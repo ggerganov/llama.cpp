@@ -97,30 +97,32 @@ void dumphex_string(const TString &sIn, const std::string &msgTag){
 // belongs to one of the chars in trimChars.
 //
 // NOTE: This will work perfectly provided the string being trimmed as well as
-// chars being trimmed are made up of FixedSize chars from the same encoded space.
+// chars being trimmed are made up of NativeCharSize chars from same encoded space.
 // For utf-8, this means the ascii equivalent 1byteSized chars of utf8 and not
-// variable length ones.
-// NOTE: It will also work, if atleast either end of string have fixedSize chars
-// from their encoding space, rather than variable length based chars if any.
-// And the trimChars are also fixedSize encoded chars.
+// variable length MultiNativeCharSize (ie multibye in case of utf-8) ones.
+// NOTE: It will also work, if atleast either end of string as well as trimChars
+// have NativeCharSize chars from their encoding space, rather than variable
+// length MultiNativeCharSize based chars if any.
 //
-// NOTE: Given the way UTF-8 char encoding is designed, where fixedSize 1byte
-// encoded chars are fully unique and dont overlap with any bytes from any of
-// the variable length encoded chars in the utf-8 space, so as long as the
-// trimChars belong to the fixedSize chars subset, the logic should work, even
-// if the string has a mixture of fixed and variable length encoded chars.
+// NOTE: Given the way UTF-8 char encoding is designed, where NativeCharSize 1byte
+// encoded chars are fully unique and dont overlap with any bytes from any of the
+// variable length MultiNativeCharSize encoded chars in the utf-8 space, so as long as
+// the trimChars belong to NativeCharSize chars subset, the logic should work, even
+// if string has a mixture of NativeCharSize and MultiNativeCharSize encoded chars.
 // Chances are utf-16 and utf-32 also have similar characteristics wrt thier
-// fixedSize encoded chars, and so equivalent semantic applies to them also.
+// NativeCharSize encoded chars (ie fully encoded within single 16bit and 32bit value
+// respectively), and so equivalent semantic applies to them also.
 //
-// ALERT: Given that this simple minded logic, works at individual bytes level
-// only, If trimChars involve variable length encoded chars, then
-// * because different bytes from different trim chars when clubbed together
-//   can map to some other new char, if there is that new char at either end
-//   of the string, it may get trimmed, because of the possibility of mix up
-//   mentioned.
-// * given that different variable length encoded chars may have some common
-//   bytes between them, if one of these chars is at either end of the string
-//   and another char is in trimChars, then string may get partially trimmed.
+// ALERT: Given that this simple minded logic, works at individual NativeCharSize level
+// only, If trimChars involve variable length MultiNativeCharSize encoded chars, then
+// * because different NativeCharSize subparts (bytes in case of utf-8) from different
+//   MultiNativeCharSize trim chars when clubbed together can map to some other new char
+//   in a variable length encoded char space, if there is that new char at either end
+//   of the string, it may get trimmed, because of the possibility of mix up mentioned.
+// * given that different variable length MultiNativeCharSize encoded chars may have
+//   some common NativeCharSize subparts (bytes in case of utf-8) between them, if one
+//   of these chars is at either end of the string and another char is in trimChars,
+//   then string may get partially trimmed.
 //
 template <typename TString>
 TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
@@ -137,8 +139,10 @@ TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
 // to one of the chars in trimChars.
 // NOTE: Internally converts to wchar/wstring to try and support proper trimming,
 // wrt possibly more languages, to some extent. IE even if the passed string
-// contains multibyte encoded characters in it in utf-8 space, it may get converted
-// to fixed size chars in the expanded wchar_t encoding space.
+// contains multibyte encoded characters in it in utf-8 space (ie MultiNativeCharSize),
+// it may get converted to NativeCharSize chars in the expanded wchar_t encoding space,
+// thus leading to fixed NativeCharSize driven logic itself handling things sufficiently.
+// Look at str_trim_dumb comments for additional aspects.
 std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \t\n") {
     std::wstring wIn;
     mbs_to_wcs(wIn, sIn);
@@ -152,8 +156,8 @@ std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \
 
 // Remove atmost 1 char at the begin and 1 char at the end of the passed string,
 // provided the char belongs to one of the chars in trimChars.
-// NOTE: Chars being trimmed (ie in trimChars) needs to be 1byte encoded chars, to
-// avoid mix up when working utf-8/variable length encoded strings.
+// NOTE: Chars being trimmed (ie in trimChars) needs to be FixedSize encoded chars,
+// to avoid mix up when working with strings which can utf-8/variable length encoded strings.
 // NOTE: This will work provided the string being trimmed as well the chars being
 // trimmed are made up of 1byte encoded chars including in utf8 encoding space.
 // If the string being trimmed includes multibyte encoded characters at the end,
