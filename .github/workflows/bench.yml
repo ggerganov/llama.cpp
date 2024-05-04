@@ -58,7 +58,7 @@ jobs:
         github.event_name == 'schedule'
         && github.repository_owner == 'ggerganov'
       )
-      || github.event_name == 'pull_request'
+      || github.event_name == 'pull_request_target'
       || github.head_ref == 'master'
       || (
         github.event_name == 'push'
