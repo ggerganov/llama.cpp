@@ -2944,14 +2944,16 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_metal_buffer_type_alloc_buff
     ctx->owned = true;
     ctx->n_buffers = 1;
 
-    ctx->buffers[0].data = ctx->all_data;
-    ctx->buffers[0].size = size;
-    ctx->buffers[0].metal = [device newBufferWithBytesNoCopy:ctx->all_data
-                    length:size_aligned
-                    options:MTLResourceStorageModeShared
-                    deallocator:nil];
+    if (ctx->all_data != NULL) {
+        ctx->buffers[0].data = ctx->all_data;
+        ctx->buffers[0].size = size;
+        ctx->buffers[0].metal = [device newBufferWithBytesNoCopy:ctx->all_data
+                        length:size_aligned
+                        options:MTLResourceStorageModeShared
+                        deallocator:nil];
+    }
 
-    if (ctx->buffers[0].metal == nil) {
+    if (ctx->all_data == NULL || ctx->buffers[0].metal == nil) {
         GGML_METAL_LOG_ERROR("%s: error: failed to allocate buffer, size = %8.2f MiB\n", __func__, size_aligned / 1024.0 / 1024.0);
         free(ctx);
         ggml_backend_metal_free_device();
