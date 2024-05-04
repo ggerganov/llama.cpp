@@ -74,7 +74,7 @@ def find_token(token_list: Sequence[int], token: str) -> Sequence[int]:
     return token_ids
 
 
-def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new_metadata: Mapping[str, MetadataDetails], remove_metadata: Sequence[str]) -> None:
+def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new_metadata: dict[str, MetadataDetails], remove_metadata: Sequence[str]) -> None:
     for field in reader.fields.values():
         # Suppress virtual fields and fields written by GGUFWriter
         if field.name == gguf.Keys.General.ARCHITECTURE or field.name.startswith('GGUF.'):
