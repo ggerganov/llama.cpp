@@ -213,8 +213,15 @@ TString str_trim_single(TString sin, const TString& trimChars=" \t\n") {
     return sin;
 }
 
-// This works for NativeCharSize encoded chars, including in utf8 encoding space.
-// This wont work for multibyte encoded chars.
+// Convert to lower case, if language has upper and lower case semantic
+//
+// This works for fixed size encoded char spaces.
+//
+// For variable length encoded char spaces, it can work
+// * if one is doing the conversion for languages which fit into NativeCharSized chars in it
+// * AND if one is working with a sane variable length encoding standard
+// * ex: this will work if trying to do the conversion for english language within utf-8
+//
 template <typename TString>
 TString str_tolower(const TString &sin) {
     TString sout;
@@ -539,7 +546,8 @@ void check_nonenglish() {
     for (auto sTest: vTest1) {
         std::string sGotDumb = str_trim_dumb(sTest, {" \n\t"});
         std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t"});
-        std::cout << std::format("{}: Test1[{}] Dumb[{}] OverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
+        std::string sLower = str_tolower(sTest);
+        std::cout << std::format("{}: Test1 [{}]\n\tTrimDumb[{}]\n\tTrimOverSmart[{}]\n\tLowerDumb[{}]", __func__, sTest, sGotDumb, sGotOSmart, sLower) << std::endl;
     }
     // The string "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ ",
     // * will mess up str_trim_dumb,
