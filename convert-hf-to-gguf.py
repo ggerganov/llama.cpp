@@ -189,6 +189,8 @@ class Model:
         return False
 
     def write_tensors(self):
+        max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
+
         for name, data_torch in self.tensors.items():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
@@ -237,7 +239,7 @@ class Model:
                 shape_str = f"{{{', '.join(str(n) for n in reversed(data.shape))}}}"
 
                 # n_dims is implicit in the shape
-                logger.info(f"{new_name}, shape = {shape_str}, {old_dtype} --> {data.dtype}")
+                logger.info(f"{f'%-{max_name_len}s' % f'{new_name},'} {old_dtype} --> {data.dtype}, shape = {shape_str}")
 
                 self.gguf_writer.add_tensor(new_name, data)
 
