@@ -52,7 +52,16 @@ jobs:
             ftype: q4_0
             pr_comment_enabled: "true"
 
-    if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || (github.repository_owner == 'ggerganov' && github.event.schedule) || github.event.pull_request || github.head_ref == 'master' || (github.event.push && (github.repository_owner == 'ggerganov' && github.event.push.ref == 'refs/heads/master') || github.ref_name == 'master') }}
+    if: |
+      github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3'
+      || (github.event.schedule && github.repository_owner == 'ggerganov')
+      || github.event.pull_request
+      || github.head_ref == 'master'
+      || (
+        github.event.push
+        && (github.event.push.ref == 'refs/heads/master' && github.repository_owner == 'ggerganov')
+        || github.ref_name == 'master'
+      )
     steps:
       - name: Clone
         id: checkout
