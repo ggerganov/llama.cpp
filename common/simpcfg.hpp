@@ -22,6 +22,25 @@
  * 
  * It tries to provide a crude expanded form of array wrt any of the above supported types.
  * For this one needs to define keys using the pattern TheKeyName-0, TheKeyName-1, ....
+ * 
+ * ## Additional notes
+ * 
+ * NativeCharSize encoded char refers to chars which fit within the size of char type in a given
+ * type of c++ string or base bitsize of a encoding standard, like 1 byte in case of std::string,
+ * utf-8, ...
+ * * example english alphabets in utf-8 encoding space are 1byte chars, in its variable length
+ *   encoding space.
+ * 
+ * MultiNativeCharSize encoded char refers to chars which occupy multiple base-char-bit-size of
+ * a c++ string type or char encoding standard.
+ * * example indian scripts alphabets in utf-8 encoding space occupy multiple bytes in its variable
+ *   length encoding space.
+ * 
+ * Sane variable length encoding - refers to encoding where the values of NativeCharSized chars of
+ * a char encoding space cant overlap with values in NativeCharSize subparts of MultiNativeCharSized
+ * chars of the same char encoding standard.
+ * * utf-8 shows this behaviour
+ * * chances are utf-16 and utf-32 also show this behaviour (need to cross check once)
  */
 
 #include <map>
@@ -163,6 +182,7 @@ std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \
 // NOTE: Chars being trimmed (ie in trimChars) needs to be part of NativeCharSize
 // subset of the string's encoded char space, to avoid mix up when working with
 // strings which can be utf-8/utf-16/utf-32/sane-variable-length encoded strings.
+//
 // NOTE:UTF8: This will work provided the string being trimmed as well the chars
 // being trimmed are made up of 1byte encoded chars in case of utf8 encoding space.
 // If the string being trimmed includes multibyte (ie MultiNativeCharSize) encoded
@@ -193,13 +213,17 @@ TString str_trim_single(TString sin, const TString& trimChars=" \t\n") {
     return sin;
 }
 
-// This works for 1byte encoded chars, including in utf8 encoding space.
+// This works for NativeCharSize encoded chars, including in utf8 encoding space.
 // This wont work for multibyte encoded chars.
-std::string str_tolower(const std::string &sin) {
-    std::string sout;
+template <typename TString>
+TString str_tolower(const TString &sin) {
+    TString sout;
     sout.resize(sin.size());
-    std::transform(sin.begin(), sin.end(), sout.begin(), [](char c)->char {return std::tolower(c);});
-    //LDBUG_LN("DBUG:%s:%s:%s", __func__, sin.c_str(), sout.c_str());
+    std::transform(sin.begin(), sin.end(), sout.begin(), [](auto c)->auto {return std::tolower(c);});
+#ifdef SC_DEBUG_VERBOSE
+    dumphex_string(sin, std::format("DBUG:{}:in:", __func__));
+    dumphex_string(sout, std::format("DBUG:{}:out:", __func__));
+#endif
     return sout;
 }
 
