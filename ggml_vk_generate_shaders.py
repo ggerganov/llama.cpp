@@ -164,47 +164,54 @@ struct block_q6_K
 
 # Dequant functions
 shader_float_dequant_func = """
-#define DEQUANT_FUNC vec2 v = vec2(ib, ib);  // data_a[ib], data_a[ib + 1]);
+vec2 dequantize(uint ib, uint iqs) {
+    return vec2(data_a[ib], data_a[ib + 1]);
+}
 """
 
 shader_q4_0_dequant_func = """
-#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
-const uint vui = uint(data_a[ib].qs[iqs]); \
-vec2 v = vec2(vui & 0xF, vui >> 4); \
-v = (v - 8.0f)*d;
+vec2 dequantize(uint ib, uint iqs) {
+    const float d = float(data_a[ib].d);
+    const uint vui = uint(data_a[ib].qs[iqs]);
+    return (vec2(vui & 0xF, vui >> 4) - 8.0f) * d;
+}
 """
 
 shader_q4_1_dequant_func = """
-#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
-const float m = float(data_a[ib].m); \
-const uint vui = uint(data_a[ib].qs[iqs]); \
-vec2 v = vec2(vui & 0xF, vui >> 4); \
-v = v*d + m;
+vec2 dequantize(uint ib, uint iqs) {
+    const float d = float(data_a[ib].d);
+    const float m = float(data_a[ib].m);
+    const uint vui = uint(data_a[ib].qs[iqs]);
+    return vec2(vui & 0xF, vui >> 4) * d + m;
+}
 """
 
 shader_q5_0_dequant_func = """
-#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
-const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | data_a[ib].qh[0]; \
-const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10); \
-const uint vui = uint(data_a[ib].qs[iqs]); \
-vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
-v = (v - 16.0f) * d;
+vec2 dequantize(uint ib, uint iqs) {
+    const float d = float(data_a[ib].d);
+    const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | data_a[ib].qh[0];
+    const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
+    const uint vui = uint(data_a[ib].qs[iqs]);
+    return (vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) - 16.0f) * d;
+}
 """
 
 shader_q5_1_dequant_func = """
-#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
-const float m = float(data_a[ib].m); \
-const uint uint_qh = data_a[ib].qh; \
-const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10); \
-const uint vui = uint(data_a[ib].qs[iqs]); \
-vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y); \
-v = v*d + m;
+vec2 dequantize(uint ib, uint iqs) {
+    const float d = float(data_a[ib].d);
+    const float m = float(data_a[ib].m);
+    const uint uint_qh = data_a[ib].qh;
+    const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
+    const uint vui = uint(data_a[ib].qs[iqs]);
+    return vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) * d + m;
+}
 """
 
 shader_q8_0_dequant_func = """
-#define DEQUANT_FUNC const float d = float(data_a[ib].d); \
-vec2 v = vec2(int(data_a[ib].qs[iqs]), int(data_a[ib].qs[iqs + 1])); \
-v = v * d;
+vec2 dequantize(uint ib, uint iqs) {
+    const float d = float(data_a[ib].d);
+    return vec2(int(data_a[ib].qs[iqs]), int(data_a[ib].qs[iqs + 1])) * d;
+}
 """
 
 # MULMAT
@@ -218,6 +225,7 @@ mulmat_head = """#version 450
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_EXT_scalar_block_layout : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #define EXPERT_COUNT 8
 #endif
@@ -233,21 +241,12 @@ mulmat_head = """#version 450
 mulmat_body1 = """
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
 
-#ifdef MUL_MAT_ID
-layout (binding = 0) readonly buffer IDS {int data_ids[];};
-#else
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-#endif
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
 layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
 
 #ifdef MUL_MAT_ID
-layout (buffer_reference) readonly buffer InputA {A_TYPE data[];};
-layout (binding = 3) readonly buffer tensor_input_a {InputA data_a_ptr[EXPERT_COUNT];};
-
-#define DATA_A data_a.data
-#else
-#define DATA_A data_a
+layout (binding = 3) readonly buffer IDS {int data_ids[];};
 #endif
 
 layout (push_constant) uniform parameter
@@ -268,12 +267,21 @@ layout (push_constant) uniform parameter
     uint batch_stride_a;
     uint batch_stride_b;
     uint batch_stride_d;
-    uint expert_stride_b;
+
+#ifdef MUL_MAT_ID
+    uint expert_stride_a;
+    uint expert_stride_b0;
+    uint expert_stride_b1;
     uint expert_stride_d;
 
-    uint idx;
-    uint nbi1;
+    uint ids_stride;
+
     uint n_as;
+    uint nei0;
+    uint nei1;
+    uint nbi1;
+    uint ne11;
+#endif
 } p;
 
 layout (constant_id = 1) const uint BM = 64;
@@ -289,9 +297,17 @@ layout (constant_id = 9) const uint WARP = 32;
 shared FLOAT_TYPE buf_a[BM * (BK+1)];
 shared FLOAT_TYPE buf_b[BN * (BK+1)];
 
+#ifdef MUL_MAT_ID
+shared u8vec2 rowids[2048];
+#endif
+
 void main() {
+#ifdef MUL_MAT_ID
     const uint batch_idx = gl_GlobalInvocationID.z / p.n_as;
     const uint expert_idx = gl_GlobalInvocationID.z % p.n_as;
+#else
+    const uint batch_idx = gl_GlobalInvocationID.z;
+#endif
 
     const uint i13 = batch_idx / p.ne12;
     const uint i12 = batch_idx % p.ne12;
@@ -327,15 +343,34 @@ void main() {
     const uint loadstride_b = gl_WorkGroupSize.x * LOAD_VEC_B / BK;
 
 #ifdef MUL_MAT_ID
-    const uint expert_id = data_ids[p.idx + expert_idx * p.nbi1];
-    InputA data_a = data_a_ptr[expert_id];
+    uint _ne1 = 0;
+    for (uint ii1 = 0; ii1 < p.nei1; ii1++) {
+        for (uint ii0 = 0; ii0 < p.nei0; ii0++) {
+            if (data_ids[ii1*p.nbi1 + ii0] == expert_idx) {
+                rowids[_ne1] = u8vec2(ii0, ii1);
+                _ne1++;
+            }
+        }
+    }
+
+    const u8vec2 id = rowids[ir * BN + ic];
 #endif
 
     const uint start_k = ik * p.k_split;
     const uint end_k = min(p.K, (ik + 1) * p.k_split);
 
-    uint pos_a = (batch_idx_a * p.batch_stride_a + ir * BM * p.stride_a + start_k) / LOAD_VEC_A;
-    uint pos_b = (expert_idx * p.expert_stride_b + batch_idx * p.batch_stride_b + ic * BN * p.stride_b + start_k) / LOAD_VEC_B;
+    uint pos_a = (
+#ifdef MUL_MAT_ID
+        expert_idx * p.expert_stride_a +
+#endif
+        batch_idx_a * p.batch_stride_a + ir * BM * p.stride_a + start_k) / LOAD_VEC_A;
+    uint pos_b = (
+#ifdef MUL_MAT_ID
+        id.y * p.expert_stride_b1 +
+        (id.x % p.ne11) * p.expert_stride_b0 +
+#endif
+        batch_idx * p.batch_stride_b +
+        ic * BN * p.stride_b + start_k) / LOAD_VEC_B;
 
     float sums[WMITER * TM * WNITER * TN];
     FLOAT_TYPE cache_a[WMITER * TM];
@@ -352,24 +387,24 @@ mulmat_load_scalar = """
 #if LOAD_VEC_A == 8
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
             const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
-            buf_a[buf_idx    ] = FLOAT_TYPE(DATA_A[idx][0].x);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(DATA_A[idx][0].y);
-            buf_a[buf_idx + 2] = FLOAT_TYPE(DATA_A[idx][0].z);
-            buf_a[buf_idx + 3] = FLOAT_TYPE(DATA_A[idx][0].w);
-            buf_a[buf_idx + 4] = FLOAT_TYPE(DATA_A[idx][1].x);
-            buf_a[buf_idx + 5] = FLOAT_TYPE(DATA_A[idx][1].y);
-            buf_a[buf_idx + 6] = FLOAT_TYPE(DATA_A[idx][1].z);
-            buf_a[buf_idx + 7] = FLOAT_TYPE(DATA_A[idx][1].w);
+            buf_a[buf_idx    ] = FLOAT_TYPE(data_a[idx][0].x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(data_a[idx][0].y);
+            buf_a[buf_idx + 2] = FLOAT_TYPE(data_a[idx][0].z);
+            buf_a[buf_idx + 3] = FLOAT_TYPE(data_a[idx][0].w);
+            buf_a[buf_idx + 4] = FLOAT_TYPE(data_a[idx][1].x);
+            buf_a[buf_idx + 5] = FLOAT_TYPE(data_a[idx][1].y);
+            buf_a[buf_idx + 6] = FLOAT_TYPE(data_a[idx][1].z);
+            buf_a[buf_idx + 7] = FLOAT_TYPE(data_a[idx][1].w);
 #elif LOAD_VEC_A == 4
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
             const uint buf_idx = (loadc_a + l) * (BK+1) + loadr_a * LOAD_VEC_A;
-            buf_a[buf_idx    ] = FLOAT_TYPE(DATA_A[idx].x);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(DATA_A[idx].y);
-            buf_a[buf_idx + 2] = FLOAT_TYPE(DATA_A[idx].z);
-            buf_a[buf_idx + 3] = FLOAT_TYPE(DATA_A[idx].w);
+            buf_a[buf_idx    ] = FLOAT_TYPE(data_a[idx].x);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(data_a[idx].y);
+            buf_a[buf_idx + 2] = FLOAT_TYPE(data_a[idx].z);
+            buf_a[buf_idx + 3] = FLOAT_TYPE(data_a[idx].w);
 #else
             if (ir * BM + loadc_a + l < p.M && block + loadr_a < end_k) {
-                buf_a[(loadc_a + l) * (BK+1) + loadr_a] = FLOAT_TYPE(DATA_A[pos_a + (loadc_a + l) * p.stride_a + loadr_a]);
+                buf_a[(loadc_a + l) * (BK+1) + loadr_a] = FLOAT_TYPE(data_a[pos_a + (loadc_a + l) * p.stride_a + loadr_a]);
             } else {
                 buf_a[(loadc_a + l) * (BK+1) + loadr_a] = FLOAT_TYPE(0.0f);
             }
@@ -383,8 +418,8 @@ mulmat_load_q4_0 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(DATA_A[ib].d);
-            const uint vui = uint(DATA_A[ib].qs[iqs]);
+            const float d = float(data_a[ib].d);
+            const uint vui = uint(data_a[ib].qs[iqs]);
             const vec2 v = (vec2(vui & 0xF, vui >> 4) - 8.0f) * d;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -397,9 +432,9 @@ mulmat_load_q4_1 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(DATA_A[ib].d);
-            const float m = float(DATA_A[ib].m);
-            const uint vui = uint(DATA_A[ib].qs[iqs]);
+            const float d = float(data_a[ib].d);
+            const float m = float(data_a[ib].m);
+            const uint vui = uint(data_a[ib].qs[iqs]);
             const vec2 v = vec2(vui & 0xF, vui >> 4) * d + m;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -412,10 +447,10 @@ mulmat_load_q5_0 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(DATA_A[ib].d);
-            const uint uint_qh = uint(DATA_A[ib].qh[1]) << 16 | DATA_A[ib].qh[0];
+            const float d = float(data_a[ib].d);
+            const uint uint_qh = uint(data_a[ib].qh[1]) << 16 | data_a[ib].qh[0];
             const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
-            const uint vui = uint(DATA_A[ib].qs[iqs]);
+            const uint vui = uint(data_a[ib].qs[iqs]);
             const vec2 v = (vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) - 16.0f) * d;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -428,11 +463,11 @@ mulmat_load_q5_1 = """
             const uint ib = idx / 16;
             const uint iqs = idx & 0xF;
 
-            const float d = float(DATA_A[ib].d);
-            const float m = float(DATA_A[ib].m);
-            const uint uint_qh = DATA_A[ib].qh;
+            const float d = float(data_a[ib].d);
+            const float m = float(data_a[ib].m);
+            const uint uint_qh = data_a[ib].qh;
             const ivec2 qh = ivec2(((uint_qh >> iqs) << 4) & 0x10, (uint_qh >> (iqs + 12)) & 0x10);
-            const uint vui = uint(DATA_A[ib].qs[iqs]);
+            const uint vui = uint(data_a[ib].qs[iqs]);
             const vec2 v = vec2((vui & 0xF) | qh.x, (vui >> 4) | qh.y) * d + m;
 
             buf_a[buf_idx     ] = FLOAT_TYPE(v.x);
@@ -445,8 +480,8 @@ mulmat_load_q8_0 = """
             const uint ib = idx / 16;
             const uint iqs = (idx & 0xF) * 2;
 
-            const float d = float(DATA_A[ib].d);
-            const vec2 v = vec2(int(DATA_A[ib].qs[iqs]), int(DATA_A[ib].qs[iqs + 1])) * d;
+            const float d = float(data_a[ib].d);
+            const vec2 v = vec2(int(data_a[ib].qs[iqs]), int(data_a[ib].qs[iqs + 1])) * d;
 
             buf_a[buf_idx    ] = FLOAT_TYPE(v.x);
             buf_a[buf_idx + 1] = FLOAT_TYPE(v.y);"""
@@ -463,9 +498,9 @@ mulmat_load_q2_K = """
             const uint scalesi = iqs / 8;                      // 0..15
             const uint qsshift = ((iqs % 64) / 16) * 2;        // 0,2,4,6
 
-            const uvec2 qs = uvec2(DATA_A[ib].qs[qsi], DATA_A[ib].qs[qsi + 1]);
-            const uint scales = DATA_A[ib].scales[scalesi];
-            const vec2 d = vec2(DATA_A[ib].d);
+            const uvec2 qs = uvec2(data_a[ib].qs[qsi], data_a[ib].qs[qsi + 1]);
+            const uint scales = data_a[ib].scales[scalesi];
+            const vec2 d = vec2(data_a[ib].d);
 
             const vec2 v = d.x * float(scales & 0xF) * vec2((qs >> qsshift) & 3) - d.y * float(scales >> 4);
 
@@ -488,14 +523,14 @@ mulmat_load_q3_K = """
             const uint qsshift = halfsplit * 2;          // 0,2,4,6
             const uint m = 1 << (4 * n + halfsplit);     // 1,2,4,8,16,32,64,128
 
-            const int8_t us = int8_t(is <  4 ? (DATA_A[ib].scales[is-0] & 0xF) | (((DATA_A[ib].scales[is+8] >> 0) & 3) << 4) :
-                                    is <  8 ? (DATA_A[ib].scales[is-0] & 0xF) | (((DATA_A[ib].scales[is+4] >> 2) & 3) << 4) :
-                                    is < 12 ? (DATA_A[ib].scales[is-8] >>  4) | (((DATA_A[ib].scales[is+0] >> 4) & 3) << 4) :
-                                            (DATA_A[ib].scales[is-8] >>  4) | (((DATA_A[ib].scales[is-4] >> 6) & 3) << 4));
-            const float dl = float(DATA_A[ib].d) * float(us - 32);
+            const int8_t us = int8_t(is <  4 ? (data_a[ib].scales[is-0] & 0xF) | (((data_a[ib].scales[is+8] >> 0) & 3) << 4) :
+                                    is <  8 ? (data_a[ib].scales[is-0] & 0xF) | (((data_a[ib].scales[is+4] >> 2) & 3) << 4) :
+                                    is < 12 ? (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is+0] >> 4) & 3) << 4) :
+                                            (data_a[ib].scales[is-8] >>  4) | (((data_a[ib].scales[is-4] >> 6) & 3) << 4));
+            const float dl = float(data_a[ib].d) * float(us - 32);
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(dl * float(int8_t((DATA_A[ib].qs[qsi    ] >> qsshift) & 3) - (((DATA_A[ib].hmask[hmi    ] & m) != 0) ? 0 : 4)));
-            buf_a[buf_idx + 1] = FLOAT_TYPE(dl * float(int8_t((DATA_A[ib].qs[qsi + 1] >> qsshift) & 3) - (((DATA_A[ib].hmask[hmi + 1] & m) != 0) ? 0 : 4)));"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(dl * float(int8_t((data_a[ib].qs[qsi    ] >> qsshift) & 3) - (((data_a[ib].hmask[hmi    ] & m) != 0) ? 0 : 4)));
+            buf_a[buf_idx + 1] = FLOAT_TYPE(dl * float(int8_t((data_a[ib].qs[qsi + 1] >> qsshift) & 3) - (((data_a[ib].hmask[hmi + 1] & m) != 0) ? 0 : 4)));"""
 
 mulmat_load_q4_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -509,22 +544,22 @@ mulmat_load_q4_K = """
             const uint is = 2 * n + b;                 // 0..7
             const uint qsi = n * 32 + (iqs % 16) * 2;  // 0,2,4..126
 
-            const vec2 loadd = vec2(DATA_A[ib].d);
+            const vec2 loadd = vec2(data_a[ib].d);
 
             uint8_t sc;
             uint8_t mbyte;
             if (is < 4) {
-                sc    = uint8_t(DATA_A[ib].scales[is    ] & 63);
-                mbyte = uint8_t(DATA_A[ib].scales[is + 4] & 63);
+                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
+                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
             } else {
-                sc    = uint8_t((DATA_A[ib].scales[is + 4] & 0xF) | ((DATA_A[ib].scales[is - 4] >> 6) << 4));
-                mbyte = uint8_t((DATA_A[ib].scales[is + 4] >>  4) | ((DATA_A[ib].scales[is    ] >> 6) << 4));
+                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
+                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
             }
             const float d = loadd.x * sc;
             const float m = loadd.y * mbyte;
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(d * float((DATA_A[ib].qs[qsi    ] >> (b * 4)) & 0xF) - m);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(d * float((DATA_A[ib].qs[qsi + 1] >> (b * 4)) & 0xF) - m);"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(d * float((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) - m);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(d * float((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) - m);"""
 
 mulmat_load_q5_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -541,22 +576,22 @@ mulmat_load_q5_K = """
 
             const uint8_t hm = uint8_t(1 << (iqs / 16));
 
-            const vec2 loadd = vec2(DATA_A[ib].d);
+            const vec2 loadd = vec2(data_a[ib].d);
 
             uint8_t sc;
             uint8_t mbyte;
             if (is < 4) {
-                sc    = uint8_t(DATA_A[ib].scales[is    ] & 63);
-                mbyte = uint8_t(DATA_A[ib].scales[is + 4] & 63);
+                sc    = uint8_t(data_a[ib].scales[is    ] & 63);
+                mbyte = uint8_t(data_a[ib].scales[is + 4] & 63);
             } else {
-                sc    = uint8_t((DATA_A[ib].scales[is + 4] & 0xF) | ((DATA_A[ib].scales[is - 4] >> 6) << 4));
-                mbyte = uint8_t((DATA_A[ib].scales[is + 4] >>  4) | ((DATA_A[ib].scales[is    ] >> 6) << 4));
+                sc    = uint8_t((data_a[ib].scales[is + 4] & 0xF) | ((data_a[ib].scales[is - 4] >> 6) << 4));
+                mbyte = uint8_t((data_a[ib].scales[is + 4] >>  4) | ((data_a[ib].scales[is    ] >> 6) << 4));
             }
             const float d = loadd.x * sc;
             const float m = loadd.y * mbyte;
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(d * (float((DATA_A[ib].qs[qsi    ] >> (b * 4)) & 0xF) + float((DATA_A[ib].qh[qhi    ] & hm) != 0 ? 16 : 0)) - m);
-            buf_a[buf_idx + 1] = FLOAT_TYPE(d * (float((DATA_A[ib].qs[qsi + 1] >> (b * 4)) & 0xF) + float((DATA_A[ib].qh[qhi + 1] & hm) != 0 ? 16 : 0)) - m);"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(d * (float((data_a[ib].qs[qsi    ] >> (b * 4)) & 0xF) + float((data_a[ib].qh[qhi    ] & hm) != 0 ? 16 : 0)) - m);
+            buf_a[buf_idx + 1] = FLOAT_TYPE(d * (float((data_a[ib].qs[qsi + 1] >> (b * 4)) & 0xF) + float((data_a[ib].qh[qhi + 1] & hm) != 0 ? 16 : 0)) - m);"""
 
 mulmat_load_q6_K = """
             const uint idx = pos_a + (loadc_a + l) * p.stride_a / LOAD_VEC_A + loadr_a;
@@ -573,10 +608,10 @@ mulmat_load_q6_K = """
             const uint qsi = n * 64 + (iqs % 32) * 2;   // 0,2,4..126
             const uint qhi = n * 32 + (iqs % 16) * 2;   // 0,2,4..62
 
-            const float dscale = float(DATA_A[ib].d) * float(DATA_A[ib].scales[is]);
+            const float dscale = float(data_a[ib].d) * float(data_a[ib].scales[is]);
 
-            buf_a[buf_idx    ] = FLOAT_TYPE(dscale * float(int8_t(((DATA_A[ib].ql[qsi    ] >> (b * 4)) & 0xF) | (((DATA_A[ib].qh[qhi    ] >> qhshift) & 3) << 4)) - 32));
-            buf_a[buf_idx + 1] = FLOAT_TYPE(dscale * float(int8_t(((DATA_A[ib].ql[qsi + 1] >> (b * 4)) & 0xF) | (((DATA_A[ib].qh[qhi + 1] >> qhshift) & 3) << 4)) - 32));"""
+            buf_a[buf_idx    ] = FLOAT_TYPE(dscale * float(int8_t(((data_a[ib].ql[qsi    ] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi    ] >> qhshift) & 3) << 4)) - 32));
+            buf_a[buf_idx + 1] = FLOAT_TYPE(dscale * float(int8_t(((data_a[ib].ql[qsi + 1] >> (b * 4)) & 0xF) | (((data_a[ib].qh[qhi + 1] >> qhshift) & 3) << 4)) - 32));"""
 
 mulmat_body2 = """
         }
@@ -643,7 +678,11 @@ mulmat_body2 = """
     const uint dr = ir * BM + warp_r * WM;
     const uint dc = ic * BN + warp_c * WN;
 
-    const uint offsets = expert_idx * p.expert_stride_d + batch_idx * p.batch_stride_d + ik * p.batch_stride_d * gl_NumWorkGroups.z;
+    const uint offsets =
+#ifdef MUL_MAT_ID
+            expert_idx * p.expert_stride_d +
+#endif
+            batch_idx * p.batch_stride_d + ik * p.batch_stride_d * gl_NumWorkGroups.z;
 
     [[unroll]] for (uint wsic = 0; wsic < WNITER; wsic++) {
         [[unroll]] for (uint wsir = 0; wsir < WMITER; wsir++) {
@@ -1109,6 +1148,20 @@ mul_mat_vec_head = """#version 450
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_8bit_storage : require
 
+#ifdef MUL_MAT_ID
+#define EXPERT_COUNT 8
+#endif
+"""
+
+
+mul_mat_vec_layout = """
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
+layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
+#ifdef MUL_MAT_ID
+layout (binding = 3) readonly buffer IDS {int data_ids[];};
+#endif
+
 layout (push_constant) uniform parameter
 {
     uint ncols;
@@ -1124,15 +1177,24 @@ layout (push_constant) uniform parameter
     uint batch_stride_a;
     uint batch_stride_b;
     uint batch_stride_d;
+
+#ifdef MUL_MAT_ID
+    uint expert_stride_a;
+    uint expert_stride_b0;
+    uint expert_stride_b1;
+    uint expert_stride_d0;
+    uint expert_stride_d1;
+
+    uint ne11;
+    uint nei0;
+    uint nbi1;
+    uint n_as;
+#endif
 } p;
 """
 
 mul_mat_vec_body = """
 layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
-
-layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
 
 layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 
@@ -1142,6 +1204,10 @@ void main() {
     const uint row = gl_WorkGroupID.x;
     const uint tid = gl_LocalInvocationID.x;
     const uint batch_idx = gl_GlobalInvocationID.y;
+#ifdef MUL_MAT_ID
+    const uint expert_idx1 = gl_GlobalInvocationID.z / p.nei0;
+    const uint expert_idx0 = gl_GlobalInvocationID.z % p.nei0;
+#endif
 
     const uint i13 = batch_idx / p.ne12;
     const uint i12 = batch_idx % p.ne12;
@@ -1151,9 +1217,27 @@ void main() {
 
     const uint batch_idx_a = i03 * p.ne02 + i02;
 
-    const uint a_offset = batch_idx_a * p.batch_stride_a;
-    const uint b_offset = batch_idx * p.batch_stride_b;
-    const uint d_offset = batch_idx * p.batch_stride_d;
+#ifdef MUL_MAT_ID
+    const uint expert_id = data_ids[expert_idx1 * p.nbi1 + expert_idx0];
+#endif
+
+    const uint a_offset =
+#ifdef MUL_MAT_ID
+            expert_id * p.expert_stride_a +
+#endif
+            batch_idx_a * p.batch_stride_a;
+    const uint b_offset =
+#ifdef MUL_MAT_ID
+            (expert_idx0 % p.ne11) * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_b;
+    const uint d_offset =
+#ifdef MUL_MAT_ID
+            expert_idx0 * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_d;
 
     const uint y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
 
@@ -1165,7 +1249,7 @@ void main() {
         const uint iqs = (col%QUANT_K)/QUANT_R; // quant index
         const uint iybs = col - col%QUANT_K; // y block start index
 
-        DEQUANT_FUNC
+        vec2 v = dequantize(ib, iqs);
 
         // matrix multiplication
         tmp[tid] += FLOAT_TYPE(v.x) * FLOAT_TYPE(data_b[b_offset + iybs + iqs]) +
@@ -1181,7 +1265,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[d_offset + row] = D_TYPE(tmp[0]);
+        data_d[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -1190,15 +1274,15 @@ void main() {
 mul_mat_vec_q2_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
     const uint batch_idx = gl_GlobalInvocationID.y;
+#ifdef MUL_MAT_ID
+    const uint expert_idx1 = gl_GlobalInvocationID.z / p.nei0;
+    const uint expert_idx0 = gl_GlobalInvocationID.z % p.nei0;
+#endif
 
     const uint i13 = batch_idx / p.ne12;
     const uint i12 = batch_idx % p.ne12;
@@ -1208,9 +1292,27 @@ void main() {
 
     const uint batch_idx_a = i03 * p.ne02 + i02;
 
-    const uint a_offset = batch_idx_a * p.batch_stride_a;
-    const uint b_offset = batch_idx * p.batch_stride_b;
-    const uint d_offset = batch_idx * p.batch_stride_d;
+#ifdef MUL_MAT_ID
+    const uint expert_id = data_ids[expert_idx1 * p.nbi1 + expert_idx0];
+#endif
+
+    const uint a_offset =
+#ifdef MUL_MAT_ID
+            expert_id * p.expert_stride_a +
+#endif
+            batch_idx_a * p.batch_stride_a;
+    const uint b_offset =
+#ifdef MUL_MAT_ID
+            (expert_idx0 % p.ne11) * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_b;
+    const uint d_offset =
+#ifdef MUL_MAT_ID
+            expert_idx0 * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
     const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
@@ -1268,22 +1370,22 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[d_offset + row] = D_TYPE(tmp[0]);
+        data_d[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
 mul_mat_vec_q3_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
     const uint batch_idx = gl_GlobalInvocationID.y;
+#ifdef MUL_MAT_ID
+    const uint expert_idx1 = gl_GlobalInvocationID.z / p.nei0;
+    const uint expert_idx0 = gl_GlobalInvocationID.z % p.nei0;
+#endif
 
     const uint i13 = batch_idx / p.ne12;
     const uint i12 = batch_idx % p.ne12;
@@ -1293,9 +1395,27 @@ void main() {
 
     const uint batch_idx_a = i03 * p.ne02 + i02;
 
-    const uint a_offset = batch_idx_a * p.batch_stride_a;
-    const uint b_offset = batch_idx * p.batch_stride_b;
-    const uint d_offset = batch_idx * p.batch_stride_d;
+#ifdef MUL_MAT_ID
+    const uint expert_id = data_ids[expert_idx1 * p.nbi1 + expert_idx0];
+#endif
+
+    const uint a_offset =
+#ifdef MUL_MAT_ID
+            expert_id * p.expert_stride_a +
+#endif
+            batch_idx_a * p.batch_stride_a;
+    const uint b_offset =
+#ifdef MUL_MAT_ID
+            (expert_idx0 % p.ne11) * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_b;
+    const uint d_offset =
+#ifdef MUL_MAT_ID
+            expert_idx0 * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
     const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
@@ -1346,22 +1466,22 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[d_offset + row] = D_TYPE(tmp[0]);
+        data_d[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
 mul_mat_vec_q4_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
     const uint batch_idx = gl_GlobalInvocationID.y;
+#ifdef MUL_MAT_ID
+    const uint expert_idx1 = gl_GlobalInvocationID.z / p.nei0;
+    const uint expert_idx0 = gl_GlobalInvocationID.z % p.nei0;
+#endif
 
     const uint i13 = batch_idx / p.ne12;
     const uint i12 = batch_idx % p.ne12;
@@ -1371,9 +1491,27 @@ void main() {
 
     const uint batch_idx_a = i03 * p.ne02 + i02;
 
-    const uint a_offset = batch_idx_a * p.batch_stride_a;
-    const uint b_offset = batch_idx * p.batch_stride_b;
-    const uint d_offset = batch_idx * p.batch_stride_d;
+#ifdef MUL_MAT_ID
+    const uint expert_id = data_ids[expert_idx1 * p.nbi1 + expert_idx0];
+#endif
+
+    const uint a_offset =
+#ifdef MUL_MAT_ID
+            expert_id * p.expert_stride_a +
+#endif
+            batch_idx_a * p.batch_stride_a;
+    const uint b_offset =
+#ifdef MUL_MAT_ID
+            (expert_idx0 % p.ne11) * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_b;
+    const uint d_offset =
+#ifdef MUL_MAT_ID
+            expert_idx0 * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
     const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
@@ -1473,22 +1611,22 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[d_offset + row] = D_TYPE(tmp[0]);
+        data_d[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
 mul_mat_vec_q5_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
     const uint batch_idx = gl_GlobalInvocationID.y;
+#ifdef MUL_MAT_ID
+    const uint expert_idx1 = gl_GlobalInvocationID.z / p.nei0;
+    const uint expert_idx0 = gl_GlobalInvocationID.z % p.nei0;
+#endif
 
     const uint i13 = batch_idx / p.ne12;
     const uint i12 = batch_idx % p.ne12;
@@ -1498,9 +1636,27 @@ void main() {
 
     const uint batch_idx_a = i03 * p.ne02 + i02;
 
-    const uint a_offset = batch_idx_a * p.batch_stride_a;
-    const uint b_offset = batch_idx * p.batch_stride_b;
-    const uint d_offset = batch_idx * p.batch_stride_d;
+#ifdef MUL_MAT_ID
+    const uint expert_id = data_ids[expert_idx1 * p.nbi1 + expert_idx0];
+#endif
+
+    const uint a_offset =
+#ifdef MUL_MAT_ID
+            expert_id * p.expert_stride_a +
+#endif
+            batch_idx_a * p.batch_stride_a;
+    const uint b_offset =
+#ifdef MUL_MAT_ID
+            (expert_idx0 % p.ne11) * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_b;
+    const uint d_offset =
+#ifdef MUL_MAT_ID
+            expert_idx0 * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
     const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
@@ -1596,22 +1752,22 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[d_offset + row] = D_TYPE(tmp[0]);
+        data_d[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
 mul_mat_vec_q6_K_body = """
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE dst[];};
-
 shared FLOAT_TYPE tmp[32];
 
 void main() {
     const uint row = gl_WorkGroupID.x;
     const uint batch_idx = gl_GlobalInvocationID.y;
+#ifdef MUL_MAT_ID
+    const uint expert_idx1 = gl_GlobalInvocationID.z / p.nei0;
+    const uint expert_idx0 = gl_GlobalInvocationID.z % p.nei0;
+#endif
 
     const uint i13 = batch_idx / p.ne12;
     const uint i12 = batch_idx % p.ne12;
@@ -1621,9 +1777,27 @@ void main() {
 
     const uint batch_idx_a = i03 * p.ne02 + i02;
 
-    const uint a_offset = batch_idx_a * p.batch_stride_a;
-    const uint b_offset = batch_idx * p.batch_stride_b;
-    const uint d_offset = batch_idx * p.batch_stride_d;
+#ifdef MUL_MAT_ID
+    const uint expert_id = data_ids[expert_idx1 * p.nbi1 + expert_idx0];
+#endif
+
+    const uint a_offset =
+#ifdef MUL_MAT_ID
+            expert_id * p.expert_stride_a +
+#endif
+            batch_idx_a * p.batch_stride_a;
+    const uint b_offset =
+#ifdef MUL_MAT_ID
+            (expert_idx0 % p.ne11) * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_b;
+    const uint d_offset =
+#ifdef MUL_MAT_ID
+            expert_idx0 * p.expert_stride_b0 +
+            expert_idx1 * p.expert_stride_b1 +
+#endif
+            batch_idx * p.batch_stride_d;
 
     const uint num_blocks_per_row = p.ncols / QUANT_K;
     const uint ib0 = a_offset / QUANT_K + row*num_blocks_per_row;
@@ -1687,7 +1861,7 @@ void main() {
         barrier();
     }
     if (tid == 0) {
-        dst[d_offset + row] = D_TYPE(tmp[0]);
+        data_d[d_offset + row] = D_TYPE(tmp[0]);
     }
 }
 """
@@ -1868,12 +2042,13 @@ layout (push_constant) uniform parameter
     float param1; float param2;
 } p;"""
 
-generic_unary_op_funcs = """
+generic_unary_op_layout = """
 layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
-layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};"""
 
+generic_unary_op_funcs = """
 uint src0_idx(uint idx) {
     const uint i03 = idx / (p.ne02*p.ne01*p.ne00);
     const uint i03_offset = i03 * p.ne02*p.ne01*p.ne00;
@@ -1901,7 +2076,7 @@ void main() {
     }
 """
 
-generic_unary_op_combined = f"{generic_unary_op_head}\n{generic_unary_op_funcs}\n{generic_unary_op_main}"
+generic_unary_op_combined = f"{generic_unary_op_head}\n{generic_unary_op_layout}\n{generic_unary_op_funcs}\n{generic_unary_op_main}"
 
 generic_binary_op_head = """#version 450
 
@@ -1917,13 +2092,14 @@ layout (push_constant) uniform parameter
     float param1; float param2;
 } p;"""
 
-generic_binary_op_funcs = """
+generic_binary_op_layout = """
 layout(local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1) readonly buffer B {B_TYPE data_b[];};
-layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};
+layout (binding = 2) writeonly buffer D {D_TYPE data_d[];};"""
 
+generic_binary_op_funcs = """
 uint src0_idx(uint idx) {
     const uint i03 = idx / (p.ne02*p.ne01*p.ne00);
     const uint i03_offset = i03 * p.ne02*p.ne01*p.ne00;
@@ -1962,7 +2138,7 @@ void main() {
     }
 """
 
-generic_binary_op_combined = f"{generic_binary_op_head}\n{generic_binary_op_funcs}\n{generic_binary_op_main}"
+generic_binary_op_combined = f"{generic_binary_op_head}\n{generic_binary_op_layout}\n{generic_binary_op_funcs}\n{generic_binary_op_main}"
 
 # MUL F32
 mul_body = """
@@ -2053,7 +2229,7 @@ void main() {
     const uint iybs = i00 - i00%QUANT_K; // dst block start index
     const uint y_offset = QUANT_R == 1 ? 1 : QUANT_K/2;
 
-    DEQUANT_FUNC
+    vec2 v = dequantize(ib, iqs);
 
     data_d[d_offset + iybs + iqs           ] = D_TYPE(v.x);
     data_d[d_offset + iybs + iqs + y_offset] = D_TYPE(v.y);
@@ -2792,31 +2968,32 @@ async def main():
         stream.extend((mul_mat_vec_head, shader_int8_ext, shader_f32))
 
         if i == GGML_TYPE_F16:
-            stream.extend((shader_f16_defines, shader_float_dequant_func, mul_mat_vec_body))
+            stream.extend((shader_f16_defines, mul_mat_vec_layout, shader_float_dequant_func, mul_mat_vec_body))
         elif i == GGML_TYPE_Q4_0:
-            stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func, mul_mat_vec_body))
+            stream.extend((shader_q4_0_defines, mul_mat_vec_layout, shader_q4_0_dequant_func, mul_mat_vec_body))
         elif i == GGML_TYPE_Q4_1:
-            stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func, mul_mat_vec_body))
+            stream.extend((shader_q4_1_defines, mul_mat_vec_layout, shader_q4_1_dequant_func, mul_mat_vec_body))
         elif i == GGML_TYPE_Q5_0:
-            stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func, mul_mat_vec_body))
+            stream.extend((shader_q5_0_defines, mul_mat_vec_layout, shader_q5_0_dequant_func, mul_mat_vec_body))
         elif i == GGML_TYPE_Q5_1:
-            stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func, mul_mat_vec_body))
+            stream.extend((shader_q5_1_defines, mul_mat_vec_layout, shader_q5_1_dequant_func, mul_mat_vec_body))
         elif i == GGML_TYPE_Q8_0:
-            stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func, mul_mat_vec_body))
+            stream.extend((shader_q8_0_defines, mul_mat_vec_layout, shader_q8_0_dequant_func, mul_mat_vec_body))
         elif i == GGML_TYPE_Q2_K:
-            stream.extend((shader_q2_K_defines, mul_mat_vec_q2_K_body))
+            stream.extend((shader_q2_K_defines, mul_mat_vec_layout, mul_mat_vec_q2_K_body))
         elif i == GGML_TYPE_Q3_K:
-            stream.extend((shader_q3_K_defines, mul_mat_vec_q3_K_body))
+            stream.extend((shader_q3_K_defines, mul_mat_vec_layout, mul_mat_vec_q3_K_body))
         elif i == GGML_TYPE_Q4_K:
-            stream.extend((shader_q4_K_defines, mul_mat_vec_q4_K_body))
+            stream.extend((shader_q4_K_defines, mul_mat_vec_layout, mul_mat_vec_q4_K_body))
         elif i == GGML_TYPE_Q5_K:
-            stream.extend((shader_q5_K_defines, mul_mat_vec_q5_K_body))
+            stream.extend((shader_q5_K_defines, mul_mat_vec_layout, mul_mat_vec_q5_K_body))
         elif i == GGML_TYPE_Q6_K:
-            stream.extend((shader_q6_K_defines, mul_mat_vec_q6_K_body))
+            stream.extend((shader_q6_K_defines, mul_mat_vec_layout, mul_mat_vec_q6_K_body))
         else:
             continue
 
         tasks.append(string_to_spv(f"mul_mat_vec_{type_names[i]}_f32", "".join(stream), {"B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}))
+        tasks.append(string_to_spv(f"mul_mat_vec_id_{type_names[i]}_f32", "".join(stream), {"MUL_MAT_ID": "1", "B_TYPE": "float", "D_TYPE": "float", "K_QUANTS_PER_ITERATION": K_QUANTS_PER_ITERATION}))
 
     # Dequant shaders
     for i in range(0, VK_NUM_TYPES):
@@ -2858,20 +3035,20 @@ async def main():
         optimization_workaround = False
 
         if i == GGML_TYPE_F32:
-            stream.extend((shader_f32_defines, generic_binary_op_funcs, get_rows_float_body))
+            stream.extend((shader_f32_defines, generic_binary_op_layout, generic_binary_op_funcs, get_rows_float_body))
         elif i == GGML_TYPE_F16:
-            stream.extend((shader_f16_defines, generic_binary_op_funcs, get_rows_float_body))
+            stream.extend((shader_f16_defines, generic_binary_op_layout, generic_binary_op_funcs, get_rows_float_body))
             optimization_workaround = True
         elif i == GGML_TYPE_Q4_0:
-            stream.extend((shader_q4_0_defines, shader_q4_0_dequant_func, generic_binary_op_funcs, get_rows_body))
+            stream.extend((shader_q4_0_defines, generic_binary_op_layout, shader_q4_0_dequant_func, generic_binary_op_funcs, get_rows_body))
         elif i == GGML_TYPE_Q4_1:
-            stream.extend((shader_q4_1_defines, shader_q4_1_dequant_func, generic_binary_op_funcs, get_rows_body))
+            stream.extend((shader_q4_1_defines, generic_binary_op_layout, shader_q4_1_dequant_func, generic_binary_op_funcs, get_rows_body))
         elif i == GGML_TYPE_Q5_0:
-            stream.extend((shader_q5_0_defines, shader_q5_0_dequant_func, generic_binary_op_funcs, get_rows_body))
+            stream.extend((shader_q5_0_defines, generic_binary_op_layout, shader_q5_0_dequant_func, generic_binary_op_funcs, get_rows_body))
         elif i == GGML_TYPE_Q5_1:
-            stream.extend((shader_q5_1_defines, shader_q5_1_dequant_func, generic_binary_op_funcs, get_rows_body))
+            stream.extend((shader_q5_1_defines, generic_binary_op_layout, shader_q5_1_dequant_func, generic_binary_op_funcs, get_rows_body))
         elif i == GGML_TYPE_Q8_0:
-            stream.extend((shader_q8_0_defines, shader_q8_0_dequant_func, generic_binary_op_funcs, get_rows_body))
+            stream.extend((shader_q8_0_defines, generic_binary_op_layout, shader_q8_0_dequant_func, generic_binary_op_funcs, get_rows_body))
         else:
             continue
 
