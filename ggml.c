@@ -21139,7 +21139,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
     }
 
     // read the tensor infos
-    {
+    if (ctx->header.n_tensors > 0) {
         ctx->infos = GGML_CALLOC(ctx->header.n_tensors, sizeof(struct gguf_tensor_info));
 
         for (uint64_t i = 0; i < ctx->header.n_tensors; ++i) {
