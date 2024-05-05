@@ -937,7 +937,7 @@ If your issue is with model generation quality, then please at least scan the fo
 [Termux](https://github.com/termux/termux-app#installation) is a method to execute `llama.cpp` on an Android device (no root required).
 ```
 apt update && apt upgrade -y
-apt install git
+apt install git make cmake 
 ```
 
 It's recommended to move your model inside the `~/` directory for best performance:
@@ -961,11 +961,6 @@ $ make
 ```
 
 Install [termux](https://github.com/termux/termux-app#installation) on your device and run `termux-setup-storage` to get access to your SD card (if Android 11+ then run the command twice).
-
-Install the essential packages for termux:
-```
-pkg install clang wget git cmake
-```
 
 Finally, copy these built `llama` binaries and the model file to your device storage. Because the file permissions in the Android sdcard cannot be changed, you can copy the executable files to the `/data/data/com.termux/files/home/bin` path, and then execute the following commands in Termux to add executable permission:
 
