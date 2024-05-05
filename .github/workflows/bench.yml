@@ -56,18 +56,14 @@ jobs:
       inputs.gpu-series == 'Standard_NC4as_T4_v3'
       || (
         github.event_name == 'schedule'
+        && github.ref_name == 'master'
         && github.repository_owner == 'ggerganov'
       )
       || github.event_name == 'pull_request_target'
-      || github.head_ref == 'master'
       || (
         github.event_name == 'push'
         && github.event.ref == 'refs/heads/master'
         && github.repository_owner == 'ggerganov'
-      )
-      || (
-        github.event_name != 'push'
-        && github.ref_name == 'master'
       )
     steps:
       - name: Clone
