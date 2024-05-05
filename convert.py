@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import argparse
 import concurrent.futures
 import enum
@@ -34,6 +35,8 @@ import gguf
 
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
+
+logger = logging.getLogger("convert")
 
 if hasattr(faulthandler, 'register') and hasattr(signal, 'SIGUSR1'):
     faulthandler.register(signal.SIGUSR1)
@@ -643,7 +646,6 @@ class LlamaHfVocab(Vocab):
 
 
 def permute(weights: NDArray, n_head: int, n_head_kv: int) -> NDArray:
-    # print( "permute debug " + str(weights.shape[0]) + " x " + str(weights.shape[1]) + " nhead " + str(n_head) + " nheadkv " + str(n_kv_head) )
     if n_head_kv is not None and n_head != n_head_kv:
         n_head = n_head_kv
     return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
@@ -1033,12 +1035,12 @@ def check_vocab_size(params: Params, vocab: BaseVocab, pad_vocab: bool = False) 
 
     # Check for a vocab size mismatch
     if params.n_vocab == vocab.vocab_size:
-        print("Ignoring added_tokens.json since model matches vocab size without it.")
+        logger.warning("Ignoring added_tokens.json since model matches vocab size without it.")
         return
 
     if pad_vocab and params.n_vocab > vocab.vocab_size:
         pad_count = params.n_vocab - vocab.vocab_size
-        print(
+        logger.debug(
             f"Padding vocab with {pad_count} token(s) - <dummy00001> through <dummy{pad_count:05}>"
         )
         for i in range(1, pad_count + 1):
@@ -1166,7 +1168,7 @@ class OutputFile:
             elapsed = time.time() - start
             size = ' x '.join(f"{dim:6d}" for dim in lazy_tensor.shape)
             padi = len(str(len(model)))
-            print(
+            logger.info(
                 f"[{i + 1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}"
             )
             self.gguf.write_tensor_data(ndarray)
@@ -1281,12 +1283,12 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
     # HF models permut or pack some of the tensors, so we need to undo that
     for i in itertools.count():
         if f"model.layers.{i}.self_attn.q_proj.weight" in model:
-            print(f"Permuting layer {i}")
+            logger.debug(f"Permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.q_proj.weight"], params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_lazy(model[f"model.layers.{i}.self_attn.k_proj.weight"], params.n_head, params.n_head_kv)
             # tmp[f"model.layers.{i}.self_attn.v_proj.weight"] =              model[f"model.layers.{i}.self_attn.v_proj.weight"]
         elif f"model.layers.{i}.self_attn.W_pack.weight" in model:
-            print(f"Unpacking and permuting layer {i}")
+            logger.debug(f"Unpacking and permuting layer {i}")
             tmp[f"model.layers.{i}.self_attn.q_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 0, params.n_head, params.n_head)
             tmp[f"model.layers.{i}.self_attn.k_proj.weight"] = permute_part_lazy(model[f"model.layers.{i}.self_attn.W_pack.weight"], 1, params.n_head, params.n_head_kv)
             tmp[f"model.layers.{i}.self_attn.v_proj.weight"] = part_lazy        (model[f"model.layers.{i}.self_attn.W_pack.weight"], 2)
@@ -1299,15 +1301,15 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
         tensor_type, name_new = tmap.get_type_and_name(name, try_suffixes = (".weight", ".bias")) or (None, None)
         if name_new is None:
             if skip_unknown:
-                print(f"Unexpected tensor name: {name} - skipping")
+                logger.warning(f"Unexpected tensor name: {name} - skipping")
                 continue
             raise ValueError(f"Unexpected tensor name: {name}. Use --skip-unknown to ignore it (e.g. LLaVA)")
 
         if tensor_type in should_skip:
-            print(f"skipping tensor {name_new}")
+            logger.debug(f"skipping tensor {name_new}")
             continue
 
-        print(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
+        logger.debug(f"{name:48s} -> {name_new:40s} | {lazy_tensor.data_type.name:6s} | {lazy_tensor.shape}")
         out[name_new] = lazy_tensor
 
     return out
@@ -1372,7 +1374,7 @@ def load_some_model(path: Path) -> ModelPlus:
     paths = find_multifile_paths(path)
     models_plus: list[ModelPlus] = []
     for path in paths:
-        print(f"Loading model file {path}")
+        logger.info(f"Loading model file {path}")
         models_plus.append(lazy_load_file(path))
 
     model_plus = merge_multifile_models(models_plus)
@@ -1413,7 +1415,7 @@ class VocabFactory:
         else:
             raise FileNotFoundError(f"Could not find a tokenizer matching any of {vocab_types}")
 
-        print(f"Loaded vocab file {vocab.fname_tokenizer!r}, type {vocab.name!r}")
+        logger.info(f"Loaded vocab file {vocab.fname_tokenizer!r}, type {vocab.name!r}")
         return vocab
 
     def load_vocab(self, vocab_types: list[str] | None, model_parent_path: Path) -> tuple[BaseVocab, gguf.SpecialVocab]:
@@ -1438,19 +1440,19 @@ def default_outfile(model_paths: list[Path], file_type: GGMLFileType) -> Path:
     }[file_type]
     ret = model_paths[0].parent / f"ggml-model-{namestr}.gguf"
     if ret in model_paths:
-        sys.stderr.write(
+        logger.error(
             f"Error: Default output path ({ret}) would overwrite the input. "
-            "Please explicitly specify a path using --outfile.\n")
+            "Please explicitly specify a path using --outfile.")
         sys.exit(1)
     return ret
 
 
 def do_dump_model(model_plus: ModelPlus) -> None:
-    print(f"model_plus.paths = {model_plus.paths!r}")
-    print(f"model_plus.format = {model_plus.format!r}")
-    print(f"model_plus.vocab = {model_plus.vocab!r}")
+    print(f"model_plus.paths = {model_plus.paths!r}") # noqa: NP100
+    print(f"model_plus.format = {model_plus.format!r}") # noqa: NP100
+    print(f"model_plus.vocab = {model_plus.vocab!r}") # noqa: NP100
     for name, lazy_tensor in model_plus.model.items():
-        print(f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}")
+        print(f"{name}: shape={lazy_tensor.shape} type={lazy_tensor.data_type}; {lazy_tensor.description}") # noqa: NP100
 
 
 def main(args_in: list[str] | None = None) -> None:
@@ -1473,8 +1475,18 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--big-endian",   action="store_true",    help="model is executed on big endian machine")
     parser.add_argument("--pad-vocab",    action="store_true",    help="add pad tokens when model vocab expects more than tokenizer metadata provides")
     parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
+    parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
 
     args = parser.parse_args(args_in)
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    elif args.dump_single or args.dump:
+        # Avoid printing anything besides the dump output
+        logging.basicConfig(level=logging.WARNING)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     if args.no_vocab and args.vocab_only:
         raise ValueError("--vocab-only does not make sense with --no-vocab")
 
@@ -1491,6 +1503,7 @@ def main(args_in: list[str] | None = None) -> None:
     if args.dump:
         do_dump_model(model_plus)
         return
+
     endianess = gguf.GGUFEndian.LITTLE
     if args.big_endian:
         endianess = gguf.GGUFEndian.BIG
@@ -1513,7 +1526,7 @@ def main(args_in: list[str] | None = None) -> None:
             "q8_0": GGMLFileType.MostlyQ8_0,
         }[args.outtype]
 
-    print(f"params = {params}")
+    logger.info(f"params = {params}")
 
     model_parent_path = model_plus.paths[0].parent
     vocab_path = Path(args.vocab_dir or args.model or model_parent_path)
@@ -1528,15 +1541,14 @@ def main(args_in: list[str] | None = None) -> None:
         outfile = args.outfile
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab,
                                     endianess=endianess, pad_vocab=args.pad_vocab)
-        print(f"Wrote {outfile}")
+        logger.info(f"Wrote {outfile}")
         return
 
     if model_plus.vocab is not None and args.vocab_dir is None and not args.no_vocab:
         vocab = model_plus.vocab
 
-    print(f"Vocab info: {vocab}")
-    print(f"Special vocab info: {special_vocab}")
-
+    logger.info(f"Vocab info: {vocab}")
+    logger.info(f"Special vocab info: {special_vocab}")
     model   = model_plus.model
     model   = convert_model_names(model, params, args.skip_unknown)
     ftype   = pick_output_type(model, args.outtype)
@@ -1544,11 +1556,11 @@ def main(args_in: list[str] | None = None) -> None:
     outfile = args.outfile or default_outfile(model_plus.paths, ftype)
 
     params.ftype = ftype
-    print(f"Writing {outfile}, format {ftype}")
+    logger.info(f"Writing {outfile}, format {ftype}")
 
     OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab,
                          concurrency=args.concurrency, endianess=endianess, pad_vocab=args.pad_vocab)
-    print(f"Wrote {outfile}")
+    logger.info(f"Wrote {outfile}")
 
 
 if __name__ == '__main__':

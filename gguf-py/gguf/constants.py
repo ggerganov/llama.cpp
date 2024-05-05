@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from enum import Enum, IntEnum, auto
 from typing import Any
 
@@ -72,6 +71,7 @@ class Keys:
 
     class Tokenizer:
         MODEL            = "tokenizer.ggml.model"
+        PRE              = "tokenizer.ggml.pre"
         LIST             = "tokenizer.ggml.tokens"
         TOKEN_TYPE       = "tokenizer.ggml.token_type"
         TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # for BERT-style token types
@@ -853,8 +853,7 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.INT32
         # TODO: need help with 64-bit types in Python
         else:
-            print("Unknown type:", type(val))
-            sys.exit()
+            raise ValueError(f"Unknown type: {type(val)}")
 
 
 # Note: Does not support GGML_QKK_64
@@ -940,6 +939,7 @@ KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
+KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
 KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
 KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES

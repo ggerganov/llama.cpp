@@ -43,11 +43,7 @@ else()
     set(LLAMA_METAL_DEFAULT OFF)
 endif()
 
-if (CMAKE_SYSTEM_NAME MATCHES "ANDROID")
-    set(LLAMA_LLAMAFILE_DEFAULT OFF)
-else()
-    set(LLAMA_LLAMAFILE_DEFAULT ON)
-endif()
+set(LLAMA_LLAMAFILE_DEFAULT ON)
 
 # general
 option(BUILD_SHARED_LIBS                "build shared libraries"                                OFF)
