@@ -320,6 +320,36 @@
 		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
+	},
+	"orion": {
+		"global": {
+			"begin": "",
+			"end": ""
+		},
+		"system": {
+			"begin": "",
+			"prefix": "Human: ",
+			"suffix": "\n\n",
+			"end": ""
+		},
+		"user": {
+			"begin": "",
+			"prefix": "Human: ",
+			"suffix": "\n\nAssistant: </s>",
+			"end": ""
+		},
+		"assistant": {
+			"begin": "",
+			"prefix": "",
+			"suffix": "</s>",
+			"end": ""
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
+		"systemuser-1st-user-has-begin": false,
+		"systemuser-1st-user-has-prefix": false
 	}
+
 }
 
