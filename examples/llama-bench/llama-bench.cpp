@@ -178,7 +178,6 @@ struct cmd_params {
     std::vector<std::vector<float>> tensor_split;
     std::vector<bool> use_mmap;
     std::vector<bool> embeddings;
-    //I'm not sure if it's safe to call llama_numa_init multiple times, so this isn't a vector.
     ggml_numa_strategy numa;
     int reps;
     bool verbose;
