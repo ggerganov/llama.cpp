@@ -934,7 +934,7 @@ If your issue is with model generation quality, then please at least scan the fo
 ### Android
 
 #### Build on Android using Termux
-[Termux](https://github.com/termux/termux-app#installation) is an alternative to execute `llama.cpp` on an Android device (no root required).
+[Termux](https://github.com/termux/termux-app#installation) is a method to execute `llama.cpp` on an Android device (no root required).
 ```
 apt update && apt upgrade -y
 apt install git
