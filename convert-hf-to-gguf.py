@@ -21,7 +21,9 @@ if TYPE_CHECKING:
 
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
-import gguf
+import importlib
+gguf = importlib.import_module("gguf-py.gguf")
+# import gguf
 
 from convert import LlamaHfVocab, permute
 
@@ -43,18 +45,18 @@ AnyModel = TypeVar("AnyModel", bound="type[Model]")
 class Model(ABC):
     _model_classes: dict[str, type[Model]] = {}
 
-    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool):
+    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, args: argparse.Namespace):
         self.dir_model = dir_model
         self.ftype = ftype
         self.fname_out = fname_out
-        self.is_big_endian = is_big_endian
-        self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
-        self.use_temp_file = use_temp_file
+        self.is_big_endian = args.bigendian
+        self.endianess = gguf.GGUFEndian.BIG if args.bigendian else gguf.GGUFEndian.LITTLE
+        self.use_temp_file = args.use_temp_file
         self.is_safetensors = self._is_model_safetensors()
         self.num_parts = Model.count_model_parts(self.dir_model, ".safetensors" if self.is_safetensors else ".bin")
         self.part_names = self._get_part_names()
         self.hparams = Model.load_hparams(self.dir_model)
-        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
+        self.gguf_writer = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], args, endianess=self.endianess, use_temp_file=self.use_temp_file)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
 
     @property
@@ -174,14 +176,11 @@ class Model(ABC):
 
     def write(self):
         self.write_tensors()
-        self.gguf_writer.write_header_to_file()
-        self.gguf_writer.write_kv_data_to_file()
-        self.gguf_writer.write_tensors_to_file()
+        self.gguf_writer.write_to_file()
         self.gguf_writer.close()
 
     def write_vocab(self):
-        self.gguf_writer.write_header_to_file()
-        self.gguf_writer.write_kv_data_to_file()
+        self.gguf_writer.write_to_file(meta_only=True)
         self.gguf_writer.close()
 
     @staticmethod
@@ -1711,7 +1710,7 @@ class MiniCPMModel(Model):
 
             self.gguf_writer.add_tensor(new_name, data)
 
-
+# TODO what the hell is this?
 @Model.register("QWenLMHeadModel")
 class QwenModel(Model):
     model_arch = gguf.MODEL_ARCH.QWEN
@@ -2843,6 +2842,11 @@ def parse_args() -> argparse.Namespace:
         help="directory containing model file",
     )
     parser.add_argument("--use-temp-file", action="store_true", help="use the tempfile library while processing (helpful when running out of memory, process killed)")
+    parser.add_argument("--split", action="store_true", help="split the converted model into multiple files")
+    parser.add_argument("--split-max-tensors", type=int, help="max tensors in each split")
+    parser.add_argument("--split-max-size", type=str, help="max size per split N(M|G)")
+    parser.add_argument("--dry-run", action="store_true", help="only print out a split plan and exit, without writing any new files")
+    parser.add_argument("--large-first-shard", action="store_true", help="include tensors in the first shard when splitting (default: metadata only)")
 
     return parser.parse_args()
 
@@ -2869,6 +2873,15 @@ def main() -> None:
         print(f'Error: {args.model} is not a directory', file=sys.stderr)
         sys.exit(1)
 
+    if args.split and not (args.split_max_tensors or args.split_max_size):
+        raise ValueError("Need to specify one of --split-max-tensors or --split-max-size when splitting")
+
+    if args.split_max_tensors and args.split_max_size:
+        raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
+
+    if args.split_max_size:
+        args.split_max_size = gguf.SplitStrategy.split_str_to_n_bytes(args.split_max_size)
+
     ftype_map = {
         "f32": gguf.GGMLQuantizationType.F32,
         "f16": gguf.GGMLQuantizationType.F16,
@@ -2886,7 +2899,7 @@ def main() -> None:
 
     with torch.inference_mode():
         model_class = Model.from_model_architecture(hparams["architectures"][0])
-        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file)
+        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args)
 
         print("Set model parameters")
         model_instance.set_gguf_parameters()

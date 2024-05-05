@@ -4,6 +4,7 @@ import os
 import shutil
 import struct
 import tempfile
+import time
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, Sequence, Mapping
 from string import ascii_letters, digits
@@ -174,7 +175,9 @@ class GGUFManager:
     # have to consolidate because we need to know kv data count and tensor count before we can write the header
     # and we need to write tensor info before we can write metadata
     # these all kinda show up around the same places anyway so it's not a huge deal?
-    def write_to_file(self, meta_only: bool = False, ftype: int = 0, concurrency: int = 8, write_tensor_data: function = None) -> None:
+    def write_to_file(self, meta_only: bool = False, ftype: int = 0, concurrency: int = 8,
+                      write_tensor_data: function = None
+    ) -> None:
 
         # here is the first place you can assume you have all tensors written and you can establish the size of the file - so logic goes here
         self.total_tensors = len(self.tensors)
@@ -218,19 +221,37 @@ class GGUFManager:
 
         if self.args.dry_run:
             print("\nDry run, not writing files")
+            # instantiating GGUFWriters creates files
+            for name, _, _ in self.split_strategy:
+                os.remove(name)
             return
 
         # run add_tensor_info, write data, then write_tensor_data - taken from convert.py
         running_total = self.total_tensors
+        start = time.time()
         for i, (_, tensors, writer) in enumerate(self.split_strategy):
 
             if tensors:
-                for name, tensor in tensors:
+                for j, (name, tensor) in enumerate(tensors):
                     n_elements = int(np.prod(tensor.shape))
-                    raw_dtype = getattr(tensor.data_type, 'ggml_type', None)
-                    data_type = getattr(tensor.data_type, 'quantized_type', None) or tensor.data_type.dtype
-                    data_nbytes = tensor.data_type.elements_to_bytes(n_elements)
-                    writer.add_tensor_info(name, tensor.shape, data_type, data_nbytes, raw_dtype=raw_dtype)
+                    # logic from convert.py
+                    if getattr(tensor, 'data_type', None):
+                        raw_dtype = getattr(tensor.data_type, 'ggml_type', None)
+                        data_type = getattr(tensor.data_type, 'quantized_type', None) or tensor.data_type.dtype
+                        data_nbytes = tensor.data_type.elements_to_bytes(n_elements)
+                        writer.add_tensor_info(name, tensor.shape, data_type, data_nbytes, raw_dtype=raw_dtype)
+                    # logic from convert-hf-to-gguf.py
+                    else:
+                        # stolen from write_tensor_data because that doesn't get called with this logic
+                        elapsed = time.time() - start
+                        size = ' x '.join(f"{dim:6d}" for dim in tensor.shape)
+                        padi = len(str(self.total_tensors))
+                        dtype = str(tensor.dtype)
+                        print(
+                            f"[{j + 1:{padi}d}/{len(tensors)}] Writing tensor {name:38s} | size {size:16} | type {dtype:8} | T+{int(elapsed):4}"
+                        )
+                        writer.add_tensor(name, tensor)
+
 
             writer.write_header_to_file()
             writer.write_kv_data_to_file()
@@ -240,8 +261,9 @@ class GGUFManager:
                 print(f"\nWriting to shard {i + 1}/{self.total_shards} with {len(tensors)}/{running_total} remaining tensors (of {self.total_tensors} total)")
                 running_total -= len(tensors)
 
-                # convert.py's write_tensor_data is dependent on so many objects in convert.py itself that it's easier to pass the function as a parameter and call it here
-                write_tensor_data(ftype, dict(tensors), concurrency, writer)
+                if write_tensor_data:
+                    # convert.py's write_tensor_data is dependent on so many objects in convert.py itself that it's easier to pass the function as a parameter and call it here
+                    write_tensor_data(ftype, dict(tensors), concurrency, writer)
 
     def add_uint8(self, key: str, val: int) -> None:
         self.kv_data[key] = (val, GGUFValueType.UINT8)
@@ -295,8 +317,23 @@ class GGUFManager:
         self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None,
         raw_dtype: GGMLQuantizationType | None = None,
     ) -> None:
-        # TODO WRITE
-        pass
+        if self.endianess == GGUFEndian.BIG:
+            tensor.byteswap(inplace=True)
+
+        # TODO reimplement temp file
+        #if self.use_temp_file and self.temp_file is None:
+        #    fp = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256 * 1024 * 1024)
+        #    fp.seek(0)
+        #    self.temp_file = fp
+
+        self.add_tensor_info(name, tensor)
+
+        #if self.temp_file is None:
+        #    self.tensors.append(tensor)
+        #    return
+
+        #tensor.tofile(self.temp_file)
+        #self.write_padding(self.temp_file, tensor.nbytes)
 
     def write_tensors_to_file(self) -> None:
         # TODO WRITE

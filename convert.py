@@ -1465,7 +1465,7 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
     parser.add_argument("--split", action="store_true", help="split the converted model into multiple files")
     parser.add_argument("--split-max-tensors", type=int, help="max tensors in each split")
-    parser.add_argument("--split-max-size", type=str, help="max size per split N(M|G)+")
+    parser.add_argument("--split-max-size", type=str, help="max size per split N(M|G)")
     parser.add_argument("--dry-run", action="store_true", help="only print out a split plan and exit, without writing any new files")
     parser.add_argument("--large-first-shard", action="store_true", help="include tensors in the first shard when splitting (default: metadata only)")
 
