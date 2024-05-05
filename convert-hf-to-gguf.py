@@ -2079,6 +2079,8 @@ class GemmaModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
         # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
         # To prevent errors, skip loading lm_head.weight.
         if name == "lm_head.weight":
@@ -2089,7 +2091,7 @@ class GemmaModel(Model):
         if name.endswith("norm.weight"):
             data_torch = data_torch + 1
 
-        return super().modify_tensors(data_torch, name, bid)
+        return [(self.map_tensor_name(name), data_torch)]
 
 
 @Model.register("Starcoder2ForCausalLM")
@@ -2277,7 +2279,7 @@ class LazyTorchTensor:
 
     @staticmethod
     def _recurse_apply(o: Any, fn: Callable[[Any], Any]) -> Any:
-        # TODO: dicts
+        # TODO: dict and set
         if isinstance(o, (list, tuple)):
             L = []
             for item in o:
@@ -2379,7 +2381,7 @@ class LazyTorchTensor:
     def __add__(self, *args):  # gemma
         return self._wrap_fn(torch.Tensor.__add__)(self, *args)
 
-    def __getitem__(self, *args):  # bloom falcon internlm2
+    def __getitem__(self, *args):  # bloom falcon refact internlm2
         return self._wrap_fn(torch.Tensor.__getitem__)(self, *args)
 
 
