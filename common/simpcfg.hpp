@@ -126,7 +126,8 @@ void dumphex_string(const TString &sIn, const std::string &msgTag){
 // variable length MultiNativeCharSize (ie multibye in case of utf-8) ones.
 // NOTE: It will also work, if atleast either end of string as well as trimChars
 // have NativeCharSize chars from their encoding space, rather than variable
-// length MultiNativeCharSize based chars if any.
+// length MultiNativeCharSize based chars if any. There needs to be NativeCharSized
+// chars beyond any chars that get trimmed, on either side.
 //
 // NOTE: Given the way UTF-8 char encoding is designed, where NativeCharSize 1byte
 // encoded chars are fully unique and dont overlap with any bytes from any of the
@@ -134,8 +135,8 @@ void dumphex_string(const TString &sIn, const std::string &msgTag){
 // the trimChars belong to NativeCharSize chars subset, the logic should work, even
 // if string has a mixture of NativeCharSize and MultiNativeCharSize encoded chars.
 // Chances are utf-16 and utf-32 also have similar characteristics wrt thier
-// NativeCharSize encoded chars (ie fully encoded within single 16bit and 32bit value
-// respectively), and so equivalent semantic applies to them also.
+// NativeCharSize encoded chars (ie those fully encoded within single 16bit and 32bit 
+// value respectively), and so equivalent semantic applies to them also.
 //
 // ALERT: Given that this simple minded logic, works at individual NativeCharSize level
 // only, If trimChars involve variable length MultiNativeCharSize encoded chars, then
@@ -146,7 +147,7 @@ void dumphex_string(const TString &sIn, const std::string &msgTag){
 // * given that different variable length MultiNativeCharSize encoded chars may have
 //   some common NativeCharSize subparts (bytes in case of utf-8) between them, if one
 //   of these chars is at either end of the string and another char is in trimChars,
-//   then string may get partially trimmed.
+//   then string may get partially trimmed wrt such a char at either end.
 //
 template <typename TString>
 TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
@@ -188,7 +189,7 @@ std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \
 // NOTE:UTF8: This will work provided the string being trimmed as well the chars
 // being trimmed are made up of 1byte encoded chars in case of utf8 encoding space.
 // If the string being trimmed includes multibyte (ie MultiNativeCharSize) encoded
-// characters at the end, then trimming can mess things up, if you have multibyte
+// characters at either end, then trimming can mess things up, if you have multibyte
 // encoded utf-8 chars in the trimChars set.
 //
 // Currently given that SimpCfg only uses this with NativeCharSize chars in the
@@ -268,7 +269,7 @@ std::string str(std::vector<TypeWithStrSupp> values) {
 }
 
 
-// **** **** **** SimpCfg related helpers **** **** **** //
+// **** **** **** the SimpCfg **** **** **** //
 
 
 typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
@@ -499,6 +500,10 @@ public:
 
 
 #ifdef SC_TEST_PRG
+
+
+// **** **** **** some simple test code **** **** **** //
+
 
 void check_string() {
     std::vector<std::string> vStandard = { "123", "1अ3" };
