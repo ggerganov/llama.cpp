@@ -52,13 +52,14 @@ class Model:
     is_big_endian: bool
     endianess: gguf.GGUFEndian
     use_temp_file: bool
+    lazy: bool
     part_names: list[str]
     is_safetensors: bool
     hparams: dict[str, Any]
     gguf_writer: gguf.GGUFWriter
     block_count: int
     tensor_map: gguf.TensorNameMap
-    tensors: dict[str, Tensor]
+    tensor_names: set[str] | None
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
@@ -72,6 +73,7 @@ class Model:
         self.is_big_endian = is_big_endian
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
+        self.lazy = not eager
         self.part_names = Model.get_model_part_names(self.dir_model, ".safetensors")
         self.is_safetensors = len(self.part_names) > 0
         if not self.is_safetensors:
@@ -80,10 +82,7 @@ class Model:
         self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
-        self.tensors = dict(self.get_tensors())
-        if not eager:
-            for k, v in self.tensors.items():
-                self.tensors[k] = LazyTorchTensor.from_eager(v)
+        self.tensor_names = None
 
     @classmethod
     def __init_subclass__(cls):
@@ -104,6 +103,22 @@ class Model:
         self._set_vocab_gpt2()
 
     def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
+        tensor_names_from_parts: set[str] = set()
+
+        if len(self.part_names) > 1:
+            self.tensor_names = set()
+            index_name = "model.safetensors" if self.is_safetensors else "pytorch_model.bin"
+            index_name += ".index.json"
+            logger.info(f"gguf: loading model weight map from '{index_name}'")
+            with open(self.dir_model / index_name, "r", encoding="utf-8") as f:
+                index: dict[str, Any] = json.load(f)
+                weight_map = index.get("weight_map")
+                if weight_map is None or not isinstance(weight_map, dict):
+                    raise ValueError(f"Can't load 'weight_map' from {index_name!r}")
+                self.tensor_names.update(weight_map.keys())
+        else:
+            self.tensor_names = tensor_names_from_parts
+
         for part_name in self.part_names:
             logger.info(f"gguf: loading model part '{part_name}'")
             ctx: ContextManager[Any]
@@ -114,9 +129,17 @@ class Model:
                 ctx = contextlib.nullcontext(torch.load(str(self.dir_model / part_name), map_location="cpu", mmap=True, weights_only=True))
 
             with ctx as model_part:
+                tensor_names_from_parts.update(model_part.keys())
+
                 for name in model_part.keys():
                     data = model_part.get_tensor(name) if self.is_safetensors else model_part[name]
+                    if self.lazy:
+                        data = LazyTorchTensor.from_eager(data)
                     yield name, data
+
+        # only verify tensor name presence; it doesn't matter if they are not in the right files
+        if len(sym_diff := tensor_names_from_parts.symmetric_difference(self.tensor_names)) > 0:
+            raise ValueError(f"Mismatch between weight map and model parts for tensor names: {sym_diff}")
 
     def format_tensor_name(self, key: gguf.MODEL_TENSOR, bid: int | None = None, suffix: str = ".weight") -> str:
         name: str = gguf.TENSOR_NAMES[key]
@@ -194,7 +217,7 @@ class Model:
     def write_tensors(self):
         max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
 
-        for name, data_torch in self.tensors.items():
+        for name, data_torch in self.get_tensors():
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
                 continue
@@ -248,8 +271,6 @@ class Model:
 
     def write(self):
         self.write_tensors()
-        self.tensors.clear()  # save memory by not keeping references to the tensors
-
         self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
@@ -621,8 +642,10 @@ class BloomModel(Model):
         tensors.append((self.map_tensor_name(name), data_torch))
 
         if name == "word_embeddings.weight":
+            assert self.tensor_names is not None
+
             # TODO: tie them at runtime, don't duplicate in the model file
-            if "lm_head.weight" not in self.tensors and "output.weight" not in self.tensors:
+            if all(s not in self.tensor_names for s in ("lm_head.weight", "output.weight")):
                 tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
 
         return tensors
@@ -1759,7 +1782,10 @@ class CodeShellModel(Model):
         tensors: list[tuple[str, Tensor]] = [(new_name, data_torch)]
 
         if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
-            if "lm_head.weight" not in self.tensors and "output.weight" not in self.tensors:
+            assert self.tensor_names is not None
+
+            if all(s not in self.tensor_names for s in ("lm_head.weight", "output.weight")):
+                # copy tok_embd.weight to output.weight
                 tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
 
         return tensors
