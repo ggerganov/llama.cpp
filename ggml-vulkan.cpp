@@ -147,7 +147,7 @@ struct vk_device {
     vk_pipeline pipeline_silu_f32;
     vk_pipeline pipeline_relu_f32;
     vk_pipeline pipeline_diag_mask_inf_f32;
-    vk_pipeline pipeline_soft_max_f32;
+    vk_pipeline pipeline_soft_max_f32, pipeline_soft_max_f32_f16;
     vk_pipeline pipeline_rope_f32, pipeline_rope_f16;
     vk_pipeline pipeline_rope_neox_f32, pipeline_rope_neox_f16;
     vk_pipeline pipeline_argsort_f32;
@@ -1502,6 +1502,7 @@ static void ggml_vk_load_shaders(ggml_backend_vk_context * ctx) {
     ggml_vk_create_pipeline(ctx, ctx->device->pipeline_diag_mask_inf_f32, "diag_mask_inf_f32", diag_mask_inf_f32_len, diag_mask_inf_f32_data, "main", 2, sizeof(vk_op_diag_mask_push_constants), {512, 1, 1}, {}, 1);
 
     ggml_vk_create_pipeline(ctx, ctx->device->pipeline_soft_max_f32, "soft_max_f32", soft_max_f32_len, soft_max_f32_data, "main", 4, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, {}, 1);
+    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_soft_max_f32_f16, "soft_max_f32_f16", soft_max_f32_f16_len, soft_max_f32_f16_data, "main", 4, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, {}, 1);
 
     ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_f32, "rope_f32", rope_f32_len, rope_f32_data, "main", 3, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
     ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_f16, "rope_f16", rope_f16_len, rope_f16_data, "main", 3, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
@@ -3828,13 +3829,14 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
         }
         return nullptr;
     case GGML_OP_SOFT_MAX:
-#pragma message("TODO: add ggml_vk_soft_max() F16 src1 and src2 support")
-#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5021")
-        GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32);
-        GGML_ASSERT(!src2 || src2->type == GGML_TYPE_F32);
+        GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32 || src1->type == GGML_TYPE_F16);
+        GGML_ASSERT(!src2 || src2->type == GGML_TYPE_F32 || src2->type == GGML_TYPE_F16);
 
         if (src0->type == GGML_TYPE_F32 && (src1 == nullptr || src1->type == GGML_TYPE_F32) && (src2 == nullptr || src2->type == GGML_TYPE_F32) && dst->type == GGML_TYPE_F32) {
             return ctx->device->pipeline_soft_max_f32;
+        }
+        if (src0->type == GGML_TYPE_F32 && src1->type == GGML_TYPE_F16 && src2->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F32) {
+            return ctx->device->pipeline_soft_max_f32_f16;
         }
         return nullptr;
     case GGML_OP_ROPE:
