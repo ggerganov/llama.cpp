@@ -116,7 +116,7 @@ static __global__ void flash_attn_vec_ext_f16(
             sum2 = warp_reduce_sum(sum2);
             half sum = __low2half(sum2) + __high2half(sum2);
             sum += mask ? maskh[k_VKQ_0 + i_KQ] : __float2half(0.0f);
-            kqmax_new = __hmax(kqmax_new, sum);
+            kqmax_new = ggml_cuda_hmax(kqmax_new, sum);
             if (threadIdx.x == 0) {
                 KQ[i_KQ] = sum;
             }
@@ -416,9 +416,9 @@ static __global__ void flash_attn_ext_f16(
                     const int k = k0 + threadIdx.x;
 
                     KQ2_tmp[k0/WARP_SIZE] += mask ? mask2[(j*ne11 + k_VKQ_0)/2 + k] : make_half2(0.0f, 0.0f);
-                    KQ_max_new = __hmax2(KQ_max_new, KQ2_tmp[k0/WARP_SIZE]);
+                    KQ_max_new = ggml_cuda_hmax2(KQ_max_new, KQ2_tmp[k0/WARP_SIZE]);
                 }
-                KQ_max_new = __half2half2(warp_reduce_max(__hmax(__low2half(KQ_max_new), __high2half(KQ_max_new))));
+                KQ_max_new = __half2half2(warp_reduce_max(ggml_cuda_hmax(__low2half(KQ_max_new), __high2half(KQ_max_new))));
                 const half2 diff = KQ_max_h2[j0/nwarps] - KQ_max_new;
                 KQ_max_scale_h2[j0/nwarps] = h2exp(diff);
                 const uint32_t ftz_mask = __hgt2_mask(diff, make_half2(SOFTMAX_FTZ_THRESHOLD, SOFTMAX_FTZ_THRESHOLD));

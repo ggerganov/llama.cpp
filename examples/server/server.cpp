@@ -1383,9 +1383,10 @@ struct server_context {
             if (!slot.params.stream && slot.stopped_word) {
                 const std::vector<llama_token> stop_word_toks = llama_tokenize(ctx, slot.stopping_word, false);
 
+                size_t safe_offset = std::min(slot.generated_token_probs.size(), stop_word_toks.size());
                 probs = std::vector<completion_token_output>(
                         slot.generated_token_probs.begin(),
-                        slot.generated_token_probs.end() - stop_word_toks.size());
+                        slot.generated_token_probs.end() - safe_offset);
             } else {
                 probs = std::vector<completion_token_output>(
                         slot.generated_token_probs.begin(),

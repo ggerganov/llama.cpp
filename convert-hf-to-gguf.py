@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import argparse
 import contextlib
 import json
@@ -25,6 +26,8 @@ if 'NO_LOCAL_GGUF' not in os.environ:
 import gguf
 
 from convert import LlamaHfVocab, permute
+
+logger = logging.getLogger("hf-to-gguf")
 
 
 ###### MODEL DEFINITIONS ######
@@ -76,7 +79,7 @@ class Model(ABC):
 
     def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
         for part_name in self.part_names:
-            print(f"gguf: loading model part '{part_name}'")
+            logger.info(f"gguf: loading model part '{part_name}'")
             ctx: ContextManager[Any]
             if self.is_safetensors:
                 from safetensors import safe_open
@@ -95,42 +98,42 @@ class Model(ABC):
 
         if (n_ctx := self.find_hparam(["max_position_embeddings", "n_ctx"], optional=True)) is not None:
             self.gguf_writer.add_context_length(n_ctx)
-            print(f"gguf: context length = {n_ctx}")
+            logger.info(f"gguf: context length = {n_ctx}")
 
         n_embd = self.find_hparam(["hidden_size", "n_embd"])
         self.gguf_writer.add_embedding_length(n_embd)
-        print(f"gguf: embedding length = {n_embd}")
+        logger.info(f"gguf: embedding length = {n_embd}")
 
         if (n_ff := self.find_hparam(["intermediate_size", "n_inner"], optional=True)) is not None:
             self.gguf_writer.add_feed_forward_length(n_ff)
-            print(f"gguf: feed forward length = {n_ff}")
+            logger.info(f"gguf: feed forward length = {n_ff}")
 
         n_head = self.find_hparam(["num_attention_heads", "n_head"])
         self.gguf_writer.add_head_count(n_head)
-        print(f"gguf: head count = {n_head}")
+        logger.info(f"gguf: head count = {n_head}")
 
         if (n_head_kv := self.hparams.get("num_key_value_heads")) is not None:
             self.gguf_writer.add_head_count_kv(n_head_kv)
-            print(f"gguf: key-value head count = {n_head_kv}")
+            logger.info(f"gguf: key-value head count = {n_head_kv}")
 
         if (rope_theta := self.hparams.get("rope_theta")) is not None:
             self.gguf_writer.add_rope_freq_base(rope_theta)
-            print(f"gguf: rope theta = {rope_theta}")
+            logger.info(f"gguf: rope theta = {rope_theta}")
         if (f_rms_eps := self.hparams.get("rms_norm_eps")) is not None:
             self.gguf_writer.add_layer_norm_rms_eps(f_rms_eps)
-            print(f"gguf: rms norm epsilon = {f_rms_eps}")
+            logger.info(f"gguf: rms norm epsilon = {f_rms_eps}")
         if (f_norm_eps := self.find_hparam(["layer_norm_eps", "layer_norm_epsilon", "norm_epsilon"], optional=True)) is not None:
             self.gguf_writer.add_layer_norm_eps(f_norm_eps)
-            print(f"gguf: layer norm epsilon = {f_norm_eps}")
+            logger.info(f"gguf: layer norm epsilon = {f_norm_eps}")
         if (n_experts := self.hparams.get("num_local_experts")) is not None:
             self.gguf_writer.add_expert_count(n_experts)
-            print(f"gguf: expert count = {n_experts}")
+            logger.info(f"gguf: expert count = {n_experts}")
         if (n_experts_used := self.hparams.get("num_experts_per_tok")) is not None:
             self.gguf_writer.add_expert_used_count(n_experts_used)
-            print(f"gguf: experts used count = {n_experts_used}")
+            logger.info(f"gguf: experts used count = {n_experts_used}")
 
         self.gguf_writer.add_file_type(self.ftype)
-        print(f"gguf: file type = {self.ftype}")
+        logger.info(f"gguf: file type = {self.ftype}")
 
     def write_tensors(self):
         block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
@@ -151,8 +154,7 @@ class Model(ABC):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -169,7 +171,7 @@ class Model(ABC):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -274,8 +276,8 @@ class Model(ABC):
         chktok = tokenizer.encode(chktxt)
         chkhsh = sha256(str(chktok).encode()).hexdigest()
 
-        print(f"chktok: {chktok}")
-        print(f"chkhsh: {chkhsh}")
+        logger.debug(f"chktok: {chktok}")
+        logger.debug(f"chkhsh: {chkhsh}")
 
         res = None
 
@@ -306,24 +308,30 @@ class Model(ABC):
         if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
             # ref: https://huggingface.co/openai-community/gpt2
             res = "gpt-2"
+        if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
+            # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
+            res = "refact"
+        if chkhsh == "9c2227e4dd922002fb81bde4fc02b0483ca4f12911410dee2255e4987644e3f8":
+            # ref: https://huggingface.co/CohereForAI/c4ai-command-r-v01
+            res = "command-r"
 
         if res is None:
-            print("\n")
-            print("**************************************************************************************")
-            print("** WARNING: The BPE pre-tokenizer was not recognized!")
-            print("**          There are 2 possible reasons for this:")
-            print("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
-            print("**          - the pre-tokenization config has changed upstream")
-            print("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
-            print("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
-            print("**")
-            print(f"** chkhsh:  {chkhsh}")
-            print("**************************************************************************************")
-            print("\n")
+            logger.warning("\n")
+            logger.warning("**************************************************************************************")
+            logger.warning("** WARNING: The BPE pre-tokenizer was not recognized!")
+            logger.warning("**          There are 2 possible reasons for this:")
+            logger.warning("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
+            logger.warning("**          - the pre-tokenization config has changed upstream")
+            logger.warning("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
+            logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
+            logger.warning("**")
+            logger.warning(f"** chkhsh:  {chkhsh}")
+            logger.warning("**************************************************************************************")
+            logger.warning("\n")
             raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
-        print(f"tokenizer.ggml.pre: {res}")
-        print(f"chkhsh: {chkhsh}")
+        logger.debug(f"tokenizer.ggml.pre: {repr(res)}")
+        logger.debug(f"chkhsh: {chkhsh}")
 
         return res
 
@@ -439,9 +447,7 @@ class Model(ABC):
 
         if vocab_size > len(tokens):
             pad_count = vocab_size - len(tokens)
-            print(
-                f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]"
-            )
+            logger.debug(f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]")
             for i in range(1, pad_count + 1):
                 tokens.append(f"[PAD{i}]")
                 scores.append(-1000.0)
@@ -553,7 +559,7 @@ class BloomModel(Model):
                     ),
                     axis=0,
                 )
-                print("re-format attention.linear_qkv.weight")
+                logger.info("re-format attention.linear_qkv.weight")
             elif re.match(r"h\.\d+\.self_attention\.query_key_value\.bias", name):
                 qkv_bias = data.reshape((n_head, 3, n_embed // n_head))
                 data = np.concatenate(
@@ -564,13 +570,12 @@ class BloomModel(Model):
                     ),
                     axis=0,
                 )
-                print("re-format attention.linear_qkv.bias")
+                logger.info("re-format attention.linear_qkv.bias")
 
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -587,13 +592,13 @@ class BloomModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"=> {new_name}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+            logger.info(f"=> {new_name}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
             if not has_lm_head and name == "word_embeddings.weight":
                 self.gguf_writer.add_tensor("output.weight", data)
-                print(name, f"=> output.weight, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+                logger.info(name, f"=> output.weight, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
 
 @Model.register("MPTForCausalLM")
@@ -653,8 +658,7 @@ class MPTModel(Model):
             else:
                 new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -671,7 +675,7 @@ class MPTModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -697,8 +701,7 @@ class OrionModel(Model):
         elif "model_max_length" in self.hparams:
             ctx_length = self.hparams["model_max_length"]
         else:
-            print("gguf: can not find ctx length parameter.")
-            sys.exit()
+            raise ValueError("gguf: can not find ctx length parameter.")
 
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_name(self.dir_model.name)
@@ -736,8 +739,7 @@ class OrionModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -754,7 +756,7 @@ class OrionModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
 
@@ -779,8 +781,7 @@ class BaichuanModel(Model):
         elif "model_max_length" in self.hparams:
             ctx_length = self.hparams["model_max_length"]
         else:
-            print("gguf: can not find ctx length parameter.")
-            sys.exit()
+            raise ValueError("gguf: can not find ctx length parameter.")
 
         self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_source_hf_repo(hf_repo)
@@ -809,7 +810,7 @@ class BaichuanModel(Model):
 
         for i in range(block_count):
             if (w := model_kv.get(f"model.layers.{i}.self_attn.W_pack.weight")) is not None:
-                print(f"Unpacking and permuting layer {i}")
+                logger.info(f"Unpacking and permuting layer {i}")
                 model_kv[f"model.layers.{i}.self_attn.q_proj.weight"] = \
                     self._reverse_hf_permute_part(w, 0, head_count, head_count)
                 model_kv[f"model.layers.{i}.self_attn.k_proj.weight"] = \
@@ -834,8 +835,7 @@ class BaichuanModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -852,7 +852,7 @@ class BaichuanModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
@@ -937,8 +937,7 @@ class XverseModel(Model):
         elif "model_max_length" in self.hparams:
             ctx_length = self.hparams["model_max_length"]
         else:
-            print("gguf: can not find ctx length parameter.")
-            sys.exit()
+            raise ValueError("gguf: can not find ctx length parameter.")
 
         self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_source_hf_repo(hf_repo)
@@ -987,8 +986,7 @@ class XverseModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1005,7 +1003,7 @@ class XverseModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{name} -> {new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
@@ -1092,8 +1090,7 @@ class FalconModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1110,7 +1107,7 @@ class FalconModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1197,8 +1194,7 @@ class RefactModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight",))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1215,7 +1211,7 @@ class RefactModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1264,10 +1260,9 @@ class PersimmonModel(Model):
             data = data_torch.to(torch.float32).squeeze().numpy()
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
             n_dims = len(data.shape)
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
 
@@ -1332,8 +1327,7 @@ class StableLMModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1350,7 +1344,7 @@ class StableLMModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1366,8 +1360,7 @@ class StableLMModel(Model):
             merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
             if self.ftype == 1 and data_dtype == np.float16 and (n_dims == 1 or new_name.endswith("_norm.weight")):
                 data = data.astype(np.float32)
 
@@ -1375,7 +1368,7 @@ class StableLMModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and not new_name.endswith("_norm.weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1427,7 +1420,7 @@ class LlamaModel(Model):
         experts = dict()
         for name, data_torch in self.get_tensors():
             # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
                 continue
 
             old_dtype = data_torch.dtype
@@ -1480,10 +1473,9 @@ class LlamaModel(Model):
 
                             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
                             if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
+                                raise ValueError(f"Can not map tensor {name!r}")
 
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+                            logger.info(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
                             self.gguf_writer.add_tensor(new_name, data)
                 continue
@@ -1491,8 +1483,7 @@ class LlamaModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1509,7 +1500,7 @@ class LlamaModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1584,10 +1575,9 @@ class GrokModel(Model):
 
                             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
                             if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
+                                raise ValueError(f"Can not map tensor {name!r}")
 
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+                            logger.info(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
                             self.gguf_writer.add_tensor(new_name, data)
                 continue
@@ -1595,8 +1585,7 @@ class GrokModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1613,7 +1602,7 @@ class GrokModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1646,7 +1635,7 @@ class DbrxModel(Model):
         self.gguf_writer.add_layer_norm_eps(1e-5)
 
         self.gguf_writer.add_file_type(self.ftype)
-        print(f"gguf: file type = {self.ftype}")
+        logger.info(f"gguf: file type = {self.ftype}")
 
     def write_tensors(self):
         block_count = self.hparams.get("n_layers")
@@ -1689,8 +1678,7 @@ class DbrxModel(Model):
             # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
             new_name = tensor_map.get_name(name if not experts else name + ".weight", try_suffixes=(".weight",))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1698,8 +1686,7 @@ class DbrxModel(Model):
             # Most of the codebase that takes in 1D tensors only handles F32 tensors
             # and most of the outputs tensors are F32.
             if data_dtype != np.float32 and n_dims == 1:
-                print(f"Can not map tensor {name!r}: all 1D tensors must be F32")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}: all 1D tensors must be F32")
 
             # if f32 desired, convert any float16 to float32
             if self.ftype == 0 and data_dtype == np.float16:
@@ -1709,7 +1696,7 @@ class DbrxModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and n_dims > 1:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1771,8 +1758,7 @@ class MiniCPMModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1789,7 +1775,7 @@ class MiniCPMModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -1855,8 +1841,7 @@ class QwenModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1873,7 +1858,7 @@ class QwenModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
 
 
@@ -1950,10 +1935,9 @@ class Qwen2MoeModel(Model):
 
                             new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
                             if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
+                                raise ValueError(f"Can not map tensor {name!r}")
 
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+                            logger.debug(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
 
                             self.gguf_writer.add_tensor(new_name, data)
                 continue
@@ -1961,8 +1945,7 @@ class Qwen2MoeModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -1979,7 +1962,7 @@ class Qwen2MoeModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+            logger.debug(f"{new_name}, n_dims = {n_dims}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -2024,8 +2007,7 @@ class GPT2Model(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2042,13 +2024,13 @@ class GPT2Model(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
             # note: GPT2 output is tied to (same as) wte in original model
             if new_name == "token_embd.weight":
-                print(f"output.weight, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+                logger.info(f"output.weight, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
                 self.gguf_writer.add_tensor("output.weight", data)
 
 
@@ -2087,8 +2069,7 @@ class Phi3MiniModel(Model):
         tokenizer_path = self.dir_model / 'tokenizer.model'
 
         if not tokenizer_path.is_file():
-            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
-            sys.exit(1)
+            raise ValueError(f'Error: Missing {tokenizer_path}')
 
         tokenizer = SentencePieceProcessor(str(tokenizer_path))
 
@@ -2126,7 +2107,7 @@ class Phi3MiniModel(Model):
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
                     if (token_id >= vocab_size):
-                        print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        logger.debug(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                         continue
 
                     tokens[token_id] = key.encode("utf-8")
@@ -2208,8 +2189,7 @@ class PlamoModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             # shuffle for broadcasting of gqa in ggml_mul_mat
             if new_name.endswith("attn_q.weight"):
@@ -2240,7 +2220,7 @@ class PlamoModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -2286,8 +2266,7 @@ class CodeShellModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2304,13 +2283,13 @@ class CodeShellModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
             if not has_lm_head and name == "transformer.wte.weight":
                 self.gguf_writer.add_tensor("output.weight", data)
-                print(name, f"=> output.weight, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+                logger.info(name, f"=> output.weight, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
 
 @Model.register("InternLM2ForCausalLM")
@@ -2332,7 +2311,7 @@ class InternLM2Model(Model):
         toktypes: list[int] = []
 
         if not tokenizer_path.is_file():
-            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
+            logger.error(f'Error: Missing {tokenizer_path}')
             sys.exit(1)
 
         sentencepiece_model = model.ModelProto()
@@ -2349,7 +2328,7 @@ class InternLM2Model(Model):
             if text == b"\x00":
                 # (TODO): fixme
                 # Hack here and replace the \x00 characters.
-                print(f"InternLM2 convert token '{text}' to '🐉'!")
+                logger.debug(f"InternLM2 convert token '{text}' to '🐉'!")
                 text = "🐉"
 
             toktype = SentencePieceTokenTypes.NORMAL
@@ -2390,7 +2369,7 @@ class InternLM2Model(Model):
             # TODO: this is a hack, should be fixed
             #       https://github.com/ggerganov/llama.cpp/pull/6745#issuecomment-2067687048
             special_vocab.special_token_ids["eos"] = self._try_get_sft_eos(tokenizer)
-            print(f"Replace eos:{old_eos} with a special token:{special_vocab.special_token_ids['eos']} \
+            logger.warning(f"Replace eos:{old_eos} with a special token:{special_vocab.special_token_ids['eos']} \
 in chat mode so that the conversation can end normally.")
 
         special_vocab.add_to_gguf(self.gguf_writer)
@@ -2435,8 +2414,7 @@ in chat mode so that the conversation can end normally.")
         # map tensor names
         new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
         if new_name is None:
-            print(f"Can not map tensor {name!r}")
-            sys.exit()
+            raise ValueError(f"Can not map tensor {name!r}")
 
         n_dims = len(data.shape)
         data_dtype = data.dtype
@@ -2453,7 +2431,7 @@ in chat mode so that the conversation can end normally.")
         if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
             data = data.astype(np.float16)
 
-        print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+        logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
         self.gguf_writer.add_tensor(new_name, data)
 
     def write_tensors(self):
@@ -2564,8 +2542,7 @@ class BertModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             # convert any unsupported data types to float32
             if data_torch.dtype not in (torch.float16, torch.float32):
@@ -2585,7 +2562,7 @@ class BertModel(Model):
                 # if f32 desired, convert any float16 to float32
                 new_dtype = np.float32
 
-            print(f"{new_name}, n_dims = {n_dims}, {data_torch.dtype} --> {new_dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {data_torch.dtype} --> {new_dtype}")
 
             if data.dtype != new_dtype:
                 data = data.astype(new_dtype)
@@ -2664,7 +2641,7 @@ class GemmaModel(Model):
             # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
             # To prevent errors, skip loading lm_head.weight.
             if name == "lm_head.weight":
-                print(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+                logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
                 continue
 
             old_dtype = data_torch.dtype
@@ -2681,8 +2658,7 @@ class GemmaModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2693,7 +2669,7 @@ class GemmaModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -2721,7 +2697,7 @@ class MambaModel(Model):
         else:
             # Use the GPT-NeoX tokenizer when no tokenizer files are present
             tokenizer_path = Path(sys.path[0]) / "models" / "ggml-vocab-gpt-neox.gguf"
-            print(f"Using tokenizer from '{os.path.relpath(tokenizer_path, os.getcwd())}'")
+            logger.warning(f"Using tokenizer from '{os.path.relpath(tokenizer_path, os.getcwd())}'")
             neox_reader = gguf.GGUFReader(tokenizer_path, "r")
 
             field = neox_reader.get_field(gguf.Keys.Tokenizer.MODEL)
@@ -2793,17 +2769,16 @@ class MambaModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             if name.endswith(".A_log"):
-                print("A_log --> A ==> " + new_name)
+                logger.debug("A_log --> A ==> " + new_name)
                 data_torch = -torch.exp(data_torch)
 
             # assuming token_embd.weight is seen before output.weight
             if tok_embd is not None and new_name == output_name:
                 if torch.equal(tok_embd, data_torch):
-                    print(f"{output_name} is equivalent to {tok_embd_name}, omitting")
+                    logger.debug(f"{output_name} is equivalent to {tok_embd_name}, omitting")
                     continue
             if new_name == tok_embd_name:
                 tok_embd = data_torch
@@ -2826,7 +2801,7 @@ class MambaModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and new_weight_name.endswith((".ssm_in", ".ssm_out", "token_embd", "output")) and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -2885,8 +2860,7 @@ class OlmoModel(Model):
             # map tensor names
             new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
             if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
+                raise ValueError(f"Can not map tensor {name!r}")
 
             n_dims = len(data.shape)
             data_dtype = data.dtype
@@ -2903,7 +2877,7 @@ class OlmoModel(Model):
             if self.ftype == 1 and data_dtype == np.float32 and n_dims == 2:
                 data = data.astype(np.float16)
 
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+            logger.info(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
 
@@ -2936,12 +2910,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--use-temp-file", action="store_true", help="use the tempfile library while processing (helpful when running out of memory, process killed)")
     parser.add_argument("--model-name", type=str, default=None, help="name of the model")
+    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     dir_model = args.model
 
@@ -2951,15 +2928,15 @@ def main() -> None:
         tmp_model_path = args.model / "weighted_model"
         dir_model = tmp_model_path
         if tmp_model_path.is_dir():
-            print(f"{tmp_model_path} exists as a weighted model.")
+            logger.info(f"{tmp_model_path} exists as a weighted model.")
         else:
             tmp_model_path.mkdir(parents=True, exist_ok=True)
-            print("Saving new weighted model ...")
+            logger.info("Saving new weighted model ...")
             add_scale_weights(str(args.model), str(args.awq_path), str(tmp_model_path))
-            print(f"Saved weighted model at {tmp_model_path}.")
+            logger.info(f"Saved weighted model at {tmp_model_path}.")
 
     if not dir_model.is_dir():
-        print(f'Error: {args.model} is not a directory', file=sys.stderr)
+        logger.error(f'Error: {args.model} is not a directory')
         sys.exit(1)
 
     ftype_map = {
@@ -2973,7 +2950,7 @@ def main() -> None:
         # output in the same directory as the model by default
         fname_out = dir_model / f'ggml-model-{args.outtype}.gguf'
 
-    print(f"Loading model: {dir_model.name}")
+    logger.info(f"Loading model: {dir_model.name}")
 
     hparams = Model.load_hparams(dir_model)
 
@@ -2981,20 +2958,20 @@ def main() -> None:
         model_class = Model.from_model_architecture(hparams["architectures"][0])
         model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file)
 
-        print("Set model parameters")
+        logger.info("Set model parameters")
         model_instance.set_gguf_parameters()
 
-        print("Set model tokenizer")
+        logger.info("Set model tokenizer")
         model_instance.set_vocab()
 
         if args.vocab_only:
-            print(f"Exporting model vocab to '{fname_out}'")
+            logger.info(f"Exporting model vocab to '{fname_out}'")
             model_instance.write_vocab()
         else:
-            print(f"Exporting model to '{fname_out}'")
+            logger.info(f"Exporting model to '{fname_out}'")
             model_instance.write()
 
-        print(f"Model successfully exported to '{fname_out}'")
+        logger.info(f"Model successfully exported to '{fname_out}'")
 
 
 if __name__ == '__main__':
