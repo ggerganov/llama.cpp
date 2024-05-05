@@ -349,6 +349,35 @@
 		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": false,
 		"systemuser-1st-user-has-prefix": false
+	},
+	"openchat": {
+		"global": {
+			"begin": "<s>",
+			"end": ""
+		},
+		"system": {
+			"begin": "",
+			"prefix": "GPT4 Correct System: ",
+			"suffix": "<|end_of_turn|>",
+			"end": ""
+		},
+		"user": {
+			"begin": "",
+			"prefix": "GPT4 Correct User: ",
+			"suffix": "<|end_of_turn|>",
+			"end": ""
+		},
+		"assistant": {
+			"begin": "",
+			"prefix": "GPT4 Correct Assistant: ",
+			"suffix": "<|end_of_turn|>",
+			"end": ""
+		},
+		"reverse-prompt": "<|end_of_turn|>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
 	}
 
 }
