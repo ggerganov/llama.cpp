@@ -66,6 +66,7 @@ models = [
     {"name": "starcoder",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/bigcode/starcoder2-3b", },
     {"name": "gpt-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/openai-community/gpt2", },
     {"name": "refact",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/smallcloudai/Refact-1_6-base", },
+    {"name": "command-r",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/CohereForAI/c4ai-command-r-v01", },
 ]
 
 # make directory "models/tokenizers" if it doesn't exist
@@ -105,6 +106,14 @@ for model in models:
     url = f"{repo}/raw/main/tokenizer.json"
     save_path = f"models/tokenizers/{name}/tokenizer.json"
     download_file_with_auth(url, token, save_path)
+
+    # if downloaded file is less than 1KB, we likely need to download an LFS instead
+    if os.path.getsize(save_path) < 1024:
+        # remove the file
+        os.remove(save_path)
+        url = f"{repo}/resolve/main/tokenizer.json"
+        save_path = f"models/tokenizers/{name}/tokenizer.json"
+        download_file_with_auth(url, token, save_path)
 
     if tokt == TOKENIZER_TYPE.SPM:
         url = f"{repo}/resolve/main/tokenizer.model"
