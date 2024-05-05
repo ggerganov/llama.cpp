@@ -314,6 +314,9 @@ class Model(ABC):
         if chkhsh == "9c2227e4dd922002fb81bde4fc02b0483ca4f12911410dee2255e4987644e3f8":
             # ref: https://huggingface.co/CohereForAI/c4ai-command-r-v01
             res = "command-r"
+        if chkhsh == "b6dc8df998e1cfbdc4eac8243701a65afe638679230920b50d6f17d81c098166":
+            # ref: https://huggingface.co/allenai/OLMo-1.7-7B-hf
+            res = "olmo"
 
         if res is None:
             logger.warning("\n")
