@@ -949,9 +949,9 @@ mv model.gguf ~/
 [Get the code](https://github.com/ggerganov/llama.cpp#get-the-code) & [follow the Linux build instructions](https://github.com/ggerganov/llama.cpp#build) to build `llama.cpp`.
 
 #### Building the Project using Android NDK
-Obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+Obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake.
 
-Execute the following commands on your computer to avoid downloading the NDK to your mobile. Alternatively, you can also do this in Termux.
+Execute the following commands on your computer to avoid downloading the NDK to your mobile. Alternatively, you can also do this in Termux:
 ```
 $ mkdir build-android
 $ cd build-android
