@@ -378,6 +378,35 @@
 		"systemuser-system-has-end": true,
 		"systemuser-1st-user-has-begin": true,
 		"systemuser-1st-user-has-prefix": true
+	},
+	"vicuna": {
+		"global": {
+			"begin": "<s>",
+			"end": ""
+		},
+		"system": {
+			"begin": "",
+			"prefix": "SYSTEM: ",
+			"suffix": "\n\n",
+			"end": ""
+		},
+		"user": {
+			"begin": "",
+			"prefix": "USER: ",
+			"suffix": "\n",
+			"end": ""
+		},
+		"assistant": {
+			"begin": "",
+			"prefix": "ASSISTANT: ",
+			"suffix": "</s>\n",
+			"end": ""
+		},
+		"reverse-prompt": "</s>",
+		"systemuser-system-has-suffix": true,
+		"systemuser-system-has-end": true,
+		"systemuser-1st-user-has-begin": true,
+		"systemuser-1st-user-has-prefix": true
 	}
 
 }
