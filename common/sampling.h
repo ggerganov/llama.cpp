@@ -170,9 +170,13 @@ void llama_sampling_accept(
 // Token healing
 //
 
+// Roll back `tokens` for constrained generation according to the token healing
+// strategy. Returns the prefix for constrained generation.
 std::string llama_token_healing_prepare(
             const llama_context * ctx_main,
             llama_token_healing_type th_type,
             std::vector<llama_token> & tokens,
             int max_to_remove = -1,
             int * n_removed = nullptr);
+
+void llama_token_healing_set_prefix(llama_sampling_context * ctx_sampling, const std::string & prefix);

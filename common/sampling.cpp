@@ -97,6 +97,10 @@ std::string llama_token_healing_prepare(
     return prefix;
 }
 
+void llama_token_healing_set_prefix(llama_sampling_context * ctx_sampling, const std::string & prefix) {
+    ctx_sampling->token_healing_prefix = prefix;
+}
+
 //
 // Sampling
 //
@@ -131,8 +135,6 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
                 grammar_rules.data(),
                 grammar_rules.size(), result->parsed_grammar.symbol_ids.at("root"));
     }
-
-    result->token_healing_prefix.clear();
 
     result->prev.resize(params.n_prev);
 
@@ -424,8 +426,6 @@ static llama_token_data_array llama_sampling_prepare_impl(
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
-
-    // TODO should we skip penalties and grammar while token healing?
 
     // apply penalties
     const auto& penalty_tokens = params.use_penalty_prompt_tokens ? params.penalty_prompt_tokens : prev;
