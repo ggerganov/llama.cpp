@@ -694,7 +694,7 @@ test $ret -eq 0 && gg_run ctest_release
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
     test $ret -eq 0 && gg_run embd_bge_small
 
-    if [ -z ${GGML_BUILD_CLOUD} ] || [ ${GGML_BUILD_EXTRA_TESTS_0} ]; then
+    if [ -z ${GG_BUILD_CLOUD} ] || [ ${GG_BUILD_EXTRA_TESTS_0} ]; then
         test $ret -eq 0 && gg_run test_scripts_debug
         test $ret -eq 0 && gg_run test_scripts_release
     fi
