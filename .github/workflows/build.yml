@@ -71,13 +71,13 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
           zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
 
       - name: Upload artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
@@ -131,13 +131,13 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
           zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
 
       - name: Upload artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
@@ -259,13 +259,13 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         run: |
           cp LICENSE ./build/bin/
           zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
 
       - name: Upload artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
@@ -808,13 +808,13 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         run: |
           Copy-Item LICENSE .\build\bin\Release\llama.cpp.txt
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip .\build\bin\Release\*
 
       - name: Upload artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
@@ -865,12 +865,12 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         run: |
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip .\build\bin\Release\*
 
       - name: Upload artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
@@ -884,7 +884,7 @@ jobs:
           7z a cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip $dst\*
 
       - name: Upload Cuda runtime
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
@@ -930,12 +930,12 @@ jobs:
 
       - name: Pack artifacts
         id: pack_artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         run: |
           7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
 
       - name: Upload artifacts
-        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
@@ -993,7 +993,7 @@ jobs:
 #            gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j `sysctl -n hw.ncpu`
 
   release:
-    if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+    if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || inputs.create_release == 'true' }}
 
     runs-on: ubuntu-latest
 

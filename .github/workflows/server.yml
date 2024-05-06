@@ -61,7 +61,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
+          ref: ${{ inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
 
       - name: Python setup
         id: setup_python
@@ -112,7 +112,7 @@ jobs:
 
       - name: Slow tests
         id: server_integration_tests_slow
-        if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
+        if: ${{ (github.event_name == 'schedule' || inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh --stop --no-skipped --no-capture --tags slow
@@ -127,7 +127,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
+          ref: ${{ inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
 
       - name: libCURL
         id: get_libcurl
@@ -169,7 +169,7 @@ jobs:
 
       - name: Slow tests
         id: server_integration_tests_slow
-        if: ${{ (github.event.schedule || github.event.inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
+        if: ${{ (github.event_name == 'schedule' || inputs.slow_tests == 'true') && matrix.build_type == 'Release' }}
         run: |
           cd examples/server/tests
           behave.exe --stop --no-skipped --no-capture --tags slow

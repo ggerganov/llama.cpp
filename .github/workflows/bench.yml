@@ -32,7 +32,7 @@ on:
     -  cron: '04 2 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}-${{ github.event.inputs.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}-${{ inputs.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
+          ref: ${{ inputs.sha || github.event.pull_request.head.sha || github.sha || github.head_ref || github.ref_name }}
 
       - name: Install python env
         id: pipenv
@@ -138,9 +138,9 @@ jobs:
               --runner-label ${{ env.RUNNER_LABEL }} \
               --name ${{ github.job }} \
               --branch ${{ github.head_ref || github.ref_name }} \
-              --commit ${{ github.event.inputs.sha || github.event.pull_request.head.sha || github.sha }} \
+              --commit ${{ inputs.sha || github.event.pull_request.head.sha || github.sha }} \
               --scenario script.js \
-              --duration ${{ github.event.inputs.duration || env.DURATION }} \
+              --duration ${{ inputs.duration || env.DURATION }} \
               --hf-repo ggml-org/models	 \
               --hf-file ${{ matrix.model }}/ggml-model-${{ matrix.ftype }}.gguf \
               --model-path-prefix /models \
@@ -243,7 +243,7 @@ jobs:
 
             <summary>Expand details for performance related PR only</summary>
 
-            - Concurrent users: ${{ env.N_USERS }}, duration: ${{ github.event.inputs.duration || env.DURATION }}
+            - Concurrent users: ${{ env.N_USERS }}, duration: ${{ inputs.duration || env.DURATION }}
             - HTTP request          : avg=${{ env.HTTP_REQ_DURATION_AVG }}ms        p(95)=${{ env.HTTP_REQ_DURATION_P_95_ }}ms fails=${{ env.HTTP_REQ_FAILED_PASSES }}, finish reason: stop=${{ env.LLAMACPP_COMPLETIONS_STOP_RATE_PASSES }} truncated=${{ env.LLAMACPP_COMPLETIONS_TRUNCATED_RATE_PASSES }}
             - Prompt processing (pp): avg=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_PROMPT_PROCESSING_SECOND_P_95_ }}tk/s
             - Token generation  (tg): avg=${{ env.LLAMACPP_TOKENS_SECOND_AVG }}tk/s p(95)=${{ env.LLAMACPP_TOKENS_SECOND_P_95_ }}tk/s
