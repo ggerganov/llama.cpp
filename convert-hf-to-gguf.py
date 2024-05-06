@@ -271,7 +271,7 @@ class Model(ABC):
 
         chktxt = '\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶\u200d🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български \'\'\'\'\'\'```````""""......!!!!!!?????? I\'ve been \'told he\'s there, \'RE you sure? \'M not sure I\'ll make it, \'D you like some tea? We\'Ve a\'lL'
 
-        if hasattr(tokenizer, 'backend_tokenizer'):
+        if tokenizer.is_fast:
             chktok = tokenizer.backend_tokenizer.pre_tokenizer.pre_tokenize_str(tokenizer.backend_tokenizer.normalizer.normalize_str(chktxt))
             chkhsh = sha256(str(chktok).encode()).hexdigest()
         else:
