@@ -1,6 +1,6 @@
 # Startup, Testing, & Debugging
 ---
-I know this sort of thing can be elementary to some, but to others it can save days or weeks worth of time & because I was searching for this kind of information in the repository & couldn't seem to find it, I wanted to try to provide a brief example of getting up & running, debugging code & tests. I won't be super explicit about everything because there is documentation in the reposity that can be found by searching. I'll just assume you use a terminal & a text editor because it's the simplest thing to understand.
+I know this sort of thing can be elementary to some, but to others it can save days or weeks worth of time & because I was searching for this kind of information in the repository & couldn't seem to find it, I wanted to try to provide a brief example of getting up & running, debugging code & tests. I won't be super explicit about everything because there is documentation in the repository that can be found by searching. I'll just assume you use a terminal & a text editor because it's the simplest thing to understand.
 
 ## How to run & debug a specific test without running all the others to keep the feedback loop short?
 Borrowing from the CI scripts to make something workflow specific, we have the following.
