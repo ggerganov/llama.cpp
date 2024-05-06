@@ -124,11 +124,11 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         // We select top-k experts, the number of calls for the expert tensors will be k times larger.
         // NOTE: This will trigger the "if (e.ncall > m_last_call)" save conditional on the first active expert.
         //       The commented out "if (idx == t->src[0]->ne[0] - 1) ++e.ncall;" doesn't work.
-        if (idx == 0) ++e.ncall;
+        if (((int32_t *) t->op_params)[0] == 0) ++e.ncall;
 
         if (e.values.empty()) {
             e.values.resize(src1->ne[0]*n_as, 0);
-            e.counts.resize(src1->ne[0]*n_as, 0); // +++
+            e.counts.resize(src1->ne[0]*n_as, 0);
         }
         else if (e.values.size() != (size_t)src1->ne[0]*n_as) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
@@ -232,7 +232,7 @@ void IMatrixCollector::save_imatrix(const char * fname, const char * dataset) co
             for (int i = 0; i < nval; i++) {
                 tmp[i] = (p.second.values[i] / static_cast<float>(p.second.counts[i])) * static_cast<float>(p.second.ncall);
             }
-            out.write((const char*)tmp.data(), nval*sizeof(float))
+            out.write((const char*)tmp.data(), nval*sizeof(float));
         }
     }
 
