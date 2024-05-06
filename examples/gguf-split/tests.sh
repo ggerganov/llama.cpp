@@ -55,15 +55,15 @@ $MAIN --model $WORK_PATH/ggml-model-merge.gguf --random-prompt --n-predict 32
 echo PASS
 echo
 
-# 4. Split with no tensor in metadata
-#$SPLIT --split-max-tensors 32 --no-tensor-in-metadata $WORK_PATH/ggml-model-merge.gguf $WORK_PATH/ggml-model-split-32-tensors
-#echo PASS
-#echo
+# 4. Split with no tensors in the first split
+$SPLIT --split-max-tensors 32 --no-tensor-first-split $WORK_PATH/ggml-model-merge.gguf $WORK_PATH/ggml-model-split-32-tensors
+echo PASS
+echo
 
 # 4b. Test the sharded model is loading properly
-#$MAIN --model $WORK_PATH/ggml-model-split-32-tensors-00001-of-00006.gguf --random-prompt --n-predict 32
-#echo PASS
-#echo
+$MAIN --model $WORK_PATH/ggml-model-split-32-tensors-00001-of-00007.gguf --random-prompt --n-predict 32
+echo PASS
+echo
 
 # 5. Merge
 #$SPLIT --merge $WORK_PATH/ggml-model-split-32-tensors-00001-of-00006.gguf $WORK_PATH/ggml-model-merge-2.gguf

@@ -71,17 +71,20 @@ extern "C" {
 
     // pre-tokenization types
     enum llama_vocab_pre_type {
-        LLAMA_VOCAB_PRE_TYPE_DEFAULT               = 0,
-        LLAMA_VOCAB_PRE_TYPE_LLAMA3                = 1,
-        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM          = 2,
-        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER        = 3,
-        LLAMA_VOCAB_PRE_TYPE_FALCON                = 4,
-        LLAMA_VOCAB_PRE_TYPE_MPT                   = 5,
-        LLAMA_VOCAB_PRE_TYPE_STARCODER             = 6,
-        LLAMA_VOCAB_PRE_TYPE_GPT2                  = 7,
-        LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_ES = 8,
-        LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_DE = 9,
-        LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_ZH = 10,
+
+        LLAMA_VOCAB_PRE_TYPE_DEFAULT        = 0,
+        LLAMA_VOCAB_PRE_TYPE_LLAMA3         = 1,
+        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM   = 2,
+        LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER = 3,
+        LLAMA_VOCAB_PRE_TYPE_FALCON         = 4,
+        LLAMA_VOCAB_PRE_TYPE_MPT            = 5,
+        LLAMA_VOCAB_PRE_TYPE_STARCODER      = 6,
+        LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
+        LLAMA_VOCAB_PRE_TYPE_REFACT         = 8,
+        LLAMA_VOCAB_PRE_TYPE_COMMAND_R      = 9,
+        LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_ES = 10,
+        LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_DE = 11,
+        LLAMA_VOCAB_PRE_TYPE_JINA_EMBEDDINGS_V2_ZH = 12,
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -174,7 +177,7 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    typedef bool (*llama_progress_callback)(float progress, void *ctx);
+    typedef bool (*llama_progress_callback)(float progress, void * user_data);
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences

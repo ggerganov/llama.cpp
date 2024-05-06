@@ -55,8 +55,10 @@
 //    return _k_tests;
 //}
 
-static std::map<std::string, std::vector<llama_token>> read_tests(const std::string & fname_inp, const std::string & fname_out) {
-    std::map<std::string, std::vector<llama_token>> tests;
+using llama_tests = std::map<std::string, std::vector<llama_token>>;
+
+static llama_tests read_tests(const std::string & fname_inp, const std::string & fname_out) {
+    llama_tests tests;
 
     std::ifstream ifs_inp(fname_inp);
     if (!ifs_inp) {
@@ -175,12 +177,20 @@ int main(int argc, char **argv) {
 
     bool success = true;
 
-    const auto k_tests = read_tests(fname_inp, fname_out);
+    const auto k_tests = [&]() -> llama_tests {
+        if (!fname_text.empty()) {
+            return {};
+        }
 
-    if (k_tests.empty()) {
-        fprintf(stderr, "%s : error: no tests found\n", __func__);
-        return 1;
-    }
+        const auto res = read_tests(fname_inp, fname_out);
+
+        if (res.empty()) {
+            fprintf(stderr, "%s : error: no tests found\n", __func__);
+            exit(1);
+        }
+
+        return res;
+    }();
 
     const bool add_special = false;
 
@@ -238,7 +248,17 @@ int main(int argc, char **argv) {
 
         fprintf(stderr, "%s : text size: %zu\n", __func__, text.size());
 
-        const std::vector<llama_token> res = llama_tokenize(ctx, text, add_special);
+        std::vector<llama_token> res;
+
+        {
+            const auto t_start = ggml_time_us();
+
+            res = llama_tokenize(ctx, text, add_special);
+
+            const auto t_end = ggml_time_us();
+
+            fprintf(stderr, "%s : tokenized in %.3f ms (cpp)\n", __func__, (t_end - t_start) / 1000.0);
+        }
 
         fprintf(stderr, "%s : tokens: %zu\n", __func__, res.size());
 
@@ -252,7 +272,8 @@ int main(int argc, char **argv) {
             }
 
             for (const auto & tok : res) {
-                ofs << tok << " '" << string_strip(llama_detokenize_bpe(ctx, std::vector<int>{tok})) << "'" << std::endl;
+                //ofs << tok << " '" << string_strip(llama_detokenize_bpe(ctx, std::vector<int>{tok})) << "'" << std::endl;
+                ofs << tok << "\n";
             }
         }
 
