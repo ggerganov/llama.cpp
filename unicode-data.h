@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_digit;
+extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_number;
 extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_letter;
 extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_whitespace;
 extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_accent_mark;
