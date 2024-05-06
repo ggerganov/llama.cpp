@@ -121,10 +121,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
         auto & e = m_stats[wname];
 
-        // We select top-k experts, the number of calls for the expert tensors will be k times larger.
-        // NOTE: This will trigger the "if (e.ncall > m_last_call)" save conditional on the first active expert.
-        //       The commented out "if (idx == t->src[0]->ne[0] - 1) ++e.ncall;" doesn't work.
-        if (((int32_t *) t->op_params)[0] == 0) ++e.ncall;
+        ++e.ncall;
 
         if (e.values.empty()) {
             e.values.resize(src1->ne[0]*n_as, 0);
