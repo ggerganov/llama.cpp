@@ -57,3 +57,15 @@ bear -- make -j
 ```
 ## What if I don't have a GPU locally?
 I run all my code on Nvidia GPU enabled ==AWS Spot Instances==. I use the cheapest Ubuntu based instance that gets the job done. Once I get an instance up with all the dependencies installed, I save the base work, without any credentials of course, in the form of a custom AMI which can be used to create a new EC2. You can figure out how that's done online quickly or if you have a basic understanding of EC2s you can click around the AWS console & figure it out. My rough cost per day using this workflow is ~1$. It does fluctuate with the price of whichever spot instance I'm using that day. At this point, I never even go to the AWS console, my workflow is bash scripted, but AWS makes it easy to connect to any EC2 in the AWS console & work in a terminal or in Cloud9, a browser-based IDE. I personally use SSH & NeoVim, but there's 100 different ways to get the job done. I make sure to stop all my instances each evening, but it wouldn't be too expensive if I forgot. There are some hypothetical downsides to spot instances, but I never experience them. The AWS experience has come a long way & even setting up SSO for AWSCLI authentication is relatively straight-forward now.
+
+If you're just looking for a CPP repl experience with GPUs available, your best bet is Google Colab. Here are the relevant tools:
+```bash
+# Decorate a block that will represent a CPP or CUDA file like this:
+%%writefile vector-math.cu || %%writefile vector-math.cpp
+
+# In some other block, compile & run the code.
+%%shell
+nvcc -o vector-math vector-math.cu
+./vector-math
+```
+This is something I do very often, it really is an incredible tool with access to high end GPUs.
