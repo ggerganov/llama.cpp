@@ -110,9 +110,9 @@ static uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset)
 
 static std::unordered_map<uint32_t, int> unicode_cpt_type_map() {
     std::unordered_map<uint32_t, int> cpt_types;
-    for (auto p : unicode_ranges_digit) {
+    for (auto p : unicode_ranges_number) {
         for (auto i = p.first; i <= p.second; ++ i) {
-            cpt_types[i] = CODEPOINT_TYPE_DIGIT;
+            cpt_types[i] = CODEPOINT_TYPE_NUMBER;
         }
     }
     for (auto p : unicode_ranges_letter) {
@@ -300,13 +300,13 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
                     collecting_letter = true;
                     collecting = true;
                 }
-                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || (token.empty() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                else if (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_NUMBER || (token.empty() && utf_char == " " && unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_NUMBER)) {
                     collecting_numeric = true;
                     collecting = true;
                 }
                 else if (
-                    ((unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) && (unicode_cpt_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
-                    (token.empty() && utf_char == " " && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_DIGIT && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
+                    ((unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_NUMBER) && (unicode_cpt_type(utf_char) != CODEPOINT_TYPE_WHITESPACE)) ||
+                    (token.empty() && utf_char == " " && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_LETTER && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_NUMBER && unicode_cpt_type(utf_char_next) != CODEPOINT_TYPE_WHITESPACE)
                     ) {
                     collecting_special = true;
                     collecting = true;
@@ -323,13 +323,13 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
                 if (collecting_letter && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_LETTER) {
                     split_condition = true;
                 }
-                else if (collecting_numeric && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_DIGIT) {
+                else if (collecting_numeric && unicode_cpt_type(utf_char) != CODEPOINT_TYPE_NUMBER) {
                     split_condition = true;
                 }
-                else if (collecting_special && (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_DIGIT || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
+                else if (collecting_special && (unicode_cpt_type(utf_char) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_NUMBER || unicode_cpt_type(utf_char) == CODEPOINT_TYPE_WHITESPACE)) {
                     split_condition = true;
                 }
-                else if (collecting_whitespace_lookahead && (unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_DIGIT)) {
+                else if (collecting_whitespace_lookahead && (unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_LETTER || unicode_cpt_type(utf_char_next) == CODEPOINT_TYPE_NUMBER)) {
                     split_condition = true;
                 }
             }
@@ -524,19 +524,19 @@ char32_t unicode_tolower(char32_t cp) {
 std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::string> & regex_exprs) {
     // unicode categories
     static const std::map<std::string, int> k_ucat_enum = {
-        { "\\p{N}", CODEPOINT_TYPE_DIGIT },
+        { "\\p{N}", CODEPOINT_TYPE_NUMBER },
         { "\\p{L}", CODEPOINT_TYPE_LETTER },
         { "\\p{P}", CODEPOINT_TYPE_PUNCTUATION },
     };
 
     static const std::map<int, int> k_ucat_cpt = {
-        { CODEPOINT_TYPE_DIGIT,         0xD1 },
+        { CODEPOINT_TYPE_NUMBER,        0xD1 },
         { CODEPOINT_TYPE_LETTER,        0xD2 },
         { CODEPOINT_TYPE_PUNCTUATION,   0xD3 },
     };
 
     static const std::map<int, std::string> k_ucat_map = {
-        { CODEPOINT_TYPE_DIGIT,         "\x30-\x39" }, // 0-9
+        { CODEPOINT_TYPE_NUMBER,        "\x30-\x39" }, // 0-9
         { CODEPOINT_TYPE_LETTER,        "\x41-\x5A\x61-\x7A" }, // A-Za-z
         { CODEPOINT_TYPE_PUNCTUATION,   "\x21-\x23\x25-\x2A\x2C-\x2F\x3A-\x3B\x3F-\x40\\\x5B-\\\x5D\x5F\\\x7B\\\x7D" }, // !-#%-*,-/:-;?-@\[-\]_\{\}
     };
