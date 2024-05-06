@@ -36,7 +36,7 @@ The first issue I was assigned to was pointing me in the direction of CUDA relat
 >>> i stack
 ```
 
-## How to debug the infill application?
+## Debugging tricks?
 After you narrow down where the problem is you might want to step through some program execution. That looks similar to what we did above, but there are some tricks that can make it easier.
 ```bash
 # GDB can save your breakpoints to a file & source them later so that you can revisit a debugging session.
