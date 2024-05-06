@@ -19,6 +19,7 @@
 
 struct Stats {
     std::vector<float> values;
+    std::vector<int> counts;
     int ncall = 0;
 };
 
@@ -120,13 +121,14 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
         auto & e = m_stats[wname];
 
-        ++e.ncall;
-        // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
-        //       using the following line, we can correct for that if needed by replacing the line above with:
-        //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
+        // We select top-k experts, the number of calls for the expert tensors will be k times larger.
+        // NOTE: This will trigger the "if (e.ncall > m_last_call)" save conditional on the first active expert.
+        //       The commented out "if (idx == t->src[0]->ne[0] - 1) ++e.ncall;" doesn't work.
+        if (idx == 0) ++e.ncall;
 
         if (e.values.empty()) {
             e.values.resize(src1->ne[0]*n_as, 0);
+            e.counts.resize(src1->ne[0]*n_as, 0); // +++
         }
         else if (e.values.size() != (size_t)src1->ne[0]*n_as) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
@@ -153,6 +155,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
                     for (int j = 0; j < (int)src1->ne[0]; ++j) {
                         e.values[e_start + j] += x[j]*x[j];
+                        e.counts[e_start + j]++;
                     }
                 }
             }
@@ -170,6 +173,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         auto& e = m_stats[wname];
         if (e.values.empty()) {
             e.values.resize(src1->ne[0], 0);
+            e.counts.resize(src1->ne[0], 0);
         }
         else if (e.values.size() != (size_t)src1->ne[0]) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]);
@@ -183,6 +187,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             const float * x = data + row * src1->ne[0];
             for (int j = 0; j < (int)src1->ne[0]; ++j) {
                 e.values[j] += x[j]*x[j];
+                e.counts[j]++;
             }
         }
         if (e.ncall > m_last_call) {
@@ -222,7 +227,13 @@ void IMatrixCollector::save_imatrix(const char * fname, const char * dataset) co
         out.write((const char *) &p.second.ncall, sizeof(p.second.ncall));
         int nval = p.second.values.size();
         out.write((const char *) &nval, sizeof(nval));
-        if (nval > 0) out.write((const char *) p.second.values.data(), nval * sizeof(float));
+        if (nval > 0) {
+            std::vector<float> tmp(nval);
+            for (int i = 0; i < nval; i++) {
+                tmp[i] = (p.second.values[i] / static_cast<float>(p.second.counts[i])) * static_cast<float>(p.second.ncall);
+            }
+            out.write((const char*)tmp.data(), nval*sizeof(float))
+        }
     }
 
     // Write the number of call the matrix was computed with
