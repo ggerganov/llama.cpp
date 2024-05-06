@@ -21,6 +21,4 @@ ctest -R test-tokenizer-0 -V -N
 # Now that we have the command & arguments needed to run a test, we can debug it with GDB.
 # I copied the command from the above output, your scenario will be different.
 gdb --args /home/ubuntu/workspace/llama.cpp/bin/test-tokenizer-0 "/home/ubuntu/workspace/llama.cpp/tests/../models/ggml-vocab-llama-spm.gguf"
-
-# In case you're struggling after this, GDB can tell you how to use it (>>> help) & it can do incredible things like inspect the variables of any stackframe previous to the current one to help you see what's led to the issue. GDB also makes it easy to revisit a debugging session (see below).
 ```
