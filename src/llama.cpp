@@ -520,6 +520,10 @@ enum llm_tensor {
     LLM_TENSOR_SSM_A,
     LLM_TENSOR_SSM_D,
     LLM_TENSOR_SSM_OUT,
+    LLM_TENSOR_TIME_MIX_K,
+    LLM_TENSOR_TIME_MIX_V,
+    LLM_TENSOR_TIME_MIX_R,
+    LLM_TENSOR_TIME_MIX_G,
     LLM_TENSOR_ATTN_Q_A,
     LLM_TENSOR_ATTN_Q_B,
     LLM_TENSOR_ATTN_KV_A_MQA,
@@ -1350,6 +1354,10 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_OUTPUT,          "output" },
             { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
             { LLM_TENSOR_ATTN_NORM_2,     "blk.%d.attn_norm_2" },
+            { LLM_TENSOR_TIME_MIX_K,      "blk.%d.time_mix_k" },
+            { LLM_TENSOR_TIME_MIX_V,      "blk.%d.time_mix_v" },
+            { LLM_TENSOR_TIME_MIX_R,      "blk.%d.time_mix_r" },
+            { LLM_TENSOR_TIME_MIX_G,      "blk.%d.time_mix_g" },
         },
     },
     {
@@ -2513,6 +2521,12 @@ struct llama_layer {
     // mamba bias
     struct ggml_tensor * ssm_conv1d_b;
     struct ggml_tensor * ssm_dt_b;
+
+    // rwkv
+    struct ggml_tensor * time_mix_k;
+    struct ggml_tensor * time_mix_v;
+    struct ggml_tensor * time_mix_r;
+    struct ggml_tensor * time_mix_g;
 
     // long rope factors
     struct ggml_tensor * rope_long  = nullptr;
@@ -8245,11 +8259,9 @@ static bool llm_load_tensors(
                     model.tok_norm_b = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd});
 
                     // output
-                    {
-                        model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"), {n_embd});
-                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                    }
+                    model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+                    model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"), {n_embd});
+                    model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -8261,6 +8273,11 @@ static bool llm_load_tensors(
 
                         layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd});
                         layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd});
+
+                        layer.time_mix_k = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_K, "weight", i), {n_embd, 1, 1});
+                        layer.time_mix_v = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_V, "weight", i), {n_embd, 1, 1});
+                        layer.time_mix_r = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_R, "weight", i), {n_embd, 1, 1});
+                        layer.time_mix_g = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_G, "weight", i), {n_embd, 1, 1});
                     }
 
                 }
