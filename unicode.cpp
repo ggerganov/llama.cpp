@@ -470,47 +470,47 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
     throw std::invalid_argument("invalid codepoint");
 }
 
+auto compareByCanonicalClass = [&](const uint32_t& a, const uint32_t& b) {
+    auto cc_a_it = unicode_canonical_class.find(a);
+    if (cc_a_it != unicode_canonical_class.end()) {
+        auto cc_b_it = unicode_canonical_class.find(b);
+        if (cc_b_it != unicode_canonical_class.end()) {
+            return cc_a_it->second < cc_b_it->second;
+        }
+
+    }
+    return false;
+};
+
 // Function to sort subsequences based on canonical class
 std::vector<uint32_t> sort_by_canonical_class(std::vector<uint32_t> & cpts) {
-    auto compareByCanonicalClass = [&](const uint32_t& a, const uint32_t& b) {
-        auto cc_a_it = unicode_canonical_class.find(a);
-        if (cc_a_it != unicode_canonical_class.end()) {
-            auto cc_b_it = unicode_canonical_class.find(b);
-            if (cc_b_it != unicode_canonical_class.end()) {
-                return cc_a_it->second < cc_b_it->second;
-            }
-
-        }
-        return false;
-    };
-
     // Sort the sequence using the custom comparator function
     sort(cpts.begin(), cpts.end(), compareByCanonicalClass);
     return cpts;
 }
 
-std::vector<uint32_t> canonical_decomposition_cpts(std::vector<uint32_t> & cpts, const std::vector<uint32_t>::iterator& cpt_begin, const std::vector<uint32_t>::iterator& cpt_end) {
+std::vector<uint32_t> canonical_decomposition_cpts(std::vector<uint32_t> & cpts, uint32_t starting_offset) {
     std::vector<uint32_t> result;
-    for (auto cpt_it = cpt_begin; cpt_it != cpt_end; ++cpt_it) {
-        auto it = unicode_map_nfd.equal_range(*cpt_it);
+    for (auto i = starting_offset; i < cpts.size(); i++) {
+        auto it = unicode_map_nfd.equal_range(cpts[i]);
         if (it.first != it.second) {
             uint offset = 0;
             for (auto jt = it.first; jt != it.second; jt++) {
-                cpts.insert(cpt_it + offset, jt->second);
+                cpts.emplace(cpts.begin() + i + offset, jt->second);
                 offset++;
             }
-            const auto & inner_result = canonical_decomposition_cpts(cpts, cpt_it, cpt_end);
+            const auto & inner_result = canonical_decomposition_cpts(cpts, i);
             result.insert(result.end(), inner_result.begin(), inner_result.end());
             break;
         } else {
-            result.push_back(*cpt_it);
+            result.push_back(cpts[i]);
         }
     }
     return result;
 }
 
 std::vector<uint32_t> unicode_cpts_normalize_nfd(std::vector<uint32_t> & cpts) {
-    auto result = canonical_decomposition_cpts(cpts, cpts.begin(), cpts.end());
+    auto result = canonical_decomposition_cpts(cpts, 0);
     return sort_by_canonical_class(result);
 }
 
