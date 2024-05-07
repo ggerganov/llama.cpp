@@ -1522,7 +1522,87 @@ class ArcticModel(Model):
     model_arch = gguf.MODEL_ARCH.ARCTIC
 
     def set_vocab(self):
-        self._set_vocab_llama_hf()
+        # The reason for using a custom implementation here is that the
+        # snowflake-arctic-instruct model redefined tokens 31998 and 31999 from
+        # tokenizer.model and used them as BOS and EOS instead of adding new tokens.
+        from sentencepiece import SentencePieceProcessor
+
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+
+        if not tokenizer_path.is_file():
+            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
+            sys.exit(1)
+
+        # Read the whole vocabulary from the tokenizer.model file
+        tokenizer = SentencePieceProcessor(str(tokenizer_path))
+
+        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
+
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
+        for token_id in range(tokenizer.vocab_size()):
+
+            piece = tokenizer.id_to_piece(token_id)
+            text = piece.encode("utf-8")
+            score = tokenizer.get_score(token_id)
+
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.is_unknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.is_control(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.is_unused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.is_byte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
+
+        # Use the added_tokens_decoder field from tokeniser_config.json as the source
+        # of information about added/redefined tokens and modify them accordingly.
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+
+                if "added_tokens_decoder" in tokenizer_config_json:
+                    added_tokens_decoder = tokenizer_config_json["added_tokens_decoder"]
+                    for token_id, token_json in added_tokens_decoder.items():
+                        token_id = int(token_id)
+                        if (token_id >= vocab_size):
+                            print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                            continue
+
+                        token_content = token_json["content"]
+                        token_type = SentencePieceTokenTypes.USER_DEFINED
+                        token_score = -10000.0
+
+                        # Map unk_token to UNKNOWN, other special tokens to CONTROL
+                        # Set the score to 0.0 as in the original tokenizer.model
+                        if ("special" in token_json) and token_json["special"]:
+                            if token_content == tokenizer_config_json["unk_token"]:
+                                token_type = SentencePieceTokenTypes.UNKNOWN
+                            else:
+                                token_type = SentencePieceTokenTypes.CONTROL
+                            token_score = 0.0
+
+                        print(f"Setting token {token_id} to '{token_content}' (type: {token_type}, score: {token_score:.2f})")
+                        tokens[token_id] = token_content.encode("utf-8")
+                        toktypes[token_id] = token_type
+                        scores[token_id] = token_score
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
