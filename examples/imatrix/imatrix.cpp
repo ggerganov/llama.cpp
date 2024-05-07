@@ -297,9 +297,9 @@ bool IMatrixCollector::load_imatrix(const char * imatrix_file, std::unordered_ma
         for (int i = 0; i < nval; i++) {
             e.values[i] += tmp[i];
             e.counts[i] += ncall;
-        }
+        } 
+        e.ncall += ncall;
         
-        e.ncall = ncall;
     }
     return true;
 }
