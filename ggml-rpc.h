@@ -28,6 +28,8 @@ struct rpc_tensor {
 // RPC commands
 enum rpc_cmd {
     ALLOC_BUFFER = 0,
+    GET_ALIGNMENT,
+    GET_MAX_SIZE,
     BUFFER_GET_BASE,
     FREE_BUFFER,
     BUFFER_CLEAR,
