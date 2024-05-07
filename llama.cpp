@@ -4392,9 +4392,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "qwen2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_QWEN2;
-            }
-            
-            else {
+            } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
         } else {
