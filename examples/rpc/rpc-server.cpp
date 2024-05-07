@@ -26,9 +26,7 @@ static ggml_backend_t create_backend() {
     if (!backend) {
         fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
     }
-#endif
-
-#ifdef GGML_USE_METAL
+#elif GGML_USE_METAL
     fprintf(stderr, "%s: using Metal backend\n", __func__);
     backend = ggml_backend_metal_init();
     if (!backend) {
@@ -42,6 +40,16 @@ static ggml_backend_t create_backend() {
         backend = ggml_backend_cpu_init();
     }
     return backend;
+}
+
+static void get_backend_memory(size_t * free_mem, size_t * total_mem) {
+#ifdef GGML_USE_CUDA
+    ggml_backend_cuda_get_device_memory(0, free_mem, total_mem);
+#else
+    // TODO: implement for other backends
+    *free_mem = 1;
+    *total_mem = 1;
+#endif
 }
 
 static int create_server_socket(const char * host, int port) {
@@ -101,8 +109,10 @@ int main(int argc, char * argv[])
             close(client_socket);
             continue;
         }
-        printf("Accepted client connection\n");
-        rpc_serve_client(backend, client_socket);
+        size_t free_mem, total_mem;
+        get_backend_memory(&free_mem, &total_mem);
+        printf("Accepted client connection, free_mem=%zu, total_mem=%zu\n", free_mem, total_mem);
+        rpc_serve_client(backend, client_socket, free_mem, total_mem);
         printf("Client connection closed\n");
         close(client_socket);
     }

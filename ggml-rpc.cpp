@@ -565,11 +565,31 @@ GGML_API GGML_CALL bool ggml_backend_is_rpc(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_rpc_guid());
 }
 
+static void get_device_memory(const std::shared_ptr<sockfd> & sock, size_t * free, size_t * total) {
+    // input serialization format: | 0 bytes |
+    std::vector<uint8_t> input;
+    std::vector<uint8_t> output;
+    bool status = send_rpc_cmd(sock, GET_DEVICE_MEMORY, input, output);
+    GGML_ASSERT(status);
+    GGML_ASSERT(output.size() == 2*sizeof(uint64_t));
+    // output serialization format: | free (8 bytes) | total (8 bytes) |
+    uint64_t free_mem;
+    memcpy(&free_mem, output.data(), sizeof(free_mem));
+    uint64_t total_mem;
+    memcpy(&total_mem, output.data() + sizeof(uint64_t), sizeof(total_mem));
+    *free = free_mem;
+    *total = total_mem;
+}
+
 GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const std::string & endpoint, size_t * free, size_t * total) {
-    UNUSED(endpoint);
-    // TODO: implement
-    *free = 1;
-    *total = 1;
+    ggml_backend_t backend = ggml_backend_rpc_init(endpoint);
+    if (backend == nullptr) {
+        *free = 0;
+        *total = 0;
+        return;
+    }
+    ggml_backend_rpc_context * ctx = (ggml_backend_rpc_context *)backend->context;
+    get_device_memory(ctx->sock, free, total);
 }
 
 // RPC server-side implementation
@@ -759,7 +779,7 @@ static void rpc_graph_compute(ggml_backend_t backend, const std::vector<uint8_t>
     ggml_free(ctx);
 }
 
-void rpc_serve_client(ggml_backend_t backend, int sockfd) {
+void rpc_serve_client(ggml_backend_t backend, int sockfd, size_t free_mem, size_t total_mem) {
     while (true) {
         uint8_t cmd;
         if (!recv_data(sockfd, &cmd, 1)) {
@@ -814,6 +834,13 @@ void rpc_serve_client(ggml_backend_t backend, int sockfd) {
             }
             case GRAPH_COMPUTE: {
                 rpc_graph_compute(backend, input, output);
+                break;
+            }
+            case GET_DEVICE_MEMORY: {
+                // output serialization format: | free (8 bytes) | total (8 bytes) |
+                output.resize(2*sizeof(uint64_t), 0);
+                memcpy(output.data(), &free_mem, sizeof(free_mem));
+                memcpy(output.data() + sizeof(uint64_t), &total_mem, sizeof(total_mem));
                 break;
             }
             default: {

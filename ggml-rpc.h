@@ -37,6 +37,7 @@ enum rpc_cmd {
     GET_TENSOR,
     COPY_TENSOR,
     GRAPH_COMPUTE,
+    GET_DEVICE_MEMORY,
 };
 
 #define GGML_RPC_MAX_SERVERS       16
@@ -49,7 +50,7 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const
 
 GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const std::string & endpoint, size_t * free, size_t * total);
 
-GGML_API GGML_CALL void rpc_serve_client(ggml_backend_t backend, int sockfd);
+GGML_API GGML_CALL void rpc_serve_client(ggml_backend_t backend, int sockfd, size_t free_mem, size_t total_mem);
 
 #ifdef  __cplusplus
 }
