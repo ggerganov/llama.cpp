@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
-import logging
 import argparse
 import contextlib
 import json
+import logging
 import os
 import re
 import sys
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from pathlib import Path
 from hashlib import sha256
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterator, Sequence, TypeVar, cast
+from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ContextManager,
+    Iterator,
+    Sequence,
+    TypeVar,
+    cast,
+)
 
 import numpy as np
 import torch
@@ -308,6 +317,21 @@ class Model(ABC):
         if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
             # ref: https://huggingface.co/openai-community/gpt2
             res = "gpt-2"
+        if chkhsh == "fcace8b9cac38ce847670c970cd5892031a753a1ef381abd1d9af00f713da085":
+            # ref: https://huggingface.co/microsoft/phi-1
+            res = "phi"
+        if chkhsh == "32d85c31273f8019248f2559fed492d929ea28b17e51d81d3bb36fff23ca72b3":
+            # ref: https://huggingface.co/stabilityai/stablelm-2-zephyr-1_6b
+            res = "stablelm"
+        if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
+            # ref: https://huggingface.co/Qwen/Qwen-tokenizer
+            res = "qwen"
+        if chkhsh == "e750a9b14dfed9b73287639bd1ecda50c38fa6011138f2f609804c6dab9ed5c2":
+            # ref: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2
+            res = "mistral-bpe"
+        if chkhsh == "e750a9b14dfed9b73287639bd1ecda50c38fa6011138f2f609804c6dab9ed5c2":
+            # ref: https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1
+            res = "mixtral-bpe"
         if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
             # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
             res = "refact"
