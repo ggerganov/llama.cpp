@@ -284,7 +284,7 @@ bool IMatrixCollector::load_imatrix(const char * imatrix_file, std::unordered_ma
             e.values.resize(nval, 0);
             e.counts.resize(nval, 0);
         }
-        
+
         std::vector<float> tmp(nval);
         in.read((char*)tmp.data(), nval*sizeof(float));
         if (in.fail()) {
@@ -297,9 +297,9 @@ bool IMatrixCollector::load_imatrix(const char * imatrix_file, std::unordered_ma
         for (int i = 0; i < nval; i++) {
             e.values[i] += tmp[i];
             e.counts[i] += ncall;
-        } 
+        }
         e.ncall += ncall;
-        
+
     }
     return true;
 }
