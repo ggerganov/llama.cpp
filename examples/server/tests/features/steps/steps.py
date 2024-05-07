@@ -670,9 +670,10 @@ async def step_tokenize(context):
             context.tokens = tokenize_json['tokens']
 
 
-@step('tokens can be detokenize')
+@step('tokens can be detokenize and is equivalent {equivalent}')
 @async_run_until_complete
-async def step_detokenize(context):
+async def step_detokenize(context, equivalent):
+    equivalent = equivalent == 'True'
     assert len(context.tokens) > 0
     async with aiohttp.ClientSession() as session:
         async with session.post(f'{context.base_url}/detokenize',
@@ -682,8 +683,8 @@ async def step_detokenize(context):
             assert response.status == 200
             detokenize_json = await response.json()
             # SPM tokenizer adds a whitespace prefix: https://github.com/google/sentencepiece/issues/15
-            assert context.tokenized_text == detokenize_json['content'].strip()
-
+            if equivalent:
+                assert context.tokenized_text == detokenize_json['content'].strip()
 
 @step('an OPTIONS request is sent from {origin}')
 @async_run_until_complete

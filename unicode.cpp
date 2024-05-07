@@ -492,7 +492,7 @@ std::vector<uint32_t> sort_by_canonical_class(std::vector<uint32_t> & cpts) {
 std::vector<uint32_t> canonical_decomposition_cpts(std::vector<uint32_t> & cpts, uint32_t starting_offset) {
     std::vector<uint32_t> result;
     for (auto i = starting_offset; i < cpts.size(); i++) {
-        auto it = unicode_map_nfd.equal_range(cpts[i]);
+        const auto& it = unicode_map_nfd.equal_range(cpts[i]);
         if (it.first != it.second) {
             uint offset = 0;
             for (auto jt = it.first; jt != it.second; jt++) {

@@ -91,7 +91,7 @@ Feature: llama.cpp server
     """
     What is the capital of France ?
     """
-    Then tokens can be detokenize
+    Then tokens can be detokenize and is equivalent True
 
   Scenario: Models available
     Given available models
