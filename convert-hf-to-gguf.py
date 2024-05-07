@@ -2916,11 +2916,14 @@ class OpenELM(Model):
         head_dim = self.find_hparam(["head_dim"])
         n_head = n_embd // head_dim
         rot_pct = 1.0
+
         self.gguf_writer.add_context_length(self.find_hparam(["max_context_length"]))
-        self.gguf_writer.add_embedding_length(n_embd)
+        # self.gguf_writer.add_embedding_length(n_embd)
         self.gguf_writer.add_block_count(self.block_count)
-        self.gguf_writer.add_head_count(n_head)
-        self.gguf_writer.add_head_count_kv(n_head)
+        # self.gguf_writer.add_head_count(n_head)
+        # self.gguf_writer.add_head_count_kv(n_head)
+        self.gguf_writer.add_head_count_kv(n_head*10)
+        self.gguf_writer.add_head_count(n_head*10)
         self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_feed_forward_length(0) # dynamically calculated
@@ -2977,6 +2980,7 @@ class OpenELM(Model):
         block_count = self.hparams.get("num_transformer_layers", self.hparams.get("num_hidden_layers", self.hparams.get("num_transformer_layers")))
         tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
         n_head = self.hparams.get("model_dim") //  self.hparams.get("head_dim") # TODO: propagate this
+        foobar = {}
         for name, data_torch in self.get_tensors():
             old_dtype = data_torch.dtype
             # convert any unsupported data types to float32
@@ -3002,6 +3006,8 @@ class OpenELM(Model):
                 data = data.astype(np.float16)
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
             self.gguf_writer.add_tensor(new_name, data)
+            foobar[name] = (data_torch, new_name, data)
+        foobar
 
 
 ###### CONVERSION LOGIC ######

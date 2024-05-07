@@ -145,7 +145,6 @@ class TensorNameMap:
             "model.layers.layers.{bid}.self_attn.k_proj",              # plamo
             "model.layers.{bid}.attention.wk",                         # internlm2
             "transformer.decoder_layer.{bid}.multi_head_attention.key", # Grok
-            "transformer.layers.{bid}.attn.k_norm.weight"               # openelm
         ),
 
         # Attention value
