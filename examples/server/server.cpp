@@ -2266,17 +2266,31 @@ struct server_context {
                 llama_token_data_array cur_p = { slot.ctx_sampling->cur.data(), slot.ctx_sampling->cur.size(), false };
                 result.tok = id;
 
-                const int32_t n_probs = slot.sparams.n_probs;
-                if (slot.sparams.temp <= 0 && n_probs > 0) {
-                    // for llama_sample_token_greedy we need to sort candidates
-                    llama_sample_softmax(ctx, &cur_p);
-                }
+                const size_t n_probs = std::min(cur_p.size, (size_t) slot.sparams.n_probs);
+                if (n_probs > 0) {
+                    const size_t n_considered = slot.ctx_sampling->n_considered;
 
-                for (size_t i = 0; i < std::min(cur_p.size, (size_t) n_probs); ++i) {
-                    result.probs.push_back({
-                        cur_p.data[i].id,
-                        cur_p.data[i].p
-                    });
+                    // Make sure at least n_probs top tokens are at the front of the vector:
+                    if (slot.sparams.temp == 0.0f && n_probs > n_considered) {
+                        llama_sample_top_k(ctx, &cur_p, n_probs, 0);
+                    }
+
+                    if (slot.sparams.temp == 0.0f) {
+                        // With greedy sampling the probabilities have possibly not been calculated.
+                        for (size_t i = 0; i < n_probs; ++i) {
+                            result.probs.push_back({
+                                cur_p.data[i].id,
+                                i == 0 ? 1.0f : 0.0f
+                            });
+                        }
+                    } else {
+                        for (size_t i = 0; i < n_probs; ++i) {
+                            result.probs.push_back({
+                                cur_p.data[i].id,
+                                i >= n_considered ? 0.0f : cur_p.data[i].p // Tokens filtered out due to e.g. top_k have 0 probability.
+                            });
+                        }
+                    }
                 }
 
                 if (!process_token(result, slot)) {
