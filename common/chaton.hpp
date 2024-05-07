@@ -594,8 +594,8 @@ inline int32_t chaton_tmpl_apply_ex_capi(
         bool alertAssistantAtEnd,
         char *dest,
         int32_t destLength,
-        char *partTypes,
-        int32_t *partLengths,
+        char *partsTypes,
+        int32_t *partsLengths,
         int32_t *pNumParts
         ) {
     if ((tmpl == nullptr) || (dest == nullptr)) {
@@ -619,12 +619,12 @@ inline int32_t chaton_tmpl_apply_ex_capi(
         strlcpy(dest, taggedMsgs.c_str(), destLength);
     }
     if (*pNumParts > 0) {
-        if (partTypes != nullptr) {
-            strlcpy(partTypes, types.c_str(), *pNumParts);
+        if (partsTypes != nullptr) {
+            strlcpy(partsTypes, types.c_str(), *pNumParts);
         }
-        if (partLengths != nullptr) {
+        if (partsLengths != nullptr) {
             for(int i=0; i < *pNumParts; i++) {
-                partLengths[i] = lens[i];
+                partsLengths[i] = lens[i];
             }
         }
     }
