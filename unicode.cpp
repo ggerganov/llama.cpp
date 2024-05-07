@@ -13,6 +13,7 @@
 #include <vector>
 #include <locale>
 #include <codecvt>
+#include <algorithm>
 
 static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
@@ -470,9 +471,7 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
 }
 
 // Function to sort subsequences based on canonical class
-std::vector<uint32_t> sort_by_canonical_class(const std::vector<uint32_t> & cpts) {
-    std::vector<uint32_t> subsequence;
-    std::vector<uint32_t> result;
+std::vector<uint32_t> sort_by_canonical_class(std::vector<uint32_t> & cpts) {
     auto compareByCanonicalClass = [&](const uint32_t& a, const uint32_t& b) {
         auto cc_a_it = unicode_canonical_class.find(a);
         if (cc_a_it != unicode_canonical_class.end()) {
@@ -485,33 +484,9 @@ std::vector<uint32_t> sort_by_canonical_class(const std::vector<uint32_t> & cpts
         return false;
     };
 
-    for (const auto& cpt : cpts) {
-        auto it = unicode_canonical_class.find(cpt);
-        if (it != unicode_canonical_class.end()) {
-            if (it->second > 0) {
-                subsequence.push_back(cpt);
-            } else {
-                if (!subsequence.empty()) {
-                    sort(subsequence.begin(), subsequence.end(), compareByCanonicalClass);
-                    for (const auto& codepoint : subsequence) {
-                        result.push_back(codepoint);
-                    }
-                    subsequence.clear();
-                }
-
-                result.push_back(cpt);
-            }
-        }
-    }
-
-    if (!subsequence.empty()) {
-        sort(subsequence.begin(), subsequence.end(), compareByCanonicalClass);
-        for (const auto& codepoint : subsequence) {
-            result.push_back(codepoint);
-        }
-    }
-
-    return result;
+    // Sort the sequence using the custom comparator function
+    sort(cpts.begin(), cpts.end(), compareByCanonicalClass);
+    return cpts;
 }
 
 std::vector<uint32_t> canonical_decomposition_cpts(std::vector<uint32_t> & cpts, const std::vector<uint32_t>::iterator& cpt_begin, const std::vector<uint32_t>::iterator& cpt_end) {
