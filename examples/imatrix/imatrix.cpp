@@ -378,7 +378,7 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params, bool
     auto tim1 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true, true, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());

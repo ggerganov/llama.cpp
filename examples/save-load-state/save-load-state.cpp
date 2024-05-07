@@ -37,7 +37,7 @@ int main(int argc, char ** argv) {
     }
 
     // tokenize prompt
-    auto tokens = llama_tokenize(ctx, params.prompt, true);
+    auto tokens = llama_tokenize(ctx, params.prompt, true, true, true);
 
     // evaluate prompt
     llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size(), n_past, 0));

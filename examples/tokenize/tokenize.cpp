@@ -28,7 +28,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> tokens;
 
-    tokens = ::llama_tokenize(model, prompt, true, true);
+    tokens = ::llama_tokenize(model, prompt, true, true, true);
 
     for (int i = 0; i < (int) tokens.size(); i++) {
         if (printing_ids) {

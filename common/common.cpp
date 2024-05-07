@@ -2343,15 +2343,17 @@ std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
                         bool   add_special,
-                        bool   parse_special) {
-    return llama_tokenize(llama_get_model(ctx), text, add_special, parse_special);
+                        bool   parse_special,
+                        bool   fix_double_bos) {
+    return llama_tokenize(llama_get_model(ctx), text, add_special, parse_special, fix_double_bos);
 }
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_special,
-                        bool   parse_special) {
+                        bool   parse_special,
+                        bool   fix_double_bos) {
     // upper limit for the number of tokens
     int n_tokens = text.length() + 2 * add_special;
     std::vector<llama_token> result(n_tokens);
@@ -2363,7 +2365,17 @@ std::vector<llama_token> llama_tokenize(
     } else {
         result.resize(n_tokens);
     }
+    if (fix_double_bos) {
+        llama_fix_double_bos(model, result);
+    }
     return result;
+}
+
+void llama_fix_double_bos(const struct llama_model * model, std::vector<llama_token> & prompt) {
+    const llama_token bos = llama_token_bos(model);
+    if (prompt.size() >= 2 && prompt[0] == bos && prompt[1] == bos) {
+        prompt.erase(prompt.begin(), prompt.begin() + 1);
+    }
 }
 
 std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {

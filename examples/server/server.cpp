@@ -765,6 +765,9 @@ struct server_context {
         //       but it's better compared to completely ignoring ChatML and other chat templates
         const bool TMP_FORCE_SPECIAL = true;
 
+        // If special tokens are added, also make sure that this doesn't cause 2 BOS tokens if the user also adds one:
+        const bool fix_double_bos = add_special;
+
         // If `add_bos` is true, we only add BOS, when json_prompt is a string,
         // or the first element of the json_prompt array is a string.
         std::vector<llama_token> prompt_tokens;
@@ -777,7 +780,7 @@ struct server_context {
 
                     std::vector<llama_token> p;
                     if (first) {
-                        p = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+                        p = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL, fix_double_bos);
                         first = false;
                     } else {
                         p = ::llama_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
@@ -794,7 +797,7 @@ struct server_context {
             }
         } else {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
+            prompt_tokens = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL, fix_double_bos);
         }
 
         return prompt_tokens;
@@ -1058,7 +1061,7 @@ struct server_context {
         system_tokens.clear();
 
         if (!system_prompt.empty()) {
-            system_tokens = ::llama_tokenize(ctx, system_prompt, true);
+            system_tokens = ::llama_tokenize(ctx, system_prompt, true, false, true);
 
             llama_batch_clear(batch);
 

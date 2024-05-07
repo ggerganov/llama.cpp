@@ -255,7 +255,7 @@ int main(int argc, char ** argv) {
         if (params.chatml) {
             params.prompt = "<|im_start|>system\n" + params.prompt + "<|im_end|>";
         }
-        embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, true, true, true);
     } else {
         LOG("use session tokens\n");
         embd_inp = session_tokens;
@@ -277,10 +277,10 @@ int main(int argc, char ** argv) {
     if (ctx_guidance) {
         LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(sparams.cfg_negative_prompt));
 
-        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, true, true);
+        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, true, true, true);
         LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp).c_str());
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true, true);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true, true, true);
         LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp).c_str());
 
         original_prompt_len = original_inp.size();
@@ -339,15 +339,15 @@ int main(int argc, char ** argv) {
     }
 
     // prefix & suffix for instruct mode
-    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true,  true);
-    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false, true);
+    const auto inp_pfx = ::llama_tokenize(ctx, "\n\n### Instruction:\n\n", true,  true, false);
+    const auto inp_sfx = ::llama_tokenize(ctx, "\n\n### Response:\n\n",    false, true, false);
 
     LOG("inp_pfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_pfx).c_str());
     LOG("inp_sfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, inp_sfx).c_str());
 
     // chatml prefix & suffix
-    const auto cml_pfx = ::llama_tokenize(ctx, "\n<|im_start|>user\n", true, true);
-    const auto cml_sfx = ::llama_tokenize(ctx, "<|im_end|>\n<|im_start|>assistant\n", false, true);
+    const auto cml_pfx = ::llama_tokenize(ctx, "\n<|im_start|>user\n",                true,  true, false);
+    const auto cml_sfx = ::llama_tokenize(ctx, "<|im_end|>\n<|im_start|>assistant\n", false, true, false);
 
     LOG("cml_pfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, cml_pfx).c_str());
     LOG("cml_sfx: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, cml_sfx).c_str());
@@ -418,7 +418,7 @@ int main(int argc, char ** argv) {
             for (const auto & antiprompt : params.antiprompt) {
                 LOG_TEE("Reverse prompt: '%s'\n", antiprompt.c_str());
                 if (params.verbose_prompt) {
-                    auto tmp = ::llama_tokenize(ctx, antiprompt, false, true);
+                    auto tmp = ::llama_tokenize(ctx, antiprompt, false, true, false);
                     for (int i = 0; i < (int) tmp.size(); i++) {
                         LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
                     }
@@ -433,7 +433,7 @@ int main(int argc, char ** argv) {
         if (!params.input_prefix.empty()) {
             LOG_TEE("Input prefix: '%s'\n", params.input_prefix.c_str());
             if (params.verbose_prompt) {
-                auto tmp = ::llama_tokenize(ctx, params.input_prefix, true, true);
+                auto tmp = ::llama_tokenize(ctx, params.input_prefix, true, true, true);
                 for (int i = 0; i < (int) tmp.size(); i++) {
                     LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
                 }
@@ -443,7 +443,7 @@ int main(int argc, char ** argv) {
         if (!params.input_suffix.empty()) {
             LOG_TEE("Input suffix: '%s'\n", params.input_suffix.c_str());
             if (params.verbose_prompt) {
-                auto tmp = ::llama_tokenize(ctx, params.input_suffix, false, true);
+                auto tmp = ::llama_tokenize(ctx, params.input_suffix, false, true, false);
                 for (int i = 0; i < (int) tmp.size(); i++) {
                     LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx, tmp[i]).c_str());
                 }
@@ -516,7 +516,7 @@ int main(int argc, char ** argv) {
 
     antiprompt_ids.reserve(params.antiprompt.size());
     for (const std::string & antiprompt : params.antiprompt) {
-        antiprompt_ids.emplace_back(::llama_tokenize(ctx, antiprompt, false, true));
+        antiprompt_ids.emplace_back(::llama_tokenize(ctx, antiprompt, false, true, false));
     }
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
@@ -801,7 +801,7 @@ int main(int argc, char ** argv) {
                 if (params.interactive) {
                     if (!params.antiprompt.empty()) {
                         // tokenize and inject first reverse prompt
-                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false, true);
+                        const auto first_antiprompt = ::llama_tokenize(ctx, params.antiprompt.front(), false, true, false);
                         embd_inp.insert(embd_inp.end(), first_antiprompt.begin(), first_antiprompt.end());
                         is_antiprompt = true;
                     }
@@ -875,9 +875,9 @@ int main(int argc, char ** argv) {
                         process_escapes(buffer);
                     }
 
-                    const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true);
-                    const auto line_inp = ::llama_tokenize(ctx, buffer,              false, false);
-                    const auto line_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true);
+                    const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true,  false);
+                    const auto line_inp = ::llama_tokenize(ctx, buffer,              false, false, false);
+                    const auto line_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true,  false);
 
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp).c_str());
 

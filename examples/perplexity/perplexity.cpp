@@ -345,7 +345,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
 
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true, true, true);
 
     const int n_ctx = llama_n_ctx(ctx);
 
@@ -498,7 +498,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     auto tim1 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenizing the input ..\n", __func__);
 
-    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true);
+    std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, true, true, true);
 
     auto tim2 = std::chrono::high_resolution_clock::now();
     fprintf(stderr, "%s: tokenization took %g ms\n",__func__,1e-3*std::chrono::duration_cast<std::chrono::microseconds>(tim2-tim1).count());
@@ -843,7 +843,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
         hs_cur.gold_ending_idx = std::stoi( prompt_lines[idx*6+1] );
         for (size_t j = 0; j < 4; j++) {
             hs_cur.ending[j] = prompt_lines[idx*6+2+j];
-            hs_cur.seq_tokens[j] = ::llama_tokenize(ctx, hs_cur.context + " " + hs_cur.ending[j], true);
+            hs_cur.seq_tokens[j] = ::llama_tokenize(ctx, hs_cur.context + " " + hs_cur.ending[j], true, true, true);
         }
 
         // determine the common prefix of the endings
@@ -1136,8 +1136,8 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
     fprintf(stderr, "%s : tokenizing selected tasks\n", __func__);
 
     for (auto & task : data) {
-        task.seq_tokens[0] = ::llama_tokenize(ctx, task.first + task.choices[0] + task.second, true);
-        task.seq_tokens[1] = ::llama_tokenize(ctx, task.first + task.choices[1] + task.second, true);
+        task.seq_tokens[0] = ::llama_tokenize(ctx, task.first + task.choices[0] + task.second, true, true, true);
+        task.seq_tokens[1] = ::llama_tokenize(ctx, task.first + task.choices[1] + task.second, true, true, true);
 
         task.common_prefix = 0;
         for (size_t k = 0; k < task.seq_tokens[0].size(); k++) {
@@ -1152,8 +1152,8 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             task.seq_tokens[0].size() - task.common_prefix +
             task.seq_tokens[1].size() - task.common_prefix;
 
-        task.n_base1 = ::llama_tokenize(ctx, task.first + task.choices[0], true).size();
-        task.n_base2 = ::llama_tokenize(ctx, task.first + task.choices[1], true).size();
+        task.n_base1 = ::llama_tokenize(ctx, task.first + task.choices[0], true, true, true).size();
+        task.n_base2 = ::llama_tokenize(ctx, task.first + task.choices[1], true, true, true).size();
     }
 
     fprintf(stderr, "%s : calculating winogrande score over selected tasks.\n", __func__);
@@ -1359,7 +1359,7 @@ static bool multiple_choice_prepare_one_task(llama_context * ctx, multiple_choic
             }
             return false;
         }
-        task.seq_tokens.emplace_back(::llama_tokenize(ctx, task.question + " " + answer, true));
+        task.seq_tokens.emplace_back(::llama_tokenize(ctx, task.question + " " + answer, true, true, true));
     }
     auto min_len = task.seq_tokens.front().size();
     for (auto& seq : task.seq_tokens) {

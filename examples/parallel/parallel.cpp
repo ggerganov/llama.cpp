@@ -164,7 +164,7 @@ int main(int argc, char ** argv) {
     }
 
     std::vector<llama_token> tokens_system;
-    tokens_system = ::llama_tokenize(ctx, k_system, true);
+    tokens_system = ::llama_tokenize(ctx, k_system, true, true, true);
     const int32_t n_tokens_system = tokens_system.size();
 
     llama_seq_id g_seq_id = 0;
@@ -256,7 +256,7 @@ int main(int argc, char ** argv) {
 
                     // do not prepend BOS because we have a system prompt!
                     std::vector<llama_token> tokens_prompt;
-                    tokens_prompt = ::llama_tokenize(ctx, client.prompt, false);
+                    tokens_prompt = ::llama_tokenize(ctx, client.prompt, false, true, false);
 
                     for (size_t i = 0; i < tokens_prompt.size(); ++i) {
                         llama_batch_add(batch, tokens_prompt[i], i + n_tokens_system, { client.id + 1 }, false);
