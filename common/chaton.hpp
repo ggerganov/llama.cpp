@@ -268,8 +268,8 @@ public:
         return types;
     }
 
-    std::vector<int> get_partslens() {
-        std::vector<int> lens = {};
+    std::vector<int32_t> get_partslens() {
+        std::vector<int32_t> lens = {};
         for(auto part: parts) {
             lens.push_back(part.length());
         }
@@ -362,7 +362,7 @@ inline bool chaton_tmpl_apply_single_ex(
         const std::string &content,
         std::string &tagged,
         std::string &types,
-        std::vector<int> &lens
+        std::vector<int32_t> &lens
         ) {
     if (!chaton_tmpl_exists(tmpl)) {
         return false;
@@ -392,7 +392,7 @@ inline size_t chaton_tmpl_apply_single(
         std::string &tagged
         ) {
     std::string types;
-    std::vector<int> lens;
+    std::vector<int32_t> lens;
     if (!chaton_tmpl_apply_single_ex(tmpl, role, content, tagged, types, lens)) {
         return -1;
     }
@@ -418,8 +418,6 @@ inline size_t chat_tmpl_apply_single_capi(
         const size_t destLength
         ) {
     std::string tagged;
-    std::string types;
-    std::vector<int> lens;
     auto taggedLength = chaton_tmpl_apply_single(tmpl, role, content, tagged);
     if (taggedLength <= 0) {
         return taggedLength;
@@ -449,7 +447,7 @@ inline bool chaton_tmpl_apply_ex(
         bool alertAssistantAtEnd,
         std::string &tagged,
         std::string &types,
-        std::vector<int> &lens
+        std::vector<int32_t> &lens
         ) {
     if (!chaton_tmpl_exists(tmpl)) {
         return false;
@@ -527,7 +525,7 @@ inline int32_t chaton_tmpl_apply(
         std::string &tagged
         ) {
     std::string types;
-    std::vector<int> lens;
+    std::vector<int32_t> lens;
     if (!chaton_tmpl_apply_ex(tmpl, msgs, alertAssistantAtEnd, tagged, types, lens)) {
         return -1;
     }
@@ -578,12 +576,12 @@ inline int32_t chaton_tmpl_apply_capi(
 // this additionally also returns info about the parts that make up
 // the returned tagged message.
 //
-// partTypes and partLengths should be arrays that can accomodate the
+// partsTypes and partsLengths should be arrays that can accomodate the
 // same number of elements belonging to its respective type.
 // Inturn the pNumParts should point to a int which specifies the
 // number of elements.
 // If the generated tagged message has more parts than the specified
-// *pNumParts, then the logic copies partTypes and partLengths to the
+// *pNumParts, then the logic copies partsTypes and partsLengths to the
 // specified length/NumOfParts only. Parallely it updates *pNumParts
 // to the actual needed length (not including any terminating null char or so).
 //
@@ -607,7 +605,7 @@ inline int32_t chaton_tmpl_apply_ex_capi(
     }
     std::string taggedMsgs;
     std::string types;
-    std::vector<int> lens;
+    std::vector<int32_t> lens;
     if (!chaton_tmpl_apply_ex(tmpl, vMsgs, alertAssistantAtEnd, taggedMsgs, types, lens)) {
         return -1;
     }
@@ -623,9 +621,7 @@ inline int32_t chaton_tmpl_apply_ex_capi(
             strlcpy(partsTypes, types.c_str(), *pNumParts);
         }
         if (partsLengths != nullptr) {
-            for(int i=0; i < *pNumParts; i++) {
-                partsLengths[i] = lens[i];
-            }
+            memcpy(partsLengths, lens.data(), (*pNumParts)*4);
         }
     }
     *pNumParts = types.length();
