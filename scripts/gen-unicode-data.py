@@ -100,14 +100,15 @@ print_cat("map", "lowercase", map_lowercase)
 print_cat("map", "uppercase", map_uppercase)
 
 
-inv_map_nfd = {}
-for codepoint in range(0x110000):
-    char = chr(codepoint)
-    norm = ord(unicodedata.normalize('NFD', char)[0])
-    if codepoint != norm:
-        a, b = inv_map_nfd.get(norm, (codepoint, codepoint))
-        inv_map_nfd[norm] = (min(a, codepoint), max(b, codepoint))
-nfd_ranges = [ (a, b, nfd) for nfd,(a,b) in inv_map_nfd.items() ]
-nfd_ranges = list(sorted(nfd_ranges))
-del inv_map_nfd
-print_cat("range_value", "nfd", nfd_ranges)
+# TODO: this is wrong
+# inv_map_nfd = {}
+# for codepoint in range(0x110000):
+#     char = chr(codepoint)
+#     norm = ord(unicodedata.normalize('NFD', char)[0])
+#     if codepoint != norm:
+#         a, b = inv_map_nfd.get(norm, (codepoint, codepoint))
+#         inv_map_nfd[norm] = (min(a, codepoint), max(b, codepoint))
+# nfd_ranges = [ (a, b, nfd) for nfd,(a,b) in inv_map_nfd.items() ]
+# nfd_ranges = list(sorted(nfd_ranges))
+# del inv_map_nfd
+# print_cat("range_value", "nfd", nfd_ranges)
