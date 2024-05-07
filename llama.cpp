@@ -2367,9 +2367,9 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
     return free;
 #else
     return 1;
+#endif
     GGML_UNUSED(model);
     GGML_UNUSED(device);
-#endif
 }
 
 //
