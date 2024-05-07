@@ -496,7 +496,11 @@ std::vector<uint32_t> canonical_decomposition_cpts(std::vector<uint32_t> & cpts,
         if (it.first != it.second) {
             uint offset = 0;
             for (auto jt = it.first; jt != it.second; jt++) {
-                cpts.emplace(cpts.begin() + i + offset, jt->second);
+                if (offset == 0) {
+                    cpts[i] = jt->second;
+                } else {
+                    cpts.emplace(cpts.begin() + i + offset, jt->second);
+                }
                 offset++;
             }
             const auto & inner_result = canonical_decomposition_cpts(cpts, i);

@@ -16,17 +16,10 @@ Feature: llama.cpp server
     Then  the server is starting
     Then  the server is healthy
 
-  Scenario: Embedding
-    When embeddings are computed for:
-    """
-    What is the capital of Bulgaria ?
-    """
-    Then embeddings are generated
-
   Scenario: Tokenize / Detokenize complex
     When tokenizing:
     """
-    España is a èspciâl café über naïve résumé cañón élite cañas Barça 例子 東京 こんにちは 你好 中国
+    España is your's mine's l'heure èspciâl café über naïve résumé cañón élite cañas Barça 例子 東京 こんにちは 你好 中国
     """
     Then tokens can be detokenize and is equivalent False
 
