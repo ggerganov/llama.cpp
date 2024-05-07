@@ -278,13 +278,27 @@ bool IMatrixCollector::load_imatrix(const char * imatrix_file, std::unordered_ma
             imatrix_data = {};
             return false;
         }
-        e.values.resize(nval);
-        in.read((char*)e.values.data(), nval*sizeof(float));
+
+        // When re-called from load_imatrix() with add set, this will already be created.
+        if (e.values.empty()) {
+            e.values.resize(nval, 0);
+            e.counts.resize(nval, 0);
+        }
+        
+        std::vector<float> tmp(nval);
+        in.read((char*)tmp.data(), nval*sizeof(float));
         if (in.fail()) {
             printf("%s: failed reading data for entry %d\n",__func__,i);
             imatrix_data = {};
             return false;
         }
+
+        // Recreate the state as expected by save_imatrix(), and corerct for weighted sum.
+        for (int i = 0; i < nval; i++) {
+            e.values[i] += tmp[i];
+            e.counts[i] += ncall;
+        }
+        
         e.ncall = ncall;
     }
     return true;
