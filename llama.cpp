@@ -6955,17 +6955,6 @@ struct llm_build_context {
         return lctx.inp_KQ_mask;
     }
 
-    struct ggml_tensor * build_inp_KQ_mask2(int64_t n_kv, bool causal = true) {
-        if (causal) {
-            lctx.inp_KQ_mask = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_kv, n_tokens);
-        } else {
-            lctx.inp_KQ_mask = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_tokens, n_tokens);
-        }
-        cb(lctx.inp_KQ_mask, "KQ_mask", -1);
-        ggml_set_input(lctx.inp_KQ_mask);
-        return lctx.inp_KQ_mask;
-    }
-
     struct ggml_tensor * build_inp_KQ_pos() {
         lctx.inp_KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, n_kv);
         cb(lctx.inp_KQ_pos, "KQ_pos", -1);
