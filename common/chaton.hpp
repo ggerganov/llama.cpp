@@ -264,7 +264,7 @@ public:
         return allin;
     }
 
-    std::string get_types() {
+    std::string get_partstypes() {
         return types;
     }
 
@@ -376,7 +376,7 @@ inline bool chaton_tmpl_apply_single_ex(
     cp.dump();
     tagged = cp.str();
     LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), tagged.c_str());
-    types = cp.get_types();
+    types = cp.get_partstypes();
     lens = cp.get_partslens();
     return true;
 }
@@ -512,7 +512,7 @@ inline bool chaton_tmpl_apply_ex(
     tagged = cp.str();
     LOGLN("DBUG:%s:%s:%s", __func__, tmpl.c_str(), tagged.c_str());
     LOGLN("DBUG:%s:%s:CntSys[%d]:CntUsr[%d]:CntOthers[%d]", __func__, tmpl.c_str(), cntSystem, cntUser, cntOthers);
-    types = cp.get_types();
+    types = cp.get_partstypes();
     lens = cp.get_partslens();
     return true;
 }
