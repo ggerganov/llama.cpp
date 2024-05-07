@@ -23,14 +23,14 @@
 # TODO: automate the update of convert-hf-to-gguf.py
 #
 
+import json
 import logging
 import os
-import requests
 import sys
-import json
-
-from hashlib import sha256
 from enum import IntEnum, auto
+from hashlib import sha256
+
+import requests
 from transformers import AutoTokenizer
 
 logging.basicConfig(level=logging.DEBUG)
@@ -65,6 +65,13 @@ models = [
     {"name": "mpt",            "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mosaicml/mpt-7b", },
     {"name": "starcoder",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/bigcode/starcoder2-3b", },
     {"name": "gpt-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/openai-community/gpt2", },
+    {"name": "phi",            "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/microsoft/phi-1", },
+    {"name": "stablelm",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/stabilityai/stablelm-2-zephyr-1_6b", },
+    {"name": "qwen",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen-tokenizer", },
+    {"name": "mistral-bpe",    "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2", },
+    {"name": "mistral-spm",    "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2", },
+    {"name": "mixtral-bpe",    "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1", },
+    {"name": "mixtral-spm",    "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1", },
     {"name": "refact",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/smallcloudai/Refact-1_6-base", },
     {"name": "command-r",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/CohereForAI/c4ai-command-r-v01", },
 ]
@@ -290,12 +297,18 @@ for model in models:
     logger.info(f"Tests for {name} written in ./models/ggml-vocab-{name}.gguf.*")
 
 # generate commands for creating vocab files
-
-logger.info("\nRun the following commands to generate the vocab files for testing:\n")
+shscript = "#!/usr/bin/env bash\n\n"
 
 for model in models:
     name = model["name"]
+    tmpline = f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only\n"
+    shscript += tmpline
+    logging.info(tmpline.strip())
 
-    print(f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only") # noqa: NP100
+with open("generate-vocab.sh", "w", encoding="utf-8") as f:
+    f.writelines(shscript)
+    logging.info(f"Wrote {len(shscript)} bytes to generate-vocab.sh")
 
-logger.info("\n")
+logging.info("Run the following command to generate the vocab files for testing:")
+logging.info("Enable execution: chmod +x generate-vocab.sh")
+logging.info("Execute with ./generate-vocab.sh")
