@@ -937,7 +937,7 @@ If your issue is with model generation quality, then please at least scan the fo
 [Termux](https://github.com/termux/termux-app#installation) is a method to execute `llama.cpp` on an Android device (no root required).
 ```
 apt update && apt upgrade -y
-apt install git make cmake 
+apt install git make cmake
 ```
 
 It's recommended to move your model inside the `~/` directory for best performance:
