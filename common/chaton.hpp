@@ -608,7 +608,10 @@ inline int32_t chaton_tmpl_apply_ex_capi(
     std::string taggedMsgs;
     std::string types;
     std::vector<int> lens;
-    int32_t taggedLength = chaton_tmpl_apply_ex(tmpl, vMsgs, taggedMsgs, types, lens, alertAssistantAtEnd);
+    if (!chaton_tmpl_apply_ex(tmpl, vMsgs, taggedMsgs, types, lens, alertAssistantAtEnd)) {
+        return -1;
+    }
+    int32_t taggedLength = taggedMsgs.size();
     if (taggedLength <= 0) {
         return taggedLength;
     }
@@ -616,9 +619,13 @@ inline int32_t chaton_tmpl_apply_ex_capi(
         strlcpy(dest, taggedMsgs.c_str(), destLength);
     }
     if (*pNumParts > 0) {
-        strlcpy(partTypes, types.c_str(), *pNumParts);
-        for(int i=0; i < *pNumParts; i++) {
-            partLengths[i] = lens[i];
+        if (partTypes != nullptr) {
+            strlcpy(partTypes, types.c_str(), *pNumParts);
+        }
+        if (partLengths != nullptr) {
+            for(int i=0; i < *pNumParts; i++) {
+                partLengths[i] = lens[i];
+            }
         }
     }
     *pNumParts = types.length();
