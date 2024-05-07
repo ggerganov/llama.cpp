@@ -12456,7 +12456,8 @@ struct llm_tokenizer_wpm {
     }
 
     std::vector<std::string> preprocess(const std::string & text) {
-        std::vector<uint32_t> cpts_nfd = unicode_cpts_normalize_nfd(unicode_cpts_from_utf8(text));
+        auto unicode_cpts = unicode_cpts_from_utf8(text);
+        std::vector<uint32_t> cpts_nfd = unicode_cpts_normalize_nfd(unicode_cpts);
 
         // strip accents, strip control, uniformize whitespace,
         // to lowercase, pad chinese characters, pad punctuation

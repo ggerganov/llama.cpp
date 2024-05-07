@@ -1691,3 +1691,11 @@ const std::map<char32_t, char32_t> unicode_map_lowercase = {
 {0x1E917, 0x1E939}, {0x1E918, 0x1E93A}, {0x1E919, 0x1E93B}, {0x1E91A, 0x1E93C}, {0x1E91B, 0x1E93D}, {0x1E91C, 0x1E93E},
 {0x1E91D, 0x1E93F}, {0x1E91E, 0x1E940}, {0x1E91F, 0x1E941}, {0x1E920, 0x1E942}, {0x1E921, 0x1E943},
 };
+
+
+const std::map<uint32_t, uint32_t> unicode_canonical_class = {
+    {65, 0},   // Example: Unicode point A has canonical class 0
+    {769, 1},  // Example: Combining acute accent has canonical class 1
+    {99, 0},   // Example: Unicode point c has canonical class 0
+    {807, 1}   // Example: Combining cedilla has canonical class 1
+};

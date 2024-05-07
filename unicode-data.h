@@ -14,3 +14,4 @@ extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_symbol;
 extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_control;
 extern const std::multimap<uint32_t, uint32_t>          unicode_map_nfd;
 extern const std::map<char32_t, char32_t>               unicode_map_lowercase;
+extern const std::map<uint32_t, uint32_t>               unicode_canonical_class;

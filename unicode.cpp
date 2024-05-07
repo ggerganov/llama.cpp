@@ -469,18 +469,74 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
     throw std::invalid_argument("invalid codepoint");
 }
 
-std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
+// Function to sort subsequences based on canonical class
+std::vector<uint32_t> sort_by_canonical_class(const std::vector<uint32_t> & cpts) {
+    std::vector<uint32_t> subsequence;
     std::vector<uint32_t> result;
-    result.reserve(cpts.size());
-    for (size_t i = 0; i < cpts.size(); ++i) {
-        auto it = unicode_map_nfd.find(cpts[i]);
-        if (it == unicode_map_nfd.end()) {
-            result.push_back(cpts[i]);
+    auto compareByCanonicalClass = [&](const uint32_t& a, const uint32_t& b) {
+        auto cc_a_it = unicode_canonical_class.find(a);
+        if (cc_a_it != unicode_canonical_class.end()) {
+            auto cc_b_it = unicode_canonical_class.find(b);
+            if (cc_b_it != unicode_canonical_class.end()) {
+                return cc_a_it->second < cc_b_it->second;
+            }
+
+        }
+        return false;
+    };
+
+    for (const auto& cpt : cpts) {
+        auto it = unicode_canonical_class.find(cpt);
+        if (it != unicode_canonical_class.end()) {
+            if (it->second > 0) {
+                subsequence.push_back(cpt);
+            } else {
+                if (!subsequence.empty()) {
+                    sort(subsequence.begin(), subsequence.end(), compareByCanonicalClass);
+                    for (const auto& codepoint : subsequence) {
+                        result.push_back(codepoint);
+                    }
+                    subsequence.clear();
+                }
+
+                result.push_back(cpt);
+            }
+        }
+    }
+
+    if (!subsequence.empty()) {
+        sort(subsequence.begin(), subsequence.end(), compareByCanonicalClass);
+        for (const auto& codepoint : subsequence) {
+            result.push_back(codepoint);
+        }
+    }
+
+    return result;
+}
+
+std::vector<uint32_t> canonical_decomposition_cpts(std::vector<uint32_t> & cpts, const std::vector<uint32_t>::iterator& cpt_begin, const std::vector<uint32_t>::iterator& cpt_end) {
+    std::vector<uint32_t> result;
+    for (auto cpt_it = cpt_begin; cpt_it != cpt_end; ++cpt_it) {
+        auto it = unicode_map_nfd.equal_range(*cpt_it);
+        if (it.first != it.second) {
+            uint offset = 0;
+            for (auto jt = it.first; jt != it.second; jt++) {
+                cpts.insert(cpt_it + offset, jt->second);
+                offset++;
+            }
+            const auto & inner_result = canonical_decomposition_cpts(cpts, cpt_it, cpt_end);
+            result.insert(result.end(), inner_result.begin(), inner_result.end());
+            break;
         } else {
-            result.push_back(it->second);
+            result.push_back(*cpt_it);
         }
     }
     return result;
+}
+
+std::vector<uint32_t> unicode_cpts_normalize_nfd(std::vector<uint32_t> & cpts) {
+    auto result = canonical_decomposition_cpts(cpts, cpts.begin(), cpts.end());
+    return sort_by_canonical_class(result);
 }
 
 std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
