@@ -96,7 +96,9 @@ def find_first_mismatch(ids1: list[int], ids2: list[int]):
     for i, (a,b) in enumerate(zip(ids1, ids2)):
         if a != b:
             return i
-    return -1 if len(ids1) == len(ids2) else i
+    if len(ids1) == len(ids2):
+        return -1
+    return min(len(ids1), len(ids2))
 
 
 def test_custom_texts(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase):
@@ -152,11 +154,12 @@ def test_custom_texts(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase):
         'a 〇b',    # unicode_ranges_digit, 0x3007
         'Ⅵ-a',     # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
         '\uFEFF//', # unicode_ranges_control, 0xFEFF (BOM)
+        '<s>a'      # TODO: Phi-3 fail
     ]
 
     for text in tests + more_tests:
-        ids1 = model.tokenize(text, parse_special=True)
-        ids2 = tokenizer.encode(text)
+        ids1 = model.tokenize(text, add_special=False, parse_special=False)
+        ids2 = tokenizer.encode(text, add_special_tokens=False)
         logger.info(repr(text))
         if ids1 != ids2:
             logger.info(" TokenIDs: " + str(list(ids1)))
@@ -165,7 +168,7 @@ def test_custom_texts(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase):
             raise Exception()
 
 
-def test_random_chars(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, iterations=100):
+def test_random_chars(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, iterations = 100):
 
     WHITESPACES = list(" " * 20 + "\n" * 5 + "\r\n" * 5 + "\t" * 5)
     CHARS = list(set("""
@@ -192,12 +195,12 @@ def test_random_chars(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, 
             text.append("".join(word) + space)
         text = "".join(text)
 
-        ids1 = model.tokenize(text, parse_special=True)
-        ids2 = tokenizer.encode(text)
+        ids1 = model.tokenize(text, add_special=False, parse_special=False)
+        ids2 = tokenizer.encode(text, add_special_tokens=False)
         assert(ids1 == ids2)
 
 
-def test_random_vocab_chars(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, iterations=100):
+def test_random_vocab_chars(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, iterations = 100):
 
     logger.info("Building vocab char list ...")
     vocab_ids = list(tokenizer.vocab.values())
@@ -215,8 +218,8 @@ def test_random_vocab_chars(model: LibLlamaModel, tokenizer: PreTrainedTokenizer
         text = rand.choices(vocab_chars, k=1024)
         text = "".join(text)
 
-        ids1 = model.tokenize(text, parse_special=True)
-        ids2 = tokenizer.encode(text)
+        ids1 = model.tokenize(text, add_special=False, parse_special=False)
+        ids2 = tokenizer.encode(text, add_special_tokens=False)
         assert(ids1 == ids2)
 
 
@@ -255,12 +258,12 @@ def test_random_vocab_tokens(model: LibLlamaModel, tokenizer: PreTrainedTokenize
             text.append("".join(tokens) + sep)
         text = "".join(text)
 
-        ids1 = model.tokenize(text, parse_special=True)
-        ids2 = tokenizer.encode(text)
+        ids1 = model.tokenize(text, add_special=False, parse_special=False)
+        ids2 = tokenizer.encode(text, add_special_tokens=False)
         assert(ids1 == ids2)
 
 
-def test_random_bytes(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, iterations=100):
+def test_random_bytes(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, iterations = 100):
 
     WHITESPACES = list(" " * 20 + "\n" * 5 + "\r\n" * 5 + "\t" * 5)
 
@@ -280,8 +283,8 @@ def test_random_bytes(model: LibLlamaModel, tokenizer: PreTrainedTokenizerBase, 
             text.append("".join(word))
         text = "".join(text)
 
-        ids1 = model.tokenize(text, parse_special=True)
-        ids2 = tokenizer.encode(text)
+        ids1 = model.tokenize(text, add_special=False, parse_special=False)
+        ids2 = tokenizer.encode(text, add_special_tokens=False)
         assert(ids1 == ids2)
 
 
