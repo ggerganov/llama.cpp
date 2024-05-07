@@ -446,10 +446,10 @@ inline size_t chat_tmpl_apply_single_capi(
 inline bool chaton_tmpl_apply_ex(
         const std::string &tmpl,
         const std::vector<const llama_chat_message *> &msgs,
+        bool alertAssistantAtEnd,
         std::string &tagged,
         std::string &types,
-        std::vector<int> &lens,
-        bool alertAssistantAtEnd
+        std::vector<int> &lens
         ) {
     if (!chaton_tmpl_exists(tmpl)) {
         return false;
@@ -528,7 +528,7 @@ inline int32_t chaton_tmpl_apply(
         ) {
     std::string types;
     std::vector<int> lens;
-    if (!chaton_tmpl_apply_ex(tmpl, msgs, tagged, types, lens, alertAssistantAtEnd)) {
+    if (!chaton_tmpl_apply_ex(tmpl, msgs, alertAssistantAtEnd, tagged, types, lens)) {
         return -1;
     }
     return tagged.size();
@@ -608,7 +608,7 @@ inline int32_t chaton_tmpl_apply_ex_capi(
     std::string taggedMsgs;
     std::string types;
     std::vector<int> lens;
-    if (!chaton_tmpl_apply_ex(tmpl, vMsgs, taggedMsgs, types, lens, alertAssistantAtEnd)) {
+    if (!chaton_tmpl_apply_ex(tmpl, vMsgs, alertAssistantAtEnd, taggedMsgs, types, lens)) {
         return -1;
     }
     int32_t taggedLength = taggedMsgs.size();
