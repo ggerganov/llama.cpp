@@ -2271,12 +2271,12 @@ struct server_context {
                     const size_t n_considered = slot.ctx_sampling->n_considered;
 
                     // Make sure at least n_probs top tokens are at the front of the vector:
-                    if (n_probs > n_considered) {
+                    if (slot.sparams.temp == 0.0f && n_probs > n_considered) {
                         llama_sample_top_k(ctx, &cur_p, n_probs, 0);
                     }
 
-                    if (slot.sparams.temp <= 0.0f) {
-                        // With greedy sampling the probabilities were never calculated.
+                    if (slot.sparams.temp == 0.0f) {
+                        // With greedy sampling the probabilities have possibly not been calculated.
                         for (size_t i = 0; i < n_probs; ++i) {
                             result.probs.push_back({
                                 cur_p.data[i].id,
