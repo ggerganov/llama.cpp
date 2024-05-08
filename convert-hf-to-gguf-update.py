@@ -120,14 +120,21 @@ for model in models:
     # model and repo urls are not the same
     # url = "https://huggingface.co/Qwen/Qwen-tokenizer/raw/main/tokenizer.json"
     if name == "qwen":  # qwen is an outlier and will raise a FileNotFoundError
-        # fetch the qwen tokenizer
+        # override the tokenizer path
+        model_tokenizer_path = f"{model_name_or_path}/qwen.tiktoken"
+        # fetch the qwens BPE tokenizer
         download_file_with_auth(
-            url="https://huggingface.co/Qwen/Qwen-tokenizer/raw/main/tokenizer.json",
+            url="https://huggingface.co/Qwen/Qwen-7B/raw/main/qwen.tiktoken",
             token=token,
             save_path=model_tokenizer_path
         )
-    else:  # Et tu, Brute?
-        # Get the models tokenizer
+        # fetch qwens tokenizer script; this is required.
+        download_file_with_auth(
+            url="https://huggingface.co/Qwen/Qwen-7B/raw/main/tokenization_qwen.py",
+            token=token,
+            save_path=f"{model_name_or_path}/tokenization_qwen.py"
+        )
+    else:  # Get the models tokenizer
         download_file_with_auth(
             url=f"{url_main}/tokenizer.json",
             token=token,
@@ -177,8 +184,7 @@ for model in models:
     if tokt == TOKENIZER_TYPE.SPM:
         continue
 
-    # create the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}", trust_remote_code=True)
 
     chktok = tokenizer.encode(chktxt)
     chkhsh = sha256(str(chktok).encode()).hexdigest()
@@ -314,8 +320,7 @@ for model in models:
     name = model["name"]
     tokt = model["tokt"]
 
-    # create the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
 
     with open(f"models/ggml-vocab-{name}.gguf.inp", "w", encoding="utf-8") as f:
         for text in tests:
@@ -336,7 +341,7 @@ shscript = "#!/usr/bin/env bash\n\n"
 
 for model in models:
     name = model["name"]
-    tmpline = f"python3 convert-hf-to-gguf.py {model_name_or_path}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only\n"
+    tmpline = f"python3 convert-hf-to-gguf.py models/tokenizers/{name} --outfile models/ggml-vocab-{name}.gguf --vocab-only\n"
     shscript += tmpline
     logging.info(tmpline.strip())
 
