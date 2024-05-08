@@ -151,6 +151,8 @@ for model in models:
     # print the "pre_tokenizer" content from the tokenizer.json
     with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
         cfg = json.load(f)
+        normalizer = cfg["normalizer"]
+        logger.info("normalizer: " + json.dumps(normalizer, indent=4))
         pre_tokenizer = cfg["pre_tokenizer"]
         logger.info("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
 
