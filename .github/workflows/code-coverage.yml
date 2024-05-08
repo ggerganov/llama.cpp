@@ -19,7 +19,8 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential gcc-8 lcov
+          sudo apt-get install build-essential gcc-8 lcov git-lfs
+          git-lfs install
 
       - name: Build
         run: CC=gcc-8 make -j LLAMA_CODE_COVERAGE=1 tests
