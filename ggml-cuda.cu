@@ -2474,7 +2474,7 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
     void * ggml_cuda_cpy_fn_ptr = nullptr;
 
     if (cuda_ctx->cuda_graph->graph == nullptr) {
-        if (ggml_cuda_info().devices[cuda_ctx->device].cc < 800) {
+        if (ggml_cuda_info().devices[cuda_ctx->device].cc < CC_AMPERE) {
             cuda_ctx->cuda_graph->disable_due_to_gpu_arch = true;
 #ifndef NDEBUG
             fprintf(stderr, "%s: disabling CUDA graphs due to GPU architecture\n", __func__);
