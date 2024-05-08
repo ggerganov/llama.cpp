@@ -102,8 +102,7 @@ for model in models:
     repo = model["repo"]
     tokt = model["tokt"]
 
-    # set url paths
-    url_main = f"{repo}/raw/main"
+    # NOTE: We should always be using resolve to download files
     url_resolve = f"{repo}/resolve/main"
 
     # set dir paths
@@ -138,27 +137,17 @@ for model in models:
         )
     else:  # Get the models tokenizer
         download_file_with_auth(
-            url=f"{url_main}/tokenizer.json",
+            url=f"{url_resolve}/tokenizer.json",
             token=token,
             save_path=model_tokenizer_path
         )
 
     # Get the models hyper params
     download_file_with_auth(
-        url=f"{url_main}/config.json",
+        url=f"{url_resolve}/config.json",
         token=token,
         save_path=f"{model_name_or_path}/config.json"
     )
-
-    # if downloaded file is less than 1KB, we likely need to download an LFS instead
-    if os.path.getsize(model_tokenizer_path) < 1024:
-        # remove the file
-        os.remove(model_tokenizer_path)
-        download_file_with_auth(
-            url=f"{url_resolve}/tokenizer.json",
-            token=token,
-            save_path=model_tokenizer_path
-        )
 
     # Handle sentencepiece tokenizer
     if tokt == TOKENIZER_TYPE.SPM:
@@ -170,7 +159,7 @@ for model in models:
 
     # Get the tokenizer config
     download_file_with_auth(
-        url=f"{url_main}/tokenizer_config.json",
+        url=f"{url_resolve}/tokenizer_config.json",
         token=token,
         save_path=f"{model_name_or_path}/tokenizer_config.json"
     )
