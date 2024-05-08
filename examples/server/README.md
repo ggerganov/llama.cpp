@@ -331,7 +331,7 @@ Notice that each `probs` is an array of length `n_probs`.
 
     `content`: Set the text to tokenize.
 
-    Note that a special `BOS` token is never inserted.
+    `add_special`: Boolean indicating if special tokens, i.e. `BOS`, should be inserted.  Default: `false`
 
 - **POST** `/detokenize`: Convert tokens to text.
 

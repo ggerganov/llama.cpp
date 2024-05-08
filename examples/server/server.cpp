@@ -3647,7 +3647,8 @@ int main(int argc, char ** argv) {
 
         std::vector<llama_token> tokens;
         if (body.count("content") != 0) {
-            tokens = ctx_server.tokenize(body["content"], false);
+            const bool add_special = json_value(body, "add_special", false);
+            tokens = ctx_server.tokenize(body["content"], add_special);
         }
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json; charset=utf-8");
