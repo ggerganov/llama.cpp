@@ -7,6 +7,7 @@ Feature: llama.cpp server
     And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
     And   a model file test-model.gguf
     And   a model alias tinyllama-2
+    And   BOS token is 1
     And   42 as server seed
       # KV Cache corresponds to the total amount of tokens
       # that can be stored across all independent sequences: #4130
@@ -91,7 +92,18 @@ Feature: llama.cpp server
     """
     What is the capital of France ?
     """
-    Then tokens can be detokenize
+    Then tokens can be detokenized
+    And  tokens do not begin with BOS
+
+  Scenario: Tokenize w/ BOS
+    Given adding special tokens
+    When  tokenizing:
+    """
+    What is the capital of Germany?
+    """
+    Then  tokens begin with BOS
+    Given first token is removed
+    Then  tokens can be detokenized
 
   Scenario: Models available
     Given available models

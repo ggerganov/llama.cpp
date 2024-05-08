@@ -796,7 +796,7 @@ int main(int argc, char ** argv) {
 
             // deal with end of generation tokens in interactive mode
             if (llama_token_is_eog(model, llama_sampling_last(ctx_sampling))) {
-                LOG("found EOS token\n");
+                LOG("found an EOG token\n");
 
                 if (params.interactive) {
                     if (!params.antiprompt.empty()) {
