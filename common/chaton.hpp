@@ -651,12 +651,15 @@ std::vector<llama_token> chaton_llama_tokenize(
 
 // Tokenize the passed taggedText, keeping in mind the subparts within and
 // inturn whether to parse special tokens in them or not (partsTypes).
+// If you want to parse special tokens in the taggedText, independent of what
+// partsTypes specifies, then set forceParseSpecial to true.
 std::vector<llama_token> chaton_llama_tokenize_ex(
         const llama_context *ctx,
         const std::string &taggedText,
         const std::string &partsTypes,
         const std::vector<int32_t> &partsLengths,
-        bool addSpecial
+        bool addSpecial,
+        bool forceParseSpecial
         ) {
     std::vector<llama_token> tokens;
     int iPart = 0;
@@ -667,6 +670,7 @@ std::vector<llama_token> chaton_llama_tokenize_ex(
         auto msgPart = taggedText.substr(iStart, partLen);
         iStart += partLen;
         auto parseSpecial = partType == ChatParts::S ? true : false;
+        parseSpecial |= forceParseSpecial;
         auto curTokens = chaton_llama_tokenize(llama_get_model(ctx), msgPart, addSpecial, parseSpecial);
         tokens.insert(tokens.end(), curTokens.begin(), curTokens.end());
     }
