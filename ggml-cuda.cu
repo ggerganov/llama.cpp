@@ -2585,8 +2585,6 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
     bool graph_evaluated_or_captured = false;
 
     while (!graph_evaluated_or_captured) {
-        // Temporarily avoid indenting here (and below the following if) to make code review easier
-
         // Only perform the graph execution if CUDA graphs are not enabled, or we are capturing the graph.
         // With the use of CUDA graphs, the execution will be performed by the graph launch.
         if (!use_cuda_graph || cuda_graph_update_required) {
