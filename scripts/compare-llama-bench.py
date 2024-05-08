@@ -100,7 +100,7 @@ known_args, unknown_args = parser.parse_known_args()
 logging.basicConfig(level=logging.DEBUG if known_args.verbose else logging.INFO)
 
 if unknown_args:
-    logger.error(f"Received unknown args: {unknown_args}.")
+    logger.error(f"Received unknown args: {unknown_args}.\n")
     parser.print_help()
     sys.exit(1)
 
@@ -113,7 +113,7 @@ if input_file is None:
         input_file = sqlite_files[0]
 
 if input_file is None:
-    logger.error("Cannot find a suitable input file, please provide one.")
+    logger.error("Cannot find a suitable input file, please provide one.\n")
     parser.print_help()
     sys.exit(1)
 
@@ -205,12 +205,12 @@ elif repo is not None:
     hexsha8_baseline = find_parent_in_data(repo.heads.master.commit)
 
     if hexsha8_baseline is None:
-        logger.error("No baseline was provided and did not find data for any master branch commits.")
+        logger.error("No baseline was provided and did not find data for any master branch commits.\n")
         parser.print_help()
         sys.exit(1)
 else:
     logger.error("No baseline was provided and the current working directory "
-                 "is not part of a git repository from which a baseline could be inferred.")
+                 "is not part of a git repository from which a baseline could be inferred.\n")
     parser.print_help()
     sys.exit(1)
 
@@ -241,7 +241,7 @@ elif repo is not None:
             break
 
     if hexsha8_compare is None:
-        logger.error("No compare target was provided and did not find data for any non-master commits.")
+        logger.error("No compare target was provided and did not find data for any non-master commits.\n")
         parser.print_help()
         sys.exit(1)
 else:
