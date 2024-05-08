@@ -284,6 +284,7 @@ class Params:
         n_experts      = None
         n_experts_used = None
         f_rope_freq_base = None
+        n_ff = None
 
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
         if config.get("moe"):
@@ -307,6 +308,8 @@ class Params:
             n_experts      = config["moe"]["num_experts"]
             n_experts_used = config["moe"]["num_experts_per_tok"]
             f_rope_freq_base = 1e6
+
+        assert n_ff is not None
 
         return Params(
             n_vocab          = model["tok_embeddings.weight"].shape[0],
@@ -462,7 +465,8 @@ class SentencePieceVocab(Vocab):
             # not found in alternate location either
             raise FileNotFoundError('Cannot find tokenizer.model')
 
-        self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
+        self.sentencepiece_tokenizer = SentencePieceProcessor()
+        self.sentencepiece_tokenizer.LoadFromFile(str(fname_tokenizer))
         vocab_size = self.sentencepiece_tokenizer.vocab_size()
 
         new_tokens       = {id: piece for piece, id in added_tokens.items() if id >= vocab_size}
@@ -482,23 +486,23 @@ class SentencePieceVocab(Vocab):
     def sentencepiece_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.sentencepiece_tokenizer
         for i in range(tokenizer.vocab_size()):
-            piece = tokenizer.id_to_piece(i)
+            piece = tokenizer.IdToPiece(i)
             text         = piece.encode("utf-8")
-            score: float = tokenizer.get_score(i)
+            score: float = tokenizer.GetScore(i)
 
             toktype = gguf.TokenType.NORMAL
-            if tokenizer.is_unknown(i):
+            if tokenizer.IsUnknown(i):
                 toktype = gguf.TokenType.UNKNOWN
-            if tokenizer.is_control(i):
+            if tokenizer.IsControl(i):
                 toktype = gguf.TokenType.CONTROL
 
             # NOTE: I think added_tokens are user defined.
             # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
             # if tokenizer.is_user_defined(i): toktype = gguf.TokenType.USER_DEFINED
 
-            if tokenizer.is_unused(i):
+            if tokenizer.IsUnused(i):
                 toktype = gguf.TokenType.UNUSED
-            if tokenizer.is_byte(i):
+            if tokenizer.IsByte(i):
                 toktype = gguf.TokenType.BYTE
 
             yield text, score, toktype
@@ -906,7 +910,7 @@ class LazyUnpickler(pickle.Unpickler):
     def rebuild_from_type_v2(func, new_type, args, state):
         return func(*args)
 
-    CLASSES = {
+    CLASSES: dict[tuple[str, str], type[LazyTensor] | LazyStorageKind] = {
         # getattr used here as a workaround for mypy not being smart enough to determine
         # the staticmethods have a __func__ attribute.
         ('torch._tensor', '_rebuild_from_type_v2'): getattr(rebuild_from_type_v2, '__func__'),
