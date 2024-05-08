@@ -860,7 +860,7 @@ class GGUFValueType(IntEnum):
 # Note: Does not support GGML_QKK_64
 QK_K = 256
 # Items here are (block size, type size)
-GGML_QUANT_SIZES = {
+GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),
     GGMLQuantizationType.Q4_0:    (32, 2 + 16),
