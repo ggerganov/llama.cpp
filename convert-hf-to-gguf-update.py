@@ -119,13 +119,20 @@ for model in models:
 
     # model and repo urls are not the same
     # url = "https://huggingface.co/Qwen/Qwen-tokenizer/raw/main/tokenizer.json"
-
-    # Get the models tokenizer
-    download_file_with_auth(
-        url=f"{url_main}/tokenizer.json",
-        token=token,
-        save_path=model_tokenizer_path
-    )
+    if name == "qwen":  # qwen is an outlier and will raise a FileNotFoundError
+        # fetch the qwen tokenizer
+        download_file_with_auth(
+            url="https://huggingface.co/Qwen/Qwen-tokenizer/raw/main/tokenizer.json",
+            token=token,
+            save_path=model_tokenizer_path
+        )
+    else:  # Et tu, Brute?
+        # Get the models tokenizer
+        download_file_with_auth(
+            url=f"{url_main}/tokenizer.json",
+            token=token,
+            save_path=model_tokenizer_path
+        )
 
     # Get the models hyper params
     download_file_with_auth(
