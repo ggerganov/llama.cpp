@@ -16,11 +16,12 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential gcc-8 lcov git-lfs
-          git-lfs install
+          sudo apt-get install build-essential gcc-8 lcov
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Build
         run: CC=gcc-8 make -j LLAMA_CODE_COVERAGE=1 tests
