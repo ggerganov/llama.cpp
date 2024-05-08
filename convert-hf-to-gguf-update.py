@@ -109,11 +109,11 @@ for model in models:
     model_config_path = f"{model_name_or_path}/config.json"
 
     # check dir path
-    if not os.path.exists(model_name_or_path):  # TOCTOU
-        os.makedirs(model_name_or_path)
-    else:
+    if os.path.exists(model_name_or_path):  # Still TOCTOU?
         logger.info(f"Directory {model_name_or_path} already exists - skipping")
         continue
+
+    os.makedirs(model_name_or_path, exist_ok=True)
 
     logger.info(f"Downloading {name} to {model_name_or_path}")
 
