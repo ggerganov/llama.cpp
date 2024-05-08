@@ -2175,7 +2175,7 @@ kernel void kernel_flash_attn_ext_f16(
 
     const short D4 = D/4;
     const short D8 = D/8;
-    const short Q8 = Q/8;
+  //const short Q8 = Q/8;
     const short NW = N_SIMDWIDTH;
     const short SH = (C + Q); // shared memory per simdgroup in (half)
 
