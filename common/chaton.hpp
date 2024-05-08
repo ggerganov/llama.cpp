@@ -629,7 +629,7 @@ inline int32_t chaton_tmpl_apply_ex_capi(
 }
 
 // Copied from common.cpp
-std::vector<llama_token> chaton_llama_tokenize(
+inline std::vector<llama_token> chaton_llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_special,
@@ -653,7 +653,7 @@ std::vector<llama_token> chaton_llama_tokenize(
 // inturn whether to parse special tokens in them or not (partsTypes).
 // If you want to parse special tokens in the taggedText, independent of what
 // partsTypes specifies, then set forceParseSpecial to true.
-std::vector<llama_token> chaton_llama_tokenize_ex(
+inline std::vector<llama_token> chaton_llama_tokenize_ex(
         const llama_context *ctx,
         const std::string &taggedText,
         const std::string &partsTypes,
