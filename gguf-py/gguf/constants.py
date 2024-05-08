@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from enum import Enum, IntEnum, auto
 from typing import Any
 
@@ -72,6 +71,7 @@ class Keys:
 
     class Tokenizer:
         MODEL            = "tokenizer.ggml.model"
+        PRE              = "tokenizer.ggml.pre"
         LIST             = "tokenizer.ggml.tokens"
         TOKEN_TYPE       = "tokenizer.ggml.token_type"
         TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # for BERT-style token types
@@ -124,6 +124,7 @@ class MODEL_ARCH(IntEnum):
     QWEN2      = auto()
     QWEN2MOE   = auto()
     PHI2       = auto()
+    PHI3       = auto()
     PLAMO      = auto()
     CODESHELL  = auto()
     ORION      = auto()
@@ -200,6 +201,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.QWEN2:          "qwen2",
     MODEL_ARCH.QWEN2MOE:       "qwen2moe",
     MODEL_ARCH.PHI2:           "phi2",
+    MODEL_ARCH.PHI3:           "phi3",
     MODEL_ARCH.PLAMO:          "plamo",
     MODEL_ARCH.CODESHELL:      "codeshell",
     MODEL_ARCH.ORION:          "orion",
@@ -550,6 +552,20 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.PHI3: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.CODESHELL: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.POS_EMBD,
@@ -801,6 +817,7 @@ class GGMLQuantizationType(IntEnum):
     I64     = 27
     F64     = 28
     IQ1_M   = 29
+    BF16    = 30
 
 
 class GGUFEndian(IntEnum):
@@ -837,8 +854,7 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.INT32
         # TODO: need help with 64-bit types in Python
         else:
-            print("Unknown type:", type(val))
-            sys.exit()
+            raise ValueError(f"Unknown type: {type(val)}")
 
 
 # Note: Does not support GGML_QKK_64
@@ -873,6 +889,7 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.I64:     (1, 8),
     GGMLQuantizationType.F64:     (1, 8),
     GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
+    GGMLQuantizationType.BF16:    (1, 2),
 }
 
 
@@ -924,6 +941,7 @@ KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
+KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
 KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
 KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
