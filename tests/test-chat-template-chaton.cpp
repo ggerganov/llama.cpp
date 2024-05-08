@@ -173,6 +173,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
     std::string metaJson(argv[1]);
-    check_chaton(metaJson);
+    //check_chaton(metaJson);
+    check_chaton_ex(metaJson);
     return 0;
 }

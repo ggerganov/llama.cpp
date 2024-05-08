@@ -635,6 +635,10 @@ inline std::vector<llama_token> chaton_llama_tokenize(
                         bool   add_special,
                         bool   parse_special) {
     LOGLN("DBUG:%s:%s:special[add:%d, parse:%d]", __func__, text.c_str(), add_special, parse_special);
+    if (model == nullptr) {
+        LOG_TEELN("ERRR:%s:Model NOT Provided:%s:special[add:%d, parse:%d]", __func__, text.c_str(), add_special, parse_special);
+        return std::vector<llama_token>{};
+    }
     // upper limit for the number of tokens
     int n_tokens = text.length() + 2 * add_special;
     std::vector<llama_token> result(n_tokens);
@@ -654,7 +658,7 @@ inline std::vector<llama_token> chaton_llama_tokenize(
 // If you want to parse special tokens in the taggedText, independent of what
 // partsTypes specifies, then set forceParseSpecial to true.
 inline std::vector<llama_token> chaton_llama_tokenize_ex(
-        const llama_context *ctx,
+        const struct llama_model *model,
         const std::string &taggedText,
         const std::string &partsTypes,
         const std::vector<int32_t> &partsLengths,
@@ -671,7 +675,7 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
         iStart += partLen;
         auto parseSpecial = partType == ChatParts::S ? true : false;
         parseSpecial |= forceParseSpecial;
-        auto curTokens = chaton_llama_tokenize(llama_get_model(ctx), msgPart, addSpecial, parseSpecial);
+        auto curTokens = chaton_llama_tokenize(model, msgPart, addSpecial, parseSpecial);
         tokens.insert(tokens.end(), curTokens.begin(), curTokens.end());
     }
     return tokens;
