@@ -109,7 +109,6 @@ for model in models:
     # set dir paths
     model_name_or_path = f"models/tokenizers/{name}"
     model_tokenizer_path = f"{model_name_or_path}/tokenizer.json"
-    model_config_path = f"{model_name_or_path}/config.json"
 
     # check dir path
     if os.path.exists(model_name_or_path):  # Still TOCTOU?
@@ -148,7 +147,7 @@ for model in models:
     download_file_with_auth(
         url=f"{url_main}/config.json",
         token=token,
-        save_path=model_config_path
+        save_path=f"{model_name_or_path}/config.json"
     )
 
     # if downloaded file is less than 1KB, we likely need to download an LFS instead
@@ -166,7 +165,7 @@ for model in models:
         download_file_with_auth(
             url=f"{url_resolve}/tokenizer.model",
             token=token,
-            save_path=model_tokenizer_path
+            save_path=f"{model_name_or_path}/tokenizer.model"
         )
 
     # Get the tokenizer config
@@ -187,7 +186,7 @@ for model in models:
     if tokt == TOKENIZER_TYPE.SPM:
         continue
 
-    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
 
     chktok = tokenizer.encode(chktxt)
     chkhsh = sha256(str(chktok).encode()).hexdigest()

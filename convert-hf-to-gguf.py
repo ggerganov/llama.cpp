@@ -323,9 +323,6 @@ class Model(ABC):
         if chkhsh == "32d85c31273f8019248f2559fed492d929ea28b17e51d81d3bb36fff23ca72b3":
             # ref: https://huggingface.co/stabilityai/stablelm-2-zephyr-1_6b
             res = "stablelm"
-        if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
-            # ref: https://huggingface.co/Qwen/Qwen-tokenizer
-            res = "qwen"
         if chkhsh == "e750a9b14dfed9b73287639bd1ecda50c38fa6011138f2f609804c6dab9ed5c2":
             # ref: https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2
             res = "mistral-bpe"
@@ -338,6 +335,9 @@ class Model(ABC):
         if chkhsh == "9c2227e4dd922002fb81bde4fc02b0483ca4f12911410dee2255e4987644e3f8":
             # ref: https://huggingface.co/CohereForAI/c4ai-command-r-v01
             res = "command-r"
+        if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
+            # ref: https://huggingface.co/Qwen/Qwen-7B
+            res = "qwen"
         if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
             # ref: https://huggingface.co/Qwen/Qwen1.5-7B
             res = "qwen2"
