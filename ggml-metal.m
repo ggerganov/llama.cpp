@@ -803,7 +803,7 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_GET_ROWS:
             {
-                return op->ne[3] == 1;
+                return op->src[0]->type != GGML_TYPE_BF16 && op->ne[3] == 1;
             }
         default:
             return false;
