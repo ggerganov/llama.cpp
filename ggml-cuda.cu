@@ -2707,8 +2707,10 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
         }
         // Launch graph
         CUDA_CHECK(cudaGraphLaunch(cuda_ctx->cuda_graph->instance, cuda_ctx->stream()));
-    }
+#else
+        graph_evaluated_or_captured = true;
 #endif // USE_CUDA_GRAPH
+    }
 
     return GGML_STATUS_SUCCESS;
 }
