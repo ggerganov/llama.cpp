@@ -49,18 +49,18 @@ extern bool server_log_json;
 #define LOG_WARNING(MSG, ...) server_log("WARN", __func__, __LINE__, MSG, __VA_ARGS__)
 #define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
 
-static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra);
+static inline void server_log(const char * level, const char * function, int line, const char * message, const json & extra);
 
 template <typename T>
-static T json_value(const json &body, const std::string &key, const T &default_value) {
+static T json_value(const json & body, const std::string & key, const T & default_value) {
     // Fallback null to default value
-    if (body.contains(key) && !body.at(key).is_null()){
+    if (body.contains(key) && !body.at(key).is_null()) {
         try {
-            return body.value(key, default_value);
-        }
-        catch (nlohmann::json_abi_v3_11_3::detail::type_error const&){
-            std::string message = "Wrong type supplied for parameter '" + key + "'. Expected '" + typeid(default_value).name() + "', using default value.";
-            server_log("WARN", __func__, __LINE__, message.c_str(), body);
+            return body.at(key);
+        } catch (NLOHMANN_JSON_NAMESPACE::detail::type_error const &) {
+            std::stringstream ss;
+            ss << "Wrong type supplied for parameter '" << key << "'. Expected '" << json(default_value).type_name() << "', using default value.";
+            LOG_WARNING(ss.str().c_str(), body);
             return default_value;
         }
     } else {
@@ -68,16 +68,16 @@ static T json_value(const json &body, const std::string &key, const T &default_v
     }
 }
 
-static inline void server_log(const char *level, const char *function, int line, const char *message, const nlohmann::ordered_json &extra) {
+static inline void server_log(const char * level, const char * function, int line, const char * message, const json & extra) {
     std::stringstream ss_tid;
     ss_tid << std::this_thread::get_id();
-    json log = nlohmann::ordered_json{
+    json log = json{
         {"tid",       ss_tid.str()},
         {"timestamp", time(nullptr)},
     };
 
     if (server_log_json) {
-        log.merge_patch( {
+        log.merge_patch({
             {"level",    level},
             {"function", function},
             {"line",     line},
@@ -98,7 +98,7 @@ static inline void server_log(const char *level, const char *function, int line,
         }
         std::stringstream ss;
         ss << buf << " |";
-        for (const auto& el : log.items())
+        for (const auto & el : log.items())
         {
             const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
             ss << " " << el.key() << "=" << value;
