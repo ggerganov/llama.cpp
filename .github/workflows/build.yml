@@ -33,6 +33,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           fetch-depth: 0
 
       - name: Dependencies
@@ -91,6 +92,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           fetch-depth: 0
 
       - name: Dependencies
@@ -153,6 +155,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -188,6 +192,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -211,6 +217,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           fetch-depth: 0
 
       - name: Dependencies
@@ -285,6 +292,8 @@ jobs:
 #      - name: Clone
 #        id: checkout
 #        uses: actions/checkout@v4
+#        with:
+#          lfs: true
 #
 #      - name: Dependencies
 #        id: depends
@@ -319,6 +328,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -347,6 +358,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -369,6 +382,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          lfs: true
 
       - name: add oneAPI to apt
         shell: bash
@@ -393,6 +408,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Build
         id: cmake_build
@@ -410,6 +427,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          lfs: true
 
       - name: add oneAPI to apt
         shell: bash
@@ -434,6 +453,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Build
         id: cmake_build
@@ -454,6 +475,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -485,6 +508,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -514,6 +539,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v1
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -543,6 +570,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v1
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -576,6 +605,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v1
+        with:
+          lfs: true
 
       - name: Dependencies
         id: depends
@@ -606,6 +637,8 @@ jobs:
     steps:
       - name: Clone
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Setup ${{ matrix.sys }}
         uses: msys2/setup-msys2@v2
@@ -687,6 +720,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           fetch-depth: 0
 
       - name: Clone Kompute submodule
@@ -833,6 +867,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           fetch-depth: 0
 
       - uses: Jimver/cuda-toolkit@v0.2.11
@@ -906,6 +941,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           fetch-depth: 0
 
       - name: Install
@@ -947,6 +983,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Build Xcode project
         run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
@@ -957,6 +995,8 @@ jobs:
     steps:
       - name: Clone
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Set up JDK
         uses: actions/setup-java@v3
@@ -979,7 +1019,9 @@ jobs:
 #    runs-on: macos-12
 #    steps:
 #    - name: Clone
-#      uses: actions/checkout@v4
+#      uses: actions/checkout@#v4
+#        with:
+#          lfs: true
 #
 #    - name: Build
 #      uses: cross-platform-actions/action@v0.19.0
@@ -1012,6 +1054,7 @@ jobs:
         id: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           fetch-depth: 0
 
       - name: Determine tag name
@@ -1077,6 +1120,8 @@ jobs:
 #    steps:
 #      - name: Clone
 #        uses: actions/checkout@v4
+#        with:
+#          lfs: true
 #
 #      - name: Dependencies
 #        run: |
@@ -1101,6 +1146,8 @@ jobs:
 #    steps:
 #      - name: Clone
 #        uses: actions/checkout@v4
+#        with:
+#          lfs: true
 #
 #      - name: Dependencies
 #        run: |
@@ -1125,6 +1172,8 @@ jobs:
 #    steps:
 #      - name: Clone
 #        uses: actions/checkout@v4
+#        with:
+#          lfs: true
 #
 #      - name: Dependencies
 #        run: |
@@ -1155,6 +1204,8 @@ jobs:
 #    steps:
 #      - name: Clone
 #        uses: actions/checkout@v4
+#        with:
+#          lfs: true
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -1194,6 +1245,8 @@ jobs:
 #    steps:
 #      - name: Clone
 #        uses: actions/checkout@v4
+#        with:
+#          lfs: true
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -1240,6 +1293,8 @@ jobs:
 #    steps:
 #      - name: Clone
 #        uses: actions/checkout@v4
+#        with:
+#          lfs: true
 #
 #      - name: Dependencies
 #        run: |
