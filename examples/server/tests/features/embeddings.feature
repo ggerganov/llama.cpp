@@ -16,10 +16,17 @@ Feature: llama.cpp server
     Then  the server is starting
     Then  the server is healthy
 
+  Scenario: Embedding
+    When embeddings are computed for:
+    """
+    What is the capital of Bulgaria ?
+    """
+    Then embeddings are generated
+
   Scenario: Tokenize / Detokenize complex
     When tokenizing:
     """
-    España is your's mine's l'heure èspciâl café über naïve résumé cañón élite cañas Barça 例子 東京 こんにちは 你好 中国
+    北京的清晨，空氣清新而寧靜，一个年轻的旅行者在长城上漫步，他从自己的故乡—서울에서 출발하여 아시아의 다양한 문화를 탐험하고자 하는 꿈을 품고 떠났다。彼は日本の古都、京都を訪れ、そこで美しい桜の花が満開の下で古典音楽のコンサートに参加しました。祭りの夜、彼は色とりどりの灯籠が空に浮かぶのを見て、その美しさに感動しました。その後、彼は印度のバラナシに到着し、गंगा की घाटों पर आध्यात्मिक शांति की खोज में जुट गया। वहाँ उसने दिवाली के उत्सव में हिस्सा लिया, जहां लाखों दीये जलाकर समृद्धि और खुशहाली की कामना की गई थी।この旅は彼にとって非常に啓発的であり、多くの異なる文化から新しいことを学び、新しい友達を作る機会を与えました。彼はこの経験を通じて、 異なる文化の間の共通点と相違点を理解するようになりました。España is your's mine's l'heure èspciâl café über naïve résumé cañón élite cañas Barça 例子 東京 こんにちは 你好 中国
     """
     Then tokens can be detokenize and is equivalent False
 

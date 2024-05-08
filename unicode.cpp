@@ -13,7 +13,6 @@
 #include <vector>
 #include <locale>
 #include <codecvt>
-#include <algorithm>
 
 static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
@@ -470,52 +469,19 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
     throw std::invalid_argument("invalid codepoint");
 }
 
-auto compareByCanonicalClass = [&](const uint32_t& a, const uint32_t& b) {
-    auto cc_a_it = unicode_canonical_class.find(a);
-    if (cc_a_it != unicode_canonical_class.end()) {
-        auto cc_b_it = unicode_canonical_class.find(b);
-        if (cc_b_it != unicode_canonical_class.end()) {
-            return cc_a_it->second < cc_b_it->second;
-        }
-
-    }
-    return false;
-};
-
-// Function to sort subsequences based on canonical class
-std::vector<uint32_t> sort_by_canonical_class(std::vector<uint32_t> & cpts) {
-    // Sort the sequence using the custom comparator function
-    sort(cpts.begin(), cpts.end(), compareByCanonicalClass);
-    return cpts;
-}
-
-std::vector<uint32_t> canonical_decomposition_cpts(std::vector<uint32_t> & cpts, uint32_t starting_offset) {
+std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
     std::vector<uint32_t> result;
-    for (auto i = starting_offset; i < cpts.size(); i++) {
-        const auto& it = unicode_map_nfd.equal_range(cpts[i]);
+    for (uint32_t cpt : cpts) {
+        auto it = unicode_map_nfd.equal_range(cpt);
         if (it.first != it.second) {
-            uint offset = 0;
             for (auto jt = it.first; jt != it.second; jt++) {
-                if (offset == 0) {
-                    cpts[i] = jt->second;
-                } else {
-                    cpts.emplace(cpts.begin() + i + offset, jt->second);
-                }
-                offset++;
+                result.push_back(jt->second);
             }
-            const auto & inner_result = canonical_decomposition_cpts(cpts, i);
-            result.insert(result.end(), inner_result.begin(), inner_result.end());
-            break;
         } else {
-            result.push_back(cpts[i]);
+            result.push_back(cpt);
         }
     }
     return result;
-}
-
-std::vector<uint32_t> unicode_cpts_normalize_nfd(std::vector<uint32_t> & cpts) {
-    auto result = canonical_decomposition_cpts(cpts, 0);
-    return sort_by_canonical_class(result);
 }
 
 std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
