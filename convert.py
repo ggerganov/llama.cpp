@@ -1508,25 +1508,27 @@ def main(args_in: list[str] | None = None) -> None:
     if args.big_endian:
         endianess = gguf.GGUFEndian.BIG
 
-    params = Params.load(model_plus)
-    if params.n_ctx == -1:
-        if args.ctx is None:
-            msg = """\
-                The model doesn't have a context size, and you didn't specify one with --ctx
-                Please specify one with --ctx:
-                 - LLaMA v1: --ctx 2048
-                 - LLaMA v2: --ctx 4096"""
-            parser.error(textwrap.dedent(msg))
-        params.n_ctx = args.ctx
+    params = None
+    if args.pad_vocab or not args.vocab_only:
+        params = Params.load(model_plus)
+        if params.n_ctx == -1:
+            if args.ctx is None:
+                msg = """\
+                    The model doesn't have a context size, and you didn't specify one with --ctx
+                    Please specify one with --ctx:
+                     - LLaMA v1: --ctx 2048
+                     - LLaMA v2: --ctx 4096"""
+                parser.error(textwrap.dedent(msg))
+            params.n_ctx = args.ctx
 
-    if args.outtype:
-        params.ftype = {
-            "f32": GGMLFileType.AllF32,
-            "f16": GGMLFileType.MostlyF16,
-            "q8_0": GGMLFileType.MostlyQ8_0,
-        }[args.outtype]
+        if args.outtype:
+            params.ftype = {
+                "f32": GGMLFileType.AllF32,
+                "f16": GGMLFileType.MostlyF16,
+                "q8_0": GGMLFileType.MostlyQ8_0,
+            }[args.outtype]
 
-    logger.info(f"params = {params}")
+        logger.info(f"params = {params}")
 
     model_parent_path = model_plus.paths[0].parent
     vocab_path = Path(args.vocab_dir or args.model or model_parent_path)
@@ -1539,6 +1541,17 @@ def main(args_in: list[str] | None = None) -> None:
         if not args.outfile:
             raise ValueError("need --outfile if using --vocab-only")
         outfile = args.outfile
+        if params is None:
+            params = Params(
+                n_vocab    = vocab.vocab_size,
+                n_embd     = 1,
+                n_layer    = 1,
+                n_ctx      = 1,
+                n_ff       = 1,
+                n_head     = 1,
+                n_head_kv  = 1,
+                f_norm_eps = 1e-5,
+            )
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab,
                                     endianess=endianess, pad_vocab=args.pad_vocab)
         logger.info(f"Wrote {outfile}")

@@ -17,6 +17,83 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+/**
+ * Converts brain16 to float32.
+ *
+ * The bfloat16 floating point format has the following structure:
+ *
+ *       ┌sign
+ *       │
+ *       │   ┌exponent
+ *       │   │
+ *       │   │      ┌mantissa
+ *       │   │      │
+ *       │┌──┴───┐┌─┴───┐
+ *     0b0000000000000000 brain16
+ *
+ * Since bf16 has the same number of exponent bits as a 32bit float,
+ * encoding and decoding numbers becomes relatively straightforward.
+ *
+ *       ┌sign
+ *       │
+ *       │   ┌exponent
+ *       │   │
+ *       │   │      ┌mantissa
+ *       │   │      │
+ *       │┌──┴───┐┌─┴───────────────────┐
+ *     0b00000000000000000000000000000000 IEEE binary32
+ *
+ * For comparison, the standard fp16 format has fewer exponent bits.
+ *
+ *       ┌sign
+ *       │
+ *       │  ┌exponent
+ *       │  │
+ *       │  │    ┌mantissa
+ *       │  │    │
+ *       │┌─┴─┐┌─┴──────┐
+ *     0b0000000000000000 IEEE binary16
+ *
+ * @see IEEE 754-2008
+ */
+static inline float ggml_compute_bf16_to_fp32(ggml_bf16_t h) {
+    union {
+        float f;
+        uint32_t i;
+    } u;
+    u.i = (uint32_t)h.bits << 16;
+    return u.f;
+}
+
+/**
+ * Converts float32 to brain16.
+ *
+ * This function is binary identical to AMD Zen4 VCVTNEPS2BF16.
+ * Subnormals shall be flushed to zero, and NANs will be quiet.
+ * This code should vectorize nicely if using modern compilers.
+ */
+static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
+    ggml_bf16_t h;
+    union {
+        float f;
+        uint32_t i;
+    } u;
+    u.f = s;
+    if ((u.i & 0x7fffffff) > 0x7f800000) { /* nan */
+        h.bits = (u.i >> 16) | 64; /* force to quiet */
+        return h;
+    }
+    if (!(u.i & 0x7f800000)) { /* subnormal */
+        h.bits = (u.i & 0x80000000) >> 16; /* flush to zero */
+        return h;
+    }
+    h.bits = (u.i + (0x7fff + ((u.i >> 16) & 1))) >> 16;
+    return h;
+}
+
+#define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
+#define GGML_BF16_TO_FP32(x) ggml_compute_bf16_to_fp32(x)
+
 #ifdef __cplusplus
 extern "C" {
 #endif

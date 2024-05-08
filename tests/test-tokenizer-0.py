@@ -13,7 +13,7 @@ fname_tok = args.fname_tok
 
 tokenizer = AutoTokenizer.from_pretrained(dir_tokenizer)
 
-print('tokenizing file: ', fname_tok)
+print('tokenizing file: ', fname_tok) # noqa: NP100
 fname_out = fname_tok + '.tok'
 with open(fname_tok, 'r', encoding='utf-8') as f:
     lines = f.readlines()
@@ -21,7 +21,7 @@ with open(fname_tok, 'r', encoding='utf-8') as f:
     t_start = time.time()
     res = tokenizer.encode(s, add_special_tokens=False)
     t_end = time.time()
-    print('\nmain : tokenized in', "{:.3f}".format(1000.0 * (t_end - t_start)), 'ms (py)')
+    print('\nmain : tokenized in', "{:.3f}".format(1000.0 * (t_end - t_start)), 'ms (py)') # noqa: NP100
     with open(fname_out, 'w', encoding='utf-8') as f:
         for x in res:
             # LLaMA v3 for some reason strips the space for these tokens (and others)
@@ -41,6 +41,6 @@ with open(fname_tok, 'r', encoding='utf-8') as f:
             #     f.write(str(x) + ' \'' + tokenizer.decode(x) + '\'\n')
             # f.write(str(x) + ' \'' + tokenizer.decode(x).strip() + '\'\n')
             f.write(str(x) + '\n')
-    print('len(res): ', len(res))
-    print('len(lines): ', len(lines))
-print('results written to: ', fname_out)
+    print('len(res): ', len(res)) # noqa: NP100
+    print('len(lines): ', len(lines)) # noqa: NP100
+print('results written to: ', fname_out) # noqa: NP100

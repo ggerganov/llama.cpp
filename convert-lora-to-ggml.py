@@ -16,6 +16,7 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
 
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("lora-to-gguf")
 
 NUMPY_TYPE_TO_FTYPE: dict[str, int] = {"float32": 0, "float16": 1}

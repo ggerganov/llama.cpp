@@ -311,6 +311,18 @@ class Model(ABC):
         if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
             # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
             res = "refact"
+        if chkhsh == "9c2227e4dd922002fb81bde4fc02b0483ca4f12911410dee2255e4987644e3f8":
+            # ref: https://huggingface.co/CohereForAI/c4ai-command-r-v01
+            res = "command-r"
+        if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
+            # ref: https://huggingface.co/Qwen/Qwen1.5-7B
+            res = "qwen2"
+        if chkhsh == "b6dc8df998e1cfbdc4eac8243701a65afe638679230920b50d6f17d81c098166":
+            # ref: https://huggingface.co/allenai/OLMo-1.7-7B-hf
+            res = "olmo"
+        if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
+            # ref: https://huggingface.co/databricks/dbrx-instruct
+            res = "dbrx"
 
         if res is None:
             logger.warning("\n")
@@ -2828,8 +2840,9 @@ class OlmoModel(Model):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         self.gguf_writer.add_layer_norm_eps(1e-5)
-        if "clip_qkv" in self.hparams is not None:
-            self.gguf_writer.add_clamp_kqv(self.hparams["clip_qkv"])
+        clip_qkv = self.hparams.get("clip_qkv")
+        if clip_qkv is not None:
+            self.gguf_writer.add_clamp_kqv(clip_qkv)
 
     # Same as super class, but permuting q_proj, k_proj
     # Copied from: LlamaModel

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # This script downloads the tokenizer models of the specified models from Huggingface and
 # generates the get_vocab_base_pre() function for convert-hf-to-gguf.py
 #
@@ -64,6 +66,10 @@ models = [
     {"name": "starcoder",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/bigcode/starcoder2-3b", },
     {"name": "gpt-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/openai-community/gpt2", },
     {"name": "refact",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/smallcloudai/Refact-1_6-base", },
+    {"name": "command-r",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/CohereForAI/c4ai-command-r-v01", },
+    {"name": "qwen2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen1.5-7B", },
+    {"name": "olmo",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/allenai/OLMo-1.7-7B-hf", },
+    {"name": "dbrx",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/databricks/dbrx-base", },
 ]
 
 # make directory "models/tokenizers" if it doesn't exist
@@ -104,6 +110,14 @@ for model in models:
     save_path = f"models/tokenizers/{name}/tokenizer.json"
     download_file_with_auth(url, token, save_path)
 
+    # if downloaded file is less than 1KB, we likely need to download an LFS instead
+    if os.path.getsize(save_path) < 1024:
+        # remove the file
+        os.remove(save_path)
+        url = f"{repo}/resolve/main/tokenizer.json"
+        save_path = f"models/tokenizers/{name}/tokenizer.json"
+        download_file_with_auth(url, token, save_path)
+
     if tokt == TOKENIZER_TYPE.SPM:
         url = f"{repo}/resolve/main/tokenizer.model"
         save_path = f"models/tokenizers/{name}/tokenizer.model"
@@ -139,6 +153,8 @@ for model in models:
     # print the "pre_tokenizer" content from the tokenizer.json
     with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
         cfg = json.load(f)
+        normalizer = cfg["normalizer"]
+        logger.info("normalizer: " + json.dumps(normalizer, indent=4))
         pre_tokenizer = cfg["pre_tokenizer"]
         logger.info("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
 
