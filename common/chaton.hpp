@@ -562,7 +562,7 @@ inline int32_t chaton_tmpl_apply_capi(
     }
     std::string taggedMsgs;
     int32_t taggedLength = chaton_tmpl_apply(tmpl, vMsgs, alertAssistantAtEnd, taggedMsgs);
-    if (taggedLength <= 0) {
+    if (taggedLength < 0) {
         return taggedLength;
     }
     if (destLength > 0) {
@@ -596,7 +596,7 @@ inline int32_t chaton_tmpl_apply_ex_capi(
         int32_t *partsLengths,
         int32_t *pNumParts
         ) {
-    if ((tmpl == nullptr) || (dest == nullptr)) {
+    if ((tmpl == nullptr) || (dest == nullptr) || (pNumParts == nullptr)) {
         return -1;
     }
     std::vector<const llama_chat_message *> vMsgs;
@@ -610,7 +610,7 @@ inline int32_t chaton_tmpl_apply_ex_capi(
         return -1;
     }
     int32_t taggedLength = taggedMsgs.size();
-    if (taggedLength <= 0) {
+    if (taggedLength < 0) {
         return taggedLength;
     }
     if (destLength > 0) {
@@ -621,7 +621,7 @@ inline int32_t chaton_tmpl_apply_ex_capi(
             strlcpy(partsTypes, types.c_str(), *pNumParts);
         }
         if (partsLengths != nullptr) {
-            memcpy(partsLengths, lens.data(), (*pNumParts)*4);
+            memcpy(partsLengths, lens.data(), (*pNumParts)*sizeof(int32_t));
         }
     }
     *pNumParts = types.length();
