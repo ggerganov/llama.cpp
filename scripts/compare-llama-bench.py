@@ -364,7 +364,7 @@ if "gpu_info" in show:
 headers  = [PRETTY_NAMES[p] for p in show]
 headers += ["Test", f"t/s {name_baseline}", f"t/s {name_compare}", "Speedup"]
 
-logger.info(tabulate(
+print(tabulate( # noqa: NP100
     table,
     headers=headers,
     floatfmt=".2f",
