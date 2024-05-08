@@ -93,8 +93,11 @@ help_s = (
     "specified values are averaged WITHOUT weighing by the --repetitions parameter of llama-bench."
 )
 parser.add_argument("-s", "--show", help=help_s)
+parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
 known_args, unknown_args = parser.parse_known_args()
+
+logging.basicConfig(level=logging.DEBUG if known_args.verbose else logging.INFO)
 
 if unknown_args:
     logger.error(f"Received unknown args: {unknown_args}.")
