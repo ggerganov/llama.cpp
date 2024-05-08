@@ -1,41 +1,4 @@
 import regex
-import unicodedata
-
-
-if False:
-
-    # This code is equivalent to: cpt.to_bytes(4, "little"))
-    def cpt_to_utf8_str(cpt):
-        if cpt <= 0xFF:
-            return bytes([cpt, 0, 0, 0])
-        elif cpt <= 0xFFFF:
-            return bytes([cpt & 0xFF, cpt >> 8, 0, 0])
-        elif cpt <= 0xFFFFFF:
-            return bytes([cpt & 0xFF, (cpt >> 8) & 0xFF, (cpt >> 16) & 0xFF, 0])
-        else:
-            return bytes([cpt & 0xFF, (cpt >> 8) & 0xFF, (cpt >> 16) & 0xFF, cpt >> 24])
-
-    # This code is equivalent to: regex_expr_compiled.match(chr(codepoint))
-    def is_match(codepoint, regex_expr):
-        try:
-            res = regex_expr.match(cpt_to_utf8_str(codepoint).decode('utf-32'))
-            return res is not None
-        except Exception:
-            return False
-
-    # Verify previous statements, using chr() and ord()
-    for codepoint in range(0x110000):
-        temp = cpt_to_utf8_str(codepoint)
-        assert(temp == codepoint.to_bytes(4, "little"))
-        try:
-            char = temp.decode('utf-32')
-            if codepoint == 0xFEFF:  # BOM
-                assert(char == "")   # why?
-                char = "\uFEFF"
-        except UnicodeDecodeError:
-            continue
-        assert(char == chr(codepoint) )
-        assert(ord(char) == codepoint )
 
 
 def get_matches(regex_expr):
@@ -63,13 +26,11 @@ def get_matches(regex_expr):
 def print_cat(mode, cat, ranges):
     if mode == "range":
         print("const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_{} = {{".format(cat))
-    if mode == "range_value":
-        print("const std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> unicode_ranges_{} = {{".format(cat))
     if mode == "map":
         print("const std::map<uint32_t, uint32_t> unicode_map_{} = {{".format(cat))
     for i, values in enumerate(ranges):
         end = ",\n" if (i%4 == 3 or i+1 == len(ranges)) else ", "
-        values = ["0x%08X"%value for value in values]
+        values = ["0x%08X" % value for value in values]
         print("{" + ", ".join(values) + "}", end=end)
     print("};")
     print("")
@@ -93,22 +54,11 @@ for codepoint in range(0x110000):
     lower = ord(char.lower()[0])
     upper = ord(char.upper()[0])
     if codepoint != lower:
-        map_lowercase.append((codepoint,lower))
+        map_lowercase.append((codepoint, lower))
     if codepoint != upper:
-        map_uppercase.append((codepoint,upper))
+        map_uppercase.append((codepoint, upper))
 print_cat("map", "lowercase", map_lowercase)
 print_cat("map", "uppercase", map_uppercase)
 
 
-# TODO: this is wrong
-# inv_map_nfd = {}
-# for codepoint in range(0x110000):
-#     char = chr(codepoint)
-#     norm = ord(unicodedata.normalize('NFD', char)[0])
-#     if codepoint != norm:
-#         a, b = inv_map_nfd.get(norm, (codepoint, codepoint))
-#         inv_map_nfd[norm] = (min(a, codepoint), max(b, codepoint))
-# nfd_ranges = [ (a, b, nfd) for nfd,(a,b) in inv_map_nfd.items() ]
-# nfd_ranges = list(sorted(nfd_ranges))
-# del inv_map_nfd
-# print_cat("range_value", "nfd", nfd_ranges)
+# TODO: generate unicode_map_nfd
