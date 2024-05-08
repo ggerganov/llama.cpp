@@ -47,7 +47,8 @@ with open(f"{args.model}/MiniCPM/tokenizer_config.json", "r") as f:
     d = json.load(f)
     d.pop("auto_map")
     d["tokenizer_class"] = "LlamaTokenizer"
-    d.pop("add_prefix_space")
+    if "add_prefix_space" in d:
+        d.pop("add_prefix_space")
 with open(f"{args.model}/MiniCPM/tokenizer_config.json", "w") as f:
     json.dump(d, f, indent=2)
 

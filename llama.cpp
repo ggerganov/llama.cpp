@@ -285,7 +285,6 @@ enum llm_kv {
     LLM_KV_EXPERT_USED_COUNT,
     LLM_KV_POOLING_TYPE,
     LLM_KV_LOGIT_SCALE,
-    LLM_KV_TIE_LM_HEAD,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -362,7 +361,6 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_EXPERT_USED_COUNT,             "%s.expert_used_count"     },
     { LLM_KV_POOLING_TYPE ,                 "%s.pooling_type"          },
     { LLM_KV_LOGIT_SCALE,                   "%s.logit_scale"           },
-    { LLM_KV_TIE_LM_HEAD,                   "%s.tie_lm_head"           },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,          "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,       "%s.attention.head_count_kv"          },
@@ -1827,7 +1825,6 @@ struct llama_hparams {
 
     bool causal_attn = true;
     bool need_kq_pos = false;
-    bool tie_lm_head = true;
 
     enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
     enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
@@ -3314,6 +3311,7 @@ struct llama_model_loader {
         ggml_set_name(tensor, ggml_get_name(cur));
 
         n_created++;
+        printf("%s: created tensor '%s'\n", __func__, ggml_get_name(tensor));
 
         return tensor;
     }
@@ -3382,6 +3380,8 @@ struct llama_model_loader {
         ggml_set_name(tensor, name.c_str());
 
         n_created++;
+        printf("%s: created tensor '%s'\n", __func__, name.c_str());
+
 
         return tensor;
     }
@@ -3699,7 +3699,6 @@ static void llm_load_hparams(
     ml.get_key(LLM_KV_BLOCK_COUNT,          hparams.n_layer);
     ml.get_key(LLM_KV_EXPERT_COUNT,         hparams.n_expert,      false);
     ml.get_key(LLM_KV_EXPERT_USED_COUNT,    hparams.n_expert_used, false);
-    ml.get_key(LLM_KV_TIE_LM_HEAD,          hparams.tie_lm_head,   false);
 
     GGML_ASSERT(hparams.n_expert <= LLAMA_MAX_EXPERTS);
     GGML_ASSERT(hparams.n_expert_used <= hparams.n_expert);
@@ -4711,8 +4710,12 @@ static bool llm_load_tensors(
             case LLM_ARCH_MINICPM:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                    if (!hparams.tie_lm_head){
-                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
+                    model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
+                    // if output is NULL, init from the input tok embed
+                    if (model.output == NULL) {
+                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                        ml.n_created--; // artificial tensor
+                        ml.size_data += ggml_nbytes(model.output);
                     }
 
                     // output
@@ -4793,6 +4796,7 @@ static bool llm_load_tensors(
                         if (model.output == NULL) {
                             model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
                             ml.n_created--; // artificial tensor
+                            printf("created tensor decrese GROK\n");
                             ml.size_data += ggml_nbytes(model.output);
                         }
                     }
@@ -4922,6 +4926,7 @@ static bool llm_load_tensors(
                         if (!model.output) {
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}); // needs to be on GPU
                             ml.n_created--; // artificial tensor
+                            printf("created tensor decrese FALCON\n");
                             ml.size_data += ggml_nbytes(model.output);
                         }
                     }
@@ -5127,6 +5132,7 @@ static bool llm_load_tensors(
                         if (!model.output) {
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}); // needs to be on GPU
                             ml.n_created--; // artificial tensor
+                            printf("created tensor decrese MPT\n");
                             ml.size_data += ggml_nbytes(model.output);
                         }
                     }
@@ -5249,6 +5255,7 @@ static bool llm_load_tensors(
                         if (model.output == NULL) {
                             model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
                             ml.n_created--; // artificial tensor
+                            printf("created tensor decrese QWEN2\n");
                             ml.size_data += ggml_nbytes(model.output);
                         }
                     }
@@ -5539,6 +5546,7 @@ static bool llm_load_tensors(
                     model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                     model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}); // same as tok_embd, duplicated to allow offloading
                     ml.n_created--; // artificial tensor
+                    printf("created tensor decrese GEMMA\n");
                     ml.size_data += ggml_nbytes(model.output);
 
                     const int64_t n_ff          = hparams.n_ff;
@@ -5579,6 +5587,7 @@ static bool llm_load_tensors(
                         if (model.output == NULL) {
                             model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
                             ml.n_created--; // artificial tensor
+                            printf("created tensor decrese STARCODER2\n");
                             ml.size_data += ggml_nbytes(model.output);
                         }
 
@@ -5635,6 +5644,7 @@ static bool llm_load_tensors(
                         if (model.output == NULL) {
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
                             ml.n_created--; // artificial tensor
+                            printf("created tensor decrese MAMBA\n");
                             ml.size_data += ggml_nbytes(model.output);
                         }
                     }
@@ -5698,6 +5708,7 @@ static bool llm_load_tensors(
                         // init output from the input tok embed
                         model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
                         ml.n_created--; // artificial tensor
+                        printf("created tensor decrese COMMAND_R\n");
                         ml.size_data += ggml_nbytes(model.output);
                     }
 
@@ -5735,6 +5746,7 @@ static bool llm_load_tensors(
                         if (model.output == NULL) {
                             model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
                             ml.n_created--; // artificial tensor
+                            printf("created tensor decrese OLMO\n");
                             ml.size_data += ggml_nbytes(model.output);
                         }
                     }
@@ -9656,11 +9668,7 @@ struct llm_build_context {
         cb(cur, "lmhead_scaling", -1);
 
         // lm_head
-        if (hparams.tie_lm_head){
-            cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
-        } else {
-            cur = ggml_mul_mat(ctx0, model.output, cur);
-        }
+        cur = ggml_mul_mat(ctx0, model.output, cur);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);

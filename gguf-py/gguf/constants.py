@@ -44,7 +44,6 @@ class Keys:
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
         POOLING_TYPE          = "{arch}.pooling_type"
         LOGIT_SCALE           = "{arch}.logit_scale"
-        TIE_LM_HEAD           = "{arch}.tie_lm_head"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -901,7 +900,6 @@ KEY_BLOCK_COUNT           = Keys.LLM.BLOCK_COUNT
 KEY_FEED_FORWARD_LENGTH   = Keys.LLM.FEED_FORWARD_LENGTH
 KEY_USE_PARALLEL_RESIDUAL = Keys.LLM.USE_PARALLEL_RESIDUAL
 KEY_TENSOR_DATA_LAYOUT    = Keys.LLM.TENSOR_DATA_LAYOUT
-KEY_TIE_LM_HEAD           = Keys.LLM.TIE_LM_HEAD
 
 # attention
 KEY_ATTENTION_HEAD_COUNT        = Keys.Attention.HEAD_COUNT
