@@ -1,6 +1,6 @@
 # llama.cpp/example/sycl
 
-This example program provide the tools for llama.cpp for SYCL on Intel GPU.
+This example program provides the tools for llama.cpp for SYCL on Intel GPU.
 
 ## Tool
 
