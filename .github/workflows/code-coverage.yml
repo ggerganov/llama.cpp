@@ -13,14 +13,14 @@ jobs:
   run:
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install build-essential gcc-8 lcov git-lfs
           git-lfs install
+
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Build
         run: CC=gcc-8 make -j LLAMA_CODE_COVERAGE=1 tests
