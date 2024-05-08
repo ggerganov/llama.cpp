@@ -67,6 +67,9 @@ models = [
     {"name": "gpt-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/openai-community/gpt2", },
     {"name": "refact",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/smallcloudai/Refact-1_6-base", },
     {"name": "command-r",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/CohereForAI/c4ai-command-r-v01", },
+    {"name": "qwen2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen1.5-7B", },
+    {"name": "olmo",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/allenai/OLMo-1.7-7B-hf", },
+    {"name": "dbrx",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/databricks/dbrx-base", },
 ]
 
 # make directory "models/tokenizers" if it doesn't exist
@@ -150,6 +153,8 @@ for model in models:
     # print the "pre_tokenizer" content from the tokenizer.json
     with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
         cfg = json.load(f)
+        normalizer = cfg["normalizer"]
+        logger.info("normalizer: " + json.dumps(normalizer, indent=4))
         pre_tokenizer = cfg["pre_tokenizer"]
         logger.info("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
 
