@@ -229,40 +229,40 @@ enum llm_arch {
 };
 
 static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
-    { LLM_ARCH_LLAMA,           "llama"      },
-    { LLM_ARCH_FALCON,          "falcon"     },
-    { LLM_ARCH_GROK,            "grok"       },
-    { LLM_ARCH_GPT2,            "gpt2"       },
-    { LLM_ARCH_GPTJ,            "gptj"       },
-    { LLM_ARCH_GPTNEOX,         "gptneox"    },
-    { LLM_ARCH_MPT,             "mpt"        },
-    { LLM_ARCH_BAICHUAN,        "baichuan"   },
-    { LLM_ARCH_STARCODER,       "starcoder"  },
-    { LLM_ARCH_PERSIMMON,       "persimmon"  },
-    { LLM_ARCH_REFACT,          "refact"     },
-    { LLM_ARCH_BERT,            "bert"       },
-    { LLM_ARCH_NOMIC_BERT,      "nomic-bert" },
-    { LLM_ARCH_JINA_BERT_V2,    "jina-bert-v2"},
-    { LLM_ARCH_BLOOM,           "bloom"      },
-    { LLM_ARCH_STABLELM,        "stablelm"   },
-    { LLM_ARCH_QWEN,            "qwen"       },
-    { LLM_ARCH_QWEN2,           "qwen2"      },
-    { LLM_ARCH_QWEN2MOE,        "qwen2moe"   },
-    { LLM_ARCH_PHI2,            "phi2"       },
-    { LLM_ARCH_PHI3,            "phi3"       },
-    { LLM_ARCH_PLAMO,           "plamo"      },
-    { LLM_ARCH_CODESHELL,       "codeshell"  },
-    { LLM_ARCH_ORION,           "orion"      },
-    { LLM_ARCH_INTERNLM2,       "internlm2"  },
-    { LLM_ARCH_MINICPM,         "minicpm"    },
-    { LLM_ARCH_GEMMA,           "gemma"      },
-    { LLM_ARCH_STARCODER2,      "starcoder2" },
-    { LLM_ARCH_MAMBA,           "mamba"      },
-    { LLM_ARCH_XVERSE,          "xverse"     },
-    { LLM_ARCH_COMMAND_R,       "command-r"  },
-    { LLM_ARCH_DBRX,            "dbrx"       },
-    { LLM_ARCH_OLMO,            "olmo"       },
-    { LLM_ARCH_UNKNOWN,         "(unknown)"  },
+    { LLM_ARCH_LLAMA,           "llama"        },
+    { LLM_ARCH_FALCON,          "falcon"       },
+    { LLM_ARCH_GROK,            "grok"         },
+    { LLM_ARCH_GPT2,            "gpt2"         },
+    { LLM_ARCH_GPTJ,            "gptj"         },
+    { LLM_ARCH_GPTNEOX,         "gptneox"      },
+    { LLM_ARCH_MPT,             "mpt"          },
+    { LLM_ARCH_BAICHUAN,        "baichuan"     },
+    { LLM_ARCH_STARCODER,       "starcoder"    },
+    { LLM_ARCH_PERSIMMON,       "persimmon"    },
+    { LLM_ARCH_REFACT,          "refact"       },
+    { LLM_ARCH_BERT,            "bert"         },
+    { LLM_ARCH_NOMIC_BERT,      "nomic-bert"   },
+    { LLM_ARCH_JINA_BERT_V2,    "jina-bert-v2" },
+    { LLM_ARCH_BLOOM,           "bloom"        },
+    { LLM_ARCH_STABLELM,        "stablelm"     },
+    { LLM_ARCH_QWEN,            "qwen"         },
+    { LLM_ARCH_QWEN2,           "qwen2"        },
+    { LLM_ARCH_QWEN2MOE,        "qwen2moe"     },
+    { LLM_ARCH_PHI2,            "phi2"         },
+    { LLM_ARCH_PHI3,            "phi3"         },
+    { LLM_ARCH_PLAMO,           "plamo"        },
+    { LLM_ARCH_CODESHELL,       "codeshell"    },
+    { LLM_ARCH_ORION,           "orion"        },
+    { LLM_ARCH_INTERNLM2,       "internlm2"    },
+    { LLM_ARCH_MINICPM,         "minicpm"      },
+    { LLM_ARCH_GEMMA,           "gemma"        },
+    { LLM_ARCH_STARCODER2,      "starcoder2"   },
+    { LLM_ARCH_MAMBA,           "mamba"        },
+    { LLM_ARCH_XVERSE,          "xverse"       },
+    { LLM_ARCH_COMMAND_R,       "command-r"    },
+    { LLM_ARCH_DBRX,            "dbrx"         },
+    { LLM_ARCH_OLMO,            "olmo"         },
+    { LLM_ARCH_UNKNOWN,         "(unknown)"    },
 };
 
 enum llm_kv {
@@ -3800,6 +3800,12 @@ static void llm_load_hparams(
 
     // get hparams kv
     ml.get_key(LLM_KV_VOCAB_SIZE,           hparams.n_vocab,       false) || ml.get_arr_n(LLM_KV_TOKENIZER_LIST, hparams.n_vocab);
+
+    // everything past this point is not vocab-related
+    if (hparams.vocab_only) {
+        return;
+    }
+
     ml.get_key(LLM_KV_CONTEXT_LENGTH,       hparams.n_ctx_train);
     ml.get_key(LLM_KV_EMBEDDING_LENGTH,     hparams.n_embd);
     ml.get_key(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff);
@@ -4417,7 +4423,9 @@ static void llm_load_vocab(
                     tokenizer_pre == "starcoder") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STARCODER;
             } else if (
-                    tokenizer_pre == "gpt-2") {
+                    tokenizer_pre == "gpt-2"   ||
+                    tokenizer_pre == "jina-es" ||
+                    tokenizer_pre == "jina-de") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
             } else if (
                     tokenizer_pre == "refact") {
