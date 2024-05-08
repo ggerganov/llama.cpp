@@ -133,6 +133,40 @@ static void check_chaton(std::string &metaJson) {
 
 }
 
+static void check_chaton_ex(std::string &metaJson) {
+    std::vector<char> formatted_chat(1024);
+    int32_t res;
+
+    chaton_meta_load(metaJson);
+    for(auto tmplId: templateIds) {
+        formatted_chat.resize(1024);
+        std::cout << "\n----------" << tmplId << "---------------\n";
+        if (!chaton_meta_ok(tmplId)) {
+            exit(1);
+        }
+        std::vector<char> partsTypes;
+        std::vector<int> partsLens;
+        int numParts = message_count * 3;
+        int numPartsCrossCheck = numParts;
+        partsLens.resize(numParts);
+        partsTypes.resize(numParts);
+        res = chaton_tmpl_apply_ex_capi(tmplId.c_str(), conversation, message_count, true, formatted_chat.data(), formatted_chat.size(), partsTypes.data(), partsLens.data(), &numParts);
+        assert(res > 0);
+        assert(numParts <= numPartsCrossCheck);
+        formatted_chat.resize(res);
+        std::string output(formatted_chat.data(), formatted_chat.size());
+        std::cout << "*** TAGGEDMSG ***\n" << output;
+        std::cout << "\n-----------------------------------------\n";
+        partsLens.resize(numParts);
+        partsTypes.resize(numParts);
+        std::string sPartsTypes(partsTypes.data(), partsTypes.size());
+        chaton_llama_tokenize_ex(nullptr, output, sPartsTypes, partsLens, false, false);
+        std::cout << "\n----------" << tmplId << "---------------\n";
+    }
+
+}
+
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         std::cout << argv[0] << " meta.json" << std::endl;
