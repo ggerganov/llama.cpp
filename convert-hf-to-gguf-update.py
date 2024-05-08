@@ -67,7 +67,7 @@ models = [
     {"name": "gpt-2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/openai-community/gpt2", },
     {"name": "phi",            "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/microsoft/phi-1", },
     {"name": "stablelm",       "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/stabilityai/stablelm-2-zephyr-1_6b", },
-    {"name": "qwen",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen-tokenizer", },
+    {"name": "qwen",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen-7B", },
     {"name": "mistral-bpe",    "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2", },
     {"name": "mistral-spm",    "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.2", },
     {"name": "mixtral-bpe",    "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1", },
@@ -94,42 +94,70 @@ def download_file_with_auth(url, token, save_path):
 
 # download the tokenizer models
 for model in models:
+    # set mapping
     name = model["name"]
     repo = model["repo"]
     tokt = model["tokt"]
 
-    if not os.path.exists(f"models/tokenizers/{name}"):
-        os.makedirs(f"models/tokenizers/{name}")
+    # set url paths
+    url_main = f"{repo}/raw/main"
+    url_resolve = f"{repo}/resolve/main"
+
+    # set dir paths
+    model_name_or_path = f"models/tokenizers/{name}"
+    model_tokenizer_path = f"{model_name_or_path}/tokenizer.json"
+    model_config_path = f"{model_name_or_path}/config.json"
+
+    # check dir path
+    if not os.path.exists(model_name_or_path):
+        os.makedirs(model_name_or_path)
     else:
-        logger.info(f"Directory models/tokenizers/{name} already exists - skipping")
+        logger.info(f"Directory {model_name_or_path} already exists - skipping")
         continue
 
-    logger.info(f"Downloading {name} to models/tokenizers/{name}")
+    logger.info(f"Downloading {name} to {model_name_or_path}")
 
-    url = f"{repo}/raw/main/config.json"
-    save_path = f"models/tokenizers/{name}/config.json"
-    download_file_with_auth(url, token, save_path)
+    # model and repo urls are not the same
+    # url = "https://huggingface.co/Qwen/Qwen-tokenizer/raw/main/tokenizer.json"
 
-    url = f"{repo}/raw/main/tokenizer.json"
-    save_path = f"models/tokenizers/{name}/tokenizer.json"
-    download_file_with_auth(url, token, save_path)
+    # Get the models tokenizer
+    download_file_with_auth(
+        url=f"{url_main}/tokenizer.json",
+        token=token,
+        save_path=model_tokenizer_path
+    )
+
+    # Get the models hyper params
+    download_file_with_auth(
+        url=f"{url_main}/config.json",
+        token=token,
+        save_path=model_config_path
+    )
 
     # if downloaded file is less than 1KB, we likely need to download an LFS instead
-    if os.path.getsize(save_path) < 1024:
+    if os.path.getsize(model_tokenizer_path) < 1024:
         # remove the file
-        os.remove(save_path)
-        url = f"{repo}/resolve/main/tokenizer.json"
-        save_path = f"models/tokenizers/{name}/tokenizer.json"
-        download_file_with_auth(url, token, save_path)
+        os.remove(model_tokenizer_path)
+        download_file_with_auth(
+            url=f"{url_resolve}/tokenizer.json",
+            token=token,
+            save_path=model_tokenizer_path
+        )
 
+    # Handle sentencepiece tokenizer
     if tokt == TOKENIZER_TYPE.SPM:
-        url = f"{repo}/resolve/main/tokenizer.model"
-        save_path = f"models/tokenizers/{name}/tokenizer.model"
-        download_file_with_auth(url, token, save_path)
+        download_file_with_auth(
+            url=f"{url_resolve}/tokenizer.model",
+            token=token,
+            save_path=model_tokenizer_path
+        )
 
-    url = f"{repo}/raw/main/tokenizer_config.json"
-    save_path = f"models/tokenizers/{name}/tokenizer_config.json"
-    download_file_with_auth(url, token, save_path)
+    # Get the tokenizer config
+    download_file_with_auth(
+        url=f"{url_main}/tokenizer_config.json",
+        token=token,
+        save_path=f"{model_name_or_path}/tokenizer_config.json"
+    )
 
 # generate the source code for the convert-hf-to-gguf.py:get_vocab_base_pre() function:
 # TODO: auto-update convert-hf-to-gguf.py with the generated function
@@ -143,7 +171,7 @@ for model in models:
         continue
 
     # create the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
     chktok = tokenizer.encode(chktxt)
     chkhsh = sha256(str(chktok).encode()).hexdigest()
@@ -155,7 +183,7 @@ for model in models:
     logger.info(f"chkhsh: {chkhsh}")
 
     # print the "pre_tokenizer" content from the tokenizer.json
-    with open(f"models/tokenizers/{name}/tokenizer.json", "r", encoding="utf-8") as f:
+    with open(model_tokenizer_path, "r", encoding="utf-8") as f:
         cfg = json.load(f)
         pre_tokenizer = cfg["pre_tokenizer"]
         logger.info("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
@@ -280,7 +308,7 @@ for model in models:
     tokt = model["tokt"]
 
     # create the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
     with open(f"models/ggml-vocab-{name}.gguf.inp", "w", encoding="utf-8") as f:
         for text in tests:
@@ -301,7 +329,7 @@ shscript = "#!/usr/bin/env bash\n\n"
 
 for model in models:
     name = model["name"]
-    tmpline = f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only\n"
+    tmpline = f"python3 convert-hf-to-gguf.py {model_name_or_path}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only\n"
     shscript += tmpline
     logging.info(tmpline.strip())
 
