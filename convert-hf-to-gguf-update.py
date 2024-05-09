@@ -261,6 +261,7 @@ tests = [
     "3333333",
     "33333333",
     "333333333",
+    # "Cửa Việt", # llama-bpe fails on this
     chktxt,
 ]
 

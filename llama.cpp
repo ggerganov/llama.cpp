@@ -12488,7 +12488,7 @@ struct llm_tokenizer_wpm {
                 continue;
             }
             code = unicode_tolower(code);
-            if (type == CODEPOINT_TYPE_WHITESPACE) {
+            if (type == CODEPOINT_TYPE_SEPARATOR) {
                 code = ' ';
             }
             std::string s = unicode_cpt_to_utf8(code);
