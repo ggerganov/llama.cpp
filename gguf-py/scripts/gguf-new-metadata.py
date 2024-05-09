@@ -209,14 +209,14 @@ def main() -> None:
         if name not in token_names:
             logger.warning(f'Unknown special token "{name}", ignoring...')
         elif not id_string.isdecimal():
-            logger.warning(f'Token ID "{id_string}" is not a valid ID, ignoring...')
+            raise LookupError(f'Token ID "{id_string}" is not a valid ID!')
         else:
             id_int = int(id_string)
 
             if id_int >= 0 and id_int < len(token_list):
                 new_metadata[token_names[name]] = MetadataDetails(gguf.GGUFValueType.UINT32, id_int, f'= {token_list[id_int]}')
             else:
-                logger.warning(f'Token ID {id_int} is not within token list, ignoring...')
+                raise LookupError(f'Token ID {id_int} is not within token list!')
 
     if os.path.isfile(args.output) and not args.force:
         logger.warning('*** Warning *** Warning *** Warning **')
