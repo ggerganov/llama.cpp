@@ -1884,7 +1884,7 @@ static int shard_progress_callback(void* clientp, double dltotal, double dlnow, 
     (void) ultotal;
     (void) ulnow;
     char* url = static_cast<char*>(clientp);
-    
+
     std::lock_guard<std::mutex> lock(progress_mutex);
 
     shard_file_progress& progress = progress_table[url];
@@ -1893,7 +1893,7 @@ static int shard_progress_callback(void* clientp, double dltotal, double dlnow, 
 
     std::string url_string = static_cast<std::string>(url);
     progress.filename = url_string.substr(url_string.find_last_of('/') + 1);
-    
+
     return 0;
 }
 
@@ -2084,7 +2084,7 @@ static bool llama_download_file(CURL * curl, const char * url, const char * path
 
         //  display download progress
         curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-        
+
         // custom progress callback on sharded download
         if (is_shard) {
             curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, shard_progress_callback);
@@ -2250,7 +2250,7 @@ struct llama_model * llama_load_model_from_url(
                 return res;
             }, idx));
         }
-        
+
         bool first_progress = true;
         while (true) {
             // Print the progress table periodically
