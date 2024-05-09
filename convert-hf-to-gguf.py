@@ -65,7 +65,7 @@ class Model:
     model_arch: gguf.MODEL_ARCH
 
     def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool):
-        if type(self) == Model:
+        if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
         self.ftype = ftype

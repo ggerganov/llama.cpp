@@ -2,12 +2,11 @@ from __future__ import annotations
 from abc import ABC, ABCMeta, abstractmethod
 
 import logging
-from typing import Any, Callable, Iterable, SupportsIndex
+from typing import Any, Callable
 from collections import deque
 
 import numpy as np
-from numpy.typing import DTypeLike, NDArray
-from numpy._typing import _ShapeLike
+from numpy.typing import DTypeLike
 
 
 logger = logging.getLogger(__name__)
@@ -132,7 +131,7 @@ class LazyBase(ABC, metaclass=LazyMeta):
                 assert isinstance(res, cls)
                 res = res._meta
                 # allow operations to override the dtype
-                if meta_noop != True:
+                if meta_noop is not True:
                     res = cls.meta_with_dtype(res, meta_noop)
 
             if isinstance(res, cls._tensor_type):
@@ -193,7 +192,7 @@ class LazyBase(ABC, metaclass=LazyMeta):
 
     @classmethod
     def from_eager(cls, t: Any) -> Any:
-        if type(t) == cls:
+        if type(t) is cls:
             # already eager
             return t
         elif isinstance(t, cls._tensor_type):
