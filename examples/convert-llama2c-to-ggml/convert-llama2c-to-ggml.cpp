@@ -880,7 +880,7 @@ int main(int argc, char ** argv) {
     TransformerWeights weights = {};
     {
         LOG("%s: Loading llama2c model from %s\n", __func__, params.fn_llama2c_model);
-        FILE *file = fopen(params.fn_llama2c_model, "r");
+        FILE * file = fopen(params.fn_llama2c_model, "rb");
         if (!file) {
             LOG("%s: Unable to open the checkpoint file %s!\n", __func__, params.fn_llama2c_model);
             return 1;

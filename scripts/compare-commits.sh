@@ -12,19 +12,7 @@ bench_args="${@:3}"
 
 rm -f llama-bench.sqlite
 
-backend="cpu"
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    backend="metal"
-elif command -v nvcc &> /dev/null; then
-    backend="cuda"
-fi
-
-make_opts=""
-
-if [[ "$backend" == "cuda" ]]; then
-    make_opts="LLAMA_CUDA=1"
-fi
+# to test a backend, call the script with the corresponding environment variable (e.g. LLAMA_CUDA=1 ./scripts/compare-commits.sh ...)
 
 git checkout $1
 make clean && make -j32 $make_opts llama-bench
