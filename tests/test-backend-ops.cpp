@@ -50,7 +50,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
 
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
-    } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16) {
+    } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16 || tensor->type == GGML_TYPE_BF16) {
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
         std::vector<float> imatrix(tensor->ne[0], 1.0f); // dummy importance matrix
@@ -92,6 +92,8 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                     size_t i = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0/bs*t->nb[0];
                     if (t->type == GGML_TYPE_F16) {
                         tv.push_back(ggml_fp16_to_fp32(*(ggml_fp16_t*)&buf[i]));
+                    } else if (t->type == GGML_TYPE_BF16) {
+                        tv.push_back(ggml_bf16_to_fp32(*(ggml_bf16_t*)&buf[i]));
                     } else if (t->type == GGML_TYPE_F32) {
                         tv.push_back(*(float *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I32) {
@@ -1898,7 +1900,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     std::default_random_engine rng(0);
 
     const ggml_type all_types[] = {
-        GGML_TYPE_F32, GGML_TYPE_F16,
+        GGML_TYPE_F32, GGML_TYPE_F16, GGML_TYPE_BF16,
         GGML_TYPE_Q4_0, GGML_TYPE_Q4_1,
         GGML_TYPE_Q5_0, GGML_TYPE_Q5_1,
         GGML_TYPE_Q8_0,
@@ -2173,7 +2175,11 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_timestep_embedding());
     test_cases.emplace_back(new test_leaky_relu());
 
+#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
+    for (int hs : { 64, 128, }) { // other head sizes not implemented
+#else
     for (int hs : { 64, 80, 128, 256, }) {
+#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         for (int nh : { 32, }) {
             for (int kv : { 512, 1024, }) {
                 for (int nb : { 1, 2, 4, 8, }) {

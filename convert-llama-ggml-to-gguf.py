@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import argparse
 import os
 import struct
@@ -13,6 +14,8 @@ import numpy as np
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
+
+logger = logging.getLogger("ggml-to-gguf")
 
 
 class GGMLFormat(IntEnum):
@@ -125,7 +128,6 @@ class Tensor:
         self.start_offset = offset
         self.len_bytes = n_bytes
         offset += n_bytes
-        # print(n_dims, name_len, dtype, self.dims, self.name, pad)
         return offset - orig_offset
 
 
@@ -175,7 +177,7 @@ class GGMLModel:
         offset += self.validate_header(data, offset)
         hp = Hyperparameters()
         offset += hp.load(data, offset)
-        print(f'* File format: {self.file_format.name}v{self.format_version} with ftype {hp.ftype.name}')
+        logger.info(f'* File format: {self.file_format.name}v{self.format_version} with ftype {hp.ftype.name}')
         self.validate_conversion(hp.ftype)
         vocab = Vocab(load_scores = self.file_format > GGMLFormat.GGML)
         offset += vocab.load(data, offset, hp.n_vocab)
@@ -215,12 +217,12 @@ class GGMLToGGUF:
                     if float(hp.n_head) / float(x) == gqa:
                         n_kv_head = x
                 assert n_kv_head is not None, "Couldn't determine n_kv_head from GQA param"
-                print(f'- Guessed n_kv_head = {n_kv_head} based on GQA {cfg.gqa}')
+                logger.info(f'- Guessed n_kv_head = {n_kv_head} based on GQA {cfg.gqa}')
         self.n_kv_head = n_kv_head
         self.name_map = gguf.get_tensor_name_map(gguf.MODEL_ARCH.LLAMA, ggml_model.hyperparameters.n_layer)
 
     def save(self):
-        print('* Preparing to save GGUF file')
+        logger.info('* Preparing to save GGUF file')
         gguf_writer = gguf.GGUFWriter(
             self.cfg.output,
             gguf.MODEL_ARCH_NAMES[gguf.MODEL_ARCH.LLAMA],
@@ -230,11 +232,11 @@ class GGMLToGGUF:
         if self.special_vocab is not None:
             self.special_vocab.add_to_gguf(gguf_writer)
         self.add_tensors(gguf_writer)
-        print("    gguf: write header")
+        logger.info("    gguf: write header")
         gguf_writer.write_header_to_file()
-        print("    gguf: write metadata")
+        logger.info("    gguf: write metadata")
         gguf_writer.write_kv_data_to_file()
-        print("    gguf: write tensors")
+        logger.info("    gguf: write tensors")
         gguf_writer.write_tensors_to_file()
         gguf_writer.close()
 
@@ -250,7 +252,7 @@ class GGMLToGGUF:
             name = cfg.name if cfg.name is not None else cfg.input.name
         except UnicodeDecodeError:
             name = None
-        print('* Adding model parameters and KV items')
+        logger.info('* Adding model parameters and KV items')
         if name is not None:
             gguf_writer.add_name(name)
         gguf_writer.add_description(desc)
@@ -287,7 +289,7 @@ class GGMLToGGUF:
         toktypes = []
         if self.vocab_override is not None:
             vo = self.vocab_override
-            print('* Adding vocab item(s)')
+            logger.info('* Adding vocab item(s)')
             for (idx, (vbytes, score, ttype)) in enumerate(vo.all_tokens()):
                 tokens.append(vbytes)
                 scores.append(score)
@@ -299,7 +301,7 @@ class GGMLToGGUF:
             if len(toktypes) > 0:
                 gguf_writer.add_token_types(toktypes)
             return
-        print(f'* Adding {hp.n_vocab} vocab item(s)')
+        logger.info(f'* Adding {hp.n_vocab} vocab item(s)')
         assert len(self.model.vocab.items) >= 3, 'Cannot handle unexpectedly short model vocab'
         for (tokid, (vbytes, vscore)) in enumerate(self.model.vocab.items):
             tt = 1 # Normal
@@ -334,7 +336,7 @@ class GGMLToGGUF:
     def add_tensors(self, gguf_writer):
         tensor_map = self.name_map
         data = self.data
-        print(f'* Adding {len(self.model.tensors)} tensor(s)')
+        logger.info(f'* Adding {len(self.model.tensors)} tensor(s)')
         for tensor in self.model.tensors:
             name = str(tensor.name, 'UTF-8')
             mapped_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
@@ -344,7 +346,6 @@ class GGMLToGGUF:
                 temp = tempdims[1]
                 tempdims[1] = tempdims[0]
                 tempdims[0] = temp
-            # print(f'+ {tensor.name} | {mapped_name} {tensor.dims} :: {tempdims}')
             gguf_writer.add_tensor(
                 mapped_name,
                 data[tensor.start_offset:tensor.start_offset + tensor.len_bytes],
@@ -401,33 +402,35 @@ def handle_args():
                         help="directory containing tokenizer.model, if separate from model file - only meaningful with --model-metadata-dir")
     parser.add_argument("--vocabtype", default="spm,hfft",
                         help="vocab format - only meaningful with --model-metadata-dir and/or --vocab-dir (default: spm,hfft)")
+    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
     return parser.parse_args()
 
 
 def main():
     cfg = handle_args()
-    print(f'* Using config: {cfg}')
-    print('\n=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===\n')
+    logging.basicConfig(level=logging.DEBUG if cfg.verbose else logging.INFO)
+    logger.info(f'* Using config: {cfg}')
+    logger.warning('=== WARNING === Be aware that this conversion script is best-effort. Use a native GGUF model if possible. === WARNING ===')
     if cfg.model_metadata_dir is None and (cfg.gqa == 1 or cfg.eps == '5.0e-06'):
-        print('- Note: If converting LLaMA2, specifying "--eps 1e-5" is required. 70B models also need "--gqa 8".')
+        logger.info('- Note: If converting LLaMA2, specifying "--eps 1e-5" is required. 70B models also need "--gqa 8".')
     data = np.memmap(cfg.input, mode = 'r')
     model = GGMLModel()
-    print('* Scanning GGML input file')
+    logger.info('* Scanning GGML input file')
     offset = model.load(data, 0)  # noqa
-    print(f'* GGML model hyperparameters: {model.hyperparameters}')
+    logger.info(f'* GGML model hyperparameters: {model.hyperparameters}')
     vocab_override = None
     params_override = None
     special_vocab = None
     if cfg.model_metadata_dir is not None:
         (params_override, vocab_override, special_vocab) = handle_metadata(cfg, model.hyperparameters)
-        print('!! Note: When overriding params the --gqa, --eps and --context-length options are ignored.')
-        print(f'* Overriding params: {params_override}')
-        print(f'* Overriding vocab: {vocab_override}')
-        print(f'* Special vocab: {special_vocab}')
+        logger.info('!! Note: When overriding params the --gqa, --eps and --context-length options are ignored.')
+        logger.info(f'* Overriding params: {params_override}')
+        logger.info(f'* Overriding vocab: {vocab_override}')
+        logger.info(f'* Special vocab: {special_vocab}')
     else:
-        print('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
+        logger.warning('\n=== WARNING === Special tokens may not be converted correctly. Use --model-metadata-dir if possible === WARNING ===\n')
         if model.file_format == GGMLFormat.GGML:
-            print('! This is a very old GGML file that does not contain vocab scores. Strongly recommend using model metadata!')
+            logger.info('! This is a very old GGML file that does not contain vocab scores. Strongly recommend using model metadata!')
     converter = GGMLToGGUF(
         model, data, cfg,
         params_override = params_override,
@@ -435,7 +438,7 @@ def main():
         special_vocab = special_vocab
     )
     converter.save()
-    print(f'* Successful completion. Output saved to: {cfg.output}')
+    logger.info(f'* Successful completion. Output saved to: {cfg.output}')
 
 
 if __name__ == '__main__':
