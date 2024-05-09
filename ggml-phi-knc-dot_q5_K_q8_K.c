@@ -16,7 +16,7 @@
 // For block_q5_K and block_q8_K.
 #include "ggml-common.h"
 
-// For our vector types.
+// For our vector types, and forward declarations.
 #include "ggml-phi-knc-dot_q5_K_q8_K.h"
 
 // We can fit 16 float32s in a single vector register.
@@ -33,7 +33,6 @@ void GGML_F32x16_VEC_ZERO(float32x16_t *target)
                           : [RES]  "+m"  (*target)
                           : [Z]     "m"  (zero)
                           : "zmm0", "memory");
-
 }
 
 /* Convert a FP16 to a FP32. */
@@ -76,8 +75,8 @@ ggml_fp16_t GGML_PHI_FP32_TO_FP16(float src)
 }
 
 
-// This function perform two multiplies of an I8x16 and an I8x16 vector into two I16x16 vectors. then does an FMA on the scaled result of multiplying the two I16x16 vectors, adding the result into an I32x16. When done, it multiplies this I32x16 by a float, returning a F32x16.
-// It loops 8 times. well, actually four, with an unroll.
+// This function perform two multiplies of an I8x16 and an I8x16 vector into two I16x16 vectors. Then it does an FMA on the scaled result of multiplying the two I16x16 vectors, adding the result into an I32x16. When done, it multiplies this I32x16 by a float, returning a F32x16.
+// It loops 8 times. Well, actually four, with an unroll.
 // Handles q8 being unaligned.
 // Requires q5 to be aligned.
 void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_t *q8, uint8x16_t *q5, const uint8_t *scale, ggml_fp16_t scaleX, float scaleY, float32x16_t *res)
@@ -214,7 +213,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vloadunpackld\t\t16(%%r9)%{uint8%},\t%%zmm7\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vloadunpackhd\t\t32(%%r9)%{uint8%},\t%%zmm7\n\t" // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vprefetch1\t32(%%r9)\n\t"                        // Pull the next set of 4 bit sequences into the L2 cache.
-                          "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"            // Apply a mask, storing the next sets of four bits into a vector.
+                          "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"            // Apply a mask, storing the next set of four bits into a vector.
                           "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
                           "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"     // Save our result.
                           
@@ -225,8 +224,8 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           
                           "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"            // Perform our test.
                           "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"            // Perform our test.
-                          "vpsrld\t$4,\t%%zmm5,\t%%zmm6\n\t"                // Load our even 4 bit sequence
-                          "vpsrld\t$4,\t%%zmm7,\t%%zmm8\n\t"                // Load our even 4 bit sequence
+                          "vpsrld\t$4,\t%%zmm5,\t%%zmm6\n\t"                // Load our even 4 bit sequence.
+                          "vpsrld\t$4,\t%%zmm7,\t%%zmm8\n\t"                // Load our next even 4 bit sequence.
                           "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
                           "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"         // Turn on bit 5 for all values that passed the prior test.
                           "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"       // Save our result.
@@ -294,10 +293,10 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
         utmp[0] &= kmask1;
 
         int sumi = 0;
+
         for (int j = 0; j < QK_K/16; ++j) sumi += y[i].bsums[j] * mins[j/2];
 
-
-        // FIXME: while comparing FMA output to the original output, the original had an error. hunt it down.
+        // FIXME: while comparing FMA output to the original output, the original had an error. Hunt it down.
         GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned((const int8x16_t *)y[i].qs, q5, scales, x[i].d, y[i].d, &sums);
 
         const float dmin = GGML_PHI_FP16_TO_FP32(x[i].dmin) * y[i].d;
