@@ -11,6 +11,7 @@ To run:
 """
 
 import argparse
+import logging
 import mmap
 import os
 import pathlib
@@ -33,8 +34,6 @@ if "NO_LOCAL_GGUF" not in os.environ:
     sys.path.insert(1, str(pathlib.Path(__file__).parent / "gguf-py"))
 
 import gguf
-
-logger = logging.getLogger("convert_grok")
 
 GGML_QK8_0 = 32
 GGML_QK4_0 = 32
@@ -216,7 +215,7 @@ def dump_state_dict(f, ggml_type, input_dir, config):
             tensor_ggml_type,
         )
         weights[name] = weight, scales
-    logger.info("Loaded", len(weight_names), "files")
+    logging.debug("Loaded %i files", len(weight_names))
 
     f.write_header_to_file()
     f.write_kv_data_to_file()
@@ -232,21 +231,23 @@ def dump_state_dict(f, ggml_type, input_dir, config):
         _, tensor_ggml_type = get_dtype_and_ggml_type(tensor, ggml_type)
         array = maybe_quantize_tensor(tensor, tensor_ggml_type).numpy()
 
-        logger.debug(
-            f"dumping {name}:",
-            f"{tensor_ggml_type.name}/{array.dtype}, {list(tensor.shape)}, {array.nbytes} bytes",
+        logging.info(
+            f"dumping {name}:"
+            f"{tensor_ggml_type.name}/{array.dtype}, {list(tensor.shape)}, {array.nbytes} bytes"
         )
         f.write_tensor_data(array)
 
         tensor_info.append((name, list(tensor.shape), tensor_ggml_type.name))
 
     try:
-        print(tabulate(tensor_info, headers=["name", "shape", "dtype"], tablefmt="psql")) # noqa: NP100
+        print(
+            tabulate(tensor_info, headers=["name", "shape", "dtype"], tablefmt="psql")
+        )  # noqa: NP100
     except NameError:
         pass
 
     if len(tensor_info) != len(weight_names):
-        logger.warning("Not all tensors are converted")
+        logging.warning("Not all tensors are converted")
 
 
 def from_numpy(array):
@@ -379,7 +380,7 @@ def convert_grok(args, vocab, ggml_type):
     config.num_experts = len(config.experts)
 
     assert config.num_experts >= 2, "need at least 2 experts"
-    logger.info("experts to export:", config.experts)
+    logging.info("experts to export: %s", config.experts)
 
     f = gguf.GGUFWriter(args.save_path, "grok", endianess=gguf.GGUFEndian.LITTLE)
 
@@ -411,12 +412,12 @@ def convert_grok(args, vocab, ggml_type):
 
     delta = time.time() - start
 
-    logger.info(f"grok GGUF model saved to {args.save_path}. Total time {delta:.2f} sec")
+    logging.info(f"grok GGUF model saved to {args.save_path}. Total time {delta:.2f} sec")
 
 
 def load_vocab(path):
     def load_spm(p):
-        logger.info(f"Loading vocab file {p}")
+        logging.info(f"Loading vocab file {p}")
         return SentencePieceVocab(p)
 
     # Be extra-friendly and accept either a file or a directory.  Also, if it's
@@ -452,7 +453,7 @@ def main():
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
-    
+
     vocab = load_vocab(
         pathlib.Path(args.vocab_dir) if args.vocab_dir else pathlib.Path(args.input_dir)
     )
