@@ -868,6 +868,7 @@ if (LLAMA_ALL_WARNINGS)
 endif()
 
 set(CUDA_CXX_FLAGS "")
+set(CMAKE_CUDA_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 if (LLAMA_CUDA)
     set(CUDA_FLAGS -use_fast_math)
