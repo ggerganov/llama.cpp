@@ -15519,13 +15519,6 @@ struct llama_context * llama_new_context_with_model(
         cparams.flash_attn = false;
     }
 
-#ifdef GGML_USE_HIPBLAS
-    if (cparams.flash_attn) {
-        LLAMA_LOG_WARN("%s: flash_attn is not yet compatible with HIPBLAS builds - forcing off\n", __func__);
-        cparams.flash_attn = false;
-    }
-#endif
-
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
