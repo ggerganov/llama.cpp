@@ -206,7 +206,7 @@ int main(void)
       float sumf = 0.0f;
       for (int l = 0; l < 16; ++l) sumf += ((float *)&resNew1)[l];
 
-      printf("Got a res from a Q8 offset by %d: %f\n", ((int)q8ptr) & 0x3F, sumf);
+      printf("Got a res from a Q8 offset by %d: %f\n", ((uint64_t) q8ptr) & 0x3F, sumf);
     }
 
   return 0;
