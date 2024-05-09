@@ -112,27 +112,27 @@ static uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset)
 static std::unordered_map<uint32_t, int> unicode_cpt_type_map() {
     std::unordered_map<uint32_t, int> cpt_types;
     for (auto p : unicode_ranges_number) {
-        for (auto i = p.first; i <= p.second; ++ i) {
+        for (auto i = p.first; i <= p.second; ++i) {
             cpt_types[i] = CODEPOINT_TYPE_NUMBER;
         }
     }
     for (auto p : unicode_ranges_letter) {
-        for (auto i = p.first; i <= p.second; ++ i) {
+        for (auto i = p.first; i <= p.second; ++i) {
             cpt_types[i] = CODEPOINT_TYPE_LETTER;
         }
     }
     for (auto p : unicode_ranges_separator) {
-        for (auto i = p.first; i <= p.second; ++ i) {
+        for (auto i = p.first; i <= p.second; ++i) {
             cpt_types[i] = CODEPOINT_TYPE_SEPARATOR;
         }
     }
     for (auto p : unicode_ranges_accent_mark) {
-        for (auto i = p.first; i <= p.second; ++ i) {
+        for (auto i = p.first; i <= p.second; ++i) {
             cpt_types[i] = CODEPOINT_TYPE_ACCENT_MARK;
         }
     }
     for (auto p : unicode_ranges_punctuation) {
-        for (auto i = p.first; i <= p.second; ++ i) {
+        for (auto i = p.first; i <= p.second; ++i) {
             cpt_types[i] = CODEPOINT_TYPE_PUNCTUATION;
         }
     }
@@ -142,7 +142,7 @@ static std::unordered_map<uint32_t, int> unicode_cpt_type_map() {
         }
     }
     for (auto p : unicode_ranges_control) {
-        for (auto i = p.first; i <= p.second; ++ i) {
+        for (auto i = p.first; i <= p.second; ++i) {
             cpt_types[i] = CODEPOINT_TYPE_CONTROL;
         }
     }
@@ -629,7 +629,7 @@ bool unicode_cpt_is_whitespace(uint32_t cp) {
     static const std::unordered_set<uint32_t> is_whitespace = [] {
         std::unordered_set<uint32_t> is_whitespace;
         for (auto p : unicode_ranges_whitespace) {
-            for (auto i = p.first; i <= p.second; ++ i) {
+            for (auto i = p.first; i <= p.second; ++i) {
                 is_whitespace.insert(i);
             }
         }
