@@ -3583,7 +3583,7 @@ void quantize_row_q8_K(const float * restrict x, void * restrict y, int k) {
     quantize_row_q8_K_reference(x, y, k);
 }
 
-//===================================== Dot ptoducts =================================
+//===================================== Dot products =================================
 
 //
 // Helper functions
