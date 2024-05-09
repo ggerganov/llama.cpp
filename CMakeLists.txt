@@ -405,6 +405,7 @@ if (LLAMA_CUDA)
         list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
 
         add_compile_definitions(GGML_USE_CUDA)
+        add_compile_definitions(GGML_CUDA_USE_GRAPHS)
         if (LLAMA_CUDA_FORCE_DMMV)
             add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
@@ -430,7 +431,7 @@ if (LLAMA_CUDA)
 
         if (LLAMA_STATIC)
             if (WIN32)
-                # As of 12.3.1 CUDA Tookit for Windows does not offer a static cublas library
+                # As of 12.3.1 CUDA Toolkit for Windows does not offer a static cublas library
                 set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas CUDA::cublasLt)
             else ()
                 set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)

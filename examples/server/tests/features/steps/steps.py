@@ -939,7 +939,7 @@ async def oai_chat_completions(user_prompt,
                     while event_received:
                         event_received = False
                         async for line_in_bytes in response.content:
-                            line = line_in_bytes.decode('utf8')
+                            line = line_in_bytes.decode('utf-8')
                             line = line.rstrip('\n').rstrip('\r')
                             if line == '':
                                 continue

@@ -140,7 +140,6 @@ Typically finetunes of the base models below are supported as well.
 - [x] [MobileVLM 1.7B/3B models](https://huggingface.co/models?search=mobileVLM)
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
 - [x] [Mini CPM](https://huggingface.co/models?search=MiniCPM)
-- [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
 
 **HTTP server**
 

@@ -4,7 +4,7 @@ import logging
 import json
 import os
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence, Mapping, Iterable
 
 from .gguf_writer import GGUFWriter
 
@@ -15,11 +15,11 @@ class SpecialVocab:
     merges: list[str]
     add_special_token: dict[str, bool]
     special_token_ids: dict[str, int]
-    chat_template: str | None
+    chat_template: str | Sequence[Mapping[str, str]] | None
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
-        special_token_types: tuple[str, ...] | None = None,
+        special_token_types: Iterable[str] | None = None,
         n_vocab: int | None = None,
     ):
         self.special_token_ids = {}
