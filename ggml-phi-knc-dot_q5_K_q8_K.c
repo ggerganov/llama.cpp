@@ -55,6 +55,14 @@ float GGML_PHI_FP16_TO_FP32(ggml_fp16_t src)
     return f32[0];
 }
 
+/* convert many FP16s to FP32s. */
+void GGML_PHI_FP16_TO_FP32_ROW(const ggml_fp16_t * x, float * y, int n)
+{
+    for (int i = 0; i < n; i++) {
+        y[i] = GGML_PHI_FP16_TO_FP32(x[i]);
+    }
+}
+
 /* Convert a FP32 to a FP16. */
 ggml_fp16_t GGML_PHI_FP32_TO_FP16(float src)
 {
@@ -74,6 +82,13 @@ ggml_fp16_t GGML_PHI_FP32_TO_FP16(float src)
     return f16[0];
 }
 
+/* convert many FP32s to FP16s. */
+void GGML_PHI_FP32_TO_FP16_ROW(const float * x, ggml_fp16_t * y, int n)
+{
+    for (int i = 0; i < n; i++) {
+        y[i] = GGML_PHI_FP32_TO_FP16(x[i]);
+    }
+}
 
 // This function perform two multiplies of an I8x16 and an I8x16 vector into two I16x16 vectors. Then it does an FMA on the scaled result of multiplying the two I16x16 vectors, adding the result into an I32x16. When done, it multiplies this I32x16 by a float, returning a F32x16.
 // It loops 8 times. Well, actually four, with an unroll.

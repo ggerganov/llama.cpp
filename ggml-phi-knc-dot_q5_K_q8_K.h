@@ -20,12 +20,17 @@ extern "C"
     typedef uint8_t uint8x16_t __attribute__((vector_size (16), aligned(16)));
     typedef int32_t int32x16_t __attribute__((vector_size (64), aligned(64)));
 
-    // Zero out a vector of Floats
+    // Zero out a vector of 16 Floats.
     void GGML_F32x16_VEC_ZERO(float32x16_t *target);
     // Convert an FP16 value to FP32(Float).
     float GGML_PHI_FP16_TO_FP32(ggml_fp16_t src);
+    // Convert a set of FP16 values to FP32(Float).
+    void GGML_PHI_FP16_TO_FP32_ROW(const ggml_fp16_t * x, float * y, int n);
     // Convert an FP32(Float) value to FP16.
     ggml_fp16_t GGML_PHI_FP32_TO_FP16(float src);
+    // Convert an FP32(Float) value to FP16.
+    void GGML_PHI_FP32_TO_FP16_ROW(const float * x, ggml_fp16_t * y, int n);
+
     // Create a 5 bit int vector from a 4 bit vector and a 1 bit vector, both in packed forms.
     void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint8x16_t * dst);
     // Multiply a Q5 and Q8 vector against each other, with some scaling.
