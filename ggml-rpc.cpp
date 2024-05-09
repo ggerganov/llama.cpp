@@ -2,18 +2,19 @@
 #include "ggml.h"
 #include "ggml-backend-impl.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <netdb.h>
+#ifndef _WIN32
+#  include <sys/socket.h>
+#  include <sys/types.h>
+#  include <netinet/in.h>
+#  include <netinet/tcp.h>
+#  include <netdb.h>
+#  include <unistd.h>
+#endif
 #include <string.h>
-#include <unistd.h>
 
 #define UNUSED GGML_UNUSED
 
@@ -24,15 +25,11 @@
 #define GGML_PRINT_DEBUG(...)
 #endif
 
-// RPC data structures
+#ifdef _WIN32
+using ssize_t = __int64;
+#endif
 
-struct sockfd {
-    int fd;
-    sockfd(int fd) : fd(fd) {}
-    ~sockfd() {
-        close(fd);
-    }
-};
+// RPC data structures
 
 static ggml_guid_t ggml_backend_rpc_guid() {
     static ggml_guid guid = {0x99, 0x68, 0x5b, 0x6c, 0xd2, 0x83, 0x3d, 0x24, 0x25, 0x36, 0x72, 0xe1, 0x5b, 0x0e, 0x14, 0x03};
@@ -40,7 +37,7 @@ static ggml_guid_t ggml_backend_rpc_guid() {
 }
 
 struct ggml_backend_rpc_buffer_type_context {
-    std::shared_ptr<sockfd> sock;
+    std::shared_ptr<socket_t> sock;
     std::string name;
     size_t alignment;
     size_t max_size;
@@ -49,27 +46,47 @@ struct ggml_backend_rpc_buffer_type_context {
 struct ggml_backend_rpc_context {
     std::string endpoint;
     std::string name;
-    std::shared_ptr<sockfd> sock;
+    std::shared_ptr<socket_t> sock;
     ggml_backend_buffer_type_t buft;
 };
 
 struct ggml_backend_rpc_buffer_context {
-    std::shared_ptr<sockfd> sock;
+    std::shared_ptr<socket_t> sock;
     std::unordered_map<ggml_backend_buffer_t, void *> base_cache;
     uint64_t remote_ptr;
     std::string name;
 };
 
-
 // RPC helper functions
 
-static std::shared_ptr<sockfd> socket_connect(const char * host, int port) {
-    struct sockaddr_in addr;
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
+socket_t::~socket_t() {
+#ifdef _WIN32
+    closesocket(this->fd);
+#else
+    close(this->fd);
+#endif
+}
+
+static std::shared_ptr<socket_t> make_socket(sockfd_t fd) {
+#ifdef _WIN32
+    if (fd == INVALID_SOCKET) {
         return nullptr;
     }
-    auto sock_ptr = std::make_shared<sockfd>(sock);
+#else
+    if (fd < 0) {
+        return nullptr;
+    }
+#endif
+    return std::make_shared<socket_t>(fd);
+}
+
+static std::shared_ptr<socket_t> socket_connect(const char * host, int port) {
+    struct sockaddr_in addr;
+    auto sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    auto sock_ptr = make_socket(sockfd);
+    if (sock_ptr == nullptr) {
+        return nullptr;
+    }
     // set TCP_NODELAY to disable Nagle's algorithm
     int flag = 1;
     int ret = setsockopt(sock_ptr->fd, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
@@ -83,17 +100,17 @@ static std::shared_ptr<sockfd> socket_connect(const char * host, int port) {
         fprintf(stderr, "Cannot resolve host '%s'\n", host);
         return nullptr;
     }
-    bcopy((char *)server->h_addr, (char *)&addr.sin_addr.s_addr, server->h_length);
+    memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
     if (connect(sock_ptr->fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         return nullptr;
     }
     return sock_ptr;
 }
 
-static bool send_data(int sockfd, const void * data, size_t size) {
+static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
     size_t bytes_sent = 0;
     while (bytes_sent < size) {
-        ssize_t n = send(sockfd, (const uint8_t *)data + bytes_sent, size - bytes_sent, 0);
+        ssize_t n = send(sockfd, (const char *)data + bytes_sent, size - bytes_sent, 0);
         if (n < 0) {
             return false;
         }
@@ -102,10 +119,10 @@ static bool send_data(int sockfd, const void * data, size_t size) {
     return true;
 }
 
-static bool recv_data(int sockfd, void * data, size_t size) {
+static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
     size_t bytes_recv = 0;
     while (bytes_recv < size) {
-        ssize_t n = recv(sockfd, (uint8_t *)data + bytes_recv, size - bytes_recv, 0);
+        ssize_t n = recv(sockfd, (char *)data + bytes_recv, size - bytes_recv, 0);
         if (n <= 0) {
             return false;
         }
@@ -116,7 +133,7 @@ static bool recv_data(int sockfd, void * data, size_t size) {
 
 // RPC request : | rpc_cmd (1 byte) | request_size (8 bytes) | request_data (request_size bytes) |
 // RPC response: | response_size (8 bytes) | response_data (response_size bytes) |
-static bool send_rpc_cmd(const std::shared_ptr<sockfd> & sock, enum rpc_cmd cmd, const std::vector<uint8_t> & input, std::vector<uint8_t> & output) {
+static bool send_rpc_cmd(const std::shared_ptr<socket_t> & sock, enum rpc_cmd cmd, const std::vector<uint8_t> & input, std::vector<uint8_t> & output) {
     uint8_t cmd_byte = cmd;
     if (!send_data(sock->fd, &cmd_byte, sizeof(cmd_byte))) {
         return false;
@@ -348,7 +365,7 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_rpc_buffer_type_alloc_buffer
     return buffer;
 }
 
-static size_t get_alignment(const std::shared_ptr<sockfd> & sock) {
+static size_t get_alignment(const std::shared_ptr<socket_t> & sock) {
     // input serialization format: | 0 bytes |
     std::vector<uint8_t> input;
     std::vector<uint8_t> output;
@@ -366,7 +383,7 @@ GGML_CALL static size_t ggml_backend_rpc_buffer_type_get_alignment(ggml_backend_
     return buft_ctx->alignment;
 }
 
-static size_t get_max_size(const std::shared_ptr<sockfd> & sock) {
+static size_t get_max_size(const std::shared_ptr<socket_t> & sock) {
     // input serialization format: | 0 bytes |
     std::vector<uint8_t> input;
     std::vector<uint8_t> output;
@@ -522,6 +539,15 @@ GGML_CALL ggml_backend_t ggml_backend_rpc_init(const std::string & endpoint) {
     if (instances.find(endpoint) != instances.end()) {
         return instances[endpoint];
     }
+#ifdef _WIN32
+    {
+        WSADATA wsaData;
+        int res = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        if (res != 0) {
+            return nullptr;
+        }
+    }
+#endif
     GGML_PRINT_DEBUG("Connecting to %s\n", endpoint.c_str());
     // split the endpoint into host and port
     size_t pos = endpoint.find(":");
@@ -565,7 +591,7 @@ GGML_API GGML_CALL bool ggml_backend_is_rpc(ggml_backend_t backend) {
     return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_rpc_guid());
 }
 
-static void get_device_memory(const std::shared_ptr<sockfd> & sock, size_t * free, size_t * total) {
+static void get_device_memory(const std::shared_ptr<socket_t> & sock, size_t * free, size_t * total) {
     // input serialization format: | 0 bytes |
     std::vector<uint8_t> input;
     std::vector<uint8_t> output;
@@ -779,7 +805,7 @@ static void rpc_graph_compute(ggml_backend_t backend, const std::vector<uint8_t>
     ggml_free(ctx);
 }
 
-void rpc_serve_client(ggml_backend_t backend, int sockfd, size_t free_mem, size_t total_mem) {
+void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t free_mem, size_t total_mem) {
     while (true) {
         uint8_t cmd;
         if (!recv_data(sockfd, &cmd, 1)) {

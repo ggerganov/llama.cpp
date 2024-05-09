@@ -498,6 +498,10 @@ endif()
 if (LLAMA_RPC)
     add_compile_definitions(GGML_USE_RPC)
 
+    if (WIN32)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ws2_32)
+    endif()
+
     set(GGML_HEADERS_RPC ggml-rpc.h)
     set(GGML_SOURCES_RPC ggml-rpc.cpp)
 endif()

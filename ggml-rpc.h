@@ -3,10 +3,34 @@
 #include "ggml.h"
 #include "ggml-backend.h"
 #include <string>
+#include <memory>
+#ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  ifndef NOMINMAX
+#     define NOMINMAX
+#  endif
+#  include <windows.h>
+#  include <winsock2.h>
+#endif
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
+
+// cross-platform socket fd
+#ifdef _WIN32
+typedef SOCKET sockfd_t;
+#else
+typedef int sockfd_t;
+#endif
+
+// cross-platform socket
+struct socket_t {
+    sockfd_t fd;
+    socket_t(sockfd_t fd) : fd(fd) {}
+    ~socket_t();
+};
+
 
 // ggml_tensor is serialized into rpc_tensor
 struct rpc_tensor {
@@ -50,7 +74,7 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const
 
 GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const std::string & endpoint, size_t * free, size_t * total);
 
-GGML_API GGML_CALL void rpc_serve_client(ggml_backend_t backend, int sockfd, size_t free_mem, size_t total_mem);
+GGML_API GGML_CALL void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t free_mem, size_t total_mem);
 
 #ifdef  __cplusplus
 }

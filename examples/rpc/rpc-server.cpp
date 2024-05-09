@@ -9,14 +9,17 @@
 #include "ggml-rpc.h"
 #include <memory>
 #include <string>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <arpa/inet.h>
+#ifndef _WIN32
+#  include <sys/socket.h>
+#  include <sys/types.h>
+#  include <arpa/inet.h>
+#  include <netinet/in.h>
+#  include <netinet/tcp.h>
+#  include <netdb.h>
+#  include <unistd.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 static ggml_backend_t create_backend() {
     ggml_backend_t backend = NULL;
@@ -52,10 +55,24 @@ static void get_backend_memory(size_t * free_mem, size_t * total_mem) {
 #endif
 }
 
-static int create_server_socket(const char * host, int port) {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
-        return -1;
+static std::shared_ptr<socket_t> make_socket(sockfd_t fd) {
+#ifdef _WIN32
+    if (fd == INVALID_SOCKET) {
+        return nullptr;
+    }
+#else
+    if (fd < 0) {
+        return nullptr;
+    }
+#endif
+    return std::make_shared<socket_t>(fd);
+}
+
+static std::shared_ptr<socket_t> create_server_socket(const char * host, int port) {
+    auto sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    auto sock = make_socket(sockfd);
+    if (sock == nullptr) {
+        return nullptr;
     }
 
     struct sockaddr_in serv_addr;
@@ -64,16 +81,24 @@ static int create_server_socket(const char * host, int port) {
     serv_addr.sin_port = htons(port);
 
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-        return -1;
+        return nullptr;
     }
     if (listen(sockfd, 5) < 0) {
-        return -1;
+        return nullptr;
     }
-    return sockfd;
+    return sock;
 }
 
 int main(int argc, char * argv[])
 {
+#ifdef _WIN32
+    WSADATA wsaData;
+    int res = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (res != 0) {
+        fprintf(stderr, "WSAStartup failed: %d\n", res);
+        return 1;
+    }
+#endif
     if (argc < 3) {
         fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
         return 1;
@@ -88,33 +113,33 @@ int main(int argc, char * argv[])
     }
 
     printf("Starting RPC server on %s:%d\n", host, port);
-    int server_socket = create_server_socket(host, port);
-    if (server_socket < 0) {
+    auto server_socket = create_server_socket(host, port);
+    if (server_socket == nullptr) {
         fprintf(stderr, "Failed to create server socket\n");
         return 1;
     }
     while (true) {
-        struct sockaddr_in cli_addr;
-        socklen_t clilen = sizeof(cli_addr);
-        int client_socket = accept(server_socket, (struct sockaddr *) &cli_addr, &clilen);
-        if (client_socket < 0) {
+        auto client_socket_fd = accept(server_socket->fd, NULL, NULL);
+        auto client_socket = make_socket(client_socket_fd);
+        if (client_socket == nullptr) {
             fprintf(stderr, "Failed to accept client connection\n");
             return 1;
         }
         // set TCP_NODELAY to disable Nagle's algorithm
         int flag = 1;
-        int ret = setsockopt(client_socket, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
+        int ret = setsockopt(client_socket->fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
         if (ret < 0) {
             fprintf(stderr, "Failed to set TCP_NODELAY\n");
-            close(client_socket);
             continue;
         }
         size_t free_mem, total_mem;
         get_backend_memory(&free_mem, &total_mem);
         printf("Accepted client connection, free_mem=%zu, total_mem=%zu\n", free_mem, total_mem);
-        rpc_serve_client(backend, client_socket, free_mem, total_mem);
+        rpc_serve_client(backend, client_socket->fd, free_mem, total_mem);
         printf("Client connection closed\n");
-        close(client_socket);
     }
+#ifdef _WIN32
+    WSACleanup();
+#endif
     return 0;
 }
