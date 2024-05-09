@@ -31,9 +31,6 @@ then
     exit 1
 fi
 
-
-
-
 # Step 1: Prepare the Build Environment
 pushd $(git rev-parse --show-toplevel)
 rm -rf build-ci-debug && mkdir build-ci-debug && pushd build-ci-debug
