@@ -1517,199 +1517,6 @@ class LlamaModel(Model):
             raise ValueError(f"Unprocessed experts: {experts.keys()}")
 
 
-@Model.register("ArcticForCausalLM")
-class ArcticModel(Model):
-    model_arch = gguf.MODEL_ARCH.ARCTIC
-
-    def set_vocab(self):
-        # The reason for using a custom implementation here is that the
-        # snowflake-arctic-instruct model redefined tokens 31998 and 31999 from
-        # tokenizer.model and used them as BOS and EOS instead of adding new tokens.
-        from sentencepiece import SentencePieceProcessor
-
-        tokenizer_path = self.dir_model / 'tokenizer.model'
-
-        if not tokenizer_path.is_file():
-            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
-            sys.exit(1)
-
-        # Read the whole vocabulary from the tokenizer.model file
-        tokenizer = SentencePieceProcessor(str(tokenizer_path))
-
-        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
-
-        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
-        scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
-
-        for token_id in range(tokenizer.vocab_size()):
-
-            piece = tokenizer.id_to_piece(token_id)
-            text = piece.encode("utf-8")
-            score = tokenizer.get_score(token_id)
-
-            toktype = SentencePieceTokenTypes.NORMAL
-            if tokenizer.is_unknown(token_id):
-                toktype = SentencePieceTokenTypes.UNKNOWN
-            elif tokenizer.is_control(token_id):
-                toktype = SentencePieceTokenTypes.CONTROL
-            elif tokenizer.is_unused(token_id):
-                toktype = SentencePieceTokenTypes.UNUSED
-            elif tokenizer.is_byte(token_id):
-                toktype = SentencePieceTokenTypes.BYTE
-
-            tokens[token_id] = text
-            scores[token_id] = score
-            toktypes[token_id] = toktype
-
-        # Use the added_tokens_decoder field from tokeniser_config.json as the source
-        # of information about added/redefined tokens and modify them accordingly.
-        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
-        if tokenizer_config_file.is_file():
-            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
-                tokenizer_config_json = json.load(f)
-
-                if "added_tokens_decoder" in tokenizer_config_json:
-                    added_tokens_decoder = tokenizer_config_json["added_tokens_decoder"]
-                    for token_id, token_json in added_tokens_decoder.items():
-                        token_id = int(token_id)
-                        if (token_id >= vocab_size):
-                            print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
-                            continue
-
-                        token_content = token_json["content"]
-                        token_type = SentencePieceTokenTypes.USER_DEFINED
-                        token_score = -10000.0
-
-                        # Map unk_token to UNKNOWN, other special tokens to CONTROL
-                        # Set the score to 0.0 as in the original tokenizer.model
-                        if ("special" in token_json) and token_json["special"]:
-                            if token_content == tokenizer_config_json["unk_token"]:
-                                token_type = SentencePieceTokenTypes.UNKNOWN
-                            else:
-                                token_type = SentencePieceTokenTypes.CONTROL
-                            token_score = 0.0
-
-                        print(f"Setting token {token_id} to '{token_content}' (type: {token_type}, score: {token_score:.2f})")
-                        tokens[token_id] = token_content.encode("utf-8")
-                        toktypes[token_id] = token_type
-                        scores[token_id] = token_score
-
-        self.gguf_writer.add_tokenizer_model("llama")
-        self.gguf_writer.add_tokenizer_pre("default")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        special_vocab.add_to_gguf(self.gguf_writer)
-
-    def set_gguf_parameters(self):
-        super().set_gguf_parameters()
-        hparams = self.hparams
-        self.gguf_writer.add_vocab_size(hparams["vocab_size"])
-        self.gguf_writer.add_rope_dimension_count(hparams["hidden_size"] // hparams["num_attention_heads"])
-
-    # Same as super class, but permuting q_proj, k_proj
-    def write_tensors(self):
-        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        n_head = self.hparams.get("num_attention_heads")
-        n_kv_head = self.hparams.get("num_key_value_heads")
-        n_experts = self.hparams.get("num_local_experts")
-        experts = dict()
-        for name, data_torch in self.get_tensors():
-            # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
-                continue
-
-            old_dtype = data_torch.dtype
-
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
-
-            data = data_torch.numpy()
-
-            if name.endswith("q_proj.weight"):
-                data = permute(data, n_head, n_head)
-            if name.endswith("k_proj.weight"):
-                data = permute(data, n_head, n_kv_head)
-
-            data = data.squeeze()
-
-            # process the experts separately
-            if name.find("block_sparse_moe.experts") != -1:
-                experts[name] = data
-                if len(experts) >= n_experts:
-                    # merge the experts into a single 3d tensor
-                    for bid in range(block_count):
-                        for wid in range(1, 4):
-                            full = True
-                            for xid in range(n_experts):
-                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
-                                if ename not in experts:
-                                    full = False
-                                    break
-                            if not full:
-                                continue
-
-                            datas = []
-                            for xid in range(n_experts):
-                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
-                                datas.append(experts[ename])
-                                del experts[ename]
-
-                            data = np.stack(datas, axis=0)
-                            data_dtype = data.dtype
-
-                            if self.ftype == 0 and data_dtype == np.float16:
-                                data = data.astype(np.float32)
-
-                            if self.ftype == 1 and data_dtype == np.float32:
-                                data = data.astype(np.float16)
-
-                            merged_name = f"layers.{bid}.feed_forward.experts.w{wid}.weight"
-
-                            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
-                            if new_name is None:
-                                print(f"Can not map tensor {name!r}")
-                                sys.exit()
-
-                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
-
-                            self.gguf_writer.add_tensor(new_name, data)
-                continue
-
-            # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # 1d tensors need to be converted to float32
-            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
-
-        if len(experts) > 0:
-            raise ValueError(f"Unprocessed experts: {experts.keys()}")
-
-
 @Model.register("GrokForCausalLM")
 class GrokModel(Model):
     model_arch = gguf.MODEL_ARCH.GROK
@@ -3099,6 +2906,199 @@ class OlmoModel(Model):
             print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
 
             self.gguf_writer.add_tensor(new_name, data)
+
+
+@Model.register("ArcticForCausalLM")
+class ArcticModel(Model):
+    model_arch = gguf.MODEL_ARCH.ARCTIC
+
+    def set_vocab(self):
+        # The reason for using a custom implementation here is that the
+        # snowflake-arctic-instruct model redefined tokens 31998 and 31999 from
+        # tokenizer.model and used them as BOS and EOS instead of adding new tokens.
+        from sentencepiece import SentencePieceProcessor
+
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+
+        if not tokenizer_path.is_file():
+            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
+            sys.exit(1)
+
+        # Read the whole vocabulary from the tokenizer.model file
+        tokenizer = SentencePieceProcessor(str(tokenizer_path))
+
+        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
+
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
+        for token_id in range(tokenizer.vocab_size()):
+
+            piece = tokenizer.id_to_piece(token_id)
+            text = piece.encode("utf-8")
+            score = tokenizer.get_score(token_id)
+
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.is_unknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.is_control(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.is_unused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.is_byte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
+
+        # Use the added_tokens_decoder field from tokeniser_config.json as the source
+        # of information about added/redefined tokens and modify them accordingly.
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+
+                if "added_tokens_decoder" in tokenizer_config_json:
+                    added_tokens_decoder = tokenizer_config_json["added_tokens_decoder"]
+                    for token_id, token_json in added_tokens_decoder.items():
+                        token_id = int(token_id)
+                        if (token_id >= vocab_size):
+                            print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                            continue
+
+                        token_content = token_json["content"]
+                        token_type = SentencePieceTokenTypes.USER_DEFINED
+                        token_score = -10000.0
+
+                        # Map unk_token to UNKNOWN, other special tokens to CONTROL
+                        # Set the score to 0.0 as in the original tokenizer.model
+                        if ("special" in token_json) and token_json["special"]:
+                            if token_content == tokenizer_config_json["unk_token"]:
+                                token_type = SentencePieceTokenTypes.UNKNOWN
+                            else:
+                                token_type = SentencePieceTokenTypes.CONTROL
+                            token_score = 0.0
+
+                        print(f"Setting token {token_id} to '{token_content}' (type: {token_type}, score: {token_score:.2f})")
+                        tokens[token_id] = token_content.encode("utf-8")
+                        toktypes[token_id] = token_type
+                        scores[token_id] = token_score
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        hparams = self.hparams
+        self.gguf_writer.add_vocab_size(hparams["vocab_size"])
+        self.gguf_writer.add_rope_dimension_count(hparams["hidden_size"] // hparams["num_attention_heads"])
+
+    # Same as super class, but permuting q_proj, k_proj
+    def write_tensors(self):
+        block_count = self.hparams.get("n_layers", self.hparams.get("num_hidden_layers", self.hparams.get("n_layer")))
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        n_head = self.hparams.get("num_attention_heads")
+        n_kv_head = self.hparams.get("num_key_value_heads")
+        n_experts = self.hparams.get("num_local_experts")
+        experts = dict()
+        for name, data_torch in self.get_tensors():
+            # we don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".attention.rotary_emb.inv_freq")):
+                continue
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.numpy()
+
+            if name.endswith("q_proj.weight"):
+                data = permute(data, n_head, n_head)
+            if name.endswith("k_proj.weight"):
+                data = permute(data, n_head, n_kv_head)
+
+            data = data.squeeze()
+
+            # process the experts separately
+            if name.find("block_sparse_moe.experts") != -1:
+                experts[name] = data
+                if len(experts) >= n_experts:
+                    # merge the experts into a single 3d tensor
+                    for bid in range(block_count):
+                        for wid in range(1, 4):
+                            full = True
+                            for xid in range(n_experts):
+                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
+                                if ename not in experts:
+                                    full = False
+                                    break
+                            if not full:
+                                continue
+
+                            datas = []
+                            for xid in range(n_experts):
+                                ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.w{wid}.weight"
+                                datas.append(experts[ename])
+                                del experts[ename]
+
+                            data = np.stack(datas, axis=0)
+                            data_dtype = data.dtype
+
+                            if self.ftype == 0 and data_dtype == np.float16:
+                                data = data.astype(np.float32)
+
+                            if self.ftype == 1 and data_dtype == np.float32:
+                                data = data.astype(np.float16)
+
+                            merged_name = f"layers.{bid}.feed_forward.experts.w{wid}.weight"
+
+                            new_name = tensor_map.get_name(merged_name, try_suffixes=(".weight", ".bias"))
+                            if new_name is None:
+                                print(f"Can not map tensor {name!r}")
+                                sys.exit()
+
+                            print(f"{new_name}, n_dims = {len(data.shape)}, shape = {data.shape} --> {data.dtype}")
+
+                            self.gguf_writer.add_tensor(new_name, data)
+                continue
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # 1d tensors need to be converted to float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"{new_name}, n_dims = {n_dims}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+        if len(experts) > 0:
+            raise ValueError(f"Unprocessed experts: {experts.keys()}")
 
 
 ###### CONVERSION LOGIC ######
