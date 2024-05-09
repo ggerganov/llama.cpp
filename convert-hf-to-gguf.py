@@ -2370,14 +2370,6 @@ class ArcticModel(Model):
         self.gguf_writer.add_vocab_size(hparams["vocab_size"])
         self.gguf_writer.add_rope_dimension_count(hparams["hidden_size"] // hparams["num_attention_heads"])
 
-    @staticmethod
-    def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
-        if n_head_kv is not None and n_head != n_head_kv:
-            n_head = n_head_kv
-        return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
-                .swapaxes(1, 2)
-                .reshape(weights.shape))
-
     _experts: list[dict[str, Tensor]] | None = None
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
