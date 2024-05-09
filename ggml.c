@@ -45,6 +45,7 @@
 // hand assembled replacement functions are cool.
 #if defined(__k1om__)
 #include <ggml-phi-knc.h>
+#include <ggml-phi-knc-dot_q5_K_q8_K.h>
 #endif
 
 #if defined(_WIN32)
@@ -335,6 +336,14 @@ const char * ggml_status_to_string(enum ggml_status status) {
 
 // note: do not use these inside ggml.c
 // these are meant to be used via the ggml.h API
+#if defined(__k1om__)
+
+#define ggml_fp16_to_fp32 GGML_PHI_FP16_TO_FP32
+#define ggml_fp32_to_fp16 GGML_PHI_FP32_TO_FP16
+#define ggml_fp16_to_fp32_row GGML_PHI_FP16_TO_FP32_ROW
+#define ggml_fp32_to_fp16_row GGML_PHI_FP32_TO_FP16_ROW
+
+#else
 float ggml_fp16_to_fp32(ggml_fp16_t x) {
     return GGML_FP16_TO_FP32(x);
 }
@@ -367,6 +376,8 @@ void ggml_fp32_to_fp16_row(const float * x, ggml_fp16_t * y, int64_t n) {
         y[i] = GGML_FP32_TO_FP16(x[i]);
     }
 }
+
+#endif /* defined(__k1om__) */
 
 bool ggml_guid_matches(ggml_guid_t guid_a, ggml_guid_t guid_b) {
     return memcmp(guid_a, guid_b, sizeof(ggml_guid)) == 0;
