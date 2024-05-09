@@ -17879,7 +17879,7 @@ struct llama_timings llama_get_timings(struct llama_context * ctx) {
         /*.t_eval_ms   =*/ 1e-3 * ctx->t_eval_us,
 
         /*.n_sample =*/ std::max(1, ctx->n_sample),
-        /*.n_p_eval =*/ std::max(1, ctx->n_p_eval),
+        /*.n_p_eval =*/ std::max(0, ctx->n_p_eval),
         /*.n_eval   =*/ std::max(1, ctx->n_eval),
     };
 
