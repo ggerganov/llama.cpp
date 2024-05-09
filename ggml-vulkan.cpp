@@ -5418,7 +5418,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
 }
 
 static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * node, bool last_node){
-    if (ctx->disable || node->backend != GGML_BACKEND_TYPE_GPU) {
+    if (ctx->disable || node->backend != GGML_BACKEND_TYPE_GPU || ggml_is_empty(node)) {
         return;
     }
 
@@ -6218,7 +6218,7 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
     int last_node = cgraph->n_nodes - 1;
 
     // If the last op in the cgraph isn't backend GPU, the command buffer doesn't get closed properly
-    while (last_node > 0 && cgraph->nodes[last_node]->backend != GGML_BACKEND_TYPE_GPU) {
+    while (last_node > 0 && (cgraph->nodes[last_node]->backend != GGML_BACKEND_TYPE_GPU || ggml_is_empty(cgraph->nodes[last_node]))) {
         last_node -= 1;
     }
 
