@@ -2485,7 +2485,7 @@ def main() -> None:
         logger.info("Set model tokenizer")
         model_instance.set_vocab()
 
-        model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION);
+        model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
 
         if args.vocab_only:
             logger.info(f"Exporting model vocab to '{fname_out}'")
