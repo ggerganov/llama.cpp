@@ -83,6 +83,15 @@ class Model:
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensor_names = None
+        if self.ftype == gguf.LlamaFileType.GUESSED:
+            # NOTE: can't use field "torch_dtype" in config.json, because some finetunes lie.
+            _, first_tensor = next(self.get_tensors())
+            if first_tensor.dtype == torch.float16:
+                logger.info(f"choosing --outtype f16 from first tensor type ({first_tensor.dtype})")
+                self.ftype = gguf.LlamaFileType.MOSTLY_F16
+            else:
+                logger.info(f"choosing --outtype bf16 from first tensor type ({first_tensor.dtype})")
+                self.ftype = gguf.LlamaFileType.MOSTLY_BF16
 
     @classmethod
     def __init_subclass__(cls):
@@ -2394,8 +2403,8 @@ def parse_args() -> argparse.Namespace:
         help="path to write to; default: based on input",
     )
     parser.add_argument(
-        "--outtype", type=str, choices=["f32", "f16", "bf16"], default="f16",
-        help="output format - use f32 for float32, f16 for float16, bf16 for bfloat16",
+        "--outtype", type=str, choices=["f32", "f16", "bf16", "auto-f16"], default="f16",
+        help="output format - use f32 for float32, f16 for float16, bf16 for bfloat16, auto-f16 for the highest-fidelity 16-bit float type depending on the first loaded tensor type",
     )
     parser.add_argument(
         "--bigendian", action="store_true",
@@ -2453,6 +2462,7 @@ def main() -> None:
         "f32": gguf.LlamaFileType.ALL_F32,
         "f16": gguf.LlamaFileType.MOSTLY_F16,
         "bf16": gguf.LlamaFileType.MOSTLY_BF16,
+        "auto-f16": gguf.LlamaFileType.GUESSED,  # TODO: use a more appropriate "auto" type
     }
 
     if args.outfile is not None:

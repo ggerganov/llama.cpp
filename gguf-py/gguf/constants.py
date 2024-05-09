@@ -861,6 +861,8 @@ class LlamaFileType(IntEnum):
     MOSTLY_IQ1_M         = 31  # except 1d tensors
     MOSTLY_BF16          = 32  # except 1d tensors
 
+    GUESSED              = 1024  # not specified in the model file
+
 
 class GGUFEndian(IntEnum):
     LITTLE = 0
