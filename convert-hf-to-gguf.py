@@ -2290,7 +2290,7 @@ class ArcticModel(Model):
         tokenizer_path = self.dir_model / 'tokenizer.model'
 
         if not tokenizer_path.is_file():
-            print(f'Error: Missing {tokenizer_path}', file=sys.stderr)
+            logger.error(f'Error: Missing {tokenizer_path}')
             sys.exit(1)
 
         # Read the whole vocabulary from the tokenizer.model file
@@ -2334,7 +2334,7 @@ class ArcticModel(Model):
                     for token_id, token_json in added_tokens_decoder.items():
                         token_id = int(token_id)
                         if (token_id >= vocab_size):
-                            print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                            logger.debug(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                             continue
 
                         token_content = token_json["content"]
@@ -2350,7 +2350,7 @@ class ArcticModel(Model):
                                 token_type = SentencePieceTokenTypes.CONTROL
                             token_score = 0.0
 
-                        print(f"Setting token {token_id} to '{token_content}' (type: {token_type}, score: {token_score:.2f})")
+                        logger.info(f"Setting added token {token_id} to '{token_content}' (type: {token_type}, score: {token_score:.2f})")
                         tokens[token_id] = token_content.encode("utf-8")
                         toktypes[token_id] = token_type
                         scores[token_id] = token_score
