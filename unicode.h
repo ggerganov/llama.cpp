@@ -5,7 +5,7 @@
 #include <vector>
 
 #define CODEPOINT_TYPE_UNIDENTIFIED 0
-#define CODEPOINT_TYPE_DIGIT        1
+#define CODEPOINT_TYPE_NUMBER       1
 #define CODEPOINT_TYPE_LETTER       2
 #define CODEPOINT_TYPE_WHITESPACE   3
 #define CODEPOINT_TYPE_ACCENT_MARK  4
@@ -24,5 +24,6 @@ int unicode_cpt_type(const std::string & utf8);
 std::string unicode_byte_to_utf8(uint8_t byte);
 uint8_t unicode_utf8_to_byte(const std::string & utf8);
 
-// simple tolower that only implements one-to-one mapping, not one-to-many
 char32_t unicode_tolower(char32_t cp);
+
+std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::string> & regex_exprs);

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 
+import logging
 import argparse
 import os
 import subprocess
 import sys
 
 import yaml
+
+logger = logging.getLogger("run-with-preset")
 
 CLI_ARGS_MAIN_PERPLEXITY = [
     "batch-size", "cfg-negative-prompt", "cfg-scale", "chunks", "color", "ctx-size", "escape",
@@ -56,12 +59,15 @@ parser.add_argument("-bin", "--binary", help="The binary to run.")
 parser.add_argument("yaml_files", nargs="*",
                     help="Arbitrary number of YAML files from which to read preset values. "
                     "If two files specify the same values the later one will be used.")
+parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
 known_args, unknown_args = parser.parse_known_args()
 
 if not known_args.yaml_files and not unknown_args:
     parser.print_help()
     sys.exit(0)
+
+logging.basicConfig(level=logging.DEBUG if known_args.verbose else logging.INFO)
 
 props = dict()
 
@@ -85,7 +91,7 @@ elif binary.lower().endswith("llama-bench"):
 elif binary.lower().endswith("server"):
     cli_args = CLI_ARGS_SERVER
 else:
-    print(f"Unknown binary: {binary}")
+    logger.error(f"Unknown binary: {binary}")
     sys.exit(1)
 
 command_list = [binary]
@@ -121,11 +127,11 @@ for cli_arg in cli_args:
 
 num_unused = len(props)
 if num_unused > 10:
-    print(f"The preset file contained a total of {num_unused} unused properties.")
+    logger.info(f"The preset file contained a total of {num_unused} unused properties.")
 elif num_unused > 0:
-    print("The preset file contained the following unused properties:")
+    logger.info("The preset file contained the following unused properties:")
     for prop, value in props.items():
-        print(f"  {prop}: {value}")
+        logger.info(f"  {prop}: {value}")
 
 command_list += unknown_args
 
