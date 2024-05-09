@@ -12,7 +12,7 @@ extern "C"
 #endif
 
     /* A forward declaration, to keep GCC happy. */
-    void ggml_vec_dot_q5_K_q8_K(int n, float *restrict s, size_t bs, const void *restrict vx, size_t bx, const void *restrict vy, size_t by, int nrc);
+    void ggml_vec_dot_q5_K_q8_K(int n, float * __restrict s, size_t bs, const void * __restrict vx, size_t bx, const void * __restrict vy, size_t by, int nrc);
 
     // Define our vector types, with a default alignment.
     typedef float float32x16_t __attribute__((vector_size (64), aligned(64)));
