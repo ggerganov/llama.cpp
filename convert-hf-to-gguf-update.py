@@ -49,6 +49,10 @@ chktxt = '\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶‍
 
 if len(sys.argv) == 2:
     token = sys.argv[1]
+    if not token.startswith("hf_"):
+        logger.info("Huggingface token seems invalid")
+        logger.info("Usage: python convert-hf-to-gguf-update.py <huggingface_token>")
+        sys.exit(1)
 else:
     logger.info("Usage: python convert-hf-to-gguf-update.py <huggingface_token>")
     sys.exit(1)
