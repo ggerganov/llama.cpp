@@ -109,6 +109,8 @@ typedef void * thread_ret_t;
 
 #endif
 
+typedef pthread_t ggml_thread_t;
+
 #ifdef GGML_USE_CPU_HBM
 #include <hbwmalloc.h>
 #endif
@@ -1535,6 +1537,57 @@ static inline void __sse_f16x4_store(ggml_fp16_t *x, __m128 y) {
 #endif
 
 //
+// ggml context
+//
+
+struct ggml_context {
+    size_t mem_size;
+    void* mem_buffer;
+    bool   mem_buffer_owned;
+    bool   no_alloc;
+    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
+
+    int    n_objects;
+
+    struct ggml_object* objects_begin;
+    struct ggml_object* objects_end;
+
+    struct ggml_scratch scratch;
+    struct ggml_scratch scratch_save;
+};
+
+struct ggml_context_container {
+    bool used;
+
+    struct ggml_context context;
+};
+
+struct ggml_compute_state_shared {
+    const struct ggml_cgraph* cgraph;
+    const struct ggml_cplan* cplan;
+
+    int64_t perf_node_start_cycles;
+    int64_t perf_node_start_time_us;
+
+    const int n_threads;
+
+    // synchronization primitives
+    atomic_int n_active;  // num active threads
+    atomic_int node_n;    // active graph node
+    atomic_int node_task; // active graph node task phase
+
+    ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
+    void* abort_callback_data;
+};
+
+struct ggml_compute_state {
+    ggml_thread_t thrd;
+    int ith;
+    struct ggml_compute_state_shared* shared;
+    enum ggml_status ec;
+};
+
+//
 // fundamental operations
 //
 
@@ -2379,32 +2432,6 @@ static void ggml_setup_op_has_task_pass(void) {
         p[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
     }
 }
-
-//
-// ggml context
-//
-
-struct ggml_context {
-    size_t mem_size;
-    void * mem_buffer;
-    bool   mem_buffer_owned;
-    bool   no_alloc;
-    bool   no_alloc_save; // this is used to save the no_alloc state when using scratch buffers
-
-    int    n_objects;
-
-    struct ggml_object * objects_begin;
-    struct ggml_object * objects_end;
-
-    struct ggml_scratch scratch;
-    struct ggml_scratch scratch_save;
-};
-
-struct ggml_context_container {
-    bool used;
-
-    struct ggml_context context;
-};
 
 //
 // NUMA support
@@ -19172,8 +19199,6 @@ typedef int ggml_lock_t;
 
 #define GGML_LOCK_INITIALIZER 0
 
-typedef pthread_t ggml_thread_t;
-
 #define ggml_thread_create pthread_create
 #define ggml_thread_join   pthread_join
 
@@ -19198,8 +19223,6 @@ typedef int ggml_lock_t;
 #define ggml_lock_unlock(x)  UNUSED(x)
 
 #define GGML_LOCK_INITIALIZER 0
-
-typedef pthread_t ggml_thread_t;
 
 #define ggml_thread_create pthread_create
 #define ggml_thread_join   pthread_join
@@ -19279,31 +19302,6 @@ static void clear_numa_thread_affinity(void) {
 static void set_numa_thread_affinity(int thread_n) { UNUSED(thread_n);  }
 static void clear_numa_thread_affinity(void) {}
 #endif
-
-struct ggml_compute_state_shared {
-    const struct ggml_cgraph * cgraph;
-    const struct ggml_cplan  * cplan;
-
-    int64_t perf_node_start_cycles;
-    int64_t perf_node_start_time_us;
-
-    const int n_threads;
-
-    // synchronization primitives
-    atomic_int n_active;  // num active threads
-    atomic_int node_n;    // active graph node
-    atomic_int node_task; // active graph node task phase
-
-    ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
-    void * abort_callback_data;
-};
-
-struct ggml_compute_state {
-    ggml_thread_t thrd;
-    int ith;
-    struct ggml_compute_state_shared * shared;
-    enum ggml_status ec;
-};
 
 static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const struct ggml_compute_state_shared * st) {
     int64_t cycles_cur  = ggml_perf_cycles()  - st->perf_node_start_cycles;
