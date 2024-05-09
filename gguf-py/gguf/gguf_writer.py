@@ -350,7 +350,7 @@ class GGUFWriter:
     def add_name(self, name: str) -> None:
         self.add_string(Keys.General.NAME, name)
 
-    def add_quantization_version(self, quantization_version: GGMLQuantizationType) -> None:
+    def add_quantization_version(self, quantization_version: int) -> None:
         self.add_uint32(
             Keys.General.QUANTIZATION_VERSION, quantization_version)
 

@@ -142,13 +142,26 @@ class Model:
             raise ValueError(f"Mismatch between weight map and model parts for tensor names: {sym_diff}")
 
     def format_tensor_name(self, key: gguf.MODEL_TENSOR, bid: int | None = None, suffix: str = ".weight") -> str:
-        name: str = gguf.TENSOR_NAMES[key]
         if key not in gguf.MODEL_TENSORS[self.model_arch]:
             raise ValueError(f"Missing {key!r} for MODEL_TENSORS of {self.model_arch!r}")
+        name: str = gguf.TENSOR_NAMES[key]
         if "{bid}" in name:
             assert bid is not None
             name = name.format(bid=bid)
         return name + suffix
+
+    def match_model_tensor_name(self, name: str, key: gguf.MODEL_TENSOR, bid: int | None, suffix: str = ".weight") -> bool:
+        if key not in gguf.MODEL_TENSORS[self.model_arch]:
+            return False
+        key_name: str = gguf.TENSOR_NAMES[key]
+        if "{bid}" in key_name:
+            if bid is None:
+                return False
+            key_name = key_name.format(bid=bid)
+        else:
+            if bid is not None:
+                return False
+        return name == (key_name + suffix)
 
     def map_tensor_name(self, name: str, try_suffixes: Sequence[str] = (".weight", ".bias")) -> str:
         new_name = self.tensor_map.get_name(key=name, try_suffixes=try_suffixes)
@@ -218,12 +231,12 @@ class Model:
         # same as ggml_compute_fp32_to_bf16 in ggml-impl.h
         def np_fp32_to_bf16(n: np.ndarray):
             # force nan to quiet
-            n = np.where((n & 0x7fffffff) > 0x7f800000, n | (64 << 16), n)
+            n = np.where((n & 0x7fffffff) > 0x7f800000, (n & 0xffff0000) | (64 << 16), n)
             # flush subnormals to zero
             n = np.where((n & 0x7f800000) == 0, n & 0x80000000, n)
             # round to nearest even
             n = (n + (0x7fff + ((n >> 16) & 1))) >> 16
-            return n
+            return n.astype(np.int16)
 
         # Doing this row-wise is much, much faster than element-wise, hence the signature
         v_fp32_to_bf16 = np.vectorize(np_fp32_to_bf16, otypes=[np.int16], signature="(n)->(n)")
@@ -263,10 +276,25 @@ class Model:
                 extra_f16 = self.extra_f16_tensors(name, new_name, bid, n_dims)
 
                 # Most of the codebase that takes in 1D tensors or norms only handles F32 tensors
-                extra_f32 = extra_f32 or n_dims == 1 or new_name.endswith("_norm.weight")
+                # Conditions should closely match those in llama_model_quantize_internal in llama.cpp
+                extra_f32 = any(cond for cond in (
+                    extra_f32,
+                    n_dims == 1,
+                    new_name.endswith("_norm.weight"),
+                ))
+
+                # Some tensor types are always in float32
+                extra_f32 = extra_f32 or any(self.match_model_tensor_name(new_name, key, bid) for key in (
+                    gguf.MODEL_TENSOR.FFN_GATE_INP,
+                    gguf.MODEL_TENSOR.POS_EMBD,
+                    gguf.MODEL_TENSOR.TOKEN_TYPES,
+                ))
 
                 # if f16 desired, convert any float32 2-dim weight tensors to float16
-                extra_f16 = extra_f16 or (name.endswith(".weight") and n_dims >= 2)
+                extra_f16 = any(cond for cond in (
+                    extra_f16,
+                    (name.endswith(".weight") and n_dims >= 2),
+                ))
 
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
                     if self.ftype == gguf.LlamaFileType.MOSTLY_F16:
@@ -2050,12 +2078,6 @@ class BertModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
-        del new_name, bid, n_dims  # unused
-
-        # not used with get_rows, must be F32
-        return name == "embeddings.token_type_embeddings.weight"
-
 
 @Model.register("NomicBertModel")
 class NomicBertModel(BertModel):
@@ -2452,6 +2474,8 @@ def main() -> None:
 
         logger.info("Set model tokenizer")
         model_instance.set_vocab()
+
+        model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION);
 
         if args.vocab_only:
             logger.info(f"Exporting model vocab to '{fname_out}'")
