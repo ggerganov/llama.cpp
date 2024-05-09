@@ -25,15 +25,15 @@ def get_matches(regex_expr):
 
 def print_cat(mode, cat, ranges):
     if mode == "range":
-        print("const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_{} = {{".format(cat))
+        print("const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_{} = {{".format(cat)) # noqa: NP100
     if mode == "map":
-        print("const std::map<uint32_t, uint32_t> unicode_map_{} = {{".format(cat))
+        print("const std::map<uint32_t, uint32_t> unicode_map_{} = {{".format(cat)) # noqa: NP100
     for i, values in enumerate(ranges):
-        end = ",\n" if (i%4 == 3 or i+1 == len(ranges)) else ", "
+        end = ",\n" if (i % 4 == 3 or i + 1 == len(ranges)) else ", "
         values = ["0x%08X" % value for value in values]
-        print("{" + ", ".join(values) + "}", end=end)
-    print("};")
-    print("")
+        print("{" + ", ".join(values) + "}", end=end) # noqa: NP100
+    print("};") # noqa: NP100
+    print("") # noqa: NP100
 
 
 print_cat("range", "number",      get_matches(r'\p{N}'))
