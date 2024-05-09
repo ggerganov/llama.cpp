@@ -1,4 +1,7 @@
 // Formatted with: indent -npcs -nlp -i4 -l300
+/* Formatted by using emacs, with (M-x set-variable RET c-basic-offset RET 4 RET) executed. */
+/* Formatted by using emacs, with (M-x set-variable RET indent-tabs-mode RET nil RET) executed. */
+
 #pragma once
 
 #include "ggml.h"
@@ -10,7 +13,8 @@ extern "C"
 
     /* A forward declaration, to keep GCC happy. */
     void ggml_vec_dot_q5_K_q8_K(int n, float *restrict s, size_t bs, const void *restrict vx, size_t bx, const void *restrict vy, size_t by, int nrc);
-    // Force an alignment onto these vectors.
+
+    // Define our vector types, with a default alignment.
     typedef float float32x16_t __attribute__((vector_size (64), aligned(64)));
     typedef int8_t int8x16_t __attribute__((vector_size (16), aligned(16)));
     typedef uint8_t uint8x16_t __attribute__((vector_size (16), aligned(16)));
@@ -20,7 +24,7 @@ extern "C"
     void GGML_F32x16_VEC_ZERO(float32x16_t *target);
     // Convert an FP16 value to FP32(Float).
     float GGML_PHI_FP16_TO_FP32(ggml_fp16_t src);
-    // Convert an FP32 value to FP16.
+    // Convert an FP32(Float) value to FP16.
     ggml_fp16_t GGML_PHI_FP32_TO_FP16(float src);
     // Create a 5 bit int vector from a 4 bit vector and a 1 bit vector, both in packed forms.
     void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint8x16_t * dst);

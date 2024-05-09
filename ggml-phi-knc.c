@@ -1,5 +1,6 @@
 /* Xeon PHI IMCI support. */
 /* formatted by using emacs, with (M-x set-variable RET c-basic-offset RET 4 RET) executed. */
+/* Formatted by using emacs, with (M-x set-variable RET indent-tabs-mode RET nil RET) executed. */
 
 #include <stdint.h>
 
