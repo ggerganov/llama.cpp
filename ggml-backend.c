@@ -1784,12 +1784,14 @@ void ggml_backend_sched_free(ggml_backend_sched_t sched) {
 
 void ggml_backend_sched_reset(ggml_backend_sched_t sched) {
     // reset state for the next run
-    size_t hash_size = sched->hash_set.size;
-    memset(sched->hash_set.keys,      0, sizeof(sched->hash_set.keys[0])     * hash_size); // NOLINT
-    memset(sched->tensor_backend_id, -1, sizeof(sched->tensor_backend_id[0]) * hash_size);
-    memset(sched->tensor_copies,      0, sizeof(sched->tensor_copies[0])     * hash_size);
+    if (!sched->is_reset) {
+        size_t hash_size = sched->hash_set.size;
+        memset(sched->hash_set.keys,      0, sizeof(sched->hash_set.keys[0])     * hash_size); // NOLINT
+        memset(sched->tensor_backend_id, -1, sizeof(sched->tensor_backend_id[0]) * hash_size);
+        memset(sched->tensor_copies,      0, sizeof(sched->tensor_copies[0])     * hash_size);
 
-    sched->is_reset = true;
+        sched->is_reset = true;
+    }
     sched->is_alloc = false;
 }
 
