@@ -52,7 +52,19 @@ jobs:
             ftype: q4_0
             pr_comment_enabled: "true"
 
-    if: ${{ github.event.inputs.gpu-series == 'Standard_NC4as_T4_v3' || github.event.schedule || github.event.pull_request || github.head_ref == 'master' || github.ref_name == 'master' || github.event.push.ref == 'refs/heads/master' }}
+    if: |
+      inputs.gpu-series == 'Standard_NC4as_T4_v3'
+      || (
+        github.event_name == 'schedule'
+        && github.ref_name == 'master'
+        && github.repository_owner == 'ggerganov'
+      )
+      || github.event_name == 'pull_request_target'
+      || (
+        github.event_name == 'push'
+        && github.event.ref == 'refs/heads/master'
+        && github.repository_owner == 'ggerganov'
+      )
     steps:
       - name: Clone
         id: checkout
@@ -96,9 +108,7 @@ jobs:
         id: cmake_build
         run: |
           set -eux
-          mkdir build
-          cd build
-          cmake .. \
+          cmake -B build \
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
               -DLLAMA_CURL=ON \
@@ -109,7 +119,7 @@ jobs:
               -DLLAMA_FATAL_WARNINGS=OFF \
               -DLLAMA_ALL_WARNINGS=OFF \
               -DCMAKE_BUILD_TYPE=Release;
-          cmake --build . --config Release -j $(nproc) --target server
+          cmake --build build --config Release -j $(nproc) --target server
 
       - name: Download the dataset
         id: download_dataset

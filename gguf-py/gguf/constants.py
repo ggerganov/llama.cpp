@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from enum import Enum, IntEnum, auto
 from typing import Any
 
@@ -72,6 +71,7 @@ class Keys:
 
     class Tokenizer:
         MODEL            = "tokenizer.ggml.model"
+        PRE              = "tokenizer.ggml.pre"
         LIST             = "tokenizer.ggml.tokens"
         TOKEN_TYPE       = "tokenizer.ggml.token_type"
         TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # for BERT-style token types
@@ -817,6 +817,7 @@ class GGMLQuantizationType(IntEnum):
     I64     = 27
     F64     = 28
     IQ1_M   = 29
+    BF16    = 30
 
 
 class GGUFEndian(IntEnum):
@@ -853,14 +854,13 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.INT32
         # TODO: need help with 64-bit types in Python
         else:
-            print("Unknown type:", type(val))
-            sys.exit()
+            raise ValueError(f"Unknown type: {type(val)}")
 
 
 # Note: Does not support GGML_QKK_64
 QK_K = 256
 # Items here are (block size, type size)
-GGML_QUANT_SIZES = {
+GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),
     GGMLQuantizationType.Q4_0:    (32, 2 + 16),
@@ -889,6 +889,7 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.I64:     (1, 8),
     GGMLQuantizationType.F64:     (1, 8),
     GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
+    GGMLQuantizationType.BF16:    (1, 2),
 }
 
 
@@ -940,6 +941,7 @@ KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
+KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
 KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
 KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
