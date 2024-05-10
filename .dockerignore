@@ -1,6 +1,9 @@
 *.o
 *.a
 .cache/
+.git/
+.github/
+.gitignore
 .vs/
 .vscode/
 .DS_Store

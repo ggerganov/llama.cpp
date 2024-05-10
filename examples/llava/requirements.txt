@@ -1,0 +1,3 @@
+-r ../../requirements/requirements-convert.txt
+pillow~=10.2.0
+torch~=2.1.1

@@ -36,37 +36,13 @@
 #define GGML_PRINT(...) printf(__VA_ARGS__)
 
 
-float frand(void) {
+static float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
 
-int irand(int n) {
-    return rand()%n;
-}
-
-void get_random_dims(int64_t * dims, int ndims) {
-    dims[0] = dims[1] = dims[2] = dims[3] = 1;
-
-    for (int i = 0; i < ndims; i++) {
-        dims[i] = 1 + irand(4);
-    }
-}
-
-void get_random_dims_minmax(int64_t * dims, int ndims, int min, int max) {
-    dims[0] = dims[1] = dims[2] = dims[3] = 1;
-
-    for (int i = 0; i < ndims; i++) {
-        dims[i] = min + irand(max-min);
-    }
-}
-
-
-struct ggml_tensor * get_random_tensor(
-        struct ggml_context * ctx0,
-        int ndims,
-        int64_t ne[],
-        float fmin,
-        float fmax) {
+static struct ggml_tensor * get_random_tensor(
+    struct ggml_context * ctx0, int ndims, int64_t ne[], float fmin, float fmax
+) {
     struct ggml_tensor * result = ggml_new_tensor(ctx0, GGML_TYPE_F32, ndims, ne);
 
     switch (ndims) {
@@ -104,17 +80,9 @@ struct ggml_tensor * get_random_tensor(
             break;
         default:
             assert(false);
-    };
+    }
 
     return result;
-}
-
-float get_element(const struct ggml_tensor * t, int idx) {
-    return ((float *)t->data)[idx];
-}
-
-void set_element(struct ggml_tensor * t, int idx, float value) {
-    ((float *)t->data)[idx] = value;
 }
 
 int main(void) {
@@ -127,7 +95,7 @@ int main(void) {
     struct ggml_context * ctx = ggml_init(params);
 
     int64_t ne1[4] = {4, 128, 1, 1};
-    int64_t ne2[4] = {4, 256, 1, 1};;
+    int64_t ne2[4] = {4, 256, 1, 1};
     int64_t ne3[4] = {128, 256, 1, 1};
 
     struct ggml_tensor * a = get_random_tensor(ctx, 2, ne1, -1, +1);
@@ -141,21 +109,22 @@ int main(void) {
     struct ggml_tensor * d  = ggml_sub(ctx, c, ab);
     struct ggml_tensor * e  = ggml_sum(ctx, ggml_sqr(ctx, d));
 
-    struct ggml_cgraph ge = ggml_build_forward(e);
-    ggml_graph_reset(&ge);
+    struct ggml_cgraph * ge = ggml_new_graph_custom(ctx, GGML_DEFAULT_GRAPH_SIZE, true);
+    ggml_build_forward_expand(ge, e);
+    ggml_graph_reset(ge);
 
-    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
+    ggml_graph_compute_with_ctx(ctx, ge, /*n_threads*/ 1);
 
     const float fe = ggml_get_f32_1d(e, 0);
     printf("%s: e = %.4f\n", __func__, fe);
 
-    struct ggml_opt_params opt_params = ggml_opt_default_params(GGML_OPT_ADAM);
+    struct ggml_opt_params opt_params = ggml_opt_default_params(GGML_OPT_TYPE_ADAM);
 
     ggml_opt(ctx, opt_params, e);
 
-    ggml_graph_reset(&ge);
+    ggml_graph_reset(ge);
 
-    ggml_graph_compute_with_ctx(ctx, &ge, /*n_threads*/ 1);
+    ggml_graph_compute_with_ctx(ctx, ge, /*n_threads*/ 1);
 
     const float fe_opt = ggml_get_f32_1d(e, 0);
     printf("%s: original  e = %.4f\n", __func__, fe);

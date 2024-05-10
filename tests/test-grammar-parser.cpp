@@ -38,8 +38,8 @@ term  ::= [0-9]+)""";
         // pretty print error message before asserting
         if (expected_pair.first != key || expected_pair.second != value)
         {
-            fprintf(stderr, "expected_pair: %s, %d\n", expected_pair.first.c_str(), expected_pair.second);
-            fprintf(stderr, "actual_pair: %s, %d\n", key.c_str(), value);
+            fprintf(stderr, "expected_pair: %s, %u\n", expected_pair.first.c_str(), expected_pair.second);
+            fprintf(stderr, "actual_pair: %s, %u\n", key.c_str(), value);
             fprintf(stderr, "expected_pair != actual_pair\n");
         }
 
@@ -96,9 +96,9 @@ term  ::= [0-9]+)""";
             // pretty print error message before asserting
             if (expected_element.type != element.type || expected_element.value != element.value)
             {
-                fprintf(stderr, "index: %d\n", index);
-                fprintf(stderr, "expected_element: %d, %d\n", expected_element.type, expected_element.value);
-                fprintf(stderr, "actual_element: %d, %d\n", element.type, element.value);
+                fprintf(stderr, "index: %u\n", index);
+                fprintf(stderr, "expected_element: %d, %u\n", expected_element.type, expected_element.value);
+                fprintf(stderr, "actual_element: %d, %u\n", element.type, element.value);
                 fprintf(stderr, "expected_element != actual_element\n");
             }
 
@@ -144,8 +144,8 @@ term  ::= [0-9]+)""";
         // pretty print error message before asserting
         if (expected_pair.first != key || expected_pair.second != value)
         {
-            fprintf(stderr, "expected_pair: %s, %d\n", expected_pair.first.c_str(), expected_pair.second);
-            fprintf(stderr, "actual_pair: %s, %d\n", key.c_str(), value);
+            fprintf(stderr, "expected_pair: %s, %u\n", expected_pair.first.c_str(), expected_pair.second);
+            fprintf(stderr, "actual_pair: %s, %u\n", key.c_str(), value);
             fprintf(stderr, "expected_pair != actual_pair\n");
         }
 
@@ -235,9 +235,9 @@ term  ::= [0-9]+)""";
             // pretty print error message before asserting
             if (expected_element.type != element.type || expected_element.value != element.value)
             {
-                fprintf(stderr, "index: %d\n", index);
-                fprintf(stderr, "expected_element: %d, %d\n", expected_element.type, expected_element.value);
-                fprintf(stderr, "actual_element: %d, %d\n", element.type, element.value);
+                fprintf(stderr, "index: %u\n", index);
+                fprintf(stderr, "expected_element: %d, %u\n", expected_element.type, expected_element.value);
+                fprintf(stderr, "actual_element: %d, %u\n", element.type, element.value);
                 fprintf(stderr, "expected_element != actual_element\n");
             }
 

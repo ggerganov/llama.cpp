@@ -2,6 +2,7 @@
 *.a
 *.so
 *.gguf
+*.gguf.json
 *.bin
 *.exe
 *.dll
@@ -10,9 +11,15 @@
 *.gcno
 *.gcda
 *.dot
+*.bat
+*.tmp
+*.metallib
+*.etag
+*.lastModified
 .DS_Store
 .build/
 .cache/
+.ccls-cache/
 .direnv/
 .envrc
 .swiftpm
@@ -20,11 +27,16 @@
 .clang-tidy
 .vs/
 .vscode/
+.idea/
+
+ggml-metal-embed.metal
 
 lcov-report/
 gcovr-report/
 
-build*/
+build*
+!build.zig
+cmake-build-*
 out/
 tmp/
 
@@ -38,23 +50,43 @@ models-mnt
 /convert-llama2c-to-ggml
 /embd-input-test
 /embedding
+/eval-callback
 /gguf
 /gguf-llama-simple
+/gguf-split
+/gritlm
+/imatrix
+/infill
 /libllama.so
 /llama-bench
+/llava-cli
+/lookahead
+/lookup
+/lookup-create
+/lookup-merge
+/lookup-stats
 /main
 /metal
+/passkey
 /perplexity
+/q8dot
 /quantize
 /quantize-stats
 /result
 /save-load-state
 /server
 /simple
+/batched
+/batched-bench
+/export-lora
+/finetune
+/retrieval
 /speculative
+/parallel
 /train-text-from-scratch
+/tokenize
 /vdot
-build-info.h
+/common/build-info.cpp
 arm_neon.h
 compile_commands.json
 CMakeSettings.json
@@ -70,19 +102,25 @@ qnt-*.txt
 perf-*.txt
 
 examples/jeopardy/results.txt
+examples/server/*.html.hpp
+examples/server/*.js.hpp
+examples/server/*.mjs.hpp
 
 poetry.lock
 poetry.toml
+nppBackup
 
 # Test binaries
-tests/test-grammar-parser
-tests/test-llama-grammar
-tests/test-double-float
-tests/test-grad0
-tests/test-opt
-tests/test-quantize-fns
-tests/test-quantize-perf
-tests/test-sampling
-tests/test-tokenizer-0-llama
-tests/test-tokenizer-0-falcon
-tests/test-tokenizer-1
+/tests/test-grammar-parser
+/tests/test-llama-grammar
+/tests/test-double-float
+/tests/test-grad0
+/tests/test-opt
+/tests/test-quantize-fns
+/tests/test-quantize-perf
+/tests/test-sampling
+/tests/test-tokenizer-0
+/tests/test-tokenizer-1-spm
+/tests/test-tokenizer-1-bpe
+/tests/test-rope
+/tests/test-backend-ops

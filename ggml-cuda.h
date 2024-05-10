@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ggml.h"
+#include "ggml-backend.h"
 
 #ifdef GGML_USE_HIPBLAS
 #define GGML_CUDA_NAME "ROCm"
@@ -16,30 +17,26 @@ extern "C" {
 
 #define GGML_CUDA_MAX_DEVICES       16
 
-GGML_API void   ggml_init_cublas(void);
-GGML_API void * ggml_cuda_host_malloc(size_t size);
-GGML_API void   ggml_cuda_host_free(void * ptr);
+// backend API
+GGML_API GGML_CALL ggml_backend_t ggml_backend_cuda_init(int device);
 
-GGML_API bool   ggml_cuda_can_mul_mat(const struct ggml_tensor * src0, const struct ggml_tensor * src1, struct ggml_tensor * dst);
-GGML_API void   ggml_cuda_set_tensor_split(const float * tensor_split);
-GGML_API void   ggml_cuda_transform_tensor(void * data, struct ggml_tensor * tensor);
-GGML_API void   ggml_cuda_free_data(struct ggml_tensor * tensor);
+GGML_API GGML_CALL bool ggml_backend_is_cuda(ggml_backend_t backend);
 
-GGML_API void   ggml_cuda_assign_buffers(struct ggml_tensor * tensor);
-GGML_API void   ggml_cuda_assign_buffers_no_scratch(struct ggml_tensor * tensor);
-GGML_API void   ggml_cuda_assign_buffers_force_inplace(struct ggml_tensor * tensor);
+// device buffer
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_buffer_type(int device);
 
-GGML_API void   ggml_cuda_assign_buffers_no_alloc(struct ggml_tensor * tensor);
-GGML_API void   ggml_cuda_assign_scratch_offset(struct ggml_tensor * tensor, size_t offset);
+// split tensor buffer that splits matrices by rows across multiple devices
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_split_buffer_type(const float * tensor_split);
 
-GGML_API void   ggml_cuda_set_main_device(int main_device);
-GGML_API void   ggml_cuda_set_mul_mat_q(bool mul_mat_q);
-GGML_API void   ggml_cuda_set_scratch_size(size_t scratch_size);
-GGML_API void   ggml_cuda_free_scratch(void);
-GGML_API bool   ggml_cuda_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor);
+// pinned host buffer for use with the CPU backend for faster copies between CPU and GPU
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_cuda_host_buffer_type(void);
 
-GGML_API int    ggml_cuda_get_device_count(void);
-GGML_API void   ggml_cuda_get_device_description(int device, char * description, size_t description_size);
+GGML_API GGML_CALL int  ggml_backend_cuda_get_device_count(void);
+GGML_API GGML_CALL void ggml_backend_cuda_get_device_description(int device, char * description, size_t description_size);
+GGML_API GGML_CALL void ggml_backend_cuda_get_device_memory(int device, size_t * free, size_t * total);
+
+GGML_API GGML_CALL bool ggml_backend_cuda_register_host_buffer(void * buffer, size_t size);
+GGML_API GGML_CALL void ggml_backend_cuda_unregister_host_buffer(void * buffer);
 
 #ifdef  __cplusplus
 }
