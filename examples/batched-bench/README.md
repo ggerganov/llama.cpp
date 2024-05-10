@@ -10,16 +10,16 @@ There are 2 modes of operation:
 - `prompt is shared` - there is a common prompt of size `PP` used by all batches (i.e. `N_KV = PP + B*TG`)
 
 ```bash
-./batched-bench MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL] [MMQ] <PP> <TG> <PL>
+./batched-bench MODEL_PATH [N_KV_MAX] [N_BATCH] [N_UBATCH] [IS_PP_SHARED] [NGL] [MMQ] <PP> <TG> <PL>
 
 # LLaMA 7B, F16, N_KV_MAX = 16384 (8GB), prompt not shared
-./batched-bench ./models/llama-7b/ggml-model-f16.gguf 16384 0 99
+./batched-bench ./models/llama-7b/ggml-model-f16.gguf 16384 2048 512 0 99
 
 # LLaMA 7B, Q8_0, N_KV_MAX = 16384 (8GB), prompt is shared
-./batched-bench ./models/llama-7b/ggml-model-q8_0.gguf 16384 1 99
+./batched-bench ./models/llama-7b/ggml-model-q8_0.gguf 16384 2048 512 1 99
 
 # custom set of batches
-./batched-bench ./models/llama-7b/ggml-model-q8_0.gguf 2048 0 999 0 128,256,512 128,256 1,2,4,8,16,32
+./batched-bench ./models/llama-7b/ggml-model-q8_0.gguf 2048 512 512 0 999 0 128,256,512 128,256 1,2,4,8,16,32
 ```
 
 ## Sample results

@@ -43,6 +43,8 @@ else()
     set(LLAMA_METAL_DEFAULT OFF)
 endif()
 
+set(LLAMA_LLAMAFILE_DEFAULT ON)
+
 # general
 option(BUILD_SHARED_LIBS                "build shared libraries"                                OFF)
 option(LLAMA_STATIC                     "llama: static link libraries"                          OFF)
@@ -88,6 +90,7 @@ endif()
 # 3rd party libs
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
 option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
+option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"                       ${LLAMA_LLAMAFILE_DEFAULT})
 set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
 option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
@@ -100,6 +103,8 @@ set(LLAMA_CUDA_KQUANTS_ITER "2" CACHE STRING "llama: iters./thread per block for
 set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_CUDA_NO_PEER_COPY               "llama: do not use peer to peer copies"            OFF)
+option(LLAMA_CUDA_NO_VMM                     "llama: do not try to use CUDA VMM"                OFF)
+
 option(LLAMA_CURL                            "llama: use libcurl to download model from an URL" OFF)
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
 option(LLAMA_HIP_UMA                         "llama: use HIP unified memory architecture"       OFF)
@@ -113,6 +118,9 @@ option(LLAMA_METAL                           "llama: use Metal"                 
 option(LLAMA_METAL_NDEBUG                    "llama: disable Metal debugging"                   OFF)
 option(LLAMA_METAL_SHADER_DEBUG              "llama: compile Metal with -fno-fast-math"         OFF)
 option(LLAMA_METAL_EMBED_LIBRARY             "llama: embed Metal library"                       OFF)
+set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
+                                             "llama: metal minimum macOS version")
+set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
@@ -250,6 +258,16 @@ if (LLAMA_METAL)
             set(XC_FLAGS -O3)
         endif()
 
+        # Append macOS metal versioning flags
+        if (LLAMA_METAL_MACOSX_VERSION_MIN)
+            message(STATUS "Adding -mmacosx-version-min=${LLAMA_METAL_MACOSX_VERSION_MIN} flag to metal compilation")
+            list(APPEND XC_FLAGS -mmacosx-version-min=${LLAMA_METAL_MACOSX_VERSION_MIN})
+        endif()
+        if (LLAMA_METAL_STD)
+            message(STATUS "Adding -std=${LLAMA_METAL_STD} flag to metal compilation")
+            list(APPEND XC_FLAGS -std=${LLAMA_METAL_STD})
+        endif()
+
         add_custom_command(
             OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/default.metallib
             COMMAND xcrun -sdk macosx metal    ${XC_FLAGS} -c ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.metal -o ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ggml-metal.air
@@ -273,6 +291,7 @@ if (LLAMA_METAL)
         ${METALKIT_FRAMEWORK}
         )
 endif()
+
 if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
@@ -355,6 +374,13 @@ if (LLAMA_BLAS)
     endif()
 endif()
 
+if (LLAMA_LLAMAFILE)
+    add_compile_definitions(GGML_USE_LLAMAFILE)
+
+    set(GGML_HEADERS_LLAMAFILE sgemm.h)
+    set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
+endif()
+
 if (LLAMA_QKK_64)
     add_compile_definitions(GGML_QKK_64)
 endif()
@@ -379,11 +405,15 @@ if (LLAMA_CUDA)
         list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
 
         add_compile_definitions(GGML_USE_CUDA)
+        add_compile_definitions(GGML_CUDA_USE_GRAPHS)
         if (LLAMA_CUDA_FORCE_DMMV)
             add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
         if (LLAMA_CUDA_FORCE_MMQ)
             add_compile_definitions(GGML_CUDA_FORCE_MMQ)
+        endif()
+        if (LLAMA_CUDA_NO_VMM)
+            add_compile_definitions(GGML_CUDA_NO_VMM)
         endif()
         add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
         add_compile_definitions(GGML_CUDA_MMV_Y=${LLAMA_CUDA_MMV_Y})
@@ -401,7 +431,7 @@ if (LLAMA_CUDA)
 
         if (LLAMA_STATIC)
             if (WIN32)
-                # As of 12.3.1 CUDA Tookit for Windows does not offer a static cublas library
+                # As of 12.3.1 CUDA Toolkit for Windows does not offer a static cublas library
                 set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas CUDA::cublasLt)
             else ()
                 set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
@@ -410,7 +440,11 @@ if (LLAMA_CUDA)
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart CUDA::cublas CUDA::cublasLt)
         endif()
 
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cuda_driver)
+        if (LLAMA_CUDA_NO_VMM)
+            # No VMM requested, no need to link directly with the cuda driver lib (libcuda.so)
+        else()
+            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cuda_driver) # required by cuDeviceGetAttribute(), cuMemGetAllocationGranularity(...), ...
+        endif()
 
     if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
         # 52 == lowest CUDA 12 standard
@@ -1138,15 +1172,16 @@ add_library(ggml OBJECT
             ggml-backend.h
             ggml-quants.c
             ggml-quants.h
-            ${GGML_SOURCES_CUDA}    ${GGML_HEADERS_CUDA}
-            ${GGML_SOURCES_OPENCL}  ${GGML_HEADERS_OPENCL}
-            ${GGML_SOURCES_METAL}   ${GGML_HEADERS_METAL}
-            ${GGML_SOURCES_MPI}     ${GGML_HEADERS_MPI}
-            ${GGML_SOURCES_EXTRA}   ${GGML_HEADERS_EXTRA}
-            ${GGML_SOURCES_SYCL}    ${GGML_HEADERS_SYCL}
-            ${GGML_SOURCES_KOMPUTE} ${GGML_HEADERS_KOMPUTE}
-            ${GGML_SOURCES_VULKAN}  ${GGML_HEADERS_VULKAN}
-            ${GGML_SOURCES_ROCM}    ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
+            ${GGML_SOURCES_OPENCL}    ${GGML_HEADERS_OPENCL}
+            ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
+            ${GGML_SOURCES_MPI}       ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_EXTRA}     ${GGML_HEADERS_EXTRA}
+            ${GGML_SOURCES_SYCL}      ${GGML_HEADERS_SYCL}
+            ${GGML_SOURCES_KOMPUTE}   ${GGML_HEADERS_KOMPUTE}
+            ${GGML_SOURCES_VULKAN}    ${GGML_HEADERS_VULKAN}
+            ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
             )
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})

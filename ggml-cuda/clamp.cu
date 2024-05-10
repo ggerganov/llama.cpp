@@ -31,5 +31,4 @@ void ggml_cuda_op_clamp(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     memcpy(&max, (float *) dst->op_params + 1, sizeof(float));
 
     clamp_f32_cuda(src0_d, dst_d, min, max, ggml_nelements(src0), stream);
-    CUDA_CHECK(cudaGetLastError());
 }
