@@ -12,7 +12,7 @@ int main(int argc, char ** argv) {
     auto * model_path = get_model_or_exit(argc, argv);
 
     std::thread([&model_path]() {
-        llama_backend_init(false);
+        llama_backend_init();
         auto * model = llama_load_model_from_file(model_path, llama_model_default_params());
         auto * ctx = llama_new_context_with_model(model, llama_context_default_params());
         llama_free(ctx);

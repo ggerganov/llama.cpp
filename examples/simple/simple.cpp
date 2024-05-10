@@ -31,7 +31,8 @@ int main(int argc, char ** argv) {
 
     // init LLM
 
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     // initialize the model
 
@@ -132,8 +133,8 @@ int main(int argc, char ** argv) {
             // sample the most likely token
             const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
-            // is it an end of stream?
-            if (new_token_id == llama_token_eos(model) || n_cur == n_len) {
+            // is it an end of generation?
+            if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
                 LOG_TEE("\n");
 
                 break;

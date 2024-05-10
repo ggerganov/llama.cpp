@@ -17,7 +17,7 @@ int main(int argc, char ** argv) {
 
     const bool printing_ids = argc > 3 && std::string(argv[3]) == "--ids";
 
-    llama_backend_init(false);
+    llama_backend_init();
 
     llama_model_params model_params = llama_model_default_params();
     model_params.vocab_only = true;
@@ -26,11 +26,9 @@ int main(int argc, char ** argv) {
     llama_context_params ctx_params = llama_context_default_params();
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
-    const bool add_bos = llama_should_add_bos_token(model);
-
     std::vector<llama_token> tokens;
 
-    tokens = ::llama_tokenize(model, prompt, add_bos, true);
+    tokens = ::llama_tokenize(model, prompt, true, true);
 
     for (int i = 0; i < (int) tokens.size(); i++) {
         if (printing_ids) {

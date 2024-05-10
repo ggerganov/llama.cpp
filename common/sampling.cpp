@@ -1,4 +1,6 @@
+#define LLAMA_API_INTERNAL
 #include "sampling.h"
+#include <random>
 
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
     struct llama_sampling_context * result = new llama_sampling_context();
@@ -17,6 +19,13 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
             return nullptr;
         }
 
+        // Ensure that there is a "root" node.
+        if (result->parsed_grammar.symbol_ids.find("root") == result->parsed_grammar.symbol_ids.end()) {
+            fprintf(stderr, "%s: grammar does not contain a 'root' symbol\n", __func__);
+            delete result;
+            return nullptr;
+        }
+
         std::vector<const llama_grammar_element *> grammar_rules(result->parsed_grammar.c_rules());
 
         result->grammar = llama_grammar_init(
@@ -25,6 +34,10 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
     }
 
     result->prev.resize(params.n_prev);
+
+    result->n_considered = 0;
+
+    llama_sampling_set_rng_seed(result, params.seed);
 
     return result;
 }
@@ -53,6 +66,14 @@ void llama_sampling_reset(llama_sampling_context * ctx) {
 
     std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
     ctx->cur.clear();
+    ctx->n_considered = 0;
+}
+
+void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t seed) {
+    if (seed == LLAMA_DEFAULT_SEED) {
+        seed = std::random_device{}();
+    }
+    ctx->rng.seed(seed);
 }
 
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst) {
@@ -103,15 +124,10 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
 std::string llama_sampling_order_print(const llama_sampling_params & params) {
     std::string result = "CFG -> Penalties ";
     if (params.mirostat == 0) {
-        for (auto s : params.samplers_sequence) {
-            switch (s) {
-                case 'k': result += "-> top_k "; break;
-                case 'f': result += "-> tfs_z "; break;
-                case 'y': result += "-> typical_p "; break;
-                case 'p': result += "-> top_p "; break;
-                case 'm': result += "-> min_p "; break;
-                case 't': result += "-> temp "; break;
-                default : break;
+        for (auto sampler_type : params.samplers_sequence) {
+            const auto sampler_type_name = sampler_type_to_name_string(sampler_type);
+            if (!sampler_type_name.empty()) {
+                result += "-> " + sampler_type_name + " ";
             }
         }
     } else {
@@ -126,9 +142,7 @@ static void sampler_queue(
                    struct llama_context * ctx_main,
             const llama_sampling_params & params,
                  llama_token_data_array & cur_p,
-                                 size_t & min_keep) {
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
-
+                                 size_t   min_keep) {
     const float         temp              = params.temp;
     const float         dynatemp_range    = params.dynatemp_range;
     const float         dynatemp_exponent = params.dynatemp_exponent;
@@ -137,16 +151,16 @@ static void sampler_queue(
     const float         min_p             = params.min_p;
     const float         tfs_z             = params.tfs_z;
     const float         typical_p         = params.typical_p;
-    const std::string & samplers_sequence = params.samplers_sequence;
+    const std::vector<llama_sampler_type> & samplers_sequence = params.samplers_sequence;
 
-    for (auto s : samplers_sequence) {
-        switch (s){
-            case 'k': llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep); break;
-            case 'f': llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep); break;
-            case 'y': llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
-            case 'p': llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
-            case 'm': llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
-            case 't':
+    for (auto sampler_type : samplers_sequence) {
+        switch (sampler_type) {
+            case llama_sampler_type::TOP_K    : llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep); break;
+            case llama_sampler_type::TFS_Z    : llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep); break;
+            case llama_sampler_type::TYPICAL_P: llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
+            case llama_sampler_type::TOP_P    : llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
+            case llama_sampler_type::MIN_P    : llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
+            case llama_sampler_type::TEMPERATURE:
                 if (dynatemp_range > 0) {
                     float dynatemp_min = std::max(0.0f, temp - dynatemp_range);
                     float dynatemp_max = std::max(0.0f, temp + dynatemp_range);
@@ -168,32 +182,112 @@ static llama_token llama_sampling_sample_impl(
                   bool is_resampling) {  // Add a parameter to indicate if we are resampling
     const llama_sampling_params & params = ctx_sampling->params;
 
+    const float   temp            = params.temp;
+    const int     mirostat        = params.mirostat;
+    const float   mirostat_tau    = params.mirostat_tau;
+    const float   mirostat_eta    = params.mirostat_eta;
+
+    std::vector<float> original_logits;
+    auto cur_p = llama_sampling_prepare(ctx_sampling, ctx_main, ctx_cfg, idx, !is_resampling, &original_logits);
+    if (!is_resampling) {
+        GGML_ASSERT(!original_logits.empty());
+    }
+    llama_token id = 0;
+    // Get a pointer to the logits
+    float * logits = llama_get_logits_ith(ctx_main, idx);
+
+    if (temp < 0.0) {
+        // greedy sampling, with probs
+        llama_sample_softmax(ctx_main, &cur_p);
+        id = cur_p.data[0].id;
+    } else if (temp == 0.0) {
+        // greedy sampling, no probs
+        id = llama_sample_token_greedy(ctx_main, &cur_p);
+    } else {
+        if (mirostat == 1) {
+            const int mirostat_m = 100;
+            llama_sample_temp(ctx_main, &cur_p, temp);
+            id = llama_sample_token_mirostat(ctx_main, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &ctx_sampling->mirostat_mu);
+        } else if (mirostat == 2) {
+            llama_sample_temp(ctx_main, &cur_p, temp);
+            id = llama_sample_token_mirostat_v2(ctx_main, &cur_p, mirostat_tau, mirostat_eta, &ctx_sampling->mirostat_mu);
+        } else {
+            // temperature sampling
+            size_t min_keep = std::max(1, params.min_keep);
+
+            sampler_queue(ctx_main, params, cur_p, min_keep);
+
+            id = llama_sample_token_with_rng(ctx_main, &cur_p, ctx_sampling->rng);
+
+            //{
+            //    const int n_top = 10;
+            //    LOG("top %d candidates:\n", n_top);
+
+            //    for (int i = 0; i < n_top; i++) {
+            //        const llama_token id = cur_p.data[i].id;
+            //        (void)id; // To avoid a warning that id is unused when logging is disabled.
+            //        LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(ctx_main, id).c_str(), cur_p.data[i].p);
+            //    }
+            //}
+
+            //LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx_main, id).c_str());
+        }
+    }
+
+    if (ctx_sampling->grammar != NULL && !is_resampling) {
+        // Create an array with a single token data element for the sampled id
+        llama_token_data single_token_data = {id, logits[id], 0.0f};
+        llama_token_data_array single_token_data_array = { &single_token_data, 1, false };
+
+        // Apply grammar constraints to the single token
+        llama_sample_grammar(ctx_main, &single_token_data_array, ctx_sampling->grammar);
+
+        // Check if the token is valid according to the grammar by seeing if its logit has been set to -INFINITY
+        bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
+
+        // If the token is not valid according to the grammar, perform resampling
+        if (!is_valid) {
+            LOG("Resampling because token %d: '%s' does not meet grammar rules\n", id, llama_token_to_piece(ctx_main, id).c_str());
+
+            // Restore logits from the copy
+            std::copy(original_logits.begin(), original_logits.end(), logits);
+
+            return llama_sampling_sample_impl(ctx_sampling, ctx_main, ctx_cfg, idx, true);  // Pass true for is_resampling
+        }
+    }
+
+    ctx_sampling->n_considered = cur_p.size;
+
+    return id;
+}
+
+static llama_token_data_array llama_sampling_prepare_impl(
+                  struct llama_sampling_context * ctx_sampling,
+                  struct llama_context * ctx_main,
+                  struct llama_context * ctx_cfg,
+                  const int idx,
+                  bool apply_grammar,
+                  std::vector<float> * original_logits) {
+    const llama_sampling_params & params = ctx_sampling->params;
+
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
 
-    const float   temp            = params.temp;
     const int32_t penalty_last_n  = params.penalty_last_n < 0 ? params.n_prev : params.penalty_last_n;
     const float   penalty_repeat  = params.penalty_repeat;
     const float   penalty_freq    = params.penalty_freq;
     const float   penalty_present = params.penalty_present;
-    const int     mirostat        = params.mirostat;
-    const float   mirostat_tau    = params.mirostat_tau;
-    const float   mirostat_eta    = params.mirostat_eta;
+
     const bool    penalize_nl     = params.penalize_nl;
 
     auto & prev = ctx_sampling->prev;
     auto & cur  = ctx_sampling->cur;
 
-    llama_token id = 0;
-
     // Get a pointer to the logits
     float * logits = llama_get_logits_ith(ctx_main, idx);
 
-    // Declare original_logits at the beginning of the function scope
-    std::vector<float> original_logits;
-
-    if (!is_resampling) {
-        // Only make a copy of the original logits if we are not in the resampling phase, not sure if I actually have to do this.
-        original_logits = std::vector<float>(logits, logits + llama_n_vocab(llama_get_model(ctx_main)));
+    if (apply_grammar && original_logits != NULL) {
+        // Only make a copy of the original logits if we are not applying grammar checks, not sure if I actually have to do this.
+        *original_logits = {logits, logits + llama_n_vocab(llama_get_model(ctx_main))};
     }
 
     // apply params.logit_bias map
@@ -234,72 +328,12 @@ static llama_token llama_sampling_sample_impl(
         }
     }
 
-    // If we are in the resampling phase, apply grammar checks before sampling logic
-    if (is_resampling && ctx_sampling->grammar != NULL) {
+    // apply grammar checks before sampling logic
+    if (apply_grammar && ctx_sampling->grammar != NULL) {
         llama_sample_grammar(ctx_main, &cur_p, ctx_sampling->grammar);
     }
 
-    if (temp < 0.0) {
-        // greedy sampling, with probs
-        llama_sample_softmax(ctx_main, &cur_p);
-        id = cur_p.data[0].id;
-    } else if (temp == 0.0) {
-        // greedy sampling, no probs
-        id = llama_sample_token_greedy(ctx_main, &cur_p);
-    } else {
-        if (mirostat == 1) {
-            const int mirostat_m = 100;
-            llama_sample_temp(ctx_main, &cur_p, temp);
-            id = llama_sample_token_mirostat(ctx_main, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &ctx_sampling->mirostat_mu);
-        } else if (mirostat == 2) {
-            llama_sample_temp(ctx_main, &cur_p, temp);
-            id = llama_sample_token_mirostat_v2(ctx_main, &cur_p, mirostat_tau, mirostat_eta, &ctx_sampling->mirostat_mu);
-        } else {
-            // temperature sampling
-            size_t min_keep = std::max(1, params.n_probs);
-
-            sampler_queue(ctx_main, params, cur_p, min_keep);
-
-            id = llama_sample_token(ctx_main, &cur_p);
-
-            //{
-            //    const int n_top = 10;
-            //    LOG("top %d candidates:\n", n_top);
-
-            //    for (int i = 0; i < n_top; i++) {
-            //        const llama_token id = cur_p.data[i].id;
-            //        (void)id; // To avoid a warning that id is unused when logging is disabled.
-            //        LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(ctx_main, id).c_str(), cur_p.data[i].p);
-            //    }
-            //}
-
-            LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx_main, id).c_str());
-        }
-    }
-
-    if (ctx_sampling->grammar != NULL && !is_resampling) {
-        // Create an array with a single token data element for the sampled id
-        llama_token_data single_token_data = {id, logits[id], 0.0f};
-        llama_token_data_array single_token_data_array = { &single_token_data, 1, false };
-
-        // Apply grammar constraints to the single token
-        llama_sample_grammar(ctx_main, &single_token_data_array, ctx_sampling->grammar);
-
-        // Check if the token is valid according to the grammar by seeing if its logit has been set to -INFINITY
-        bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
-
-        // If the token is not valid according to the grammar, perform resampling
-        if (!is_valid) {
-            LOG("Resampling because token %d: '%s' does not meet grammar rules\n", id, llama_token_to_piece(ctx_main, id).c_str());
-
-            // Restore logits from the copy
-            std::copy(original_logits.begin(), original_logits.end(), logits);
-
-            return llama_sampling_sample_impl(ctx_sampling, ctx_main, ctx_cfg, idx, true);  // Pass true for is_resampling
-        }
-    }
-
-    return id;
+    return cur_p;
 }
 
 llama_token llama_sampling_sample(
@@ -309,6 +343,16 @@ llama_token llama_sampling_sample(
                   const int idx) {
     // Call the implementation function with is_resampling set to false by default
     return llama_sampling_sample_impl(ctx_sampling, ctx_main, ctx_cfg, idx, false);
+}
+
+llama_token_data_array llama_sampling_prepare(
+                  struct llama_sampling_context * ctx_sampling,
+                  struct llama_context * ctx_main,
+                  struct llama_context * ctx_cfg,
+                  const int idx,
+                  bool apply_grammar,
+                  std::vector<float> * original_logits) {
+    return llama_sampling_prepare_impl(ctx_sampling,ctx_main, ctx_cfg, idx, apply_grammar, original_logits);
 }
 
 void llama_sampling_accept(

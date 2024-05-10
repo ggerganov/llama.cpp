@@ -54,7 +54,8 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     // init llama.cpp
-    llama_backend_init(params.numa);
+    llama_backend_init();
+    llama_numa_init(params.numa);
 
     llama_model * model = NULL;
     llama_context * ctx = NULL;
@@ -63,13 +64,10 @@ int main(int argc, char ** argv) {
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
     // Tokenize the prompt
-    const bool add_bos = llama_should_add_bos_token(model);
-    LOG("add_bos tgt: %d\n", add_bos);
-
     std::vector<llama_token> inp;
     std::vector<llama_token> all;
 
-    inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
+    inp = ::llama_tokenize(ctx, params.prompt, true, true);
     all = inp;
 
     const int max_context_size     = llama_n_ctx(ctx);
@@ -301,7 +299,7 @@ int main(int argc, char ** argv) {
                 }
                 fflush(stdout);
 
-                if (id == llama_token_eos(model)) {
+                if (llama_token_is_eog(model, id)) {
                     has_eos = true;
                 }
 

@@ -8,6 +8,10 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   nix-eval:
     strategy:
@@ -23,8 +27,8 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         extra-conf: |
-          extra-substituters = https://${{ vars.CACHIX_NAME }}.cachix.org https://cuda-maintainers.cachix.org
-          extra-trusted-public-keys = ${{ vars.CACHIX_PUBLIC_KEY }} cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=
+          extra-substituters = https://llama-cpp.cachix.org https://cuda-maintainers.cachix.org
+          extra-trusted-public-keys = llama-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc= cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=
     - uses: DeterminateSystems/magic-nix-cache-action@v2
       with:
         upstream-cache: https://${{ matrix.cachixName }}.cachix.org
@@ -37,7 +41,6 @@ jobs:
           --flake
           ".#packages.$(nix eval --raw --impure --expr builtins.currentSystem)"
   nix-build:
-    if: ${{ vars.CACHIX_NAME != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -51,8 +54,8 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         extra-conf: |
-          extra-substituters = https://${{ vars.CACHIX_NAME }}.cachix.org https://cuda-maintainers.cachix.org
-          extra-trusted-public-keys = ${{ vars.CACHIX_PUBLIC_KEY }} cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=
+          extra-substituters = https://llama-cpp.cachix.org https://cuda-maintainers.cachix.org
+          extra-trusted-public-keys = llama-cpp.cachix.org-1:H75X+w83wUKTIPSO1KWy9ADUrzThyGs8P5tmAbkWhQc= cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E=
     - uses: DeterminateSystems/magic-nix-cache-action@v2
       with:
         upstream-cache: https://${{ matrix.cachixName }}.cachix.org
@@ -60,7 +63,7 @@ jobs:
       uses: cachix/cachix-action@v13
       with:
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        name: ${{ vars.CACHIX_NAME }}
+        name: llama-cpp
     - name: Build
       run: >
           nix run github:Mic92/nix-fast-build
