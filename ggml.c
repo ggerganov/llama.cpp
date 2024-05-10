@@ -1578,6 +1578,8 @@ struct ggml_compute_state_shared {
 
     ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
     void* abort_callback_data;
+
+    atomic_int current_chunk; // currently processing chunk during Mat_Mul, shared between all the threads.
 };
 
 struct ggml_compute_state {
@@ -12003,6 +12005,8 @@ UseGgmlGemm1:;
         if (ith != 0) {
             return;
         }
+        //Every thread starts at ith, so the first unprocessed chunk is nth.  This save a bit of coordination right at the start.
+        atomic_store(&state->shared->current_chunk, nth);
         if (src1->type != vec_dot_type) {
             char * wdata = params->wdata;
             const size_t row_size = ggml_row_size(vec_dot_type, ne10);
