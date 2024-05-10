@@ -279,15 +279,18 @@ std::string str(std::vector<TypeWithStrSupp> values) {
 
 typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
 typedef std::vector<std::string> MultiPart;
+typedef std::map<std::string, std::map<std::string, SimpCfgData>> SimpCfgMapMapVariant;
 
 class SimpCfg {
 
 private:
-    std::map<std::string, std::map<std::string, SimpCfgData>> mapV = {};
+    SimpCfgMapMapVariant mapV = {};
     std::regex rInt {R"(^[-+]?\d+$)"};
     std::regex rFloat {R"(^[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$)"};
 
 public:
+
+    SimpCfg(SimpCfgMapMapVariant defaultMap) : mapV(defaultMap) {}
 
     static std::string joiner(const MultiPart& parts) {
         std::stringstream joined;
@@ -354,6 +357,8 @@ public:
         set_double(group, keyParts, dvalue);
     }
 
+    // Dump info about the specified group.
+    // If group is empty, then dump info about all groups maintained in this instance.
     void dump(const std::string &group) {
         for (auto gm: mapV) {
             if (!group.empty() && (gm.first != group)) {
@@ -604,16 +609,28 @@ void check_strings() {
     SimpCfg::locale_restore(sSavedLocale);
 }
 
-int main(int argc, char **argv) {
-    if (argc != 2) {
-        LERRR_LN("USAGE:%s simp.cfg", argv[0]);
-        exit(1);
-    }
+void sc_inited() {
+    SimpCfg sc = {{
+        {"Group1",{
+            {"testkey11", 11},
+            {"testkey12", true}
+        }},
+        {"Group2", {
+            {"key21", "val21"},
+            {"key22", 22},
+            {"key23", 2.3}
+        }}
+    }};
 
-    check_strings();
+    std::cout << "**** sc inited **** " << std::endl;
+    sc.dump("");
 
-    std::string fname {argv[1]};
-    SimpCfg sc;
+}
+
+void sc_set(const std::string &fname) {
+
+    std::cout << "**** sc set **** " << std::endl;
+    SimpCfg sc = {{}};
     sc.load(fname);
     sc.dump("");
 
@@ -646,6 +663,19 @@ int main(int argc, char **argv) {
     sc.set_string("testme", {"keyA301", "2"}, "AkashaGanga");
     sc.get_vector<int64_t>("testme", {"keyA300"}, {1, 2, 3});
     sc.get_vector<std::string>("testme", {"keyA301"}, { "yes 1", "No 2", "very well 3" });
+}
+
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        LERRR_LN("USAGE:%s simp.cfg", argv[0]);
+        exit(1);
+    }
+
+    check_strings();
+    sc_inited();
+    std::string fname {argv[1]};
+    sc_set(fname);
+
     return 0;
 }
 #endif
