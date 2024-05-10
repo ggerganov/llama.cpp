@@ -6,6 +6,7 @@ There is a script called debug-test.sh in the scripts folder that takes a REGEX 
 # Once in the debugger, i.e. at the chevrons prompt, setting a breakpoint could be as follows:
 >>> b main
 ```
+Another idea is to see all the tests in general, at the least the ones prefixed with "test". This is accomplished via the following: `scripts/debug-test.sh test`.
 
 &nbsp;
 
