@@ -13335,7 +13335,7 @@ static void ggml_compute_forward_soft_max_f32(
         const float slope = (max_bias > 0.0f) ? h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1) : 1.0f;
 
         float * sp = (float *)((char *) src0->data + i1*src0->nb[1]);
-        float * dp = (float *)((char *)  dst->data + i1*dst->nb[1]);
+        float * dp = (float *)((char *)  dst->data +  i1*dst->nb[1]);
 
         // broadcast the mask across rows
         ggml_fp16_t * mp_f16 = src1 ? (ggml_fp16_t *)((char *) src1->data) + (i1%ne01)*ne00 : NULL;

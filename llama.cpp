@@ -6403,7 +6403,7 @@ static struct ggml_tensor * llm_build_ffn(
           llm_ffn_gate_type   type_gate,
          const llm_build_cb & cb,
                         int   il) {
-    struct ggml_tensor * tmp = up ? ggml_mul_mat(ctx, up, cur): cur;
+    struct ggml_tensor * tmp = up ? ggml_mul_mat(ctx, up, cur) : cur;
     cb(tmp, "ffn_up", il);
 
     if (up_b) {
@@ -8371,7 +8371,6 @@ struct llm_build_context {
 
             // output layer norm
             cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].layer_out_norm, model.layers[il].layer_out_norm_b, LLM_NORM, cb, il);
-
 
             // input for next layer
             inpL = cur;
@@ -12806,8 +12805,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     }
                 }
 
-                //GGML_ASSERT(vocab.special_add_eos != 1);
-                //TODO: Check this, why this tokenizer does not add at the end, why not leaving up to the `gguf` exporter?
                 if (add_special && vocab.special_add_eos == 1) {
                     GGML_ASSERT(vocab.special_add_eos != -1);
                     output.push_back(vocab.special_eos_id);
