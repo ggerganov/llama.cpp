@@ -12097,7 +12097,7 @@ UseGgmlGemm2:;
     //printf("nr0 = %lld, nr1 = %lld\n", nr0, nr1);
 
     //If the chunking is poor for the number of threads on this setup, scrap the whole plan.  Re-chunk it by thread.
-    if (nchunk0 * nchunk1 < nth * 400)
+    if (nchunk0 * nchunk1 < nth * 4 || ggml_is_numa())
     {
         //if (ith == 0)
         //    printf("rechunked");
