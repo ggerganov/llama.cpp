@@ -15544,7 +15544,7 @@ static void ggml_compute_forward_flash_attn_ext_f16(
         const int iq2 = (ir - iq3*neq2*neq1)/neq1;
         const int iq1 = (ir - iq3*neq2*neq1 - iq2*neq1);
 
-        const int h = iq2; // head
+        const uint32_t h = iq2; // head
         const float slope = (max_bias > 0.0f) ? h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1) : 1.0f;
 
         float S = 0.0f;
