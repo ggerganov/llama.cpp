@@ -21,14 +21,14 @@ void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restri
 
 inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 {
-    uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
+    uint8_t zero = 0;
 
     __asm__ __volatile__ (
-                          "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
+                          "vbroadcastss\t%[Z]%{uint8%},\t%%zmm8\n\t" // use an upscaling operator to clear our value.
                           "vmovnraps\t\t%%zmm8,\t%[RES]\n\t"
                           : [RES]  "+m"  (*target)
-                          : [Z]    "m"   (zero)
-                          : "zmm8");
+                          : [Z]     "m"  (zero)
+                          : "zmm8", "memory");
 
 }
 
