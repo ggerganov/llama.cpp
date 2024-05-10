@@ -538,7 +538,7 @@ class Model:
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
                     if (token_id >= vocab_size):
-                        print(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        logger.warning(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                         continue
 
                     tokens[token_id] = key.encode("utf-8")
