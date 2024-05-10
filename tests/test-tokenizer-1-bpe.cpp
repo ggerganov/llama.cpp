@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
     const std::string fname = argv[1];
     bool ignore_merges = false;
     if (argc == 3) {
-        if (std::strcmp(argv[2], "ignore-merges") != 0) {
+        if (std::strcmp(argv[2], "--ignore-merges") != 0) {
             fprintf(stderr, "Usage: %s <vocab-file> [--ignore-merges]\n", argv[0]);
             return 1;
         }
