@@ -15,25 +15,158 @@ on:
     types: [opened, synchronize, reopened]
     paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
   GGML_NLOOP: 3
   GGML_N_THREADS: 1
 
 jobs:
-  ubuntu-focal-make:
-    runs-on: ubuntu-20.04
+  macOS-latest-cmake-arm64:
+    runs-on: macos-14
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL_EMBED_LIBRARY=ON -DLLAMA_CURL=ON ..
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest -L 'main|curl' --verbose --timeout 900
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          cp LICENSE ./build/bin/
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          path: llama-${{ steps.tag.outputs.name }}-bin-macos-arm64.zip
+          name: llama-bin-macos-arm64.zip
+
+  macOS-latest-cmake-x64:
+    runs-on: macos-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Dependencies
+        id: depends
+        continue-on-error: true
+        run: |
+          brew update
+
+      - name: Build
+        id: cmake_build
+        run: |
+          sysctl -a
+          mkdir build
+          cd build
+          # Metal is disabled due to intermittent failures with Github runners not having a GPU:
+          # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL=OFF -DLLAMA_CURL=ON ..
+          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest -L main --verbose --timeout 900
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          cp LICENSE ./build/bin/
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          path: llama-${{ steps.tag.outputs.name }}-bin-macos-x64.zip
+          name: llama-bin-macos-x64.zip
+
+  ubuntu-focal-make:
+    runs-on: ubuntu-20.04
+    env:
+      LLAMA_NODE_AVAILABLE: true
+      LLAMA_PYTHON_AVAILABLE: true
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
         run: |
           sudo apt-get update
           sudo apt-get install build-essential gcc-8
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Build
         id: make_build
@@ -48,68 +181,130 @@ jobs:
           CC=gcc-8 make tests -j $(nproc)
           make test -j $(nproc)
 
+  ubuntu-focal-make-curl:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential gcc-8 libcurl4-openssl-dev
+
+      - name: Build
+        id: make_build
+        env:
+          LLAMA_FATAL_WARNINGS: 1
+          LLAMA_CURL: 1
+        run: |
+          CC=gcc-8 make -j $(nproc)
+
   ubuntu-latest-cmake:
     runs-on: ubuntu-latest
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential libcurl4-openssl-dev
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          ctest -L 'main|curl' --verbose --timeout 900
 
-  ubuntu-latest-cmake-sanitizer:
-    runs-on: ubuntu-latest
-
-    continue-on-error: true
-
-    strategy:
-      matrix:
-        sanitizer: [ADDRESS, THREAD, UNDEFINED]
-        build_type: [Debug, Release]
-
-    steps:
-      - name: Clone
-        id: checkout
-        uses: actions/checkout@v3
-
-      - name: Dependencies
-        id: depends
-        run: |
-          sudo apt-get update
-          sudo apt-get install build-essential
-
-      - name: Build
-        id: cmake_build
-        run: |
-          mkdir build
-          cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
-
-      - name: Test
-        id: cmake_test
+      - name: Test llama2c conversion
+        id: llama2c_test
         run: |
           cd build
-          ctest -L main --verbose --timeout 900
+          echo "Fetch tokenizer"
+          wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/tok512.bin
+          echo "Fetch llama2c model"
+          wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin
+          ./bin/convert-llama2c-to-ggml --copy-vocab-from-model ./tok512.bin --llama2c-model stories260K.bin --llama2c-output-model stories260K.gguf
+          ./bin/main -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          cp LICENSE ./build/bin/
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
+          name: llama-bin-ubuntu-x64.zip
+
+#  ubuntu-latest-cmake-sanitizer:
+#    runs-on: ubuntu-latest
+#
+#    continue-on-error: true
+#
+#    strategy:
+#      matrix:
+#        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+#        build_type: [Debug, Release]
+#
+#    steps:
+#      - name: Clone
+#        id: checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Dependencies
+#        id: depends
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install build-essential
+#
+#      - name: Build
+#        id: cmake_build
+#        run: |
+#          mkdir build
+#          cd build
+#          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+#          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
+#
+#      - name: Test
+#        id: cmake_test
+#        run: |
+#          cd build
+#          ctest -L main --verbose --timeout 900
 
   ubuntu-latest-cmake-mpi:
     runs-on: ubuntu-latest
@@ -123,7 +318,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -151,7 +346,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -197,7 +392,7 @@ jobs:
 
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build
         id: cmake_build
@@ -238,7 +433,7 @@ jobs:
 
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build
         id: cmake_build
@@ -258,7 +453,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -289,7 +484,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -333,6 +528,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DLLAMA_METAL_EMBED_LIBRARY=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
@@ -361,6 +557,7 @@ jobs:
           mkdir build
           cd build
           cmake -G Xcode .. \
+            -DLLAMA_METAL_EMBED_LIBRARY=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
@@ -395,6 +592,63 @@ jobs:
         id: make_build_swift_example
         run: |
             make swift
+
+  windows-msys2:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sys: UCRT64,  env: ucrt-x86_64,  build: Release }
+          - { sys: CLANG64, env: clang-x86_64, build: Release }
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Setup ${{ matrix.sys }}
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: ${{matrix.sys}}
+          install: >-
+            base-devel
+            mingw-w64-${{matrix.env}}-toolchain
+            mingw-w64-${{matrix.env}}-cmake
+            mingw-w64-${{matrix.env}}-openblas
+
+      - name: Build using make
+        shell: msys2 {0}
+        run: |
+            make -j $(nproc)
+
+      - name: Clean after building using make
+        shell: msys2 {0}
+        run: |
+            make clean
+
+      - name: Build using make w/ OpenBLAS
+        shell: msys2 {0}
+        run: |
+            make LLAMA_OPENBLAS=1 -j $(nproc)
+
+      - name: Build using CMake
+        shell: msys2 {0}
+        run: |
+            cmake -B build
+            cmake --build build --config ${{ matrix.build }} -j $(nproc)
+
+      - name: Clean after building using CMake
+        shell: msys2 {0}
+        run: |
+            rm -rf build
+
+      - name: Build using CMake w/ OpenBLAS
+        shell: msys2 {0}
+        run: |
+            cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+            cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
   windows-latest-cmake:
     runs-on: windows-latest
@@ -431,7 +685,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -561,23 +815,23 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          path: |
-            llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
+          path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-x64.zip
+          name: llama-bin-win-${{ matrix.build }}-x64.zip
 
-  windows-latest-cmake-cublas:
+  windows-latest-cmake-cuda:
     runs-on: windows-latest
 
     strategy:
       matrix:
         cuda: ['12.2.0', '11.7.1']
-        build: ['cublas']
+        build: ['cuda']
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -593,7 +847,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUBLAS=ON -DBUILD_SHARED_LIBS=ON
+          cmake .. -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CUDA=ON -DBUILD_SHARED_LIBS=ON
           cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - name: Determine tag name
@@ -617,10 +871,10 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          path: |
-            llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+          path: llama-${{ steps.tag.outputs.name }}-bin-win-${{ matrix.build }}-cu${{ matrix.cuda }}-x64.zip
+          name: llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
       - name: Copy and pack Cuda runtime
         run: |
@@ -631,13 +885,14 @@ jobs:
 
       - name: Upload Cuda runtime
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          path: |
-            cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+          path: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
+          name: cudart-llama-bin-win-cu${{ matrix.cuda }}-x64.zip
 
   windows-latest-cmake-sycl:
     runs-on: windows-latest
+
     defaults:
       run:
         shell: bash
@@ -646,11 +901,10 @@ jobs:
       WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/62641e01-1e8d-4ace-91d6-ae03f7f8a71f/w_BaseKit_p_2024.0.0.49563_offline.exe
       WINDOWS_DPCPP_MKL: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel
 
-
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -661,12 +915,38 @@ jobs:
         id: cmake_build
         run:  examples/sycl/win-build-sycl.bat
 
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          7z a llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          path: llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
+          name: llama-bin-win-sycl-x64.zip
+
   ios-xcode-build:
     runs-on: macos-latest
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Build Xcode project
         run: xcodebuild -project examples/llama.swiftui/llama.swiftui.xcodeproj -scheme llama.swiftui -sdk iphoneos CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= -destination 'generic/platform=iOS' build
@@ -676,7 +956,7 @@ jobs:
 
     steps:
       - name: Clone
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up JDK
         uses: actions/setup-java@v3
@@ -699,7 +979,7 @@ jobs:
 #    runs-on: macos-12
 #    steps:
 #    - name: Clone
-#      uses: actions/checkout@v3
+#      uses: actions/checkout@v4
 #
 #    - name: Build
 #      uses: cross-platform-actions/action@v0.19.0
@@ -723,12 +1003,14 @@ jobs:
       - macOS-latest-make
       - macOS-latest-cmake
       - windows-latest-cmake
-      - windows-latest-cmake-cublas
+      - windows-latest-cmake-cuda
+      - macOS-latest-cmake-arm64
+      - macOS-latest-cmake-x64
 
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -747,7 +1029,13 @@ jobs:
 
       - name: Download artifacts
         id: download-artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifact
+
+      - name: Move artifacts
+        id: move_artifacts
+        run: mkdir -p ./artifact/release && mv ./artifact/*/*.zip ./artifact/release
 
       - name: Create release
         id: create_release
@@ -766,7 +1054,7 @@ jobs:
             const path = require('path');
             const fs = require('fs');
             const release_id = '${{ steps.create_release.outputs.id }}';
-            for (let file of await fs.readdirSync('./artifact')) {
+            for (let file of await fs.readdirSync('./artifact/release')) {
               if (path.extname(file) === '.zip') {
                 console.log('uploadReleaseAsset', file);
                 await github.repos.uploadReleaseAsset({
@@ -774,7 +1062,7 @@ jobs:
                   repo: context.repo.repo,
                   release_id: release_id,
                   name: file,
-                  data: await fs.readFileSync(`./artifact/${file}`)
+                  data: await fs.readFileSync(`./artifact/release/${file}`)
                 });
               }
             }
@@ -788,7 +1076,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |
@@ -812,7 +1100,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |
@@ -836,7 +1124,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |
@@ -866,7 +1154,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -882,7 +1170,7 @@ jobs:
 #          msbuild ALL_BUILD.vcxproj -t:build -p:configuration=${{ matrix.build }} -p:platform=${{ matrix.arch }}
 #
 #      - name: Upload binaries
-#        uses: actions/upload-artifact@v1
+#        uses: actions/upload-artifact@v4
 #        with:
 #          name: llama-bin-${{ matrix.arch }}
 #          path: build/bin/${{ matrix.build }}
@@ -905,7 +1193,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Add msbuild to PATH
 #        uses: microsoft/setup-msbuild@v1
@@ -937,7 +1225,7 @@ jobs:
 #
 #      - name: Upload binaries
 #        if: matrix.blas == 'ON'
-#        uses: actions/upload-artifact@v1
+#        uses: actions/upload-artifact@v4
 #        with:
 #          name: llama-blas-bin-${{ matrix.arch }}
 #          path: build/bin/${{ matrix.build }}
@@ -951,7 +1239,7 @@ jobs:
 #
 #    steps:
 #      - name: Clone
-#        uses: actions/checkout@v3
+#        uses: actions/checkout@v4
 #
 #      - name: Dependencies
 #        run: |

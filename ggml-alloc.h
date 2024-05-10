@@ -11,11 +11,15 @@ typedef struct ggml_backend_buffer * ggml_backend_buffer_t;
 typedef struct ggml_backend * ggml_backend_t;
 
 // Tensor allocator
-typedef struct ggml_tallocr * ggml_tallocr_t;
+struct ggml_tallocr {
+    ggml_backend_buffer_t buffer;
+    void * base;
+    size_t alignment;
+    size_t offset;
+};
 
-GGML_API ggml_tallocr_t ggml_tallocr_new(ggml_backend_buffer_t buffer);
-GGML_API void           ggml_tallocr_free(ggml_tallocr_t talloc);
-GGML_API void           ggml_tallocr_alloc(ggml_tallocr_t talloc, struct ggml_tensor * tensor);
+GGML_API struct ggml_tallocr ggml_tallocr_new(ggml_backend_buffer_t buffer);
+GGML_API void                ggml_tallocr_alloc(struct ggml_tallocr * talloc, struct ggml_tensor * tensor);
 
 // Graph allocator
 /*
@@ -50,7 +54,11 @@ GGML_API void           ggml_gallocr_free(ggml_gallocr_t galloc);
 // not strictly required for single buffer usage: ggml_gallocr_alloc_graph will reallocate the buffers automatically if needed
 // returns false if the buffer allocation failed
 GGML_API bool ggml_gallocr_reserve(ggml_gallocr_t galloc, struct ggml_cgraph * graph);
-GGML_API bool ggml_gallocr_reserve_n(ggml_gallocr_t galloc, struct ggml_cgraph * graph, const int * node_buffer_ids);
+GGML_API bool ggml_gallocr_reserve_n(
+    ggml_gallocr_t galloc,
+    struct ggml_cgraph * graph,
+    const int * node_buffer_ids,
+    const int * leaf_buffer_ids);
 
 // automatic reallocation if the topology changes when using a single buffer
 // returns false if using multiple buffers and a re-allocation is needed (call ggml_gallocr_reserve_n first to set the node buffers)

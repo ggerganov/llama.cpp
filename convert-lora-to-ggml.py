@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import json
 import os
 import struct
@@ -14,6 +15,9 @@ import torch
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py' / 'gguf'))
 import gguf
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("lora-to-gguf")
 
 NUMPY_TYPE_TO_FTYPE: dict[str, int] = {"float32": 0, "float16": 1}
 
@@ -48,11 +52,9 @@ def write_tensor_header(fout: BinaryIO, name: str, shape: Sequence[int], data_ty
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print(f"Usage: python {sys.argv[0]} <path> [arch]")
-        print(
-            "Path must contain HuggingFace PEFT LoRA files 'adapter_config.json' and 'adapter_model.bin'"
-        )
-        print(f"Arch must be one of {list(gguf.MODEL_ARCH_NAMES.values())} (default: llama)")
+        logger.info(f"Usage: python {sys.argv[0]} <path> [arch]")
+        logger.info("Path must contain HuggingFace PEFT LoRA files 'adapter_config.json' and 'adapter_model.bin'")
+        logger.info(f"Arch must be one of {list(gguf.MODEL_ARCH_NAMES.values())} (default: llama)")
         sys.exit(1)
 
     input_json = os.path.join(sys.argv[1], "adapter_config.json")
@@ -70,7 +72,7 @@ if __name__ == '__main__':
     arch_name = sys.argv[2] if len(sys.argv) == 3 else "llama"
 
     if arch_name not in gguf.MODEL_ARCH_NAMES.values():
-        print(f"Error: unsupported architecture {arch_name}")
+        logger.error(f"Error: unsupported architecture {arch_name}")
         sys.exit(1)
 
     arch = list(gguf.MODEL_ARCH_NAMES.keys())[list(gguf.MODEL_ARCH_NAMES.values()).index(arch_name)]
@@ -80,21 +82,21 @@ if __name__ == '__main__':
         params = json.load(f)
 
     if params["peft_type"] != "LORA":
-        print(f"Error: unsupported adapter type {params['peft_type']}, expected LORA")
+        logger.error(f"Error: unsupported adapter type {params['peft_type']}, expected LORA")
         sys.exit(1)
 
     if params["fan_in_fan_out"] is True:
-        print("Error: param fan_in_fan_out is not supported")
+        logger.error("Error: param fan_in_fan_out is not supported")
         sys.exit(1)
 
     if params["bias"] is not None and params["bias"] != "none":
-        print("Error: param bias is not supported")
+        logger.error("Error: param bias is not supported")
         sys.exit(1)
 
     # TODO: these seem to be layers that have been trained but without lora.
     # doesn't seem widely used but eventually should be supported
     if params["modules_to_save"] is not None and len(params["modules_to_save"]) > 0:
-        print("Error: param modules_to_save is not supported")
+        logger.error("Error: param modules_to_save is not supported")
         sys.exit(1)
 
     with open(output_path, "wb") as fout:
@@ -125,13 +127,13 @@ if __name__ == '__main__':
                 suffix = k[-len(lora_suffixes[0]):]
                 k = k[: -len(lora_suffixes[0])]
             else:
-                print(f"Error: unrecognized tensor name {orig_k}")
+                logger.error(f"Error: unrecognized tensor name {orig_k}")
                 sys.exit(1)
 
             tname = name_map.get_name(k)
             if tname is None:
-                print(f"Error: could not map tensor name {orig_k}")
-                print(" Note: the arch parameter must be specified if the model is not llama")
+                logger.error(f"Error: could not map tensor name {orig_k}")
+                logger.error(" Note: the arch parameter must be specified if the model is not llama")
                 sys.exit(1)
 
             if suffix == ".lora_A.weight":
@@ -141,8 +143,8 @@ if __name__ == '__main__':
             else:
                 assert False
 
-            print(f"{k} => {tname} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB")
+            logger.info(f"{k} => {tname} {t.shape} {t.dtype} {t.nbytes/1024/1024:.2f}MB")
             write_tensor_header(fout, tname, t.shape, t.dtype)
             t.tofile(fout)
 
-    print(f"Converted {input_json} and {input_model} to {output_path}")
+    logger.info(f"Converted {input_json} and {input_model} to {output_path}")

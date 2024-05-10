@@ -132,7 +132,6 @@ int main(int argc, char ** argv) {
     llama_context * ctx = NULL;
 
     // load the target model
-    params.logits_all = true;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
     // load the prompts from an external file if there are any
@@ -360,7 +359,7 @@ int main(int argc, char ** argv) {
                 //        client.id, client.seq_id, id, client.n_decoded, client.i_batch, token_str.c_str());
 
                 if (client.n_decoded > 2 &&
-                        (id == llama_token_eos(model) ||
+                        (llama_token_is_eog(model, id) ||
                          (params.n_predict > 0 && client.n_decoded + client.n_prompt >= params.n_predict) ||
                          client.response.find("User:") != std::string::npos ||
                          client.response.find('\n') != std::string::npos)) {
