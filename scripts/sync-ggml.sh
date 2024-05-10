@@ -4,6 +4,8 @@ cp -rpv ../ggml/src/ggml.c                  ./ggml.c
 cp -rpv ../ggml/src/ggml-alloc.c            ./ggml-alloc.c
 cp -rpv ../ggml/src/ggml-backend-impl.h     ./ggml-backend-impl.h
 cp -rpv ../ggml/src/ggml-backend.c          ./ggml-backend.c
+cp -rpv ../ggml/src/ggml-common.h           ./ggml-common.h
+cp -rpv ../ggml/src/ggml-cuda/*             ./ggml-cuda/
 cp -rpv ../ggml/src/ggml-cuda.cu            ./ggml-cuda.cu
 cp -rpv ../ggml/src/ggml-cuda.h             ./ggml-cuda.h
 cp -rpv ../ggml/src/ggml-impl.h             ./ggml-impl.h
@@ -29,3 +31,6 @@ cp -rpv ../ggml/include/ggml/ggml-backend.h ./ggml-backend.h
 cp -rpv ../ggml/tests/test-opt.cpp         ./tests/test-opt.cpp
 cp -rpv ../ggml/tests/test-grad0.cpp       ./tests/test-grad0.cpp
 cp -rpv ../ggml/tests/test-backend-ops.cpp ./tests/test-backend-ops.cpp
+
+cp -rpv ../LICENSE                         ./LICENSE
+cp -rpv ../ggml/scripts/gen-authors.sh     ./scripts/gen-authors.sh

@@ -37,10 +37,27 @@ Feature: Security
       | llama.cpp | no        |
       | hackme    | raised    |
 
+  Scenario Outline: OAI Compatibility (invalid response formats)
+    Given a system prompt test
+    And   a user prompt test
+    And   a response format <response_format>
+    And   a model test
+    And   2 max tokens to predict
+    And   streaming is disabled
+    Given an OAI compatible chat completions request with raised api error
+
+    Examples: Prompts
+      | response_format                                       |
+      | {"type": "sound"}                                     |
+      | {"type": "json_object", "schema": 123}                |
+      | {"type": "json_object", "schema": {"type": 123}}      |
+      | {"type": "json_object", "schema": {"type": "hiccup"}} |
+
 
   Scenario Outline: CORS Options
-    When an OPTIONS request is sent from <origin>
-    Then CORS header <cors_header> is set to <cors_header_value>
+    Given a user api key llama.cpp
+    When  an OPTIONS request is sent from <origin>
+    Then  CORS header <cors_header> is set to <cors_header_value>
 
     Examples: Headers
       | origin          | cors_header                      | cors_header_value |
