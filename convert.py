@@ -1065,8 +1065,8 @@ def check_vocab_size(params: Params, vocab: BaseVocab, pad_vocab: bool = False) 
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path, args: argparse.Namespace, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
-        self.gguf = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], args, endianess=endianess)
+    def __init__(self, fname_out: Path, split_arguments: gguf.SplitArguments, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
+        self.gguf = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], split_arguments, endianess=endianess)
 
     def add_meta_arch(self, params: Params) -> None:
         name = "LLaMA"
@@ -1183,7 +1183,7 @@ class OutputFile:
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
-        of = OutputFile(fname_out, endianess=endianess)
+        of = OutputFile(fname_out, gguf.SplitArguments(), endianess=endianess)
 
         # meta data
         of.add_meta_arch(params)
@@ -1210,10 +1210,10 @@ class OutputFile:
     @staticmethod
     def write_all(
         fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: BaseVocab, svocab: gguf.SpecialVocab,
-        args: argparse.Namespace, concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE
+        split_arguments: gguf.SplitArguments, concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=args.pad_vocab)
-        of = OutputFile(fname_out, args, endianess=endianess)
+        of = OutputFile(fname_out, split_arguments, endianess=endianess)
 
         # meta data
         of.add_meta_arch(params)
@@ -1500,8 +1500,7 @@ def main(args_in: list[str] | None = None) -> None:
     if args.split_max_tensors and args.split_max_size:
         raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
 
-    if args.split_max_size:
-        args.split_max_size = gguf.SplitStrategy.split_str_to_n_bytes(args.split_max_size)
+    split_arguments = gguf.SplitArguments(args) if args.split else gguf.SplitArguments()
 
     if not args.vocab_only:
         model_plus = load_some_model(args.model)
@@ -1578,15 +1577,9 @@ def main(args_in: list[str] | None = None) -> None:
 
     params.ftype = ftype
 
-    print(f"Writing {outfile}, format {ftype}")
-    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, args,
-                         concurrency=args.concurrency, endianess=endianess)
-    if not args.dry_run:
-        print(f"Wrote {outfile}")
-
     logger.info(f"Writing {outfile}, format {ftype}")
 
-    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab,
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, split_arguments,
                          concurrency=args.concurrency, endianess=endianess, pad_vocab=args.pad_vocab)
     if not args.dry_run:
         logger.info(f"Wrote {outfile}")

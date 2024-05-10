@@ -58,7 +58,7 @@ class Model:
     part_names: list[str]
     is_safetensors: bool
     hparams: dict[str, Any]
-    gguf_writer: gguf.GGUFWriter
+    gguf_writer: gguf.GGUFManager
     block_count: int
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
@@ -66,7 +66,8 @@ class Model:
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool):
+    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool,
+                 split_arguments: gguf.SplitArguments):
         if self.__class__ == Model:
             raise TypeError(f"{self.__class__.__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
@@ -83,7 +84,8 @@ class Model:
             self.part_names = Model.get_model_part_names(self.dir_model, ".bin")
             
         self.hparams = Model.load_hparams(self.dir_model)
-        self.gguf_writer = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
+        self.gguf_writer = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], split_arguments,
+                                            endianess=self.endianess, use_temp_file=self.use_temp_file)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensor_names = None
@@ -275,9 +277,7 @@ class Model:
 
     def write(self):
         self.write_tensors()
-        self.gguf_writer.write_header_to_file()
-        self.gguf_writer.write_kv_data_to_file()
-        self.gguf_writer.write_tensors_to_file(progress=True)
+        self.gguf_writer.write_to_file()
         self.gguf_writer.close()
 
     def write_vocab(self):
@@ -2501,8 +2501,7 @@ def main() -> None:
     if args.split_max_tensors and args.split_max_size:
         raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
 
-    if args.split_max_size:
-        args.split_max_size = gguf.SplitStrategy.split_str_to_n_bytes(args.split_max_size)
+    split_arguments = gguf.SplitArguments(args) if args.split else gguf.SplitArguments()
 
     ftype_map = {
         "f32": gguf.GGMLQuantizationType.F32,
@@ -2521,7 +2520,8 @@ def main() -> None:
 
     with torch.inference_mode():
         model_class = Model.from_model_architecture(hparams["architectures"][0])
-        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file, args.no_lazy)
+        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file,
+                                     args.no_lazy, split_arguments)
 
         logger.info("Set model parameters")
         model_instance.set_gguf_parameters()
