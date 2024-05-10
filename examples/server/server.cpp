@@ -2270,10 +2270,10 @@ struct server_context {
 
                 const size_t n_probs = std::min(cur_p.size, (size_t) slot.sparams.n_probs);
                 if (n_probs > 0) {
-                    const size_t n_considered = slot.ctx_sampling->n_considered;
+                    const size_t n_valid = slot.ctx_sampling->n_valid;
 
                     // Make sure at least n_probs top tokens are at the front of the vector:
-                    if (slot.sparams.temp == 0.0f && n_probs > n_considered) {
+                    if (slot.sparams.temp == 0.0f && n_probs > n_valid) {
                         llama_sample_top_k(ctx, &cur_p, n_probs, 0);
                     }
 
@@ -2289,7 +2289,7 @@ struct server_context {
                         for (size_t i = 0; i < n_probs; ++i) {
                             result.probs.push_back({
                                 cur_p.data[i].id,
-                                i >= n_considered ? 0.0f : cur_p.data[i].p // Tokens filtered out due to e.g. top_k have 0 probability.
+                                i >= n_valid ? 0.0f : cur_p.data[i].p // Tokens filtered out due to e.g. top_k have 0 probability.
                             });
                         }
                     }
