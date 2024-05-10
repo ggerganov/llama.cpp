@@ -9416,7 +9416,7 @@ static void diag_mask_inf_f32(const float * x, float * dst, const int ncols, con
 
 
 template <bool vals_smem, int ncols_template, int block_size_template>
-static void soft_max_f32(const float * x, const float * mask, const float *pos, float * dst, const int ncols_par,
+static void soft_max_f32(const float * x, const float * mask, float * dst, const int ncols_par,
                          const int nrows_y, const float scale, const float max_bias, const float m0,
                          const float m1, uint32_t n_head_log2, const sycl::nd_item<3> &item_ct1, float *buf) {
     const int ncols = ncols_template == 0 ? ncols_par : ncols_template;
@@ -9430,7 +9430,7 @@ static void soft_max_f32(const float * x, const float * mask, const float *pos, 
     const int warp_id = item_ct1.get_local_id(2) / WARP_SIZE;
     const int lane_id = item_ct1.get_local_id(2) % WARP_SIZE;
 
-    float slope = 0.0f;
+    float slope = 1.0f;
 
     // ALiBi
     if (max_bias > 0.0f) {
@@ -9455,7 +9455,7 @@ static void soft_max_f32(const float * x, const float * mask, const float *pos, 
         const int ix = rowx*ncols + col;
         const int iy = rowy*ncols + col;
 
-        const float val = x[ix]*scale + (mask ? mask[iy] : 0.0f) + (pos ? slope*pos[col] : 0.0f);
+        const float val = x[ix]*scale + (mask ? slope*mask[iy] : 0.0f);
 
         vals[col] = val;
         max_val = sycl::max(max_val, val);
@@ -13017,7 +13017,7 @@ static void diag_mask_inf_f32_sycl(const float *x, float *dst,
 }
 
 template <bool vals_smem, int ncols_template, int block_size_template>
-static void soft_max_f32_submitter(const float * x, const float * mask, const float *pos, float * dst, const int ncols_par,
+static void soft_max_f32_submitter(const float * x, const float * mask, float * dst, const int ncols_par,
                                    const int nrows_y, const float scale, const float max_bias, const float m0,
                                    const float m1, uint32_t n_head_log2, sycl::range<3> block_nums, sycl::range<3> block_dims,
                                    const size_t n_local_scratch, dpct::queue_ptr stream) {
@@ -13027,7 +13027,7 @@ static void soft_max_f32_submitter(const float * x, const float * mask, const fl
         cgh.parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
             [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
-                soft_max_f32<vals_smem, ncols_template, block_size_template>(x, mask, pos, dst, ncols_par,
+                soft_max_f32<vals_smem, ncols_template, block_size_template>(x, mask, dst, ncols_par,
                                                                              nrows_y, scale, max_bias, m0,
                                                                              m1, n_head_log2, item_ct1,
                                                                              local_buf_acc.get_pointer());
@@ -13035,7 +13035,7 @@ static void soft_max_f32_submitter(const float * x, const float * mask, const fl
     });
 }
 
-static void soft_max_f32_sycl(const float * x, const float * mask, const float * pos,
+static void soft_max_f32_sycl(const float * x, const float * mask,
                               float * dst, const int ncols_x, const int nrows_x,
                               const int nrows_y, const float scale, const float max_bias,
                               dpct::queue_ptr stream) {
@@ -13057,60 +13057,60 @@ static void soft_max_f32_sycl(const float * x, const float * mask, const float *
     const size_t local_mem_size = stream->get_device().get_info<sycl::info::device::local_mem_size>();
     if (n_local_scratch*sizeof(float) < local_mem_size) {
         if (ncols_x > max_block_size) {
-            soft_max_f32_submitter<true, 0, 0>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+            soft_max_f32_submitter<true, 0, 0>(x, mask, dst, ncols_x, nrows_y, scale,
                                                max_bias, m0, m1, n_head_log2, block_nums,
                                                block_dims, n_local_scratch, stream);
             return;
         }
         switch (ncols_x) {
             case 32:
-                soft_max_f32_submitter<true, 32, 32>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 32, 32>(x, mask, dst, ncols_x, nrows_y, scale,
                                                      max_bias, m0, m1, n_head_log2, block_nums,
                                                      block_dims, n_local_scratch, stream);
                 break;
             case 64:
-                soft_max_f32_submitter<true, 64, 64>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 64, 64>(x, mask, dst, ncols_x, nrows_y, scale,
                                                      max_bias, m0, m1, n_head_log2, block_nums,
                                                      block_dims, n_local_scratch, stream);
                 break;
             case 128:
-                soft_max_f32_submitter<true, 128, 128>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 128, 128>(x, mask, dst, ncols_x, nrows_y, scale,
                                                        max_bias, m0, m1, n_head_log2, block_nums,
                                                        block_dims, n_local_scratch, stream);
                 break;
             case 256:
-                soft_max_f32_submitter<true, 256, 256>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 256, 256>(x, mask, dst, ncols_x, nrows_y, scale,
                                                        max_bias, m0, m1, n_head_log2, block_nums,
                                                        block_dims, n_local_scratch, stream);
                 break;
             case 512:
-                soft_max_f32_submitter<true, 512, 512>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 512, 512>(x, mask, dst, ncols_x, nrows_y, scale,
                                                        max_bias, m0, m1, n_head_log2, block_nums,
                                                        block_dims, n_local_scratch, stream);
                 break;
             case 1024:
-                soft_max_f32_submitter<true, 1024, 1024>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 1024, 1024>(x, mask, dst, ncols_x, nrows_y, scale,
                                                          max_bias, m0, m1, n_head_log2, block_nums,
                                                          block_dims, n_local_scratch, stream);
                 break;
             case 2048:
-                soft_max_f32_submitter<true, 2048, 1024>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 2048, 1024>(x, mask, dst, ncols_x, nrows_y, scale,
                                                          max_bias, m0, m1, n_head_log2, block_nums,
                                                          block_dims, n_local_scratch, stream);
                 break;
             case 4096:
-                soft_max_f32_submitter<true, 4096, 1024>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 4096, 1024>(x, mask, dst, ncols_x, nrows_y, scale,
                                                          max_bias, m0, m1, n_head_log2, block_nums,
                                                          block_dims, n_local_scratch, stream);
                 break;
             default:
-                soft_max_f32_submitter<true, 0, 0>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+                soft_max_f32_submitter<true, 0, 0>(x, mask, dst, ncols_x, nrows_y, scale,
                                                    max_bias, m0, m1, n_head_log2, block_nums,
                                                    block_dims, n_local_scratch, stream);
                 break;
         }
     } else {
-        soft_max_f32_submitter<false, 0, 0>(x, mask, pos, dst, ncols_x, nrows_y, scale,
+        soft_max_f32_submitter<false, 0, 0>(x, mask, dst, ncols_x, nrows_y, scale,
                                             max_bias, m0, m1, n_head_log2, block_nums,
                                             block_dims, WARP_SIZE, stream);
     }
@@ -14675,12 +14675,9 @@ inline void ggml_sycl_op_soft_max(const ggml_tensor *src0,
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
-    const ggml_tensor * src2 = dst->src[2];
-
-#pragma message("TODO: add ggml_sycl_op_soft_max() F16 src1 and src2 support")
+#pragma message("TODO: add ggml_sycl_op_soft_max() F16 src1 support")
 #pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5021")
     GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32); // src1 contains mask and it is optional
-    GGML_ASSERT(!src2 || src2->type == GGML_TYPE_F32); // src2 contains positions and it is optional
 
     const int64_t ne00 = src0->ne[0];
     const int64_t nrows_x = ggml_nrows(src0);
@@ -14692,25 +14689,7 @@ inline void ggml_sycl_op_soft_max(const ggml_tensor *src0,
     memcpy(&scale, dst->op_params + 0, sizeof(float));
     memcpy(&max_bias, dst->op_params + 1, sizeof(float));
 
-    // positions tensor
-    float * src2_dd = nullptr;
-    sycl_pool_alloc<float> src2_f;
-
-    const bool use_src2 = src2 != nullptr;
-
-    if (use_src2) {
-        const bool src2_on_device = src2->backend == GGML_BACKEND_TYPE_GPU;
-
-        if (src2_on_device) {
-            ggml_tensor_extra_gpu * src2_extra = (ggml_tensor_extra_gpu *) src2->extra;
-            src2_dd = (float *) src2_extra->data_device[g_main_device];
-        } else {
-            src2_dd = src2_f.alloc(ggml_nelements(src2));
-            SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src2_dd, src2, 0, 0, 0, 1, main_stream));
-        }
-    }
-
-    soft_max_f32_sycl(src0_dd, src1 ? src1_dd : nullptr, src2_dd, dst_dd, ne00,
+    soft_max_f32_sycl(src0_dd, src1 ? src1_dd : nullptr, dst_dd, ne00,
                       nrows_x, nrows_y, scale, max_bias, main_stream);
 }
 
