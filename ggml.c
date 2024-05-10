@@ -12106,12 +12106,6 @@ UseGgmlGemm2:;
         const int64_t ir1_start = dr1 * ith1;
         const int64_t ir1_end = MIN(ir1_start + dr1, nr1);
 
-    // threads with no work simply yield (not sure if it helps)
-    if (ir0_start >= ir0_end || ir1_start >= ir1_end) {
-        sched_yield();
-        return;
-    }
-
         ggml_compute_forward_mul_mat_one_chunk(params, dst, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end);
 
 #ifdef GGML_PERF
