@@ -71,7 +71,7 @@ int main(int argc, char ** argv) {
     // tokenize the prompt
 
     std::vector<llama_token> tokens_list;
-    tokens_list = ::llama_tokenize(model, params.prompt, true);
+    tokens_list = ::llama_tokenize(model, params.prompt, true, true, true);
 
     const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size())*n_parallel;
 

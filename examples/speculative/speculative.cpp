@@ -128,7 +128,7 @@ int main(int argc, char ** argv) {
 
     // Tokenize the prompt
     std::vector<llama_token> inp;
-    inp = ::llama_tokenize(ctx_tgt, params.prompt, true, true);
+    inp = ::llama_tokenize(ctx_tgt, params.prompt, true, true, true);
 
     const int max_context_size     = llama_n_ctx(ctx_tgt);
     const int max_tokens_list_size = max_context_size - 4;

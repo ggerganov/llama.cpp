@@ -239,13 +239,18 @@ std::vector<llama_token> llama_tokenize(
   const struct llama_context * ctx,
            const std::string & text,
                         bool   add_special,
-                        bool   parse_special = false);
+                        bool   parse_special  = false,
+                        bool   fix_dobule_bos = false);
 
 std::vector<llama_token> llama_tokenize(
     const struct llama_model * model,
            const std::string & text,
                         bool   add_special,
-                        bool   parse_special = false);
+                        bool   parse_special  = false,
+                        bool   fix_double_bos = false);
+
+// if the first and the second token in the prompt are both EOS, remove the first token
+void llama_fix_double_bos(const struct llama_model * model, std::vector<llama_token> & prompt);
 
 // tokenizes a token into a piece, optionally renders special/control tokens
 // should work similar to Python's `tokenizer.id_to_piece`

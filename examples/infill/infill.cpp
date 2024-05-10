@@ -248,8 +248,8 @@ int main(int argc, char ** argv) {
         suff_rm_leading_spc = false;
     }
     std::vector<llama_token> embd_inp;
-    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
-    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+    std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true, false);
+    std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true, false);
     const int space_token = 29871;
     if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
         inp_sfx.erase(inp_sfx.begin());
@@ -280,10 +280,10 @@ int main(int argc, char ** argv) {
     if (ctx_guidance) {
         LOG("cfg_negative_prompt: \"%s\"\n", log_tostr(sparams.cfg_negative_prompt));
 
-        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, true);
+        guidance_inp = ::llama_tokenize(ctx_guidance, sparams.cfg_negative_prompt, true, true, true);
         LOG("guidance_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx_guidance, guidance_inp).c_str());
 
-        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true);
+        std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true, true, true);
         LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp).c_str());
 
         original_prompt_len = original_inp.size();
@@ -630,8 +630,8 @@ int main(int argc, char ** argv) {
                     suff_rm_leading_spc = false;
                 }
                 // tokenize new prefix and suffix
-                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false);
-                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false);
+                std::vector<llama_token> inp_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true, false);
+                std::vector<llama_token> inp_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true, false);
                 if (suff_rm_leading_spc && inp_sfx[0] == space_token) {
                     inp_sfx.erase(inp_sfx.begin());
                 }
@@ -703,7 +703,7 @@ int main(int argc, char ** argv) {
 
                     const size_t original_size = embd_inp.size();
 
-                    const auto line_inp = ::llama_tokenize(ctx, buffer, false);
+                    const auto line_inp = ::llama_tokenize(ctx, buffer, false, true, false);
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp).c_str());
 
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());

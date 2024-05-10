@@ -67,7 +67,7 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> inp;
     std::vector<llama_token> all;
 
-    inp = ::llama_tokenize(ctx, params.prompt, true, true);
+    inp = ::llama_tokenize(ctx, params.prompt, true, true, true);
     all = inp;
 
     const int max_context_size     = llama_n_ctx(ctx);
