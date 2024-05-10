@@ -5657,6 +5657,10 @@ static struct ggml_tensor * ggml_soft_max_impl(
         GGML_ASSERT(mask->ne[1] >= a->ne[1]);
     }
 
+    if (max_bias > 0.0f) {
+        GGML_ASSERT(mask);
+    }
+
     bool is_node = false;
 
     if (a->grad) {
@@ -6440,6 +6444,7 @@ struct ggml_tensor * ggml_flash_attn_ext(
         float                 max_bias) {
     GGML_ASSERT(ggml_can_mul_mat(k, q));
     // TODO: check if vT can be multiplied by (k*qT)
+
     if (mask) {
         GGML_ASSERT(ggml_is_contiguous(mask));
         GGML_ASSERT(mask->ne[2] == 1);
@@ -6447,6 +6452,10 @@ struct ggml_tensor * ggml_flash_attn_ext(
         GGML_ASSERT(mask->ne[1] >= GGML_PAD(q->ne[1], GGML_KQ_MASK_PAD) &&
                 "the Flash-Attention kernel requires the mask to be padded to GGML_KQ_MASK_PAD and at least n_queries big");
         //GGML_ASSERT(ggml_can_repeat_rows(mask, qk));
+    }
+
+    if (max_bias > 0.0f) {
+        GGML_ASSERT(mask);
     }
 
     bool is_node = false;
