@@ -11778,7 +11778,6 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     const int64_t ir1_start,
     const int64_t ir1_end,
 
-    const bool src1_cont,
     const size_t row_size
 ) {
 
@@ -11788,6 +11787,8 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     GGML_TENSOR_BINARY_OP_LOCALS
 
     const enum ggml_type type = src0->type;
+
+    const bool src1_cont = ggml_is_contiguous(src1);
 
     ggml_vec_dot_t    const vec_dot = type_traits[type].vec_dot;
     enum ggml_type    const vec_dot_type = type_traits[type].vec_dot_type;
@@ -12089,7 +12090,7 @@ UseGgmlGemm2:;
         num_rows_per_vec_dot = 1;
     }
 
-    ggml_compute_forward_mul_mat_one_chunk(params, dst, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end, src1_cont, row_size);
+    ggml_compute_forward_mul_mat_one_chunk(params, dst, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end, row_size);
 }
 
 // ggml_compute_forward_mul_mat_id
