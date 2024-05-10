@@ -29,7 +29,6 @@ inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
                           : [RES]  "+m"  (*target)
                           : [Z]     "m"  (zero)
                           : "zmm8", "memory");
-
 }
 
 // Multiply each item in mvec1 with the corresponding item in mvec2, adding the result to the corresponding item in sum. optionally clear the sum before starting. 
@@ -52,11 +51,11 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "mov\t%[VEC2],%%r12\n\t"                      // Where do we start work in mvec2?
                           "cmp\t$0,%[CLR]\n\t"                          // Should we clear the sum before we start?
                           "jz\t4f\n\t"
-                          "vbroadcastss\t%[Z]%{uint8%},\t%%zmm0\n\t"    // if so, use an upscaling operator to do it.
+                          "vbroadcastss\t%[Z]%{uint8%},\t%%zmm0\n\t"    // If so, use an upscaling operator to clear our sum.
                           "jmp\t1f\n\t"
                           "4:\n\t"
                           "vprefetch0\t(%[RES])\n\t"
-                          "vmovaps\t\t(%[RES]),\t%%zmm0\n\t"            // otherwise, load our inital state from sum..
+                          "vmovaps\t\t(%[RES]),\t%%zmm0\n\t"            // Otherwise, load our inital state from sum..
                           "vprefetchnta\t(%%r10)\n\t"
                           "vprefetchnta\t(%%r12)\n\t"
                           "1:\n\t"
@@ -83,7 +82,7 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "vfmadd231ps\t%%zmm3,\t%%zmm4,\t%%zmm0\n\t"   // Perform a fused multiply add
                           "vfmadd231ps\t%%zmm5,\t%%zmm6,\t%%zmm0\n\t"   // Perform a fused multiply add
                           "jmp\t1b\n\t"                                 // Jump back to the start of the loop
-                          "6:\n\t"                                      // we know we are near the tail. handle 2, 1, and 0 cases.
+                          "6:\n\t"                                      // We know we are near the tail. handle 2, 1, and 0 cases.
                           "cmp\t$0,\t%%r8\n\t"                          // Compare iterations to zero
                           "je\t2f\n\t"                                  // Jump to label 2 if zero (end of loop)
                           "cmp\t$1,\t%%r8\n\t"                          // Compare iterations to one
@@ -96,7 +95,7 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "vmovaps\t\t64(%%r12),\t%%zmm4\n\t"
                           "vfmadd231ps\t%%zmm3,\t%%zmm4,\t%%zmm0\n\t"   // Perform a fused multiply add
                           "2:\n\t"                                      // Label for loop end
-                          "vmovnraps\t\t%%zmm0,\t(%[RES])\n\t"          // save our results.
+                          "vmovnraps\t\t%%zmm0,\t(%[RES])\n\t"          // Save our results.
                           : [RES]  "+r" (sumvec)
                           : [ITER]  "r"  (iterations),
                             [VEC1]  "r"  (mvec1),
