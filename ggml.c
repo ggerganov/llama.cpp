@@ -12088,20 +12088,23 @@ UseGgmlGemm2:;
 
     // distribute the thread work across the inner or outer loop based on which one is larger
 
-    const int64_t nth0 = nr0 > nr1 ? nth : 1; // parallelize by src0 rows
-    const int64_t nth1 = nr0 > nr1 ? 1 : nth; // parallelize by src1 rows
+    const int64_t nchunk0 = nr0 > nr1 ? nth : 1; // parallelize by src0 rows
+    const int64_t nchunk1 = nr0 > nr1 ? 1 : nth; // parallelize by src1 rows
 
-    const int64_t ith0 = ith % nth0;
-    const int64_t ith1 = ith / nth0;
+    int current_chunk = ith;
 
-    const int64_t dr0 = (nr0 + nth0 - 1)/nth0;
-    const int64_t dr1 = (nr1 + nth1 - 1)/nth1;
+    {
+        const int64_t ith0 = current_chunk % nchunk0;
+        const int64_t ith1 = current_chunk / nchunk0;
 
-    const int64_t ir0_start = dr0*ith0;
-    const int64_t ir0_end = MIN(ir0_start + dr0, nr0);
+        const int64_t dr0 = (nr0 + nchunk0 - 1) / nchunk0;
+        const int64_t dr1 = (nr1 + nchunk1 - 1) / nchunk1;
 
-    const int64_t ir1_start = dr1*ith1;
-    const int64_t ir1_end = MIN(ir1_start + dr1, nr1);
+        const int64_t ir0_start = dr0 * ith0;
+        const int64_t ir0_end = MIN(ir0_start + dr0, nr0);
+
+        const int64_t ir1_start = dr1 * ith1;
+        const int64_t ir1_end = MIN(ir1_start + dr1, nr1);
 
     // threads with no work simply yield (not sure if it helps)
     if (ir0_start >= ir0_end || ir1_start >= ir1_end) {
@@ -12109,7 +12112,13 @@ UseGgmlGemm2:;
         return;
     }
 
-    ggml_compute_forward_mul_mat_one_chunk(params, dst, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end);
+        ggml_compute_forward_mul_mat_one_chunk(params, dst, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end);
+
+#ifdef GGML_PERF
+        chunks_executed++;
+#endif
+
+    }
 
 #ifdef GGML_PERF
     // These numbers are useful when trying to measure how well the threading scheduling works.
