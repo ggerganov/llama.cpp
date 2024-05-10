@@ -82,8 +82,8 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "add\t$192,\t%%r10\n\t"                       // Move to the next float32x16_t block (192 bytes ahead)
                           "add\t$192,\t%%r12\n\t"
                           "vfmadd231ps\t%%zmm5,\t%%zmm6,\t%%zmm0\n\t"   // Perform a fused multiply add
-                          "cmp\t$3,\t%%r8\n\t"                          // Compare iterations to three.
-                          "jge\t1b\n\t"                                 // If there still three or more iterations left, loop.
+                          "cmp\t$3,\t%%r8\n\t"                          // Compare iteration count to three.
+                          "jge\t1b\n\t"                                 // If there three or more iterations left, loop.
                           "6:\n\t"                                      // We know we are near the tail. handle 2, 1, and 0 cases.
                           "cmp\t$0,\t%%r8\n\t"                          // Compare iterations to zero
                           "jz\t2f\n\t"                                  // Jump to label 2 if zero (end of loop)
