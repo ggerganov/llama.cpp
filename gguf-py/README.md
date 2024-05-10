@@ -21,6 +21,8 @@ pip install gguf
 
 [scripts/gguf-convert-endian.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/scripts/gguf-convert-endian.py) — Allows converting the endianness of GGUF files.
 
+[scripts/gguf-new-metadata.py](https://github.com/ggerganov/llama.cpp/blob/master/gguf-py/scripts/gguf-new-metadata.py) — Copies a GGUF file with added/modified/removed metadata values.
+
 ## Development
 Maintainers who participate in development of this package are advised to install it in editable mode:
 

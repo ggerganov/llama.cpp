@@ -29,7 +29,7 @@ To mitigate it, you can increase values in `n_predict`, `kv_size`.
 cd ../../..
 mkdir build
 cd build
-cmake ../
+cmake -DLLAMA_CURL=ON ../
 cmake --build . --target server
 ```
 
@@ -57,7 +57,7 @@ Feature or Scenario must be annotated with `@llama.cpp` to be included in the de
 To run a scenario annotated with `@bug`, start:
 
 ```shell
-DEBUG=ON ./tests.sh --no-skipped --tags bug
+DEBUG=ON ./tests.sh --no-skipped --tags bug --stop
 ```
 
 After changing logic in `steps.py`, ensure that `@bug` and `@wrong_usage` scenario are updated.

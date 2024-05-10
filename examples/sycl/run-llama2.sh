@@ -12,6 +12,7 @@ if [ $# -gt 0 ]; then
     GGML_SYCL_SINGLE_GPU=1
 else
     GGML_SYCL_DEVICE=0
+    GGML_SYCL_SINGLE_GPU=0
 fi
 
 #export GGML_SYCL_DEBUG=1
