@@ -86,12 +86,12 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "jge\t1b\n\t"                                 // If there still three or more iterations left, loop.
                           "6:\n\t"                                      // We know we are near the tail. handle 2, 1, and 0 cases.
                           "cmp\t$0,\t%%r8\n\t"                          // Compare iterations to zero
-                          "je\t2f\n\t"                                  // Jump to label 2 if zero (end of loop)
+                          "jz\t2f\n\t"                                  // Jump to label 2 if zero (end of loop)
                           "cmp\t$1,\t%%r8\n\t"                          // Compare iterations to one
                           "vmovaps\t\t(%%r10),\t%%zmm1\n\t"             // Load two vectors.
                           "vmovaps\t\t(%%r12),\t%%zmm2\n\t"
                           "vfmadd231ps\t%%zmm1,\t%%zmm2,\t%%zmm0\n\t"   // Perform a fused multiply add
-                          "je\t2f\n\t"                                  // Jump to label 3 if one (end of loop)
+                          "je\t2f\n\t"                                  // Jump to label 2 if one (end of loop)
                           // No compare. we must be two.
                           "vmovaps\t\t64(%%r10),\t%%zmm3\n\t"           // Load two vectors.
                           "vmovaps\t\t64(%%r12),\t%%zmm4\n\t"
