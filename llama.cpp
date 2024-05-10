@@ -12200,7 +12200,7 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
-        int ignore_merges = false;
+        bool ignore_merges = false;
 
         std::vector<std::string> word_collection;
         switch (vocab.type) {
