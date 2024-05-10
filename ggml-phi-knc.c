@@ -38,11 +38,20 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
     uint8_t zero = 0;
 
     __asm__ __volatile__ (
-                          "mov\t%[ITER],%%r8\n\t"                       // how many register sized chunks are we responsible for
-                          "mov\t%[VEC1],%%r10\n\t"                      // where do we start work in mvec1?
-                          "mov\t%[VEC2],%%r12\n\t"                      // where do we start work in mvec2?
-                          "cmp\t$1,%[CLR]\n\t"                          // should we clear the sum before we start?
-                          "jne\t4f\n\t"
+                          "vprefetchenta\t(%[RES])\n\t"
+                          "vprefetch0\t(%[VEC1])\n\t"
+                          "vprefetch1\t64(%[VEC1])\n\t"
+                          "vprefetch0\t128(%[VEC1])\n\t"
+                          "vprefetch1\t192(%[VEC1])\n\t"
+                          "vprefetch0\t(%[VEC2])\n\t"
+                          "vprefetch1\t64(%[VEC2])\n\t"
+                          "vprefetch0\t128(%[VEC2])\n\t"
+                          "vprefetch1\t192(%[VEC2])\n\t"
+                          "mov\t%[ITER],%%r8\n\t"                       // How many vector sized chunks we are responsible for.
+                          "mov\t%[VEC1],%%r10\n\t"                      // Where do we start work in mvec1?
+                          "mov\t%[VEC2],%%r12\n\t"                      // Where do we start work in mvec2?
+                          "cmp\t$0,%[CLR]\n\t"                          // Should we clear the sum before we start?
+                          "jz\t4f\n\t"
                           "vbroadcastss\t%[Z]%{uint8%},\t%%zmm0\n\t"    // if so, use an upscaling operator to do it.
                           "vprefetchnta\t(%%r10)\n\t"
                           "vprefetchnta\t(%%r12)\n\t"
