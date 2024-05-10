@@ -65,7 +65,18 @@ int main(int argc, char **argv) {
         std::string str = llama_detokenize_bpe(ctx, std::vector<int>(1, i));
         try {
             auto cps = unicode_cpts_from_utf8(str);
-            std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
+            std::vector<llama_token> tokens = llama_tokenize(ctx, str, false, true);
+            if (tokens.size() > 1) {
+                fprintf(stderr,
+                        "%s : error: token %d detokenizes to '%s'(%zu) but "
+                        "tokenization of this to multiple tokens: [",
+                        __func__, i, str.c_str(), str.length());
+                fprintf(stderr, "%d", tokens[0]);
+                for (size_t i = 1; i < tokens.size(); i++) {
+                    fprintf(stderr, ", %d", tokens[i]);
+                }
+                fprintf(stderr, "]\n");
+            }
             std::string check = llama_detokenize_bpe(ctx, tokens);
             if (check != str) {
                 fprintf(stderr, "%s : error: token %d detokenizes to '%s'(%zu) but tokenization of this detokenizes to '%s'(%zu)\n",
