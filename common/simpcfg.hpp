@@ -51,22 +51,25 @@
 #include <regex>
 #include <variant>
 #include <sstream>
-#include <format>
 #include <cuchar>
-#include <iostream>
 
 
 #define SC_DEBUG
 #undef SC_DEBUG_VERBOSE
+
 #define SC_TEST_PRG
 #ifdef SC_TEST_PRG
-#define LINFO_LN(FMT, ...) fprintf(stdout, FMT"\n", __VA_ARGS__)
-#define LDBUG_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
-#define LERRR_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
-#define LWARN_LN(FMT, ...) fprintf(stderr, FMT"\n", __VA_ARGS__)
+#include <iostream>
+#include <format>
+#define LINFO_LN(FMT, ...) fprintf(stdout, FMT"\n", ##__VA_ARGS__)
+#define LDBUG(FMT, ...) fprintf(stderr, FMT, ##__VA_ARGS__)
+#define LDBUG_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
+#define LERRR_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
+#define LWARN_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
 #else
 #include "log.h"
 #define LINFO_LN LOG_TEELN
+#define LDBUG LOG
 #define LDBUG_LN LOGLN
 #define LERRR_LN LOG_TEELN
 #define LWARN_LN LOG_TEELN
@@ -101,20 +104,22 @@ size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
 
 template <typename TString>
 void dumphex_string(const TString &sIn, const std::string &msgTag){
-    std::cout << msgTag << "[ ";
+    LDBUG("%s[ ", msgTag.c_str());
     for(auto c: sIn) {
         auto cSize = sizeof(c);
         if (cSize == 1) {
-            std::cout << std::format("{:02x}, ", (uint8_t)c);
+            LDBUG("%02x, ", (uint8_t)c);
         } else if (cSize == 2) {
-            std::cout << std::format("{:04x}, ", (uint16_t)c);
+            LDBUG("%04x, ", (uint16_t)c);
         } else if (cSize == 4) {
-            std::cout << std::format("{:08x}, ", (uint32_t)c);
+            LDBUG("%08x, ", (uint32_t)c);
         } else {
-            throw std::runtime_error( std::format("ERRR:{}:Unsupported char type with size [{}]", __func__, cSize) );
+            std::stringstream ss;
+            ss << "ERRR:" << __func__ << ":Unsupported char type with size [" << cSize << "]";
+            throw std::runtime_error( ss.str().c_str() );
         }
     }
-    std::cout << " ]" << std::endl;
+    LDBUG_LN(" ]");
 }
 
 // Remove chars from begin and end of the passed string, provided the char
@@ -152,8 +157,8 @@ void dumphex_string(const TString &sIn, const std::string &msgTag){
 template <typename TString>
 TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
 #ifdef SC_DEBUG_VERBOSE
-    dumphex_string(sin, "DBUG:TrimDumb:Str:");
-    dumphex_string(trimChars, "DBUG:TrimDumb:Tim:");
+    dumphex_string(sin, "DBUG:StrTrimDumb:Str:");
+    dumphex_string(trimChars, "DBUG:StrTrimDumb:TrimChars:");
 #endif
     sin.erase(sin.find_last_not_of(trimChars)+1);
     sin.erase(0, sin.find_first_not_of(trimChars));
@@ -231,8 +236,8 @@ TString str_tolower(const TString &sin) {
     sout.resize(sin.size());
     std::transform(sin.begin(), sin.end(), sout.begin(), [](auto c)->auto {return std::tolower(c);});
 #ifdef SC_DEBUG_VERBOSE
-    dumphex_string(sin, std::format("DBUG:{}:in:", __func__));
-    dumphex_string(sout, std::format("DBUG:{}:out:", __func__));
+    dumphex_string(sin, "DBUG:StrToLower:in:");
+    dumphex_string(sout, "DBUG:StrToLower:out:");
 #endif
     return sout;
 }
@@ -568,6 +573,7 @@ void check_wstring_cout() {
 }
 
 void check_nonenglish() {
+    std::cout << "**** non english **** " << std::endl;
     std::vector<std::string> vTest1 = { "\n\tAഅअಅ\n\t", "\n\tAഅअಅ " };
     for (auto sTest: vTest1) {
         std::string sGotDumb = str_trim_dumb(sTest, {" \n\t"});
