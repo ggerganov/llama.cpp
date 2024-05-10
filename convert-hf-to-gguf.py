@@ -48,7 +48,6 @@ class Model:
 
     dir_model: Path
     ftype: int
-    fname_out: Path
     is_big_endian: bool
     endianess: gguf.GGUFEndian
     use_temp_file: bool
@@ -56,20 +55,20 @@ class Model:
     part_names: list[str]
     is_safetensors: bool
     hparams: dict[str, Any]
-    gguf_writer: gguf.GGUFWriter
     block_count: int
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
+    fname_out: Path
+    gguf_writer: gguf.GGUFWriter
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool):
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
         self.ftype = ftype
-        self.fname_out = fname_out
         self.is_big_endian = is_big_endian
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
@@ -79,7 +78,6 @@ class Model:
         if not self.is_safetensors:
             self.part_names = Model.get_model_part_names(self.dir_model, ".bin")
         self.hparams = Model.load_hparams(self.dir_model)
-        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensor_names = None
@@ -92,6 +90,11 @@ class Model:
             else:
                 logger.info(f"choosing --outtype bf16 from first tensor type ({first_tensor.dtype})")
                 self.ftype = gguf.LlamaFileType.MOSTLY_BF16
+        ftype_up: str = self.ftype.name.partition("_")[2].upper()
+        ftype_lw: str = ftype_up.lower()
+        # allow templating the file name with the output ftype, useful with the "auto" ftype
+        self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
+        self.gguf_writer = gguf.GGUFWriter(self.fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
 
     @classmethod
     def __init_subclass__(cls):
@@ -2400,11 +2403,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--outfile", type=Path,
-        help="path to write to; default: based on input",
+        help="path to write to; default: based on input. {ftype} will be replaced by the outtype.",
     )
     parser.add_argument(
-        "--outtype", type=str, choices=["f32", "f16", "bf16", "auto-f16"], default="f16",
-        help="output format - use f32 for float32, f16 for float16, bf16 for bfloat16, auto-f16 for the highest-fidelity 16-bit float type depending on the first loaded tensor type",
+        "--outtype", type=str, choices=["f32", "f16", "bf16", "auto"], default="f16",
+        help="output format - use f32 for float32, f16 for float16, bf16 for bfloat16, auto for the highest-fidelity 16-bit float type depending on the first loaded tensor type",
     )
     parser.add_argument(
         "--bigendian", action="store_true",
@@ -2462,14 +2465,14 @@ def main() -> None:
         "f32": gguf.LlamaFileType.ALL_F32,
         "f16": gguf.LlamaFileType.MOSTLY_F16,
         "bf16": gguf.LlamaFileType.MOSTLY_BF16,
-        "auto-f16": gguf.LlamaFileType.GUESSED,  # TODO: use a more appropriate "auto" type
+        "auto": gguf.LlamaFileType.GUESSED,
     }
 
     if args.outfile is not None:
         fname_out = args.outfile
     else:
         # output in the same directory as the model by default
-        fname_out = dir_model / f'ggml-model-{args.outtype}.gguf'
+        fname_out = dir_model / 'ggml-model-{ftype}.gguf'
 
     logger.info(f"Loading model: {dir_model.name}")
 
@@ -2488,13 +2491,13 @@ def main() -> None:
         model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
 
         if args.vocab_only:
-            logger.info(f"Exporting model vocab to '{fname_out}'")
+            logger.info(f"Exporting model vocab to '{model_instance.fname_out}'")
             model_instance.write_vocab()
         else:
-            logger.info(f"Exporting model to '{fname_out}'")
+            logger.info(f"Exporting model to '{model_instance.fname_out}'")
             model_instance.write()
 
-        logger.info(f"Model successfully exported to '{fname_out}'")
+        logger.info(f"Model successfully exported to '{model_instance.fname_out}'")
 
 
 if __name__ == '__main__':
