@@ -1,4 +1,6 @@
 #include "common.h"
+// Change JSON_ASSERT from assert() to GGML_ASSERT:
+#define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
@@ -911,6 +913,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.instruct = true;
         return true;
     }
+    if (arg == "-cnv" || arg == "--conversation") {
+        params.conversation = true;
+        return true;
+    }
     if (arg == "-cml" || arg == "--chatml") {
         params.chatml = true;
         return true;
@@ -1439,6 +1445,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  --version             show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
+    printf("  -cnv, --conversation  run in conversation mode (does not print special tokens and suffix/prefix)\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
     printf("  --chaton-meta-json JsonFile\n");
@@ -1990,18 +1997,18 @@ static bool llama_download_file(const std::string & url, const std::string & pat
             try {
                 metadata_in >> metadata;
                 fprintf(stderr, "%s: previous metadata file found %s: %s\n", __func__, metadata_path.c_str(), metadata.dump().c_str());
-                if (metadata.contains("url") && metadata["url"].is_string()) {
-                    auto previous_url = metadata["url"].get<std::string>();
+                if (metadata.contains("url") && metadata.at("url").is_string()) {
+                    auto previous_url = metadata.at("url").get<std::string>();
                     if (previous_url != url) {
                         fprintf(stderr, "%s: Model URL mismatch: %s != %s\n", __func__, url.c_str(), previous_url.c_str());
                         return false;
                     }
                 }
-                if (metadata.contains("etag") && metadata["etag"].is_string()) {
-                    etag = metadata["etag"];
+                if (metadata.contains("etag") && metadata.at("etag").is_string()) {
+                    etag = metadata.at("etag");
                 }
-                if (metadata.contains("lastModified") && metadata["lastModified"].is_string()) {
-                    last_modified = metadata["lastModified"];
+                if (metadata.contains("lastModified") && metadata.at("lastModified").is_string()) {
+                    last_modified = metadata.at("lastModified");
                 }
             } catch (const nlohmann::json::exception & e) {
                 fprintf(stderr, "%s: error reading metadata file %s: %s\n", __func__, metadata_path.c_str(), e.what());
