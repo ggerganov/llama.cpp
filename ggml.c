@@ -12091,8 +12091,10 @@ UseGgmlGemm2:;
     const int64_t nchunk0 = nr0 > nr1 ? nth : 1; // parallelize by src0 rows
     const int64_t nchunk1 = nr0 > nr1 ? 1 : nth; // parallelize by src1 rows
 
+    //The first chunk comes from our thread_id, the rest will get auto-assigned.
     int current_chunk = ith;
 
+    while (current_chunk < nchunk0 * nchunk1)
     {
         const int64_t ith0 = current_chunk % nchunk0;
         const int64_t ith1 = current_chunk / nchunk0;
@@ -12112,6 +12114,10 @@ UseGgmlGemm2:;
         chunks_executed++;
 #endif
 
+        if (nth >= nchunk0 * nchunk1)
+            break;
+
+        current_chunk = atomic_fetch_add(&state->shared->current_chunk, 1);
     }
 
 #ifdef GGML_PERF
