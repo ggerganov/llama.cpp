@@ -1,5 +1,5 @@
 /* Xeon PHI IMCI support. */
-/* formatted by using emacs, with (M-x set-variable RET c-basic-offset RET 4 RET) executed. */
+/* Formatted by using emacs, with (M-x set-variable RET c-basic-offset RET 4 RET) executed. */
 /* Formatted by using emacs, with (M-x set-variable RET indent-tabs-mode RET nil RET) executed. */
 
 #include <stdint.h>
@@ -35,7 +35,7 @@ inline static void GGML_F32x16_VEC_ZERO(float32x16_t *target)
 // Multiply each item in mvec1 with the corresponding item in mvec2, adding the result to the corresponding item in sum. optionally clear the sum before starting. 
 inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x16_t *mvec2, float32x16_t *sumvec, size_t iterations, int clear)
 {
-    uint8_t zero[4] __attribute__((aligned(64))) = {0,0,0,0};
+    uint8_t zero = 0;
 
     __asm__ __volatile__ (
                           "mov\t%[ITER],%%r8\n\t"                       // how many register sized chunks are we responsible for
@@ -43,7 +43,7 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "mov\t%[VEC2],%%r12\n\t"                      // where do we start work in mvec2?
                           "cmp\t$1,%[CLR]\n\t"                          // should we clear the sum before we start?
                           "jne\t4f\n\t"
-                          "vbroadcastf32x4\t%[Z]%{uint8%},\t%%zmm0\n\t" // if so, use an upscaling operator to do it.
+                          "vbroadcastss\t%[Z]%{uint8%},\t%%zmm0\n\t"    // if so, use an upscaling operator to do it.
                           "vprefetchnta\t(%%r10)\n\t"
                           "vprefetchnta\t(%%r12)\n\t"
                           "vprefetch1\t128(%%r10)\n\t"
