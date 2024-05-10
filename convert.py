@@ -284,6 +284,7 @@ class Params:
         n_experts      = None
         n_experts_used = None
         f_rope_freq_base = None
+        n_ff = None
 
         # hack to determine LLaMA v1 vs v2 vs CodeLlama
         if config.get("moe"):
@@ -307,6 +308,8 @@ class Params:
             n_experts      = config["moe"]["num_experts"]
             n_experts_used = config["moe"]["num_experts_per_tok"]
             f_rope_freq_base = 1e6
+
+        assert n_ff is not None
 
         return Params(
             n_vocab          = model["tok_embeddings.weight"].shape[0],
@@ -462,7 +465,8 @@ class SentencePieceVocab(Vocab):
             # not found in alternate location either
             raise FileNotFoundError('Cannot find tokenizer.model')
 
-        self.sentencepiece_tokenizer = SentencePieceProcessor(str(fname_tokenizer))
+        self.sentencepiece_tokenizer = SentencePieceProcessor()
+        self.sentencepiece_tokenizer.LoadFromFile(str(fname_tokenizer))
         vocab_size = self.sentencepiece_tokenizer.vocab_size()
 
         new_tokens       = {id: piece for piece, id in added_tokens.items() if id >= vocab_size}
@@ -482,23 +486,23 @@ class SentencePieceVocab(Vocab):
     def sentencepiece_tokens(self) -> Iterable[tuple[bytes, float, gguf.TokenType]]:
         tokenizer = self.sentencepiece_tokenizer
         for i in range(tokenizer.vocab_size()):
-            piece = tokenizer.id_to_piece(i)
+            piece = tokenizer.IdToPiece(i)
             text         = piece.encode("utf-8")
-            score: float = tokenizer.get_score(i)
+            score: float = tokenizer.GetScore(i)
 
             toktype = gguf.TokenType.NORMAL
-            if tokenizer.is_unknown(i):
+            if tokenizer.IsUnknown(i):
                 toktype = gguf.TokenType.UNKNOWN
-            if tokenizer.is_control(i):
+            if tokenizer.IsControl(i):
                 toktype = gguf.TokenType.CONTROL
 
             # NOTE: I think added_tokens are user defined.
             # ref: https://github.com/google/sentencepiece/blob/master/src/sentencepiece_model.proto
             # if tokenizer.is_user_defined(i): toktype = gguf.TokenType.USER_DEFINED
 
-            if tokenizer.is_unused(i):
+            if tokenizer.IsUnused(i):
                 toktype = gguf.TokenType.UNUSED
-            if tokenizer.is_byte(i):
+            if tokenizer.IsByte(i):
                 toktype = gguf.TokenType.BYTE
 
             yield text, score, toktype
@@ -906,7 +910,7 @@ class LazyUnpickler(pickle.Unpickler):
     def rebuild_from_type_v2(func, new_type, args, state):
         return func(*args)
 
-    CLASSES = {
+    CLASSES: dict[tuple[str, str], type[LazyTensor] | LazyStorageKind] = {
         # getattr used here as a workaround for mypy not being smart enough to determine
         # the staticmethods have a __func__ attribute.
         ('torch._tensor', '_rebuild_from_type_v2'): getattr(rebuild_from_type_v2, '__func__'),
@@ -1508,25 +1512,27 @@ def main(args_in: list[str] | None = None) -> None:
     if args.big_endian:
         endianess = gguf.GGUFEndian.BIG
 
-    params = Params.load(model_plus)
-    if params.n_ctx == -1:
-        if args.ctx is None:
-            msg = """\
-                The model doesn't have a context size, and you didn't specify one with --ctx
-                Please specify one with --ctx:
-                 - LLaMA v1: --ctx 2048
-                 - LLaMA v2: --ctx 4096"""
-            parser.error(textwrap.dedent(msg))
-        params.n_ctx = args.ctx
+    params = None
+    if args.pad_vocab or not args.vocab_only:
+        params = Params.load(model_plus)
+        if params.n_ctx == -1:
+            if args.ctx is None:
+                msg = """\
+                    The model doesn't have a context size, and you didn't specify one with --ctx
+                    Please specify one with --ctx:
+                     - LLaMA v1: --ctx 2048
+                     - LLaMA v2: --ctx 4096"""
+                parser.error(textwrap.dedent(msg))
+            params.n_ctx = args.ctx
 
-    if args.outtype:
-        params.ftype = {
-            "f32": GGMLFileType.AllF32,
-            "f16": GGMLFileType.MostlyF16,
-            "q8_0": GGMLFileType.MostlyQ8_0,
-        }[args.outtype]
+        if args.outtype:
+            params.ftype = {
+                "f32": GGMLFileType.AllF32,
+                "f16": GGMLFileType.MostlyF16,
+                "q8_0": GGMLFileType.MostlyQ8_0,
+            }[args.outtype]
 
-    logger.info(f"params = {params}")
+        logger.info(f"params = {params}")
 
     model_parent_path = model_plus.paths[0].parent
     vocab_path = Path(args.vocab_dir or args.model or model_parent_path)
@@ -1539,6 +1545,17 @@ def main(args_in: list[str] | None = None) -> None:
         if not args.outfile:
             raise ValueError("need --outfile if using --vocab-only")
         outfile = args.outfile
+        if params is None:
+            params = Params(
+                n_vocab    = vocab.vocab_size,
+                n_embd     = 1,
+                n_layer    = 1,
+                n_ctx      = 1,
+                n_ff       = 1,
+                n_head     = 1,
+                n_head_kv  = 1,
+                f_norm_eps = 1e-5,
+            )
         OutputFile.write_vocab_only(outfile, params, vocab, special_vocab,
                                     endianess=endianess, pad_vocab=args.pad_vocab)
         logger.info(f"Wrote {outfile}")

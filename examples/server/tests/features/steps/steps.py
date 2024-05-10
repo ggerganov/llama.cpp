@@ -376,6 +376,11 @@ def step_seed(context, seed):
         context.seed.append(seed)
 
 
+@step('BOS token is {bos:d}')
+def step_bos_token(context, bos):
+    context.bos = bos
+
+
 @step('a prefix prompt')
 def step_prompt_prefix(context):
     context.prompt_prefix = context_text(context)
@@ -656,21 +661,29 @@ async def all_embeddings_are_generated(context):
         assert_embeddings(context.tasks_result.pop().pop())
 
 
+@step('adding special tokens')
+def step_tokenize_set_add_special(context):
+    context.tokenize_add_special = True
+
+
 @step('tokenizing')
 @async_run_until_complete
 async def step_tokenize(context):
     context.tokenized_text = context_text(context)
     async with aiohttp.ClientSession() as session:
+        tokenize_args = {
+            "content": context.tokenized_text,
+        }
+        if getattr(context, 'tokenize_add_special', None) is not None:
+            tokenize_args['add_special'] = context.tokenize_add_special
         async with session.post(f'{context.base_url}/tokenize',
-                                json={
-                                    "content": context.tokenized_text,
-                                }) as response:
+                                json=tokenize_args) as response:
             assert response.status == 200
             tokenize_json = await response.json()
             context.tokens = tokenize_json['tokens']
 
 
-@step('tokens can be detokenize')
+@step('tokens can be detokenized')
 @async_run_until_complete
 async def step_detokenize(context):
     assert len(context.tokens) > 0
@@ -683,6 +696,21 @@ async def step_detokenize(context):
             detokenize_json = await response.json()
             # SPM tokenizer adds a whitespace prefix: https://github.com/google/sentencepiece/issues/15
             assert context.tokenized_text == detokenize_json['content'].strip()
+
+
+@step('tokens begin with BOS')
+def step_strings_for_tokenization(context):
+    assert context.tokens[0] == context.bos
+
+
+@step('tokens do not begin with BOS')
+def step_strings_for_tokenization(context):
+    assert context.tokens[0] != context.bos
+
+
+@step('first token is removed')
+def step_strings_for_tokenization(context):
+    context.tokens = context.tokens[1:]
 
 
 @step('an OPTIONS request is sent from {origin}')
@@ -911,7 +939,7 @@ async def oai_chat_completions(user_prompt,
                     while event_received:
                         event_received = False
                         async for line_in_bytes in response.content:
-                            line = line_in_bytes.decode('utf8')
+                            line = line_in_bytes.decode('utf-8')
                             line = line.rstrip('\n').rstrip('\r')
                             if line == '':
                                 continue
