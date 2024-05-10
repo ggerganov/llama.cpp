@@ -169,7 +169,6 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_MUL_MM_ID_IQ4_XS_F32,
     GGML_METAL_KERNEL_TYPE_ROPE_F32,
     GGML_METAL_KERNEL_TYPE_ROPE_F16,
-    GGML_METAL_KERNEL_TYPE_ALIBI_F32,
     GGML_METAL_KERNEL_TYPE_IM2COL_F16,
     GGML_METAL_KERNEL_TYPE_IM2COL_F32,
     GGML_METAL_KERNEL_TYPE_UPSCALE_F32,
@@ -623,7 +622,6 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MM_ID_IQ4_XS_F32,          mul_mm_id_iq4_xs_f32,           ctx->support_simdgroup_mm);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_ROPE_F32,                      rope_f32,                       true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_ROPE_F16,                      rope_f16,                       true);
-        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_ALIBI_F32,                     alibi_f32,                      true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_IM2COL_F16,                    im2col_f16,                     true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_IM2COL_F32,                    im2col_f32,                     true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_UPSCALE_F32,                   upscale_f32,                    true);
@@ -759,7 +757,6 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
         case GGML_OP_GROUP_NORM:
             return ctx->support_simdgroup_reduction;
         case GGML_OP_NORM:
-        case GGML_OP_ALIBI:
         case GGML_OP_ROPE:
         case GGML_OP_IM2COL:
             return true;
@@ -1357,13 +1354,12 @@ static enum ggml_status ggml_metal_graph_compute(
                 case GGML_OP_SOFT_MAX:
                     {
                         GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F16 || src1->type == GGML_TYPE_F32);
-                        GGML_ASSERT(!src2 || src2->type == GGML_TYPE_F16 || src2->type == GGML_TYPE_F32);
 
                         int nth = 32; // SIMD width
 
                         id<MTLComputePipelineState> pipeline = nil;
 
-                        const bool use_f16 = (src1 && src1->type == GGML_TYPE_F16) || (src2 && src2->type == GGML_TYPE_F16);
+                        const bool use_f16 = (src1 && src1->type == GGML_TYPE_F16);
 
                         if (ne00%4 == 0) {
                             while (nth < ne00/4 && nth < 256) {
@@ -1407,20 +1403,15 @@ static enum ggml_status ggml_metal_graph_compute(
                         } else {
                             [encoder setBuffer:id_src0 offset:offs_src0   atIndex:1];
                         }
-                        if (id_src2) {
-                            [encoder setBuffer:id_src2 offset:offs_src2   atIndex:2];
-                        } else {
-                            [encoder setBuffer:id_src0 offset:offs_src0   atIndex:2];
-                        }
-                        [encoder setBuffer:id_dst   offset:offs_dst          atIndex:3];
-                        [encoder setBytes:&ne00     length:sizeof(ne00)      atIndex:4];
-                        [encoder setBytes:&ne01     length:sizeof(ne01)      atIndex:5];
-                        [encoder setBytes:&ne02     length:sizeof(ne02)      atIndex:6];
-                        [encoder setBytes:&scale    length:sizeof(scale)     atIndex:7];
-                        [encoder setBytes:&max_bias length:sizeof(max_bias)  atIndex:8];
-                        [encoder setBytes:&m0       length:sizeof(m0)        atIndex:9];
-                        [encoder setBytes:&m1       length:sizeof(m1)        atIndex:10];
-                        [encoder setBytes:&n_head_log2 length:sizeof(n_head_log2) atIndex:11];
+                        [encoder setBuffer:id_dst      offset:offs_dst            atIndex:2];
+                        [encoder setBytes:&ne00        length:sizeof(ne00)        atIndex:3];
+                        [encoder setBytes:&ne01        length:sizeof(ne01)        atIndex:4];
+                        [encoder setBytes:&ne02        length:sizeof(ne02)        atIndex:5];
+                        [encoder setBytes:&scale       length:sizeof(scale)       atIndex:6];
+                        [encoder setBytes:&max_bias    length:sizeof(max_bias)    atIndex:7];
+                        [encoder setBytes:&m0          length:sizeof(m0)          atIndex:8];
+                        [encoder setBytes:&m1          length:sizeof(m1)          atIndex:9];
+                        [encoder setBytes:&n_head_log2 length:sizeof(n_head_log2) atIndex:10];
                         [encoder setThreadgroupMemoryLength:32*sizeof(float) atIndex:0];
 
                         [encoder dispatchThreadgroups:MTLSizeMake(ne01*ne02*ne03, 1, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
@@ -2224,49 +2215,6 @@ static enum ggml_status ggml_metal_graph_compute(
                         const int64_t nrows = ggml_nrows(src0);
 
                         [encoder dispatchThreadgroups:MTLSizeMake(nrows, 1, 1) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
-                    } break;
-                case GGML_OP_ALIBI:
-                    {
-                        GGML_ASSERT((src0t == GGML_TYPE_F32));
-
-                        const int nth = MIN(1024, ne00);
-
-                        //const int n_past = ((int32_t *) dst->op_params)[0];
-                        const int n_head = ((int32_t *) dst->op_params)[1];
-
-                        float max_bias;
-                        memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
-
-                        const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));
-                        const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
-                        const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_heads_log2_floor);
-
-                        id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_ALIBI_F32].pipeline;
-
-                        [encoder setComputePipelineState:pipeline];
-                        [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
-                        [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
-                        [encoder setBytes:&ne00 length:sizeof( int64_t) atIndex:2];
-                        [encoder setBytes:&ne01 length:sizeof( int64_t) atIndex:3];
-                        [encoder setBytes:&ne02 length:sizeof( int64_t) atIndex:4];
-                        [encoder setBytes:&ne03 length:sizeof( int64_t) atIndex:5];
-                        [encoder setBytes:&nb00 length:sizeof(uint64_t) atIndex:6];
-                        [encoder setBytes:&nb01 length:sizeof(uint64_t) atIndex:7];
-                        [encoder setBytes:&nb02 length:sizeof(uint64_t) atIndex:8];
-                        [encoder setBytes:&nb03 length:sizeof(uint64_t) atIndex:9];
-                        [encoder setBytes:&ne0  length:sizeof( int64_t) atIndex:10];
-                        [encoder setBytes:&ne1  length:sizeof( int64_t) atIndex:11];
-                        [encoder setBytes:&ne2  length:sizeof( int64_t) atIndex:12];
-                        [encoder setBytes:&ne3  length:sizeof( int64_t) atIndex:13];
-                        [encoder setBytes:&nb0  length:sizeof(uint64_t) atIndex:14];
-                        [encoder setBytes:&nb1  length:sizeof(uint64_t) atIndex:15];
-                        [encoder setBytes:&nb2  length:sizeof(uint64_t) atIndex:16];
-                        [encoder setBytes:&nb3  length:sizeof(uint64_t) atIndex:17];
-                        [encoder setBytes:&m0   length:sizeof(   float) atIndex:18];
-                        [encoder setBytes:&m1   length:sizeof(   float) atIndex:19];
-                        [encoder setBytes:&n_heads_log2_floor   length:sizeof(int) atIndex:20];
-
-                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne02, ne03) threadsPerThreadgroup:MTLSizeMake(nth, 1, 1)];
                     } break;
                 case GGML_OP_ROPE:
                     {

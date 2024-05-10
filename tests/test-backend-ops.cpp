@@ -1111,11 +1111,7 @@ struct test_soft_max : public test_case {
         if (this->mask) {
             mask = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, ne[0], ne[1]);
         }
-        ggml_tensor * pos = nullptr;
-        if (max_bias > 0.0f) {
-            pos = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, ne[0]);
-        }
-        ggml_tensor * out = ggml_soft_max_ext(ctx, a, mask, pos, scale, max_bias);
+        ggml_tensor * out = ggml_soft_max_ext(ctx, a, mask, scale, max_bias);
         return out;
     }
 };
@@ -1611,7 +1607,7 @@ public:
 
         struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
 
-        kq = ggml_soft_max_ext(ctx, kq, kq_mask, nullptr, kq_scale, 0.0f);
+        kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale, 0.0f);
 
         // split cached v into n_head heads
         struct ggml_tensor * v =

@@ -3154,7 +3154,6 @@ typedef float (*vec_dot_q_mul_mat_sycl_t)(
 #define SYCL_SCALE_BLOCK_SIZE 256
 #define SYCL_CLAMP_BLOCK_SIZE 256
 #define SYCL_ROPE_BLOCK_SIZE 256
-#define SYCL_ALIBI_BLOCK_SIZE 32
 #define SYCL_DIAG_MASK_INF_BLOCK_SIZE 32
 #define SYCL_QUANTIZE_BLOCK_SIZE 256
 #define SYCL_DEQUANTIZE_BLOCK_SIZE 256
@@ -9316,32 +9315,6 @@ static void rope_glm_f32(
     dst[i + half_n_dims * 3] = x2*sin_block_theta + x3*cos_block_theta;
 }
 
-static void alibi_f32(const float * x, float * dst, const int ncols, const int k_rows,
-                                 const int n_heads_log2_floor, const float m0, const float m1,
-                                 const sycl::nd_item<3> &item_ct1) {
-    const int col = item_ct1.get_local_range(2) * item_ct1.get_group(2) +
-                    item_ct1.get_local_id(2);
-
-    if (col >= ncols) {
-        return;
-    }
-
-    const int row = item_ct1.get_local_range(1) * item_ct1.get_group(1) +
-                    item_ct1.get_local_id(1);
-    const int i = row*ncols + col;
-
-    const int k = row/k_rows;
-
-    float m_k;
-    if (k < n_heads_log2_floor) {
-        m_k = dpct::pow(m0, k + 1);
-    } else {
-        m_k = dpct::pow(m1, 2 * (k - n_heads_log2_floor) + 1);
-    }
-
-    dst[i] = col * m_k + x[i];
-}
-
 static void k_sum_rows_f32(const float * x, float * dst, const int ncols,
                            const sycl::nd_item<3> &item_ct1) {
     const int row = item_ct1.get_group(1);
@@ -12964,20 +12937,6 @@ static void rope_glm_f32_sycl(const float *x, float *dst, int ncols, int nrows,
                          });
 }
 
-static void alibi_f32_sycl(const float *x, float *dst, const int ncols,
-                           const int nrows, const int k_rows,
-                           const int n_heads_log2_floor, const float m0,
-                           const float m1, dpct::queue_ptr stream) {
-    const sycl::range<3> block_dims(1, 1, SYCL_ALIBI_BLOCK_SIZE);
-    const int num_blocks_x = (ncols + SYCL_ALIBI_BLOCK_SIZE - 1) / (SYCL_ALIBI_BLOCK_SIZE);
-    const sycl::range<3> block_nums(1, nrows, num_blocks_x);
-    stream->parallel_for(sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                         [=](sycl::nd_item<3> item_ct1) {
-                             alibi_f32(x, dst, ncols, k_rows,
-                                       n_heads_log2_floor, m0, m1, item_ct1);
-                         });
-}
-
 static void sum_rows_f32_sycl(const float *x, float *dst, const int ncols,
                               const int nrows, dpct::queue_ptr stream) {
     const sycl::range<3> block_dims(1, 1, WARP_SIZE);
@@ -14559,36 +14518,6 @@ inline void ggml_sycl_op_rope(const ggml_tensor *src0, const ggml_tensor *src1,
 
     (void) src1;
     (void) dst;
-    (void) src1_dd;
-}
-
-inline void ggml_sycl_op_alibi(const ggml_tensor *src0, const ggml_tensor *src1,
-                               ggml_tensor *dst, const float *src0_dd,
-                               const float *src1_dd, float *dst_dd,
-                               const dpct::queue_ptr &main_stream) {
-
-    GGML_ASSERT(src0->type == GGML_TYPE_F32);
-    GGML_ASSERT( dst->type == GGML_TYPE_F32);
-
-    GGML_TENSOR_LOCALS_3(int64_t, ne0, src0, ne);
-    const int64_t nrows = ggml_nrows(src0);
-
-    //const int n_past = ((int32_t *) dst->op_params)[0];
-    const int n_head = ((int32_t *) dst->op_params)[1];
-    float max_bias;
-    memcpy(&max_bias, (int32_t *) dst->op_params + 2, sizeof(float));
-
-    //GGML_ASSERT(ne01 + n_past == ne00);
-    GGML_ASSERT(n_head == ne02);
-
-    const int n_heads_log2_floor = 1 << (int) floor(log2(n_head));
-
-    const float m0 = powf(2.0f, -(max_bias) / n_heads_log2_floor);
-    const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_heads_log2_floor);
-
-    alibi_f32_sycl(src0_dd, dst_dd, ne00, nrows, ne01, n_heads_log2_floor, m0, m1, main_stream);
-
-    (void) src1;
     (void) src1_dd;
 }
 
@@ -16232,10 +16161,6 @@ static void ggml_sycl_rope(const ggml_tensor * src0, const ggml_tensor * src1, g
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_rope);
 }
 
-static void ggml_sycl_alibi(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
-    ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_alibi);
-}
-
 static void ggml_sycl_pool2d(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     ggml_sycl_op_flatten(src0, src1, dst, ggml_sycl_op_pool2d);
 }
@@ -16611,9 +16536,6 @@ bool ggml_sycl_compute_forward(struct ggml_compute_params * params, struct ggml_
             break;
         case GGML_OP_ROPE:
             func = ggml_sycl_rope;
-            break;
-        case GGML_OP_ALIBI:
-            func = ggml_sycl_alibi;
             break;
         case GGML_OP_IM2COL:
             func = ggml_sycl_im2col;
@@ -17744,7 +17666,6 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_ROPE:
-        case GGML_OP_ALIBI:
         case GGML_OP_IM2COL:
         case GGML_OP_POOL_2D:
         case GGML_OP_SUM_ROWS:
