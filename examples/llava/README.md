@@ -24,7 +24,7 @@ After building, run: `./llava-cli` to see the usage. For example:
 
 ## LLaVA 1.5
 
-- Clone a LLaVA and a CLIP model ([available options](https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md)). For example:
+1. Clone a LLaVA and a CLIP model ([available options](https://github.com/haotian-liu/LLaVA/blob/main/docs/MODEL_ZOO.md)). For example:
 
 ```sh
 git clone https://huggingface.co/liuhaotian/llava-v1.5-7b
@@ -56,7 +56,7 @@ python ./examples/llava/convert-image-encoder-to-gguf.py -m ../clip-vit-large-pa
 python ./convert.py ../llava-v1.5-7b --skip-unknown
 ```
 
-Now both the LLaMA part and the image encoder is in the `llava-v1.5-7b` directory.
+Now both the LLaMA part and the image encoder are in the `llava-v1.5-7b` directory.
 
 ## LLaVA 1.6 gguf conversion
 1) First clone a LLaVA 1.6 model:

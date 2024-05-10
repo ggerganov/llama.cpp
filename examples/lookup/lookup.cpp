@@ -38,15 +38,11 @@ int main(int argc, char ** argv){
 
     // load the model
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
-    llama_set_rng_seed(ctx, params.seed);
     GGML_ASSERT(llama_n_vocab(model) < (1 << 16));
 
     // tokenize the prompt
-    const bool add_bos = llama_should_add_bos_token(model);
-    LOG("add_bos tgt: %d\n", add_bos);
-
     std::vector<llama_token> inp;
-    inp = ::llama_tokenize(ctx, params.prompt, add_bos, true);
+    inp = ::llama_tokenize(ctx, params.prompt, true, true);
 
     llama_ngram_cache ngram_cache_context;
     llama_ngram_cache ngram_cache_dynamic;
@@ -144,7 +140,7 @@ int main(int argc, char ** argv){
                 printf("%s", token_str.c_str());
             }
 
-            if (id == llama_token_eos(model)) {
+            if (llama_token_is_eog(model, id)) {
                 has_eos = true;
             }
 
