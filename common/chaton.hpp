@@ -192,7 +192,6 @@
 
 #include <string>
 #include <fstream>
-#include <iostream>
 #include <json.hpp>
 
 #include "log.h"
