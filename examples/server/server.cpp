@@ -124,6 +124,7 @@ struct server_params {
     std::string chat_template = "";
     std::string system_prompt = "";
 
+    std::vector<std::string> http_cors_origin = {"http://localhost:8080", "http://127.0.0.1:8080"};
     std::vector<std::string> api_keys;
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
@@ -2972,7 +2973,7 @@ int main(int argc, char ** argv) {
     svr->set_default_headers({{"Server", "llama.cpp"}});
   
     // Disallow CORS requests from any origin not specified in the --http-cors-origin flag
-    svr.set_pre_routing_handler([&sparams](const httplib::Request &req, httplib::Response &res) {       
+    svr->set_pre_routing_handler([&sparams](const httplib::Request &req, httplib::Response &res) {       
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         res.set_header("Access-Control-Allow-Credentials", "true");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
