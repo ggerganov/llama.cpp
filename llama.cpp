@@ -12200,12 +12200,14 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
+        int ignore_merges = false;
 
         std::vector<std::string> word_collection;
         switch (vocab.type) {
             case LLAMA_VOCAB_TYPE_BPE:
                 switch (vocab.type_pre) {
                     case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
+                        ignore_merges = true;
                     case LLAMA_VOCAB_PRE_TYPE_DBRX:
                         word_collection = unicode_regex_split(text, {
                             // original regex from tokenizer.json
@@ -12292,7 +12294,7 @@ struct llm_tokenizer_bpe {
         symbols_final.clear();
 
         for (auto & word : word_collection) {
-            if (vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
+            if (ignore_merges && vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
                 llm_symbol sym;
                 sym.text = word.c_str();
                 sym.n = word.size();
