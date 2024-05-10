@@ -12062,6 +12062,9 @@ UseGgmlGemm1:;
 UseGgmlGemm2:;
 #endif
 
+    int chunk_size = 16;
+    UNUSED(chunk_size);
+
 #ifdef GGML_PERF
     int chunks_executed = 0;
     UNUSED(chunks_executed);
