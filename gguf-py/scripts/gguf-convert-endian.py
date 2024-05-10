@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import logging
 import argparse
 import os
 import sys
+from tqdm import tqdm
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +15,8 @@ if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import gguf
+
+logger = logging.getLogger("gguf-convert-endian")
 
 
 def convert_byteorder(reader: gguf.GGUFReader, args: argparse.Namespace) -> None:
@@ -29,11 +33,11 @@ def convert_byteorder(reader: gguf.GGUFReader, args: argparse.Namespace) -> None
     else:
         file_endian = host_endian
     order = host_endian if args.order == "native" else args.order
-    print(f"* Host is {host_endian.upper()} endian, GGUF file seems to be {file_endian.upper()} endian")
+    logger.info(f"* Host is {host_endian.upper()} endian, GGUF file seems to be {file_endian.upper()} endian")
     if file_endian == order:
-        print(f"* File is already {order.upper()} endian. Nothing to do.")
+        logger.info(f"* File is already {order.upper()} endian. Nothing to do.")
         sys.exit(0)
-    print("* Checking tensors for conversion compatibility")
+    logger.info("* Checking tensors for conversion compatibility")
     for tensor in reader.tensors:
         if tensor.tensor_type not in (
             gguf.GGMLQuantizationType.F32,
@@ -41,51 +45,64 @@ def convert_byteorder(reader: gguf.GGUFReader, args: argparse.Namespace) -> None
             gguf.GGMLQuantizationType.Q8_0,
         ):
             raise ValueError(f"Cannot handle type {tensor.tensor_type.name} for tensor {repr(tensor.name)}")
-    print(f"* Preparing to convert from {file_endian.upper()} to {order.upper()}")
+    logger.info(f"* Preparing to convert from {file_endian.upper()} to {order.upper()}")
     if args.dry_run:
         return
-    print("\n*** Warning *** Warning *** Warning **")
-    print("* This conversion process may damage the file. Ensure you have a backup.")
+    logger.warning("*** Warning *** Warning *** Warning **")
+    logger.warning("* This conversion process may damage the file. Ensure you have a backup.")
     if order != host_endian:
-        print("* Requested endian differs from host, you will not be able to load the model on this machine.")
-    print("* The file will be modified immediately, so if conversion fails or is interrupted")
-    print("* the file will be corrupted. Enter exactly YES if you are positive you want to proceed:")
+        logger.warning("* Requested endian differs from host, you will not be able to load the model on this machine.")
+    logger.warning("* The file will be modified immediately, so if conversion fails or is interrupted")
+    logger.warning("* the file will be corrupted. Enter exactly YES if you are positive you want to proceed:")
     response = input("YES, I am sure> ")
     if response != "YES":
-        print("You didn't enter YES. Okay then, see ya!")
+        logger.warning("You didn't enter YES. Okay then, see ya!")
         sys.exit(0)
-    print(f"\n* Converting fields ({len(reader.fields)})")
+    logger.info(f"* Converting fields ({len(reader.fields)})")
     for idx, field in enumerate(reader.fields.values()):
-        print(f"- {idx:4}: Converting field {repr(field.name)}, part count: {len(field.parts)}")
+        logger.info(f"- {idx:4}: Converting field {repr(field.name)}, part count: {len(field.parts)}")
         for part in field.parts:
             part.byteswap(inplace=True)
-    print(f"\n* Converting tensors ({len(reader.tensors)})")
-    for idx, tensor in enumerate(reader.tensors):
-        print(
-            f"  - {idx:4}: Converting tensor {repr(tensor.name)}, type={tensor.tensor_type.name}, "
-            f"elements={tensor.n_elements}... ",
-            end="",
+    logger.info(f"* Converting tensors ({len(reader.tensors)})")
+
+    for idx, tensor in enumerate(pbar := tqdm(reader.tensors, desc="Converting tensor")):
+        log_message = (
+            f"Converting tensor {repr(tensor.name)}, "
+            f"type={tensor.tensor_type.name}, "
+            f"elements={tensor.n_elements} "
         )
-        tensor_type = tensor.tensor_type
+
+        # Byte-swap each part of the tensor's field
         for part in tensor.field.parts:
             part.byteswap(inplace=True)
-        if tensor_type != gguf.GGMLQuantizationType.Q8_0:
+
+        # Byte-swap tensor data if necessary
+        if tensor.tensor_type == gguf.GGMLQuantizationType.Q8_0:
+            # Handle Q8_0 tensor blocks (block_q8_0)
+            # Specific handling of block_q8_0 is required.
+            # Each block_q8_0 consists of an f16 delta (scaling factor) followed by 32 int8 quantizations.
+
+            block_size = 34 # 34 bytes = <f16 delta scaling factor> + 32 * <int8 quant>
+
+            n_blocks = len(tensor.data) // block_size
+            for block_num in (inner_pbar := tqdm(range(n_blocks), desc="Byte-swapping Blocks", leave=False)):
+                block_offs = block_num * block_size
+
+                # Byte-Swap f16 sized delta field
+                delta = tensor.data[block_offs:block_offs + 2].view(dtype=np.uint16)
+                delta.byteswap(inplace=True)
+
+                # Byte-Swap Q8 weights
+                if block_num % 100000 == 0:
+                    inner_pbar.set_description(f"Byte-swapping Blocks [{(n_blocks - block_num) // n_blocks}]")
+
+        else:
+            # Handle other tensor types
             tensor.data.byteswap(inplace=True)
-            print()
-            continue
-        # A Q8_0 block consists of a f16 delta followed by 32 int8 quants, so 34 bytes
-        block_size = 34
-        n_blocks = len(tensor.data) // block_size
-        for block_num in range(n_blocks):
-            block_offs = block_num * block_size
-            # I know I said f16, but it doesn't matter here - any simple 16 bit type works.
-            delta = tensor.data[block_offs:block_offs + 2].view(dtype=np.uint16)
-            delta.byteswap(inplace=True)
-            if block_num % 100000 == 0:
-                print(f"[{(n_blocks - block_num) // 1000}K]", end="")
-                sys.stdout.flush()
-        print()
-    print("* Completion")
+
+        pbar.set_description(log_message)
+
+    logger.info("* Completion")
 
 
 def main() -> None:
@@ -102,8 +119,13 @@ def main() -> None:
         "--dry-run", action="store_true",
         help="Don't actually change anything",
     )
+    parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
+
     args = parser.parse_args(None if len(sys.argv) > 1 else ["--help"])
-    print(f'* Loading: {args.model}')
+
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+
+    logger.info(f'* Loading: {args.model}')
     reader = gguf.GGUFReader(args.model, 'r' if args.dry_run else 'r+')
     convert_byteorder(reader, args)
 

@@ -12,6 +12,8 @@
 // increase max payload length to allow use of larger context size
 #define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH 1048576
 #include "httplib.h"
+// Change JSON_ASSERT from assert() to GGML_ASSERT:
+#define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 
 // auto generated files (update with ./deps.sh)
@@ -61,7 +63,10 @@ enum server_task_type {
     SERVER_TASK_TYPE_COMPLETION,
     SERVER_TASK_TYPE_CANCEL,
     SERVER_TASK_TYPE_NEXT_RESPONSE,
-    SERVER_TASK_TYPE_METRICS
+    SERVER_TASK_TYPE_METRICS,
+    SERVER_TASK_TYPE_SLOT_SAVE,
+    SERVER_TASK_TYPE_SLOT_RESTORE,
+    SERVER_TASK_TYPE_SLOT_ERASE,
 };
 
 struct server_task {
@@ -128,6 +133,7 @@ struct server_params {
 
     bool slots_endpoint   = true;
     bool metrics_endpoint = false;
+    std::string slot_save_path;
 };
 
 struct server_slot {
@@ -685,6 +691,7 @@ struct server_context {
         n_ctx = llama_n_ctx(ctx);
 
         add_bos_token = llama_should_add_bos_token(model);
+        GGML_ASSERT(llama_add_eos_token(model) != 1);
 
         return true;
     }
@@ -754,7 +761,7 @@ struct server_context {
         metrics.init();
     }
 
-    std::vector<llama_token> tokenize(const json & json_prompt, bool add_bos) const {
+    std::vector<llama_token> tokenize(const json & json_prompt, bool add_special) const {
         // TODO: currently, we tokenize using special tokens by default
         //       this is not always correct (see https://github.com/ggerganov/llama.cpp/pull/4160#issuecomment-1824826216)
         //       but it's better compared to completely ignoring ChatML and other chat templates
@@ -772,7 +779,7 @@ struct server_context {
 
                     std::vector<llama_token> p;
                     if (first) {
-                        p = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
+                        p = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
                         first = false;
                     } else {
                         p = ::llama_tokenize(ctx, s, false, TMP_FORCE_SPECIAL);
@@ -789,7 +796,7 @@ struct server_context {
             }
         } else {
             auto s = json_prompt.template get<std::string>();
-            prompt_tokens = ::llama_tokenize(ctx, s, add_bos, TMP_FORCE_SPECIAL);
+            prompt_tokens = ::llama_tokenize(ctx, s, add_special, TMP_FORCE_SPECIAL);
         }
 
         return prompt_tokens;
@@ -851,12 +858,12 @@ struct server_context {
         slot.sparams.penalize_nl       = json_value(data, "penalize_nl",       default_sparams.penalize_nl);
         slot.params.n_keep             = json_value(data, "n_keep",            slot.params.n_keep);
         slot.params.n_discard          = json_value(data, "n_discard",         default_params.n_discard);
-        slot.params.seed               = json_value(data, "seed",              default_params.seed);
+        slot.sparams.seed              = json_value(data, "seed",              default_sparams.seed);
         slot.sparams.n_probs           = json_value(data, "n_probs",           default_sparams.n_probs);
         slot.sparams.min_keep          = json_value(data, "min_keep",          default_sparams.min_keep);
 
         // process "json_schema" and "grammar"
-        if (data.contains("json_schema") && data.contains("grammar")) {
+        if (data.contains("json_schema") && !data.at("json_schema").is_null() && data.contains("grammar") && !data.at("grammar").is_null()) {
             send_error(task, "Either \"json_schema\" or \"grammar\" can be specified, but not both", ERROR_TYPE_INVALID_REQUEST);
             return false;
         } else if (data.contains("json_schema") && !data.contains("grammar")) {
@@ -1025,7 +1032,6 @@ struct server_context {
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
                 return false;
             }
-            llama_set_rng_seed(ctx, slot.params.seed);
         }
 
         slot.command = SLOT_COMMAND_LOAD_PROMPT;
@@ -1056,7 +1062,7 @@ struct server_context {
         system_tokens.clear();
 
         if (!system_prompt.empty()) {
-            system_tokens = ::llama_tokenize(ctx, system_prompt, add_bos_token);
+            system_tokens = ::llama_tokenize(ctx, system_prompt, true);
 
             llama_batch_clear(batch);
 
@@ -1080,7 +1086,7 @@ struct server_context {
                 };
 
                 if (llama_decode(ctx, batch_view) != 0) {
-                    LOG_TEE("%s: llama_decode() failed\n", __func__);
+                    LOG_ERROR("llama_decode() failed", {});
                     return;
                 }
             }
@@ -1115,7 +1121,7 @@ struct server_context {
 
     bool process_token(completion_token_output & result, server_slot & slot) {
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = llama_token_to_piece(ctx, result.tok);
+        const std::string token_str = llama_token_to_piece(ctx, result.tok, false);
         slot.sampled = result.tok;
 
         // search stop word and delete it
@@ -1198,11 +1204,32 @@ struct server_context {
             });
         }
 
-        if (result.tok == llama_token_eos(model)) {
+        if (llama_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
             LOG_VERBOSE("eos token found", {});
+        }
+
+        auto n_ctx_train = llama_n_ctx_train(model);
+        if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.ga_n == 1
+                    && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
+            LOG_WARNING("n_predict is not set and self-context extend is disabled."
+                        " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
+                    { "id_slot",              slot.id },
+                    { "params.n_predict",     slot.params.n_predict },
+                    { "slot.n_prompt_tokens", slot.n_prompt_tokens },
+                    { "slot.n_decoded",       slot.n_decoded },
+                    { "slot.n_predict",       slot.n_predict },
+                    { "n_slots",              params.n_parallel },
+                    { "slot.n_ctx",           slot.n_ctx },
+                    { "n_ctx",                n_ctx },
+                    { "n_ctx_train",          n_ctx_train },
+                    { "ga_n",                 slot.ga_n },
+                });
+            slot.truncated      = true;
+            slot.stopped_limit  = true;
+            slot.has_next_token = false; // stop prediction
         }
 
         LOG_VERBOSE("next token", {
@@ -1278,7 +1305,11 @@ struct server_context {
     }
 
     void send_error(const int id_task, const int id_multi, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
-        LOG_TEE("task %i - error: %s\n", id_task, error.c_str());
+        LOG_ERROR("task error", {
+            {"id_multi", id_multi},
+            {"id_task", id_task},
+            {"error", error},
+        });
 
         server_task_result res;
         res.id       = id_task;
@@ -1356,9 +1387,10 @@ struct server_context {
             if (!slot.params.stream && slot.stopped_word) {
                 const std::vector<llama_token> stop_word_toks = llama_tokenize(ctx, slot.stopping_word, false);
 
+                size_t safe_offset = std::min(slot.generated_token_probs.size(), stop_word_toks.size());
                 probs = std::vector<completion_token_output>(
                         slot.generated_token_probs.begin(),
-                        slot.generated_token_probs.end() - stop_word_toks.size());
+                        slot.generated_token_probs.end() - safe_offset);
             } else {
                 probs = std::vector<completion_token_output>(
                         slot.generated_token_probs.begin(),
@@ -1484,7 +1516,7 @@ struct server_context {
         // add subtasks
         for (int i = 0; i < prompt_count; i++) {
             json subtask_data = multiprompt_task.data;
-            subtask_data["prompt"] = subtask_data["prompt"][i];
+            subtask_data["prompt"] = subtask_data.at("prompt")[i];
 
             // subtasks inherit everything else (infill mode, embedding mode, etc.)
             request_completion(subtask_ids[i], id_multi, subtask_data, multiprompt_task.infill, multiprompt_task.embedding);
@@ -1504,7 +1536,7 @@ struct server_context {
                     }
 
                     if (task.data.contains("system_prompt")) {
-                        system_prompt_set(task.data["system_prompt"]);
+                        system_prompt_set(task.data.at("system_prompt"));
 
                         for (server_slot & slot : slots) {
                             slot.n_past    = 0;
@@ -1613,6 +1645,107 @@ struct server_context {
                         metrics.reset_bucket();
                     }
                     queue_results.send(res);
+                } break;
+            case SERVER_TASK_TYPE_SLOT_SAVE:
+                {
+                    int id_slot = task.data.at("id_slot");
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    const size_t token_count = slot->cache_tokens.size();
+                    const int64_t t_start = ggml_time_us();
+
+                    std::string filename = task.data.at("filename");
+                    std::string filepath = task.data.at("filepath");
+
+                    const size_t nwrite = llama_state_seq_save_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), token_count);
+
+                    const int64_t t_end = ggml_time_us();
+                    const double t_save_ms = (t_end - t_start) / 1000.0;
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",   id_slot },
+                        { "filename",  filename },
+                        { "n_saved",   token_count }, // tokens saved
+                        { "n_written", nwrite },      // bytes written
+                        { "timings", {
+                            { "save_ms", t_save_ms }
+                        } }
+                    };
+                    queue_results.send(result);
+                } break;
+            case SERVER_TASK_TYPE_SLOT_RESTORE:
+                {
+                    int id_slot = task.data.at("id_slot");
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    const int64_t t_start = ggml_time_us();
+
+                    std::string filename = task.data.at("filename");
+                    std::string filepath = task.data.at("filepath");
+
+                    slot->cache_tokens.resize(slot->n_ctx);
+                    size_t token_count = 0;
+                    size_t nread = llama_state_seq_load_file(ctx, filepath.c_str(), slot->id + 1, slot->cache_tokens.data(), slot->cache_tokens.size(), &token_count);
+                    if (nread == 0) {
+                        slot->cache_tokens.resize(0);
+                        send_error(task, "Unable to restore slot, no available space in KV cache or invalid slot save file", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+                    slot->cache_tokens.resize(token_count);
+
+                    const int64_t t_end = ggml_time_us();
+                    const double t_restore_ms = (t_end - t_start) / 1000.0;
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",    id_slot },
+                        { "filename",   filename },
+                        { "n_restored", token_count }, // tokens restored
+                        { "n_read",     nread },       // bytes read
+                        { "timings", {
+                            { "restore_ms", t_restore_ms }
+                        } }
+                    };
+                    queue_results.send(result);
+                } break;
+            case SERVER_TASK_TYPE_SLOT_ERASE:
+                {
+                    int id_slot = task.data.at("id_slot");
+                    server_slot * slot = get_slot(id_slot);
+                    if (slot == nullptr) {
+                        send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+
+                    // Erase token cache
+                    const size_t n_erased = slot->cache_tokens.size();
+                    llama_kv_cache_seq_rm(ctx, slot->id + 1, -1, -1);
+                    slot->cache_tokens.clear();
+
+                    server_task_result result;
+                    result.id = task.id;
+                    result.stop = true;
+                    result.error = false;
+                    result.data = json {
+                        { "id_slot",  id_slot },
+                        { "n_erased", n_erased }
+                    };
+                    queue_results.send(result);
                 } break;
         }
     }
@@ -1811,7 +1944,7 @@ struct server_context {
                             prefix_tokens.push_back(llama_token_middle(model));
                             prompt_tokens = prefix_tokens;
                         } else {
-                            prompt_tokens = tokenize(slot.prompt, system_prompt.empty() && add_bos_token);  // add BOS if there isn't system prompt
+                            prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
                         }
 
                         slot.n_past = 0;
@@ -2034,7 +2167,7 @@ struct server_context {
         });
 
         // process the created batch of tokens
-        for (int32_t i = 0; i < (int32_t) batch.n_tokens; i += n_batch) {
+        for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
             const int32_t n_tokens = std::min(n_batch, batch.n_tokens - i);
 
             for (auto & slot : slots) {
@@ -2082,7 +2215,11 @@ struct server_context {
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
                     // if you get here, it means the KV cache is full - try increasing it via the context size
-                    LOG_TEE("%s : failed to decode the batch, n_batch = %d, ret = %d\n", __func__, n_batch, ret);
+                    LOG_ERROR("failed to decode the batch: KV cache is full - try increasing it via the context size", {
+                        {"i",   i},
+                        {"n_batch",  ret},
+                        {"ret",   ret},
+                    });
                     for (auto & slot : slots) {
                         slot.state = SLOT_STATE_PROCESSING;
                         slot.command = SLOT_COMMAND_NONE;
@@ -2092,11 +2229,15 @@ struct server_context {
                     break; // break loop of n_batch
                 }
 
-                LOG_TEE("%s : failed to find free space in the KV cache, retrying with smaller n_batch = %d\n", __func__, n_batch / 2);
-
                 // retry with half the batch size to try to find a free slot in the KV cache
                 n_batch /= 2;
                 i -= n_batch;
+
+                LOG_WARNING("failed to find free space in the KV cache, retrying with smaller batch size - try increasing it via the context size or enable defragmentation", {
+                    {"i",   i},
+                    {"n_batch",  n_batch},
+                    {"ret",   ret},
+                });
 
                 continue; // continue loop of n_batch
             }
@@ -2129,17 +2270,31 @@ struct server_context {
                 llama_token_data_array cur_p = { slot.ctx_sampling->cur.data(), slot.ctx_sampling->cur.size(), false };
                 result.tok = id;
 
-                const int32_t n_probs = slot.sparams.n_probs;
-                if (slot.sparams.temp <= 0 && n_probs > 0) {
-                    // for llama_sample_token_greedy we need to sort candidates
-                    llama_sample_softmax(ctx, &cur_p);
-                }
+                const size_t n_probs = std::min(cur_p.size, (size_t) slot.sparams.n_probs);
+                if (n_probs > 0) {
+                    const size_t n_considered = slot.ctx_sampling->n_considered;
 
-                for (size_t i = 0; i < std::min(cur_p.size, (size_t) n_probs); ++i) {
-                    result.probs.push_back({
-                        cur_p.data[i].id,
-                        cur_p.data[i].p
-                    });
+                    // Make sure at least n_probs top tokens are at the front of the vector:
+                    if (slot.sparams.temp == 0.0f && n_probs > n_considered) {
+                        llama_sample_top_k(ctx, &cur_p, n_probs, 0);
+                    }
+
+                    if (slot.sparams.temp == 0.0f) {
+                        // With greedy sampling the probabilities have possibly not been calculated.
+                        for (size_t i = 0; i < n_probs; ++i) {
+                            result.probs.push_back({
+                                cur_p.data[i].id,
+                                i == 0 ? 1.0f : 0.0f
+                            });
+                        }
+                    } else {
+                        for (size_t i = 0; i < n_probs; ++i) {
+                            result.probs.push_back({
+                                cur_p.data[i].id,
+                                i >= n_considered ? 0.0f : cur_p.data[i].p // Tokens filtered out due to e.g. top_k have 0 probability.
+                            });
+                        }
+                    }
                 }
 
                 if (!process_token(result, slot)) {
@@ -2191,8 +2346,6 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("                            KV cache defragmentation threshold (default: %.1f, < 0 - disabled)\n", params.defrag_thold);
     printf("  -b N, --batch-size N      logical maximum batch size (default: %d)\n", params.n_batch);
     printf("  -ub N, --ubatch-size N    physical maximum batch size (default: %d)\n", params.n_ubatch);
-    printf("  --memory-f32              use f32 instead of f16 for memory key+value (default: disabled)\n");
-    printf("                            not recommended: doubles context memory required and no measurable increase in quality\n");
     if (llama_supports_mlock()) {
         printf("  --mlock                   force system to keep model in RAM rather than swapping or compressing\n");
     }
@@ -2215,9 +2368,11 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
         printf("                            fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1\n");
         printf("  -mg i, --main-gpu i       the GPU to use for the model (with split-mode = none),\n");
         printf("                            or for intermediate results and KV (with split-mode = row)\n");
+        printf("  -nkvo, --no-kv-offload\n");
+        printf("                            disable KV offload\n");
     }
     printf("  -m FNAME, --model FNAME\n");
-    printf("                            model path (default: %s)\n", params.model.c_str());
+    printf("                            model path (default: models/$filename with filename from --hf-file or --model-url if set, otherwise %s)\n", DEFAULT_MODEL_PATH);
     printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
     printf("                            model download url (default: unused)\n");
     printf("  -hfr REPO, --hf-repo REPO\n");
@@ -2241,6 +2396,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --embeddings              enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
     printf("  -np N, --parallel N       number of slots for process requests (default: %d)\n", params.n_parallel);
     printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: enabled)\n");
+    printf("  -fa, --flash-attn         enable Flash Attention (default: %s)\n", params.flash_attn ? "enabled" : "disabled");
     printf("  -spf FNAME, --system-prompt-file FNAME\n");
     printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
     printf("  -ctk TYPE, --cache-type-k TYPE\n");
@@ -2251,11 +2407,12 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --log-disable             disables logging to a file.\n");
     printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
     printf("  --metrics                 enable prometheus compatible metrics endpoint (default: %s).\n", sparams.metrics_endpoint ? "enabled" : "disabled");
+    printf("  --slot-save-path PATH     path to save slot kv cache (default: disabled)\n");
     printf("\n");
     printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("                            advanced option to override model metadata by key. may be specified multiple times.\n");
-    printf("                            types: int, float, bool. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
+    printf("                            types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
     printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`\n");
     printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`\n");
     printf("  --chat-template JINJA_TEMPLATE\n");
@@ -2500,6 +2657,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                     "See main README.md for information on enabling GPU BLAS support",
                     {{"n_gpu_layers", params.n_gpu_layers}});
             }
+        } else if (arg == "-nkvo" || arg == "--no-kv-offload") {
+            params.no_kv_offload = true;
         } else if (arg == "--split-mode" || arg == "-sm") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2603,6 +2762,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             params.embedding = true;
         } else if (arg == "-cb" || arg == "--cont-batching") {
             params.cont_batching = true;
+        } else if (arg == "-fa" || arg == "--flash-attn") {
+            params.flash_attn = true;
         } else if (arg == "-np" || arg == "--parallel") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2657,6 +2818,16 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             sparams.slots_endpoint = false;
         } else if (arg == "--metrics") {
             sparams.metrics_endpoint = true;
+        } else if (arg == "--slot-save-path") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            sparams.slot_save_path = argv[i];
+            // if doesn't end with DIRECTORY_SEPARATOR, add it
+            if (!sparams.slot_save_path.empty() && sparams.slot_save_path[sparams.slot_save_path.size() - 1] != DIRECTORY_SEPARATOR) {
+                sparams.slot_save_path += DIRECTORY_SEPARATOR;
+            }
         } else if (arg == "--chat-template") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2674,49 +2845,19 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            char * sep = strchr(argv[i], '=');
-            if (sep == nullptr || sep - argv[i] >= 128) {
-                fprintf(stderr, "error: Malformed KV override: %s\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-
-            struct llama_model_kv_override kvo;
-            std::strncpy(kvo.key, argv[i], sep - argv[i]);
-            kvo.key[sep - argv[i]] = 0;
-            sep++;
-            if (strncmp(sep, "int:", 4) == 0) {
-                sep += 4;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-                kvo.int_value = std::atol(sep);
-            } else if (strncmp(sep, "float:", 6) == 0) {
-                sep += 6;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-                kvo.float_value = std::atof(sep);
-            } else if (strncmp(sep, "bool:", 5) == 0) {
-                sep += 5;
-                kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
-                if (std::strcmp(sep, "true") == 0) {
-                    kvo.bool_value = true;
-                } else if (std::strcmp(sep, "false") == 0) {
-                    kvo.bool_value = false;
-                } else {
-                    fprintf(stderr, "error: Invalid boolean value for KV override: %s\n", argv[i]);
-                    invalid_param = true;
-                    break;
-                }
-            } else {
+            if (!parse_kv_override(argv[i], params.kv_overrides)) {
                 fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
                 invalid_param = true;
                 break;
             }
-            params.kv_overrides.push_back(kvo);
         } else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             server_print_usage(argv[0], default_params, default_sparams);
             exit(1);
         }
     }
+
+    gpt_params_handle_model_default(params);
 
     if (!params.kv_overrides.empty()) {
         params.kv_overrides.emplace_back();
@@ -2999,8 +3140,8 @@ int main(int argc, char ** argv) {
                     server_task_result result = ctx_server.queue_results.recv(task.id);
                     ctx_server.queue_results.remove_waiting_task_id(task.id);
 
-                    const int n_idle_slots       = result.data["idle"];
-                    const int n_processing_slots = result.data["processing"];
+                    const int n_idle_slots       = result.data.at("idle");
+                    const int n_processing_slots = result.data.at("processing");
 
                     json health = {
                         {"status",           "ok"},
@@ -3010,7 +3151,7 @@ int main(int argc, char ** argv) {
 
                     res.status = 200; // HTTP OK
                     if (sparams.slots_endpoint && req.has_param("include_slots")) {
-                        health["slots"] = result.data["slots"];
+                        health["slots"] = result.data.at("slots");
                     }
 
                     if (n_idle_slots == 0) {
@@ -3054,7 +3195,7 @@ int main(int argc, char ** argv) {
         server_task_result result = ctx_server.queue_results.recv(task.id);
         ctx_server.queue_results.remove_waiting_task_id(task.id);
 
-        res.set_content(result.data["slots"].dump(), "application/json");
+        res.set_content(result.data.at("slots").dump(), "application/json");
         res.status = 200; // HTTP OK
     };
 
@@ -3081,32 +3222,32 @@ int main(int argc, char ** argv) {
 
         json data = result.data;
 
-        const uint64_t n_prompt_tokens_processed = data["n_prompt_tokens_processed"];
-        const uint64_t t_prompt_processing       = data["t_prompt_processing"];
+        const uint64_t n_prompt_tokens_processed = data.at("n_prompt_tokens_processed");
+        const uint64_t t_prompt_processing       = data.at("t_prompt_processing");
 
-        const uint64_t n_tokens_predicted  = data["n_tokens_predicted"];
-        const uint64_t t_tokens_generation = data["t_tokens_generation"];
+        const uint64_t n_tokens_predicted  = data.at("n_tokens_predicted");
+        const uint64_t t_tokens_generation = data.at("t_tokens_generation");
 
-        const int32_t kv_cache_used_cells = data["kv_cache_used_cells"];
+        const int32_t kv_cache_used_cells = data.at("kv_cache_used_cells");
 
         // metrics definition: https://prometheus.io/docs/practices/naming/#metric-names
         json all_metrics_def = json {
             {"counter", {{
                     {"name",  "prompt_tokens_total"},
                     {"help",  "Number of prompt tokens processed."},
-                    {"value",  (uint64_t) data["n_prompt_tokens_processed_total"]}
+                    {"value",  (uint64_t) data.at("n_prompt_tokens_processed_total")}
             }, {
                     {"name",  "prompt_seconds_total"},
                     {"help",  "Prompt process time"},
-                    {"value",  (uint64_t) data["t_prompt_processing_total"] / 1.e3}
+                    {"value",  (uint64_t) data.at("t_prompt_processing_total") / 1.e3}
             }, {
                     {"name",  "tokens_predicted_total"},
                     {"help",  "Number of generation tokens processed."},
-                    {"value",  (uint64_t) data["n_tokens_predicted_total"]}
+                    {"value",  (uint64_t) data.at("n_tokens_predicted_total")}
             }, {
                     {"name",  "tokens_predicted_seconds_total"},
                     {"help",  "Predict process time"},
-                    {"value",  (uint64_t) data["t_tokens_generation_total"] / 1.e3}
+                    {"value",  (uint64_t) data.at("t_tokens_generation_total") / 1.e3}
             }}},
             {"gauge", {{
                     {"name",  "prompt_tokens_seconds"},
@@ -3123,15 +3264,15 @@ int main(int argc, char ** argv) {
             },{
                     {"name",  "kv_cache_tokens"},
                     {"help",  "KV-cache tokens."},
-                    {"value",  (uint64_t) data["kv_cache_tokens_count"]}
+                    {"value",  (uint64_t) data.at("kv_cache_tokens_count")}
             },{
                     {"name",  "requests_processing"},
                     {"help",  "Number of request processing."},
-                    {"value",  (uint64_t) data["processing"]}
+                    {"value",  (uint64_t) data.at("processing")}
             },{
                     {"name",  "requests_deferred"},
                     {"help",  "Number of request deferred."},
-                    {"value",  (uint64_t) data["deferred"]}
+                    {"value",  (uint64_t) data.at("deferred")}
             }}}
         };
 
@@ -3142,8 +3283,8 @@ int main(int argc, char ** argv) {
             const auto & metrics_def = el.value();
 
             for (const auto & metric_def : metrics_def) {
-                const std::string name = metric_def["name"];
-                const std::string help = metric_def["help"];
+                const std::string name = metric_def.at("name");
+                const std::string help = metric_def.at("help");
 
                 auto value = json_value(metric_def, "value", 0.);
                 prometheus << "# HELP llamacpp:" << name << " " << help  << "\n"
@@ -3152,11 +3293,117 @@ int main(int argc, char ** argv) {
             }
         }
 
-        const int64_t t_start = data["t_start"];
+        const int64_t t_start = data.at("t_start");
         res.set_header("Process-Start-Time-Unix", std::to_string(t_start));
 
         res.set_content(prometheus.str(), "text/plain; version=0.0.4");
         res.status = 200; // HTTP OK
+    };
+
+    const auto handle_slots_save = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        json request_data = json::parse(req.body);
+        std::string filename = request_data.at("filename");
+        if (!validate_file_name(filename)) {
+            res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+        std::string filepath = sparams.slot_save_path + filename;
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_SAVE;
+        task.data = {
+            { "id_slot", id_slot },
+            { "filename", filename },
+            { "filepath", filepath }
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slots_restore = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
+        json request_data = json::parse(req.body);
+        std::string filename = request_data.at("filename");
+        if (!validate_file_name(filename)) {
+            res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+        std::string filepath = sparams.slot_save_path + filename;
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_RESTORE;
+        task.data = {
+            { "id_slot", id_slot },
+            { "filename", filename },
+            { "filepath", filepath }
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slots_erase = [&ctx_server, &res_error](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SLOT_ERASE;
+        task.data = {
+            { "id_slot", id_slot },
+        };
+
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        if (result.error) {
+            res_error(res, result.data);
+        } else {
+            res.set_content(result.data.dump(), "application/json");
+        }
+    };
+
+    const auto handle_slots_action = [&res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        std::string id_slot_str = req.path_params.at("id_slot");
+        int id_slot;
+
+        try {
+            id_slot = std::stoi(id_slot_str);
+        } catch (const std::exception &) {
+            res_error(res, format_error_response("Invalid slot ID", ERROR_TYPE_INVALID_REQUEST));
+            return;
+        }
+
+        std::string action = req.get_param_value("action");
+
+        if (action == "save") {
+            handle_slots_save(req, res, id_slot);
+        } else if (action == "restore") {
+            handle_slots_restore(req, res, id_slot);
+        } else if (action == "erase") {
+            handle_slots_erase(req, res, id_slot);
+        } else {
+            res_error(res, format_error_response("Invalid action", ERROR_TYPE_INVALID_REQUEST));
+        }
     };
 
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
@@ -3404,7 +3651,8 @@ int main(int argc, char ** argv) {
 
         std::vector<llama_token> tokens;
         if (body.count("content") != 0) {
-            tokens = ctx_server.tokenize(body["content"], false);
+            const bool add_special = json_value(body, "add_special", false);
+            tokens = ctx_server.tokenize(body.at("content"), add_special);
         }
         const json data = format_tokenizer_response(tokens);
         return res.set_content(data.dump(), "application/json; charset=utf-8");
@@ -3416,7 +3664,7 @@ int main(int argc, char ** argv) {
 
         std::string content;
         if (body.count("tokens") != 0) {
-            const std::vector<llama_token> tokens = body["tokens"];
+            const std::vector<llama_token> tokens = body.at("tokens");
             content = tokens_to_str(ctx_server.ctx, tokens.cbegin(), tokens.cend());
         }
 
@@ -3439,10 +3687,10 @@ int main(int argc, char ** argv) {
         json prompt;
         if (body.count("input") != 0) {
             is_openai = true;
-            prompt = body["input"];
+            prompt = body.at("input");
         } else if (body.count("content") != 0) {
             // with "content", we only support single prompt
-            prompt = std::vector<std::string>{body["content"]};
+            prompt = std::vector<std::string>{body.at("content")};
         } else {
             res_error(res, format_error_response("\"input\" or \"content\" must be provided", ERROR_TYPE_INVALID_REQUEST));
             return;
@@ -3461,7 +3709,7 @@ int main(int argc, char ** argv) {
             if (!result.error) {
                 if (result.data.count("results")) {
                     // result for multi-task
-                    responses = result.data["results"];
+                    responses = result.data.at("results");
                 } else {
                     // result for single task
                     responses = std::vector<json>{result.data};
@@ -3521,6 +3769,10 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/embeddings",       handle_embeddings);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
+    if (!sparams.slot_save_path.empty()) {
+        // only enable slot endpoints if slot_save_path is set
+        svr->Post("/slots/:id_slot",  handle_slots_action);
+    }
 
     //
     // Start the server

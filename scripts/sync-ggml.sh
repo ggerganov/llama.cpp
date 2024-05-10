@@ -31,3 +31,6 @@ cp -rpv ../ggml/include/ggml/ggml-backend.h ./ggml-backend.h
 cp -rpv ../ggml/tests/test-opt.cpp         ./tests/test-opt.cpp
 cp -rpv ../ggml/tests/test-grad0.cpp       ./tests/test-grad0.cpp
 cp -rpv ../ggml/tests/test-backend-ops.cpp ./tests/test-backend-ops.cpp
+
+cp -rpv ../LICENSE                         ./LICENSE
+cp -rpv ../ggml/scripts/gen-authors.sh     ./scripts/gen-authors.sh

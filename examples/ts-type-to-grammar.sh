@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # ./examples/ts-type-to-grammar.sh "{a:string,b:string,c?:string}"
-# python examples/json-schema-to-grammar.py https://json.schemastore.org/tsconfig.json
+# python examples/json_schema_to_grammar.py https://json.schemastore.org/tsconfig.json
 #
 set -euo pipefail
 
@@ -25,4 +25,4 @@ npx ts-json-schema-generator --unstable --no-top-ref --path "$DTS_FILE" --type M
 # https://github.com/YousefED/typescript-json-schema
 # npx typescript-json-schema --defaultProps --required "$DTS_FILE" MyType | tee "$SCHEMA_FILE" >&2
 
-./examples/json-schema-to-grammar.py "$SCHEMA_FILE"
+./examples/json_schema_to_grammar.py "$SCHEMA_FILE"
