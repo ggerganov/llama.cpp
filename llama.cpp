@@ -3860,7 +3860,7 @@ static void llm_load_hparams(
                     switch (hparams.n_layer) {
                         case 22: model.type = e_model::MODEL_1B; break;
                         case 26: model.type = e_model::MODEL_3B; break;
-                        case 32: model.type = hparams.n_head == hparams.n_head_kv ? e_model::MODEL_7B : e_model::MODEL_8B; break; // LLaMa 8B v3 uses GQA
+                        case 32: model.type = hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B; break;
                         case 40: model.type = e_model::MODEL_13B; break;
                         case 48: model.type = e_model::MODEL_34B; break;
                         case 60: model.type = e_model::MODEL_30B; break;
