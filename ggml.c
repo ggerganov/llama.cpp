@@ -2435,6 +2435,7 @@ static void ggml_setup_op_has_task_pass(void) {
     }
 }
 
+
 //
 // NUMA support
 //
@@ -11798,6 +11799,11 @@ static void ggml_compute_forward_mul_mat_one_chunk(
 
     //printf("ir0_start = %6lld, ir0_end = %6lld, ir1_start = %6lld, ir1_end = %6lld\n", ir0_start, ir0_end, ir1_start, ir1_end);
 
+    // threads with no work simply yield (not sure if it helps)
+    if (ir0_start >= ir0_end || ir1_start >= ir1_end) {
+        return;
+    }
+
     const void* wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
     const size_t row_size = ggml_row_size(vec_dot_type, ne10);
 
@@ -11860,7 +11866,7 @@ static void ggml_compute_forward_mul_mat_one_chunk(
 static void ggml_compute_forward_mul_mat(
         const struct ggml_compute_params * params,
               struct ggml_tensor * dst,
-              struct ggml_compute_state* state) {
+              struct ggml_compute_state * state) {
 
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
@@ -11897,8 +11903,8 @@ static void ggml_compute_forward_mul_mat(
     GGML_ASSERT(nb2 <= nb3);
 
     // broadcast factors
-    const int64_t r2 = ne12 / ne02;
-    const int64_t r3 = ne13 / ne03;
+    const int64_t r2 = ne12/ne02;
+    const int64_t r3 = ne13/ne03;
 
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
@@ -19617,17 +19623,17 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
     return n_tasks;
 }
 
-static void ggml_graph_compute_thread_sync_node(int * node_n, struct ggml_compute_state * state, const bool do_yield) {
+static void ggml_graph_compute_thread_sync_node(int* node_n, struct ggml_compute_state* state, const bool do_yield) {
     // wait for other threads to finish
-    const int last_node_n = * node_n;
+    const int last_node_n = *node_n;
 
     while (true) {
         if (do_yield) {
             sched_yield();
         }
 
-        * node_n = atomic_load(&state->shared->node_n);
-        if (* node_n != last_node_n) break;
+        *node_n = atomic_load(&state->shared->node_n);
+        if (*node_n != last_node_n) break;
 #if defined(__SSE3__)
         //Tell the processor we're spinning.  It's a processor hint for spinlocks.
         _mm_pause();
@@ -19635,17 +19641,17 @@ static void ggml_graph_compute_thread_sync_node(int * node_n, struct ggml_comput
     }
 }
 
-static void ggml_graph_compute_thread_sync_task(int * task_phase, struct ggml_compute_state * state, const bool do_yield) {
+static void ggml_graph_compute_thread_sync_task(int* task_phase, struct ggml_compute_state* state, const bool do_yield) {
     // wait for other threads to finish
-    const int last_task_phase = * task_phase;
+    const int last_task_phase = *task_phase;
 
     while (true) {
         if (do_yield) {
             sched_yield();
         }
 
-        * task_phase = atomic_load(&state->shared->node_task);
-        if (* task_phase != last_task_phase) break;
+        *task_phase = atomic_load(&state->shared->node_task);
+        if (*task_phase != last_task_phase) break;
 #if defined(__SSE3__)
         //Tell the processor we're spinning.  It's a processor hint for spinlocks.
         _mm_pause();
@@ -20030,6 +20036,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         /*.node_task               =*/ GGML_TASK_TYPE_FINALIZE,
         /*.abort_callback          =*/ NULL,
         /*.abort_callback_data     =*/ NULL,
+        /*.current_chunk;          =*/ 0,
     };
     struct ggml_compute_state * workers = alloca(sizeof(struct ggml_compute_state)*n_threads);
 
