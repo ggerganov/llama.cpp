@@ -1731,7 +1731,8 @@ extern "C" {
             struct ggml_tensor  * k,
             struct ggml_tensor  * v,
             struct ggml_tensor  * mask,
-            float                 scale);
+            float                 scale,
+            float                 max_bias);
 
     GGML_API void ggml_flash_attn_ext_set_prec(
             struct ggml_tensor * a,
