@@ -2277,15 +2277,8 @@ struct server_context {
                         llama_sample_top_k(ctx, &cur_p, n_probs, 0);
                     }
 
-                    if (slot.sparams.temp == 0.0f) {
-                        // With greedy sampling the probabilities have possibly not been calculated.
-                        for (size_t i = 0; i < n_probs; ++i) {
-                            result.probs.push_back({
-                                cur_p.data[i].id,
-                                i == 0 ? 1.0f : 0.0f
-                            });
-                        }
-                    } else {
+                    // Only populate probs if using temperature != 0, as otherwise the probs might not have been calculated
+                    if (slot.sparams.temp != 0.0f) {
                         for (size_t i = 0; i < n_probs; ++i) {
                             result.probs.push_back({
                                 cur_p.data[i].id,

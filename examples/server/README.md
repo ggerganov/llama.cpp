@@ -36,9 +36,7 @@ The project is under active development, and we are [looking for feedback and co
 - `--numa STRATEGY`: Attempt one of the below optimization strategies that may help on some NUMA systems
 - `--numa distribute`: Spread execution evenly over all nodes
 - `--numa isolate`: Only spawn threads on CPUs on the node that execution started on
-- `--numa numactl`: Use the CPU map provided by numactl. If run without this previously, it is recommended to drop the system
-page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/1437
-
+- `--numa numactl`: Use the CPU map provided by numactl. If run without this previously, it is recommended to drop the systempage cache before using this. See https://github.com/ggerganov/llama.cpp/issues/1437
 - `--numa`: Attempt optimizations that may help on some NUMA systems.
 - `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 - `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
@@ -272,7 +270,7 @@ node index.js
 
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. Default: `[]`
 
-    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. Note that for temperature < 0 the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Default: `0`
+    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. For `temperature == 0`, these probabilities are not calculated, so the returned `probs` array is empty. For `temperature < 0` the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Default: `0`
 
     `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum. Default: `0`
 
