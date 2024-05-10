@@ -107,6 +107,27 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           : "zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "cc", "memory", "r8", "r10", "r12");
 }
 
+// Multiply each item in mvec1 with the corresponding item in mvec2, adding the result to the corresponding item in sum. uses masks to handle just the last run-through.
+inline static void GGML_F32x16_VEC_FMA_TAIL(const float32x16_t *mvec1, const float32x16_t *mvec2, float32x16_t *sumvec, size_t items)
+{
+    uint32_t mask = (0x00000001 << items)-1;
+
+    __asm__ __volatile__ (
+                          "vprefetchnta\t(%[VEC1])\n\t"
+                          "vprefetchnta\t(%[VEC2])\n\t"
+                          "vmovaps\t\t(%[RES]),\t%%zmm0\n\t"                  // Load our inital state from sum..
+                          "kmov\t%[MASK],%%k1\n\t"                            // Load a mask that we will use to just operate on part of a vector..
+                          "vmovaps\t\t(%[VEC1]),\t%%zmm1%{%%k1%}\n\t"         // Partially two vectors.
+                          "vmovaps\t\t(%[VEC2]),\t%%zmm2%{%%k1%}\n\t"
+                          "vfmadd231ps\t%%zmm1,\t%%zmm2,\t%%zmm0%{%%k1%}\n\t" // Perform a fused multiply add
+                          "vmovnraps\t\t%%zmm0,\t(%[RES])%{%%k1%}\n\t"        // save our results.
+                          : [RES]  "+r" (sumvec)
+                          : [VEC1]  "r"  (mvec1),
+                            [VEC2]  "r"  (mvec2),
+                            [MASK]  "r"  (mask)
+                          : "zmm0", "zmm1", "zmm2", "k1", "memory");
+}
+
 // NOTE: x and y inputs must be __attribute__((aligned(64)));
 void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc)
 {
@@ -118,26 +139,11 @@ void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restri
 
     GGML_F32x16_VEC_FMA((const float32x16_t *)x, (const float32x16_t *)y, &sum, np/GGML_F32_EPR, 1);
 
-    // add the leftovers, that could not be handled by the vector loop.
-    if ( n - np != 0 )
-        {
-            // our extended last part of x.
-            float32x16_t v1;
-            GGML_F32x16_VEC_ZERO(&v1);
-            // our extended last part of y.
-            float32x16_t v2;
-            GGML_F32x16_VEC_ZERO(&v2);
-
-            memcpy(&v1, &x[np], (n - np)*sizeof(float));
-            memcpy(&v2, &y[np], (n - np)*sizeof(float));
-
-            GGML_F32x16_VEC_FMA(&v1,
-                                &v2,
-                                &sum, 1, 0);
-        }
+    // add the leftovers, that could not be handled by the whole vector loop.
+    if ( n - np != 0 ) GGML_F32x16_VEC_FMA_TAIL((const float32x16_t *)&x[np], (const float32x16_t *)&y[np], &sum, n-np);
 
     // reduce sum, and store it in s.
-    for (uint32_t i=0; i <GGML_F32_EPR; ++i)
+    for (uint32_t i=0; i < GGML_F32_EPR; ++i)
         *s+=((float *)&sum)[i];
 
 }
