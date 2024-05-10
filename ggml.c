@@ -12097,8 +12097,10 @@ UseGgmlGemm2:;
     //printf("nr0 = %lld, nr1 = %lld\n", nr0, nr1);
 
     //If the chunking is poor for the number of threads on this setup, scrap the whole plan.  Re-chunk it by thread.
-    if (nchunk0 * nchunk1 < nth * 4)
+    if (nchunk0 * nchunk1 < nth * 400)
     {
+        //if (ith == 0)
+        //    printf("rechunked");
         // distribute the thread work across the inner or outer loop based on which one is larger
         nchunk0 = nr0 > nr1 ? nth : 1; // parallelize by src0 rows
         nchunk1 = nr0 > nr1 ? 1 : nth; // parallelize by src1 rows
@@ -12107,6 +12109,9 @@ UseGgmlGemm2:;
     //The number of elements in each chunk
     const int64_t dr0 = (nr0 + nchunk0 - 1) / nchunk0;
     const int64_t dr1 = (nr1 + nchunk1 - 1) / nchunk1;
+
+    //if (ith == 0)
+    //    printf("MUL_MAT = [%d, %d, %d, %d] x [%d, %d, %d, %d] = %d x %d = %d.  Fp/Ch %d\n", ne00, ne01, ne02, ne03, ne10, ne11, ne12, ne13, nchunk0, nchunk1, nchunk0 * nchunk1, ne00 * nr0 * nr1 / nchunk0 / nchunk1);
 
     //The first chunk comes from our thread_id, the rest will get auto-assigned.
     int current_chunk = ith;
