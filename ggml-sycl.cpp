@@ -8330,24 +8330,26 @@ static void mul_mat_vec_q(const void * __restrict__ vx, const void * __restrict_
     const int blocks_per_row = ncols / qk;
     const int blocks_per_warp = vdr * WARP_SIZE / qi;
 
-// partial sum for each thread
+    const int qi_vdr = (qi / vdr); // N_threads processing 1 qk block
+
+    // partial sum for each thread
     float tmp = 0.0f;
 
     const block_q_t  * x = (const block_q_t  *) vx;
     const block_q8_1 * y = (const block_q8_1 *) vy;
 
-    for (int i = item_ct1.get_local_id(2) / (qi / vdr); i < blocks_per_row;
+    for (int i = item_ct1.get_local_id(2) / qi_vdr; i < blocks_per_row;
          i += blocks_per_warp) {
-        const int ibx = row*blocks_per_row + i; // x block index
+      const int ibx = row * blocks_per_row + i; // x block index
 
-        const int iby = i * (qk/QK8_1); // y block index that aligns with ibx
+      const int iby = i * (qk / QK8_1); // y block index that aligns with ibx
 
-        const int iqs =
-            vdr *
-            (item_ct1.get_local_id(2) %
-             (qi / vdr)); // x block quant index when casting the quants to int
+      const int iqs =
+          vdr *
+          (item_ct1.get_local_id(2) -
+           i * qi_vdr); // x block quant index when casting the quants to int
 
-        tmp += vec_dot_q_sycl(&x[ibx], &y[iby], iqs);
+      tmp += vec_dot_q_sycl(&x[ibx], &y[iby], iqs);
     }
 
     // sum up partial sums and write back result
@@ -13416,11 +13418,16 @@ void print_device_detail(int id, sycl::device &device, std::string device_type) 
     version += std::to_string(prop.get_minor_version());
 
     device_type = std::regex_replace(device_type, std::regex("ext_oneapi_"), "");
+    std::string name = std::string(prop.get_name());
+    name = std::regex_replace(name, std::regex("\\(R\\)"), "");
+    name = std::regex_replace(name, std::regex("\\(TM\\)"), "");
 
-    fprintf(stderr, "|%2d|%18s|%45s|%10s|%11d|%8d|%7d|%15lu|\n", id, device_type.c_str(),
-            prop.get_name(), version.c_str(), prop.get_max_compute_units(),
+    auto global_mem_size = prop.get_global_mem_size()/1000000;
+
+    fprintf(stderr, "|%2d|%19s|%39s|%7s|%7d|%8d|%5d|%6luM|%21s|\n", id, device_type.c_str(),
+            name.c_str(), version.c_str(), prop.get_max_compute_units(),
             prop.get_max_work_group_size(), prop.get_max_sub_group_size(),
-            prop.get_global_mem_size());
+            global_mem_size, device.get_info<sycl::info::device::driver_version>().c_str());
 }
 
 void ggml_backend_sycl_print_sycl_devices() {
@@ -13428,9 +13435,10 @@ void ggml_backend_sycl_print_sycl_devices() {
     int device_count = dpct::dev_mgr::instance().device_count();
     std::map<std::string, size_t> DeviceNums;
     fprintf(stderr, "found %d SYCL devices:\n", device_count);
-    fprintf(stderr, "|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |\n");
-    fprintf(stderr, "|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|\n");
-    fprintf(stderr, "|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|\n");
+    fprintf(stderr, "|  |                   |                                       |       |Max    |        |Max  |Global |                     |\n");
+    fprintf(stderr, "|  |                   |                                       |       |compute|Max work|sub  |mem    |                     |\n");
+    fprintf(stderr, "|ID|        Device Type|                                   Name|Version|units  |group   |group|size   |       Driver version|\n");
+    fprintf(stderr, "|--|-------------------|---------------------------------------|-------|-------|--------|-----|-------|---------------------|\n");
     for (int id = 0; id < device_count; ++id) {
         sycl::device device = dpct::dev_mgr::instance().get_device(id);
         sycl::backend backend = device.get_backend();
@@ -14738,7 +14746,12 @@ inline void ggml_sycl_op_soft_max(const ggml_tensor *src0,
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT( dst->type == GGML_TYPE_F32);
 
+    const ggml_tensor * src2 = dst->src[2];
+
+#pragma message("TODO: add ggml_sycl_op_soft_max() F16 src1 and src2 support")
+#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5021")
     GGML_ASSERT(!src1 || src1->type == GGML_TYPE_F32); // src1 contains mask and it is optional
+    GGML_ASSERT(!src2 || src2->type == GGML_TYPE_F32); // src2 contains positions and it is optional
 
     const int64_t ne00 = src0->ne[0];
     const int64_t nrows_x = ggml_nrows(src0);
@@ -14754,7 +14767,6 @@ inline void ggml_sycl_op_soft_max(const ggml_tensor *src0,
     float * src2_dd = nullptr;
     sycl_pool_alloc<float> src2_f;
 
-    ggml_tensor * src2 = dst->src[2];
     const bool use_src2 = src2 != nullptr;
 
     if (use_src2) {
@@ -17752,7 +17764,7 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
 
 GGML_CALL static bool ggml_backend_sycl_offload_op(ggml_backend_t backend, const ggml_tensor * op) {
     const int min_batch_size = 32;
-    return op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS;
+    return op->ne[1] >= min_batch_size && op->op != GGML_OP_GET_ROWS && op->op != GGML_OP_MUL_MAT_ID;
     GGML_UNUSED(backend);
 }
 

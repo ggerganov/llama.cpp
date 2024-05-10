@@ -29,7 +29,7 @@ To mitigate it, you can increase values in `n_predict`, `kv_size`.
 cd ../../..
 mkdir build
 cd build
-cmake ../
+cmake -DLLAMA_CURL=ON ../
 cmake --build . --target server
 ```
 

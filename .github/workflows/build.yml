@@ -32,6 +32,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -88,6 +90,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -206,6 +210,8 @@ jobs:
       - name: Clone
         id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Dependencies
         id: depends
@@ -237,6 +243,33 @@ jobs:
           wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin
           ./bin/convert-llama2c-to-ggml --copy-vocab-from-model ./tok512.bin --llama2c-model stories260K.bin --llama2c-output-model stories260K.gguf
           ./bin/main -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack artifacts
+        id: pack_artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        run: |
+          cp LICENSE ./build/bin/
+          zip -r llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip ./build/bin/*
+
+      - name: Upload artifacts
+        if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
+          name: llama-bin-ubuntu-x64.zip
 
 #  ubuntu-latest-cmake-sanitizer:
 #    runs-on: ubuntu-latest
@@ -559,6 +592,63 @@ jobs:
         id: make_build_swift_example
         run: |
             make swift
+
+  windows-msys2:
+    runs-on: windows-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sys: UCRT64,  env: ucrt-x86_64,  build: Release }
+          - { sys: CLANG64, env: clang-x86_64, build: Release }
+
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Setup ${{ matrix.sys }}
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: ${{matrix.sys}}
+          install: >-
+            base-devel
+            mingw-w64-${{matrix.env}}-toolchain
+            mingw-w64-${{matrix.env}}-cmake
+            mingw-w64-${{matrix.env}}-openblas
+
+      - name: Build using make
+        shell: msys2 {0}
+        run: |
+            make -j $(nproc)
+
+      - name: Clean after building using make
+        shell: msys2 {0}
+        run: |
+            make clean
+
+      - name: Build using make w/ OpenBLAS
+        shell: msys2 {0}
+        run: |
+            make LLAMA_OPENBLAS=1 -j $(nproc)
+
+      - name: Build using CMake
+        shell: msys2 {0}
+        run: |
+            cmake -B build
+            cmake --build build --config ${{ matrix.build }} -j $(nproc)
+
+      - name: Clean after building using CMake
+        shell: msys2 {0}
+        run: |
+            rm -rf build
+
+      - name: Build using CMake w/ OpenBLAS
+        shell: msys2 {0}
+        run: |
+            cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+            cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
   windows-latest-cmake:
     runs-on: windows-latest
