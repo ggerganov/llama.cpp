@@ -2137,7 +2137,7 @@ struct server_context {
                             { "p1",      slot.n_past },
                             { "delta",   -n_truncate }
                         });
-                    } 
+                    }
 
                     // keep only the common part
                     int p0 = (int) system_tokens.size() + slot.n_past;
