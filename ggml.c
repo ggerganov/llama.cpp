@@ -11776,10 +11776,7 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     const int64_t ir0_start,
     const int64_t ir0_end,
     const int64_t ir1_start,
-    const int64_t ir1_end,
-
-    const size_t row_size
-) {
+    const int64_t ir1_end) {
 
     const struct ggml_tensor* src0 = dst->src[0];
     const struct ggml_tensor* src1 = dst->src[1];
@@ -11800,6 +11797,7 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     //printf("ir0_start = %6lld, ir0_end = %6lld, ir1_start = %6lld, ir1_end = %6lld\n", ir0_start, ir0_end, ir1_start, ir1_end);
 
     const void* wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
+    const size_t row_size = ggml_row_size(vec_dot_type, ne10);
 
     assert(ne12 % ne02 == 0);
     assert(ne13 % ne03 == 0);
@@ -12090,7 +12088,7 @@ UseGgmlGemm2:;
         num_rows_per_vec_dot = 1;
     }
 
-    ggml_compute_forward_mul_mat_one_chunk(params, dst, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end, row_size);
+    ggml_compute_forward_mul_mat_one_chunk(params, dst, num_rows_per_vec_dot, ir0_start, ir0_end, ir1_start, ir1_end);
 }
 
 // ggml_compute_forward_mul_mat_id
