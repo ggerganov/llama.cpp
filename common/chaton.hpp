@@ -315,14 +315,54 @@ inline bool chaton_meta_load(const std::string &fname) {
     std::ifstream f(fname);
     json conMeta = json::parse(f);
     for(auto it=conMeta.begin(); it != conMeta.end(); ++it) {
-        std::cout << it.key() << std::endl;
-        std::cout << it.value() << std::endl;
-        auto curMeta = conMeta[it.key()];
-        std::cout << curMeta.dump(4) << std::endl;
+
+        auto group = it.key();
+        auto curTmpl = conMeta[group];
+
+        std::string globalBegin = curTmpl[K_GLOBAL][K_BEGIN];
+        gCT.set_value<std::string>(group, { K_GLOBAL, K_BEGIN }, globalBegin);
+
+        std::string globalEnd = curTmpl[K_GLOBAL][K_END];
+        gCT.set_value<std::string>(group, { K_GLOBAL, K_END }, globalEnd);
+
+        std::string systemBegin = curTmpl[K_SYSTEM][K_BEGIN];
+        gCT.set_value<std::string>(group, { K_SYSTEM, K_BEGIN }, systemBegin);
+
+        std::string systemPrefix = curTmpl[K_SYSTEM][K_PREFIX];
+        gCT.set_value<std::string>(group, { K_SYSTEM, K_PREFIX }, systemPrefix);
+
+        std::string systemSuffix = curTmpl[K_SYSTEM][K_SUFFIX];
+        gCT.set_value<std::string>(group, { K_SYSTEM, K_SUFFIX }, systemSuffix);
+
+        std::string systemEnd = curTmpl[K_SYSTEM][K_END];
+        gCT.set_value<std::string>(group, { K_SYSTEM, K_END }, systemEnd);
+
+        std::string userBegin = curTmpl[K_USER][K_BEGIN];
+        gCT.set_value<std::string>(group, { K_USER, K_BEGIN }, userBegin);
+
+        std::string userPrefix = curTmpl[K_USER][K_PREFIX];
+        gCT.set_value<std::string>(group, { K_USER, K_PREFIX }, userPrefix);
+
+        std::string userSuffix = curTmpl[K_USER][K_SUFFIX];
+        gCT.set_value<std::string>(group, { K_USER, K_SUFFIX }, userSuffix);
+
+        std::string userEnd = curTmpl[K_USER][K_END];
+        gCT.set_value<std::string>(group, { K_USER, K_END }, userEnd);
+
+        std::string assistantBegin = curTmpl[K_ASSISTANT][K_BEGIN];
+        gCT.set_value<std::string>(group, { K_ASSISTANT, K_BEGIN }, assistantBegin);
+
+        std::string assistantPrefix = curTmpl[K_ASSISTANT][K_PREFIX];
+        gCT.set_value<std::string>(group, { K_ASSISTANT, K_PREFIX }, assistantPrefix);
+
+        std::string assistantSuffix = curTmpl[K_ASSISTANT][K_SUFFIX];
+        gCT.set_value<std::string>(group, { K_ASSISTANT, K_SUFFIX }, assistantSuffix);
+
+        std::string assistantEnd = curTmpl[K_ASSISTANT][K_END];
+        gCT.set_value<std::string>(group, { K_ASSISTANT, K_END }, assistantEnd);
+
     }
-    for(auto curTmpl: conMeta) {
-        std::cout << curTmpl.dump(4) << std::endl;
-    }
+    LOGXLN("%s", gCT.dump("", "DBUG:ChatONMetaLoad:ChatTemplates:").c_str());
     return true;
 }
 
