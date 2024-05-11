@@ -129,12 +129,12 @@ int main(int argc, char ** argv) {
         inputs.push_back(inp);
     }
 
-    // add SEP if not present
-    // JoanFM: I propose to remove this line so that user can make sure that their model is properly configured to tokenize as expected.
-    // We could also add a parameter, but I think that adding parameters specific for the examples can become messy and unmantaibable easy
+    // check if the last token is SEP
+    // it should be automatically added by the tokenizer when 'tokenizer.ggml.add_eos_token' is set to 'true'
     for (auto & inp : inputs) {
         if (inp.empty() || inp.back() != llama_token_sep(model)) {
-            inp.push_back(llama_token_sep(model));
+            fprintf(stderr, "%s: warning: last token in the prompt is not SEP\n", __func__);
+            fprintf(stderr, "%s:          'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header\n", __func__);
         }
     }
 
