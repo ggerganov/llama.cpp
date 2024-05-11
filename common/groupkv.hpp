@@ -99,6 +99,12 @@ public:
         return ss.str();
     }
 
+    bool group_exists(const std::string &group) {
+        if (gkv.find(group) == gkv.end()) {
+            return false;
+        }
+        return true;
+    }
 
     template<typename SupportedDataType>
     void set_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &value, const std::string &callerName="") {
