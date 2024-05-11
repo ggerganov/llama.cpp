@@ -361,6 +361,20 @@ inline bool chaton_meta_load(const std::string &fname) {
         std::string assistantEnd = curTmpl[K_ASSISTANT][K_END];
         gCT.set_value<std::string>(group, { K_ASSISTANT, K_END }, assistantEnd);
 
+
+        std::string reversePrompt = curTmpl[K_REVERSE_PROMPT];
+        gCT.set_value<std::string>(group, { K_REVERSE_PROMPT }, reversePrompt);
+
+        bool systemHasSuffix = curTmpl[K_SYSTEMUSER_SYSTEM_HAS_SUFFIX];
+        gCT.set_value(group, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX }, systemHasSuffix);
+        bool systemHasEnd = curTmpl[K_SYSTEMUSER_SYSTEM_HAS_END];
+        gCT.set_value(group, { K_SYSTEMUSER_SYSTEM_HAS_END }, systemHasEnd);
+
+        bool userHasBegin = curTmpl[K_SYSTEMUSER_1ST_USER_HAS_BEGIN];
+        gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN }, userHasBegin);
+        bool userHasPrefix = curTmpl[K_SYSTEMUSER_1ST_USER_HAS_PREFIX];
+        gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX }, userHasPrefix);
+
     }
     LOGXLN("%s", gCT.dump("", "DBUG:ChatONMetaLoad:ChatTemplates:").c_str());
     return true;
