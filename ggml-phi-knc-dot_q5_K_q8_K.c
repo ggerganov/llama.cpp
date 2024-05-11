@@ -215,7 +215,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vmovdqa32\t(%[SRC1])%{uint8%},\t%%zmm3\n\t"        // Load 16 sets of 8 packed single bits.
                           "vmovdqa32\t16(%[SRC1])%{uint8%},\t%%zmm4\n\t"      // Load the next 16 sets of 8 packed single bits.
 
-                          "1:\n\t"
+                          "3:\n\t"
                           "inc\t%%ecx\n\t"                                    // We are in the loop. increment the counter.
 
                           "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"              // Test to see if our selected bit is set.
@@ -258,7 +258,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "add\t$32,\t%%r9\n\t"
                           "add\t$32,\t%%r10\n\t"
                           "add\t$32,\t%%r11\n\t"
-                          "jmp\t1b\n\t"
+                          "jmp\t3b\n\t"
                           "2:"
                           : [DST]   "+r" (dst)
                           : [SRC4]   "r" (q4),
