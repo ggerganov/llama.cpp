@@ -225,13 +225,13 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"              // Test to see if our selected bit is set.
 
                           "vloadunpackld\t\t(%%r9)%{uint8%},\t%%zmm5\n\t"     // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vloadunpackhd\t\t16(%%r10)%{uint8%},\t%%zmm5\n\t"  // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+                          "vloadunpackhd\t\t(%%r10)%{uint8%},\t%%zmm5\n\t"    // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vpandd\t%%zmm0,\t%%zmm5,\t%%zmm6\n\t"              // Apply a mask, storing the first set of four bits into a vector.
                           "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"           // Turn on bit 5 for all values that passed the prior test.
                           "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"         // Save our result.
 
                           "vloadunpackld\t\t16(%%r9)%{uint8%},\t%%zmm7\n\t"   // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vloadunpackhd\t\t32(%%r11)%{uint8%},\t%%zmm7\n\t"  // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+                          "vloadunpackhd\t\t16(%%r11)%{uint8%},\t%%zmm7\n\t"  // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vprefetch1\t32(%%r9)\n\t"                          // Pull the next set of 4 bit sequences into the L2 cache.
                           "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"              // Apply a mask, storing the next set of four bits into a vector.
                           "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"           // Turn on bit 5 for all values that passed the prior test.
