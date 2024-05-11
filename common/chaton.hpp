@@ -192,7 +192,7 @@
 
 #include <string>
 #include <fstream>
-#include <json.hpp>
+#include <groupkv.hpp>
 
 #include "log.h"
 #include "llama.h"
@@ -213,10 +213,12 @@ const auto K_SYSTEMUSER_1ST_USER_HAS_BEGIN = "systemuser-1st-user-has-begin";
 const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
 const auto K_REVERSE_PROMPT = "reverse-prompt";
 
-
+#define CHATON_JSON
+#ifdef CHATON_JSON
+#include <json.hpp>
 using json = nlohmann::ordered_json;
+#endif
 
-json conMeta;
 
 
 /**
@@ -296,37 +298,40 @@ public:
 
 };
 
-inline bool chaton_meta_load(std::string &fname) {
-    if (conMeta != nullptr) {
-        LOGXLN("WARN:%s:ChatOn Meta: overwriting???", __func__);
-    }
+
+class ChatTemplates : public GroupKV {
+
+};
+
+ChatTemplates gCT;
+
+#ifdef CHATON_JSON
+
+inline bool chaton_meta_load(const std::string &fname) {
     std::ifstream f(fname);
-    conMeta = json::parse(f);
+    json conMeta = json::parse(f);
+    for(auto curTmpl: conMeta) {
+        curTmpl.dump();
+    }
     return true;
 }
 
+#endif
+
+
 inline bool chaton_tmpl_exists(const std::string &tmpl) {
-    if (conMeta == nullptr) {
-        LOG_TEELN("ERRR:%s:ChatOnMeta: Not loaded yet...", __func__);
+    if (!gCT.group_exists(tmpl)) {
+        LOG_TEELN("WARN:%s: tmpl[%s] not found...", __func__, tmpl.c_str());
         return false;
     }
-    try {
-        auto tmplData = conMeta[tmpl];
-        return true;
-    } catch (json::exception &err) {
-        LOG_TEELN("WARN:%s:ChatOnMeta: tmpl[%s] not found...", __func__, tmpl.c_str());
-        return false;
-    }
+    return true;
 }
 
 inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::string &role, const std::vector<std::string> &keys) {
     std::string got = "";
     std::string sKeys = "";
     for(auto key: keys) {
-        try {
-            got += conMeta[tmpl][role][key];
-        } catch (json::exception &err) {
-        }
+        got += gCT.get_value<std::string>(tmpl, {role, key}, "");
         sKeys += "+";
         sKeys += key;
     }
@@ -335,13 +340,13 @@ inline std::string chaton_tmpl_role_kv(const std::string &tmpl, const std::strin
 }
 
 inline std::string chaton_tmpl_kv(const std::string &tmpl, const std::string &key) {
-    std::string got = conMeta[tmpl][key];
+    std::string got = gCT.get_value<std::string>(tmpl, {key}, "");
     LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), key.c_str(), got.c_str());
     return got;
 }
 
 inline bool chaton_tmpl_kv_bool(const std::string &tmpl, const std::string &key) {
-    bool got = conMeta[tmpl][key];
+    bool got = gCT.get_value(tmpl, {key}, false);
     LOGLN("DBUG:%s:%s:%s:%d", __func__, tmpl.c_str(), key.c_str(), got);
     return got;
 }
@@ -471,10 +476,10 @@ inline bool chaton_tmpl_apply_ex(
         } else if (role == K_USER) {
             cntUser += 1;
             if ((cntSystem == 1) && (cntUser == 1)) {
-                if (conMeta[tmpl][K_SYSTEMUSER_1ST_USER_HAS_BEGIN]) {
+                if (chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_BEGIN)) {
                     cp.add_part(ChatParts::S, begin);
                 }
-                if (conMeta[tmpl][K_SYSTEMUSER_1ST_USER_HAS_PREFIX]) {
+                if (chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX)) {
                     cp.add_part(ChatParts::S, prefix);
                 }
             } else {
@@ -687,16 +692,13 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
  * * chaton-template-id, then dump contents related to that specific chat-handshake-template-standard
  */
 inline bool _chaton_meta_dump(std::string &tmpl) {
-    json theJson;
-    if (tmpl.empty()) {
-        theJson = conMeta;
-    } else {
-        theJson = conMeta[tmpl];
-        if (theJson.empty()) {
+    if (!tmpl.empty()) {
+        if (!gCT.group_exists(tmpl)) {
             LOGXLN("ERRR:%s:Specified template-id [%s] not found", __func__, tmpl.c_str());
             return false;
         }
     }
+    gCT.dump(tmpl);
     LOGXLN("\n\nINFO:%s:ChatOn Meta:%s:\n%s", __func__, tmpl.c_str(), theJson.dump(4).c_str());
     if (!tmpl.empty()) {
         std::string globalBegin = conMeta[tmpl][K_GLOBAL][K_BEGIN];
@@ -745,13 +747,8 @@ inline bool _chaton_meta_dump(std::string &tmpl) {
 }
 
 /**
- * Check that a meta-json file has been loaded.
- * Verify that specified chaton-template-id contains required fields in meta-json, using meta-dump
+ * Verify that specified chaton-template-id contains required fields using meta-dump
  */
 inline bool chaton_meta_ok(std::string &tmpl) {
-    if (conMeta == nullptr) {
-        LOG_TEELN("ERRR:%s:%s:ChatOn Meta: Not loaded yet...", __func__, tmpl.c_str());
-        return false;
-    }
     return _chaton_meta_dump(tmpl);
 }
