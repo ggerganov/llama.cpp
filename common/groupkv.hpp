@@ -132,16 +132,28 @@ public:
     }
 
     template<typename SupportedDataType>
-    SupportedDataType get_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &defaultValue, const std::string &callerName="") {
+    SupportedDataType get_value(const std::string &group, const MultiPart &keyParts) {
         auto key = joiner(keyParts);
         auto gm = gkv[group];
         if (gm.find(key) == gm.end()) {
-            LDBUG_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
-            return defaultValue;
+            std::stringstream ss;
+            ss << "WARN:GKV:" << __func__ << ":" << group << ":Key [" << key << "] not found";
+            throw std::range_error(ss.str());
         }
         auto value = gm[key];
-        LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
         return std::get<SupportedDataType>(value);
+    }
+
+    template<typename SupportedDataType>
+    SupportedDataType get_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &defaultValue, const std::string &callerName="") {
+        try {
+            auto value = get_value<SupportedDataType>(group, keyParts);
+            LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), to_str(keyParts).c_str(), to_str(value).c_str());
+            return value;
+        } catch (std::exception &e) {
+        }
+        LDBUG_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), to_str(keyParts).c_str(), to_str(defaultValue).c_str());
+        return defaultValue;
     }
 
     template<typename SupportedDataType>
