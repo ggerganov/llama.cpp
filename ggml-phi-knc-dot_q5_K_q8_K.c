@@ -199,6 +199,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
     uint8_t lowmask = 0x0F;
     uint8_t m=1;
     uint8_t bit5 = 0x10;
+    uint64_t q4offset=((uint64_t) q4) & 0x3f;
 
     __asm__ __volatile__ (
                           "vprefetch0\t(%[SRC1])\n\t"                         // Issue our memory requests first thing.
@@ -230,7 +231,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vmovdqa32\t\t%%zmm6%{uint8%},\t(%%r8)\n\t"         // Save our result.
 
                           "vloadunpackld\t\t16(%%r9)%{uint8%},\t%%zmm7\n\t"   // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
-                          "vloadunpackhd\t\t32(%%r11)%{uint8%},\t%%zmm7\n\t"   // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
+                          "vloadunpackhd\t\t32(%%r11)%{uint8%},\t%%zmm7\n\t"  // Load our odd 4 bit sequences. note that it loads two 4 bit sequences into each zmm value.
                           "vprefetch1\t32(%%r9)\n\t"                          // Pull the next set of 4 bit sequences into the L2 cache.
                           "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"              // Apply a mask, storing the next set of four bits into a vector.
                           "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"           // Turn on bit 5 for all values that passed the prior test.
@@ -267,6 +268,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "2:"
                           : [DST]   "+r" (dst)
                           : [SRC4]   "r" (q4),
+                            [OFFSET] "m" (q4offset),
                             [SRC1]   "r" (q1),
                             [MASK]   "m" (lowmask),
                             [M]      "m" (m),
