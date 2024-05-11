@@ -301,9 +301,13 @@ public:
 
 class ChatTemplates : public GroupKV {
 
+public:
+
+    ChatTemplates(GroupKVMapMapVariant defaultMap) : GroupKV(defaultMap) {}
+
 };
 
-ChatTemplates gCT;
+ChatTemplates gCT = {{}};
 
 #ifdef CHATON_JSON
 
