@@ -783,7 +783,6 @@ class RopeScalingType(Enum):
     NONE   = 'none'
     LINEAR = 'linear'
     YARN   = 'yarn'
-    SU     = 'su'
 
 
 class PoolingType(IntEnum):
