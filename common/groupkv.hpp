@@ -81,7 +81,7 @@ public:
         auto &gm = mapV[group];
         gm[key] = value;
 #ifdef GKV_DEBUG
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
+        LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
 #endif
     }
 
@@ -90,11 +90,11 @@ public:
     void dump(const std::string &group) {
         for (auto gm: mapV) {
             if (!group.empty() && (gm.first != group)) {
-                LINFO_LN("INFO:SC:%s:%s:Skipping...", __func__, gm.first.c_str());
+                LINFO_LN("INFO:GKV:%s:%s:Skipping...", __func__, gm.first.c_str());
                 continue;
             }
             for(auto k: gm.second) {
-                LINFO_LN("DBUG:SC:%s:%s:Iterate:%s:%s", __func__, gm.first.c_str(), k.first.c_str(), to_str(k.second).c_str());
+                LINFO_LN("DBUG:GKV:%s:%s:Iterate:%s:%s", __func__, gm.first.c_str(), k.first.c_str(), to_str(k.second).c_str());
             }
         }
     }
@@ -105,13 +105,13 @@ public:
         auto gm = mapV[group];
         if (gm.find(key) == gm.end()) {
 #ifdef GKV_DEBUG
-            LWARN_LN("WARN:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
+            LWARN_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
 #endif
             return defaultValue;
         }
         auto value = gm[key];
 #ifdef GKV_DEBUG
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
+        LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
 #endif
         return std::get<SupportedDataType>(value);
     }
@@ -133,10 +133,14 @@ public:
             i += 1;
         }
         if (array.empty()) {
-            LWARN_LN("DBUG:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(defaultValue).c_str());
+#ifdef GKV_DEBUG
+            LWARN_LN("DBUG:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(defaultValue).c_str());
+#endif
             return defaultValue;
         }
+#ifdef GKV_DEBUG
         LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(array).c_str());
+#endif
         return array;
     }
 
@@ -146,11 +150,8 @@ public:
 #ifdef GKV_TEST_PRG
 
 
-// **** **** **** some simple test code **** **** **** //
-
-
-void sc_inited() {
-    GroupKV sc = {{
+void gkv_inited() {
+    GroupKV gkv = {{
         {"Group1",{
             {"testkey11", 11},
             {"testkey12", true}
@@ -162,59 +163,48 @@ void sc_inited() {
         }}
     }};
 
-    std::cout << "**** sc inited **** " << std::endl;
-    sc.dump("");
+    std::cout << "**** gkv inited **** " << std::endl;
+    gkv.dump("");
 
 }
 
-void sc_set(const std::string &fname) {
+void gkv_set() {
 
-    std::cout << "**** sc set **** " << std::endl;
-    SimpCfg sc = {{}};
-    sc.load(fname);
-    sc.dump("");
+    std::cout << "**** gkv set **** " << std::endl;
+    GroupKV gkv = {{}};
+    gkv.dump("");
 
-    sc.get_bool("testme", {"key101b"}, false);
-    sc.get_string("testme", {"key101s"}, "Not found");
-    sc.get_int64("testme", {"key101i"}, 123456);
-    sc.get_double("testme", {"key101d"}, 123456.789);
+    gkv.get_value("testme", {"key101b"}, false);
+    gkv.get_value<std::string>("testme", {"key101s"}, "Not found");
+    gkv.get_value("testme", {"key101i"}, 123456);
+    gkv.get_value("testme", {"key101d"}, 123456.789);
 
-    sc.set_bool("testme", {"key201b"}, true);
-    sc.set_string("testme", {"key201s"}, "hello world");
-    sc.set_int64("testme", {"key201i"}, 987654);
-    sc.set_double("testme", {"key201d"}, 9988.7766);
+    gkv.set_value("testme", {"key201b"}, true);
+    gkv.set_value("testme", {"key201s"}, "hello world");
+    gkv.set_value("testme", {"key201i"}, 987654);
+    gkv.set_value("testme", {"key201d"}, 9988.7766);
 
-    sc.dump("testme");
-    sc.get_bool("testme", {"key201b"}, false);
-    sc.get_string("testme", {"key201s"}, "Not found");
-    sc.get_int64("testme", {"key201i"}, 123456);
-    sc.get_double("testme", {"key201d"}, 123456.789);
+    gkv.dump("testme");
+    gkv.get_value("testme", {"key201b"}, false);
+    gkv.get_value<std::string>("testme", {"key201s"}, "Not found");
+    gkv.get_value("testme", {"key201i"}, 123456);
+    gkv.get_value("testme", {"key201d"}, 123456.789);
 
-    sc.get_string("mistral", {"system-prefix"}, "Not found");
-    sc.get_string("\"mistral\"", {"\"system-prefix\""}, "Not found");
-
-    sc.get_vector<int64_t>("testme", {"keyA100"}, {1, 2, 3});
-    sc.get_vector<std::string>("testme", {"keyA100"}, { "A", "അ", "अ", "ಅ" });
-    sc.set_int64("testme", {"keyA300-0"}, 330);
-    sc.set_int64("testme", {"keyA300-1"}, 331);
-    sc.set_int64("testme", {"keyA300-2"}, 332);
-    sc.set_string("testme", {"keyA301-0"}, "India");
-    sc.set_value<std::string>("testme", {"keyA301", "1"}, "World");
-    sc.set_string("testme", {"keyA301", "2"}, "AkashaGanga");
-    sc.get_vector<int64_t>("testme", {"keyA300"}, {1, 2, 3});
-    sc.get_vector<std::string>("testme", {"keyA301"}, { "yes 1", "No 2", "very well 3" });
+    gkv.get_vector<int64_t>("testme", {"keyA100"}, {1, 2, 3});
+    gkv.get_vector<std::string>("testme", {"keyA100"}, { "A", "അ", "अ", "ಅ" });
+    gkv.set_value("testme", {"keyA300-0"}, 330);
+    gkv.set_value("testme", {"keyA300-1"}, 331);
+    gkv.set_value("testme", {"keyA300-2"}, 332);
+    gkv.set_value("testme", {"keyA301-0"}, "India");
+    gkv.set_value<std::string>("testme", {"keyA301", "1"}, "World");
+    gkv.set_value("testme", {"keyA301", "2"}, "AkashaGanga");
+    gkv.get_vector<int64_t>("testme", {"keyA300"}, {1, 2, 3});
+    gkv.get_vector<std::string>("testme", {"keyA301"}, { "yes 1", "No 2", "very well 3" });
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) {
-        LERRR_LN("USAGE:%s simp.cfg", argv[0]);
-        exit(1);
-    }
-
-    sc_inited();
-    std::string fname {argv[1]};
-    sc_set(fname);
-
+    gkv_inited();
+    gkv_set();
     return 0;
 }
 #endif
