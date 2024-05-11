@@ -99,8 +99,9 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "vmovaps\t\t64(%%r10),\t%%zmm3\n\t"           // Load two vectors.
                           "vmovaps\t\t64(%%r12),\t%%zmm4\n\t"
                           "vfmadd231ps\t%%zmm3,\t%%zmm4,\t%%zmm0\n\t"   // Perform a fused multiply add
+                          "je\t2f\n\t"                                  // Jump to label 2 if two (end of loop)
                           // No compare. we must be three.
-                          "vmovaps\t\t128(%%r10),\t%%zmm5\n\t"           // Load two vectors.
+                          "vmovaps\t\t128(%%r10),\t%%zmm5\n\t"          // Load two vectors.
                           "vmovaps\t\t128(%%r12),\t%%zmm6\n\t"
                           "vfmadd231ps\t%%zmm5,\t%%zmm6,\t%%zmm0\n\t"   // Perform a fused multiply add
                           "2:\n\t"                                      // Label for loop end
