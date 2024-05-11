@@ -75,6 +75,21 @@ public:
         return std::visit(visitor, value);
     }
 
+    template<typename TypeWithStrSupp>
+    std::string to_str(std::vector<TypeWithStrSupp> values) {
+        std::stringstream ss;
+        ss << "[ ";
+        int cnt = 0;
+        for(auto value: values) {
+            cnt += 1;
+            if (cnt != 1) ss << ", ";
+            ss << value;
+        }
+        ss << " ]";
+        return ss.str();
+    }
+
+
     template<typename SupportedDataType>
     void set_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &value, const std::string &callerName="") {
         auto key = joiner(keyParts);
@@ -134,12 +149,12 @@ public:
         }
         if (array.empty()) {
 #ifdef GKV_DEBUG
-            LWARN_LN("DBUG:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(defaultValue).c_str());
+            LWARN_LN("DBUG:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
 #endif
             return defaultValue;
         }
 #ifdef GKV_DEBUG
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(array).c_str());
+        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(array).c_str());
 #endif
         return array;
     }
@@ -176,7 +191,7 @@ void gkv_set() {
 
     gkv.get_value("testme", {"key101b"}, false);
     gkv.get_value<std::string>("testme", {"key101s"}, "Not found");
-    gkv.get_value("testme", {"key101i"}, 123456);
+    gkv.get_value<int64_t>("testme", {"key101i"}, 123456);
     gkv.get_value("testme", {"key101d"}, 123456.789);
 
     gkv.set_value("testme", {"key201b"}, true);
@@ -187,7 +202,7 @@ void gkv_set() {
     gkv.dump("testme");
     gkv.get_value("testme", {"key201b"}, false);
     gkv.get_value<std::string>("testme", {"key201s"}, "Not found");
-    gkv.get_value("testme", {"key201i"}, 123456);
+    gkv.get_value("testme", {"key201i"}, 123456LL);
     gkv.get_value("testme", {"key201d"}, 123456.789);
 
     gkv.get_vector<int64_t>("testme", {"keyA100"}, {1, 2, 3});
