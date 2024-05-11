@@ -119,19 +119,19 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
                           "cmp\t$48,%%r10\n\t"
                           "jl\t21f\n\t"
                           "add\t$64,%%r12\n\t"                                // Greater than 47.
-                          "jmp\t18f\n\t"
+                          "jmp\t14f\n\t"
                           "21:\n\t"
                           "add\t$64,%%r13\n\t"                                // Between 48 and 31.
-                          "jmp\t18f\n\t"
+                          "jmp\t14f\n\t"
                           "20:\n\t"                                           // Less than 32...
                           "cmp\t$16,%%r10\n\t"
-                          "jz\t18f\n\t"                                       // Zero.
-                          "jl\t23f\n\t"
+                          "jz\t14f\n\t"                                       // Zero.
+                          "jl\t13f\n\t"
                           "add\t$64,%%r14\n\t"                                // Between 32 and 15.
-                          "jmp\t18f\n\t"
-                          "23:\n\t"
+                          "jmp\t14f\n\t"
+                          "13:\n\t"
                           "add\t$64,%%r15\n\t"                                // Between 16 and zero.
-                          "18:\n\t"
+                          "14:\n\t"
                           "vbroadcastss\t%[SCALEY],\t%%zmm3\n\t"              // Load the scale factors coresponding to the two input vectors.
                           "vbroadcastss\t%[SCALEX]%{float16%},\t%%zmm4\n\t"
                           "vmulps\t%%zmm3,\t%%zmm4,\t%%zmm5\n\t"              // Prepare the factor we're going to multiply the result by..
@@ -315,7 +315,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 
         for (int j = 0; j < QK_K/16; ++j) sumi += y[i].bsums[j] * mins[j/2];
 
-        // FIXME: while comparing FMA output to the original output, the original had an error. Hunt it down.
+        // FIXME: While comparing FMA output to the original output, the original had an error. Hunt it down.
         GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned((const int8x16_t *)y[i].qs, q5, scales, x[i].d, y[i].d, &sums);
 
         const float dmin = GGML_PHI_FP16_TO_FP32(x[i].dmin) * y[i].d;
