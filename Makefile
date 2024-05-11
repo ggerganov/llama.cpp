@@ -121,6 +121,8 @@ CC	:= riscv64-unknown-linux-gnu-gcc
 CXX	:= riscv64-unknown-linux-gnu-g++
 endif
 
+K1OM := $(shell echo | $(CC) -dM -E - | grep __k1om__)
+
 #
 # Compile flags
 #
@@ -307,6 +309,10 @@ endif
 ifndef RISCV
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
+
+# detect the PHI cross compiler.
+ifeq "${K1OM}" ""
+
 	# Use all CPU extensions that are available:
 	MK_CFLAGS     += -march=native -mtune=native
 	HOST_CXXFLAGS += -march=native -mtune=native
@@ -318,6 +324,11 @@ ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Usage SSSE3-only (Not is SSE3!)
 	#MK_CFLAGS   += -mssse3
 	#MK_CXXFLAGS += -mssse3
+else
+	OBJS         += ggml-phi-knc.o ggml-phi-knc-dot_q5_K_q8_K.o
+	MK_CFLAGS    += -march=knc -mtune=knc
+endif
+
 endif
 
 ifneq '' '$(findstring mingw,$(shell $(CC) -dumpmachine))'
@@ -769,12 +780,28 @@ clean:
 # Helper function that replaces .c, .cpp, and .cu file endings with .o:
 GET_OBJ_FILE = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(patsubst %.cu,%.o,$(1))))
 
+# Helper function that replaces .c, .cpp, and .cu file endings with .s:
+GET_ASM_FILE = $(patsubst %.c,%.s,$(patsubst %.cpp,%.s,$(patsubst %.cu,%.s,$(1))))
+
 main: examples/main/main.cpp                                  ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 	@echo
 	@echo '====  Run ./main -h for help.  ===='
 	@echo
+
+bench-phi-knc.s: bench-phi-knc.c
+	$(CC) $(CFLAGS) -S $< -o $(call GET_ASM_FILE, $<)
+
+ggml-phi-knc.s: ggml-phi-knc.c
+	$(CC) $(CFLAGS) -S $< -o $(call GET_ASM_FILE, $<)
+
+bench-phi-knc: bench-phi-knc.c ggml-phi-knc.o
+	$(CC) $(CFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CC) $(CFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+ggml-phi-knc-dot_q5_K_q8_K.s: ggml-phi-knc-dot_q5_K_q8_K.c
+	$(CC) $(CFLAGS) -S $< -o $(call GET_ASM_FILE, $<)
 
 infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)

@@ -4,6 +4,7 @@
 #include "ggml-quants.h"
 #include "ggml-impl.h"
 
+// FIXME: why do we import this twice?
 #define GGML_COMMON_IMPL_C
 #include "ggml-common.h"
 
@@ -13,6 +14,52 @@
 #include <float.h>
 #include <stdlib.h> // for qsort
 #include <stdio.h>  // for GGML_ASSERT
+
+#ifdef __ARM_NEON
+
+// if YCM cannot find <arm_neon.h>, make a symbolic link to it, for example:
+//
+//   $ ln -sfn /Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/include/arm_neon.h ./src/
+//
+#include <arm_neon.h>
+
+#else
+
+#ifdef __wasm_simd128__
+#include <wasm_simd128.h>
+#else
+#if defined(__POWER9_VECTOR__) || defined(__powerpc64__)
+#include <altivec.h>
+#undef bool
+#define bool _Bool
+#else
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#include <intrin.h>
+#else
+#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__) || defined(__SSSE3__) || defined(__SSE3__)
+#if !defined(__riscv)
+#include <immintrin.h>
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+
+#ifdef __riscv_v_intrinsic
+#include <riscv_vector.h>
+#endif
+
+// hand assembled replacement functions are cool.
+#if defined(__k1om__)
+#include <ggml-phi-knc-dot_q5_K_q8_K.h>
+#endif
+
+#undef MIN
+#undef MAX
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define UNUSED GGML_UNUSED
 
@@ -6860,6 +6907,9 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 }
 #endif
 
+#if defined(__k1om__)
+/* We get this from elsewhere. */
+#else
 #if QK_K == 256
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy,  size_t by, int nrc) {
     assert(n % QK_K == 0);
@@ -7284,7 +7334,7 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
 #endif
 }
 
-#else
+#else /* QK_K != 256 */
 
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     assert(n % QK_K == 0);
@@ -7553,8 +7603,9 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     *s = sumf;
 #endif
 }
-#endif
+#endif /* end QK_K != 256 */
 
+#endif /* defined(__k1om__) */
 
 #if QK_K == 256
 void ggml_vec_dot_q6_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {

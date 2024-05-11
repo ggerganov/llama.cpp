@@ -47,6 +47,11 @@
 #pragma warning(disable: 4996)
 #endif
 
+// hand assembled replacement functions are cool.
+#if defined(__k1om__)
+#include <ggml-phi-knc.h>
+#endif
+
 #if defined(_WIN32)
 
 #define WIN32_LEAN_AND_MEAN
@@ -554,7 +559,11 @@ FILE * ggml_fopen(const char * fname, const char * mode) {
 
 static const size_t CACHE_LINE_SIZE_F32 = CACHE_LINE_SIZE/sizeof(float);
 
+#if defined(__k1om__)
+// We get this function from elsewhere.
+#else
 static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc);
+#endif
 static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t * restrict x, size_t bx, ggml_fp16_t * restrict y, size_t by, int nrc);
 static void ggml_vec_dot_bf16(int n, float * restrict s, size_t bs, ggml_bf16_t * restrict x, size_t bx, ggml_bf16_t * restrict y, size_t by, int nrc);
 
@@ -1559,6 +1568,9 @@ inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)   
 inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];   }
 inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];   }
 
+#if defined(__k1om__)
+// we get this function from elsewhere.
+#else
 static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc) {
    assert(nrc == 1);
    UNUSED(nrc);
@@ -1601,6 +1613,7 @@ static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float *
 
     *s = sumf;
 }
+#endif
 
 static void ggml_vec_dot_bf16(int n, float * restrict s, size_t bs, ggml_bf16_t * restrict x, size_t bx, ggml_bf16_t * restrict y, size_t by, int nrc) {
     assert(nrc == 1);
@@ -2522,9 +2535,10 @@ void ggml_numa_init(enum ggml_numa_strategy numa_flag) {
 #   if !defined(SYS_getcpu) && defined(SYS_get_cpu)
 #       define SYS_getcpu SYS_get_cpu // some older glibc versions use this name
 #   endif
+#   if defined(SYS_getcpu)
     getcpu_ret = syscall(SYS_getcpu, &current_cpu, &g_state.numa.current_node);
 #endif
-
+#endif
     if (g_state.numa.n_nodes < 1 || g_state.numa.total_cpus < 1 || getcpu_ret != 0) {
         g_state.numa.n_nodes = 0;
         return;
@@ -22934,6 +22948,14 @@ int ggml_cpu_has_vsx(void) {
 
 int ggml_cpu_has_matmul_int8(void) {
 #if defined(__ARM_FEATURE_MATMUL_INT8)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_is_xeonphi_knc(void) {
+#if defined(__k1om__)
     return 1;
 #else
     return 0;
