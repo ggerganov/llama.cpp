@@ -6,7 +6,7 @@ PROG=${0##*/}
 build_dir="build-ci-debug"
 
 if [ x"$1" = x"-h" ] || [ x"$1" = x"--help" ]; then
-    echo "Usage: $PROG [OPTION]... <test_regex> <test_number>"
+    echo "Usage: $PROG [OPTION]... <test_regex> (test_number)"
     echo "Debug specific ctest program."
     echo
     echo "Options:"
@@ -83,11 +83,10 @@ function select_test() {
 # Step 0: Check the args
 if [ -z "$test_suite" ]
 then
-    echo "Usage: $0 [test_regex] [test_number]"
-    echo "e.g., $0 test-tokenizer"
-    echo "      $0 test-tokenizer 3"
+    echo "Usage: $PROG [OPTION]... <test_regex> (test_number)"
     echo "Supply one regex to the script to filter tests,"
     echo "and optionally a test number to run a specific test."
+    echo "Use --help flag for full instructions"
     exit 1
 fi
 
