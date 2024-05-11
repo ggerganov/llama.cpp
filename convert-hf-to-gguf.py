@@ -404,8 +404,17 @@ class Model:
             # ref: https://huggingface.co/allenai/OLMo-1.7-7B-hf
             res = "olmo"
         if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
-            # ref: https://huggingface.co/databricks/dbrx-instruct
+            # ref: https://huggingface.co/databricks/dbrx-base
             res = "dbrx"
+        if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
+            res = "jina-en"
+        if chkhsh == "171aeeedd6fb548d418a7461d053f11b6f1f1fc9b387bd66640d28a4b9f5c643":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-es
+            res = "jina-es"
+        if chkhsh == "27949a2493fc4a9f53f5b9b029c82689cfbe5d3a1929bb25e043089e28466de6":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
+            res = "jina-de"
 
         if res is None:
             logger.warning("\n")
@@ -2287,6 +2296,43 @@ class OlmoModel(Model):
             data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
         return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("JinaBertModel", "JinaBertForMaskedLM")
+class JinaBertV2Model(BertModel):
+    model_arch = gguf.MODEL_ARCH.JINA_BERT_V2
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.intermediate_size = self.hparams["intermediate_size"]
+
+    def get_tensors(self):
+        for name, data in super().get_tensors():
+            if 'gated_layers' in name:
+                d1 = data[:self.intermediate_size, :]
+                name1 = name.replace('gated_layers', 'gated_layers_w')
+                d2 = data[self.intermediate_size:, :]
+                name2 = name.replace('gated_layers', 'gated_layers_v')
+                yield name1, d1
+                yield name2, d2
+                continue
+
+            yield name, data
+
+    def set_vocab(self, *args, **kwargs):
+        tokenizer_class = 'BertTokenizer'
+        with open(self.dir_model / "tokenizer_config.json", "r", encoding="utf-8") as f:
+            tokenizer_class = json.load(f)['tokenizer_class']
+
+        if tokenizer_class == 'BertTokenizer':
+            super().set_vocab()
+        elif tokenizer_class == 'RobertaTokenizer':
+            self._set_vocab_gpt2()
+            self.gguf_writer.add_token_type_count(2)
+        else:
+            raise NotImplementedError(f'Tokenizer {tokenizer_class} is not supported for JinaBertModel')
+        self.gguf_writer.add_add_bos_token(True)
+        self.gguf_writer.add_add_eos_token(True)
 
 
 ###### CONVERSION LOGIC ######
