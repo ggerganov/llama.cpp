@@ -57,11 +57,11 @@ class GroupKV {
 
 private:
 
-    GroupKVMapMapVariant mapV = {};
+    GroupKVMapMapVariant gkv = {};
 
 public:
 
-    GroupKV(GroupKVMapMapVariant defaultMap) : mapV(defaultMap) {}
+    GroupKV(GroupKVMapMapVariant defaultMap) : gkv(defaultMap) {}
 
     static std::string joiner(const MultiPart& parts) {
         std::stringstream joined;
@@ -103,7 +103,7 @@ public:
     template<typename SupportedDataType>
     void set_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &value, const std::string &callerName="") {
         auto key = joiner(keyParts);
-        auto &gm = mapV[group];
+        auto &gm = gkv[group];
         gm[key] = value;
         LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
     }
@@ -111,7 +111,7 @@ public:
     // Dump info about the specified group.
     // If group is empty, then dump info about all groups maintained in this instance.
     void dump(const std::string &group) {
-        for (auto gm: mapV) {
+        for (auto gm: gkv) {
             if (!group.empty() && (gm.first != group)) {
                 LINFO_LN("INFO:GKV:%s:%s:Skipping...", __func__, gm.first.c_str());
                 continue;
@@ -125,7 +125,7 @@ public:
     template<typename SupportedDataType>
     SupportedDataType get_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &defaultValue, const std::string &callerName="") {
         auto key = joiner(keyParts);
-        auto gm = mapV[group];
+        auto gm = gkv[group];
         if (gm.find(key) == gm.end()) {
             LDBUG_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
             return defaultValue;
@@ -138,7 +138,7 @@ public:
     template<typename SupportedDataType>
     std::vector<SupportedDataType> get_vector(const std::string &group, const MultiPart &keyParts, const std::vector<SupportedDataType> &defaultValue, const std::string &callerName="") {
         auto key = joiner(keyParts);
-        auto gm = mapV[group];
+        auto gm = gkv[group];
         std::vector<SupportedDataType> array;
         int i = 0;
         while(true) {
