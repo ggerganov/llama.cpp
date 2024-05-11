@@ -74,6 +74,9 @@ models = [
     {"name": "qwen2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen1.5-7B", },
     {"name": "olmo",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/allenai/OLMo-1.7-7B-hf", },
     {"name": "dbrx",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/databricks/dbrx-base", },
+    {"name": "jina-en",        "tokt": TOKENIZER_TYPE.WPM, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-en", }, # WPM!
+    {"name": "jina-es",        "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-es", },
+    {"name": "jina-de",        "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-de", },
 ]
 
 # make directory "models/tokenizers" if it doesn't exist
@@ -142,8 +145,17 @@ for model in models:
     if tokt == TOKENIZER_TYPE.SPM:
         continue
 
+    # Skip if the tokenizer folder does not exist or there are other download issues previously
+    if not os.path.exists(f"models/tokenizers/{name}"):
+        logger.warning(f"Directory for tokenizer {name} not found. Skipping...")
+        continue
+
     # create the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+    except OSError as e:
+        logger.error(f"Error loading tokenizer for model {name}. The model may not exist or is not accessible with the provided token. Error: {e}")
+        continue  # Skip to the next model if the tokenizer can't be loaded
 
     chktok = tokenizer.encode(chktxt)
     chkhsh = sha256(str(chktok).encode()).hexdigest()
@@ -161,6 +173,8 @@ for model in models:
         logger.info("normalizer: " + json.dumps(normalizer, indent=4))
         pre_tokenizer = cfg["pre_tokenizer"]
         logger.info("pre_tokenizer: " + json.dumps(pre_tokenizer, indent=4))
+        if "ignore_merges" in cfg["model"]:
+            logger.info("ignore_merges: " + json.dumps(cfg["model"]["ignore_merges"], indent=4))
 
     logger.info("")
 
@@ -282,8 +296,17 @@ for model in models:
     name = model["name"]
     tokt = model["tokt"]
 
+    # Skip if the tokenizer folder does not exist or there are other download issues previously
+    if not os.path.exists(f"models/tokenizers/{name}"):
+        logger.warning(f"Directory for tokenizer {name} not found. Skipping...")
+        continue
+
     # create the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+    except OSError as e:
+        logger.error(f"Failed to load tokenizer for model {name}. Error: {e}")
+        continue  # Skip this model and continue with the next one in the loop
 
     with open(f"models/ggml-vocab-{name}.gguf.inp", "w", encoding="utf-8") as f:
         for text in tests:
