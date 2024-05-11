@@ -690,6 +690,8 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
  * if tmpl is
  * * empty string, then dump the full loaded chaton-meta
  * * chaton-template-id, then dump contents related to that specific chat-handshake-template-standard
+ * NOTE: It uses the exception raising get_value to check if the tags related keys are present
+ * wrt the specified template-standard/model-id or not.
  */
 inline bool _chaton_meta_dump(std::string &tmpl) {
     if (!tmpl.empty()) {
@@ -698,23 +700,22 @@ inline bool _chaton_meta_dump(std::string &tmpl) {
             return false;
         }
     }
-    gCT.dump(tmpl);
-    LOGXLN("\n\nINFO:%s:ChatOn Meta:%s:\n%s", __func__, tmpl.c_str(), theJson.dump(4).c_str());
+    LOGXLN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump(tmpl, "INFO:ChatOnMetaDump:").c_str());
     if (!tmpl.empty()) {
-        std::string globalBegin = conMeta[tmpl][K_GLOBAL][K_BEGIN];
-        std::string globalEnd = conMeta[tmpl][K_GLOBAL][K_END];
-        std::string systemBegin = conMeta[tmpl][K_SYSTEM][K_BEGIN];
-        std::string systemPrefix = conMeta[tmpl][K_SYSTEM][K_PREFIX];
-        std::string systemSuffix = conMeta[tmpl][K_SYSTEM][K_SUFFIX];
-        std::string systemEnd = conMeta[tmpl][K_SYSTEM][K_END];
-        std::string userBegin = conMeta[tmpl][K_USER][K_BEGIN];
-        std::string userPrefix = conMeta[tmpl][K_USER][K_PREFIX];
-        std::string userSuffix = conMeta[tmpl][K_USER][K_SUFFIX];
-        std::string userEnd = conMeta[tmpl][K_USER][K_END];
-        std::string assistantBegin = conMeta[tmpl][K_ASSISTANT][K_BEGIN];
-        std::string assistantPrefix = conMeta[tmpl][K_ASSISTANT][K_PREFIX];
-        std::string assistantSuffix = conMeta[tmpl][K_ASSISTANT][K_SUFFIX];
-        std::string assistantEnd = conMeta[tmpl][K_ASSISTANT][K_END];
+        std::string globalBegin = gCT.get_value<std::string>(tmpl, { K_GLOBAL, K_BEGIN });
+        std::string globalEnd = gCT.get_value<std::string>(tmpl, { K_GLOBAL, K_END });
+        std::string systemBegin = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_BEGIN });
+        std::string systemPrefix = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_PREFIX });
+        std::string systemSuffix = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_SUFFIX });
+        std::string systemEnd = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_END });
+        std::string userBegin = gCT.get_value<std::string>(tmpl, { K_USER, K_BEGIN });
+        std::string userPrefix = gCT.get_value<std::string>(tmpl, { K_USER, K_PREFIX });
+        std::string userSuffix = gCT.get_value<std::string>(tmpl, { K_USER, K_SUFFIX });
+        std::string userEnd = gCT.get_value<std::string>(tmpl, { K_USER, K_END });
+        std::string assistantBegin = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_BEGIN });
+        std::string assistantPrefix = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_PREFIX });
+        std::string assistantSuffix = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_SUFFIX });
+        std::string assistantEnd = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_END });
 
         LOGXLN("INFO:%s:%s:%s", __func__, "global->begin", globalBegin.c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "global->end", globalEnd.c_str());
