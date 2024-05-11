@@ -29,13 +29,14 @@ static llama_grammar* build_grammar(const std::string & grammar_str) {
 }
 
 static bool test_build_grammar_fails(const std::string & grammar_str) {
+    fprintf(stderr, "⚫ Testing failure for grammar: %s\n", grammar_str.c_str());
     bool grammar_fails = false;
     try {
         build_grammar(grammar_str);
-        fprintf(stderr, "❌ Expected build failure, but succeeded: %s\n", grammar_str.c_str());
+        fprintf(stderr, "  ❌ Expected build failure, but succeeded\n");
     } catch (const std::exception & err) {
         grammar_fails = true;
-        fprintf(stdout, "✅︎\n");
+        fprintf(stdout, "  ✅︎\n");
     }
     return grammar_fails;
 }
@@ -352,6 +353,14 @@ root ::= asdf
 asdf ::= "a" | foo "b"
 foo ::= "c" | asdf "d" | "e")""";
     assert(test_build_grammar_fails(hard_str));
+
+    // Test yet even more complicated left recursion detection
+    const std::string hardest_str = R"""(
+root ::= asdf
+asdf ::= "a" | foo "b"
+foo ::= "c" | empty asdf "d" | "e"
+empty ::= "blah" | )""";
+    assert(test_build_grammar_fails(hardest_str));
 
     fprintf(stderr, "  ✅︎ Passed\n");
 }
