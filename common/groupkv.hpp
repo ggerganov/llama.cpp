@@ -39,7 +39,7 @@
 #endif
 
 
-typedef std::variant<std::string, bool, int64_t, double> GroupKVData;
+typedef std::variant<std::string, bool, int32_t, int64_t, double> GroupKVData;
 typedef std::vector<std::string> MultiPart;
 typedef std::map<std::string, std::map<std::string, GroupKVData>> GroupKVMapMapVariant;
 
@@ -191,7 +191,7 @@ void gkv_set() {
 
     gkv.get_value("testme", {"key101b"}, false);
     gkv.get_value<std::string>("testme", {"key101s"}, "Not found");
-    gkv.get_value<int64_t>("testme", {"key101i"}, 123456);
+    gkv.get_value("testme", {"key101i"}, 123456);
     gkv.get_value("testme", {"key101d"}, 123456.789);
 
     gkv.set_value("testme", {"key201b"}, true);
@@ -202,7 +202,7 @@ void gkv_set() {
     gkv.dump("testme");
     gkv.get_value("testme", {"key201b"}, false);
     gkv.get_value<std::string>("testme", {"key201s"}, "Not found");
-    gkv.get_value("testme", {"key201i"}, 123456LL);
+    gkv.get_value("testme", {"key201i"}, 123456);
     gkv.get_value("testme", {"key201d"}, 123456.789);
 
     gkv.get_vector<int64_t>("testme", {"keyA100"}, {1, 2, 3});
@@ -213,7 +213,7 @@ void gkv_set() {
     gkv.set_value("testme", {"keyA301-0"}, "India");
     gkv.set_value<std::string>("testme", {"keyA301", "1"}, "World");
     gkv.set_value("testme", {"keyA301", "2"}, "AkashaGanga");
-    gkv.get_vector<int64_t>("testme", {"keyA300"}, {1, 2, 3});
+    gkv.get_vector<int32_t>("testme", {"keyA300"}, {1, 2, 3});
     gkv.get_vector<std::string>("testme", {"keyA301"}, { "yes 1", "No 2", "very well 3" });
 }
 
