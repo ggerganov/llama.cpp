@@ -25,15 +25,25 @@
 #include <iostream>
 #include <format>
 #define LINFO_LN(FMT, ...) fprintf(stdout, FMT"\n", ##__VA_ARGS__)
+#ifdef GKV_DEBUG
 #define LDBUG(FMT, ...) fprintf(stderr, FMT, ##__VA_ARGS__)
 #define LDBUG_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
+#else
+#define LDBUG_LN(...)
+#define LDBUG(...)
+#endif
 #define LERRR_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
 #define LWARN_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
 #else
 #include "log.h"
 #define LINFO_LN LOG_TEELN
+#ifdef GKV_DEBUG
 #define LDBUG LOG
 #define LDBUG_LN LOGLN
+#else
+#define LDBUG_LN(...)
+#define LDBUG(...)
+#endif
 #define LERRR_LN LOG_TEELN
 #define LWARN_LN LOG_TEELN
 #endif
@@ -95,9 +105,7 @@ public:
         auto key = joiner(keyParts);
         auto &gm = mapV[group];
         gm[key] = value;
-#ifdef GKV_DEBUG
         LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
-#endif
     }
 
     // Dump info about the specified group.
@@ -119,15 +127,11 @@ public:
         auto key = joiner(keyParts);
         auto gm = mapV[group];
         if (gm.find(key) == gm.end()) {
-#ifdef GKV_DEBUG
-            LWARN_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
-#endif
+            LDBUG_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
             return defaultValue;
         }
         auto value = gm[key];
-#ifdef GKV_DEBUG
         LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
-#endif
         return std::get<SupportedDataType>(value);
     }
 
@@ -148,14 +152,10 @@ public:
             i += 1;
         }
         if (array.empty()) {
-#ifdef GKV_DEBUG
-            LWARN_LN("DBUG:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
-#endif
+            LDBUG_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
             return defaultValue;
         }
-#ifdef GKV_DEBUG
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(array).c_str());
-#endif
+        LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(array).c_str());
         return array;
     }
 
