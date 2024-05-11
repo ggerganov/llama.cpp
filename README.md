@@ -2,7 +2,7 @@
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
@@ -20,7 +20,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- **BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920**
+- **Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021**
+- BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
 - MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
 - Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
 - Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
@@ -175,6 +176,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [Faraday](https://faraday.dev/) (proprietary)
 - [LMStudio](https://lmstudio.ai/) (proprietary)
+- [Layla](https://play.google.com/store/apps/details?id=com.laylalite) (proprietary)
 - [LocalAI](https://github.com/mudler/LocalAI) (MIT)
 - [LostRuins/koboldcpp](https://github.com/LostRuins/koboldcpp) (AGPL)
 - [Mozilla-Ocho/llamafile](https://github.com/Mozilla-Ocho/llamafile)
@@ -935,17 +937,25 @@ If your issue is with model generation quality, then please at least scan the fo
 
 ### Android
 
+#### Build on Android using Termux
+[Termux](https://github.com/termux/termux-app#installation) is a method to execute `llama.cpp` on an Android device (no root required).
+```
+apt update && apt upgrade -y
+apt install git make cmake
+```
+
+It's recommended to move your model inside the `~/` directory for best performance:
+```
+cd storage/downloads
+mv model.gguf ~/
+```
+
+[Get the code](https://github.com/ggerganov/llama.cpp#get-the-code) & [follow the Linux build instructions](https://github.com/ggerganov/llama.cpp#build) to build `llama.cpp`.
+
 #### Building the Project using Android NDK
-You can easily run `llama.cpp` on Android device with [termux](https://termux.dev/).
+Obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake.
 
-First, install the essential packages for termux:
-```
-pkg install clang wget git cmake
-```
-Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
-
-You can execute the following commands on your computer to avoid downloading the NDK to your mobile. Of course, you can also do this in Termux.
-
+Execute the following commands on your computer to avoid downloading the NDK to your mobile. Alternatively, you can also do this in Termux:
 ```
 $ mkdir build-android
 $ cd build-android
@@ -953,7 +963,9 @@ $ export NDK=<your_ndk_directory>
 $ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DCMAKE_C_FLAGS=-march=armv8.4a+dotprod ..
 $ make
 ```
-Install [termux](https://termux.dev/) on your device and run `termux-setup-storage` to get access to your SD card.
+
+Install [termux](https://github.com/termux/termux-app#installation) on your device and run `termux-setup-storage` to get access to your SD card (if Android 11+ then run the command twice).
+
 Finally, copy these built `llama` binaries and the model file to your device storage. Because the file permissions in the Android sdcard cannot be changed, you can copy the executable files to the `/data/data/com.termux/files/home/bin` path, and then execute the following commands in Termux to add executable permission:
 
 (Assumed that you have pushed the built executable files to the /sdcard/llama.cpp/bin path using `adb push`)
@@ -975,24 +987,9 @@ $cd /data/data/com.termux/files/home/bin
 $./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
 ```
 
-Here is a demo of an interactive session running on Pixel 5 phone:
+Here's a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
-
-#### Build on Android using Termux
-[Termux](https://github.com/termux/termux-app#installation) is an alternative to execute `llama.cpp` on an Android device (no root required).
-```
-apt update && apt upgrade -y
-apt install git
-```
-
-It's recommended to move your model inside the `~/` directory for best performance:
-```
-cd storage/downloads
-mv model.gguf ~/
-```
-
-[Follow the Linux build instructions](https://github.com/ggerganov/llama.cpp#build) to build `llama.cpp`.
 
 ### Docker
 

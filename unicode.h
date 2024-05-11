@@ -7,7 +7,7 @@
 #define CODEPOINT_TYPE_UNIDENTIFIED 0
 #define CODEPOINT_TYPE_NUMBER       1
 #define CODEPOINT_TYPE_LETTER       2
-#define CODEPOINT_TYPE_WHITESPACE   3
+#define CODEPOINT_TYPE_SEPARATOR    3
 #define CODEPOINT_TYPE_ACCENT_MARK  4
 #define CODEPOINT_TYPE_PUNCTUATION  5
 #define CODEPOINT_TYPE_SYMBOL       6
@@ -23,6 +23,8 @@ std::vector<uint32_t> sort_by_canonical_class(const std::vector<uint32_t> & cpts
 
 int unicode_cpt_type(uint32_t cp);
 int unicode_cpt_type(const std::string & utf8);
+
+bool unicode_cpt_is_whitespace(uint32_t cp);
 
 std::string unicode_byte_to_utf8(uint8_t byte);
 uint8_t unicode_utf8_to_byte(const std::string & utf8);

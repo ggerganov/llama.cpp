@@ -1,4 +1,6 @@
 #include "common.h"
+// Change JSON_ASSERT from assert() to GGML_ASSERT:
+#define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
@@ -899,6 +901,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.interactive = true;
         return true;
     }
+    if (arg == "--interactive-specials") {
+        params.interactive_specials = true;
+        return true;
+    }
     if (arg == "--embedding") {
         params.embedding = true;
         return true;
@@ -909,6 +915,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "-ins" || arg == "--instruct") {
         params.instruct = true;
+        return true;
+    }
+    if (arg == "-cnv" || arg == "--conversation") {
+        params.conversation = true;
         return true;
     }
     if (arg == "-cml" || arg == "--chatml") {
@@ -1361,14 +1371,12 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
-
         if (!gpt_params_find_arg(argc, argv, arg, params, i, invalid_param)) {
             throw std::invalid_argument("error: unknown argument: " + arg);
         }
-    }
-
-    if (invalid_param) {
-        throw std::invalid_argument("error: invalid parameter for argument: " + arg);
+        if (invalid_param) {
+            throw std::invalid_argument("error: invalid parameter for argument: " + arg);
+        }
     }
 
     if (params.prompt_cache_all &&
@@ -1416,7 +1424,9 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -h, --help            show this help message and exit\n");
     printf("  --version             show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
+    printf("  --interactive-specials allow special tokens in user text, in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
+    printf("  -cnv, --conversation  run in conversation mode (does not print special tokens and suffix/prefix)\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
     printf("  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
@@ -1964,18 +1974,18 @@ static bool llama_download_file(const std::string & url, const std::string & pat
             try {
                 metadata_in >> metadata;
                 fprintf(stderr, "%s: previous metadata file found %s: %s\n", __func__, metadata_path.c_str(), metadata.dump().c_str());
-                if (metadata.contains("url") && metadata["url"].is_string()) {
-                    auto previous_url = metadata["url"].get<std::string>();
+                if (metadata.contains("url") && metadata.at("url").is_string()) {
+                    auto previous_url = metadata.at("url").get<std::string>();
                     if (previous_url != url) {
                         fprintf(stderr, "%s: Model URL mismatch: %s != %s\n", __func__, url.c_str(), previous_url.c_str());
                         return false;
                     }
                 }
-                if (metadata.contains("etag") && metadata["etag"].is_string()) {
-                    etag = metadata["etag"];
+                if (metadata.contains("etag") && metadata.at("etag").is_string()) {
+                    etag = metadata.at("etag");
                 }
-                if (metadata.contains("lastModified") && metadata["lastModified"].is_string()) {
-                    last_modified = metadata["lastModified"];
+                if (metadata.contains("lastModified") && metadata.at("lastModified").is_string()) {
+                    last_modified = metadata.at("lastModified");
                 }
             } catch (const nlohmann::json::exception & e) {
                 fprintf(stderr, "%s: error reading metadata file %s: %s\n", __func__, metadata_path.c_str(), e.what());
@@ -2645,6 +2655,7 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     dump_string_yaml_multiline(stream, "in_suffix", params.input_prefix.c_str());
     fprintf(stream, "instruct: %s # default: false\n", params.instruct ? "true" : "false");
     fprintf(stream, "interactive: %s # default: false\n", params.interactive ? "true" : "false");
+    fprintf(stream, "interactive_specials: %s # default: false\n", params.interactive_specials ? "true" : "false");
     fprintf(stream, "interactive_first: %s # default: false\n", params.interactive_first ? "true" : "false");
     fprintf(stream, "keep: %d # default: 0\n", params.n_keep);
     fprintf(stream, "logdir: %s # default: unset (no logging)\n", params.logdir.c_str());

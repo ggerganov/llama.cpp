@@ -2,6 +2,7 @@
 #undef NDEBUG
 #endif
 
+#include <cassert>
 #include <fstream>
 #include <sstream>
 #include <regex>

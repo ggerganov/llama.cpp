@@ -93,11 +93,14 @@ help_s = (
     "specified values are averaged WITHOUT weighing by the --repetitions parameter of llama-bench."
 )
 parser.add_argument("-s", "--show", help=help_s)
+parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
 known_args, unknown_args = parser.parse_known_args()
 
+logging.basicConfig(level=logging.DEBUG if known_args.verbose else logging.INFO)
+
 if unknown_args:
-    logger.error(f"Received unknown args: {unknown_args}.")
+    logger.error(f"Received unknown args: {unknown_args}.\n")
     parser.print_help()
     sys.exit(1)
 
@@ -110,7 +113,7 @@ if input_file is None:
         input_file = sqlite_files[0]
 
 if input_file is None:
-    logger.error("Cannot find a suitable input file, please provide one.")
+    logger.error("Cannot find a suitable input file, please provide one.\n")
     parser.print_help()
     sys.exit(1)
 
@@ -202,12 +205,12 @@ elif repo is not None:
     hexsha8_baseline = find_parent_in_data(repo.heads.master.commit)
 
     if hexsha8_baseline is None:
-        logger.error("No baseline was provided and did not find data for any master branch commits.")
+        logger.error("No baseline was provided and did not find data for any master branch commits.\n")
         parser.print_help()
         sys.exit(1)
 else:
     logger.error("No baseline was provided and the current working directory "
-                 "is not part of a git repository from which a baseline could be inferred.")
+                 "is not part of a git repository from which a baseline could be inferred.\n")
     parser.print_help()
     sys.exit(1)
 
@@ -238,7 +241,7 @@ elif repo is not None:
             break
 
     if hexsha8_compare is None:
-        logger.error("No compare target was provided and did not find data for any non-master commits.")
+        logger.error("No compare target was provided and did not find data for any non-master commits.\n")
         parser.print_help()
         sys.exit(1)
 else:
@@ -322,8 +325,12 @@ table = []
 for row in rows_show:
     n_prompt = int(row[-4])
     n_gen    = int(row[-3])
-    assert n_prompt == 0 or n_gen == 0
-    test_name = f"tg{n_gen}" if n_prompt == 0 else f"pp{n_prompt}"
+    if n_prompt != 0 and n_gen == 0:
+        test_name = f"pp{n_prompt}"
+    elif n_prompt == 0 and n_gen != 0:
+        test_name = f"tg{n_gen}"
+    else:
+        test_name = f"pp{n_prompt}+tg{n_gen}"
     #           Regular columns    test name    avg t/s values              Speedup
     #            VVVVVVVVVVVVV     VVVVVVVVV    VVVVVVVVVVVVVV              VVVVVVV
     table.append(list(row[:-4]) + [test_name] + list(row[-2:]) + [float(row[-1]) / float(row[-2])])
@@ -361,7 +368,7 @@ if "gpu_info" in show:
 headers  = [PRETTY_NAMES[p] for p in show]
 headers += ["Test", f"t/s {name_baseline}", f"t/s {name_compare}", "Speedup"]
 
-logger.info(tabulate(
+print(tabulate( # noqa: NP100
     table,
     headers=headers,
     floatfmt=".2f",
