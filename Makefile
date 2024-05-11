@@ -146,10 +146,10 @@ ifndef LLAMA_NO_CCACHE
 CCACHE := $(shell which ccache)
 ifdef CCACHE
 export CCACHE_SLOPPINESS = time_macros
-RED=\033[0;31m
-GREEN=\033[0;32m
-YELLOW=\033[0;33m
-RESET=\033[0m
+RED := $(shell tput setaf 1)
+GREEN := $(shell tput setaf 2)
+YELLOW := $(shell tput setaf 3)
+RESET := $(shell tput sgr0)
 $(info $(GREEN)I ccache found, compilation results will be cached. Disable with LLAMA_NO_CCACHE: `make clean && time make LLAMA_NO_CCACHE=1`$(RESET))
 CC    := $(CCACHE) $(CC)
 CXX   := $(CCACHE) $(CXX)
