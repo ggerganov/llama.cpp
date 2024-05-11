@@ -208,6 +208,8 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "mov\t%[SRC4],\t%%r9\n\t"                           // Load the address of the head of our 4-bit list into r9, for vloadunpackld.
                           "mov\t%[SRC4],\t%%r10\n\t"                          // Load the address of the head of our 4-bit list into r10-r11, for vloadunpackhd.
                           "mov\t%[SRC4],\t%%r11\n\t"
+                          "mov\t%[SRC4],\t%%r12\n\t"
+                          "mov\t%[SRC4],\t%%r13\n\t"
                           "mov\t$0,%%ecx\n\t"                                 // Initialize our counter.
                           "vpbroadcastd\t%[MASK]%{uint8%},\t%%zmm0\n\t"       // Load our mask.
                           "vpbroadcastd\t%[BIT5]%{uint8},\t%%zmm1\n\t"        // Load the bit we want to add (conditionally).
@@ -259,6 +261,8 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "add\t$32,\t%%r9\n\t"
                           "add\t$32,\t%%r10\n\t"
                           "add\t$32,\t%%r11\n\t"
+                          "add\t$32,\t%%r12\n\t"
+                          "add\t$32,\t%%r13\n\t"
                           "jmp\t3b\n\t"
                           "2:"
                           : [DST]   "+r" (dst)
@@ -267,7 +271,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                             [MASK]   "m" (lowmask),
                             [M]      "m" (m),
                             [BIT5]   "m" (bit5)
-                          : "zmm0", "zmm1", "zmm2", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r8", "r9", "r10", "r11", "memory");
+                          : "zmm0", "zmm1", "zmm2", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r8", "r9", "r10", "r11", "r12", "r13", "memory");
 }
   
 // A function for getting the dot product of two vectors, one of 5 bit resolution, and one of 8.
