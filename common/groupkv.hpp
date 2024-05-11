@@ -116,16 +116,19 @@ public:
 
     // Dump info about the specified group.
     // If group is empty, then dump info about all groups maintained in this instance.
-    void dump(const std::string &group) {
+    std::string dump(const std::string &group, const std::string &msgTag = "") {
+        std::stringstream ss;
         for (auto gm: gkv) {
             if (!group.empty() && (gm.first != group)) {
-                LINFO_LN("INFO:GKV:%s:%s:Skipping...", __func__, gm.first.c_str());
+                LDBUG_LN("DBUG:GKV:%s:%s:%s:Skipping...", __func__, msgTag.c_str(), gm.first.c_str());
                 continue;
             }
+            ss << "\n" << msgTag << gm.first << ":\n";
             for(auto k: gm.second) {
-                LINFO_LN("DBUG:GKV:%s:%s:Iterate:%s:%s", __func__, gm.first.c_str(), k.first.c_str(), to_str(k.second).c_str());
+                ss << msgTag << "\t" << k.first << ":" << to_str(k.second) << "\n";
             }
         }
+        return ss.str();
     }
 
     template<typename SupportedDataType>
@@ -185,7 +188,7 @@ void gkv_inited() {
     }};
 
     std::cout << "**** gkv inited **** " << std::endl;
-    gkv.dump("");
+    std::cout << gkv.dump("", "INFO:GKV:Inited:") << std::endl;
 
 }
 
@@ -193,7 +196,7 @@ void gkv_set() {
 
     std::cout << "**** gkv set **** " << std::endl;
     GroupKV gkv = {{}};
-    gkv.dump("");
+    std::cout << gkv.dump("", "INFO:GKV:Set:Initial:") << std::endl;
 
     gkv.get_value("testme", {"key101b"}, false);
     gkv.get_value<std::string>("testme", {"key101s"}, "Not found");
@@ -205,7 +208,7 @@ void gkv_set() {
     gkv.set_value("testme", {"key201i"}, 987654);
     gkv.set_value("testme", {"key201d"}, 9988.7766);
 
-    gkv.dump("testme");
+    std::cout << gkv.dump("testme", "INFO:GKV:Set:After testme set:") << std::endl;
     gkv.get_value("testme", {"key201b"}, false);
     gkv.get_value<std::string>("testme", {"key201s"}, "Not found");
     gkv.get_value("testme", {"key201i"}, 123456);
