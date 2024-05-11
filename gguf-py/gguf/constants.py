@@ -10,6 +10,7 @@ from typing import Any
 GGUF_MAGIC             = 0x46554747  # "GGUF"
 GGUF_VERSION           = 3
 GGUF_DEFAULT_ALIGNMENT = 32
+GGML_QUANT_VERSION     = 2  # GGML_QNT_VERSION from ggml.h
 
 #
 # metadata keys
@@ -836,6 +837,49 @@ class GGMLQuantizationType(IntEnum):
     F64     = 28
     IQ1_M   = 29
     BF16    = 30
+
+
+# TODO: add GGMLFileType from ggml_ftype in ggml.h
+
+
+# from llama_ftype in llama.h
+# ALL VALUES SHOULD BE THE SAME HERE AS THEY ARE OVER THERE.
+class LlamaFileType(IntEnum):
+    ALL_F32              = 0
+    MOSTLY_F16           = 1   # except 1d tensors
+    MOSTLY_Q4_0          = 2   # except 1d tensors
+    MOSTLY_Q4_1          = 3   # except 1d tensors
+    MOSTLY_Q4_1_SOME_F16 = 4   # tok_embeddings.weight and output.weight are F16
+    # MOSTLY_Q4_2        = 5   # support has been removed
+    # MOSTLY_Q4_3        = 6   # support has been removed
+    MOSTLY_Q8_0          = 7   # except 1d tensors
+    MOSTLY_Q5_0          = 8   # except 1d tensors
+    MOSTLY_Q5_1          = 9   # except 1d tensors
+    MOSTLY_Q2_K          = 10  # except 1d tensors
+    MOSTLY_Q3_K_S        = 11  # except 1d tensors
+    MOSTLY_Q3_K_M        = 12  # except 1d tensors
+    MOSTLY_Q3_K_L        = 13  # except 1d tensors
+    MOSTLY_Q4_K_S        = 14  # except 1d tensors
+    MOSTLY_Q4_K_M        = 15  # except 1d tensors
+    MOSTLY_Q5_K_S        = 16  # except 1d tensors
+    MOSTLY_Q5_K_M        = 17  # except 1d tensors
+    MOSTLY_Q6_K          = 18  # except 1d tensors
+    MOSTLY_IQ2_XXS       = 19  # except 1d tensors
+    MOSTLY_IQ2_XS        = 20  # except 1d tensors
+    MOSTLY_Q2_K_S        = 21  # except 1d tensors
+    MOSTLY_IQ3_XS        = 22  # except 1d tensors
+    MOSTLY_IQ3_XXS       = 23  # except 1d tensors
+    MOSTLY_IQ1_S         = 24  # except 1d tensors
+    MOSTLY_IQ4_NL        = 25  # except 1d tensors
+    MOSTLY_IQ3_S         = 26  # except 1d tensors
+    MOSTLY_IQ3_M         = 27  # except 1d tensors
+    MOSTLY_IQ2_S         = 28  # except 1d tensors
+    MOSTLY_IQ2_M         = 29  # except 1d tensors
+    MOSTLY_IQ4_XS        = 30  # except 1d tensors
+    MOSTLY_IQ1_M         = 31  # except 1d tensors
+    MOSTLY_BF16          = 32  # except 1d tensors
+
+    GUESSED              = 1024  # not specified in the model file
 
 
 class GGUFEndian(IntEnum):
