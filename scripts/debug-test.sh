@@ -1,7 +1,27 @@
 #!/bin/bash
-build_dir="build-ci-debug"
 test_suite=${1:-}
 test_number=${2:-}
+
+PROG=${0##*/}
+build_dir="build-ci-debug"
+
+if [ x"$1" = x"-h" ] || [ x"$1" = x"--help" ]; then
+    echo "Usage: $PROG [OPTION]... <test_regex> <test_number>"
+    echo "Debug specific ctest program."
+    echo
+    echo "Options:"
+    echo "  -h, --help       Display this help and exit"
+    echo
+    echo "Arguments:"
+    echo "  <test_regex>     (Mandatory) Supply one regex to the script to filter tests"
+    echo "  (test_number)    (Optional) Test number to run a specific test"
+    echo
+    echo "Example:"
+    echo "  $PROG test-tokenizer"
+    echo "  $PROG test-tokenizer 3"
+    echo
+    exit 0
+fi
 
 # Function to select and debug a test
 function select_test() {
@@ -61,7 +81,7 @@ function select_test() {
 }
 
 # Step 0: Check the args
-if [ -z "$test_suite" ] || [ "$1" = "help" ]
+if [ -z "$test_suite" ]
 then
     echo "Usage: $0 [test_regex] [test_number]"
     echo "e.g., $0 test-tokenizer"
@@ -86,7 +106,7 @@ pushd "$repo_root" || exit 1
 rm -rf "$build_dir" && mkdir "$build_dir" || exit 1
 
 # Step 2: Setup Build Environment and Compile Test Binaries
-cmake -B ./build-ci-debug -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WARNINGS=ON || exit 1
+cmake -B "./$build_dir" -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WARNINGS=ON || exit 1
 pushd "$build_dir" && make -j || exit 1
 
 # Step 3: Debug the Test
