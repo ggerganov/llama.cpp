@@ -1790,7 +1790,7 @@ class Phi3MiniModel(Model):
         rms_eps = self.find_hparam(["rms_norm_eps"])
         max_pos_embds = self.find_hparam(["n_positions", "max_position_embeddings"])
         orig_max_pos_embds = self.find_hparam(["original_max_position_embeddings"])
-        rope_dims =  n_embd // n_head
+        rope_dims = n_embd // n_head
 
         self.gguf_writer.add_name("Phi3")
         self.gguf_writer.add_context_length(max_pos_embds)
@@ -1814,7 +1814,7 @@ class Phi3MiniModel(Model):
 
         rope_scaling_type = rope_scaling.get('type', '').lower()
         if len(rope_scaling_type) == 0:
-            raise KeyError(f'Missing the required key rope_scaling.type')
+            raise KeyError('Missing the required key rope_scaling.type')
 
         if rope_scaling_type == 'su':
             attn_factor = math.sqrt(1 + math.log(scale) / math.log(orig_max_pos_embds)) if scale > 1.0 else 1.0
@@ -1829,13 +1829,14 @@ class Phi3MiniModel(Model):
         short_factors = rope_scaling.get('short_factor', None)
 
         if long_factors is None or short_factors is None:
-            raise KeyError(f'Missing the required key rope_scaling.long_factor or rope_scaling_short_factor')
+            raise KeyError('Missing the required key rope_scaling.long_factor or rope_scaling_short_factor')
 
         if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
             raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
 
         self.gguf_writer.add_rope_scaling_freq_long_factors(long_factors)
         self.gguf_writer.add_rope_scaling_freq_short_factors(short_factors)
+
 
 @Model.register("PlamoForCausalLM")
 class PlamoModel(Model):
