@@ -88,7 +88,7 @@ static __global__ void rope_neox(
     float cur_rot = inv_ndims * ic - ib;
 
     const int p = has_pos ? pos[i2] : 0;
-    const float freq_factor = has_freq_facs ? freq_factors[col/2] : 1.0f;
+    const float freq_factor = has_freq_facs ? freq_factors[ic/2] : 1.0f;
 
     const float theta_base = p*freq_scale*powf(theta_scale, col/2.0f)/freq_factor;
 
