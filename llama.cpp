@@ -12253,18 +12253,25 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
+        bool ignore_merges = false;
 
         std::vector<std::string> word_collection;
         switch (vocab.type) {
             case LLAMA_VOCAB_TYPE_BPE:
                 switch (vocab.type_pre) {
                     case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
-                    case LLAMA_VOCAB_PRE_TYPE_DBRX:
+                        ignore_merges = true;
                         word_collection = unicode_regex_split(text, {
                             // original regex from tokenizer.json
                             //"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
 
                             // adapted: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2080233989
+                            "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_DBRX:
+                        word_collection = unicode_regex_split(text, {
+                            // same as llama3
                             "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                         });
                         break;
@@ -12350,6 +12357,11 @@ struct llm_tokenizer_bpe {
 
             int index = 0;
             size_t offset = 0;
+
+            if (ignore_merges && vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
+                symbols.emplace_back(llm_symbol{-1, -1, word.c_str(), word.size()});
+                offset = word.size();
+            }
 
             while (offset < word.size()) {
                 llm_symbol sym;
