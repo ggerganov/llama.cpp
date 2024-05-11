@@ -271,7 +271,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                             [MASK]   "m" (lowmask),
                             [M]      "m" (m),
                             [BIT5]   "m" (bit5)
-                          : "zmm0", "zmm1", "zmm2", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r8", "r9", "r10", "r11", "r12", "r13", "memory");
+                          : "zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r8", "r9", "r10", "r11", "r12", "r13", "memory");
 }
   
 // A function for getting the dot product of two vectors, one of 5 bit resolution, and one of 8.
