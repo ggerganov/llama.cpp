@@ -115,15 +115,15 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
                           "mov\t%[SRC8],\t%%r12\n\t"
                           "mov\t%[OFFSET],\t%%r10\n\t"
                           "cmp\t$32,%%r10\n\t"                                // Examine OFFSET, and decide which (if any) of the vloadunpackhd invocations needs to be increased by 64.
-                          "jl\t20f\n\t"
+                          "jl\t10f\n\t"
                           "cmp\t$48,%%r10\n\t"
-                          "jl\t21f\n\t"
+                          "jl\t11f\n\t"
                           "add\t$64,%%r12\n\t"                                // Greater than 47.
                           "jmp\t14f\n\t"
-                          "21:\n\t"
+                          "11:\n\t"
                           "add\t$64,%%r13\n\t"                                // Between 48 and 31.
                           "jmp\t14f\n\t"
-                          "20:\n\t"                                           // Less than 32...
+                          "10:\n\t"                                           // Less than 32...
                           "cmp\t$16,%%r10\n\t"
                           "jz\t14f\n\t"                                       // Zero.
                           "jl\t13f\n\t"
@@ -238,9 +238,10 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "cmp\t$4,\t%%ecx\n\t"
 
                           "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                  // Select the next bit to test for.
-                          
+
                           "vptestmd\t%%zmm3,\t%%zmm2,\t%%k1\n\t"              // Test to see if our selected bit is set.
                           "vptestmd\t%%zmm4,\t%%zmm2,\t%%k2\n\t"              // Test to see if our selected bit is set.
+
                           "vpsrld\t$4,\t%%zmm5,\t%%zmm6\n\t"                  // Load our even 4 bit sequence.
                           "vpsrld\t$4,\t%%zmm7,\t%%zmm8\n\t"                  // Load our next even 4 bit sequence.
                           "vpord\t%%zmm1,%%zmm6,%%zmm6%{%%k1%}\n\t"           // Turn on bit 5 for all values that passed the prior test.
