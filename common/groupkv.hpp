@@ -20,7 +20,7 @@
 
 #define GKV_DEBUG
 
-#define GKV_TEST_PRG
+//#define GKV_TEST_PRG
 #ifdef GKV_TEST_PRG
 #include <iostream>
 #include <format>

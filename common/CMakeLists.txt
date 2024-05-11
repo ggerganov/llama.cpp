@@ -66,6 +66,7 @@ add_library(${TARGET} STATIC
     ngram-cache.h
     ngram-cache.cpp
     chaton.hpp
+    groupkv.hpp
     )
 
 if (BUILD_SHARED_LIBS)
