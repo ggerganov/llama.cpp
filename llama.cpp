@@ -12299,25 +12299,16 @@ struct llm_tokenizer_bpe {
         symbols_final.clear();
 
         for (auto & word : word_collection) {
-            if (ignore_merges && vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
-                llm_symbol sym;
-                sym.text = word.c_str();
-                sym.n = word.size();
-                sym.prev = final_prev_index;
-                sym.next = -1;
-                if (final_prev_index != -1) {
-                    symbols_final[final_prev_index].next = symbols_final.size();
-                }
-                symbols_final.emplace_back(sym);
-                final_prev_index = symbols_final.size() - 1;
-                continue;
-            }
-
             work_queue = llm_bigram_bpe::queue();
             symbols.clear();
 
             int index = 0;
             size_t offset = 0;
+
+            if (ignore_merges && vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
+                symbols.emplace_back(llm_symbol{-1, -1, word.c_str(), word.size()});
+                offset = word.size();
+            }
 
             while (offset < word.size()) {
                 llm_symbol sym;
