@@ -1013,6 +1013,18 @@ class StarCoderModel(Model):
 class RefactModel(Model):
     model_arch = gguf.MODEL_ARCH.REFACT
 
+    def set_vocab(self):
+        super().set_vocab()
+
+        # TODO: how to determine special FIM tokens automatically?
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
+                                          special_token_types = ['prefix', 'suffix', 'middle', 'fsep', 'eot'])
+        special_vocab._set_special_token("prefix", 1)
+        special_vocab._set_special_token("suffix", 3)
+        special_vocab._set_special_token("middle", 2)
+        special_vocab._set_special_token("fsep",   4) # is this correct?
+        special_vocab.add_to_gguf(self.gguf_writer)
+
     def set_gguf_parameters(self):
         hidden_dim = self.hparams["n_embd"]
         inner_dim = 4 * hidden_dim

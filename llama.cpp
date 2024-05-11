@@ -1845,7 +1845,7 @@ struct llama_hparams {
     float f_logit_scale    = 0.0f;
 
     bool causal_attn = true;
-    bool use_alibi   = false; // currently, we need KQ_pos data for ALiBi-based models
+    bool use_alibi   = false;
 
     enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
     enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
@@ -2317,7 +2317,6 @@ struct llama_context {
     struct ggml_tensor * inp_pos;       // I32 [n_batch]
     struct ggml_tensor * inp_out_ids;   // I32 [n_outputs]
     struct ggml_tensor * inp_KQ_mask;   // F32 [kv_size, n_batch]
-    struct ggml_tensor * inp_KQ_pos;    // F32 [n_kv]
     struct ggml_tensor * inp_K_shift;   // I32 [kv_size]
     struct ggml_tensor * inp_mean;      // F32 [n_batch, n_batch]
     struct ggml_tensor * inp_cls;       // I32 [n_batch]
@@ -6500,7 +6499,6 @@ static struct ggml_tensor * llm_build_kqv(
          struct ggml_tensor * wo_b,
          struct ggml_tensor * q_cur,
          struct ggml_tensor * kq_mask,
-         struct ggml_tensor * kq_pos,
                     int32_t   n_tokens,
                     int32_t   n_kv,
                     float     kq_scale,
@@ -6530,10 +6528,6 @@ static struct ggml_tensor * llm_build_kqv(
         GGML_UNUSED(model);
         GGML_UNUSED(n_ctx);
 
-        // note: if this assert triggers, then some check has failed earlier
-        //       the idea is to detect during context creation that ALiBi would be used and disable Flash Attention
-        GGML_ASSERT(kq_pos == nullptr && "ALiBi is not yet supported with Flash Attention");
-
         // split cached v into n_head heads (not transposed)
         struct ggml_tensor * v =
             ggml_view_3d(ctx, kv.v_l[il],
@@ -6543,7 +6537,7 @@ static struct ggml_tensor * llm_build_kqv(
                     0);
         cb(v, "v", il);
 
-        cur = ggml_flash_attn_ext(ctx, q, k, v, kq_mask, kq_scale);
+        cur = ggml_flash_attn_ext(ctx, q, k, v, kq_mask, kq_scale, hparams.f_max_alibi_bias);
 
         if (model.arch == LLM_ARCH_PHI2 || model.arch == LLM_ARCH_PHI3) {
             ggml_flash_attn_ext_set_prec(cur, GGML_PREC_F32);
@@ -6574,28 +6568,8 @@ static struct ggml_tensor * llm_build_kqv(
             kq = ggml_scale(ctx, kq, 30);
         }
 
-#if defined(GGML_USE_KOMPUTE)
-#pragma message("TODO: ALiBi support in ggml_soft_max_ext is not implemented for Kompute")
-#pragma message("      Falling back to ggml_alibi(). Will become an error in Mar 2024")
-#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5488")
-        if (hparams.use_alibi) {
-            kq = ggml_scale(ctx, kq, kq_scale);
-            cb(kq, "kq_scaled", il);
-
-            kq = ggml_alibi(ctx, kq, /*n_past*/ 0, n_head, hparams.f_max_alibi_bias);
-            cb(kq, "kq_scaled_alibi", il);
-
-            kq = ggml_add(ctx, kq, kq_mask);
-            cb(kq, "kq_masked", il);
-
-            kq = ggml_soft_max(ctx, kq);
-            cb(kq, "kq_soft_max", il);
-        } else
-#endif
-        {
-            kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_pos, kq_scale, hparams.f_max_alibi_bias);
-            cb(kq, "kq_soft_max_ext", il);
-        }
+        kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale, hparams.f_max_alibi_bias);
+        cb(kq, "kq_soft_max_ext", il);
 
         GGML_ASSERT(kv.size == n_ctx);
 
@@ -6645,7 +6619,6 @@ static struct ggml_tensor * llm_build_kv(
          struct ggml_tensor * v_cur,
          struct ggml_tensor * q_cur,
          struct ggml_tensor * kq_mask,
-         struct ggml_tensor * kq_pos,
                     int32_t   n_tokens,
                     int32_t   kv_head,
                     int32_t   n_kv,
@@ -6664,7 +6637,7 @@ static struct ggml_tensor * llm_build_kv(
     struct ggml_tensor * cur;
 
     cur  = llm_build_kqv(ctx, model, hparams, cparams, kv, graph, wo, wo_b,
-            q_cur, kq_mask, kq_pos, n_tokens, n_kv, kq_scale, cb, il);
+            q_cur, kq_mask, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
 
     return cur;
@@ -6771,18 +6744,17 @@ struct llm_build_context {
 
         ctx0 = ggml_init(params);
 
-        lctx.inp_tokens = nullptr;
-        lctx.inp_embd = nullptr;
-        lctx.inp_pos = nullptr;
+        lctx.inp_tokens  = nullptr;
+        lctx.inp_embd    = nullptr;
+        lctx.inp_pos     = nullptr;
         lctx.inp_out_ids = nullptr;
         lctx.inp_KQ_mask = nullptr;
-        lctx.inp_KQ_pos = nullptr;
         lctx.inp_K_shift = nullptr;
-        lctx.inp_mean = nullptr;
-        lctx.inp_cls = nullptr;
-        lctx.inp_s_copy = nullptr;
-        lctx.inp_s_mask = nullptr;
-        lctx.inp_s_seq = nullptr;
+        lctx.inp_mean    = nullptr;
+        lctx.inp_cls     = nullptr;
+        lctx.inp_s_copy  = nullptr;
+        lctx.inp_s_mask  = nullptr;
+        lctx.inp_s_seq   = nullptr;
     }
 
     void free() {
@@ -6932,19 +6904,6 @@ struct llm_build_context {
         return flash_attn ? ggml_cast(ctx0, lctx.inp_KQ_mask, GGML_TYPE_F16) : lctx.inp_KQ_mask;
     }
 
-    struct ggml_tensor * build_inp_KQ_pos(bool causal = true) {
-        if (causal) {
-            lctx.inp_KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, n_kv);
-        } else {
-            // TODO: this will be needed for ALiBi-based BERT models
-            //       https://github.com/ggerganov/llama.cpp/pull/6826
-            lctx.inp_KQ_pos = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, n_tokens);
-        }
-        cb(lctx.inp_KQ_pos, "KQ_pos", -1);
-        ggml_set_input(lctx.inp_KQ_pos);
-        return flash_attn ? ggml_cast(ctx0, lctx.inp_KQ_pos, GGML_TYPE_F16) : lctx.inp_KQ_pos;
-    }
-
     struct ggml_tensor * build_inp_mean() {
         lctx.inp_mean = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_tokens, n_tokens);
         cb(lctx.inp_mean, "inp_mean", -1);
@@ -7050,7 +7009,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7143,9 +7102,6 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
-        // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = build_inp_KQ_pos();
-
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
@@ -7190,7 +7146,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, KQ_pos, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7260,9 +7216,6 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
-        // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = build_inp_KQ_pos();
-
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
@@ -7297,7 +7250,7 @@ struct llm_build_context {
                 cb(Kcur, "Kcur", il);
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, KQ_pos, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7417,7 +7370,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7542,7 +7495,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7694,7 +7647,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7806,7 +7759,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8010,7 +7963,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Q, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Q, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8076,9 +8029,6 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
-        // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = build_inp_KQ_pos();
-
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * inpSA = inpL;
 
@@ -8106,7 +8056,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, KQ_pos, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8246,7 +8196,7 @@ struct llm_build_context {
             struct ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
             cb(kq, "kq", il);
 
-            kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, nullptr, 1.0f/sqrtf(float(n_embd_head)), hparams.f_max_alibi_bias);
+            kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, 1.0f/sqrtf(float(n_embd_head)), hparams.f_max_alibi_bias);
             cb(kq, "kq_soft_max_ext", il);
 
             struct ggml_tensor * v = ggml_cont(ctx0, ggml_transpose(ctx0, ggml_reshape_2d(ctx0, Vcur, n_embd_gqa, n_tokens)));
@@ -8363,9 +8313,6 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
-        // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = build_inp_KQ_pos();
-
         inpL = llm_build_norm(ctx0, inpL, hparams,
                 model.tok_norm,
                 model.tok_norm_b,
@@ -8399,7 +8346,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, KQ_pos, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8464,9 +8411,6 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
-        // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = build_inp_KQ_pos();
-
         if (model.pos_embd) {
             // inp_pos - contains the positions
             struct ggml_tensor * inp_pos = build_inp_pos();
@@ -8530,13 +8474,13 @@ struct llm_build_context {
 
                     cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                             model.layers[il].wo, model.layers[il].bo,
-                            Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                            Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 } else {
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
                     cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                             model.layers[il].wo, model.layers[il].bo,
-                            Kcur, Vcur, Qcur, KQ_mask, KQ_pos, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                            Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 }
             }
 
@@ -8680,7 +8624,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8798,7 +8742,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8911,7 +8855,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9025,7 +8969,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9180,7 +9124,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9297,7 +9241,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9410,7 +9354,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
             struct ggml_tensor * sa_out = cur;
 
@@ -9513,7 +9457,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9620,7 +9564,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9736,7 +9680,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9853,7 +9797,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9983,7 +9927,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10104,7 +10048,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10223,7 +10167,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10513,7 +10457,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10644,7 +10588,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, nullptr,
-                        Kcur, Vcur, Qcur, KQ_mask, nullptr, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -11032,9 +10976,19 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                         if (!lctx.kv_self.cells[i].has_seq_id(seq_id) || lctx.kv_self.cells[i].pos > pos) {
                             f = -INFINITY;
                         } else {
-                            f = 0.0f;
+                            if (hparams.use_alibi) {
+                                f = -fabs(lctx.kv_self.cells[i].pos - pos);
+                            } else {
+                                f = 0.0f;
+                            }
                         }
                         data[h*(n_kv*n_tokens) + j*n_kv + i] = f;
+                    }
+                }
+
+                for (int i = n_tokens; i < GGML_PAD(n_tokens, GGML_KQ_MASK_PAD); ++i) {
+                    for (int j = 0; j < n_kv; ++j) {
+                        data[h*(n_kv*n_tokens) + i*n_kv + j] = -INFINITY;
                     }
                 }
             }
@@ -11055,7 +11009,11 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                         float f = -INFINITY;
                         for (int s = 0; s < batch.n_seq_id[i]; ++s) {
                             if (batch.seq_id[i][s] == seq_id) {
-                                f = 0.0f;
+                                if (hparams.use_alibi) {
+                                    f = -fabs(batch.pos[i] - batch.pos[j]);
+                                } else {
+                                    f = 0.0f;
+                                }
                                 break;
                             }
                         }
@@ -11068,21 +11026,6 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                     }
                 }
             }
-        }
-    }
-
-    // ALiBi requires the KQ_pos tensor to provide the sequence position of each token in the batch
-    // this allows to process multiple sequences in parallel with ALiBi-based models
-    if (hparams.use_alibi) {
-        const int64_t n_kv = kv_self.n;
-
-        GGML_ASSERT(lctx.inp_KQ_pos);
-        GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_KQ_pos->buffer));
-
-        float * data = (float *) lctx.inp_KQ_pos->data;
-
-        for (int i = 0; i < n_kv; ++i) {
-            data[i] = float(lctx.kv_self.cells[i].pos);
         }
     }
 
@@ -15507,11 +15450,6 @@ struct llama_context * llama_new_context_with_model(
         } else {
             cparams.pooling_type = hparams.pooling_type;
         }
-    }
-
-    if (cparams.flash_attn && hparams.use_alibi) {
-        LLAMA_LOG_WARN("%s: flash_attn is not yet compatible with ALiBi - forcing off\n", __func__);
-        cparams.flash_attn = false;
     }
 
     if (cparams.flash_attn && model->arch == LLM_ARCH_GROK) {

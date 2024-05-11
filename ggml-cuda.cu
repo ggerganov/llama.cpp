@@ -4,7 +4,6 @@
 
 #include "ggml-cuda/common.cuh"
 #include "ggml-cuda/acc.cuh"
-#include "ggml-cuda/alibi.cuh"
 #include "ggml-cuda/arange.cuh"
 #include "ggml-cuda/argsort.cuh"
 #include "ggml-cuda/binbcast.cuh"
@@ -2277,9 +2276,6 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
         case GGML_OP_ROPE:
             ggml_cuda_op_rope(ctx, dst);
             break;
-        case GGML_OP_ALIBI:
-            ggml_cuda_op_alibi(ctx, dst);
-            break;
         case GGML_OP_IM2COL:
             ggml_cuda_op_im2col(ctx, dst);
             break;
@@ -2829,7 +2825,6 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_ROPE:
-        case GGML_OP_ALIBI:
         case GGML_OP_IM2COL:
         case GGML_OP_POOL_2D:
         case GGML_OP_SUM_ROWS:
