@@ -62,7 +62,7 @@ inline static void GGML_F32x16_VEC_FMA(const float32x16_t *mvec1, const float32x
                           "cmp\t$4,\t%%r8\n\t"                          // Compare iterations to four.
                           "jnae\t6f\n\t"                                // If there are not four iterations left, jump to label 6.
                           "1:\n\t"
-                          "sub\t$3,\t%%r8\n\t"                          // Decrement iterations
+                          "sub\t$4,\t%%r8\n\t"                          // Decrement iterations
                           "vmovaps\t\t(%%r10),\t%%zmm1\n\t"             // Load two vectors.
                           "vmovaps\t\t(%%r12),\t%%zmm2\n\t"
                           "vprefetchnta\t192(%%r10)\n\t"                // prefetch the next float32x16_t block (192 bytes ahead)
