@@ -674,7 +674,7 @@ struct server_context {
             model = nullptr;
         }
 
-	llama_batch_free(batch);
+        llama_batch_free(batch);
     }
 
     bool load_model(const gpt_params & params_) {
