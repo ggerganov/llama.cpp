@@ -312,7 +312,7 @@ void ggml_cuda_flash_attn_ext_vec_f16(ggml_backend_cuda_context & ctx, ggml_tens
 
     ggml_tensor * KQV = dst;
 
-    const int32_t precision = KQV->op_params[1];
+    const int32_t precision = KQV->op_params[2];
     GGML_ASSERT(precision == GGML_PREC_DEFAULT);
 
     constexpr int cols_per_block = 1;
