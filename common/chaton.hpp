@@ -314,8 +314,14 @@ ChatTemplates gCT = {{}};
 inline bool chaton_meta_load(const std::string &fname) {
     std::ifstream f(fname);
     json conMeta = json::parse(f);
+    for(auto it=conMeta.begin(); it != conMeta.end(); ++it) {
+        std::cout << it.key() << std::endl;
+        std::cout << it.value() << std::endl;
+        auto curMeta = conMeta[it.key()];
+        std::cout << curMeta.dump(4) << std::endl;
+    }
     for(auto curTmpl: conMeta) {
-        curTmpl.dump();
+        std::cout << curTmpl.dump(4) << std::endl;
     }
     return true;
 }
