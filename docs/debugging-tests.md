@@ -45,7 +45,7 @@ make -j
 
 The output of this command will give you the command & arguments needed to run GDB.
 
-* `-R test-tokenizer` : looks for all the test files named test-tokenizer* (R=Regex)
+* `-R test-tokenizer` : looks for all the test files named `test-tokenizer*` (R=Regex)
 * `-N` : "show-only" disables test execution & shows test commands that you can feed to GDB.
 * `-V` : Verbose Mode
 
