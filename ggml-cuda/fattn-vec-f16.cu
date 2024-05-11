@@ -342,7 +342,7 @@ void ggml_cuda_flash_attn_ext_vec_f16_no_mma(ggml_backend_cuda_context & ctx, gg
 
     ggml_tensor * KQV = dst;
 
-    const int32_t precision = KQV->op_params[1];
+    const int32_t precision = KQV->op_params[2];
     GGML_ASSERT(precision == GGML_PREC_DEFAULT);
     GGML_ASSERT(Q->ne[0] == 64 || Q->ne[0] == 128 && "FlashAttention without tensor cores only supports head sizes 64 and 128.");
 
