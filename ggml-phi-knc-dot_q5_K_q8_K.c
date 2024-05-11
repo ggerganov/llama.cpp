@@ -92,7 +92,7 @@ void GGML_PHI_FP32_TO_FP16_ROW(const float * x, ggml_fp16_t * y, int n)
 
 // This function perform two multiplies of an I8x16 and an I8x16 vector into two I16x16 vectors. Then it does an FMA on the scaled result of multiplying the two I16x16 vectors, adding the result into an I32x16. When done, It multiplies this I32x16 by a float, returning a F32x16.
 // It loops 8 times. Well, actually four, with an unroll.
-// Handles q4 being aligned incorrectly.
+// Handles q8 being aligned incorrectly.
 // Requires q5 to be aligned.
 void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_t *q8, uint8x16_t *q5, const uint8_t *scale, ggml_fp16_t scaleX, float scaleY, float32x16_t *res)
 {
@@ -192,7 +192,7 @@ void GGML_8X_2xI8x16_2xI8x16_MUL_2xI16x16_S_FMA_I32x16_Unaligned (const int8x16_
 }
 
 // Unpack 256 unsigned 5 bit values into an 8 bit vector.
-// Handles q4 not being aligned correctly.
+// Handles q4 being aligned incorrectly.
 // Requires dst to be aligned.
 void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint8x16_t * dst)
 {
@@ -211,6 +211,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "mov\t%[SRC4],\t%%r11\n\t"
                           "mov\t%[SRC4],\t%%r12\n\t"
                           "mov\t%[SRC4],\t%%r13\n\t"
+                          "mov\t%[OFFSET],\t%%r14\n\t"
                           "mov\t$0,%%ecx\n\t"                                 // Initialize our counter.
                           "vpbroadcastd\t%[MASK]%{uint8%},\t%%zmm0\n\t"       // Load our mask.
                           "vpbroadcastd\t%[BIT5]%{uint8},\t%%zmm1\n\t"        // Load the bit we want to add (conditionally).
@@ -273,7 +274,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                             [MASK]   "m" (lowmask),
                             [M]      "m" (m),
                             [BIT5]   "m" (bit5)
-                          : "zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r8", "r9", "r10", "r11", "r12", "r13", "memory");
+                          : "zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "cc", "ecx", "k1", "k2", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "memory");
 }
   
 // A function for getting the dot product of two vectors, one of 5 bit resolution, and one of 8.
