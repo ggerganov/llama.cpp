@@ -1306,6 +1306,8 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F16_VEC_ZERO   GGML_F32x4_ZERO
 #define GGML_F16_VEC_SET1   GGML_F32x4_SET1
 #define GGML_F16_VEC_FMA    GGML_F32x4_FMA
+#define GGML_F16_VEC_ADD    GGML_F32x4_ADD
+#define GGML_F16_VEC_MUL    GGML_F32x4_MUL
 #define GGML_F16_VEC_REDUCE GGML_F32x4_REDUCE
 // Use vec_xl, not vec_ld, in case the load address is not aligned.
 #define GGML_F16_VEC_LOAD(p, i) (i & 0x1) ?                   \
