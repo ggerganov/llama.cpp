@@ -307,7 +307,8 @@ public:
 
 };
 
-ChatTemplates gCT = {{}};
+#include "chaton_meta.hpp"
+//ChatTemplates gCT = {{}};
 
 #ifdef CHATON_JSON
 
