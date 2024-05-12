@@ -15,7 +15,8 @@ def kv_bool(j, tmpl, k1, comma):
 
 fp=open(sys.argv[1])
 j=json.load(fp)
-print("{")
+print("//This is auto created/converted from chaton-meta-json file")
+print("#pragma once\n\n#include \"chaton.hpp\"\n\nChatTemplates gCT = {{")
 
 for tmpl in j:
     print("\t{{ \"{}\", {{".format(tmpl))
@@ -45,5 +46,5 @@ for tmpl in j:
 
     print("\t}},")
 
-print("}")
+print("}};")
 
