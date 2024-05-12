@@ -53,27 +53,13 @@
 #include <sstream>
 #include <cuchar>
 
+#include "groupkv.hpp"
+
 
 #define SC_DEBUG
 #undef SC_DEBUG_VERBOSE
 
 #define SC_TEST_PRG
-#ifdef SC_TEST_PRG
-#include <iostream>
-#include <format>
-#define LINFO_LN(FMT, ...) fprintf(stdout, FMT"\n", ##__VA_ARGS__)
-#define LDBUG(FMT, ...) fprintf(stderr, FMT, ##__VA_ARGS__)
-#define LDBUG_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
-#define LERRR_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
-#define LWARN_LN(FMT, ...) fprintf(stderr, FMT"\n", ##__VA_ARGS__)
-#else
-#include "log.h"
-#define LINFO_LN LOG_TEELN
-#define LDBUG LOG
-#define LDBUG_LN LOGLN
-#define LERRR_LN LOG_TEELN
-#define LWARN_LN LOG_TEELN
-#endif
 
 #undef SC_STR_OVERSMART
 #ifdef SC_STR_OVERSMART
@@ -259,70 +245,20 @@ std::string str(TypeWithStrSupp value) {
     return ss.str();
 }
 
-template<typename TypeWithStrSupp>
-std::string str(std::vector<TypeWithStrSupp> values) {
-    std::stringstream ss;
-    ss << "[ ";
-    int cnt = 0;
-    for(auto value: values) {
-        cnt += 1;
-        if (cnt != 1) ss << ", ";
-        ss << value;
-    }
-    ss << " ]";
-    return ss.str();
-}
-
 
 // **** **** **** the SimpCfg **** **** **** //
 
 
-typedef std::variant<std::string, bool, int64_t, double> SimpCfgData;
-typedef std::vector<std::string> MultiPart;
-typedef std::map<std::string, std::map<std::string, SimpCfgData>> SimpCfgMapMapVariant;
-
-class SimpCfg {
+class SimpCfg : public GroupKV {
 
 private:
-    SimpCfgMapMapVariant mapV = {};
     std::regex rInt {R"(^[-+]?\d+$)"};
     std::regex rFloat {R"(^[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?$)"};
 
 public:
 
-    SimpCfg(SimpCfgMapMapVariant defaultMap) : mapV(defaultMap) {}
+    SimpCfg(GroupKVMapMapVariant defaultMap) : GroupKV(defaultMap) {}
 
-    static std::string joiner(const MultiPart& parts) {
-        std::stringstream joined;
-        int iCnt = 0;
-        for(auto part: parts) {
-            if (iCnt != 0) {
-                joined << "-";
-            }
-            iCnt += 1;
-            joined << part;
-        }
-        return joined.str();
-    }
-
-    std::string to_str(const SimpCfgData &value) {
-        auto visitor = [](auto value) -> auto {
-            std::stringstream ss;
-            ss << value;
-            return ss.str();
-        };
-        return std::visit(visitor, value);
-    }
-
-    template<typename SupportedDataType>
-    void set_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &value, const std::string &callerName="") {
-        auto key = joiner(keyParts);
-        auto &gm = mapV[group];
-        gm[key] = value;
-#ifdef SC_DEBUG
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
-#endif
-    }
 
     void set_string(const std::string &group, const MultiPart &keyParts, const std::string &value) {
         set_value(group, keyParts, value, __func__);
@@ -337,6 +273,15 @@ public:
         bool bValue = sValue == "true" ? true : false;
         //LDBUG_LN("DBUG:%s:%s:%s:%d", __func__, value.c_str(), sValue.c_str(), bValue);
         set_bool(group, keyParts, bValue);
+    }
+
+    void set_int32(const std::string &group, const MultiPart &keyParts, int32_t value) {
+        set_value(group, keyParts, value, __func__);
+    }
+
+    void set_int32(const std::string &group, const MultiPart &keyParts, std::string &value) {
+        auto ivalue = strtol(value.c_str(), nullptr, 0);
+        set_int32(group, keyParts, ivalue);
     }
 
     void set_int64(const std::string &group, const MultiPart &keyParts, int64_t value) {
@@ -357,42 +302,16 @@ public:
         set_double(group, keyParts, dvalue);
     }
 
-    // Dump info about the specified group.
-    // If group is empty, then dump info about all groups maintained in this instance.
-    void dump(const std::string &group) {
-        for (auto gm: mapV) {
-            if (!group.empty() && (gm.first != group)) {
-                LINFO_LN("INFO:SC:%s:%s:Skipping...", __func__, gm.first.c_str());
-                continue;
-            }
-            for(auto k: gm.second) {
-                LINFO_LN("DBUG:SC:%s:%s:Iterate:%s:%s", __func__, gm.first.c_str(), k.first.c_str(), to_str(k.second).c_str());
-            }
-        }
-    }
-
-    template<typename SupportedDataType>
-    SupportedDataType get_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &defaultValue, const std::string &callerName="") {
-        auto key = joiner(keyParts);
-        auto gm = mapV[group];
-        if (gm.find(key) == gm.end()) {
-#ifdef SC_DEBUG
-            LWARN_LN("WARN:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(defaultValue).c_str());
-#endif
-            return defaultValue;
-        }
-        auto value = gm[key];
-#ifdef SC_DEBUG
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
-#endif
-        return std::get<SupportedDataType>(value);
-    }
 
     std::string get_string(const std::string &group, const MultiPart &keyParts, const std::string &defaultValue) {
         return get_value(group, keyParts, defaultValue, __func__);
     }
 
     bool get_bool(const std::string &group, const MultiPart &keyParts, bool defaultValue) {
+        return get_value(group, keyParts, defaultValue, __func__);
+    }
+
+    int32_t get_int32(const std::string &group, const MultiPart &keyParts, int32_t defaultValue) {
         return get_value(group, keyParts, defaultValue, __func__);
     }
 
@@ -404,30 +323,6 @@ public:
         return get_value(group, keyParts, defaultValue, __func__);
     }
 
-
-    template<typename SupportedDataType>
-    std::vector<SupportedDataType> get_vector(const std::string &group, const MultiPart &keyParts, const std::vector<SupportedDataType> &defaultValue, const std::string &callerName="") {
-        auto key = joiner(keyParts);
-        auto gm = mapV[group];
-        std::vector<SupportedDataType> array;
-        int i = 0;
-        while(true) {
-            std::stringstream ssArrayKey;
-            ssArrayKey << key << "-" << i;
-            auto arrayKey = ssArrayKey.str();
-            if (gm.find(arrayKey) == gm.end()) {
-                break;
-            }
-            array.push_back(std::get<SupportedDataType>(gm[arrayKey]));
-            i += 1;
-        }
-        if (array.empty()) {
-            LWARN_LN("DBUG:SC:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(defaultValue).c_str());
-            return defaultValue;
-        }
-        LDBUG_LN("DBUG:SC:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), str(array).c_str());
-        return array;
-    }
 
     static void locale_prepare(std::string &sSavedLocale) {
         sSavedLocale = std::setlocale(LC_ALL, nullptr);
@@ -510,6 +405,9 @@ public:
 
 
 #ifdef SC_TEST_PRG
+
+#include <iostream>
+#include <format>
 
 
 // **** **** **** some simple test code **** **** **** //
