@@ -375,14 +375,14 @@ inline bool chaton_meta_load(const std::string &fname) {
         std::string reversePrompt = json_get<std::string>(curTmpl, { K_REVERSE_PROMPT }, group);
         gCT.set_value<std::string>(group, { K_REVERSE_PROMPT }, reversePrompt);
 
-        bool systemHasSuffix = curTmpl[K_SYSTEMUSER_SYSTEM_HAS_SUFFIX];
+        bool systemHasSuffix = json_get<bool>(curTmpl, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX }, group);
         gCT.set_value(group, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX }, systemHasSuffix);
-        bool systemHasEnd = curTmpl[K_SYSTEMUSER_SYSTEM_HAS_END];
+        bool systemHasEnd = json_get<bool>(curTmpl, { K_SYSTEMUSER_SYSTEM_HAS_END }, group);
         gCT.set_value(group, { K_SYSTEMUSER_SYSTEM_HAS_END }, systemHasEnd);
 
-        bool userHasBegin = curTmpl[K_SYSTEMUSER_1ST_USER_HAS_BEGIN];
+        bool userHasBegin = json_get<bool>(curTmpl, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN }, group);
         gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN }, userHasBegin);
-        bool userHasPrefix = curTmpl[K_SYSTEMUSER_1ST_USER_HAS_PREFIX];
+        bool userHasPrefix = json_get<bool>(curTmpl, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX }, group);
         gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX }, userHasPrefix);
 
     }
