@@ -1,5 +1,6 @@
 import regex
 import ctypes
+import unicodedata
 
 
 class CoodepointFlags (ctypes.Structure):
@@ -32,6 +33,7 @@ codepoint_flags = (CoodepointFlags * MAX_CODEPOINTS)()
 table_whitespace = []
 table_lowercase = []
 table_uppercase = []
+table_nfd = []
 
 for codepoint in range(MAX_CODEPOINTS):
     # convert codepoint to unicode character
@@ -63,12 +65,28 @@ for codepoint in range(MAX_CODEPOINTS):
     if codepoint != upper:
         table_uppercase.append((codepoint, upper))
 
+    # NFD normalization
+    norm = ord(unicodedata.normalize('NFD', char)[0])
+    if codepoint != norm:
+        table_nfd.append((codepoint, norm))
 
-ranges_flags = [(0, codepoint_flags[0])]
+
+# group ranges with same flags
+ranges_flags = [(0, codepoint_flags[0])] # start, flags
 for codepoint, flags in enumerate(codepoint_flags):
     if bytes(flags) != bytes(ranges_flags[-1][1]):
         ranges_flags.append((codepoint, flags))
 ranges_flags.append((MAX_CODEPOINTS, CoodepointFlags()))
+
+
+# group ranges with same nfd
+ranges_nfd = [(0, 0, 0)] # start, last, nfd
+for codepoint, norm in table_nfd:
+    start = ranges_nfd[-1][0]
+    if norm != ranges_nfd[-1][2]:
+        ranges_nfd.append(None)
+        start = codepoint
+    ranges_nfd[-1] = (start, codepoint, norm)
 
 
 # Generate 'unicode-data.cpp'
@@ -102,4 +120,9 @@ print("};\n")
 print("const std::unordered_map<uint32_t, uint32_t> unicode_map_uppercase = {")
 for tuple in table_uppercase:
     print("{0x%06X, 0x%06X}," % tuple)
+print("};\n")
+
+print("const std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> unicode_ranges_nfd = {  // start, last, nfd")
+for triple in ranges_nfd:
+    print("{0x%06X, 0x%06X, 0x%06X}," % triple)
 print("};\n")

@@ -134,6 +134,10 @@ static std::array<codepoint_flags, MAX_CODEPOINTS> unicode_cpt_flags_array() {
         cpt_flags[p.second].is_uppercase = true;
     }
 
+    for (auto &range : unicode_ranges_nfd) {  // start, last, nfd
+        cpt_flags[std::get<2>(range)].is_nfd = true;
+    }
+
     return cpt_flags;
 }
 
@@ -576,8 +580,17 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
 }
 
 std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
-    (void) cpts;
-    return {};  //####WIP
+    // unicode_ranges_nfd[i] -> tuple(first, last, nfd)
+    auto comp = +[] (const uint32_t cpt, const decltype(unicode_ranges_nfd)::value_type & triple) {
+        return cpt < std::get<0>(triple);
+    };
+    std::vector<uint32_t> result(cpts.size());
+    for (size_t i = 0; i < cpts.size(); ++i) {
+        const uint32_t cpt = cpts[i];
+        auto it = std::upper_bound(unicode_ranges_nfd.cbegin(), unicode_ranges_nfd.cend(), cpt, comp) - 1;
+        result[i] = (std::get<0>(*it) <= cpt && cpt <= std::get<1>(*it)) ? std::get<2>(*it) : cpt;
+    }
+    return result;
 }
 
 std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
