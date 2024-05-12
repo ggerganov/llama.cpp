@@ -303,7 +303,8 @@ struct vk_op_soft_max_push_constants {
 
 struct vk_op_argsort_push_constants {
     uint32_t ncols;
-    bool ascending;
+    uint32_t ncols_pad;
+    int32_t order;
 };
 
 // Allow pre-recording command buffers
@@ -4025,7 +4026,10 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context * subctx, c
             elements = { (uint32_t)ggml_nrows(src0), (uint32_t)ne00, 1 };
             break;
         case GGML_OP_GET_ROWS:
-            elements = {  (uint32_t)ne00, (uint32_t)ne10, (uint32_t)(ne11 * ne12) };
+            elements = { (uint32_t)ne00, (uint32_t)ne10, (uint32_t)(ne11 * ne12) };
+            break;
+        case GGML_OP_ARGSORT:
+            elements = { (uint32_t)ne00, (uint32_t)ggml_nrows(src0), 1 };
             break;
         default:
             elements = { (uint32_t)ggml_nelements(src0), 1, 1 };
@@ -4071,6 +4075,7 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context * subctx, c
         }
     } else {
         GGML_ASSERT(op != GGML_OP_SOFT_MAX);
+        GGML_ASSERT(op != GGML_OP_ARGSORT);
 
         ggml_pipeline_allocate_descriptor_sets(ctx, pipeline, ne02 * ne03);
 
@@ -4302,7 +4307,25 @@ static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context * subctx, con
 
 static void ggml_vk_argsort(ggml_backend_vk_context * ctx, vk_context * subctx, const ggml_tensor * src0, ggml_tensor * dst) {
     int32_t * op_params = (int32_t *)dst->op_params;
-    ggml_vk_op_f32<vk_op_argsort_push_constants>(ctx, subctx, src0, nullptr, dst, GGML_OP_ARGSORT, { (uint32_t)src0->ne[0], ((ggml_sort_order) op_params[0]) == GGML_SORT_ORDER_ASC });
+
+    uint32_t ncols = src0->ne[0];
+
+    uint32_t ncols_pad = 1;
+    while (ncols_pad < ncols) {
+        ncols_pad *= 2;
+    }
+
+    GGML_ASSERT(ncols_pad <= 1024);
+
+    std::cerr << "ncols=" << ncols << " ncols_pad=" << ncols_pad << " ascending=" << op_params[0] << std::endl;
+
+    std::cerr << ((ggml_sort_order) op_params[0]) << " " << GGML_SORT_ORDER_ASC << std::endl;
+
+    ggml_vk_op_f32<vk_op_argsort_push_constants>(ctx, subctx, src0, nullptr, dst, GGML_OP_ARGSORT, {
+        ncols,
+        ncols_pad,
+        op_params[0],
+    });
 }
 
 #ifdef GGML_VULKAN_RUN_TESTS

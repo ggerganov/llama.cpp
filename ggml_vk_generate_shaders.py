@@ -2689,20 +2689,26 @@ argsort_src = """
 
 #extension GL_EXT_shader_16bit_storage : require
 
-layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+#define BLOCK_SIZE 1024
+#define ASC 0
+
+layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
 
 layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
 layout (binding = 1)          buffer D {int data_d[];};
 
 layout (push_constant) uniform parameter {
     uint ncols;
-    bool ascending;
+    uint ncols_pad;
+    uint order;
 } p;
 
+shared int dst_row[BLOCK_SIZE];
+
 void swap(uint idx0, uint idx1) {
-    int tmp = data_d[idx0];
-    data_d[idx0] = data_d[idx1];
-    data_d[idx1] = tmp;
+    int tmp = dst_row[idx0];
+    dst_row[idx0] = dst_row[idx1];
+    dst_row[idx1] = tmp;
 }
 
 void main() {
@@ -2710,35 +2716,44 @@ void main() {
     const int col = int(gl_LocalInvocationID.x);
     const uint row = gl_WorkGroupID.y;
 
-    if (col >= p.ncols) {
+    if (col >= p.ncols_pad) {
         return;
     }
 
-    const uint a_idx = row * p.ncols;
-    const uint d_idx = row * p.ncols;
+    const uint row_offset = row * p.ncols;
 
     // initialize indices
-    if (col < p.ncols) {
-        data_d[col] = col;
-    }
+    dst_row[col] = col;
     barrier();
 
-    for (uint k = 2; k <= p.ncols; k *= 2) {
+    for (uint k = 2; k <= p.ncols_pad; k *= 2) {
         for (uint j = k / 2; j > 0; j /= 2) {
             const uint ixj = col ^ j;
             if (ixj > col) {
                 if ((col & k) == 0) {
-                    if (p.ascending ? data_a[a_idx + data_d[d_idx + col]] > data_a[a_idx + data_d[d_idx + ixj]] : data_a[a_idx + data_d[d_idx + col]] < data_a[a_idx + data_d[d_idx + ixj]]) {
-                        swap(d_idx + col, d_idx + ixj);
+                    if (dst_row[col] >= p.ncols ||
+                        (dst_row[ixj] < p.ncols && (p.order == ASC ?
+                            data_a[row_offset + dst_row[col]] > data_a[row_offset + dst_row[ixj]] :
+                            data_a[row_offset + dst_row[col]] < data_a[row_offset + dst_row[ixj]]))
+                    ) {
+                        swap(col, ixj);
                     }
                 } else {
-                    if (p.ascending ? data_a[a_idx + data_d[d_idx + col]] < data_a[a_idx + data_d[d_idx + ixj]] : data_a[a_idx + data_d[d_idx + col]] > data_a[a_idx + data_d[d_idx + ixj]]) {
-                        swap(d_idx + col, d_idx + ixj);
+                    if (dst_row[ixj] >= p.ncols ||
+                        (dst_row[col] < p.ncols && (p.order == ASC ?
+                            data_a[row_offset + dst_row[col]] < data_a[row_offset + dst_row[ixj]] :
+                            data_a[row_offset + dst_row[col]] > data_a[row_offset + dst_row[ixj]]))
+                    ) {
+                        swap(col, ixj);
                     }
                 }
             }
             barrier();
         }
+    }
+
+    if (col < p.ncols) {
+        data_d[row_offset + col] = dst_row[col];
     }
 }
 """
