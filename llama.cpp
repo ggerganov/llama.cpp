@@ -13179,13 +13179,6 @@ static bool llama_grammar_detect_left_recursion(
         size_t                                                  rule_index,
         std::vector<bool>                                     * rules_visited,
         std::vector<bool>                                     * rules_in_progress,
-        std::vector<bool>                                     * rules_may_be_empty);
-
-static bool llama_grammar_detect_left_recursion(
-        const std::vector<std::vector<llama_grammar_element>> & rules,
-        size_t                                                  rule_index,
-        std::vector<bool>                                     * rules_visited,
-        std::vector<bool>                                     * rules_in_progress,
         std::vector<bool>                                     * rules_may_be_empty) {
     if ((*rules_in_progress)[rule_index]) {
         return true;
