@@ -49,6 +49,12 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
         }
 
         float * out = output + batch.seq_id[i][0] * n_embd;
+        //TODO: I would also add a parameter here to enable normalization or not.
+        /*fprintf(stdout, "unnormalized_embedding:");
+        for (int hh = 0; hh < n_embd; hh++) {
+            fprintf(stdout, "%9.6f ", embd[hh]);
+        }
+        fprintf(stdout, "\n");*/
         llama_embd_normalize(embd, out, n_embd);
     }
 }
@@ -123,10 +129,12 @@ int main(int argc, char ** argv) {
         inputs.push_back(inp);
     }
 
-    // add SEP if not present
+    // check if the last token is SEP
+    // it should be automatically added by the tokenizer when 'tokenizer.ggml.add_eos_token' is set to 'true'
     for (auto & inp : inputs) {
         if (inp.empty() || inp.back() != llama_token_sep(model)) {
-            inp.push_back(llama_token_sep(model));
+            fprintf(stderr, "%s: warning: last token in the prompt is not SEP\n", __func__);
+            fprintf(stderr, "%s:          'tokenizer.ggml.add_eos_token' should be set to 'true' in the GGUF header\n", __func__);
         }
     }
 

@@ -14,6 +14,12 @@
 #include <stdlib.h> // for qsort
 #include <stdio.h>  // for GGML_ASSERT
 
+#if defined(_MSC_VER)
+// disable "possible loss of data" to avoid warnings for hundreds of casts
+// we should just be careful :)
+#pragma warning(disable: 4244 4267)
+#endif
+
 #define UNUSED GGML_UNUSED
 
 // some compilers don't provide _mm256_set_m128i, e.g. gcc 7
@@ -12450,6 +12456,24 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
     const size_t nb = nbytes/ggml_type_size(type);
 
     switch (type) {
+        case GGML_TYPE_BF16:
+            {
+                int nans = 0;
+                int infs = 0;
+                const unsigned short * f = (const unsigned short *) data;
+                for (size_t i = 0; i < nb; ++i) {
+                    nans += (f[i] & 0x7fff) > 0x7f80;
+                    infs += (f[i] & 0x7fff) == 0x7f80;
+                }
+                if (nans) {
+                    fprintf(stderr, "%s: found %d NaNs in row of %zu BF16 values\n", __func__, nans, nb);
+                    return false;
+                }
+                if (infs) {
+                    fprintf(stderr, "%s: found %d infinities in row of %zu BF16 values\n", __func__, infs, nb);
+                    return false;
+                }
+            } break;
         case GGML_TYPE_F16:
             {
                 const ggml_fp16_t * f = (const ggml_fp16_t *) data;
