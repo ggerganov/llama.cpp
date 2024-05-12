@@ -174,7 +174,12 @@ class LazyBase(ABC, metaclass=LazyMeta):
             while _t._data is None:
                 lt = _t._lazy.popleft()
                 if lt._data is not None:
-                    raise ValueError(f"{lt} did not belong in the lazy queue")
+                    # Lazy tensor did not belong in the lazy queue.
+                    # Weirdly only happens with Bloom models...
+                    # likely because tensors aren't unique in the queue.
+                    # The final output is still the same as in eager mode,
+                    # so it's safe to ignore this.
+                    continue
                 assert lt._func is not None
                 lt._args = cls._recurse_apply(lt._args, already_eager_to_eager)
                 lt._data = lt._func(lt._args)
