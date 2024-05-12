@@ -58,7 +58,7 @@ static void gkv_set() {
 }
 
 int main(int argc, char **argv) {
-    log_set_target(log_filename_generator("main", "log"));
+    log_set_target(log_filename_generator("chaton-groupkv", "log"));
     log_dump_cmdline(argc, argv);
     gkv_inited();
     gkv_set();

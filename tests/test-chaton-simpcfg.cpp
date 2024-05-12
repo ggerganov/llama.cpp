@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    log_set_target(log_filename_generator("main", "log"));
+    log_set_target(log_filename_generator("chaton-simpcfg", "log"));
     log_dump_cmdline(argc, argv);
 
     check_strings();
