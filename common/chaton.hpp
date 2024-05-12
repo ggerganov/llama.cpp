@@ -312,6 +312,25 @@ public:
 
 #ifdef CHATON_JSON
 
+inline std::string json_get_str(json &j, std::vector<std::string> &keys, const std::string &msgTag) {
+    json curJ = j;
+    std::stringstream skey;
+    int i = 0;
+    for(auto key: keys) {
+        if (i != 0) skey << "-";
+        i += 1;
+        skey << key;
+        if (curJ.contains(key)) {
+            curJ = curJ[key];
+        } else {
+            std::stringstream ss;
+            ss << "ERRR:ChatON:" << __func__ << msgTag << ":Key [" << skey.str() << "] is missing";
+            throw std::runtime_error(ss.str());
+        }
+    }
+    return curJ;
+}
+
 inline bool chaton_meta_load(const std::string &fname) {
     std::ifstream f(fname);
     json conMeta = json::parse(f);
