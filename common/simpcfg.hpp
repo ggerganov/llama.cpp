@@ -56,7 +56,6 @@
 #include "groupkv.hpp"
 
 
-#define SC_DEBUG
 #undef SC_DEBUG_VERBOSE
 
 #undef SC_STR_OVERSMART
