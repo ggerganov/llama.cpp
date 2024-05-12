@@ -227,7 +227,7 @@ class Model:
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
     def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         del name, new_name, bid, n_dims  # unused
@@ -266,10 +266,6 @@ class Model:
 
             old_dtype = data_torch.dtype
 
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
-
             # use the first number-like part of the tensor name as the block id
             bid = None
             for part in name.split("."):
@@ -277,8 +273,13 @@ class Model:
                     bid = int(part)
                     break
 
-            for new_name, data in ((n, d.squeeze().numpy()) for n, d in self.modify_tensors(data_torch, name, bid)):
-                data: np.ndarray = data  # type hint
+            for new_name, new_data_torch in self.modify_tensors(data_torch, name, bid):
+
+                # convert any unsupported-by-Numpy data types to float32
+                if new_data_torch.dtype not in (torch.float16, torch.float32):
+                    new_data_torch = new_data_torch.to(torch.float32)
+
+                data: np.ndarray = new_data_torch.squeeze().numpy()
                 n_dims = len(data.shape)
                 data_dtype = data.dtype
                 data_qtype: gguf.GGMLQuantizationType | None = None
@@ -702,8 +703,6 @@ class BloomModel(Model):
 
         name = re.sub(r'transformer\.', '', name)
 
-        tensors: list[tuple[str, Tensor]] = []
-
         if re.match(r"h\.\d+\.self_attention\.query_key_value\.weight", name):
             # Map bloom-style qkv_linear to gpt-style qkv_linear
             # bloom: https://github.com/huggingface/transformers/blob/main/src/transformers/models/bloom/modeling_bloom.py#L238-L252  # noqa
@@ -730,16 +729,14 @@ class BloomModel(Model):
             )
             logger.info("re-format attention.linear_qkv.bias")
 
-        tensors.append((self.map_tensor_name(name), data_torch))
+        yield self.map_tensor_name(name), data_torch
 
         if name == "word_embeddings.weight":
             assert self.tensor_names is not None
 
             # TODO: tie them at runtime, don't duplicate in the model file
             if all(s not in self.tensor_names for s in ("lm_head.weight", "output.weight")):
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
-
-        return tensors
+                yield self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch
 
 
 @Model.register("MPTForCausalLM")
@@ -784,7 +781,7 @@ class MPTModel(Model):
         else:
             new_name = self.map_tensor_name(name, try_suffixes=(".weight", ".bias"))
 
-        return [(new_name, data_torch)]
+        yield new_name, data_torch
 
 
 @Model.register("OrionForCausalLM")
@@ -869,22 +866,16 @@ class BaichuanModel(Model):
         head_count = self.hparams["num_attention_heads"]
         head_count_kv = self.hparams.get("num_key_value_heads", head_count)
 
-        tensors: list[tuple[str, Tensor]] = []
-
         if bid is not None and name == f"model.layers.{bid}.self_attn.W_pack.weight":
             logger.info(f"Unpacking and permuting layer {bid}")
-            tensors = [
-                (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid),
-                    self._reverse_hf_permute_part(data_torch, 0, head_count, head_count)),
-                (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid),
-                    self._reverse_hf_permute_part(data_torch, 1, head_count, head_count_kv)),
-                (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid),
-                    self._reverse_hf_part(data_torch, 2)),
-            ]
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid),
+                    self._reverse_hf_permute_part(data_torch, 0, head_count, head_count))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid),
+                    self._reverse_hf_permute_part(data_torch, 1, head_count, head_count_kv))
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid),
+                    self._reverse_hf_part(data_torch, 2))
         else:
-            tensors = [(self.map_tensor_name(name), data_torch)]
-
-        return tensors
+            yield (self.map_tensor_name(name), data_torch)
 
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
@@ -999,7 +990,7 @@ class XverseModel(Model):
         if name.endswith("k_proj.weight"):
             data_torch = self._reverse_hf_permute(data_torch, head_count, head_count_kv)
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
@@ -1064,7 +1055,7 @@ class FalconModel(Model):
             v = qkv[:, [-1]].reshape(n_head_kv * head_dim, head_dim * n_head)
             data_torch = torch.cat((q, k, v)).reshape_as(data_torch)
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
 
 @Model.register("GPTBigCodeForCausalLM")
@@ -1132,22 +1123,20 @@ class RefactModel(Model):
         n_head_kv = 1
         head_dim = self.hparams["n_embd"] // n_head
 
-        tensors: list[tuple[str, Tensor]] = []
-
         if bid is not None:
             if name == f"transformer.h.{bid}.attn.kv.weight":
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid), data_torch[:n_head_kv * head_dim]))
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid), data_torch[n_head_kv * head_dim:]))
+                yield self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid), data_torch[:n_head_kv * head_dim]
+                yield self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid), data_torch[n_head_kv * head_dim:]
+                return
             elif name == f"transformer.h.{bid}.attn.q.weight":
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid), data_torch))
+                yield self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid), data_torch
+                return
             elif name == f"transformer.h.{bid}.mlp.gate_up_proj.weight":
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE, bid), data_torch[:ff_dim]))
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP, bid), data_torch[ff_dim:]))
+                yield self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE, bid), data_torch[:ff_dim]
+                yield self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP, bid), data_torch[ff_dim:]
+                return
 
-        if len(tensors) == 0:
-            tensors.append((self.map_tensor_name(name), data_torch))
-
-        return tensors
+        yield self.map_tensor_name(name), data_torch
 
 
 @Model.register("PersimmonForCausalLM")
@@ -1232,9 +1221,8 @@ class StableLMModel(Model):
             self._q_norms[bid][name] = data_torch
 
             if len(self._q_norms[bid]) >= n_head:
-                return self._stack_qk_norm(bid, n_head, self._q_norms[bid], "q_layernorm")
-            else:
-                return []
+                yield self._stack_qk_norm(bid, n_head, self._q_norms[bid], "q_layernorm")
+            return
 
         if name.find("k_layernorm.norms") != -1:
             assert bid is not None
@@ -1245,13 +1233,12 @@ class StableLMModel(Model):
             self._k_norms[bid][name] = data_torch
 
             if len(self._k_norms[bid]) >= n_kv_head:
-                return self._stack_qk_norm(bid, n_kv_head, self._k_norms[bid], "k_layernorm")
-            else:
-                return []
+                yield self._stack_qk_norm(bid, n_kv_head, self._k_norms[bid], "k_layernorm")
+            return
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
-    def _stack_qk_norm(self, bid: int, n_head: int, norms: dict[str, Tensor], layer_name: str = "q_layernorm"):
+    def _stack_qk_norm(self, bid: int, n_head: int, norms: dict[str, Tensor], layer_name: str = "q_layernorm") -> tuple[str, Tensor]:
         datas: list[Tensor] = []
         # extract the norms in order
         for xid in range(n_head):
@@ -1263,7 +1250,7 @@ class StableLMModel(Model):
         merged_name = f"model.layers.{bid}.self_attn.{layer_name}.weight"
         new_name = self.map_tensor_name(merged_name)
 
-        return [(new_name, data_torch)]
+        return (new_name, data_torch)
 
     def write_tensors(self):
         super().write_tensors()
@@ -1347,7 +1334,6 @@ class LlamaModel(Model):
             self._experts[bid][name] = data_torch
 
             if len(self._experts[bid]) >= n_experts * 3:
-                tensors: list[tuple[str, Tensor]] = []
 
                 # merge the experts into a single 3d tensor
                 for wid in ["w1", "w2", "w3"]:
@@ -1364,12 +1350,10 @@ class LlamaModel(Model):
 
                     new_name = self.map_tensor_name(merged_name)
 
-                    tensors.append((new_name, data_torch))
-                return tensors
-            else:
-                return []
+                    yield new_name, data_torch
+            return
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
     def write_tensors(self):
         super().write_tensors()
@@ -1410,7 +1394,6 @@ class GrokModel(Model):
             self._experts[bid][name] = data_torch
 
             if len(self._experts[bid]) >= n_experts * 3:
-                tensors: list[tuple[str, Tensor]] = []
 
                 # merge the experts into a single 3d tensor
                 for wid in ["linear", "linear_1", "linear_v"]:
@@ -1427,12 +1410,10 @@ class GrokModel(Model):
 
                     new_name = self.map_tensor_name(merged_name)
 
-                    tensors.append((new_name, data_torch))
-                return tensors
-            else:
-                return []
+                    yield new_name, data_torch
+            return
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
 
 @Model.register("DbrxForCausalLM")
@@ -1498,7 +1479,7 @@ class DbrxModel(Model):
         # https://huggingface.co/databricks/dbrx-instruct/blob/main/model.safetensors.index.json#L15
         new_name = self.map_tensor_name(name if not experts else name + ".weight", try_suffixes=(".weight",))
 
-        return [(new_name, data_torch)]
+        yield new_name, data_torch
 
     def extra_f16_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         del name, new_name, bid  # unused
@@ -1548,7 +1529,7 @@ class MiniCPMModel(Model):
         if name.endswith(("k_proj.weight")):
             data_torch = self._reverse_hf_permute(data_torch, n_head, n_kv_head)
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
 
 @Model.register("QWenLMHeadModel")
@@ -1627,7 +1608,6 @@ class Qwen2MoeModel(Model):
             self._experts[bid][name] = data_torch
 
             if len(self._experts[bid]) >= n_experts * 3:
-                tensors: list[tuple[str, Tensor]] = []
 
                 # merge the experts into a single 3d tensor
                 for w_name in ["down_proj", "gate_proj", "up_proj"]:
@@ -1644,12 +1624,10 @@ class Qwen2MoeModel(Model):
 
                     new_name = self.map_tensor_name(merged_name)
 
-                    tensors.append((new_name, data_torch))
-                return tensors
-            else:
-                return []
+                    yield new_name, data_torch
+            return
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
     def write_tensors(self):
         super().write_tensors()
@@ -1678,24 +1656,20 @@ class GPT2Model(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
-        tensors: list[tuple[str, Tensor]] = []
-
         # we don't need these
         if name.endswith((".attn.bias", ".attn.masked_bias")):
-            return tensors
+            return
 
         if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_proj.weight")):
             data_torch = data_torch.transpose(1, 0)
 
         new_name = self.map_tensor_name(name)
 
-        tensors.append((new_name, data_torch))
+        yield new_name, data_torch
 
         # note: GPT2 output is tied to (same as) wte in original model
         if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
-            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
-
-        return tensors
+            yield self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch
 
 
 @Model.register("PhiForCausalLM")
@@ -1854,7 +1828,7 @@ class PlamoModel(Model):
         elif new_name.endswith("attn_output.weight"):
             data_torch = self.shuffle_attn_output_weight(data_torch)
 
-        return [(new_name, data_torch)]
+        yield new_name, data_torch
 
 
 @Model.register("CodeShellForCausalLM")
@@ -1882,16 +1856,14 @@ class CodeShellModel(Model):
 
         new_name = self.map_tensor_name(name)
 
-        tensors: list[tuple[str, Tensor]] = [(new_name, data_torch)]
+        yield new_name, data_torch
 
         if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
             assert self.tensor_names is not None
 
             if all(s not in self.tensor_names for s in ("lm_head.weight", "output.weight")):
                 # copy tok_embd.weight to output.weight
-                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
-
-        return tensors
+                yield self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch
 
 
 @Model.register("InternLM2ForCausalLM")
@@ -2031,13 +2003,11 @@ in chat mode so that the conversation can end normally.")
             k = self._hf_permute_qk(k.reshape((k.shape[0], -1)).T, num_heads, num_kv_heads)
             # v = rearrange(v, " o g n i ->  o (g n i)").T
             v = v.reshape((v.shape[0], -1)).T
-            return [
-                (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid), q),
-                (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid), k),
-                (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid), v),
-            ]
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid), q)
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid), k)
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid), v)
         else:
-            return [(self.map_tensor_name(name), data_torch)]
+            yield (self.map_tensor_name(name), data_torch)
 
 
 @Model.register("BertModel", "CamembertModel")
@@ -2107,9 +2077,9 @@ class BertModel(Model):
 
         # we are only using BERT for embeddings so we don't need the pooling layer
         if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
-            return [] # we don't need these
+            return  # we don't need these
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
 
 @Model.register("NomicBertModel")
@@ -2182,13 +2152,13 @@ class GemmaModel(Model):
         # To prevent errors, skip loading lm_head.weight.
         if name == "lm_head.weight":
             logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
-            return []
+            return
 
         # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
         if name.endswith("norm.weight"):
             data_torch = data_torch + 1
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
 
 @Model.register("Starcoder2ForCausalLM")
@@ -2294,11 +2264,12 @@ class MambaModel(Model):
         if self._tok_embd is not None and new_name == output_name:
             if torch.equal(self._tok_embd, data_torch):
                 logger.debug(f"{output_name} is equivalent to {tok_embd_name}, omitting")
-                return []
+                self._tok_embd = None
+                return
         elif new_name == tok_embd_name:
             self._tok_embd = data_torch
 
-        return [(new_name, data_torch)]
+        yield new_name, data_torch
 
     def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         del n_dims  # unused
@@ -2356,7 +2327,7 @@ class OlmoModel(Model):
         if name.endswith("k_proj.weight"):
             data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
 
 @Model.register("JinaBertModel", "JinaBertForMaskedLM")
