@@ -59,8 +59,6 @@
 #define SC_DEBUG
 #undef SC_DEBUG_VERBOSE
 
-#define SC_TEST_PRG
-
 #undef SC_STR_OVERSMART
 #ifdef SC_STR_OVERSMART
 #define str_trim str_trim_oversmart
@@ -72,7 +70,7 @@
 // **** **** **** String related helpers **** **** **** //
 
 
-size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
+inline size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
     std::mbstate_t mbState = std::mbstate_t();
     const wchar_t *wSrcP = wSrc.c_str();
     auto reqLen = std::wcsrtombs(nullptr, &wSrcP, 0, &mbState);
@@ -80,7 +78,7 @@ size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
     return std::wcsrtombs(sDest.data(), &wSrcP, sDest.length(), &mbState);
 }
 
-size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
+inline size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
     std::mbstate_t mbState = std::mbstate_t();
     const char *sSrcP = sSrc.c_str();
     auto reqLen = std::mbsrtowcs(nullptr, &sSrcP, 0, &mbState);
@@ -89,7 +87,7 @@ size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
 }
 
 template <typename TString>
-void dumphex_string(const TString &sIn, const std::string &msgTag){
+inline void dumphex_string(const TString &sIn, const std::string &msgTag){
     LDBUG("%s[ ", msgTag.c_str());
     for(auto c: sIn) {
         auto cSize = sizeof(c);
@@ -141,7 +139,7 @@ void dumphex_string(const TString &sIn, const std::string &msgTag){
 //   then string may get partially trimmed wrt such a char at either end.
 //
 template <typename TString>
-TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
+inline TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
 #ifdef SC_DEBUG_VERBOSE
     dumphex_string(sin, "DBUG:StrTrimDumb:Str:");
     dumphex_string(trimChars, "DBUG:StrTrimDumb:TrimChars:");
@@ -159,7 +157,7 @@ TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
 // it may get converted to NativeCharSize chars in the expanded wchar_t encoding space,
 // thus leading to fixed NativeCharSize driven logic itself handling things sufficiently.
 // Look at str_trim_dumb comments for additional aspects.
-std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \t\n") {
+inline std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \t\n") {
     std::wstring wIn;
     mbs_to_wcs(wIn, sIn);
     std::wstring wTrimChars;
@@ -189,7 +187,7 @@ std::string str_trim_oversmart(std::string sIn, const std::string &trimChars=" \
 // logics perspective), so not providing oversmart variant.
 //
 template <typename TString>
-TString str_trim_single(TString sin, const TString& trimChars=" \t\n") {
+inline TString str_trim_single(TString sin, const TString& trimChars=" \t\n") {
     if (sin.empty()) return sin;
     for(auto c: trimChars) {
         if (c == sin.front()) {
@@ -217,7 +215,7 @@ TString str_trim_single(TString sin, const TString& trimChars=" \t\n") {
 // * ex: this will work if trying to do the conversion for english language within utf-8
 //
 template <typename TString>
-TString str_tolower(const TString &sin) {
+inline TString str_tolower(const TString &sin) {
     TString sout;
     sout.resize(sin.size());
     std::transform(sin.begin(), sin.end(), sout.begin(), [](auto c)->auto {return std::tolower(c);});
@@ -228,7 +226,7 @@ TString str_tolower(const TString &sin) {
     return sout;
 }
 
-void str_compare_dump(const std::string &s1, const std::string &s2) {
+inline void str_compare_dump(const std::string &s1, const std::string &s2) {
     LDBUG_LN("DBUG:%s:%s:Len:%zu", __func__, s1.c_str(), s1.length());
     LDBUG_LN("DBUG:%s:%s:Len:%zu", __func__, s2.c_str(), s2.length());
     int minLen = s1.length() < s2.length() ? s1.length() : s2.length();
@@ -402,178 +400,3 @@ public:
     }
 
 };
-
-
-#ifdef SC_TEST_PRG
-
-#include <iostream>
-#include <format>
-
-
-// **** **** **** some simple test code **** **** **** //
-
-
-void check_string() {
-    std::vector<std::string> vStandard = { "123", "1अ3" };
-    std::cout << "**** string **** " << vStandard.size() << std::endl;
-    for(auto sCur: vStandard) {
-        std::cout << std::format("string: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
-        int i = 0;
-        for(auto c: sCur) {
-            std::cout << std::format("string:{}:pos:{}:char:{}[0x{:x}]\n", sCur, i, c, (uint8_t)c);
-            i += 1;
-        }
-    }
-}
-
-void check_u8string() {
-    std::vector<std::u8string> vU8s = { u8"123", u8"1अ3" };
-    std::cout << "**** u8string **** " << vU8s.size() << std::endl;
-    for(auto sCur: vU8s) {
-        std::string sCurx (sCur.begin(), sCur.end());
-        std::cout << std::format("u8string: [{}] len[{}] size[{}]", sCurx, sCur.length(), sCur.size()) << std::endl;
-        int i = 0;
-        for(auto c: sCur) {
-            //std::cout << c << std::endl;
-            std::cout << std::format("u8string:{}:pos:{}:char:{}[0x{:x}]\n", sCurx, i, (unsigned char)c, (unsigned char)c);
-            i += 1;
-        }
-    }
-}
-
-void check_wstring_wcout() {
-    std::wcout.imbue(std::locale("en_US.UTF-8"));
-    std::vector<std::wstring> vWide = { L"123", L"1अ3" };
-    std::cout << "**** wstring wcout **** " << vWide.size() << std::endl;
-    for(auto sCur: vWide) {
-        std::wcout << sCur << std::endl;
-        std::wcout << std::format(L"wstring: [{}] len[{}] size[{}]", sCur, sCur.length(), sCur.size()) << std::endl;
-        int i = 0;
-        for(auto c: sCur) {
-            std::wcout << std::format(L"wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCur, i, c, c);
-            i += 1;
-        }
-    }
-}
-
-void check_wstring_cout() {
-    std::vector<std::wstring> vWide = { L"123", L"1अ3" };
-    std::cout << "**** wstring cout **** " << vWide.size() << std::endl;
-    for(auto sCur: vWide) {
-        std::string sCury;
-        wcs_to_mbs(sCury, sCur);
-        std::cout << std::format("wstring: [{}] len[{}] size[{}]", sCury, sCur.length(), sCur.size()) << std::endl;
-        int i = 0;
-        for(auto c: sCur) {
-            std::wstringstream wsc;
-            wsc << c;
-            std::string ssc;
-            wcs_to_mbs(ssc, wsc.str());
-            std::cout << std::format("wstring:{}:pos:{}:char:{}[0x{:x}]\n", sCury, i, ssc, (uint32_t)c);
-            i += 1;
-        }
-    }
-}
-
-void check_nonenglish() {
-    std::cout << "**** non english **** " << std::endl;
-    std::vector<std::string> vTest1 = { "\n\tAഅअಅ\n\t", "\n\tAഅअಅ " };
-    for (auto sTest: vTest1) {
-        std::string sGotDumb = str_trim_dumb(sTest, {" \n\t"});
-        std::string sGotOSmart = str_trim_oversmart(sTest, {" \n\t"});
-        std::string sLower = str_tolower(sTest);
-        std::cout << std::format("{}: Test1 [{}]\n\tTrimDumb[{}]\n\tTrimOverSmart[{}]\n\tLowerDumb[{}]", __func__, sTest, sGotDumb, sGotOSmart, sLower) << std::endl;
-    }
-    // The string "\n\tthis र remove 0s and अs at end 000रअ0\xa4अ ",
-    // * will mess up str_trim_dumb,
-    // * but will rightly trigger a exception with oversmart.
-    std::vector<std::string> vTest2 = { "\n\t this र remove 0s at end 000 ", "\n\tthis र remove 0s, अs, ഇs at end 000रअ0अ ", "\n\tthis र remove 0s, अs, ഇs at end 000रअ0इअ "};
-    std::string trimChars = {" \n\tഇ0अ"};
-    for (auto sTest: vTest2) {
-        std::string sGotDumb = str_trim_dumb(sTest, trimChars);
-        std::string sGotOSmart = str_trim_oversmart(sTest, trimChars);
-        std::cout << std::format("{}: Test2 [{}]\n\tDumb[{}]\n\tOverSmart[{}]", __func__, sTest, sGotDumb, sGotOSmart) << std::endl;
-    }
-}
-
-void check_strings() {
-    std::string sSavedLocale;
-    SimpCfg::locale_prepare(sSavedLocale);
-    check_string();
-    check_u8string();
-    //check_wstring_wcout();
-    check_wstring_cout();
-    check_nonenglish();
-    SimpCfg::locale_restore(sSavedLocale);
-}
-
-void sc_inited() {
-    SimpCfg sc = {{
-        {"Group1",{
-            {"testkey11", 11},
-            {"testkey12", true}
-        }},
-        {"Group2", {
-            {"key21", "val21"},
-            {"key22", 22},
-            {"key23", 2.3}
-        }}
-    }};
-
-    std::cout << "**** sc inited **** " << std::endl;
-    sc.dump("");
-
-}
-
-void sc_set(const std::string &fname) {
-
-    std::cout << "**** sc set **** " << std::endl;
-    SimpCfg sc = {{}};
-    sc.load(fname);
-    sc.dump("");
-
-    sc.get_bool("testme", {"key101b"}, false);
-    sc.get_string("testme", {"key101s"}, "Not found");
-    sc.get_int64("testme", {"key101i"}, 123456);
-    sc.get_double("testme", {"key101d"}, 123456.789);
-
-    sc.set_bool("testme", {"key201b"}, true);
-    sc.set_string("testme", {"key201s"}, "hello world");
-    sc.set_int64("testme", {"key201i"}, 987654);
-    sc.set_double("testme", {"key201d"}, 9988.7766);
-
-    sc.dump("testme");
-    sc.get_bool("testme", {"key201b"}, false);
-    sc.get_string("testme", {"key201s"}, "Not found");
-    sc.get_int64("testme", {"key201i"}, 123456);
-    sc.get_double("testme", {"key201d"}, 123456.789);
-
-    sc.get_string("mistral", {"system-prefix"}, "Not found");
-    sc.get_string("\"mistral\"", {"\"system-prefix\""}, "Not found");
-
-    sc.get_vector<int64_t>("testme", {"keyA100"}, {1, 2, 3});
-    sc.get_vector<std::string>("testme", {"keyA100"}, { "A", "അ", "अ", "ಅ" });
-    sc.set_int64("testme", {"keyA300-0"}, 330);
-    sc.set_int64("testme", {"keyA300-1"}, 331);
-    sc.set_int64("testme", {"keyA300-2"}, 332);
-    sc.set_string("testme", {"keyA301-0"}, "India");
-    sc.set_value<std::string>("testme", {"keyA301", "1"}, "World");
-    sc.set_string("testme", {"keyA301", "2"}, "AkashaGanga");
-    sc.get_vector<int64_t>("testme", {"keyA300"}, {1, 2, 3});
-    sc.get_vector<std::string>("testme", {"keyA301"}, { "yes 1", "No 2", "very well 3" });
-}
-
-int main(int argc, char **argv) {
-    if (argc != 2) {
-        LERRR_LN("USAGE:%s simp.cfg", argv[0]);
-        exit(1);
-    }
-
-    check_strings();
-    sc_inited();
-    std::string fname {argv[1]};
-    sc_set(fname);
-
-    return 0;
-}
-#endif
