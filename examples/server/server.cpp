@@ -2029,24 +2029,7 @@ struct server_context {
 
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
-                                if (slot.ga_n != 1)
-                                {
-                                    int ga_i = 0;
-                                    int32_t ga_n = slot.ga_n;
-                                    int32_t ga_w = slot.ga_w;
-                                    int32_t slot_npast = 0;
-                                    for (int k = 0; k < slot.n_past; ++k)
-                                    {
-                                        while (slot_npast >= ga_i + ga_w) {
-                                            const int bd = (ga_w/ga_n)*(ga_n - 1);
-                                            slot_npast -= bd;
-                                            ga_i += ga_w/ga_n;
-                                        }
-                                        slot_npast++;
-                                    }
-                                    slot.n_past_se = slot_npast;
-                                    slot.ga_i = ga_i;
-                                }
+                                
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
                                     llama_sampling_accept(slot.ctx_sampling, ctx, slot.cache_tokens[i], false);
