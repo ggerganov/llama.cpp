@@ -384,13 +384,24 @@ static __device__ __forceinline__ float2 warp_reduce_sum_impl_amd(float2 a) {
     return a;
 }
 
-static __device__ __forceinline__ half2 warp_reduce_sum_impl_amd(half2 x) {
-    x += hip_ds_swizzleh2(x, AMD_SWIZZLE_MASK(0x1F, 0, 0x10));
-    x += hip_move_dpph2(x, AMD_DPP_ROW_RR(8), 0xF, 0xF, true);
-    x += hip_move_dpph2(x, AMD_DPP_ROW_RR(4), 0xF, 0xF, true);
-    x += hip_move_dpph2(x, AMD_DPP_ROW_RR(2), 0xF, 0xF, true);
-    x += hip_move_dpph2(x, AMD_DPP_ROW_RR(1), 0xF, 0xF, true);
-    return x;
+static __device__ __forceinline__ half2 warp_reduce_sum_impl_amd(half2 a) {
+    half2 tmp;
+    tmp = hip_ds_swizzleh2(a, AMD_SWIZZLE_MASK(0x1F, 0, 0x10));
+    a.data.x += tmp.data.x;
+    a.data.y += tmp.data.y;
+    tmp = hip_move_dpph2(a, AMD_DPP_ROW_RR(8), 0xF, 0xF, true);
+    a.data.x += tmp.data.x;
+    a.data.y += tmp.data.y;
+    tmp = hip_move_dpph2(a, AMD_DPP_ROW_RR(4), 0xF, 0xF, true);
+    a.data.x += tmp.data.x;
+    a.data.y += tmp.data.y;
+    tmp = hip_move_dpph2(a, AMD_DPP_ROW_RR(2), 0xF, 0xF, true);
+    a.data.x += tmp.data.x;
+    a.data.y += tmp.data.y;
+    tmp = hip_move_dpph2(a, AMD_DPP_ROW_RR(1), 0xF, 0xF, true);
+    a.data.x += tmp.data.x;
+    a.data.y += tmp.data.y;
+    return a;
 }
 
 static __device__ __forceinline__ float warp_reduce_max_impl_amd(float x) {
