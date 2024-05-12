@@ -312,7 +312,7 @@ public:
 
 #ifdef CHATON_JSON
 
-inline std::string json_get_str(json &j, std::vector<std::string> &keys, const std::string &msgTag) {
+inline std::string json_get_str(json &j, std::vector<std::string> keys, const std::string &msgTag) {
     json curJ = j;
     std::stringstream skey;
     int i = 0;
@@ -324,7 +324,7 @@ inline std::string json_get_str(json &j, std::vector<std::string> &keys, const s
             curJ = curJ[key];
         } else {
             std::stringstream ss;
-            ss << "ERRR:ChatON:" << __func__ << msgTag << ":Key [" << skey.str() << "] is missing";
+            ss << "ERRR:ChatON:" << __func__ << ":" << msgTag << ":Key [" << skey.str() << "] is missing";
             throw std::runtime_error(ss.str());
         }
     }
@@ -339,50 +339,39 @@ inline bool chaton_meta_load(const std::string &fname) {
         auto group = it.key();
         auto curTmpl = conMeta[group];
 
-        std::string globalBegin = curTmpl[K_GLOBAL][K_BEGIN];
+        std::string globalBegin = json_get_str(curTmpl, { K_GLOBAL, K_BEGIN }, group);
         gCT.set_value<std::string>(group, { K_GLOBAL, K_BEGIN }, globalBegin);
-
-        std::string globalEnd = curTmpl[K_GLOBAL][K_END];
+        std::string globalEnd = json_get_str(curTmpl, { K_GLOBAL, K_END }, group);
         gCT.set_value<std::string>(group, { K_GLOBAL, K_END }, globalEnd);
 
-        std::string systemBegin = curTmpl[K_SYSTEM][K_BEGIN];
+        std::string systemBegin = json_get_str(curTmpl, { K_SYSTEM, K_BEGIN }, group);
         gCT.set_value<std::string>(group, { K_SYSTEM, K_BEGIN }, systemBegin);
-
-        std::string systemPrefix = curTmpl[K_SYSTEM][K_PREFIX];
+        std::string systemPrefix = json_get_str(curTmpl, { K_SYSTEM, K_PREFIX }, group);
         gCT.set_value<std::string>(group, { K_SYSTEM, K_PREFIX }, systemPrefix);
-
-        std::string systemSuffix = curTmpl[K_SYSTEM][K_SUFFIX];
+        std::string systemSuffix = json_get_str(curTmpl, { K_SYSTEM, K_SUFFIX }, group);
         gCT.set_value<std::string>(group, { K_SYSTEM, K_SUFFIX }, systemSuffix);
-
-        std::string systemEnd = curTmpl[K_SYSTEM][K_END];
+        std::string systemEnd = json_get_str(curTmpl, { K_SYSTEM, K_END }, group);
         gCT.set_value<std::string>(group, { K_SYSTEM, K_END }, systemEnd);
 
-        std::string userBegin = curTmpl[K_USER][K_BEGIN];
+        std::string userBegin = json_get_str(curTmpl, { K_USER, K_BEGIN }, group);
         gCT.set_value<std::string>(group, { K_USER, K_BEGIN }, userBegin);
-
-        std::string userPrefix = curTmpl[K_USER][K_PREFIX];
+        std::string userPrefix = json_get_str(curTmpl, { K_USER, K_PREFIX }, group);
         gCT.set_value<std::string>(group, { K_USER, K_PREFIX }, userPrefix);
-
-        std::string userSuffix = curTmpl[K_USER][K_SUFFIX];
+        std::string userSuffix = json_get_str(curTmpl, { K_USER, K_SUFFIX }, group);
         gCT.set_value<std::string>(group, { K_USER, K_SUFFIX }, userSuffix);
-
-        std::string userEnd = curTmpl[K_USER][K_END];
+        std::string userEnd = json_get_str(curTmpl, { K_USER, K_END }, group);
         gCT.set_value<std::string>(group, { K_USER, K_END }, userEnd);
 
-        std::string assistantBegin = curTmpl[K_ASSISTANT][K_BEGIN];
+        std::string assistantBegin = json_get_str(curTmpl, { K_ASSISTANT, K_BEGIN }, group);
         gCT.set_value<std::string>(group, { K_ASSISTANT, K_BEGIN }, assistantBegin);
-
-        std::string assistantPrefix = curTmpl[K_ASSISTANT][K_PREFIX];
+        std::string assistantPrefix = json_get_str(curTmpl, { K_ASSISTANT, K_PREFIX }, group);
         gCT.set_value<std::string>(group, { K_ASSISTANT, K_PREFIX }, assistantPrefix);
-
-        std::string assistantSuffix = curTmpl[K_ASSISTANT][K_SUFFIX];
+        std::string assistantSuffix = json_get_str(curTmpl, { K_ASSISTANT, K_SUFFIX }, group);
         gCT.set_value<std::string>(group, { K_ASSISTANT, K_SUFFIX }, assistantSuffix);
-
-        std::string assistantEnd = curTmpl[K_ASSISTANT][K_END];
+        std::string assistantEnd = json_get_str(curTmpl, { K_ASSISTANT, K_END }, group);
         gCT.set_value<std::string>(group, { K_ASSISTANT, K_END }, assistantEnd);
 
-
-        std::string reversePrompt = curTmpl[K_REVERSE_PROMPT];
+        std::string reversePrompt = json_get_str(curTmpl, { K_REVERSE_PROMPT }, group);
         gCT.set_value<std::string>(group, { K_REVERSE_PROMPT }, reversePrompt);
 
         bool systemHasSuffix = curTmpl[K_SYSTEMUSER_SYSTEM_HAS_SUFFIX];
