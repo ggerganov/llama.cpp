@@ -255,7 +255,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                           "vpandd\t%%zmm0,\t%%zmm7,\t%%zmm8\n\t"              // Apply a mask, storing the next set of four bits into a vector.
                           "vpord\t%%zmm1,%%zmm8,%%zmm8%{%%k2%}\n\t"           // Turn on bit 5 for all values that passed the prior test.
                           "vmovdqa32\t\t%%zmm8%{uint8%},\t16(%%r8)\n\t"       // Save our result.
-                          
+
                           "add\t$32,\t%%r8\n\t"
                           "vpslld\t$1,\t%%zmm2,\t%%zmm2\n\t"                  // Select the next bit to test for.
 
@@ -333,7 +333,7 @@ void GGML_5bit_Unpack_Unaligned (const uint8x16_t * q4, const uint8_t * q1, uint
                             [BIT5]   "m" (bit5)
                           : "zmm0", "zmm1", "zmm2", "zmm3", "zmm4", "zmm5", "zmm6", "zmm7", "zmm8", "zmm9", "zmm10", "zmm11", "zmm12", "cc", "ecx", "k1", "k2", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "memory");
 }
-  
+
 // A function for getting the dot product of two vectors, one of 5 bit resolution, and one of 8.
 // Used during inference, if your model prints "llama_model_loader: - type q5_K:  XXX tensors", and XXX is not zero. :)
 void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
