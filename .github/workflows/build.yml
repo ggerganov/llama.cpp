@@ -932,6 +932,7 @@ jobs:
         id: pack_artifacts
         if: ${{ ( github.event_name == 'push' && github.ref == 'refs/heads/master' ) || github.event.inputs.create_release == 'true' }}
         run: |
+          source "C:/Program Files (x86)/Intel/oneAPI/setvars.bat" intel64 --force
           echo "cp oneAPI running time dll files in ${ONEAPI_ROOT} to ./build/bin"
           cp ${{ ONEAPI_ROOT }}/mkl/latest/bin/mkl_sycl_blas.4.dll ./build/bin
           cp ${{ ONEAPI_ROOT }}/mkl/latest/bin/mkl_core.2.dlll ./build/bin
