@@ -11425,7 +11425,7 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
 
             vector signed short qxh = (vector signed short)vec_sld(vec_splats(qh[1]), vec_splats(qh[0]), 8);
             qh += 2;
-            vector bool short vsel = vec_cmpge(qxh, (vector signed short)v0);
+            vector __bool short vsel = vec_cmpge(qxh, (vector signed short)v0);
 
             vector signed short q8ysum = vec_sel((vector signed short)vec_xor((vector unsigned short)q8ysums, vsign), q8ysums, vsel);
 
