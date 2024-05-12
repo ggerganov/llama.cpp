@@ -887,6 +887,7 @@ async def oai_chat_completions(user_prompt,
                                base_path,
                                async_client,
                                debug=False,
+                               temperature=None,
                                model=None,
                                n_predict=None,
                                enable_streaming=None,
@@ -913,7 +914,8 @@ async def oai_chat_completions(user_prompt,
         "model": model,
         "max_tokens": n_predict,
         "stream": enable_streaming,
-        "seed": seed
+        "temperature": temperature if temperature is not None else 0.0,
+        "seed": seed,
     }
     if response_format is not None:
         payload['response_format'] = response_format
@@ -978,7 +980,8 @@ async def oai_chat_completions(user_prompt,
                 max_tokens=n_predict,
                 stream=enable_streaming,
                 response_format=payload.get('response_format'),
-                seed=seed
+                seed=seed,
+                temperature=payload['temperature']
             )
         except openai.error.AuthenticationError as e:
             if expect_api_error is not None and expect_api_error:
