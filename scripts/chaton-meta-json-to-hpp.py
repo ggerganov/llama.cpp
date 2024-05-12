@@ -9,6 +9,9 @@ import json
 def kkv_str(j, tmpl, k1, k2, comma):
     print("\t\t{{ \"{}\", \"{}\" }}{}".format("{}-{}".format(k1,k2), repr(j[tmpl][k1][k2])[1:-1], comma))
 
+def kv_str(j, tmpl, k1, comma):
+    print("\t\t{{ \"{}\", \"{}\" }}{}".format(k1, repr(j[tmpl][k1])[1:-1], comma))
+
 def kv_bool(j, tmpl, k1, comma):
     print("\t\t{{ \"{}\", {} }}{}".format(k1, repr(j[tmpl][k1]).lower(), comma))
 
@@ -38,6 +41,8 @@ for tmpl in j:
     kkv_str(j, tmpl, "assistant", "prefix", ",")
     kkv_str(j, tmpl, "assistant", "suffix", ",")
     kkv_str(j, tmpl, "assistant", "end", ",")
+
+    kv_str(j, tmpl, "reverse-prompt", ",")
 
     kv_bool(j, tmpl, "systemuser-system-has-suffix", ",")
     kv_bool(j, tmpl, "systemuser-system-has-end", ",")

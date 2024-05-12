@@ -781,6 +781,11 @@ inline bool _chaton_meta_dump(std::string &tmpl) {
         std::string assistantPrefix = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_PREFIX });
         std::string assistantSuffix = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_SUFFIX });
         std::string assistantEnd = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_END });
+        std::string reversePrompt = gCT.get_value<std::string>(tmpl, { K_REVERSE_PROMPT });
+        bool systemHasSuffix = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX });
+        bool systemHasEnd = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_END });
+        bool userHasBegin = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN });
+        bool userHasPrefix = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX });
 
         LOGXLN("INFO:%s:%s:%s", __func__, "global->begin", globalBegin.c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "global->end", globalEnd.c_str());
@@ -796,11 +801,11 @@ inline bool _chaton_meta_dump(std::string &tmpl) {
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->prefix", assistantPrefix.c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->suffix", assistantSuffix.c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, "assistant->end", assistantEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, chaton_tmpl_kv(tmpl, K_REVERSE_PROMPT).c_str());
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX));
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_END));
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_BEGIN));
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, chaton_tmpl_kv_bool(tmpl, K_SYSTEMUSER_1ST_USER_HAS_PREFIX));
+        LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, reversePrompt.c_str());
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, systemHasSuffix);
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, systemHasEnd);
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, userHasBegin);
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, userHasPrefix);
 
         if (!userEnd.empty()) {
             LOG_TEELN("WARN:%s:User->End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
