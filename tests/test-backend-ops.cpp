@@ -2,6 +2,7 @@
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-backend-impl.h>
+
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -2173,11 +2174,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_timestep_embedding());
     test_cases.emplace_back(new test_leaky_relu());
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
-    for (int hs : { 64, 128, }) { // other head sizes not implemented
-#else
     for (int hs : { 64, 80, 128, 256, }) {
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
         for (float max_bias : {0.0f, 8.0f}) {
             for (int nh : { 32, }) {
                 for (int kv : { 512, 1024, }) {
