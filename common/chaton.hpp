@@ -281,19 +281,21 @@ public:
         return typeid(*this).name();
     }
 
-    void dump() {
+    std::string dump(const std::string &msgTag) {
+        std::stringstream ss;
         std::string me = name() + ":" + __func__;
-        LOGXLN("INFO:%s:NumTypes:%zu", me.c_str(), types.length());
-        LOGXLN("INFO:%s:NumParts:%zu", me.c_str(), parts.size());
-        LOGXLN("INFO:%s:StrLength:%zu", me.c_str(), str().length());
+        ss << msgTag << ":NumTypes:" << types.length() << std::endl;
+        ss << msgTag << ":NumParts:" << parts.size() << std::endl;
+        ss << msgTag << ":StrLength:" << str().length() << std::endl;
         if (parts.size() != types.length()) {
-            LOG_TEELN("DBUG:%s:Mismatch between parts and types", me.c_str());
+            LOG_TEELN("DBUG:%s:Mismatch between parts[%zu] and types[%zu]", me.c_str(), parts.size(), types.length());
         }
         int i = 0;
         for(auto part: parts) {
-            LOGXLN("INFO:%s:%c:%s", me.c_str(), types[i], part.c_str());
+            ss << msgTag << ":Part:" << i << ":" << types[i] << ":" << part << std::endl;
             i += 1;
         }
+        return ss.str();
     }
 
 };
@@ -503,7 +505,7 @@ public:
             auto globalEnd = tmpl_role_getkeys(tmpl, K_GLOBAL, {K_END});
             cp.add_part(ChatParts::S, globalEnd);
         }
-        cp.dump();
+        LDBUG_LN("DBUG:CT:%s", cp.dump("INFO:ChatOnTmplApplyEx").c_str());
         tagged = cp.str();
         LOGLN("DBUG:CT:%s:%s:%s", __func__, tmpl.c_str(), tagged.c_str());
         LOGLN("DBUG:CT:%s:%s:CntSys[%d]:CntUsr[%d]:CntOthers[%d]", __func__, tmpl.c_str(), cntSystem, cntUser, cntOthers);
