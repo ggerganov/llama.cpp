@@ -313,7 +313,7 @@ public:
 #ifdef CHATON_JSON
 
 template <typename SupportedType>
-inline SupportedType json_get(json &j, std::vector<std::string> keys, const std::string &msgTag) {
+inline SupportedType json_get(json &j, const std::vector<std::string_view> &keys, const std::string &msgTag) {
     json curJ = j;
     std::stringstream skey;
     int i = 0;
@@ -325,7 +325,7 @@ inline SupportedType json_get(json &j, std::vector<std::string> keys, const std:
             curJ = curJ[key];
         } else {
             std::stringstream ss;
-            ss << "ERRR:ChatON:" << __func__ << ":" << msgTag << ":Key [" << skey.str() << "] is missing";
+            ss << "ERRR:ChatON:" << __func__ << ":" << msgTag << ":KeyChain [" << skey.str() << "] is missing";
             throw std::runtime_error(ss.str());
         }
     }
