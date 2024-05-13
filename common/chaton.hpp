@@ -534,7 +534,9 @@ inline bool chaton_tmpl_apply_ex(
         bool applyGlobalIfAny,
         std::string &tagged,
         std::string &types,
-        std::vector<int32_t> &lens
+        std::vector<int32_t> &lens,
+        int curSystemMsgCnt = 0,
+        int curUserMsgCnt = 0
         ) {
     if (!chaton_tmpl_exists(tmpl)) {
         return false;
@@ -544,8 +546,8 @@ inline bool chaton_tmpl_apply_ex(
         std::string globalBegin = chaton_tmpl_role_getkeys(tmpl, K_GLOBAL, {K_BEGIN});
         cp.add_part(ChatParts::S, globalBegin);
     }
-    int cntSystem = 0;
-    int cntUser = 0;
+    int cntSystem = curSystemMsgCnt;
+    int cntUser = curUserMsgCnt;
     int cntOthers = 0;
     for(const auto msg: msgs) {
         auto role = msg->role;
@@ -629,6 +631,7 @@ inline int32_t chaton_tmpl_apply(
     return tagged.size();
 }
 
+const int BYPASS_MSGCNT = 101;
 //
 // Given the template standard, role and a message, this creates the tagged message.
 //
@@ -646,7 +649,7 @@ inline size_t chaton_tmpl_apply_single(
     std::string types;
     std::vector<int32_t> lens;
     llama_chat_message cm {role.c_str(), content.c_str()};
-    if (!chaton_tmpl_apply_ex(tmpl, {&cm}, alertAssistantAtEnd, applyGlobalIfAny, tagged, types, lens)) {
+    if (!chaton_tmpl_apply_ex(tmpl, {&cm}, alertAssistantAtEnd, applyGlobalIfAny, tagged, types, lens, BYPASS_MSGCNT, BYPASS_MSGCNT)) {
         return -1;
     }
     return tagged.size();
