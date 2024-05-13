@@ -266,7 +266,7 @@ int main(int argc, char ** argv) {
             params.prompt = "<|im_start|>system\n" + params.prompt + "<|im_end|>";
         }
         if (params.chaton) {
-            chaton_tmpl_apply_single(params.chaton_template_id, K_SYSTEM, params.prompt, params.prompt);
+            chaton_tmpl_apply_single(params.chaton_template_id, K_SYSTEM, params.prompt, false, false, params.prompt);
         }
         embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
     } else {
