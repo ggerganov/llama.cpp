@@ -353,7 +353,7 @@ class Metadata:
     source_hf_repo: Optional[str] = None
 
     @staticmethod
-    def load(metadata_path: Path) -> "Metadata":
+    def load(metadata_path: Path) -> Metadata:
         if metadata_path is None or not metadata_path.exists():
             return Metadata()
 
