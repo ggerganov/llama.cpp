@@ -672,10 +672,11 @@ struct server_context {
         }
 
 	// Clear any sampling context
-	for (server_slot & slot : slots) {
-	    if (slot.ctx_sampling != nullptr)
-	        llama_sampling_free(slot.ctx_sampling);
-	}
+        for (server_slot & slot : slots) {
+            if (slot.ctx_sampling != nullptr) {
+                llama_sampling_free(slot.ctx_sampling);
+            }
+        }
 
         llama_batch_free(batch);
     }
