@@ -1099,7 +1099,7 @@ class OutputFile:
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
     def add_meta_model(self, params: Params, metadata: Metadata) -> None:
-        # Metadata About The Model And It's Provenence
+        # Metadata About The Model And Its Provenence
         name = "LLaMA"
         if metadata is not None and metadata.name is not None:
             name = metadata.name
