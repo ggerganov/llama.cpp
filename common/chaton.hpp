@@ -320,55 +320,69 @@ public:
     /**
      * Check if all expected keys/fields are present wrt the specified chat-template.
      * If any key/field is missing, expect a exception.
+     * 
+     * Additionally also return a string containing info about all the fields.
     */
-    bool tmpl_basiccheck(const std::string &tmpl, std::stringstream &ss) {
+    bool tmpl_basiccheck(const std::string &tmpl, std::stringstream &ss, const std::string &msgTag) {
+
+        if (!tmpl_exists(tmpl)) {
+            LOGXLN("ERRR:CT:%s:Specified template-id [%s] not found", msgTag.c_str(), tmpl.c_str());
+            return false;
+        }
+
         std::string globalBegin = get_value<std::string>(tmpl, { K_GLOBAL, K_BEGIN });
         std::string globalEnd = get_value<std::string>(tmpl, { K_GLOBAL, K_END });
+
         std::string systemBegin = get_value<std::string>(tmpl, { K_SYSTEM, K_BEGIN });
         std::string systemPrefix = get_value<std::string>(tmpl, { K_SYSTEM, K_PREFIX });
         std::string systemSuffix = get_value<std::string>(tmpl, { K_SYSTEM, K_SUFFIX });
         std::string systemEnd = get_value<std::string>(tmpl, { K_SYSTEM, K_END });
+
         std::string userBegin = get_value<std::string>(tmpl, { K_USER, K_BEGIN });
         std::string userPrefix = get_value<std::string>(tmpl, { K_USER, K_PREFIX });
         std::string userSuffix = get_value<std::string>(tmpl, { K_USER, K_SUFFIX });
         std::string userEnd = get_value<std::string>(tmpl, { K_USER, K_END });
+
         std::string assistantBegin = get_value<std::string>(tmpl, { K_ASSISTANT, K_BEGIN });
         std::string assistantPrefix = get_value<std::string>(tmpl, { K_ASSISTANT, K_PREFIX });
         std::string assistantSuffix = get_value<std::string>(tmpl, { K_ASSISTANT, K_SUFFIX });
         std::string assistantEnd = get_value<std::string>(tmpl, { K_ASSISTANT, K_END });
+
         std::string reversePrompt = get_value<std::string>(tmpl, { K_REVERSE_PROMPT });
+
         bool systemHasSuffix = get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX });
         bool systemHasEnd = get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_END });
         bool userHasBegin = get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN });
         bool userHasPrefix = get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX });
 
-        LOGXLN("INFO:%s:%s:%s", __func__, "global-begin", globalBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "global-end", globalEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-begin", systemBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-prefix", systemPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-suffix", systemSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-end", systemEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-begin", userBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-prefix", userPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-suffix", userSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-end", userEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-begin", assistantBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-prefix", assistantPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-suffix", assistantSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-end", assistantEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, reversePrompt.c_str());
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, systemHasSuffix);
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, systemHasEnd);
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, userHasBegin);
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, userHasPrefix);
+        ss << msgTag << ":" + tmpl + ":" << "global-begin" << ":" << globalBegin << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "global-end" << ":" << globalEnd << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "system-begin" << ":" << systemBegin << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "system-prefix" << ":" << systemPrefix << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "system-suffix" << ":" << systemSuffix << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "system-end" << ":" << systemEnd << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "user-begin" << ":" << userBegin << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "user-prefix" << ":" << userPrefix << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "user-suffix" << ":" << userSuffix << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "user-end" << ":" << userEnd << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "assistant-begin" << ":" << assistantBegin << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "assistant-prefix" << ":" << assistantPrefix << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "assistant-suffix" << ":" << assistantSuffix << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << "assistant-end" << ":" << assistantEnd << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << K_REVERSE_PROMPT << ":" << reversePrompt << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << K_SYSTEMUSER_SYSTEM_HAS_SUFFIX << ":" << systemHasSuffix << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << K_SYSTEMUSER_SYSTEM_HAS_END << ":" << systemHasEnd << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << K_SYSTEMUSER_1ST_USER_HAS_BEGIN << ":" << userHasBegin << std::endl;
+        ss << msgTag << ":" + tmpl + ":" << K_SYSTEMUSER_1ST_USER_HAS_PREFIX << ":" << userHasPrefix << std::endl;
 
         if (!userEnd.empty()) {
-            LOG_TEELN("WARN:%s:User-End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
+            LOG_TEELN("WARN:CT:%s:User-End seems to be set to [%s], do cross check if this is proper and needed", msgTag.c_str(), userEnd.c_str());
         }
         if (!assistantBegin.empty()) {
-            LOG_TEELN("WARN:%s:Assistant-Begin seems to be set to [%s], do cross check if this is proper and needed", __func__, assistantBegin.c_str());
+            LOG_TEELN("WARN:CT:%s:Assistant-Begin seems to be set to [%s], do cross check if this is proper and needed", msgTag.c_str(), assistantBegin.c_str());
         }
 
+        return true;
     }
 
     /**
@@ -836,29 +850,29 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
 
 
 /**
- * if tmpl is
- * * empty string, then dump the full loaded chaton-meta
- * * chaton-template-id, then dump contents related to that specific chat-handshake-template-standard
- * NOTE: It uses the exception raising get_value to check if the tags related keys are present
- * wrt the specified template-standard/model-id or not.
+ * Dump the full loaded chaton templates data
+ * Additionally if a chaton-template-id is specified
+ * dump contents related to that specific chat-handshake-template-standard
+ * NOTE: It uses the exception raising get_value to check if all the required
+ * keys/fields are present wrt the specified template-standard/model-id or not.
  */
-inline bool _chaton_meta_dump(std::string &tmpl) {
-    if (!tmpl.empty()) {
-        if (!gCT.tmpl_exists(tmpl)) {
-            LOGXLN("ERRR:%s:Specified template-id [%s] not found", __func__, tmpl.c_str());
-            return false;
-        }
+inline bool _chaton_meta_validate_dump(std::string &tmpl) {
+    LOGXLN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump(tmpl, "INFO:ChatOnMetaValidateDump:").c_str());
+    if (tmpl.empty()) {
+        return true;
     }
-    LOGXLN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump(tmpl, "INFO:ChatOnMetaDump:").c_str());
-    if (!tmpl.empty()) {
-        gCT.tmpl_basiccheck(tmpl);
+    std::stringstream ss;
+    if (gCT.tmpl_basiccheck(tmpl, ss, "INFO:ChatOnMetaValidateDump")) {
+        LOGXLN("%s", ss.str().c_str());
+    } else {
+        return false;
     }
     return true;
 }
 
 /**
- * Verify that specified chaton-template-id contains required fields using meta-dump
+ * Verify that specified chaton-template-id contains required fields using meta-validate-dump
  */
 inline bool chaton_meta_ok(std::string &tmpl) {
-    return _chaton_meta_dump(tmpl);
+    return _chaton_meta_validate_dump(tmpl);
 }
