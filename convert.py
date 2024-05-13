@@ -364,14 +364,15 @@ class Metadata:
         metadata = Metadata()
 
         # Assigning values to Metadata attributes if they exist in the JSON file
+        # This is based on LLM_KV_NAMES mapping in llama.cpp
         metadata.name = data.get("general.name")
         metadata.author = data.get("general.author")
         metadata.version = data.get("general.version")
         metadata.url = data.get("general.url")
         metadata.description = data.get("general.description")
         metadata.license = data.get("general.license")
-        metadata.source_url = data.get("general.source_url")
-        metadata.source_hf_repo = data.get("general.source_hf_repo")
+        metadata.source_url = data.get("general.source.url")
+        metadata.source_hf_repo = data.get("general.source.huggingface.repository")
 
         return metadata
 
