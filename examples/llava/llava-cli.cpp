@@ -272,6 +272,15 @@ static void llama_log_callback_logTee(ggml_log_level level, const char * text, v
     LOG_TEE("%s", text);
 }
 
+static std::string replaceWithN(std::string& input) {
+    size_t pos = 0;
+    while ((pos = input.find("\\n", pos)) != std::string::npos) {
+        input.replace(pos, 2, "\n"); 
+        pos += 1; 
+    }
+    return input;
+}
+
 int main(int argc, char ** argv) {
     ggml_time_init();
 
@@ -308,8 +317,9 @@ int main(int argc, char ** argv) {
             std::cerr << "error: failed to load image " << image << ". Terminating\n\n";
             return 1;
         }
-
+        
         // process the prompt
+        params.prompt = replaceWithN(params.prompt);
         process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
         llama_print_timings(ctx_llava->ctx_llama);
