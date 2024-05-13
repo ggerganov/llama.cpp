@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import jinja2
+import jinja2.sandbox
 
 # Necessary to load the local gguf package
 if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
@@ -46,7 +47,10 @@ def get_chat_template(model_file: str) -> str:
 
 
 def render_chat_template(
-    chat_template: str, bos_token: str, eos_token: str, render_template: bool = False
+    chat_template: str,
+    bos_token: str,
+    eos_token: str,
+    render_template: bool = False,
 ) -> str:
     """
     Display the chat template to standard output, optionally formatting it using Jinja2.
@@ -59,8 +63,8 @@ def render_chat_template(
 
     if render_template:
         # Render the formatted template using Jinja2 with a context that includes 'bos_token' and 'eos_token'
-        env = jinja2.Environment(
-            loader=jinja2.BaseLoader(), trim_blocks=True, lstrip_blocks=True
+        env = jinja2.sandbox.ImmutableSandboxedEnvironment(
+            trim_blocks=True, lstrip_blocks=True
         )
         template = env.from_string(chat_template)
 
@@ -131,9 +135,12 @@ def main():
 
     chat_template = get_chat_template(args.model_file)
     rendered_template = render_chat_template(
-        chat_template, args.bos, args.eos, render_template=args.render_template
+        chat_template,
+        args.bos,
+        args.eos,
+        render_template=args.render_template,
     )
-    print(rendered_template)
+    print(rendered_template)  # noqa: NP100
 
 
 if __name__ == "__main__":
