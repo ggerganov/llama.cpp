@@ -578,10 +578,15 @@ inline bool chaton_tmpl_apply_ex(
         }
         cp.add_part(ChatParts::N, content);
         if (role == K_SYSTEM) {
-            if (chaton_tmpl_getkey_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX)) {
+            if (cntSystem == 1) {
+                if (chaton_tmpl_getkey_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX)) {
+                    cp.add_part(ChatParts::S, suffix);
+                }
+                if (chaton_tmpl_getkey_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_END)) {
+                    cp.add_part(ChatParts::S, end);
+                }
+            } else {
                 cp.add_part(ChatParts::S, suffix);
-            }
-            if (chaton_tmpl_getkey_bool(tmpl, K_SYSTEMUSER_SYSTEM_HAS_END)) {
                 cp.add_part(ChatParts::S, end);
             }
         } else {
