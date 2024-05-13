@@ -2,79 +2,22 @@
 
 #include "ggml.h"
 #include "ggml-backend.h"
-#include <string>
-#include <memory>
-#ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  ifndef NOMINMAX
-#     define NOMINMAX
-#  endif
-#  include <windows.h>
-#  include <winsock2.h>
-#endif
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
-// cross-platform socket fd
-#ifdef _WIN32
-typedef SOCKET sockfd_t;
-#else
-typedef int sockfd_t;
-#endif
-
-// cross-platform socket
-struct socket_t {
-    sockfd_t fd;
-    socket_t(sockfd_t fd) : fd(fd) {}
-    ~socket_t();
-};
-
-
-// ggml_tensor is serialized into rpc_tensor
-struct rpc_tensor {
-    uint64_t id;
-    uint32_t type;
-    uint64_t buffer;
-    uint32_t ne[GGML_MAX_DIMS];
-    uint32_t nb[GGML_MAX_DIMS];
-    uint32_t op;
-    int32_t  op_params[GGML_MAX_OP_PARAMS / sizeof(int32_t)];
-    int32_t  flags;
-    uint64_t src[GGML_MAX_SRC];
-    uint64_t view_src;
-    uint64_t view_offs;
-    uint64_t data;
-    char name[GGML_MAX_NAME];
-};
-
-// RPC commands
-enum rpc_cmd {
-    ALLOC_BUFFER = 0,
-    GET_ALIGNMENT,
-    GET_MAX_SIZE,
-    BUFFER_GET_BASE,
-    FREE_BUFFER,
-    BUFFER_CLEAR,
-    SET_TENSOR,
-    GET_TENSOR,
-    COPY_TENSOR,
-    GRAPH_COMPUTE,
-    GET_DEVICE_MEMORY,
-};
-
 #define GGML_RPC_MAX_SERVERS       16
 
 // backend API
-GGML_API GGML_CALL ggml_backend_t ggml_backend_rpc_init(const std::string & endpoint);
+GGML_API GGML_CALL ggml_backend_t ggml_backend_rpc_init(const char * endpoint);
 GGML_API GGML_CALL bool ggml_backend_is_rpc(ggml_backend_t backend);
 
-GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const std::string & endpoint);
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint);
 
-GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const std::string & endpoint, size_t * free, size_t * total);
+GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const char * endpoint, size_t * free, size_t * total);
 
-GGML_API GGML_CALL void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t free_mem, size_t total_mem);
+GGML_API GGML_CALL void start_rpc_server(ggml_backend_t backend, const char * endpoint, size_t free_mem, size_t total_mem);
 
 #ifdef  __cplusplus
 }

@@ -4,9 +4,18 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
-#ifndef _WIN32
+#ifdef _WIN32
+#  define WIN32_LEAN_AND_MEAN
+#  ifndef NOMINMAX
+#     define NOMINMAX
+#  endif
+#  include <windows.h>
+#  include <winsock2.h>
+#else
+#  include <arpa/inet.h>
 #  include <sys/socket.h>
 #  include <sys/types.h>
 #  include <netinet/in.h>
@@ -26,8 +35,56 @@
 #endif
 
 #ifdef _WIN32
+typedef SOCKET sockfd_t;
 using ssize_t = __int64;
+#else
+typedef int sockfd_t;
 #endif
+
+// cross-platform socket
+struct socket_t {
+    sockfd_t fd;
+    socket_t(sockfd_t fd) : fd(fd) {}
+    ~socket_t() {
+#ifdef _WIN32
+        closesocket(this->fd);
+#else
+        close(this->fd);
+#endif
+    }
+};
+
+// ggml_tensor is serialized into rpc_tensor
+struct rpc_tensor {
+    uint64_t id;
+    uint32_t type;
+    uint64_t buffer;
+    uint32_t ne[GGML_MAX_DIMS];
+    uint32_t nb[GGML_MAX_DIMS];
+    uint32_t op;
+    int32_t  op_params[GGML_MAX_OP_PARAMS / sizeof(int32_t)];
+    int32_t  flags;
+    uint64_t src[GGML_MAX_SRC];
+    uint64_t view_src;
+    uint64_t view_offs;
+    uint64_t data;
+    char name[GGML_MAX_NAME];
+};
+
+// RPC commands
+enum rpc_cmd {
+    ALLOC_BUFFER = 0,
+    GET_ALIGNMENT,
+    GET_MAX_SIZE,
+    BUFFER_GET_BASE,
+    FREE_BUFFER,
+    BUFFER_CLEAR,
+    SET_TENSOR,
+    GET_TENSOR,
+    COPY_TENSOR,
+    GRAPH_COMPUTE,
+    GET_DEVICE_MEMORY,
+};
 
 // RPC data structures
 
@@ -59,14 +116,6 @@ struct ggml_backend_rpc_buffer_context {
 
 // RPC helper functions
 
-socket_t::~socket_t() {
-#ifdef _WIN32
-    closesocket(this->fd);
-#else
-    close(this->fd);
-#endif
-}
-
 static std::shared_ptr<socket_t> make_socket(sockfd_t fd) {
 #ifdef _WIN32
     if (fd == INVALID_SOCKET) {
@@ -80,6 +129,13 @@ static std::shared_ptr<socket_t> make_socket(sockfd_t fd) {
     return std::make_shared<socket_t>(fd);
 }
 
+static bool set_no_delay(sockfd_t sockfd) {
+    int flag = 1;
+    // set TCP_NODELAY to disable Nagle's algorithm
+    int ret = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
+    return ret >= 0;
+}
+
 static std::shared_ptr<socket_t> socket_connect(const char * host, int port) {
     struct sockaddr_in addr;
     auto sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -87,10 +143,8 @@ static std::shared_ptr<socket_t> socket_connect(const char * host, int port) {
     if (sock_ptr == nullptr) {
         return nullptr;
     }
-    // set TCP_NODELAY to disable Nagle's algorithm
-    int flag = 1;
-    int ret = setsockopt(sock_ptr->fd, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
-    if (ret < 0) {
+    if (!set_no_delay(sockfd)) {
+        fprintf(stderr, "Failed to set TCP_NODELAY\n");
         return nullptr;
     }
     addr.sin_family = AF_INET;
@@ -105,6 +159,40 @@ static std::shared_ptr<socket_t> socket_connect(const char * host, int port) {
         return nullptr;
     }
     return sock_ptr;
+}
+
+static std::shared_ptr<socket_t> socket_accept(sockfd_t srv_sockfd) {
+    auto client_socket_fd = accept(srv_sockfd, NULL, NULL);
+    auto client_socket = make_socket(client_socket_fd);
+    if (client_socket == nullptr) {
+        return nullptr;
+    }
+    if (!set_no_delay(client_socket_fd)) {
+        fprintf(stderr, "Failed to set TCP_NODELAY\n");
+        return nullptr;
+    }
+    return client_socket;
+}
+
+static std::shared_ptr<socket_t> create_server_socket(const char * host, int port) {
+    auto sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    auto sock = make_socket(sockfd);
+    if (sock == nullptr) {
+        return nullptr;
+    }
+
+    struct sockaddr_in serv_addr;
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = inet_addr(host);
+    serv_addr.sin_port = htons(port);
+
+    if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+        return nullptr;
+    }
+    if (listen(sockfd, 1) < 0) {
+        return nullptr;
+    }
+    return sock;
 }
 
 static bool send_data(sockfd_t sockfd, const void * data, size_t size) {
@@ -128,6 +216,17 @@ static bool recv_data(sockfd_t sockfd, void * data, size_t size) {
         }
         bytes_recv += n;
     }
+    return true;
+}
+
+static bool parse_endpoint(const char * endpoint, std::string & host, int & port) {
+    std::string str(endpoint);
+    size_t pos = str.find(':');
+    if (pos == std::string::npos) {
+        return false;
+    }
+    host = str.substr(0, pos);
+    port = std::stoi(str.substr(pos + 1));
     return true;
 }
 
@@ -244,7 +343,7 @@ static ggml_tensor * deserialize_tensor(struct ggml_context * ctx, const rpc_ten
     }
     result->flags = tensor->flags;
     result->data = reinterpret_cast<void *>(tensor->data);
-    snprintf(result->name, GGML_MAX_NAME, "%s", tensor->name);
+    ggml_set_name(result, tensor->name);
     return result;
 }
 
@@ -259,7 +358,7 @@ GGML_CALL static void ggml_backend_rpc_buffer_init_tensor(ggml_backend_buffer_t 
 GGML_CALL static void ggml_backend_rpc_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
     ggml_backend_rpc_buffer_context * ctx = (ggml_backend_rpc_buffer_context *)buffer->context;
     // input serialization format: | rpc_tensor | offset (8 bytes) | data (size bytes) |
-    int input_size = sizeof(rpc_tensor) + sizeof(uint64_t) + size;
+    size_t input_size = sizeof(rpc_tensor) + sizeof(uint64_t) + size;
     std::vector<uint8_t> input(input_size, 0);
     rpc_tensor rpc_tensor = serialize_tensor(tensor);
     memcpy(input.data(), &rpc_tensor, sizeof(rpc_tensor));
@@ -530,14 +629,15 @@ static ggml_backend_i ggml_backend_rpc_interface = {
 
 static std::unordered_map<std::string, ggml_backend_t> instances;
 
-GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const std::string & endpoint) {
+GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint) {
     ggml_backend_t backend = ggml_backend_rpc_init(endpoint);
     return backend != nullptr ? ggml_backend_rpc_get_default_buffer_type(backend) : nullptr;
 }
 
-GGML_CALL ggml_backend_t ggml_backend_rpc_init(const std::string & endpoint) {
-    if (instances.find(endpoint) != instances.end()) {
-        return instances[endpoint];
+GGML_CALL ggml_backend_t ggml_backend_rpc_init(const char * endpoint) {
+    std::string endpoint_str(endpoint);
+    if (instances.find(endpoint_str) != instances.end()) {
+        return instances[endpoint_str];
     }
 #ifdef _WIN32
     {
@@ -548,11 +648,12 @@ GGML_CALL ggml_backend_t ggml_backend_rpc_init(const std::string & endpoint) {
         }
     }
 #endif
-    GGML_PRINT_DEBUG("Connecting to %s\n", endpoint.c_str());
-    // split the endpoint into host and port
-    size_t pos = endpoint.find(":");
-    std::string host = endpoint.substr(0, pos);
-    int port = std::stoi(endpoint.substr(pos + 1));
+    GGML_PRINT_DEBUG("Connecting to %s\n", endpoint);
+    std::string host;
+    int port;
+    if (!parse_endpoint(endpoint, host, port)) {
+        return nullptr;
+    }
     auto sock = socket_connect(host.c_str(), port);
     if (sock == nullptr) {
         return nullptr;
@@ -607,7 +708,7 @@ static void get_device_memory(const std::shared_ptr<socket_t> & sock, size_t * f
     *total = total_mem;
 }
 
-GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const std::string & endpoint, size_t * free, size_t * total) {
+GGML_API GGML_CALL void ggml_backend_rpc_get_device_memory(const char * endpoint, size_t * free, size_t * total) {
     ggml_backend_t backend = ggml_backend_rpc_init(endpoint);
     if (backend == nullptr) {
         *free = 0;
@@ -781,7 +882,7 @@ static void rpc_graph_compute(ggml_backend_t backend, const std::vector<uint8_t>
     const rpc_tensor * tensors = (const rpc_tensor *)(input.data() + sizeof(n_nodes) + n_nodes*sizeof(uint64_t) + sizeof(n_tensors));
     GGML_PRINT_DEBUG("[%s] n_nodes: %u, n_tensors: %u\n", __func__, n_nodes, n_tensors);
 
-    static size_t buf_size = ggml_tensor_overhead()*(n_nodes + n_tensors) + ggml_graph_overhead();
+    static size_t buf_size = ggml_tensor_overhead()*(n_nodes + n_tensors) + ggml_graph_overhead_custom(n_nodes, false);
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_size,
         /*.mem_buffer =*/ NULL,
@@ -805,7 +906,7 @@ static void rpc_graph_compute(ggml_backend_t backend, const std::vector<uint8_t>
     ggml_free(ctx);
 }
 
-void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t free_mem, size_t total_mem) {
+static void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t free_mem, size_t total_mem) {
     while (true) {
         uint8_t cmd;
         if (!recv_data(sockfd, &cmd, 1)) {
@@ -871,7 +972,7 @@ void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t free_mem, 
             }
             default: {
                 fprintf(stderr, "Unknown command: %d\n", cmd);
-                break;
+                return;
             }
         }
         uint64_t output_size = output.size();
@@ -882,4 +983,40 @@ void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t free_mem, 
             break;
         }
     }
+}
+
+void start_rpc_server(ggml_backend_t backend, const char * endpoint, size_t free_mem, size_t total_mem) {
+    std::string host;
+    int port;
+    if (!parse_endpoint(endpoint, host, port)) {
+        return;
+    }
+#ifdef _WIN32
+    {
+        WSADATA wsaData;
+        int res = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        if (res != 0) {
+            fprintf(stderr, "WSAStartup failed: %d\n", res);
+            return 1;
+        }
+    }
+#endif
+    auto server_socket = create_server_socket(host.c_str(), port);
+    if (server_socket == nullptr) {
+        fprintf(stderr, "Failed to create server socket\n");
+        return;
+    }
+    while (true) {
+        auto client_socket = socket_accept(server_socket->fd);
+        if (client_socket == nullptr) {
+            fprintf(stderr, "Failed to accept client connection\n");
+            return;
+        }
+        printf("Accepted client connection, free_mem=%zu, total_mem=%zu\n", free_mem, total_mem);
+        rpc_serve_client(backend, client_socket->fd, free_mem, total_mem);
+        printf("Client connection closed\n");
+    }
+#ifdef _WIN32
+    WSACleanup();
+#endif
 }

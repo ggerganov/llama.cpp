@@ -2279,7 +2279,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
 
 #ifdef GGML_USE_RPC
     std::string endpoint = model.rpc_servers[gpu];
-    buft = ggml_backend_rpc_buffer_type(endpoint);
+    buft = ggml_backend_rpc_buffer_type(endpoint.c_str());
 #elif defined(GGML_USE_METAL)
     buft = ggml_backend_metal_buffer_type();
 #elif defined(GGML_USE_CUDA)
@@ -2348,7 +2348,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
     size_t total;
     size_t free;
     std::string endpoint = model.rpc_servers[device];
-    ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
+    ggml_backend_rpc_get_device_memory(endpoint.c_str(), &free, &total);
     return free;
 #elif defined(GGML_USE_CUDA)
     size_t total;
@@ -15727,7 +15727,7 @@ struct llama_context * llama_new_context_with_model(
         // initialize backends
 #if defined(GGML_USE_RPC)
         for (auto & server : model->rpc_servers) {
-            ggml_backend_t backend = ggml_backend_rpc_init(server);
+            ggml_backend_t backend = ggml_backend_rpc_init(server.c_str());
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to connect RPC backend to %s\n", __func__, server.c_str());
                 llama_free(ctx);
