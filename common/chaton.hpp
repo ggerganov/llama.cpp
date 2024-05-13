@@ -94,7 +94,7 @@
  * 
  * The fields that make up a given chat-handshake-template-standard include
  * 
- * * global-> begin & end
+ * * global -> begin & end
  * 
  * * system -> begin, prefix, suffix & end
  * 
@@ -796,20 +796,20 @@ inline bool _chaton_meta_dump(std::string &tmpl) {
         bool userHasBegin = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN });
         bool userHasPrefix = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX });
 
-        LOGXLN("INFO:%s:%s:%s", __func__, "global->begin", globalBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "global->end", globalEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->begin", systemBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->prefix", systemPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->suffix", systemSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system->end", systemEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->begin", userBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->prefix", userPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->suffix", userSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user->end", userEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->begin", assistantBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->prefix", assistantPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->suffix", assistantSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant->end", assistantEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "global-begin", globalBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "global-end", globalEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-begin", systemBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-prefix", systemPrefix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-suffix", systemSuffix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-end", systemEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-begin", userBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-prefix", userPrefix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-suffix", userSuffix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-end", userEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-begin", assistantBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-prefix", assistantPrefix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-suffix", assistantSuffix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-end", assistantEnd.c_str());
         LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, reversePrompt.c_str());
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, systemHasSuffix);
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, systemHasEnd);
@@ -817,10 +817,10 @@ inline bool _chaton_meta_dump(std::string &tmpl) {
         LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, userHasPrefix);
 
         if (!userEnd.empty()) {
-            LOG_TEELN("WARN:%s:User->End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
+            LOG_TEELN("WARN:%s:User-End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
         }
         if (!assistantBegin.empty()) {
-            LOG_TEELN("WARN:%s:Assistant->Begin seems to be set to [%s], do cross check if this is proper and needed", __func__, assistantBegin.c_str());
+            LOG_TEELN("WARN:%s:Assistant-Begin seems to be set to [%s], do cross check if this is proper and needed", __func__, assistantBegin.c_str());
         }
     }
     return true;
