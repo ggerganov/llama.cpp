@@ -8241,9 +8241,6 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask(false);
 
-        // positions of the tokens in the KV cache
-        struct ggml_tensor * KQ_pos = build_inp_KQ_pos(false);
-
         // iterate layers
         for (int il = 0; il < n_layer; ++il) {
             struct ggml_tensor * cur = inpL;
@@ -8385,7 +8382,6 @@ struct llm_build_context {
 
             // output layer norm
             cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].layer_out_norm, model.layers[il].layer_out_norm_b, LLM_NORM, cb, il);
-
 
             // input for next layer
             inpL = cur;
@@ -11506,7 +11502,7 @@ static int llama_decode_internal(
         }
 
         // non-causal masks do not use the KV cache
-        if (hparams.causal_attn || model.arch == LLM_ARCH_JINA_BERT_V2) {
+        if (hparams.causal_attn) {
             llama_kv_cache_update(&lctx);
 
             // if we have enough unused cells before the current head ->
@@ -12350,10 +12346,14 @@ struct llm_tokenizer_bpe {
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH:
                         //TODO: Apply GPT2 + lowercasing
-                        word_collection = unicode_regex_split(text, {
-                            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-                        });
-                        //TODO: Apply lowercasing
+                        {
+                            std::string lowercase_text = text;
+                            std::transform(lowercase_text.begin(), lowercase_text.end(), lowercase_text.begin(), [](unsigned char c){ return std::tolower(c); });
+                            word_collection = unicode_regex_split(lowercase_text, {
+                                "",
+                            });
+                        }
+                        break;
                     default:
                         // default regex for BPE tokenization pre-processing
                         word_collection = unicode_regex_split(text, {

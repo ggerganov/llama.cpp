@@ -4,7 +4,6 @@
 #include <map>
 #include <utility>
 #include <vector>
-#include <unordered_map>
 
 extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_number;
 extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_letter;
@@ -16,5 +15,3 @@ extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_symbol;
 extern const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_control;
 extern const std::multimap<uint32_t, uint32_t>          unicode_map_nfd;
 extern const std::map<char32_t, char32_t>               unicode_map_lowercase;
-extern const std::unordered_map<uint32_t, std::vector<uint32_t>> unicode_decompose_map;
-extern const std::unordered_map<uint32_t, uint32_t> unicode_canonical_class;

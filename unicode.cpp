@@ -14,8 +14,6 @@
 #include <vector>
 #include <locale>
 #include <codecvt>
-#include <unicode/unistr.h>
-#include <unicode/unorm2.h>
 
 static std::string unicode_cpts_to_utf8(const std::vector<uint32_t> & cps) {
     std::string result;
@@ -590,68 +588,6 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
     throw std::invalid_argument("invalid codepoint");
 }
 
-// Function to recursively decompose a string
-std::vector<uint32_t> decompose_cpts(const std::vector<uint32_t> & cpts) {
-    std::vector<uint32_t> result;
-    for (const auto& cpt : cpts) {
-        auto it = unicode_decompose_map.find(cpt);
-        if (it != unicode_decompose_map.end()) {
-            for (const auto& decomp: it->second) {
-                const auto & inner_result = decompose_cpts({decomp});
-                result.insert(result.end(), inner_result.begin(), inner_result.end());
-            }
-        } else {
-            result.push_back(cpt);
-        }
-    }
-    return result;
-}
-
-// Function to sort subsequences based on canonical class
-std::vector<uint32_t> sort_by_canonical_class(const std::vector<uint32_t> & cpts) {
-    std::vector<uint32_t> subsequence;
-    std::vector<uint32_t> result;
-    auto compareByCanonicalClass = [&](const uint32_t& a, const uint32_t& b) {
-        auto cc_a_it = unicode_canonical_class.find(a);
-        if (cc_a_it != unicode_canonical_class.end()) {
-            auto cc_b_it = unicode_canonical_class.find(b);
-            if (cc_b_it != unicode_canonical_class.end()) {
-                return cc_a_it->second < cc_b_it->second;
-            }
-
-        }
-        return false;
-    };
-
-    for (const auto& cpt : cpts) {
-        auto it = unicode_canonical_class.find(cpt);
-        if (it != unicode_canonical_class.end()) {
-            if (it->second > 0) {
-                subsequence.push_back(cpt);
-            } else {
-                if (!subsequence.empty()) {
-                    sort(subsequence.begin(), subsequence.end(), compareByCanonicalClass);
-                    for (const auto& codepoint : subsequence) {
-                        result.push_back(codepoint);
-                    }
-                    subsequence.clear();
-                }
-               
-                result.push_back(cpt);
-            }
-        }
-    }
-
-    if (!subsequence.empty()) {
-        sort(subsequence.begin(), subsequence.end(), compareByCanonicalClass);
-        for (const auto& codepoint : subsequence) {
-            result.push_back(codepoint);
-        }
-    }
-
-    return result;
-}
-
 std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
     std::vector<uint32_t> result;
     result.reserve(cpts.size());
@@ -664,14 +600,6 @@ std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & c
         }
     }
     return result;
-}
-
-
-std::vector<uint32_t> unicode_cpts_normalize_nfc(const std::vector<uint32_t> & cpts) {
-    const auto &decomposed_cpts = decompose_cpts(cpts);
-    const auto &sorted_sequence = sort_by_canonical_class(decomposed_cpts);
-    //TODO: Do canonical composition
-    return sorted_sequence;
 }
 
 std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
