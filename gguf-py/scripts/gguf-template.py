@@ -69,6 +69,7 @@ def display_chat_template(chat_template: str, format_template: bool = False):
             messages=[
                 {"role": "system", "content": "I am a helpful assistant."},
                 {"role": "user", "content": "Hello!"},
+                {"role": "assistant", "content": "Hello! How may I assist you today?"},
             ],
             bos_token="[BOS]",
             eos_token="[EOS]",
