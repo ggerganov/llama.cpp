@@ -531,6 +531,7 @@ enum llm_tensor {
     LLM_TENSOR_TIME_MIX_RECEPTANCE,
     LLM_TENSOR_TIME_MIX_GATE,
     LLM_TENSOR_TIME_MIX_LN,
+    LLM_TENSOR_TIME_MIX_OUTPUT,
     LLM_TENSOR_ATTN_Q_A,
     LLM_TENSOR_ATTN_Q_B,
     LLM_TENSOR_ATTN_KV_A_MQA,
@@ -1372,6 +1373,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_TIME_MIX_RECEPTANCE, "blk.%d.time_mix.receptance" },
             { LLM_TENSOR_TIME_MIX_GATE,       "blk.%d.time_mix.gate" },
             { LLM_TENSOR_TIME_MIX_LN,         "blk.%d.time_mix.ln" },
+            { LLM_TENSOR_TIME_MIX_OUTPUT,     "blk.%d.time_mix.output" },
         },
     },
     {
@@ -2551,6 +2553,7 @@ struct llama_layer {
 
     struct ggml_tensor * time_mix_ln;
     struct ggml_tensor * time_mix_ln_b;
+    struct ggml_tensor * time_mix_output;
 
     // long rope factors
     struct ggml_tensor * rope_long  = nullptr;
@@ -8313,6 +8316,7 @@ static bool llm_load_tensors(
 
                         layer.time_mix_ln = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LN, "weight", i), {n_embd});
                         layer.time_mix_ln_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LN, "bias", i), {n_embd});
+                        layer.time_mix_output = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_OUTPUT, "weight", i), {n_embd, n_embd});
                     }
 
                 }
