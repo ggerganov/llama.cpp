@@ -2412,9 +2412,9 @@ extern "C" {
 
     typedef struct {
         const char      * type_name;
+        bool              is_quantized;
         int               blck_size;
         size_t            type_size;
-        bool              is_quantized;
         ggml_to_float_t   to_float;
         ggml_from_float_t from_float;
         ggml_from_float_t from_float_reference;

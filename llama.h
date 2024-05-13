@@ -190,8 +190,6 @@ extern "C" {
     // - logits : if zero, the logits (and/or the embeddings) for the respective token will not be output
     //
     typedef struct llama_batch {
-        int32_t n_tokens;
-
         llama_token  *  token;
         float        *  embd;
         llama_pos    *  pos;
@@ -199,6 +197,7 @@ extern "C" {
         llama_seq_id ** seq_id;
         int8_t       *  logits; // TODO: rename this to "output"
 
+        int32_t         n_tokens;
         // NOTE: helpers for smooth API transition - can be deprecated in the future
         //       for future-proof code, use the above fields instead and ignore everything below
         //
@@ -230,15 +229,6 @@ extern "C" {
     };
 
     struct llama_model_params {
-        int32_t n_gpu_layers; // number of layers to store in VRAM
-        enum llama_split_mode split_mode; // how to split the model across multiple GPUs
-
-        // main_gpu interpretation depends on split_mode:
-        // LLAMA_SPLIT_NONE: the GPU that is used for the entire model
-        // LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results
-        // LLAMA_SPLIT_LAYER: ignored
-        int32_t main_gpu;
-
         // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
         const float * tensor_split;
 
@@ -252,6 +242,15 @@ extern "C" {
 
         // override key-value pairs of the model meta data
         const struct llama_model_kv_override * kv_overrides;
+
+        int32_t n_gpu_layers; // number of layers to store in VRAM
+        enum llama_split_mode split_mode; // how to split the model across multiple GPUs
+
+        // main_gpu interpretation depends on split_mode:
+        // LLAMA_SPLIT_NONE: the GPU that is used for the entire model
+        // LLAMA_SPLIT_ROW: the GPU that is used for small tensors and intermediate results
+        // LLAMA_SPLIT_LAYER: ignored
+        int32_t main_gpu;
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool vocab_only;    // only load the vocabulary, no weights

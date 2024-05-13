@@ -334,8 +334,8 @@ struct hash_node {
     int n_children;
     int n_views;
     int buffer_id;
-    size_t offset; // offset within the buffer
     bool allocated;
+    size_t offset; // offset within the buffer
 };
 
 struct tensor_alloc {

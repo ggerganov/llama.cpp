@@ -1072,13 +1072,13 @@ struct server_context {
             for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
                 const int32_t n_tokens = std::min(params.n_batch, batch.n_tokens - i);
                 llama_batch batch_view = {
-                    n_tokens,
                     batch.token    + i,
                     nullptr,
                     batch.pos      + i,
                     batch.n_seq_id + i,
                     batch.seq_id   + i,
                     batch.logits   + i,
+                    n_tokens,
                     0, 0, 0, // unused
                 };
 
@@ -2195,13 +2195,13 @@ struct server_context {
             }
 
             llama_batch batch_view = {
-                n_tokens,
                 batch.token    + i,
                 nullptr,
                 batch.pos      + i,
                 batch.n_seq_id + i,
                 batch.seq_id   + i,
                 batch.logits   + i,
+                n_tokens,
                 0, 0, 0, // unused
             };
 
