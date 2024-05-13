@@ -475,13 +475,13 @@ class Model:
             res = "dbrx"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
-            res = "jina-en"
+            res = "jina-v2-en"
         if chkhsh == "171aeeedd6fb548d418a7461d053f11b6f1f1fc9b387bd66640d28a4b9f5c643":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-es
-            res = "jina-es"
+            res = "jina-v2-es"
         if chkhsh == "27949a2493fc4a9f53f5b9b029c82689cfbe5d3a1929bb25e043089e28466de6":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
-            res = "jina-de"
+            res = "jina-v2-de"
 
         if res is None:
             logger.warning("\n")
