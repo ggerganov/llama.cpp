@@ -1,5 +1,5 @@
 """
-gguf_chat_template.py - example file to extract the chat template from the models metadata
+gguf-template.py - example file to extract the chat template from the models metadata
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def display_chat_template(chat_template: str, format_template: bool = False):
 
 
 # Example usage:
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser(
         description="Extract chat template from a GGUF model file"
     )
