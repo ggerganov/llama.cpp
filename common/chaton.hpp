@@ -318,6 +318,60 @@ public:
     }
 
     /**
+     * Check if all expected keys/fields are present wrt the specified chat-template.
+     * If any key/field is missing, expect a exception.
+    */
+    bool tmpl_basiccheck(const std::string &tmpl, std::stringstream &ss) {
+        std::string globalBegin = get_value<std::string>(tmpl, { K_GLOBAL, K_BEGIN });
+        std::string globalEnd = get_value<std::string>(tmpl, { K_GLOBAL, K_END });
+        std::string systemBegin = get_value<std::string>(tmpl, { K_SYSTEM, K_BEGIN });
+        std::string systemPrefix = get_value<std::string>(tmpl, { K_SYSTEM, K_PREFIX });
+        std::string systemSuffix = get_value<std::string>(tmpl, { K_SYSTEM, K_SUFFIX });
+        std::string systemEnd = get_value<std::string>(tmpl, { K_SYSTEM, K_END });
+        std::string userBegin = get_value<std::string>(tmpl, { K_USER, K_BEGIN });
+        std::string userPrefix = get_value<std::string>(tmpl, { K_USER, K_PREFIX });
+        std::string userSuffix = get_value<std::string>(tmpl, { K_USER, K_SUFFIX });
+        std::string userEnd = get_value<std::string>(tmpl, { K_USER, K_END });
+        std::string assistantBegin = get_value<std::string>(tmpl, { K_ASSISTANT, K_BEGIN });
+        std::string assistantPrefix = get_value<std::string>(tmpl, { K_ASSISTANT, K_PREFIX });
+        std::string assistantSuffix = get_value<std::string>(tmpl, { K_ASSISTANT, K_SUFFIX });
+        std::string assistantEnd = get_value<std::string>(tmpl, { K_ASSISTANT, K_END });
+        std::string reversePrompt = get_value<std::string>(tmpl, { K_REVERSE_PROMPT });
+        bool systemHasSuffix = get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX });
+        bool systemHasEnd = get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_END });
+        bool userHasBegin = get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN });
+        bool userHasPrefix = get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX });
+
+        LOGXLN("INFO:%s:%s:%s", __func__, "global-begin", globalBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "global-end", globalEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-begin", systemBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-prefix", systemPrefix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-suffix", systemSuffix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "system-end", systemEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-begin", userBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-prefix", userPrefix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-suffix", userSuffix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "user-end", userEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-begin", assistantBegin.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-prefix", assistantPrefix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-suffix", assistantSuffix.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-end", assistantEnd.c_str());
+        LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, reversePrompt.c_str());
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, systemHasSuffix);
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, systemHasEnd);
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, userHasBegin);
+        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, userHasPrefix);
+
+        if (!userEnd.empty()) {
+            LOG_TEELN("WARN:%s:User-End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
+        }
+        if (!assistantBegin.empty()) {
+            LOG_TEELN("WARN:%s:Assistant-Begin seems to be set to [%s], do cross check if this is proper and needed", __func__, assistantBegin.c_str());
+        }
+
+    }
+
+    /**
      * For the specified chat-template, get the value associated with the specified key/field.
     */
     template <typename SupportedDataType>
@@ -790,59 +844,14 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
  */
 inline bool _chaton_meta_dump(std::string &tmpl) {
     if (!tmpl.empty()) {
-        if (!gCT.group_exists(tmpl)) {
+        if (!gCT.tmpl_exists(tmpl)) {
             LOGXLN("ERRR:%s:Specified template-id [%s] not found", __func__, tmpl.c_str());
             return false;
         }
     }
     LOGXLN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump(tmpl, "INFO:ChatOnMetaDump:").c_str());
     if (!tmpl.empty()) {
-        std::string globalBegin = gCT.get_value<std::string>(tmpl, { K_GLOBAL, K_BEGIN });
-        std::string globalEnd = gCT.get_value<std::string>(tmpl, { K_GLOBAL, K_END });
-        std::string systemBegin = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_BEGIN });
-        std::string systemPrefix = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_PREFIX });
-        std::string systemSuffix = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_SUFFIX });
-        std::string systemEnd = gCT.get_value<std::string>(tmpl, { K_SYSTEM, K_END });
-        std::string userBegin = gCT.get_value<std::string>(tmpl, { K_USER, K_BEGIN });
-        std::string userPrefix = gCT.get_value<std::string>(tmpl, { K_USER, K_PREFIX });
-        std::string userSuffix = gCT.get_value<std::string>(tmpl, { K_USER, K_SUFFIX });
-        std::string userEnd = gCT.get_value<std::string>(tmpl, { K_USER, K_END });
-        std::string assistantBegin = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_BEGIN });
-        std::string assistantPrefix = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_PREFIX });
-        std::string assistantSuffix = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_SUFFIX });
-        std::string assistantEnd = gCT.get_value<std::string>(tmpl, { K_ASSISTANT, K_END });
-        std::string reversePrompt = gCT.get_value<std::string>(tmpl, { K_REVERSE_PROMPT });
-        bool systemHasSuffix = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX });
-        bool systemHasEnd = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_SYSTEM_HAS_END });
-        bool userHasBegin = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN });
-        bool userHasPrefix = gCT.get_value<bool>(tmpl, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX });
-
-        LOGXLN("INFO:%s:%s:%s", __func__, "global-begin", globalBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "global-end", globalEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-begin", systemBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-prefix", systemPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-suffix", systemSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "system-end", systemEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-begin", userBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-prefix", userPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-suffix", userSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "user-end", userEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-begin", assistantBegin.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-prefix", assistantPrefix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-suffix", assistantSuffix.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, "assistant-end", assistantEnd.c_str());
-        LOGXLN("INFO:%s:%s:%s", __func__, K_REVERSE_PROMPT, reversePrompt.c_str());
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_SUFFIX, systemHasSuffix);
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_SYSTEM_HAS_END, systemHasEnd);
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_BEGIN, userHasBegin);
-        LOGXLN("INFO:%s:%s:%d", __func__, K_SYSTEMUSER_1ST_USER_HAS_PREFIX, userHasPrefix);
-
-        if (!userEnd.empty()) {
-            LOG_TEELN("WARN:%s:User-End seems to be set to [%s], do cross check if this is proper and needed", __func__, userEnd.c_str());
-        }
-        if (!assistantBegin.empty()) {
-            LOG_TEELN("WARN:%s:Assistant-Begin seems to be set to [%s], do cross check if this is proper and needed", __func__, assistantBegin.c_str());
-        }
+        gCT.tmpl_basiccheck(tmpl);
     }
     return true;
 }
