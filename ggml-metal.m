@@ -1378,7 +1378,7 @@ static enum ggml_status ggml_metal_graph_compute(
                         const bool use_f16 = (src1 && src1->type == GGML_TYPE_F16);
 
                         if (ne00%4 == 0) {
-                            while (nth < ne00/4 && nth < 256) {
+                            while (nth < ne00/4 && nth*ne01*ne02*ne03 < 256) {
                                 nth *= 2;
                             }
                             if (use_f16) {
@@ -1387,7 +1387,7 @@ static enum ggml_status ggml_metal_graph_compute(
                                 pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SOFT_MAX_F32_4].pipeline;
                             }
                         } else {
-                            while (nth < ne00 && nth < 1024) {
+                            while (nth < ne00 && nth*ne01*ne02*ne03 < 256) {
                                 nth *= 2;
                             }
                             if (use_f16) {
