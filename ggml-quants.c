@@ -4838,18 +4838,18 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
 #if defined(__ARM_FEATURE_MATMUL_INT8)
     if (nrc == 2) {
-        const block_q4_0 * restrict vx0 = vx;
-        const block_q4_0 * restrict vx1 = (const block_q4_0 *) ((const uint8_t*)vx + bx);
+        const block_q8_0 * restrict vx0 = vx;
+        const block_q8_0 * restrict vx1 = (const block_q8_0 *) ((const uint8_t*)vx + bx);
         const block_q8_0 * restrict vy0 = vy;
         const block_q8_0 * restrict vy1 = (const block_q8_0 *) ((const uint8_t*)vy + by);
 
         float32x4_t sumv0 = vdupq_n_f32(0.0f);
 
         for (int i = 0; i < nb; i++) {
-            const block_q4_0 * restrict b_x0 = &vx0[i];
+            const block_q8_0 * restrict b_x0 = &vx0[i];
             const block_q8_0 * restrict b_y0 = &vy0[i];
 
-            const block_q4_0 * restrict b_x1 = &vx1[i];
+            const block_q8_0 * restrict b_x1 = &vx1[i];
             const block_q8_0 * restrict b_y1 = &vy1[i];
 
             const int8x16_t x0_l = vld1q_s8((const int8_t*)b_x0->qs);
