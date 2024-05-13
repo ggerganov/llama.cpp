@@ -13,6 +13,7 @@ from string import ascii_letters, digits
 import numpy as np
 
 from .constants import (
+    GGML_QUANT_SIZES,
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
     GGUF_VERSION,
@@ -195,7 +196,7 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def add_tensor_info(
-        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype[np.float16] | np.dtype[np.float32],
+        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype,
         tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None,
     ) -> None:
         if self.state is not WriterState.EMPTY:
@@ -208,10 +209,6 @@ class GGUFWriter:
         encoded_name = name.encode("utf-8")
         self.ti_data += self._pack("Q", len(encoded_name))
         self.ti_data += encoded_name
-        n_dims = len(tensor_shape)
-        self.ti_data += self._pack("I", n_dims)
-        for i in range(n_dims):
-            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             if tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
@@ -231,6 +228,15 @@ class GGUFWriter:
                 raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
             dtype = raw_dtype
+            if tensor_dtype == np.uint8:
+                block_size, type_size = GGML_QUANT_SIZES[raw_dtype]
+                if tensor_shape[-1] % type_size != 0:
+                    raise ValueError(f"Quantized tensor row size ({tensor_shape[-1]}) is not a multiple of {dtype.name} type size ({type_size})")
+                tensor_shape = tuple(tensor_shape[:-1]) + (tensor_shape[-1] // type_size * block_size,)
+        n_dims = len(tensor_shape)
+        self.ti_data += self._pack("I", n_dims)
+        for i in range(n_dims):
+            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         self.ti_data += self._pack("I", dtype)
         self.ti_data += self._pack("Q", self.offset_tensor)
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
