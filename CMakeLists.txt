@@ -296,7 +296,7 @@ if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
         set(BLA_SIZEOF_INTEGER 8)
     endif()
 
@@ -431,7 +431,7 @@ if (LLAMA_CUDA)
 
         if (LLAMA_STATIC)
             if (WIN32)
-                # As of 12.3.1 CUDA Tookit for Windows does not offer a static cublas library
+                # As of 12.3.1 CUDA Toolkit for Windows does not offer a static cublas library
                 set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas CUDA::cublasLt)
             else ()
                 set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
@@ -1272,17 +1272,6 @@ install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
     FILES convert.py
-    PERMISSIONS
-        OWNER_READ
-        OWNER_WRITE
-        OWNER_EXECUTE
-        GROUP_READ
-        GROUP_EXECUTE
-        WORLD_READ
-        WORLD_EXECUTE
-    DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(
-    FILES convert-lora-to-ggml.py
     PERMISSIONS
         OWNER_READ
         OWNER_WRITE

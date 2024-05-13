@@ -1182,9 +1182,9 @@ static int ggml_backend_sched_backend_id_from_cur(ggml_backend_sched_t sched, st
 static char * fmt_size(size_t size) {
     static char buffer[128];
     if (size >= 1024*1024) {
-        sprintf(buffer, "%zuM", size/1024/1024);
+        snprintf(buffer, sizeof(buffer), "%zuM", size/1024/1024);
     } else {
-        sprintf(buffer, "%zuK", size/1024);
+        snprintf(buffer, sizeof(buffer), "%zuK", size/1024);
     }
     return buffer;
 }
