@@ -380,13 +380,13 @@ int main(int argc, char ** argv) {
     }
 
     // chaton mode
-    const auto chaton_assitant_prefix = ::llama_tokenize(ctx, chaton_tmpl_role_kv(params.chaton_template_id, K_ASSISTANT, {K_BEGIN, K_PREFIX}), false, true);
+    const auto chaton_assitant_prefix = ::llama_tokenize(ctx, chaton_tmpl_role_getkeys(params.chaton_template_id, K_ASSISTANT, {K_BEGIN, K_PREFIX}), false, true);
     if (params.chaton) {
         params.interactive = true; // may remove later, by requiring user to explicitly request interactive mode
         params.interactive_first = true;
-        params.input_prefix = chaton_tmpl_role_kv(params.chaton_template_id, K_USER, {K_BEGIN, K_PREFIX});
-        params.input_suffix = chaton_tmpl_role_kv(params.chaton_template_id, K_USER, {K_SUFFIX, K_END});
-        params.antiprompt.emplace_back(chaton_tmpl_kv(params.chaton_template_id, K_REVERSE_PROMPT));
+        params.input_prefix = chaton_tmpl_role_getkeys(params.chaton_template_id, K_USER, {K_BEGIN, K_PREFIX});
+        params.input_suffix = chaton_tmpl_role_getkeys(params.chaton_template_id, K_USER, {K_SUFFIX, K_END});
+        params.antiprompt.emplace_back(chaton_tmpl_getkey_str(params.chaton_template_id, K_REVERSE_PROMPT));
     }
 
     // enable interactive mode if interactive start is specified
