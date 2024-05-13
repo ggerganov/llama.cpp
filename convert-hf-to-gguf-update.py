@@ -77,7 +77,6 @@ models = [
     {"name": "mixtral-spm",    "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1", },
     {"name": "refact",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/smallcloudai/Refact-1_6-base", },
     {"name": "command-r",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/CohereForAI/c4ai-command-r-v01", },
-    {"name": "qwen",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen-7B", },
     {"name": "qwen2",          "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/Qwen/Qwen1.5-7B", },
     {"name": "olmo",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/allenai/OLMo-1.7-7B-hf", },
     {"name": "dbrx",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/databricks/dbrx-base", },
@@ -126,28 +125,11 @@ for model in models:
     logger.info(f"Downloading {name} to {model_name_or_path}")
 
     # model and repo urls are not the same
-    # url = "https://huggingface.co/Qwen/Qwen-tokenizer/raw/main/tokenizer.json"
-    if name == "qwen":  # qwen is an outlier and will raise a FileNotFoundError
-        # override the tokenizer path
-        model_tokenizer_path = f"{model_name_or_path}/qwen.tiktoken"
-        # fetch the qwens BPE tokenizer
-        download_file_with_auth(
-            url="https://huggingface.co/Qwen/Qwen-7B/raw/main/qwen.tiktoken",
-            token=token,
-            save_path=model_tokenizer_path
-        )
-        # fetch qwens tokenizer script; this is required.
-        download_file_with_auth(
-            url="https://huggingface.co/Qwen/Qwen-7B/raw/main/tokenization_qwen.py",
-            token=token,
-            save_path=f"{model_name_or_path}/tokenization_qwen.py"
-        )
-    else:  # Get the models tokenizer
-        download_file_with_auth(
-            url=f"{url_resolve}/tokenizer.json",
-            token=token,
-            save_path=model_tokenizer_path
-        )
+    download_file_with_auth(
+        url=f"{url_resolve}/tokenizer.json",
+        token=token,
+        save_path=model_tokenizer_path
+    )
 
     # Get the models hyper params
     download_file_with_auth(

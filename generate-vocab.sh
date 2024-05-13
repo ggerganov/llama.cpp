@@ -18,6 +18,9 @@ python3 convert-hf-to-gguf.py models/tokenizers/mixtral-bpe --outfile models/ggm
 python3 convert-hf-to-gguf.py models/tokenizers/mixtral-spm --outfile models/ggml-vocab-mixtral-spm.gguf --vocab-only
 python3 convert-hf-to-gguf.py models/tokenizers/refact --outfile models/ggml-vocab-refact.gguf --vocab-only
 python3 convert-hf-to-gguf.py models/tokenizers/command-r --outfile models/ggml-vocab-command-r.gguf --vocab-only
-python3 convert-hf-to-gguf.py models/tokenizers/qwen --outfile models/ggml-vocab-qwen.gguf --vocab-only
 python3 convert-hf-to-gguf.py models/tokenizers/qwen2 --outfile models/ggml-vocab-qwen2.gguf --vocab-only
 python3 convert-hf-to-gguf.py models/tokenizers/olmo --outfile models/ggml-vocab-olmo.gguf --vocab-only
+python3 convert-hf-to-gguf.py models/tokenizers/dbrx --outfile models/ggml-vocab-dbrx.gguf --vocab-only
+python3 convert-hf-to-gguf.py models/tokenizers/jina-en --outfile models/ggml-vocab-jina-en.gguf --vocab-only
+python3 convert-hf-to-gguf.py models/tokenizers/jina-es --outfile models/ggml-vocab-jina-es.gguf --vocab-only
+python3 convert-hf-to-gguf.py models/tokenizers/jina-de --outfile models/ggml-vocab-jina-de.gguf --vocab-only
