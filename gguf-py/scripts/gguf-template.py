@@ -45,9 +45,9 @@ def get_chat_template(model_file: str) -> str:
         return ""
 
 
-def display_chat_template(
+def render_chat_template(
     chat_template: str, bos_token: str, eos_token: str, render_template: bool = False
-):
+) -> str:
     """
     Display the chat template to standard output, optionally formatting it using Jinja2.
 
@@ -86,10 +86,10 @@ def display_chat_template(
                 eos_token=eos_token,
             )
 
-        print(formatted_template)
+        return formatted_template
     else:
         # Display the raw template
-        print(chat_template)
+        return chat_template
 
 
 # Example usage:
@@ -130,9 +130,10 @@ def main():
         logging.basicConfig(level=logging.INFO)
 
     chat_template = get_chat_template(args.model_file)
-    display_chat_template(
+    rendered_template = render_chat_template(
         chat_template, args.bos, args.eos, render_template=args.render_template
     )
+    print(rendered_template)
 
 
 if __name__ == "__main__":
