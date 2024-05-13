@@ -515,87 +515,6 @@ inline bool chaton_tmpl_getkey_bool(const std::string &tmpl, const std::string &
 }
 
 
-// Given the template standard, role and a message, this returns
-// a tagged message, types string and lens vector wrt the parts that make up the returned string
-//
-// * a string containing the tagged message
-//   * role-(begin+prefix) + msg + role-(suffix+end)
-// * a string where the chars contain info about
-//   type of sub-strings/parts that make up the tagged message.
-// * a vector of ints, which give the length of each part in the tagged message.
-inline bool chaton_tmpl_apply_single_ex(
-        const std::string &tmpl,
-        const std::string &role,
-        const std::string &content,
-        std::string &tagged,
-        std::string &types,
-        std::vector<int32_t> &lens
-        ) {
-    if (!chaton_tmpl_exists(tmpl)) {
-        return false;
-    }
-    ChatParts cp = {};
-    std::string beginPrefix = chaton_tmpl_role_getkeys(tmpl, role, {K_BEGIN, K_PREFIX});
-    std::string suffixEnd = chaton_tmpl_role_getkeys(tmpl, role, {K_SUFFIX, K_END});
-    cp.add_part(ChatParts::S, beginPrefix);
-    cp.add_part(ChatParts::N, content);
-    cp.add_part(ChatParts::S, suffixEnd);
-    cp.dump();
-    tagged = cp.str();
-    LOGLN("DBUG:%s:%s:%s:%s", __func__, tmpl.c_str(), role.c_str(), tagged.c_str());
-    types = cp.get_partstypes();
-    lens = cp.get_partslens();
-    return true;
-}
-
-// Given the template standard, role and a message, this returns the tagged message.
-//
-// * a string containing the tagged message
-//   * role-(begin+prefix) + msg + role-(suffix+end)
-inline size_t chaton_tmpl_apply_single(
-        const std::string &tmpl,
-        const std::string &role,
-        const std::string &content,
-        std::string &tagged
-        ) {
-    std::string types;
-    std::vector<int32_t> lens;
-    if (!chaton_tmpl_apply_single_ex(tmpl, role, content, tagged, types, lens)) {
-        return -1;
-    }
-    return tagged.size();
-}
-
-/**
- * Apply chat-handshake-template for the specified template standard and role.
- * If the passed char array is smaller than that required for the tagged message,
- * * part of the tagged message which fits within dest buffer is copied
- * * the returned value, indicates the size of the actual tagged message
- * NOTE:
- * * ideally the passed char array should be able to fit the tagged message+0|null char.
- * * if the return value from this function is larger than or equal to destLength,
- *   then you will have to increase the size of the dest buffer, and call this
- *   function a second time, to ensure that one gets the full tagged message.
- */
-inline size_t chat_tmpl_apply_single_capi(
-        const char *tmpl,
-        const char *role,
-        const char *content,
-        char *dest,
-        const size_t destLength
-        ) {
-    std::string tagged;
-    auto taggedLength = chaton_tmpl_apply_single(tmpl, role, content, tagged);
-    if (taggedLength <= 0) {
-        return taggedLength;
-    }
-    if (dest && (destLength > 0)) {
-        strlcpy(dest, tagged.c_str(), destLength);
-    }
-    return taggedLength;
-}
-
-
 // Given the template standard and a bunch of messages including their roles, this returns
 // tagged messages, types string and lens vector. Returned types string and lens vector help
 // identify the parts of the tagged msgs string, which relate to passed msgs and added tags.
@@ -694,6 +613,28 @@ inline int32_t chaton_tmpl_apply(
     std::string types;
     std::vector<int32_t> lens;
     if (!chaton_tmpl_apply_ex(tmpl, msgs, alertAssistantAtEnd, tagged, types, lens)) {
+        return -1;
+    }
+    return tagged.size();
+}
+
+//
+// Given the template standard, role and a message, this creates the tagged message.
+//
+// string containing the tagged message
+// * role-(begin+prefix) + msg + role-(suffix+end)
+//
+inline size_t chaton_tmpl_apply_single(
+        const std::string &tmpl,
+        const std::string &role,
+        const std::string &content,
+        bool alertAssistantAtEnd,
+        std::string &tagged
+        ) {
+    std::string types;
+    std::vector<int32_t> lens;
+    llama_chat_message cm {role.c_str(), content.c_str()};
+    if (!chaton_tmpl_apply_ex(tmpl, {&cm}, alertAssistantAtEnd, tagged, types, lens)) {
         return -1;
     }
     return tagged.size();
