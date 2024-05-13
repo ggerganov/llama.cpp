@@ -8,6 +8,7 @@ Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
  * LLM inference of F16 and quantum models on GPU and CPU
  * [OpenAI API](https://github.com/openai/openai-openapi) compatible chat completions and embeddings routes
  * Parallel decoding with multi-user support
+ * Speculative decoding based on n-gram lookup
  * Continuous batching
  * Multimodal (wip)
  * Monitoring endpoints
@@ -49,7 +50,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - `--api-key`: Set an api key for request authorization. By default, the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
 - `--api-key-file`: Path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`s.
 - `--embedding`: Enable embedding extraction. Default: disabled
-- `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`
+- `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`. **Values > 1 produce nondeterministic results depending on the number of active slots.**.
 - `-cb`, `--cont-batching`: Enable continuous batching (a.k.a dynamic batching).  Default: disabled
 - `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots). This is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
@@ -74,6 +75,9 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - `-fa`, `--flash-attn` : enable flash attention (default: disabled).
 - `-ctk TYPE`, `--cache-type-k TYPE` : KV cache data type for K (default: `f16`, options `f32`, `f16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, or `q5_1`)
 - `-ctv TYPE`, `--cache-type-v TYPE` : KV cache type for V (default `f16`, see `-ctk` for options)
+- `--draft`: maximum number of additional tokens to draft using n-gram lookup. Default: 5. Set to 0 to disable n-gram lookup. **Results are not deterministic with n-gram lookup enabled due to varying batch size.**
+- `-lcs FNAME, --lookup-cache-static FNAME`: optional path to static lookup cache to use for n-gram lookup. Created from a large, unspecific text corpus using `lookup-create`.
+- `-lcd FNAME, --lookup-cache-dynamic FNAME`: optional path to dynamic lookup cache to use for n-gram lookup. Contains data from previous generations. Automatically created and filled while the server is running but by default discarded on server exit. Setting this argument tries to initialize the dynamic cache from a file and saves it to said file on server shutdown.
 
 **If compiled with `LLAMA_SERVER_SSL=ON`**
 - `--ssl-key-file FNAME`: path to file a PEM-encoded SSL private key

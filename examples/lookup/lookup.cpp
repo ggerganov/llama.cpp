@@ -38,7 +38,6 @@ int main(int argc, char ** argv){
 
     // load the model
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
-    GGML_ASSERT(llama_n_vocab(model) < (1 << 16));
 
     // tokenize the prompt
     std::vector<llama_token> inp;
@@ -53,21 +52,18 @@ int main(int argc, char ** argv){
     {
         // Fill up context ngram cache with tokens from user input:
         const int64_t t_start_draft_us = ggml_time_us();
-        llama_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp, inp.size(), false);
+        llama_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp.data(), inp.size(), inp.size(), false);
 
         if (!params.lookup_cache_static.empty()) {
-            try {
-                ngram_cache_static = llama_ngram_cache_load(params.lookup_cache_static);
-            } catch (std::ifstream::failure const &) {
+            if(!llama_ngram_cache_load(ngram_cache_static, params.lookup_cache_static)) {
                 fprintf(stderr, "error: failed to open static lookup cache: %s", params.lookup_cache_static.c_str());
                 exit(1);
             }
         }
 
         if (!params.lookup_cache_dynamic.empty()) {
-            try {
-                ngram_cache_dynamic = llama_ngram_cache_load(params.lookup_cache_dynamic);
-            } catch (std::ifstream::failure const &) {} // if the file does not exist it will simply be created at the end of the program
+            // If the dynamic lookup cache doesn't exist it will be created at the end of the program:
+            llama_ngram_cache_load(ngram_cache_dynamic, params.lookup_cache_dynamic);
         }
 
         t_draft_flat_us += ggml_time_us() - t_start_draft_us;
@@ -156,7 +152,7 @@ int main(int argc, char ** argv){
                 {
                     // Update context ngram cache with the newly accepted token:
                     const int64_t t_start_draft_us = ggml_time_us();
-                    llama_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp, 1, false);
+                    llama_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp.data(), inp.size(), 1, false);
                     t_draft_us += ggml_time_us() - t_start_draft_us;
                 }
 
@@ -182,7 +178,7 @@ int main(int argc, char ** argv){
             {
                 // Update context ngram cache with the newly accepted token:
                 const int64_t t_start_draft_us = ggml_time_us();
-                llama_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp, 1, false);
+                llama_ngram_cache_update(ngram_cache_context, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, inp.data(), inp.size(), 1, false);
                 t_draft_us += ggml_time_us() - t_start_draft_us;
             }
             break;
@@ -204,7 +200,8 @@ int main(int argc, char ** argv){
         GGML_ASSERT(draft[0] == inp.back());
         const int64_t t_start_draft_us = ggml_time_us();
 
-        llama_ngram_cache_draft(inp, draft, n_draft, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
+        llama_ngram_cache_draft(
+            inp.data(), inp.size(), draft, n_draft, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
 
         for (size_t i = 1; i < draft.size(); ++i) {
             llama_batch_add(batch_tgt, draft[i], n_past + i, { 0 }, true);

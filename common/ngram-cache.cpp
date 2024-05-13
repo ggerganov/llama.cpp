@@ -6,19 +6,18 @@
 #include <fstream>
 
 void llama_ngram_cache_update(llama_ngram_cache & ngram_cache, int ngram_min, int ngram_max,
-                              std::vector<llama_token> & inp, int nnew, bool print_progress) {
+                              llama_token * inp_data, int inp_size, int nnew, bool print_progress) {
     const int64_t t_start_ms = ggml_time_ms();
-    const int64_t inp_size = inp.size();
 
     const int64_t n_todo = inp_size * (ngram_max - ngram_min + 1);
     int64_t n_done = 0;
 
     for (int64_t ngram_size = ngram_min; ngram_size <= ngram_max; ++ngram_size) {
-        const int64_t i_start = std::max(inp_size - nnew, ngram_size);
+        const int64_t i_start = std::max((int64_t)(inp_size - nnew), ngram_size);
         for (int64_t i = i_start; i < inp_size; ++i) {
             const int64_t ngram_start = i - ngram_size;
-            llama_ngram ngram(&inp[ngram_start], ngram_size);
-            const llama_token token = inp[i];
+            llama_ngram ngram(inp_data + ngram_start, ngram_size);
+            const llama_token token = inp_data[i];
 
             llama_ngram_cache::iterator part_it = ngram_cache.find(ngram);
             if (part_it == ngram_cache.end()) {
@@ -48,8 +47,8 @@ void llama_ngram_cache_update(llama_ngram_cache & ngram_cache, int ngram_min, in
 }
 
 // Helper function to get a token from the combined, speculative sequence of inp and draft.
-static llama_token get_token(const std::vector<llama_token> & inp, const std::vector<llama_token> & draft, const size_t i) {
-    return i < inp.size() ? inp[i] : draft[1 + i - inp.size()];
+static llama_token get_token(const llama_token * inp_data, const int inp_size, const std::vector<llama_token> & draft, const int i) {
+    return i < inp_size ? inp_data[i] : draft[1 + i - inp_size];
 }
 
 // If sample size or percentage are below these thresholds the draft is aborted early:
@@ -140,11 +139,10 @@ static llama_token try_draft(
 }
 
 void llama_ngram_cache_draft(
-    std::vector<llama_token> & inp, std::vector<llama_token> & draft, int n_draft, int ngram_min, int ngram_max,
+    llama_token * inp_data, int inp_size, std::vector<llama_token> & draft, int n_draft, int ngram_min, int ngram_max,
     llama_ngram_cache & nc_context, llama_ngram_cache & nc_dynamic, llama_ngram_cache & nc_static
 ) {
     GGML_ASSERT(draft.size() == 1);
-    const int inp_size = inp.size();
 
     if (inp_size < LLAMA_NGRAM_STATIC) {
         return;
@@ -156,7 +154,7 @@ void llama_ngram_cache_draft(
         const int ngram_start_static = inp_size-LLAMA_NGRAM_STATIC + draft.size()-1;
         llama_ngram ngram_static;
         for (int j = ngram_start_static; j < ngram_start_static + LLAMA_NGRAM_STATIC; ++j) {
-            ngram_static.tokens[j-ngram_start_static] = get_token(inp, draft, j);
+            ngram_static.tokens[j-ngram_start_static] = get_token(inp_data, inp_size, draft, j);
         }
         llama_ngram_cache::iterator part_static_it = nc_static.find(ngram_static);
         llama_ngram_cache_part part_static;
@@ -170,7 +168,7 @@ void llama_ngram_cache_draft(
             const int ngram_start_cd = inp_size-ngram_size_cd + draft.size()-1;
             llama_ngram ngram_cd;
             for (int j = ngram_start_cd; j < ngram_start_cd + ngram_size_cd; ++j) {
-                ngram_cd.tokens[j-ngram_start_cd] = get_token(inp, draft, j);
+                ngram_cd.tokens[j-ngram_start_cd] = get_token(inp_data, inp_size, draft, j);
             }
             ngrams_cd.push_back(ngram_cd);
         }
@@ -216,12 +214,11 @@ void llama_ngram_cache_save(llama_ngram_cache & ngram_cache, std::string & filen
 
 }
 
-llama_ngram_cache llama_ngram_cache_load(std::string & filename) {
+bool llama_ngram_cache_load(llama_ngram_cache & ngram_cache, std::string & filename) {
     std::ifstream hashmap_file(filename, std::ios::binary);
     if (!hashmap_file) {
-        throw std::ifstream::failure("Unable to open file " + filename);
+        return false;
     }
-    llama_ngram_cache ngram_cache;
 
     llama_ngram ngram;
     int32_t     ntokens;
@@ -251,7 +248,7 @@ llama_ngram_cache llama_ngram_cache_load(std::string & filename) {
     }
     GGML_ASSERT(hashmap_file.eof());
 
-    return ngram_cache;
+    return true;
 }
 
 void llama_ngram_cache_merge(llama_ngram_cache & ngram_cache_target, llama_ngram_cache & ngram_cache_add) {
