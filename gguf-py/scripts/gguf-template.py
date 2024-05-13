@@ -20,19 +20,17 @@ from gguf.constants import Keys
 from gguf.gguf_reader import GGUFReader  # noqa: E402
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gguf-chat-template")
 
 
-def get_chat_template(model_file: str, verbose: bool = False) -> str:
+def get_chat_template(model_file: str) -> str:
     reader = GGUFReader(model_file)
 
     # Available keys
-    logger.info("Detected model metadata!")
-    if verbose:
-        logger.info("Outputting available model fields:")
-        for key in reader.fields.keys():
-            logger.info(key)
+    logger.debug("Detected model metadata!")
+    logger.debug("Outputting available model fields:")
+    for key in reader.fields.keys():
+        logger.debug(key)
 
     # Access the 'chat_template' field directly using its key
     chat_template_field = reader.fields.get(Keys.Tokenizer.CHAT_TEMPLATE)
@@ -57,7 +55,7 @@ def display_chat_template(
         chat_template (str): The extracted chat template.
         render_template (bool, optional): Whether to format the template using Jinja2. Defaults to False.
     """
-    logger.info(f"Format Template: {render_template}")
+    logger.debug(f"Render Template: {render_template}")
 
     if render_template:
         # Render the formatted template using Jinja2 with a context that includes 'bos_token' and 'eos_token'
@@ -126,8 +124,12 @@ def main():
     )
     args = parser.parse_args()
 
-    model_file = args.model_file
-    chat_template = get_chat_template(model_file, args.verbose)
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    chat_template = get_chat_template(args.model_file)
     display_chat_template(
         chat_template, args.bos, args.eos, render_template=args.render_template
     )
