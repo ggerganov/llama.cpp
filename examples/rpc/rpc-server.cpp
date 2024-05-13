@@ -44,8 +44,7 @@ static void get_backend_memory(size_t * free_mem, size_t * total_mem) {
 #endif
 }
 
-int main(int argc, char * argv[])
-{
+int main(int argc, char * argv[]) {
     if (argc < 3) {
         fprintf(stderr, "Usage: %s <host> <port>\n", argv[0]);
         return 1;
@@ -66,5 +65,6 @@ int main(int argc, char * argv[])
     get_backend_memory(&free_mem, &total_mem);
     std::string endpoint = std::string(host) + ":" + std::to_string(port);
     start_rpc_server(backend, endpoint.c_str(), free_mem, total_mem);
+    ggml_backend_free(backend);
     return 0;
 }
