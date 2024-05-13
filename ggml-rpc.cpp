@@ -997,7 +997,7 @@ void start_rpc_server(ggml_backend_t backend, const char * endpoint, size_t free
         int res = WSAStartup(MAKEWORD(2, 2), &wsaData);
         if (res != 0) {
             fprintf(stderr, "WSAStartup failed: %d\n", res);
-            return 1;
+            return;
         }
     }
 #endif
