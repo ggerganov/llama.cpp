@@ -40,6 +40,7 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_CLAMP,
     GGML_METAL_KERNEL_TYPE_TANH,
     GGML_METAL_KERNEL_TYPE_RELU,
+    GGML_METAL_KERNEL_TYPE_SIGMOID,
     GGML_METAL_KERNEL_TYPE_GELU,
     GGML_METAL_KERNEL_TYPE_GELU_4,
     GGML_METAL_KERNEL_TYPE_GELU_QUICK,
@@ -493,6 +494,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_CLAMP,                         clamp,                          true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_TANH,                          tanh,                           true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_RELU,                          relu,                           true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SIGMOID,                       sigmoid,                        true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GELU,                          gelu,                           true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GELU_4,                        gelu_4,                         true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GELU_QUICK,                    gelu_quick,                     true);
@@ -730,6 +732,7 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
             switch (ggml_get_unary_op(op)) {
                 case GGML_UNARY_OP_TANH:
                 case GGML_UNARY_OP_RELU:
+                case GGML_UNARY_OP_SIGMOID:
                 case GGML_UNARY_OP_GELU:
                 case GGML_UNARY_OP_GELU_QUICK:
                 case GGML_UNARY_OP_SILU:
@@ -1192,24 +1195,24 @@ static enum ggml_status ggml_metal_graph_compute(
                         [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                     } break;
                 case GGML_OP_CLAMP:
-                {
-                    id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_CLAMP].pipeline;
+                    {
+                        id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_CLAMP].pipeline;
 
-                    float min;
-                    float max;
-                    memcpy(&min, ((int32_t *) dst->op_params) + 0, sizeof(float));
-                    memcpy(&max, ((int32_t *) dst->op_params) + 1, sizeof(float));
+                        float min;
+                        float max;
+                        memcpy(&min, ((int32_t *) dst->op_params) + 0, sizeof(float));
+                        memcpy(&max, ((int32_t *) dst->op_params) + 1, sizeof(float));
 
-                    [encoder setComputePipelineState:pipeline];
-                    [encoder setBuffer:id_src0   offset:offs_src0 atIndex:0];
-                    [encoder setBuffer:id_dst    offset:offs_dst  atIndex:1];
-                    [encoder setBytes:&min length:sizeof(min) atIndex:2];
-                    [encoder setBytes:&max length:sizeof(max) atIndex:3];
+                        [encoder setComputePipelineState:pipeline];
+                        [encoder setBuffer:id_src0   offset:offs_src0 atIndex:0];
+                        [encoder setBuffer:id_dst    offset:offs_dst  atIndex:1];
+                        [encoder setBytes:&min length:sizeof(min) atIndex:2];
+                        [encoder setBytes:&max length:sizeof(max) atIndex:3];
 
-                    const int64_t n = ggml_nelements(dst);
+                        const int64_t n = ggml_nelements(dst);
 
-                    [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
-                } break;
+                        [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                    } break;
                 case GGML_OP_UNARY:
                     switch (ggml_get_unary_op(gf->nodes[i])) {
                         // we are not taking into account the strides, so for now require contiguous tensors
@@ -1230,6 +1233,18 @@ static enum ggml_status ggml_metal_graph_compute(
                         case GGML_UNARY_OP_RELU:
                             {
                                 id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_RELU].pipeline;
+
+                                [encoder setComputePipelineState:pipeline];
+                                [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
+                                [encoder setBuffer:id_dst  offset:offs_dst  atIndex:1];
+
+                                const int64_t n = ggml_nelements(dst);
+
+                                [encoder dispatchThreadgroups:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+                            } break;
+                        case GGML_UNARY_OP_SIGMOID:
+                            {
+                                id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SIGMOID].pipeline;
 
                                 [encoder setComputePipelineState:pipeline];
                                 [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];

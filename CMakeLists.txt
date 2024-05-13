@@ -296,7 +296,7 @@ if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-    if ($(CMAKE_VERSION) VERSION_GREATER_EQUAL 3.22)
+    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
         set(BLA_SIZEOF_INTEGER 8)
     endif()
 
@@ -1272,17 +1272,6 @@ install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
     FILES convert.py
-    PERMISSIONS
-        OWNER_READ
-        OWNER_WRITE
-        OWNER_EXECUTE
-        GROUP_READ
-        GROUP_EXECUTE
-        WORLD_READ
-        WORLD_EXECUTE
-    DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(
-    FILES convert-lora-to-ggml.py
     PERMISSIONS
         OWNER_READ
         OWNER_WRITE
