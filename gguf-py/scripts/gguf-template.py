@@ -24,14 +24,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gguf-chat-template")
 
 
-def get_chat_template(model_file: str) -> str:
+def get_chat_template(model_file: str, verbose: bool = False) -> str:
     reader = GGUFReader(model_file)
 
     # Available keys
     logger.info("Detected model metadata!")
-    logger.info("Outputting available model fields:")
-    for key in reader.fields.keys():
-        logger.info(key)
+    if verbose:
+        logger.info("Outputting available model fields:")
+        for key in reader.fields.keys():
+            logger.info(key)
 
     # Access the 'chat_template' field directly using its key
     chat_template_field = reader.fields.get(Keys.Tokenizer.CHAT_TEMPLATE)
@@ -103,12 +104,16 @@ def main():
         action="store_true",
         help="Render the chat template using Jinja2",
     )
-
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Output model keys",
+    )
     args = parser.parse_args()
 
     model_file = args.model_file
-    chat_template = get_chat_template(model_file)
-
+    chat_template = get_chat_template(model_file, args.verbose)
     display_chat_template(chat_template, render_template=args.render_template)
 
 
