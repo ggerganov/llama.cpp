@@ -9279,6 +9279,15 @@ static struct ggml_tensor * llm_build_mamba(
     return cur;
 }
 
+static struct ggml_tensor * llm_build_time_mix(
+    struct ggml_context * ctx,
+    const struct llama_layer * layer,
+    struct ggml_tensor * current,
+    int layer_i) {
+
+    return current;
+}
+
 struct llm_build_context {
     const llama_model    & model;
           llama_context  & lctx;
@@ -14813,9 +14822,10 @@ struct llm_build_context {
         for (int layer_i = 0; layer_i < n_layer; ++layer_i) {
             const llama_layer * layer = &model.layers[layer_i];
 
-            current = llm_build_norm(ctx0, current, hparams, layer->attn_norm, layer->attn_norm_b, LLM_NORM, cb, -1);
+            current = llm_build_norm(ctx0, current, hparams, layer->attn_norm, layer->attn_norm_b, LLM_NORM, cb, layer_i);
+            current = llm_build_time_mix(ctx0, layer, current, layer_i);
 
-            current = llm_build_norm(ctx0, current, hparams, layer->attn_norm_2, layer->attn_norm_2_b, LLM_NORM, cb, -1);
+            current = llm_build_norm(ctx0, current, hparams, layer->attn_norm_2, layer->attn_norm_2_b, LLM_NORM, cb, layer_i);
         }
 
         // Something related to skipping tokens, specifics unclear
