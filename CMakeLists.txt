@@ -123,6 +123,7 @@ set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
 set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
+option(LLAMA_RPC                             "llama: use RPC"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
@@ -492,6 +493,17 @@ if (LLAMA_MPI)
     else()
         message(WARNING "MPI not found")
     endif()
+endif()
+
+if (LLAMA_RPC)
+    add_compile_definitions(GGML_USE_RPC)
+
+    if (WIN32)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} ws2_32)
+    endif()
+
+    set(GGML_HEADERS_RPC ggml-rpc.h)
+    set(GGML_SOURCES_RPC ggml-rpc.cpp)
 endif()
 
 if (LLAMA_CLBLAST)
@@ -1176,6 +1188,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_OPENCL}    ${GGML_HEADERS_OPENCL}
             ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
             ${GGML_SOURCES_MPI}       ${GGML_HEADERS_MPI}
+            ${GGML_SOURCES_RPC}       ${GGML_HEADERS_RPC}
             ${GGML_SOURCES_EXTRA}     ${GGML_HEADERS_EXTRA}
             ${GGML_SOURCES_SYCL}      ${GGML_HEADERS_SYCL}
             ${GGML_SOURCES_KOMPUTE}   ${GGML_HEADERS_KOMPUTE}
