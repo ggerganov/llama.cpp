@@ -12103,14 +12103,14 @@ UseGgmlGemm2:;
         nchunk1 = nr0 > nr1 ? 1 : nth; // parallelize by src1 rows
     }
 
-    //The number of elements in each chunk
+    // The number of elements in each chunk
     const int64_t dr0 = (nr0 + nchunk0 - 1) / nchunk0;
     const int64_t dr1 = (nr1 + nchunk1 - 1) / nchunk1;
 
     //if (ith == 0)
     //    printf("MUL_MAT = [%d, %d, %d, %d] x [%d, %d, %d, %d] = %d x %d = %d.  Fp Ops/Ch %d\n", ne00, ne01, ne02, ne03, ne10, ne11, ne12, ne13, nchunk0, nchunk1, nchunk0 * nchunk1, ne00 * nr0 * nr1 / nchunk0 / nchunk1);
 
-    //The first chunk comes from our thread_id, the rest will get auto-assigned.
+    // The first chunk comes from our thread_id, the rest will get auto-assigned.
     int current_chunk = ith;
 
     while (current_chunk < nchunk0 * nchunk1) {
