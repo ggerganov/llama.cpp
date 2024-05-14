@@ -15,7 +15,8 @@ class CoodepointFlags (ctypes.Structure):
         ("is_control",     ctypes.c_uint16, 1),  # regex: \p{C}
     ]
 
-assert(ctypes.sizeof(CoodepointFlags) == 2)
+
+assert (ctypes.sizeof(CoodepointFlags) == 2)
 
 
 MAX_CODEPOINTS = 0x110000
@@ -49,7 +50,7 @@ for codepoint in range(MAX_CODEPOINTS):
     flags.is_symbol      = bool(regex_symbol.match(char))
     flags.is_control     = bool(regex_control.match(char))
     flags.is_undefined   = bytes(flags)[0] == 0
-    assert(not flags.is_undefined)
+    assert (not flags.is_undefined)
 
     # whitespaces
     if bool(regex_whitespace.match(char)):
@@ -72,7 +73,7 @@ for codepoint in range(MAX_CODEPOINTS):
 
 
 # group ranges with same flags
-ranges_flags = [(0, codepoint_flags[0])] # start, flags
+ranges_flags = [(0, codepoint_flags[0])]  # start, flags
 for codepoint, flags in enumerate(codepoint_flags):
     if bytes(flags) != bytes(ranges_flags[-1][1]):
         ranges_flags.append((codepoint, flags))
@@ -80,7 +81,7 @@ ranges_flags.append((MAX_CODEPOINTS, CoodepointFlags()))
 
 
 # group ranges with same nfd
-ranges_nfd = [(0, 0, 0)] # start, last, nfd
+ranges_nfd = [(0, 0, 0)]  # start, last, nfd
 for codepoint, norm in table_nfd:
     start = ranges_nfd[-1][0]
     if ranges_nfd[-1] != (start, codepoint - 1, norm):

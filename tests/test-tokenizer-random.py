@@ -6,6 +6,7 @@
 #   python3 tests/test-tokenizer-random.py ./models/ggml-vocab-llama-bpe.gguf ./models/tokenizers/llama-bpe
 #
 
+import os
 import time
 import logging
 import argparse
@@ -15,7 +16,7 @@ import random
 from typing import Callable, Iterator
 
 import cffi
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from transformers import AutoTokenizer
 
 logger = logging.getLogger("test-tokenizer-random-bpe")
 
@@ -145,16 +146,16 @@ def generator_custom_text() -> Iterator[str]:
 def generator_custom_text_edge_cases() -> Iterator[str]:
     """Edge cases found while debugging"""
     yield from [
-        '\x1f-a',   # unicode_ranges_control, {0x00001C, 0x00001F}
-        '¼-a',      # unicode_ranges_digit, 0x00BC
-        '½-a',      # unicode_ranges_digit, 0x00BD
-        '¾-a',      # unicode_ranges_digit, 0x00BE
-        'a 〇b',    # unicode_ranges_digit, 0x3007
-        'Ⅵ-a',     # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
-        '\uFEFF//', # unicode_ranges_control, 0xFEFF (BOM)
-        'Cửa Việt', # llama-3, ignore_merges = true
-        '<s>a',     # TODO: Phi-3 fail
-        'a\na',     # TODO: Bert fail
+        '\x1f-a',     # unicode_ranges_control, {0x00001C, 0x00001F}
+        '¼-a',        # unicode_ranges_digit, 0x00BC
+        '½-a',        # unicode_ranges_digit, 0x00BD
+        '¾-a',        # unicode_ranges_digit, 0x00BE
+        'a 〇b',      # unicode_ranges_digit, 0x3007
+        'Ⅵ-a',       # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
+        '\uFEFF//',   # unicode_ranges_control, 0xFEFF (BOM)
+        'Cửa Việt',   # llama-3, ignore_merges = true
+        '<s>a',       # TODO: Phi-3 fail
+        'a\na',       # TODO: Bert fail
     ]
 
 
@@ -163,7 +164,7 @@ def generator_vocab_words(vocab: list[str]) -> Iterator[str]:
     yield from vocab
 
 
-def generator_random_chars(iterations = 100) -> Iterator[str]:
+def generator_random_chars(iterations=100) -> Iterator[str]:
     """Brute force random text with simple characters"""
 
     WHITESPACES = list(" " * 20 + "\n" * 5 + "\r\n" * 5 + "\t" * 5)
@@ -188,7 +189,7 @@ def generator_random_chars(iterations = 100) -> Iterator[str]:
         yield "".join(text)
 
 
-def generator_random_vocab_chars(vocab: list[str], iterations = 100) -> Iterator[str]:
+def generator_random_vocab_chars(vocab: list[str], iterations=100) -> Iterator[str]:
     """Brute force random text with vocab characters"""
 
     vocab_chars = set()
@@ -203,7 +204,7 @@ def generator_random_vocab_chars(vocab: list[str], iterations = 100) -> Iterator
         yield "".join(text)
 
 
-def generator_random_vocab_words(vocab: list[str], iterations = 100) -> Iterator[str]:
+def generator_random_vocab_words(vocab: list[str], iterations=100) -> Iterator[str]:
     """Brute force random text from vocab words"""
 
     vocab = [w.strip() for w in vocab]
@@ -222,7 +223,7 @@ def generator_random_vocab_words(vocab: list[str], iterations = 100) -> Iterator
         yield "".join(text)
 
 
-def generator_random_bytes(iterations = 100) -> Iterator[str]:
+def generator_random_bytes(iterations=100) -> Iterator[str]:
     """Brute force random bytes"""
 
     WHITESPACES = list(" " * 20 + "\n" * 5 + "\r\n" * 5 + "\t" * 5)
@@ -243,7 +244,7 @@ def generator_random_bytes(iterations = 100) -> Iterator[str]:
 def test_compare_tokenizer(func_tokenize1: Callable, func_tokenize2: Callable, generator: Iterator[str]):
 
     def find_first_mismatch(ids1: list[int], ids2: list[int]):
-        for i, (a,b) in enumerate(zip(ids1, ids2)):
+        for i, (a, b) in enumerate(zip(ids1, ids2)):
             if a != b:
                 return i
         if len(ids1) == len(ids2):
@@ -259,9 +260,6 @@ def test_compare_tokenizer(func_tokenize1: Callable, func_tokenize2: Callable, g
             i = find_first_mismatch(ids1, ids2)
             ids1 = list(ids1)[max(0, i - 2) : i + 2 + 1]
             ids2 = list(ids2)[max(0, i - 2) : i + 2 + 1]
-            text2 = tokenizer.decode(ids2, skip_special_tokens=True)
-            #assert (text2 in text)
-            logger.info(" Text:     " + repr(text2))
             logger.info(" TokenIDs: " + str(ids1))
             logger.info(" Expected: " + str(ids2))
             raise Exception()
@@ -269,23 +267,24 @@ def test_compare_tokenizer(func_tokenize1: Callable, func_tokenize2: Callable, g
     logger.info("%s: end, time: %.3f secs" % (generator.__name__, t1 - t0))
 
 
-if __name__ == "__main__":
-
+def main(argv: list[str] = None):
     parser = argparse.ArgumentParser()
     parser.add_argument("vocab_file", help="path to vocab 'gguf' file")
     parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")
     parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
-    tokenizer = AutoTokenizer.from_pretrained(args.dir_tokenizer)
-    def func_tokenize2(text:str):
-        return tokenizer.encode(text, add_special_tokens=False)
-    
     model = LibLlamaModel(LibLlama(), args.vocab_file, mparams=dict(vocab_only=True), cparams=dict(n_ctx=4096))
+    tokenizer = AutoTokenizer.from_pretrained(args.dir_tokenizer)
+
+    def func_tokenize2(text: str):
+        return tokenizer.encode(text, add_special_tokens=False)
+
     parse_special = all(len(func_tokenize2(t)) == 1 for t in tokenizer.all_special_tokens)
-    def func_tokenize1(text:str):
+
+    def func_tokenize1(text: str):
         return model.tokenize(text, add_special=False, parse_special=parse_special)
 
     vocab = list(sorted(tokenizer.batch_decode(list(tokenizer.get_vocab().values()), skip_special_tokens=True)))
@@ -298,3 +297,7 @@ if __name__ == "__main__":
     # test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_bytes(10_000)) # FAIL
 
     model.free()
+
+
+if __name__ == "__main__":
+    main()
