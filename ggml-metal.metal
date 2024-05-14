@@ -2247,11 +2247,16 @@ kernel void kernel_flash_attn_ext_f16(
                         simdgroup_multiply_accumulate(mqk, mq[i], mk, mqk);
                     }
 
-                    // mqk = mqk*scale + mask*slope
-                    simdgroup_half8x8 mm;
-                    simdgroup_load(mm, mp + ic + 8*cc, nb31/sizeof(half), 0, false);
-                    simdgroup_multiply(mm, mslope, mm);
-                    simdgroup_multiply_accumulate(mqk, mqk, mscale, mm);
+                    if (mask != q) {
+                        // mqk = mqk*scale + mask*slope
+                        simdgroup_half8x8 mm;
+                        simdgroup_load(mm, mp + ic + 8*cc, nb31/sizeof(half), 0, false);
+                        simdgroup_multiply(mm, mslope, mm);
+                        simdgroup_multiply_accumulate(mqk, mqk, mscale, mm);
+                    } else {
+                        // mqk = mqk*scale
+                        simdgroup_multiply(mqk, mscale, mqk);
+                    }
 
                     simdgroup_store(mqk, ss + 8*cc, TF, 0, false);
                 }
@@ -2589,8 +2594,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
 
                     // mqk = mqk*scale + mask*slope
                     if (tiisg == 0) {
-                        float4 mm = (float4) mp4[ic/4 + cc];
-                        mqk = mqk*scale + mm*slope;
+                        mqk = mqk*scale + ((mask != q) ? ((float4) mp4[ic/4 + cc])*slope : (float4) 0.0f);
 
                         ss4[cc] = mqk;
                     }

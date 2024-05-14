@@ -2512,13 +2512,15 @@ static enum ggml_status ggml_metal_graph_compute(
                     } break;
                 case GGML_OP_FLASH_ATTN_EXT:
                     {
-                        GGML_ASSERT(ne00 % 4 == 0);
+                        GGML_ASSERT(ne00 % 4  == 0);
+                        GGML_ASSERT(ne11 % 32 == 0);
+
                         GGML_ASSERT(src0->type == GGML_TYPE_F32);
 
-                        struct ggml_tensor * src3 = gf->nodes[i]->src[3];
+                        GGML_ASSERT(ggml_are_same_shape (src1, src2));
+                        GGML_ASSERT(ggml_are_same_stride(src1, src2));
 
-                        GGML_ASSERT(ggml_are_same_shape(src1, src2));
-                        GGML_ASSERT(src3);
+                        struct ggml_tensor * src3 = gf->nodes[i]->src[3];
 
                         size_t offs_src3 = 0;
 
@@ -2590,7 +2592,11 @@ static enum ggml_status ggml_metal_graph_compute(
                         [encoder setBuffer:id_src0     offset:offs_src0           atIndex:0];
                         [encoder setBuffer:id_src1     offset:offs_src1           atIndex:1];
                         [encoder setBuffer:id_src2     offset:offs_src2           atIndex:2];
-                        [encoder setBuffer:id_src3     offset:offs_src3           atIndex:3];
+                        if (id_src3) {
+                            [encoder setBuffer:id_src3     offset:offs_src3           atIndex:3];
+                        } else {
+                            [encoder setBuffer:id_src0     offset:offs_src0           atIndex:3];
+                        }
                         [encoder setBuffer:id_dst      offset:offs_dst            atIndex:4];
                         [encoder setBytes:&ne00        length:sizeof( int64_t)    atIndex:5];
                         [encoder setBytes:&ne01        length:sizeof( int64_t)    atIndex:6];
