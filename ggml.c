@@ -2824,6 +2824,16 @@ bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor
         (t0->ne[3] == t1->ne[3] );
 }
 
+bool ggml_are_same_stride(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
+    static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
+
+    return
+        (t0->nb[0] == t1->nb[0] ) &&
+        (t0->nb[1] == t1->nb[1] ) &&
+        (t0->nb[2] == t1->nb[2] ) &&
+        (t0->nb[3] == t1->nb[3] );
+}
+
 // check if t1 can be represented as a repeatition of t0
 static inline bool ggml_can_repeat(const struct ggml_tensor * t0, const struct ggml_tensor * t1) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
