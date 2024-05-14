@@ -27,7 +27,7 @@ static void gkv_set() {
 
     std::cout << "**** gkv set **** " << std::endl;
     GroupKV gkv = {{}};
-    std::cout << gkv.dump("", "INFO:GKV:Set:Initial:") << std::endl;
+    std::cout << gkv.dump("", "INFO:GKV:Set:Initial") << std::endl;
 
     gkv.get_value("testme", {"key101b"}, false);
     gkv.get_value<std::string>("testme", {"key101s"}, "Not found");
@@ -39,7 +39,7 @@ static void gkv_set() {
     gkv.set_value("testme", {"key201i"}, 987654);
     gkv.set_value("testme", {"key201d"}, 9988.7766);
 
-    std::cout << gkv.dump("testme", "INFO:GKV:Set:After testme set:") << std::endl;
+    std::cout << gkv.dump("testme", "INFO:GKV:Set:After testme set") << std::endl;
     gkv.get_value("testme", {"key201b"}, false);
     gkv.get_value<std::string>("testme", {"key201s"}, "Not found");
     gkv.get_value("testme", {"key201i"}, 123456);
