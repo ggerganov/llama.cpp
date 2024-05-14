@@ -1,6 +1,5 @@
 package com.example.llama
 
-import android.llama.cpp.LLamaAndroid
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -10,7 +9,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
-class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instance()): ViewModel() {
+class MainViewModel(private val llm: Llm = Llm.instance()): ViewModel() {
     companion object {
         @JvmStatic
         private val NanosPerSecond = 1_000_000_000.0
@@ -29,7 +28,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
 
         viewModelScope.launch {
             try {
-                llamaAndroid.unload()
+                llm.unload()
             } catch (exc: IllegalStateException) {
                 messages += exc.message!!
             }
@@ -45,7 +44,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
         messages += ""
 
         viewModelScope.launch {
-            llamaAndroid.send(text)
+            llm.send(text)
                 .catch {
                     Log.e(tag, "send() failed", it)
                     messages += it.message!!
@@ -58,7 +57,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
         viewModelScope.launch {
             try {
                 val start = System.nanoTime()
-                val warmupResult = llamaAndroid.bench(pp, tg, pl, nr)
+                val warmupResult = llm.bench(pp, tg, pl, nr)
                 val end = System.nanoTime()
 
                 messages += warmupResult
@@ -71,7 +70,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
                     return@launch
                 }
 
-                messages += llamaAndroid.bench(512, 128, 1, 3)
+                messages += llm.bench(512, 128, 1, 3)
             } catch (exc: IllegalStateException) {
                 Log.e(tag, "bench() failed", exc)
                 messages += exc.message!!
@@ -82,7 +81,7 @@ class MainViewModel(private val llamaAndroid: LLamaAndroid = LLamaAndroid.instan
     fun load(pathToModel: String) {
         viewModelScope.launch {
             try {
-                llamaAndroid.load(pathToModel)
+                llm.load(pathToModel)
                 messages += "Loaded $pathToModel"
             } catch (exc: IllegalStateException) {
                 Log.e(tag, "load() failed", exc)

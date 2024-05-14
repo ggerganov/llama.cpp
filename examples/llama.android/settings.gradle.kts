@@ -15,4 +15,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "LlamaAndroid"
 include(":app")
-include(":llama")

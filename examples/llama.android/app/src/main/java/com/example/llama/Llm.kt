@@ -1,4 +1,4 @@
-package android.llama.cpp
+package com.example.llama
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineDispatcher
@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
-class LLamaAndroid {
+class Llm {
     private val tag: String? = this::class.simpleName
 
     private val threadLocalState: ThreadLocal<State> = ThreadLocal.withInitial { State.Idle }
@@ -165,8 +165,8 @@ class LLamaAndroid {
         }
 
         // Enforce only one instance of Llm.
-        private val _instance: LLamaAndroid = LLamaAndroid()
+        private val _instance: Llm = Llm()
 
-        fun instance(): LLamaAndroid = _instance
+        fun instance(): Llm = _instance
     }
 }
