@@ -55,7 +55,7 @@ cmake -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WARNINGS=ON ..
 make -j
 ```
 
-#### Step 3.1: Identify Test Command for Debugging
+#### Step 3: Find all tests available that matches REGEX
 
 The output of this command will give you the command & arguments needed to run GDB.
 
@@ -83,11 +83,13 @@ Labels: main
 ...
 ```
 
-So for test #1 we can tell these two pieces of relevant information:
+#### Step 4: Identify Test Command for Debugging
+
+So for test #1 above we can tell these two pieces of relevant information:
 * Test Binary: `~/llama.cpp/build-ci-debug/bin/test-tokenizer-0`
 * Test GGUF Model: `~/llama.cpp/tests/../models/ggml-vocab-llama-spm.gguf`
 
-#### Step 3.2: Run GDB on test command
+#### Step 5: Run GDB on test command
 
 Based on the ctest 'test command' report above we can then run a gdb session via this command below:
 
