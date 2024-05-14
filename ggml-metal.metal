@@ -2049,27 +2049,24 @@ typedef void (flash_attn_ext_f16_t)(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2090,27 +2087,24 @@ kernel void kernel_flash_attn_ext_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2179,10 +2173,6 @@ kernel void kernel_flash_attn_ext_f16(
         // assume K and V are same shape
         const short ne22 = ne12;
         const short ne23 = ne13;
-
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
 
         // broadcast
         const short rk2 = ne02/ne12;
@@ -2430,27 +2420,24 @@ kernel void kernel_flash_attn_ext_vec_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2525,10 +2512,6 @@ kernel void kernel_flash_attn_ext_vec_f16(
         // assume K and V are same shape
         const short ne22 = ne12;
         const short ne23 = ne13;
-
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
 
         // broadcast
         const short rk2 = ne02/ne12;
