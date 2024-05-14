@@ -311,9 +311,9 @@ public:
      * Check if the specified chat-template exists or not.
      * NOTE: This doesnt cross check, if the template inturn contains all the required fields or not.
     */
-    bool tmpl_exists(const std::string &tmpl) {
+    bool tmpl_exists(const std::string &tmpl, const std::string &msgTag="") {
         if (!group_exists(tmpl)) {
-            LOG_TEELN("WARN:CT:%s: tmpl[%s] not found...", __func__, tmpl.c_str());
+            LOG_TEELN("WARN:CT:%s:%s:Specified template-id [%s] not found...", __func__, msgTag.c_str(), tmpl.c_str());
             return false;
         }
         return true;
@@ -327,8 +327,7 @@ public:
     */
     bool tmpl_basiccheck(const std::string &tmpl, std::stringstream &ss, const std::string &msgTag) {
 
-        if (!tmpl_exists(tmpl)) {
-            LOGXLN("ERRR:CT:%s:Specified template-id [%s] not found", msgTag.c_str(), tmpl.c_str());
+        if (!tmpl_exists(tmpl, msgTag)) {
             return false;
         }
 
@@ -507,8 +506,8 @@ public:
         }
         LDBUG_LN("DBUG:CT:%s", cp.dump("INFO:ChatOnTmplApplyEx").c_str());
         tagged = cp.str();
-        LOGLN("DBUG:CT:%s:%s:%s", __func__, tmpl.c_str(), tagged.c_str());
-        LOGLN("DBUG:CT:%s:%s:CntSys[%d]:CntUsr[%d]:CntOthers[%d]", __func__, tmpl.c_str(), cntSystem, cntUser, cntOthers);
+        LDBUG_LN("DBUG:CT:%s:%s:%s", __func__, tmpl.c_str(), tagged.c_str());
+        LDBUG_LN("DBUG:CT:%s:CntSys[%d]:CntUsr[%d]:CntOthers[%d]", __func__, cntSystem, cntUser, cntOthers);
         types = cp.get_partstypes();
         lens = cp.get_partslens();
         return true;
@@ -595,7 +594,7 @@ inline bool chaton_meta_load(const std::string &fname) {
         gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX }, userHasPrefix);
 
     }
-    LOGXLN("%s", gCT.dump("", "DBUG:ChatONMetaLoad:ChatTemplates").c_str());
+    LDBUG_LN("%s", gCT.dump("", "DBUG:ChatONMetaLoad:ChatTemplates").c_str());
     return true;
 }
 
@@ -782,7 +781,7 @@ inline std::vector<llama_token> chaton_llama_tokenize(
            const std::string & text,
                         bool   add_special,
                         bool   parse_special) {
-    LOGLN("DBUG:%s:%s:special[add:%d, parse:%d]", __func__, text.c_str(), add_special, parse_special);
+    LDBUG_LN("DBUG:%s:%s:special[add:%d, parse:%d]", __func__, text.c_str(), add_special, parse_special);
     if (model == nullptr) {
         LOG_TEELN("ERRR:%s:Model NOT Provided:%s:special[add:%d, parse:%d]", __func__, text.c_str(), add_special, parse_special);
         return std::vector<llama_token>{};
@@ -831,11 +830,12 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
 
 
 /**
- * Dump the full loaded chaton templates data
- * Additionally if a chaton-template-id is specified
- * dump contents related to that specific chat-handshake-template-standard
- * NOTE: It uses the exception raising get_value to check if all the required
- * keys/fields are present wrt the specified template-standard/model-id or not.
+ * Validate specified chaton-template-id and inturn dump the contents
+ * related to that specific chat-handshake-template-standard.
+ * ALERT: If no template-id is specified, it is ignored with a warning.
+ * NOTE: It optionally dumps the full loaded chaton templates data
+ * NOTE: It uses tmpl_basiccheck, which raises exception, if all the required
+ * keys/fields are not present wrt the specified template-standard/model-id.
  */
 inline bool _chaton_meta_validate_dump(std::string &tmpl) {
     LDBUG_LN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump("", "INFO:ChatOnMetaValidateDump").c_str());

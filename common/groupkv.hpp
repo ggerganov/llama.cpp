@@ -18,11 +18,11 @@
 #include <sstream>
 
 
-#define GKV_DEBUG
+#define GKV_DEBUGLOG_ON
 
 #include "log.h"
 #define LINFO_LN LOG_TEELN
-#ifdef GKV_DEBUG
+#ifdef GKV_DEBUGLOG_ON
 #define LDBUG LOG
 #define LDBUG_LN LOGLN
 #else
@@ -115,6 +115,7 @@ public:
         return ss.str();
     }
 
+    // If the specified key is missing, an exception will be thrown.
     template<typename SupportedDataType>
     SupportedDataType get_value(const std::string &group, const MultiPart &keyParts) {
         auto key = joiner(keyParts);
@@ -128,6 +129,7 @@ public:
         return std::get<SupportedDataType>(value);
     }
 
+    // If the specified key is missing, then the provided default value will be returned.
     template<typename SupportedDataType>
     SupportedDataType get_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &defaultValue, const std::string &callerName="") {
         try {
