@@ -144,7 +144,7 @@ int main(int argc, char ** argv) {
 
     if (params.chaton) {
         if (!params.chaton_meta_json.empty()) {
-            chaton_meta_load(params.chaton_meta_json);
+            chaton_meta_load_json(params.chaton_meta_json);
         }
         if (!chaton_meta_ok(params.chaton_template_id)) {
             exit(1);

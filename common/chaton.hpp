@@ -515,11 +515,14 @@ public:
 
 };
 
+// The compiled-in configurable template data (the meta)
 #include "chaton_meta.hpp"
 //ChatTemplates gCT = {{}};
 
 #ifdef CHATON_JSON
 
+// Get value corresponding to the specified hierarchy/chain of keys.
+// Also throw a more informative exception, if it is not found.
 template <typename SupportedType>
 inline SupportedType json_get(json &j, const std::vector<std::string_view> &keys, const std::string &msgTag) {
     json curJ = j;
@@ -540,7 +543,8 @@ inline SupportedType json_get(json &j, const std::vector<std::string_view> &keys
     return curJ;
 }
 
-inline bool chaton_meta_load(const std::string &fname) {
+// Update/Extend the compiled-in configurable template data (the meta) from the specified json file.
+inline bool chaton_meta_load_json(const std::string &fname) {
     std::ifstream f(fname);
     json conMeta = json::parse(f);
     for(auto it=conMeta.begin(); it != conMeta.end(); ++it) {

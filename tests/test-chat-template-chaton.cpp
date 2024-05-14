@@ -116,7 +116,7 @@ static void check_chaton(std::string &metaJson) {
     std::vector<char> formatted_chat(1024);
     int32_t res;
 
-    chaton_meta_load(metaJson);
+    chaton_meta_load_json(metaJson);
     for(auto tmplId: templateIds) {
         formatted_chat.resize(1024);
         std::cout << "\n----------" << tmplId << "---------------\n";
@@ -137,7 +137,7 @@ static void check_chaton_ex(std::string &metaJson) {
     std::vector<char> formatted_chat(1024);
     int32_t res;
 
-    chaton_meta_load(metaJson);
+    chaton_meta_load_json(metaJson);
     for(auto tmplId: templateIds) {
         formatted_chat.resize(1024);
         std::cout << "\n----------" << tmplId << "---------------\n";
