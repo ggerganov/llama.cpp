@@ -1,41 +1,6 @@
 # Debugging Tests Tips
 
-## How to run & execute a specific test without anything else to keep the feedback loop short?
-
-There is a script called run-single-test.sh in the scripts folder whose parameter takes a REGEX and an optional test number.
-
-For example, running the following command will output an interactive list from which you can select a test. It takes this form:
-
-`run-single-test.sh [OPTION]... <test_regex> <test_number>`
-
-It will then build & run in the debugger for you.
-
-```bash
-./scripts/run-single-test.sh test-tokenizer
-```
-
-An example of a single test output is shown below. You will get either a green TEST PASS or a red TEST FAIL if a particular test is working or not. This shorter feedback loop will hopefully make it easier for you to figure out the problem you are trying to solve.
-
-```bash
-$ ./scripts/run-single-test.sh test 24
-~/gitextern/llama.cpp ~/gitextern/llama.cpp
-
-... prepping cmake environment ...
-... building test binaries ...
-... running test ...
-
-Ran Test #24: test-eval-callback
-Command: /home/mofosyne/gitextern/llama.cpp/build-ci-debug/bin/eval-callback "--hf-repo" "ggml-org/models" "--hf-file" "tinyllamas/stories260K.gguf" "--model" "stories260K.gguf" "--prompt" "hello" "--seed" "42" "-ngl" "0"
-TEST PASS
-```
-
-For further reference use `run-single-test.sh -h` to print help.
-
-### How does the script work?
-
-This is similar to `debug-test.sh` so you can follow the similar guide in this page for similar process. Just run the command directly rather than though gdb.
-
-## How to run & debug a specific test without anything else to keep the feedback loop short?
+## How to run & execute or debug a specific test without anything else to keep the feedback loop short?
 
 There is a script called debug-test.sh in the scripts folder whose parameter takes a REGEX and an optional test number.
 
@@ -45,11 +10,25 @@ For example, running the following command will output an interactive list from 
 
 It will then build & run in the debugger for you.
 
+To just execute a test and get back a PASS or FAIL message run:
+
 ```bash
 ./scripts/debug-test.sh test-tokenizer
+```
+
+To test in GDB use the `-g` flag to enable gdb test mode.
+
+```bash
+./scripts/debug-test.sh -g test-tokenizer
 
 # Once in the debugger, i.e. at the chevrons prompt, setting a breakpoint could be as follows:
 >>> b main
+```
+
+To speed up the testing loop, if you know your test number you can just run it similar to below:
+
+```bash
+./scripts/debug-test.sh test 23
 ```
 
 For further reference use `debug-test.sh -h` to print help.

@@ -5,23 +5,61 @@ test_number=${2:-}
 PROG=${0##*/}
 build_dir="build-ci-debug"
 
+# Print Color Commands
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+normal=$(tput sgr0)
+
+print_full_help() {
+  cat << EOF
+Usage: $PROG [OPTION]... <test_regex> (test_number)
+Debug specific ctest program.
+
+Options:
+  -h, --help            display this help and exit
+  -g                    run in gdb mode
+
+Arguments:
+  <test_regex>     (Mandatory) Supply one regex to the script to filter tests
+  (test_number)    (Optional) Test number to run a specific test
+
+Example:
+  $PROG test-tokenizer
+  $PROG test-tokenizer 3
+EOF
+}
+
+abort() {
+  echo "Error: $1" >&2
+  cat << EOF >&2
+Usage: $PROG [OPTION]... <test_regex> (test_number)
+Debug specific ctest program.
+Refer to --help for full instructions.
+EOF
+  exit 1
+}
+
 if [ x"$1" = x"-h" ] || [ x"$1" = x"--help" ]; then
-    echo "Usage: $PROG [OPTION]... <test_regex> (test_number)"
-    echo "Debug specific ctest program."
-    echo
-    echo "Options:"
-    echo "  -h, --help       Display this help and exit"
-    echo
-    echo "Arguments:"
-    echo "  <test_regex>     (Mandatory) Supply one regex to the script to filter tests"
-    echo "  (test_number)    (Optional) Test number to run a specific test"
-    echo
-    echo "Example:"
-    echo "  $PROG test-tokenizer"
-    echo "  $PROG test-tokenizer 3"
-    echo
-    exit 0
+  print_full_help >&2
+  exit 0
 fi
+
+# Parse command-line options
+gdb_mode=false
+while getopts "hg" opt; do
+    case $opt in
+        h)
+            print_full_help >&2
+            exit 0
+            ;;
+        g)
+            gdb_mode=true
+            echo "gdb_mode Mode Enabled"
+            ;;
+    esac
+done
 
 # Function to select and debug a test
 function select_test() {
@@ -65,31 +103,43 @@ function select_test() {
     IFS=$'\n'
 
     # Get test args
-    gdb_args=($(ctest -R ${test_suite} -V -N | grep "Test command" | cut -d':' -f3 | awk '{$1=$1};1' ))
+    test_args=($(ctest -R ${test_suite} -V -N | grep "Test command" | cut -d':' -f3 | awk '{$1=$1};1' ))
     IFS=$sIFS
-    printf "Debug arguments: ${gdb_args[test_number]}\n\n"
 
-    # Expand paths if needed
-    args=()
-    for x in $(echo ${gdb_args[test_number]} | sed -e 's/"\/\<//' -e 's/\>"//')
-    do
-        args+=($(echo $x | sed -e 's/.*\/..\//..\//'))
-    done
+    printf "${blue}Running Test #${test_number}: ${tests[test_number]}${normal}\n"
+    printf "${blue}test_args[test_number]: ${test_args[test_number]}${normal}\n"
 
-    # Print Command
-    red=$(tput setaf 1)
-    green=$(tput setaf 2)
-    yellow=$(tput setaf 3)
-    blue=$(tput setaf 4)
-    normal=$(tput sgr0)
-    printf "${blue}Ran Test #${test_number}: ${tests[test_number]}${normal}\n"
-    printf "${yellow}GDB args: ${gdb_args[test_number]}${normal}\n"
-    printf "${yellow}GDB args @: ${args[@]}${normal}\n"
+    if [ "$gdb_mode" = "true" ]; then
+        # Expand paths if needed
+        gdb_args=()
+        for x in $(echo ${test_args[test_number]} | sed -e 's/"\/\<//' -e 's/\>"//')
+        do
+            gdb_args+=($(echo $x | sed -e 's/.*\/..\//..\//'))
+        done
 
-    # Execute debugger
-    pushd "$repo_root" || exit 1
-    gdb --args ${args[@]}
-    popd > /dev/null || exit 1
+        printf "${blue}gdb_args @: ${gdb_args[@]}${normal}\n"
+
+        # Execute debugger
+        pushd "$repo_root" || exit 1
+        gdb --args ${gdb_args[@]}
+        popd > /dev/null || exit 1
+    else
+
+        # Execute Test
+        pushd "$repo_root" || exit 1
+        eval "${test_args[test_number]}"
+        exit_code=$?
+        popd > /dev/null || exit 1
+
+        # Print Result
+        printf "${blue}Ran Test #${test_number}: ${tests[test_number]}${normal}\n"
+        printf "${yellow}Command: ${test_args[test_number]}${normal}\n"
+        if [ $exit_code -eq 0 ]; then
+            printf "${green}TEST PASS${normal}\n"
+        else
+            printf "${red}TEST FAIL${normal}\n"
+        fi
+    fi
 }
 
 # Step 0: Check the args
