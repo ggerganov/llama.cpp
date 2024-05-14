@@ -2435,7 +2435,6 @@ static void ggml_setup_op_has_task_pass(void) {
     }
 }
 
-
 //
 // NUMA support
 //
@@ -11773,16 +11772,16 @@ static bool ggml_compute_forward_mul_mat_use_blas(struct ggml_tensor * dst) {
 #endif
 
 static void ggml_compute_forward_mul_mat_one_chunk(
-    const struct ggml_compute_params* params,
-    struct ggml_tensor* dst,
+    const struct ggml_compute_params * params,
+    struct ggml_tensor * dst,
     const int64_t num_rows_per_vec_dot,
     const int64_t ir0_start,
     const int64_t ir0_end,
     const int64_t ir1_start,
     const int64_t ir1_end) {
 
-    const struct ggml_tensor* src0 = dst->src[0];
-    const struct ggml_tensor* src1 = dst->src[1];
+    const struct ggml_tensor * src0 = dst->src[0];
+    const struct ggml_tensor * src1 = dst->src[1];
 
     GGML_TENSOR_BINARY_OP_LOCALS
 
@@ -11804,7 +11803,7 @@ static void ggml_compute_forward_mul_mat_one_chunk(
         return;
     }
 
-    const void* wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
+    const void * wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
     const size_t row_size = ggml_row_size(vec_dot_type, ne10);
 
     assert(ne12 % ne02 == 0);
@@ -12011,7 +12010,7 @@ UseGgmlGemm1:;
         if (ith != 0) {
             return;
         }
-        //Every thread starts at ith, so the first unprocessed chunk is nth.  This save a bit of coordination right at the start.
+        // Every thread starts at ith, so the first unprocessed chunk is nth.  This save a bit of coordination right at the start.
         atomic_store(&state->shared->current_chunk, nth);
         if (src1->type != vec_dot_type) {
             char * wdata = params->wdata;
@@ -12067,10 +12066,10 @@ UseGgmlGemm2:;
     UNUSED(chunks_executed);
 #endif
 
-    //This is the size of the first dimension of the result, so we can iterate that way. (see the ASSERT above, these are the same numbers)
+    // This is the size of the first dimension of the result, so we can iterate that way. (see the ASSERT above, these are the same numbers)
     const int64_t nr0 = ne0;
 
-    //This is the size of the rest of the dimensions of the result
+    // This is the size of the rest of the dimensions of the result
     const int64_t nr1 = ne1 * ne2 * ne3;
 
     // dot kernels can handle 1 row and col at a time, but mmla kernels can process 2 rows and cols
@@ -12081,24 +12080,24 @@ UseGgmlGemm2:;
         num_rows_per_vec_dot = 1;
     }
 
-    //Now select a reasonable chunk size.
+    // Now select a reasonable chunk size.
     int chunk_size = 16;
 
-    //We need to step up the size if it's small
-    if (nr0 == 1 || nr1 == 1)
+    // We need to step up the size if it's small
+    if (nr0 == 1 || nr1 == 1) {
         chunk_size = 64;
+    }
 
     // distribute the work across the inner or outer loop based on which one is larger
-    //The number of chunks in the 0/1 dim.
-    //CEIL(nr0/chunk_size)
+    // The number of chunks in the 0/1 dim.
+    // CEIL(nr0/chunk_size)
     int64_t nchunk0 = (nr0 + chunk_size - 1) / chunk_size;
     int64_t nchunk1 = (nr1 + chunk_size - 1) / chunk_size;
 
-    //If the chunking is poor for the number of threads on this setup, scrap the whole plan.  Re-chunk it by thread.
+    // If the chunking is poor for the number of threads on this setup, scrap the whole plan.  Re-chunk it by thread.
     //   Also, chunking by thread was measured to have perform better on NUMA systems.  See https://github.com/ggerganov/llama.cpp/pull/6915
     //   In theory, chunking should be just as useful on NUMA and non NUMA systems, but testing disagreed with that.
-    if (nchunk0 * nchunk1 < nth * 4 || ggml_is_numa())
-    {
+    if (nchunk0 * nchunk1 < nth * 4 || ggml_is_numa()) {
         // distribute the thread work across the inner or outer loop based on which one is larger
         nchunk0 = nr0 > nr1 ? nth : 1; // parallelize by src0 rows
         nchunk1 = nr0 > nr1 ? 1 : nth; // parallelize by src1 rows
@@ -12114,8 +12113,7 @@ UseGgmlGemm2:;
     //The first chunk comes from our thread_id, the rest will get auto-assigned.
     int current_chunk = ith;
 
-    while (current_chunk < nchunk0 * nchunk1)
-    {
+    while (current_chunk < nchunk0 * nchunk1) {
         const int64_t ith0 = current_chunk % nchunk0;
         const int64_t ith1 = current_chunk / nchunk0;
 
@@ -12131,8 +12129,9 @@ UseGgmlGemm2:;
         chunks_executed++;
 #endif
 
-        if (nth >= nchunk0 * nchunk1)
+        if (nth >= nchunk0 * nchunk1) {
             break;
+        }
 
         current_chunk = atomic_fetch_add(&state->shared->current_chunk, 1);
     }
@@ -19652,17 +19651,17 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
     return n_tasks;
 }
 
-static void ggml_graph_compute_thread_sync_node(int* node_n, struct ggml_compute_state* state, const bool do_yield) {
+static void ggml_graph_compute_thread_sync_node(int * node_n, struct ggml_compute_state * state, const bool do_yield) {
     // wait for other threads to finish
-    const int last_node_n = *node_n;
+    const int last_node_n = * node_n;
 
     while (true) {
         if (do_yield) {
             sched_yield();
         }
 
-        *node_n = atomic_load(&state->shared->node_n);
-        if (*node_n != last_node_n) break;
+        * node_n = atomic_load(&state->shared->node_n);
+        if (* node_n != last_node_n) break;
 #if defined(__SSE3__)
         //Tell the processor we're spinning.  It's a processor hint for spinlocks.
         _mm_pause();
@@ -19670,17 +19669,17 @@ static void ggml_graph_compute_thread_sync_node(int* node_n, struct ggml_compute
     }
 }
 
-static void ggml_graph_compute_thread_sync_task(int* task_phase, struct ggml_compute_state* state, const bool do_yield) {
+static void ggml_graph_compute_thread_sync_task(int * task_phase, struct ggml_compute_state * state, const bool do_yield) {
     // wait for other threads to finish
-    const int last_task_phase = *task_phase;
+    const int last_task_phase = * task_phase;
 
     while (true) {
         if (do_yield) {
             sched_yield();
         }
 
-        *task_phase = atomic_load(&state->shared->node_task);
-        if (*task_phase != last_task_phase) break;
+        * task_phase = atomic_load(&state->shared->node_task);
+        if (* task_phase != last_task_phase) break;
 #if defined(__SSE3__)
         //Tell the processor we're spinning.  It's a processor hint for spinlocks.
         _mm_pause();
