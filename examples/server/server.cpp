@@ -901,19 +901,22 @@ struct server_context {
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
 
         // get prompt
-        {
-            const auto & prompt = data.find("prompt");
-            if (prompt == data.end()) {
-                send_error(task, "Either \"prompt\" or \"messages\" must be provided", ERROR_TYPE_INVALID_REQUEST);
-                return false;
-            } else {
-                slot.prompt = *prompt;
-            }
-            if (slot.prompt.is_array() && slot.prompt.size() == 0) {
-                send_error(task, "\"prompt\" cannot be an empty array", ERROR_TYPE_INVALID_REQUEST);
-                return false;
+        if (!(task.infill || task.embedding)) {
+            {
+                const auto & prompt = data.find("prompt");
+                if (prompt == data.end()) {
+                    send_error(task, "Either \"prompt\" or \"messages\" must be provided", ERROR_TYPE_INVALID_REQUEST);
+                    return false;
+                } else {
+                    slot.prompt = *prompt;
+                }
+                if (slot.prompt.is_array() && slot.prompt.size() == 0) {
+                    send_error(task, "\"prompt\" cannot be an empty array", ERROR_TYPE_INVALID_REQUEST);
+                    return false;
+                }
             }
         }
+        
 
         // penalize user-provided tokens
         {
