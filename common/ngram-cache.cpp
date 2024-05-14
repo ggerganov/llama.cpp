@@ -59,7 +59,7 @@ constexpr int draft_min_sample_size_strict[LLAMA_NGRAM_MAX] = { 4,  3,  2,  2};
 constexpr int     draft_min_percent_strict[LLAMA_NGRAM_MAX] = {75, 66, 66, 66};
 
 // Helper function that tries to draft a token from only the static ngram cache:
-static llama_token try_draft(llama_ngram_cache & nc_static, const llama_ngram ngram_static) {
+static llama_token try_draft(llama_ngram_cache & nc_static, const llama_ngram & ngram_static) {
     llama_ngram_cache::iterator part_static_it = nc_static.find(ngram_static);
     if (part_static_it == nc_static.end()) {
         return -1;

@@ -596,7 +596,7 @@ inline std::string log_var_to_string_impl(bool var)
     return var ? "true" : "false";
 }
 
-inline std::string log_var_to_string_impl(std::string var)
+inline std::string log_var_to_string_impl(const std::string & var)
 {
     return var;
 }
