@@ -114,6 +114,8 @@ extern "C" {
         void                 (*GGML_CALL event_record)      (ggml_backend_event_t event);
         void                 (*GGML_CALL event_wait)        (ggml_backend_t backend, ggml_backend_event_t event);
         void                 (*GGML_CALL event_synchronize) (ggml_backend_event_t event);
+
+        ggml_backend_t (*GGML_CALL backend_dup)(ggml_backend_t backend);
     };
 
     struct ggml_backend {
