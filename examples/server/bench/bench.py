@@ -293,13 +293,14 @@ def start_server_background(args):
 
 
 def is_server_listening(server_fqdn, server_port):
-    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-        result = sock.connect_ex((server_fqdn, server_port))
-        _is_server_listening = result == 0
-        if _is_server_listening:
-            print(f"server is listening on {server_fqdn}:{server_port}...")
-        return _is_server_listening
-
+    try:
+        url = f"{server_fqdn}:{server_port}/health"
+        if not url.startswith("http://"):
+            url = f"http://{url}"
+        result = requests.get(url)
+        return result.status_code == 200
+    except Exception:
+        return False
 
 def escape_metric_name(metric_name):
     return re.sub('[^A-Z0-9]', '_', metric_name.upper())
