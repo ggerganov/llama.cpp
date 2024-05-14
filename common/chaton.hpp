@@ -603,6 +603,9 @@ const int BYPASS_MSGCNT = 101;
 // string containing the tagged message
 // * role-(begin+prefix) + msg + role-(suffix+end)
 //
+// ALERT: This currently assumes/behaves as if the system or user message it is working on
+// is a non-1st message belonging to that role.
+//
 inline size_t chaton_tmpl_apply_single(
         const std::string &tmpl,
         const std::string &role,
