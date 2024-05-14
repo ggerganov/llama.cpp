@@ -2294,7 +2294,8 @@ class ArcticModel(Model):
             sys.exit(1)
 
         # Read the whole vocabulary from the tokenizer.model file
-        tokenizer = SentencePieceProcessor(str(tokenizer_path))
+        tokenizer = SentencePieceProcessor()
+        tokenizer.LoadFromFile(str(tokenizer_path))
 
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
 
@@ -2304,18 +2305,18 @@ class ArcticModel(Model):
 
         for token_id in range(tokenizer.vocab_size()):
 
-            piece = tokenizer.id_to_piece(token_id)
+            piece = tokenizer.IdToPiece(token_id)
             text = piece.encode("utf-8")
-            score = tokenizer.get_score(token_id)
+            score = tokenizer.GetScore(token_id)
 
             toktype = SentencePieceTokenTypes.NORMAL
-            if tokenizer.is_unknown(token_id):
+            if tokenizer.IsUnknown(token_id):
                 toktype = SentencePieceTokenTypes.UNKNOWN
-            elif tokenizer.is_control(token_id):
+            elif tokenizer.IsControl(token_id):
                 toktype = SentencePieceTokenTypes.CONTROL
-            elif tokenizer.is_unused(token_id):
+            elif tokenizer.IsUnused(token_id):
                 toktype = SentencePieceTokenTypes.UNUSED
-            elif tokenizer.is_byte(token_id):
+            elif tokenizer.IsByte(token_id):
                 toktype = SentencePieceTokenTypes.BYTE
 
             tokens[token_id] = text
