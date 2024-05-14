@@ -2,21 +2,22 @@
 
 /**
  * 
- * Generic tagging logic + text config file based chat templates handling
+ * Generic tagging logic + configurable template data based chat templates handling
  * by Humans for All
  * 
  * ## Overview
  * 
  * Helps chat with models, by tagging chat messages based on the specified
  * chat-handshake-template-standard. This uses a generic tagging code driven
- * by a json meta data file, which specifies the handshake template details.
+ * by configurable template data which is either builtin or loaded from text/
+ * json file, which specifies the handshake template details.
  * 
  * This can be used by
  * 
- * * main, to build on existing interactive flow and its in-prefix, in-suffix
+ * * examples/main, to build on existing interactive flow and its in-prefix, in-suffix
  *   and antiprompt/reverse-prompt
  * 
- * * server, by replacing its existing llama_chat_apply_template with the
+ * * examples/server|..., by replacing its existing llama_chat_apply_template with the
  *   equivalent helper here.
  * 
  * 
@@ -62,7 +63,7 @@
  * 
  * ## The Strategy
  * 
- * The template meta data json file allows the user to specify the above mentioned tags wrt
+ * The configurable template data allows the user to specify the above mentioned tags wrt
  * each of the Role as well as any global tag for a group of messages. Depending on whether
  * a given model uses/needs a given tag or not you either specify the required tag or else
  * you specify a empty string.
@@ -71,13 +72,13 @@
  * using \n and so on. The tag is always demarcated using double quotes and thus also allows
  * spaces at the begining or end of the tag, if needed.
  * 
- * In order to account for the conditionality of tags between the system message and the 1st
- * user message, flags are provided to explicitly control whether each of these possible tags
- * is used by a specific model or not, as part of its template info.
+ * In order to account for the conditionality of tags between the system message and the
+ * following 1st user message, flags are provided to explicitly control whether each of
+ * these possible tags is used by a specific model or not, as part of its template info.
  * 
- * The Roles are identified in the json file using "system", "user" and "assistant". However
- * the model may use different words to identify these roles, in which case setup RolePrefix
- * and or RoleSuffix appropriately.
+ * The Roles are identified in the configurable template data using "system", "user" and
+ * "assistant". However the model may use different words to identify these roles, in which
+ * case setup RolePrefix and or RoleSuffix appropriately.
  * 
  * To identify that model is finished with generating response to user query, depending on
  * the model's handshake template standard, one will need to set the reverse-prompt to either
@@ -87,7 +88,7 @@
  * Currently flags for trimming wrt user text (be it wrt system or user role) is not added.
  * 
  * 
- * ## The JSON File
+ * ## Configurable template data and related optional text/JSON file
  * 
  * Can contain the template info wrt multiple models/handshake-standards. And inturn each
  * unique template is identified by a unique template id string.
@@ -107,31 +108,50 @@
  * * systemuser-system-has-suffix, systemuser-system-has-end,
  *   systemuser-1st-user-has-begin and systemuser-1st-user-has-prefix
  * 
- *
+ * By default one can preload at compile time. Additionally one could update/load
+ * more at runtime. A compile time optionally enabled load from json helper is
+ * provided. For any reason, if one doesnt want to use the json based mechanism,
+ * and instead wants a simple mechanism for runtime updating/loading, one could
+ * update ChatTemplates to extend from SimpCfg and inturn use its load from a
+ * simple text file based flow.
+ * 
+ * 
  * ## Usage
  * 
- * One needs to load the json file containing the template meta data and inturn call the
- * other helper functions as needed.
+ * One could use the logic along with compile time builtin configurable template data as is
+ * or one could optionally load configurable template data from a text/json file containing
+ * the template meta data and inturn call the other helper functions as needed.
+ * 
+ * NOTE: One could either make do with a pre-compiled chat templates info, or allow users
+ * to update/modify/override the pre-compiled info and or extend with info for new models
+ * or chat-handshake-template-standards at runtime.
  * 
  * Inturn one can use the helper functions to either extract a given tag or to apply all
  * tags specified wrt a given role to the passed message or to apply tags as needed for
  * a bunch of messages in one go.
  * 
- * The individual message tagging helper, will apply all tags specified wrt that role.
+ * The single message tagging helper setup to apply all tags specified wrt that role.
  * 
- * The multiple messages tagging helper chaton-tmpl-apply, will look at the boolean flags
- * when tagging the passed messages. In this the system suffix, system end, user begin and
- * user prefix get included only if corresponding flag is set.
+ * The multiple messages tagging helper chaton-tmpl-apply[-ex][-capi], will look at the
+ * boolean flags when tagging the passed messages. In this the system suffix, system end,
+ * user begin and user prefix get included only if corresponding flag is set, the 1st time
+ * system + user message is encountered.
  * 
- * Both the single and multi messages tagging helpers provide two versions.
+ * The multi messages tagging is provided in two versions.
  * * one which returns a single string which contains the tagged message(s)
- * * one which returns
+ * * one which returns [ex version]
  *   * [tagged msg] the string containing the tagged message(s)
  *   * [parts lengths] an array of integers, which specifies the part lengths,
  *     which divides the returned string into parts.
  *   * [parts types] a string where each character indicates whether the corresponding
  *     part is a normal part which needs to be tokenized without parse_special
  *     or is a special part which needs to be tokenized with parse-special.
+ * 
+ * A single message wrapper is provided for the simple (no extended) version.
+ * 
+ * chaton_llama_tokenize_ex is provided to show how the extended helpers additional
+ * subparts info wrt tagged message could be used to tokenize with and without
+ * parse_special to the appropriate subparts that make up the tagged message.
  * 
  * 
  * ## example/main
@@ -146,12 +166,14 @@
  * * the reverse-prompt to map to antiprompt
  * * wrt tokenization
  *   * the user specified system prompt is tokenized with parse_special flag.
- *   * however the user messages are tokenized without parse_special flag.
+ *   * however the user messages are tokenized with/without parse_special flag,
+ *     based on interactive-specials.
  * 
  * Currently Main doesnt use chaton-tmpl-apply, but only 
  * * chaton-tmpl-apply-single (for system prompt) and
- * * chaton-tmpl-role-kv which maps the user prefix, suffix and reverse-prompt
- *   to in-prefix, in-suffix and antiprompt of main.
+ * * chaton_tmpl_role_getkeys, used to map the user prefix and suffix
+ *   to in-prefix, in-suffix of main.
+ * * chaton_tmpl_getkey_str, used to map reverse-prompt to main's antiprompt.
  * These always adds any role specific begin+prefix and suffix+end around
  * the passed message.
  * 
@@ -163,20 +185,25 @@
  * with text based config file based flow.
  * 
  * If a program doesnt want to bring in json dependency into their project,
- * there is also common/simpcfg.hpp, which provides a simple text based config
- * file format, along with the corresponding parser for the same. This can be
- * modified to work with simpcfg easily, if needed.
+ * one can make do with the pre initialized configurable template data which
+ * is compiled in.
+ * 
+ * Additionally, if runtime configurability required without json dependency,
+ * the ChatTemplates can be updated to extend SimpCfg from common/simpcfg.hpp,
+ * which provides a simple text based config file format, along with the
+ * corresponding parser for the same. This should be relatively easy, if needed.
  * 
  * ## Adding support for new model / chat-handshake-template-standard
  * 
- * 1. Add suitable entries in json for that model/standard
- *    This in itself should work for most of the models.
+ * 1. Add suitable entries wrt configurable template data, either as part of the
+ *    compile time builtin initialisation or the text/json file loaded at runtime,
+ *    for that model/standard. This in itself should work for most of the models.
  * 
  * 2. If some new model introduces a totally different kind of chat-templating
  *    tag inter/intra mixing, Try to reuse and update the generic flow in
- *    chaton-tmpl-apply, as much as possible, before trying to add any custom logic.
+ *    chaton-tmpl-apply-ex, as much as possible, before trying to add any custom logic.
  * 
- *    If you update the generic flow, cross check if existing json files will
+ *    If you update the generic flow, cross check if existing text/json files will
  *    need to be updated or not.
  * 
  * 
@@ -411,16 +438,17 @@ public:
     }
 
     /**
-     * Given the template standard and a bunch of messages including their roles, this returns
-     * tagged messages, subPartsTypes string and subPartsLens vector. The returned subParts
-     * types string and lens vector help identify the parts of the tagged msgs string,
-     * which relate to passed msgs and added tags.
+     * Given the template model/standard id and a bunch of messages including their roles,
+     * this returns tagged messages, subPartsTypes string and subPartsLens vector.
+     * The returned subParts types string and lens vector help identify the parts of the
+     * tagged msgs string, which relate to passed msgs and added tags.
      * 
      * * a string containing the tagged messages
-     *   * global-begin + 1 or more [[role-begin] + [role-prefix] + msg + [role-suffix] +[role-end]] + global-end
+     *   [global-begin] + 1 or more [[role-begin] + [role-prefix] + msg + [role-suffix] +[role-end]] + [global-end]
      * * a string where the chars contain info about
      *   type of sub-strings/parts that make up the tagged messages string.
-     * * a vector of ints, which give the length of each part in the tagged messages string.
+     * * a vector of ints,
+     *   which give the length of each part in the tagged messages string.
      * 
      * If a combination of system-user messages is passed, then tags between the 1st system and
      * the 1st user message, is based on the flags set wrt the corresponding template standard.
