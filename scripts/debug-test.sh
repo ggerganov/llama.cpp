@@ -1,6 +1,4 @@
 #!/bin/bash
-test_suite=${1:-}
-test_number=${2:-}
 
 PROG=${0##*/}
 build_dir="build-ci-debug"
@@ -48,18 +46,30 @@ fi
 
 # Parse command-line options
 gdb_mode=false
-while getopts "hg" opt; do
+while getopts "g" opt; do
     case $opt in
-        h)
-            print_full_help >&2
-            exit 0
-            ;;
         g)
             gdb_mode=true
             echo "gdb_mode Mode Enabled"
             ;;
     esac
 done
+
+# Shift the option parameters
+shift $((OPTIND - 1))
+
+# Step 0: Check the args
+if [ -z "${1}" ]; then
+    echo "Usage: $PROG [OPTION]... <test_regex> (test_number)"
+    echo "Supply one regex to the script to filter tests,"
+    echo "and optionally a test number to run a specific test."
+    echo "Use --help flag for full instructions"
+    exit 1
+else
+    test_suite=${1:-}
+fi
+
+test_number=${2:-}
 
 # Function to select and debug a test
 function select_test() {
@@ -142,15 +152,6 @@ function select_test() {
     fi
 }
 
-# Step 0: Check the args
-if [ -z "$test_suite" ]
-then
-    echo "Usage: $PROG [OPTION]... <test_regex> (test_number)"
-    echo "Supply one regex to the script to filter tests,"
-    echo "and optionally a test number to run a specific test."
-    echo "Use --help flag for full instructions"
-    exit 1
-fi
 
 # Step 1: Reset and Setup folder context
 ## Sanity check that we are actually in a git repo
