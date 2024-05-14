@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-static const size_t MAX_CODEPOINTS = 0x110000;
+static const uint32_t MAX_CODEPOINTS = 0x110000;
 
 extern const std::vector<std::pair<uint32_t, uint16_t>> unicode_ranges_flags;
 extern const std::unordered_set<uint32_t> unicode_set_whitespace;

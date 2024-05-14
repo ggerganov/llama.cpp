@@ -83,7 +83,7 @@ ranges_flags.append((MAX_CODEPOINTS, CoodepointFlags()))
 ranges_nfd = [(0, 0, 0)] # start, last, nfd
 for codepoint, norm in table_nfd:
     start = ranges_nfd[-1][0]
-    if norm != ranges_nfd[-1][2]:
+    if ranges_nfd[-1] != (start, codepoint - 1, norm):
         ranges_nfd.append(None)
         start = codepoint
     ranges_nfd[-1] = (start, codepoint, norm)
