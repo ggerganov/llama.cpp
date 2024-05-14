@@ -142,6 +142,9 @@ namespace grammar_parser {
                 pos++;
                 last_sym_start = out_elements.size();
                 while (*pos != '"') {
+                    if (!*pos) {
+                        throw std::runtime_error("unexpected end of input");
+                    }
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
                     out_elements.push_back({LLAMA_GRETYPE_CHAR, char_pair.first});
@@ -156,6 +159,9 @@ namespace grammar_parser {
                 }
                 last_sym_start = out_elements.size();
                 while (*pos != ']') {
+                    if (!*pos) {
+                        throw std::runtime_error("unexpected end of input");
+                    }
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
                     enum llama_gretype type = last_sym_start < out_elements.size()
@@ -164,6 +170,9 @@ namespace grammar_parser {
 
                     out_elements.push_back({type, char_pair.first});
                     if (pos[0] == '-' && pos[1] != ']') {
+                        if (!pos[1]) {
+                            throw std::runtime_error("unexpected end of input");
+                        }
                         auto endchar_pair = parse_char(pos + 1);
                              pos          = endchar_pair.second;
                         out_elements.push_back({LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});
@@ -277,6 +286,22 @@ namespace grammar_parser {
             const char * pos = parse_space(src, true);
             while (*pos) {
                 pos = parse_rule(state, pos);
+            }
+            // Validate the state to ensure that all rules are defined
+            for (const auto & rule : state.rules) {
+                for (const auto & elem : rule) {
+                    if (elem.type == LLAMA_GRETYPE_RULE_REF) {
+                        // Ensure that the rule at that location exists
+                        if (elem.value >= state.rules.size() || state.rules[elem.value].empty()) {
+                            // Get the name of the rule that is missing
+                            for (const auto & kv : state.symbol_ids) {
+                                if (kv.second == elem.value) {
+                                    throw std::runtime_error("Undefined rule identifier '" + kv.first + "'");
+                                }
+                            }
+                        }
+                    }
+                }
             }
             return state;
         } catch (const std::exception & err) {

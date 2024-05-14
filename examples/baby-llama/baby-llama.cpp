@@ -1547,7 +1547,7 @@ int main(int argc, char ** argv) {
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
-        struct ggml_opt_params opt_params_lbfgs = ggml_opt_default_params(GGML_OPT_LBFGS);
+        struct ggml_opt_params opt_params_lbfgs = ggml_opt_default_params(GGML_OPT_TYPE_LBFGS);
         opt_params_lbfgs.print_forward_graph = false;
         opt_params_lbfgs.print_backward_graph = false;
         opt_params_lbfgs.lbfgs.n_iter = 16;

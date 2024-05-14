@@ -21,6 +21,7 @@ let generation_settings = null;
 //
 export async function* llama(prompt, params = {}, config = {}) {
   let controller = config.controller;
+  const api_url = config.api_url || "";
 
   if (!controller) {
     controller = new AbortController();
@@ -28,7 +29,7 @@ export async function* llama(prompt, params = {}, config = {}) {
 
   const completionParams = { ...paramDefaults, ...params, prompt };
 
-  const response = await fetch("/completion", {
+  const response = await fetch(`${api_url}/completion`, {
     method: 'POST',
     body: JSON.stringify(completionParams),
     headers: {
@@ -96,17 +97,17 @@ export async function* llama(prompt, params = {}, config = {}) {
             }
           }
           if (result.error) {
-            result.error = JSON.parse(result.error);
-            if (result.error.content.includes('slot unavailable')) {
-              // Throw an error to be caught by upstream callers
-              throw new Error('slot unavailable');
-            } else {
-              console.error(`llama.cpp error: ${result.error.content}`);
+            try {
+              result.error = JSON.parse(result.error);
+              if (result.error.message.includes('slot unavailable')) {
+                // Throw an error to be caught by upstream callers
+                throw new Error('slot unavailable');
+              } else {
+                console.error(`llama.cpp error [${result.error.code} - ${result.error.type}]: ${result.error.message}`);
+              }
+            } catch(e) {
+              console.error(`llama.cpp error ${result.error}`)
             }
-          }
-          if (result.error) {
-            result.error = JSON.parse(result.error);
-            console.error(`llama.cpp error: ${result.error.content}`);
           }
         }
       }
@@ -193,9 +194,10 @@ export const llamaComplete = async (params, controller, callback) => {
 }
 
 // Get the model info from the server. This is useful for getting the context window and so on.
-export const llamaModelInfo = async () => {
+export const llamaModelInfo = async (config = {}) => {
   if (!generation_settings) {
-    const props = await fetch("/props").then(r => r.json());
+    const api_url = config.api_url || "";
+    const props = await fetch(`${api_url}/props`).then(r => r.json());
     generation_settings = props.default_generation_settings;
   }
   return generation_settings;

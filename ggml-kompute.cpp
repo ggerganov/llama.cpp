@@ -1427,8 +1427,13 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
         for (int i = node_start; i < node_end; ++i) {
             struct ggml_tensor * src0 = gf->nodes[i]->src[0];
             struct ggml_tensor * src1 = gf->nodes[i]->src[1];
+            struct ggml_tensor * src2 = gf->nodes[i]->src[2]; GGML_UNUSED(src2);
             struct ggml_tensor * dst = gf->nodes[i];
             GGML_ASSERT(dst->data != nullptr);
+
+            if (ggml_is_empty(dst)) {
+                continue;
+            }
 
             switch (dst->op) {
                 case GGML_OP_NONE:
@@ -1554,7 +1559,19 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                 case GGML_OP_SOFT_MAX:
                     {
                         float scale;
-                        memcpy(&scale, dst->op_params, sizeof(float));
+                        float max_bias;
+
+                        memcpy(&scale,    (float *)dst->op_params + 0, sizeof(float));
+                        memcpy(&max_bias, (float *)dst->op_params + 1, sizeof(float));
+
+#pragma message("TODO: add ggml_vk_soft_max() F16 src1 support")
+#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/5021")
+                        GGML_ASSERT(!src1 || src1t == GGML_TYPE_F32);
+
+#pragma message("TODO: add ALiBi support")
+#pragma message("ref:  https://github.com/ggerganov/llama.cpp/pull/7192")
+                        GGML_ASSERT(max_bias == 0.0f);
+
                         ggml_vk_soft_max(seq, id_src0, id_src1, id_dst, off_src0, off_src1, off_dst, ne00, ne01, ne02, ne03, scale);
                     } break;
                 case GGML_OP_DIAG_MASK_INF:
@@ -1927,10 +1944,10 @@ static ggml_backend_buffer_type_t ggml_backend_kompute_get_default_buffer_type(g
     return ggml_backend_kompute_buffer_type(ctx->device);
 }
 
-static bool ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+static ggml_status ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
     ggml_vk_graph_compute(ctx, cgraph);
-    return true;
+    return GGML_STATUS_SUCCESS;
 }
 
 static bool ggml_backend_kompute_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
@@ -1951,13 +1968,25 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_kompute_graph_compute,
     /* .supports_op             = */ ggml_backend_kompute_supports_op,
+    /* .offload_op              = */ NULL,
+    /* .event_new               = */ NULL,
+    /* .event_free              = */ NULL,
+    /* .event_record            = */ NULL,
+    /* .event_wait              = */ NULL,
+    /* .event_synchronize       = */ NULL,
 };
+
+static ggml_guid_t ggml_backend_kompute_guid() {
+    static ggml_guid guid = { 0x7b, 0x57, 0xdc, 0xaf, 0xde, 0x12, 0x1d, 0x49, 0xfb, 0x35, 0xfa, 0x9b, 0x18, 0x31, 0x1d, 0xca };
+    return &guid;
+}
 
 ggml_backend_t ggml_backend_kompute_init(int device) {
     GGML_ASSERT(s_kompute_context == nullptr);
     s_kompute_context = new ggml_kompute_context(device);
 
     ggml_backend_t kompute_backend = new ggml_backend {
+        /* .guid      = */ ggml_backend_kompute_guid(),
         /* .interface = */ kompute_backend_i,
         /* .context   = */ s_kompute_context,
     };
@@ -1966,7 +1995,7 @@ ggml_backend_t ggml_backend_kompute_init(int device) {
 }
 
 bool ggml_backend_is_kompute(ggml_backend_t backend) {
-    return backend && backend->iface.get_name == ggml_backend_kompute_name;
+    return backend != NULL && ggml_guid_matches(backend->guid, ggml_backend_kompute_guid());
 }
 
 static ggml_backend_t ggml_backend_reg_kompute_init(const char * params, void * user_data) {

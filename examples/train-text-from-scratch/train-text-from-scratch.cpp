@@ -73,6 +73,7 @@ struct my_llama_model {
 static const char * LLM_KV_TRAINING_TYPE_TRAIN_MODEL     = "train_model";
 static const char * LLM_KV_TRAINING_TYPE                 = "training.type";
 
+static const char * LLM_KV_GENERAL_NAME                = "general.name";
 static const char * LLM_KV_GENERAL_ARCHITECTURE        = "general.architecture";
 static const char * LLM_KV_GENERAL_FILE_TYPE           = "general.file_type";
 
@@ -529,6 +530,7 @@ static void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_contex
 
 static void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vocab_model, struct my_llama_model * model) {
     const char * arch = "llama";
+
     enum llama_ftype ftype = LLAMA_FTYPE_ALL_F32;
 
     std::vector<char> keybuf;
@@ -540,6 +542,7 @@ static void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vo
 
     // set arch
     gguf_set_val_str(fctx, LLM_KV_GENERAL_ARCHITECTURE, arch);
+    gguf_set_val_str(fctx, LLM_KV_GENERAL_NAME, arch);
     gguf_set_val_u32(fctx, LLM_KV_GENERAL_FILE_TYPE, ftype);
 
     // set hparams
@@ -711,6 +714,7 @@ static bool load_checkpoint_file(const char * filename, struct my_llama_model * 
 
     load_checkpoint_gguf(fctx, f_ggml_ctx, model, train);
 
+    gguf_free(fctx);
     return true;
 }
 
@@ -960,7 +964,7 @@ int main(int argc, char ** argv) {
     struct ggml_opt_context * opt   = train->opt;
 
     // set opt params from command line
-    opt->params = ggml_opt_default_params(GGML_OPT_ADAM);
+    opt->params = ggml_opt_default_params(GGML_OPT_TYPE_ADAM);
     opt->params.print_forward_graph     = false;
     opt->params.print_backward_graph    = false;
     opt->params.graph_size              = LLAMA_TRAIN_MAX_NODES;

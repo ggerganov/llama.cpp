@@ -1,6 +1,7 @@
 import argparse
 import os
 import json
+import re
 
 import torch
 import numpy as np
@@ -38,9 +39,11 @@ def should_skip_tensor(name: str, has_text: bool, has_vision: bool, has_llava: b
 def get_tensor_name(name: str) -> str:
     if "projection" in name:
         return name
-
     if "mm_projector" in name:
-        return name.replace("model.mm_projector", "mm")
+        name = name.replace("model.mm_projector", "mm")
+        name = re.sub(r'mm\.mlp\.mlp', 'mm.model.mlp', name, count=1)
+        name = re.sub(r'mm\.peg\.peg', 'mm.model.peg', name, count=1)
+        return name
 
     return name.replace("text_model", "t").replace("vision_model", "v").replace("encoder.layers", "blk").replace("embeddings.", "").replace("_proj", "").replace("self_attn.", "attn_").replace("layer_norm", "ln").replace("layernorm", "ln").replace("mlp.fc1", "ffn_down").replace("mlp.fc2", "ffn_up").replace("embedding", "embd").replace("final", "post").replace("layrnorm", "ln")
 
@@ -83,7 +86,7 @@ ap.add_argument("--clip-model-is-vision", action="store_true", required=False,
 ap.add_argument("--clip-model-is-openclip", action="store_true", required=False,
                 help="The clip model is from openclip (for ViT-SO400M type))")
 ap.add_argument("--llava-projector", help="Path to llava.projector file. If specified, save an image encoder for LLaVA models.")
-ap.add_argument("--projector-type", help="Type of projector. Possible values: mlp, ldp", choices=["mlp", "ldp"], default="mlp")
+ap.add_argument("--projector-type", help="Type of projector. Possible values: mlp, ldp, ldpv2", choices=["mlp", "ldp", "ldpv2"], default="mlp")
 ap.add_argument("-o", "--output-dir", help="Directory to save GGUF files. Default is the original model directory", default=None)
 # Example --image_mean 0.48145466 0.4578275 0.40821073 --image_std 0.26862954 0.26130258 0.27577711
 # Example --image_mean 0.5 0.5 0.5 --image_std 0.5 0.5 0.5

@@ -199,10 +199,10 @@
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
-    } from '/index.js';
+    } from './index.js';
 
-    import { llama } from '/completion.js';
-    import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    import { llama } from './completion.js';
+    import { SchemaConverter } from './json-schema-to-grammar.mjs';
     let selected_image = false;
     var slot_id = -1;
 
@@ -222,6 +222,7 @@
       temperature: 0.7,
       repeat_last_n: 256, // 0 = disable penalty, -1 = context size
       repeat_penalty: 1.18, // 1.0 = disabled
+      penalize_nl: false,
       top_k: 40, // <= 0 to use vocab size
       top_p: 0.95, // 1.0 = disabled
       min_p: 0.05, // 0 = disabled
@@ -405,7 +406,7 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: location.pathname.replace(/\/+$/, '') })) {
         const data = chunk.data;
 
         if (data.stop) {
@@ -627,17 +628,20 @@
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
       const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: Math.floor(parseFloat(el.target.value)) }
+      const updateParamsBool = (el) => params.value = { ...params.value, [el.target.name]: el.target.checked }
 
       const grammarJsonSchemaPropOrder = signal('')
       const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
-      const convertJSONSchemaGrammar = () => {
+      const convertJSONSchemaGrammar = async () => {
         try {
-          const schema = JSON.parse(params.value.grammar)
-          const converter = new SchemaConverter(
-            grammarJsonSchemaPropOrder.value
+          let schema = JSON.parse(params.value.grammar)
+          const converter = new SchemaConverter({
+            prop_order: grammarJsonSchemaPropOrder.value
               .split(',')
-              .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {})
-          )
+              .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {}),
+            allow_fetch: true,
+          })
+          schema = await converter.resolveRefs(schema, 'input')
           converter.visit(schema, '')
           params.value = {
             ...params.value,
@@ -664,6 +668,15 @@
             <label for="${name}">${label}</label>
             <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
             <span>${value}</span>
+          </div>
+        `
+      };
+
+      const BoolField = ({ label, name, value }) => {
+        return html`
+          <div>
+            <label for="${name}">${label}</label>
+            <input type="checkbox" id="${name}" name="${name}" checked="${value}" onclick=${updateParamsBool} />
           </div>
         `
       };
@@ -767,6 +780,7 @@
             ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
             ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
             ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
+            ${BoolField({ label: "Penalize repetition of newlines", name: "penalize_nl", value: params.value.penalize_nl })}
             ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
             ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
             ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
@@ -867,11 +881,11 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/^#{1,6} (.*)$/gim, '<h3>$1</h3>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/__(.*?)__/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/_(.*?)_/g, '<em>$1</em>')
+        .replace(/(^|\n)#{1,6} ([^\n]*)(?=([^`]*`[^`]*`)*[^`]*$)/g, '$1<h3>$2</h3>')
+        .replace(/\*\*(.*?)\*\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
+        .replace(/__(.*?)__(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
+        .replace(/_(.*?)_(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
         .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
         .replace(/`(.*?)`/g, '<code>$1</code>')
         .replace(/\n/gim, '<br />');
@@ -1001,6 +1015,10 @@
     }
 
     function App(props) {
+      useEffect(() => {
+        const query = new URLSearchParams(location.search).get("q");
+        if (query) chat(query);
+      }, []);
 
       return html`
         <div class="mode-${session.value.type}">

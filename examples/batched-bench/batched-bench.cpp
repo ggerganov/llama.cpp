@@ -32,16 +32,18 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [N_KV_MAX] [IS_PP_SHARED] [NGL] [MMQ] <PP> <TG> <PL>\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [N_KV_MAX] [N_BATCH] [N_UBATCH] [FATTN] [IS_PP_SHARED] [NGL] <PP> <TG> <PL>\n" , argv[0]);
         printf("  <PP>, <TG> and PL are comma-separated lists of numbers without spaces\n\n");
-        printf("  example: %s ggml-model-f16.gguf 2048 0 999 0 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
+        printf("  example: %s ggml-model-f16.gguf 2048 2048 512 0 999 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
         return 1 ;
     }
 
     int n_kv_max     = 2048;
+    int n_batch      = 2048;
+    int n_ubatch     = 512;
+    bool flash_attn  = false;
     int is_pp_shared = 0;
     int n_gpu_layers = 0;
-    int mmq          = 0;
 
     std::vector<int> n_pp = { 128, 256, 512, 1024, 2048, 3584, 7680, };
     std::vector<int> n_tg = { 128, 256, };
@@ -57,27 +59,35 @@ int main(int argc, char ** argv) {
     }
 
     if (argc >= 4) {
-        is_pp_shared = std::atoi(argv[3]);
+        n_batch = std::atoi(argv[3]);
     }
 
     if (argc >= 5) {
-        n_gpu_layers = std::atoi(argv[4]);
+        n_ubatch = std::atoi(argv[4]);
     }
 
     if (argc >= 6) {
-        mmq = std::atoi(argv[5]);
+        flash_attn = std::atoi(argv[5]);
     }
 
     if (argc >= 7) {
-        n_pp = parse_list(argv[6]);
+        is_pp_shared = std::atoi(argv[6]);
     }
 
     if (argc >= 8) {
-        n_tg = parse_list(argv[7]);
+        n_gpu_layers = std::atoi(argv[7]);
     }
 
     if (argc >= 9) {
-        n_pl = parse_list(argv[8]);
+        n_pp = parse_list(argv[8]);
+    }
+
+    if (argc >= 10) {
+        n_tg = parse_list(argv[9]);
+    }
+
+    if (argc >= 11) {
+        n_pl = parse_list(argv[10]);
     }
 
     // init LLM
@@ -103,13 +113,17 @@ int main(int argc, char ** argv) {
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    ctx_params.seed      = 1234;
-    ctx_params.n_ctx     = n_kv_max;
-    ctx_params.n_batch   = 512;
-    ctx_params.mul_mat_q = mmq;
+    ctx_params.seed       = 1234;
+    ctx_params.n_ctx      = n_kv_max;
+    ctx_params.n_batch    = n_batch;
+    ctx_params.n_ubatch   = n_ubatch;
+    ctx_params.flash_attn = flash_attn;
 
     ctx_params.n_threads       = params.n_threads;
     ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+
+    // ensure enough sequences are available
+    ctx_params.n_seq_max = *std::max_element(n_pl.begin(), n_pl.end());
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
@@ -141,6 +155,8 @@ int main(int argc, char ** argv) {
                 LOG_TEE("failed to decode the batch, n_batch = %d, ret = %d\n", n_batch, ret);
                 return false;
             }
+
+            llama_synchronize(ctx);
         }
 
         return true;
@@ -159,7 +175,7 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("\n");
-    LOG_TEE("%s: n_kv_max = %d, is_pp_shared = %d, n_gpu_layers = %d, mmq = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, is_pp_shared, n_gpu_layers, mmq, ctx_params.n_threads, ctx_params.n_threads_batch);
+    LOG_TEE("%s: n_kv_max = %d, n_batch = %d, n_ubatch = %d, flash_attn = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, n_batch, n_ubatch, flash_attn, is_pp_shared, n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch);
     LOG_TEE("\n");
 
     LOG_TEE("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP",     "TG",     "B",    "N_KV",     "T_PP s",   "S_PP t/s", "T_TG s",   "S_TG t/s", "T s",      "S t/s");
@@ -180,10 +196,10 @@ int main(int argc, char ** argv) {
 
                 llama_batch_clear(batch);
 
-                const int n_tokens = is_pp_shared ? pp : pl*pp;
-
-                for (int i = 0; i < n_tokens; ++i) {
-                    llama_batch_add(batch, 0, i, { 0 }, false);
+                for (int i = 0; i < pp; ++i) {
+                    for (int j = 0; j < (is_pp_shared ? 1 : pl); ++j) {
+                        llama_batch_add(batch, 0, i, { j }, false);
+                    }
                 }
                 batch.logits[batch.n_tokens - 1] = true;
 
@@ -198,7 +214,7 @@ int main(int argc, char ** argv) {
 
                 if (is_pp_shared) {
                     for (int32_t i = 1; i < pl; ++i) {
-                        llama_kv_cache_seq_cp(ctx, 0, i, 0, pp);
+                        llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
                     }
                 }
 

@@ -107,11 +107,12 @@
         # ```
         #
         # Cf. https://nixos.org/manual/nix/unstable/command-ref/new-cli/nix3-flake.html?highlight=flake#flake-format
-        flake.overlays.default =
-          (final: prev: {
+        flake.overlays.default = (
+          final: prev: {
             llamaPackages = final.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
             inherit (final.llamaPackages) llama-cpp;
-          });
+          }
+        );
 
         systems = [
           "aarch64-darwin"
@@ -131,6 +132,9 @@
             ...
           }:
           {
+            # For standardised reproducible formatting with `nix fmt`
+            formatter = pkgs.nixfmt-rfc-style;
+
             # Unlike `.#packages`, legacyPackages may contain values of
             # arbitrary types (including nested attrsets) and may even throw
             # exceptions. This attribute isn't recursed into by `nix flake
@@ -141,6 +145,7 @@
             # the same path you would with an overlay.
             legacyPackages = {
               llamaPackages = pkgs.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
+              llamaPackagesWindows = pkgs.pkgsCross.mingwW64.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
               llamaPackagesCuda = pkgsCuda.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
               llamaPackagesRocm = pkgsRocm.callPackage .devops/nix/scope.nix { inherit llamaVersion; };
             };
@@ -150,6 +155,8 @@
             packages =
               {
                 default = config.legacyPackages.llamaPackages.llama-cpp;
+                vulkan = config.packages.default.override { useVulkan = true; };
+                windows = config.legacyPackages.llamaPackagesWindows.llama-cpp;
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
                 opencl = config.packages.default.override { useOpenCL = true; };
@@ -157,16 +164,20 @@
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };
                 mpi-cuda = config.packages.default.override { useMpi = true; };
-                vulkan = config.packages.default.override { useVulkan = true; };
               }
               // lib.optionalAttrs (system == "x86_64-linux") {
                 rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
               };
 
             # Packages exposed in `.#checks` will be built by the CI and by
-            # `nix flake check`. Currently we expose all packages, but we could
-            # make more granular choices
-            checks = config.packages;
+            # `nix flake check`.
+            #
+            # We could test all outputs e.g. as `checks = confg.packages`.
+            #
+            # TODO: Build more once https://github.com/ggerganov/llama.cpp/issues/6346 has been addressed
+            checks = {
+              inherit (config.packages) default vulkan;
+            };
           };
       };
 }

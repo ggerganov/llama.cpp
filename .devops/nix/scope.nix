@@ -12,5 +12,8 @@ lib.makeScope newScope (
   self: {
     inherit llamaVersion;
     llama-cpp = self.callPackage ./package.nix { };
+    docker = self.callPackage ./docker.nix { };
+    docker-min = self.callPackage ./docker.nix { interactive = false; };
+    sif = self.callPackage ./sif.nix { };
   }
 )

@@ -21,12 +21,8 @@ android {
             useSupportLibrary = true
         }
         ndk {
-            // Workaround for https://github.com/llvm/llvm-project/issues/65820
-            // affecting armeabi-v7a. Skip armeabi-v7a when invoked with
-            // -Pskip-armeabi-v7a (e.g., ./gradlew build -Pskip-armeabi-v7a).
-            if (project.hasProperty("skip-armeabi-v7a")) {
-                abiFilters += listOf("arm64-v8a", "x86_64", "x86")
-            }
+            // Add NDK properties if wanted, e.g.
+            // abiFilters += listOf("arm64-v8a")
         }
         externalNativeBuild {
             cmake {

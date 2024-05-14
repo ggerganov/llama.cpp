@@ -126,7 +126,7 @@ int main(int argc, char ** argv) {
     const int n_batch     = ctx_params.n_batch;
     const int n_batch_grp = ctx_params.n_batch/n_grp;
 
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d, n_grp = %d, n_batch = %d\n", __func__, n_len, n_ctx, n_kv_req, n_grp, n_batch);
+    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d, n_grp = %d, n_batch = %d, n_junk = %d, i_pos = %d\n", __func__, n_len, n_ctx, n_kv_req, n_grp, n_batch, n_junk, i_pos);
 
     // print the prompt token-by-token
 
@@ -146,10 +146,11 @@ int main(int argc, char ** argv) {
             const int ib = i/n_batch - 1;
             const int bd = n_batch_grp*(n_grp - 1);
 
-            llama_kv_cache_seq_shift(ctx, 0, n_past - n_batch,         n_past,         ib*bd);
-            llama_kv_cache_seq_div  (ctx, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
+            llama_kv_cache_seq_add (ctx, 0, n_past - n_batch,         n_past,         ib*bd);
+            llama_kv_cache_seq_div (ctx, 0, n_past - n_batch + ib*bd, n_past + ib*bd, n_grp);
+            llama_kv_cache_update  (ctx);
 
-            n_past -= bd;
+            n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
         }
 
         llama_batch_clear(batch);
@@ -179,10 +180,12 @@ int main(int argc, char ** argv) {
 
         LOG_TEE("%s: shifting KV cache with %d\n", __func__, n_discard);
 
-        llama_kv_cache_seq_rm   (ctx, 0, n_keep            , n_keep + n_discard);
-        llama_kv_cache_seq_shift(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
+        llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
+        llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
+      //llama_kv_cache_defrag (ctx);
+        llama_kv_cache_update (ctx);
 
-        n_past -= n_discard;
+        n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
 
         llama_batch_clear(batch);
 
@@ -208,10 +211,12 @@ int main(int argc, char ** argv) {
         if (n_discard > 0) {
             LOG_TEE("%s: shifting KV cache with %d to free space for the answer\n", __func__, n_discard);
 
-            llama_kv_cache_seq_rm   (ctx, 0, n_keep            , n_keep + n_discard);
-            llama_kv_cache_seq_shift(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
+            llama_kv_cache_seq_rm (ctx, 0, n_keep            , n_keep + n_discard);
+            llama_kv_cache_seq_add(ctx, 0, n_keep + n_discard, n_ctx,  -n_discard);
+          //llama_kv_cache_defrag (ctx);
+            llama_kv_cache_update (ctx);
 
-            n_past -= n_discard;
+            n_past = llama_kv_cache_seq_pos_max(ctx, 0) + 1;
         }
     }
 
@@ -247,8 +252,8 @@ int main(int argc, char ** argv) {
             // sample the most likely token
             const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
-            // is it an end of stream?
-            if (new_token_id == llama_token_eos(model) || n_cur == n_len) {
+            // is it an end of generation?
+            if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
                 LOG_TEE("\n");
 
                 break;

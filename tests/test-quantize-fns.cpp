@@ -138,11 +138,6 @@ int main(int argc, char * argv[]) {
 
         const ggml_type ei = (ggml_type)i;
 
-        if (ei == GGML_TYPE_IQ2_XXS || ei == GGML_TYPE_IQ2_XS) {
-            printf("Skip %s due to missing quantization functionality\n", ggml_type_name(ei));
-            continue;
-        }
-
         printf("Testing %s\n", ggml_type_name((ggml_type) i));
         ggml_quantize_init(ei);
 
@@ -150,7 +145,9 @@ int main(int argc, char * argv[]) {
             const float total_error = total_quantization_error(qfns, test_size, test_data.data());
             const float max_quantization_error =
                 type == GGML_TYPE_Q2_K    ? MAX_QUANTIZATION_TOTAL_ERROR_2BITS :
+                type == GGML_TYPE_IQ2_S   ? MAX_QUANTIZATION_TOTAL_ERROR_2BITS :
                 type == GGML_TYPE_Q3_K    ? MAX_QUANTIZATION_TOTAL_ERROR_3BITS :
+                type == GGML_TYPE_IQ3_S   ? MAX_QUANTIZATION_TOTAL_ERROR_3BITS :
                 type == GGML_TYPE_IQ3_XXS ? MAX_QUANTIZATION_TOTAL_ERROR_3BITS_XXS : MAX_QUANTIZATION_TOTAL_ERROR;
             failed = !(total_error < max_quantization_error);
             num_failed += failed;
@@ -167,7 +164,9 @@ int main(int argc, char * argv[]) {
 
             const float vec_dot_error = dot_product_error(qfns, test_size, test_data.data(), test_data2.data());
             const float max_allowed_error = type == GGML_TYPE_Q2_K || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ2_XXS ||
-                                            type == GGML_TYPE_IQ3_XXS ? MAX_DOT_PRODUCT_ERROR_LOWBIT : MAX_DOT_PRODUCT_ERROR;
+                                            type == GGML_TYPE_IQ3_XXS || type == GGML_TYPE_IQ3_S || type == GGML_TYPE_IQ2_S
+                                          ? MAX_DOT_PRODUCT_ERROR_LOWBIT
+                                          : MAX_DOT_PRODUCT_ERROR;
             failed = !(vec_dot_error < max_allowed_error);
             num_failed += failed;
             if (failed || verbose) {
