@@ -15849,7 +15849,11 @@ struct llama_context * llama_new_context_with_model(
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*LLAMA_MAX_NODES + ggml_graph_overhead_custom(LLAMA_MAX_NODES, false));
 
             // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
-            bool pipeline_parallel = llama_get_device_count() > 1 && model->n_gpu_layers > (int)model->hparams.n_layer && model->split_mode == LLAMA_SPLIT_MODE_LAYER;
+            bool pipeline_parallel =
+                llama_get_device_count() > 1 &&
+                model->n_gpu_layers > (int)model->hparams.n_layer &&
+                model->split_mode == LLAMA_SPLIT_MODE_LAYER &&
+                params.offload_kqv;
 #ifndef GGML_USE_CUDA
             // pipeline parallelism requires support for async compute and events
             // currently this is only implemented in the CUDA backend
