@@ -7,7 +7,7 @@ build_dir="build-ci-debug"
 
 if [ x"$1" = x"-h" ] || [ x"$1" = x"--help" ]; then
     echo "Usage: $PROG [OPTION]... <test_regex> (test_number)"
-    echo "Debug specific ctest program."
+    echo "Run a specific ctest program."
     echo
     echo "Options:"
     echo "  -h, --help       Display this help and exit"
@@ -28,6 +28,13 @@ function select_test() {
     test_suite=${1:-test}
     test_number=${2:-}
     repo_root=${3:-}
+
+    # Color
+    red=$(tput setaf 1)
+    green=$(tput setaf 2)
+    yellow=$(tput setaf 3)
+    blue=$(tput setaf 4)
+    normal=$(tput sgr0)
 
     # Sanity Check If Tests Is Detected
     printf "\n\nGathering tests that fit REGEX: ${test_suite} ...\n"
@@ -58,38 +65,30 @@ function select_test() {
         printf "\nUser Already Requested #${test_number}\n"
     fi
 
-    # Start GDB with the requested test binary and arguments
-    printf "Debugging(GDB) test: ${tests[test_number]}\n"
+    # Find requested test binary and arguments
     # Change IFS (Internal Field Separator)
     sIFS=$IFS
     IFS=$'\n'
 
     # Get test args
-    gdb_args=($(ctest -R ${test_suite} -V -N | grep "Test command" | cut -d':' -f3 | awk '{$1=$1};1' ))
+    test_args=($(ctest -R ${test_suite} -V -N | grep "Test command" | cut -d':' -f3 | awk '{$1=$1};1' ))
     IFS=$sIFS
-    printf "Debug arguments: ${gdb_args[test_number]}\n\n"
 
-    # Expand paths if needed
-    args=()
-    for x in $(echo ${gdb_args[test_number]} | sed -e 's/"\/\<//' -e 's/\>"//')
-    do
-        args+=($(echo $x | sed -e 's/.*\/..\//..\//'))
-    done
-
-    # Print Command
-    red=$(tput setaf 1)
-    green=$(tput setaf 2)
-    yellow=$(tput setaf 3)
-    blue=$(tput setaf 4)
-    normal=$(tput sgr0)
-    printf "${blue}Ran Test #${test_number}: ${tests[test_number]}${normal}\n"
-    printf "${yellow}GDB args: ${gdb_args[test_number]}${normal}\n"
-    printf "${yellow}GDB args @: ${args[@]}${normal}\n"
-
-    # Execute debugger
+    # Execute Test
     pushd "$repo_root" || exit 1
-    gdb --args ${args[@]}
-    popd > /dev/null || exit 1
+    printf "${blue}Running Test #${test_number}: ${tests[test_number]}${normal}\n"
+    eval "${test_args[test_number]}"
+    exit_code=$?
+    popd
+
+    # Print Result
+    printf "${blue}Ran Test #${test_number}: ${tests[test_number]}${normal}\n"
+    printf "${yellow}Command: ${test_args[test_number]}${normal}\n"
+    if [ $exit_code -eq 0 ]; then
+        printf "${green}TEST PASS${normal}\n"
+    else
+        printf "${red}TEST FAIL${normal}\n"
+    fi
 }
 
 # Step 0: Check the args
@@ -117,7 +116,7 @@ pushd "$repo_root" || exit 1
 rm -rf "$build_dir" && mkdir "$build_dir" || exit 1
 
 # Step 2: Setup Build Environment and Compile Test Binaries
-# Note: test-eval-callback requires -DLLAMA_CURL
+# Note: test-eval-callback requires -DLLAMA_CURL=1
 cmake -B "./$build_dir" -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=1 || exit 1
 pushd "$build_dir" && make -j || exit 1
 
