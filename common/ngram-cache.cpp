@@ -195,7 +195,7 @@ void llama_ngram_cache_draft(
 
 void llama_ngram_cache_save(llama_ngram_cache & ngram_cache, std::string & filename) {
     std::ofstream file_out(filename, std::ios::binary);
-    for (std::pair<llama_ngram, llama_ngram_cache_part> item : ngram_cache) {
+    for (const std::pair<llama_ngram, llama_ngram_cache_part> & item : ngram_cache) {
         const llama_ngram      ngram        = item.first;
         llama_ngram_cache_part token_counts = item.second;
         GGML_ASSERT(!token_counts.empty());
@@ -255,7 +255,7 @@ llama_ngram_cache llama_ngram_cache_load(std::string & filename) {
 }
 
 void llama_ngram_cache_merge(llama_ngram_cache & ngram_cache_target, llama_ngram_cache & ngram_cache_add) {
-    for (std::pair<llama_ngram, llama_ngram_cache_part> ngram_part : ngram_cache_add) {
+    for (const std::pair<llama_ngram, llama_ngram_cache_part> & ngram_part : ngram_cache_add) {
         const llama_ngram      ngram = ngram_part.first;
         llama_ngram_cache_part  part = ngram_part.second;
 
