@@ -1,5 +1,5 @@
 #include "common.h"
-#include "chaton.hpp"
+#include "chaton_json.hpp"
 
 #include "console.h"
 #include "llama.h"

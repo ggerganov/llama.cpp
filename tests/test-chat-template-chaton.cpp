@@ -7,7 +7,7 @@
 #include <cassert>
 
 #include "llama.h"
-#include "chaton.hpp"
+#include "chaton_json.hpp"
 
 
 std::vector<std::string> templateIds = { "llama2", "llama3", "chatml",

@@ -240,12 +240,6 @@ const auto K_SYSTEMUSER_1ST_USER_HAS_BEGIN = "systemuser-1st-user-has-begin";
 const auto K_SYSTEMUSER_1ST_USER_HAS_PREFIX = "systemuser-1st-user-has-prefix";
 const auto K_REVERSE_PROMPT = "reverse-prompt";
 
-#define CHATON_JSON
-#ifdef CHATON_JSON
-#include <json.hpp>
-using json = nlohmann::ordered_json;
-#endif
-
 
 
 /**
@@ -547,91 +541,6 @@ public:
 #include "chaton_meta.hpp"
 //ChatTemplates gCT = {{}};
 
-#ifdef CHATON_JSON
-
-// Get value corresponding to the specified hierarchy/chain of keys.
-// Also throw a more informative exception, if it is not found.
-template <typename SupportedType>
-inline SupportedType json_get(json &j, const std::vector<std::string_view> &keys, const std::string &msgTag) {
-    json curJ = j;
-    std::stringstream skey;
-    int i = 0;
-    for(auto key: keys) {
-        if (i != 0) skey << "-";
-        i += 1;
-        skey << key;
-        if (curJ.contains(key)) {
-            curJ = curJ[key];
-        } else {
-            std::stringstream ss;
-            ss << "ERRR:ChatON:" << __func__ << ":" << msgTag << ":KeyChain [" << skey.str() << "] is missing";
-            throw std::runtime_error(ss.str());
-        }
-    }
-    return curJ;
-}
-
-// Update/Extend the compiled-in configurable template data (the meta) from the specified json file.
-inline bool chaton_meta_load_json(const std::string &fname) {
-    std::ifstream f(fname);
-    json conMeta = json::parse(f);
-    for(auto it=conMeta.begin(); it != conMeta.end(); ++it) {
-
-        auto group = it.key();
-        auto curTmpl = conMeta[group];
-
-        std::string globalBegin = json_get<std::string>(curTmpl, { K_GLOBAL, K_BEGIN }, group);
-        gCT.set_value<std::string>(group, { K_GLOBAL, K_BEGIN }, globalBegin);
-        std::string globalEnd = json_get<std::string>(curTmpl, { K_GLOBAL, K_END }, group);
-        gCT.set_value<std::string>(group, { K_GLOBAL, K_END }, globalEnd);
-
-        std::string systemBegin = json_get<std::string>(curTmpl, { K_SYSTEM, K_BEGIN }, group);
-        gCT.set_value<std::string>(group, { K_SYSTEM, K_BEGIN }, systemBegin);
-        std::string systemPrefix = json_get<std::string>(curTmpl, { K_SYSTEM, K_PREFIX }, group);
-        gCT.set_value<std::string>(group, { K_SYSTEM, K_PREFIX }, systemPrefix);
-        std::string systemSuffix = json_get<std::string>(curTmpl, { K_SYSTEM, K_SUFFIX }, group);
-        gCT.set_value<std::string>(group, { K_SYSTEM, K_SUFFIX }, systemSuffix);
-        std::string systemEnd = json_get<std::string>(curTmpl, { K_SYSTEM, K_END }, group);
-        gCT.set_value<std::string>(group, { K_SYSTEM, K_END }, systemEnd);
-
-        std::string userBegin = json_get<std::string>(curTmpl, { K_USER, K_BEGIN }, group);
-        gCT.set_value<std::string>(group, { K_USER, K_BEGIN }, userBegin);
-        std::string userPrefix = json_get<std::string>(curTmpl, { K_USER, K_PREFIX }, group);
-        gCT.set_value<std::string>(group, { K_USER, K_PREFIX }, userPrefix);
-        std::string userSuffix = json_get<std::string>(curTmpl, { K_USER, K_SUFFIX }, group);
-        gCT.set_value<std::string>(group, { K_USER, K_SUFFIX }, userSuffix);
-        std::string userEnd = json_get<std::string>(curTmpl, { K_USER, K_END }, group);
-        gCT.set_value<std::string>(group, { K_USER, K_END }, userEnd);
-
-        std::string assistantBegin = json_get<std::string>(curTmpl, { K_ASSISTANT, K_BEGIN }, group);
-        gCT.set_value<std::string>(group, { K_ASSISTANT, K_BEGIN }, assistantBegin);
-        std::string assistantPrefix = json_get<std::string>(curTmpl, { K_ASSISTANT, K_PREFIX }, group);
-        gCT.set_value<std::string>(group, { K_ASSISTANT, K_PREFIX }, assistantPrefix);
-        std::string assistantSuffix = json_get<std::string>(curTmpl, { K_ASSISTANT, K_SUFFIX }, group);
-        gCT.set_value<std::string>(group, { K_ASSISTANT, K_SUFFIX }, assistantSuffix);
-        std::string assistantEnd = json_get<std::string>(curTmpl, { K_ASSISTANT, K_END }, group);
-        gCT.set_value<std::string>(group, { K_ASSISTANT, K_END }, assistantEnd);
-
-        std::string reversePrompt = json_get<std::string>(curTmpl, { K_REVERSE_PROMPT }, group);
-        gCT.set_value<std::string>(group, { K_REVERSE_PROMPT }, reversePrompt);
-
-        bool systemHasSuffix = json_get<bool>(curTmpl, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX }, group);
-        gCT.set_value(group, { K_SYSTEMUSER_SYSTEM_HAS_SUFFIX }, systemHasSuffix);
-        bool systemHasEnd = json_get<bool>(curTmpl, { K_SYSTEMUSER_SYSTEM_HAS_END }, group);
-        gCT.set_value(group, { K_SYSTEMUSER_SYSTEM_HAS_END }, systemHasEnd);
-
-        bool userHasBegin = json_get<bool>(curTmpl, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN }, group);
-        gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_BEGIN }, userHasBegin);
-        bool userHasPrefix = json_get<bool>(curTmpl, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX }, group);
-        gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX }, userHasPrefix);
-
-    }
-    LDBUG_LN("%s", gCT.dump("", "DBUG:ChatONMetaLoad:ChatTemplates").c_str());
-    return true;
-}
-
-#endif
-
 
 inline bool chaton_tmpl_exists(const std::string &tmpl) {
     return gCT.tmpl_exists(tmpl);
@@ -862,20 +771,25 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
 
 
 /**
- * Validate specified chaton-template-id and inturn dump the contents
- * related to that specific chat-handshake-template-standard.
+ * Validate specified chaton-template-id and inturn dump the contents related to that
+ * specific chat-handshake-template-standard, wrt the specified ChatTemplates.
+ * If ct is nullptr, then map to the compiled-in ChatTemplates global instance.
+ * 
  * ALERT: If no template-id is specified, it is ignored with a warning.
  * NOTE: It optionally dumps the full loaded chaton templates data
  * NOTE: It uses tmpl_basiccheck, which raises exception, if all the required
  * keys/fields are not present wrt the specified template-standard/model-id.
  */
-inline bool _chaton_meta_validate_dump(std::string &tmpl) {
-    LDBUG_LN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump("", "INFO:ChatOnMetaValidateDump").c_str());
+inline bool _chaton_meta_validate_dump(std::string &tmpl, ChatTemplates *ct=nullptr) {
+    if (ct == nullptr) {
+        ct = &gCT;
+    }
+    LDBUG_LN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), ct->dump("", "INFO:ChatOnMetaValidateDump").c_str());
     if (tmpl.empty()) {
         return true;
     }
     std::stringstream ss;
-    if (gCT.tmpl_basiccheck(tmpl, ss, "INFO:ChatOnMetaValidateDump")) {
+    if (ct->tmpl_basiccheck(tmpl, ss, "INFO:ChatOnMetaValidateDump")) {
         LOGXLN("%s", ss.str().c_str());
     } else {
         return false;
@@ -884,8 +798,10 @@ inline bool _chaton_meta_validate_dump(std::string &tmpl) {
 }
 
 /**
- * Verify that specified chaton-template-id contains required fields using meta-validate-dump
+ * In the passed ChatTemplates instance, verify that specified chaton-template-id
+ * contains required fields using meta-validate-dump.
+ * If ct is nullptr, then map to the compiled-in ChatTemplates global instance.
  */
-inline bool chaton_meta_ok(std::string &tmpl) {
-    return _chaton_meta_validate_dump(tmpl);
+inline bool chaton_meta_ok(std::string &tmpl, ChatTemplates *ct=nullptr) {
+    return _chaton_meta_validate_dump(tmpl, ct);
 }
