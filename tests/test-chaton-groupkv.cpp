@@ -19,7 +19,7 @@ static void gkv_inited() {
     }};
 
     std::cout << "**** gkv inited **** " << std::endl;
-    std::cout << gkv.dump("", "INFO:GKV:Inited:") << std::endl;
+    std::cout << gkv.dump("", "INFO:GKV:Inited") << std::endl;
 
 }
 

@@ -107,9 +107,9 @@ public:
                 LDBUG_LN("DBUG:GKV:%s:%s:%s:Skipping...", __func__, msgTag.c_str(), gm.first.c_str());
                 continue;
             }
-            ss << "\n" << msgTag << gm.first << ":\n";
+            ss << "\n" << msgTag + ":" << gm.first << ":\n";
             for(auto k: gm.second) {
-                ss << msgTag << "\t" << k.first << ":" << to_str(k.second) << "\n";
+                ss << msgTag + ":" << "\t" << k.first << ":" << to_str(k.second) << "\n";
             }
         }
         return ss.str();

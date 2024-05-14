@@ -116,7 +116,7 @@ static void sc_inited() {
     }};
 
     std::cout << "**** sc inited **** " << std::endl;
-    std::cout << sc.dump("") << std::endl;
+    std::cout << sc.dump("", "INFO:SC:Inited") << std::endl;
 
 }
 
@@ -125,7 +125,7 @@ static void sc_set(const std::string &fname) {
     std::cout << "**** sc set **** " << std::endl;
     SimpCfg sc = {{}};
     sc.load(fname);
-    std::cout << sc.dump("", "INFO:SC:Set:AfterLoad:") << std::endl;
+    std::cout << sc.dump("", "INFO:SC:Set:AfterLoad") << std::endl;
 
     sc.get_bool("testme", {"key101b"}, false);
     sc.get_string("testme", {"key101s"}, "Not found");
@@ -137,7 +137,7 @@ static void sc_set(const std::string &fname) {
     sc.set_int64("testme", {"key201i"}, 987654);
     sc.set_double("testme", {"key201d"}, 9988.7766);
 
-    std::cout << sc.dump("testme", "INFO:SC:Set:AfterSet:") << std::endl;
+    std::cout << sc.dump("testme", "INFO:SC:Set:AfterSet") << std::endl;
     sc.get_bool("testme", {"key201b"}, false);
     sc.get_string("testme", {"key201s"}, "Not found");
     sc.get_int64("testme", {"key201i"}, 123456);

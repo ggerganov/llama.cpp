@@ -595,7 +595,7 @@ inline bool chaton_meta_load(const std::string &fname) {
         gCT.set_value(group, { K_SYSTEMUSER_1ST_USER_HAS_PREFIX }, userHasPrefix);
 
     }
-    LOGXLN("%s", gCT.dump("", "DBUG:ChatONMetaLoad:ChatTemplates:").c_str());
+    LOGXLN("%s", gCT.dump("", "DBUG:ChatONMetaLoad:ChatTemplates").c_str());
     return true;
 }
 
@@ -838,7 +838,7 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
  * keys/fields are present wrt the specified template-standard/model-id or not.
  */
 inline bool _chaton_meta_validate_dump(std::string &tmpl) {
-    LOGXLN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump(tmpl, "INFO:ChatOnMetaValidateDump:").c_str());
+    LDBUG_LN("\n\nINFO:%s:%s:\n%s", __func__, tmpl.c_str(), gCT.dump("", "INFO:ChatOnMetaValidateDump").c_str());
     if (tmpl.empty()) {
         return true;
     }
