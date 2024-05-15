@@ -144,15 +144,15 @@ static std::array<codepoint_flags, MAX_CODEPOINTS> unicode_cpt_flags_array() {
 
 static std::unordered_map<uint8_t, std::string> unicode_byte_to_utf8_map() {
     std::unordered_map<uint8_t, std::string> map;
-    for (int ch = u'!'; ch <= u'~'; ++ch) {
+    for (int ch = 0x21; ch <= 0x7E; ++ch) {  // u'!' to u'~'
         assert(0 <= ch && ch < 256);
         map[ch] = unicode_cpt_to_utf8(ch);
     }
-    for (int ch = u'¡'; ch <= u'¬'; ++ch) {
+    for (int ch = 0xA1; ch <= 0xAC; ++ch) {  // u'¡' to u'¬'
         assert(0 <= ch && ch < 256);
         map[ch] = unicode_cpt_to_utf8(ch);
     }
-    for (int ch = u'®'; ch <= u'ÿ'; ++ch) {
+    for (int ch = 0xAE; ch <= 0xFF; ++ch) {  // u'®' to u'ÿ'
         assert(0 <= ch && ch < 256);
         map[ch] = unicode_cpt_to_utf8(ch);
     }
@@ -168,15 +168,15 @@ static std::unordered_map<uint8_t, std::string> unicode_byte_to_utf8_map() {
 
 static std::unordered_map<std::string, uint8_t> unicode_utf8_to_byte_map() {
     std::unordered_map<std::string, uint8_t> map;
-    for (int ch = u'!'; ch <= u'~'; ++ch) {
+    for (int ch = 0x21; ch <= 0x7E; ++ch) {  // u'!' to u'~'
         assert(0 <= ch && ch < 256);
         map[unicode_cpt_to_utf8(ch)] = ch;
     }
-    for (int ch = u'¡'; ch <= u'¬'; ++ch) {
+    for (int ch = 0xA1; ch <= 0xAC; ++ch) {  // u'¡' to u'¬'
         assert(0 <= ch && ch < 256);
         map[unicode_cpt_to_utf8(ch)] = ch;
     }
-    for (int ch = u'®'; ch <= u'ÿ'; ++ch) {
+    for (int ch = 0xAE; ch <= 0xFF; ++ch) {  // u'®' to u'ÿ'
         assert(0 <= ch && ch < 256);
         map[unicode_cpt_to_utf8(ch)] = ch;
     }
