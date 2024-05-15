@@ -35,7 +35,7 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 
     result->prev.resize(params.n_prev);
 
-    result->n_considered = 0;
+    result->n_valid = 0;
 
     llama_sampling_set_rng_seed(result, params.seed);
 
@@ -66,7 +66,7 @@ void llama_sampling_reset(llama_sampling_context * ctx) {
 
     std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
     ctx->cur.clear();
-    ctx->n_considered = 0;
+    ctx->n_valid = 0;
 }
 
 void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t seed) {
@@ -256,7 +256,7 @@ static llama_token llama_sampling_sample_impl(
         }
     }
 
-    ctx_sampling->n_considered = cur_p.size;
+    ctx_sampling->n_valid = temp == 0.0f ? 0 : cur_p.size;
 
     return id;
 }

@@ -142,6 +142,9 @@ namespace grammar_parser {
                 pos++;
                 last_sym_start = out_elements.size();
                 while (*pos != '"') {
+                    if (!*pos) {
+                        throw std::runtime_error("unexpected end of input");
+                    }
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
                     out_elements.push_back({LLAMA_GRETYPE_CHAR, char_pair.first});
@@ -156,6 +159,9 @@ namespace grammar_parser {
                 }
                 last_sym_start = out_elements.size();
                 while (*pos != ']') {
+                    if (!*pos) {
+                        throw std::runtime_error("unexpected end of input");
+                    }
                     auto char_pair = parse_char(pos);
                          pos       = char_pair.second;
                     enum llama_gretype type = last_sym_start < out_elements.size()
@@ -164,6 +170,9 @@ namespace grammar_parser {
 
                     out_elements.push_back({type, char_pair.first});
                     if (pos[0] == '-' && pos[1] != ']') {
+                        if (!pos[1]) {
+                            throw std::runtime_error("unexpected end of input");
+                        }
                         auto endchar_pair = parse_char(pos + 1);
                              pos          = endchar_pair.second;
                         out_elements.push_back({LLAMA_GRETYPE_CHAR_RNG_UPPER, endchar_pair.first});

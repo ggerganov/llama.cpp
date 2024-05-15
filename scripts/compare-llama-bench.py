@@ -325,8 +325,12 @@ table = []
 for row in rows_show:
     n_prompt = int(row[-4])
     n_gen    = int(row[-3])
-    assert n_prompt == 0 or n_gen == 0
-    test_name = f"tg{n_gen}" if n_prompt == 0 else f"pp{n_prompt}"
+    if n_prompt != 0 and n_gen == 0:
+        test_name = f"pp{n_prompt}"
+    elif n_prompt == 0 and n_gen != 0:
+        test_name = f"tg{n_gen}"
+    else:
+        test_name = f"pp{n_prompt}+tg{n_gen}"
     #           Regular columns    test name    avg t/s values              Speedup
     #            VVVVVVVVVVVVV     VVVVVVVVV    VVVVVVVVVVVVVV              VVVVVVV
     table.append(list(row[:-4]) + [test_name] + list(row[-2:]) + [float(row[-1]) / float(row[-2])])

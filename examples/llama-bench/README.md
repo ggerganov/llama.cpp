@@ -26,16 +26,21 @@ options:
   -m, --model <filename>              (default: models/7B/ggml-model-q4_0.gguf)
   -p, --n-prompt <n>                  (default: 512)
   -n, --n-gen <n>                     (default: 128)
-  -b, --batch-size <n>                (default: 512)
-  -ctk <t>, --cache-type-k <t>        (default: f16)
-  -ctv <t>, --cache-type-v <t>        (default: f16)
-  -t, --threads <n>                   (default: 112)
+  -pg <pp,tg>                         (default: 512,128)
+  -b, --batch-size <n>                (default: 2048)
+  -ub, --ubatch-size <n>              (default: 512)
+  -ctk, --cache-type-k <t>            (default: f16)
+  -ctv, --cache-type-v <t>            (default: f16)
+  -t, --threads <n>                   (default: 16)
   -ngl, --n-gpu-layers <n>            (default: 99)
   -sm, --split-mode <none|layer|row>  (default: layer)
   -mg, --main-gpu <i>                 (default: 0)
   -nkvo, --no-kv-offload <0|1>        (default: 0)
+  -fa, --flash-attn <0|1>             (default: 0)
   -mmp, --mmap <0|1>                  (default: 1)
-  -ts, --tensor_split <ts0/ts1/..>    (default: 0)
+  --numa <distribute|isolate|numactl> (default: disabled)
+  -embd, --embeddings <0|1>           (default: 0)
+  -ts, --tensor-split <ts0/ts1/..>    (default: 0)
   -r, --repetitions <n>               (default: 5)
   -o, --output <csv|json|md|sql>      (default: md)
   -v, --verbose                       (default: 0)
@@ -43,10 +48,11 @@ options:
 Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.
 ```
 
-llama-bench can perform two types of tests:
+llama-bench can perform three types of tests:
 
 - Prompt processing (pp): processing a prompt in batches (`-p`)
 - Text generation (tg): generating a sequence of tokens (`-n`)
+- Prompt processing + text generation (pg): processing a prompt followed by generating a sequence of tokens (`-pg`)
 
 With the exception of `-r`, `-o` and `-v`, all options can be specified multiple times to run multiple tests. Each pp and tg test is run with all combinations of the specified options. To specify multiple values for an option, the values can be separated by commas (e.g. `-n 16,32`), or the option can be specified multiple times (e.g. `-n 16 -n 32`).
 

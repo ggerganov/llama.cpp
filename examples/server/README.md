@@ -48,7 +48,7 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - `--path`: Path from which to serve static files. Default: disabled
 - `--api-key`: Set an api key for request authorization. By default, the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
 - `--api-key-file`: Path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`s.
-- `--embedding`: Enable embedding extraction. Default: disabled
+- `--embeddings`: Enable embedding vector output and the OAI compatible endpoint /v1/embeddings. Physical batch size (`--ubatch-size`) must be carefully defined. Default: disabled
 - `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`
 - `-cb`, `--cont-batching`: Enable continuous batching (a.k.a dynamic batching).  Default: disabled
 - `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots). This is useful for chat applications. [See more](#change-system-prompt-on-runtime)
