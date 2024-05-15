@@ -73,6 +73,9 @@ inline size_t wcs_to_mbs(std::string &sDest, const std::wstring &wSrc) {
     std::mbstate_t mbState = std::mbstate_t();
     const wchar_t *wSrcP = wSrc.c_str();
     auto reqLen = std::wcsrtombs(nullptr, &wSrcP, 0, &mbState);
+    if (reqLen == static_cast<std::size_t>(-1)) {
+        throw std::runtime_error("ERRR:WCS2MBS:Failed probing of size...");
+    }
     sDest.resize(reqLen);
     return std::wcsrtombs(sDest.data(), &wSrcP, sDest.length(), &mbState);
 }
@@ -81,6 +84,9 @@ inline size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
     std::mbstate_t mbState = std::mbstate_t();
     const char *sSrcP = sSrc.c_str();
     auto reqLen = std::mbsrtowcs(nullptr, &sSrcP, 0, &mbState);
+    if (reqLen == static_cast<std::size_t>(-1)) {
+        throw std::runtime_error("ERRR:MBS2WCS:Failed probing of size...");
+    }
     wDest.resize(reqLen);
     return std::mbsrtowcs(wDest.data(), &sSrcP, wDest.length(), &mbState);
 }

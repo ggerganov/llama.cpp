@@ -96,7 +96,7 @@ static void check_strings() {
     SimpCfg::locale_prepare(sSavedLocale);
     check_string();
     check_u8string();
-    //check_wstring_wcout();
+    check_wstring_wcout();
     check_wstring_cout();
     check_nonenglish();
     SimpCfg::locale_restore(sSavedLocale);
