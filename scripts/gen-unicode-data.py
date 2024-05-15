@@ -92,7 +92,12 @@ for codepoint, norm in table_nfd:
 
 # Generate 'unicode-data.cpp'
 
-print("""\
+
+def out(line=""):
+    print(line, end='\n')  # noqa
+
+
+out("""\
 // generated with scripts/gen-unicode-data.py
 
 #include "unicode-data.h"
@@ -103,27 +108,27 @@ print("""\
 #include <unordered_set>
 """)
 
-print("const std::vector<std::pair<uint32_t, uint16_t>> unicode_ranges_flags = {  // start, flags // last=next_start-1")
+out("const std::vector<std::pair<uint32_t, uint16_t>> unicode_ranges_flags = {  // start, flags // last=next_start-1")
 for codepoint, flags in ranges_flags:
     flags = int.from_bytes(bytes(flags), "little")
-    print("{0x%06X, 0x%04X}," % (codepoint, flags))
-print("};\n")
+    out("{0x%06X, 0x%04X}," % (codepoint, flags))
+out("};\n")
 
-print("const std::unordered_set<uint32_t> unicode_set_whitespace = {")
-print(", ".join("0x%06X" % cpt for cpt in table_whitespace))
-print("};\n")
+out("const std::unordered_set<uint32_t> unicode_set_whitespace = {")
+out(", ".join("0x%06X" % cpt for cpt in table_whitespace))
+out("};\n")
 
-print("const std::unordered_map<uint32_t, uint32_t> unicode_map_lowercase = {")
+out("const std::unordered_map<uint32_t, uint32_t> unicode_map_lowercase = {")
 for tuple in table_lowercase:
-    print("{0x%06X, 0x%06X}," % tuple)
-print("};\n")
+    out("{0x%06X, 0x%06X}," % tuple)
+out("};\n")
 
-print("const std::unordered_map<uint32_t, uint32_t> unicode_map_uppercase = {")
+out("const std::unordered_map<uint32_t, uint32_t> unicode_map_uppercase = {")
 for tuple in table_uppercase:
-    print("{0x%06X, 0x%06X}," % tuple)
-print("};\n")
+    out("{0x%06X, 0x%06X}," % tuple)
+out("};\n")
 
-print("const std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> unicode_ranges_nfd = {  // start, last, nfd")
+out("const std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> unicode_ranges_nfd = {  // start, last, nfd")
 for triple in ranges_nfd:
-    print("{0x%06X, 0x%06X, 0x%06X}," % triple)
-print("};\n")
+    out("{0x%06X, 0x%06X, 0x%06X}," % triple)
+out("};\n")

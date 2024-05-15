@@ -6,7 +6,6 @@
 #   python3 tests/test-tokenizer-random.py ./models/ggml-vocab-llama-bpe.gguf ./models/tokenizers/llama-bpe
 #
 
-import os
 import time
 import logging
 import argparse
