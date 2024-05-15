@@ -60,6 +60,21 @@ public:
         return joined.str();
     }
 
+    std::string the_type(const GroupKVData &value) {
+        if (std::holds_alternative<std::string>(value)) {
+            return "string";
+        } else if (std::holds_alternative<bool>(value)) {
+            return "bool";
+        } else if (std::holds_alternative<int32_t>(value)) {
+            return "int32_t";
+        } else if (std::holds_alternative<int64_t>(value)) {
+            return "int64_t";
+        } else if (std::holds_alternative<double>(value)) {
+            return "double";
+        }
+        return "unknown";
+    }
+
     std::string to_str(const GroupKVData &value) {
         auto visitor = [](auto value) -> auto {
             std::stringstream ss;
@@ -95,7 +110,7 @@ public:
         auto key = joiner(keyParts);
         auto &gm = gkv[group];
         gm[key] = value;
-        LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), to_str(value).c_str());
+        LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), key.c_str(), the_type(value).c_str(), to_str(value).c_str());
     }
 
     // Dump info about the specified group.
@@ -109,7 +124,11 @@ public:
             }
             ss << "\n" << msgTag + ":" << gm.first << ":\n";
             for(auto k: gm.second) {
+#ifdef GKV_DEBUGLOG_ON
+                ss << msgTag + ":" << "\t" << k.first << ":" + the_type(k.second) + ":" << to_str(k.second) << "\n";
+#else
                 ss << msgTag + ":" << "\t" << k.first << ":" << to_str(k.second) << "\n";
+#endif
             }
         }
         return ss.str();
@@ -134,11 +153,11 @@ public:
     SupportedDataType get_value(const std::string &group, const MultiPart &keyParts, const SupportedDataType &defaultValue, const std::string &callerName="") {
         try {
             auto value = get_value<SupportedDataType>(group, keyParts);
-            LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), to_str(keyParts).c_str(), to_str(value).c_str());
+            LDBUG_LN("DBUG:GKV:%s_%s:%s:%s:%s:%s", __func__, callerName.c_str(), group.c_str(), to_str(keyParts).c_str(), the_type(value).c_str(), to_str(value).c_str());
             return value;
         } catch (std::exception &e) {
         }
-        LDBUG_LN("WARN:GKV:%s_%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), to_str(keyParts).c_str(), to_str(defaultValue).c_str());
+        LDBUG_LN("WARN:GKV:%s_%s:%s:%s:%s:%s[default]", __func__, callerName.c_str(), group.c_str(), to_str(keyParts).c_str(), the_type(defaultValue).c_str(), to_str(defaultValue).c_str());
         return defaultValue;
     }
 
