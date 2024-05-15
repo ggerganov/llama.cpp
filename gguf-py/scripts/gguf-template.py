@@ -111,7 +111,7 @@ def main():
         "-r",
         "--render-template",
         action="store_true",
-        help="Render the chat template using Jinja2",
+        help="Render the chat template using Jinja2. Default is False.",
     )
     parser.add_argument(
         "-b",
@@ -129,13 +129,13 @@ def main():
         "-g",
         "--agp",
         action="store_true",
-        help="Add generation prompt. Default is True.",
+        help="Add generation prompt. Default is False.",
     )
     parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="Output model keys",
+        help="Output model keys. Default is False.",
     )
     args = parser.parse_args()
 
