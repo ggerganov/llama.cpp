@@ -469,6 +469,9 @@ class Model:
         if chkhsh == "27949a2493fc4a9f53f5b9b029c82689cfbe5d3a1929bb25e043089e28466de6":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
             res = "jina-v2-de"
+        if chkhsh == "fcace8b9cac38ce847670c970cd5892031a753a1ef381abd1d9af00f713da085":
+            # ref: https://huggingface.co/microsoft/phi-2
+            res = "phi-2"
 
         if res is None:
             logger.warning("\n")
