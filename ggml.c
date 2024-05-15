@@ -19683,7 +19683,7 @@ static void ggml_graph_compute_thread_sync_task(int * task_phase, struct ggml_co
         * task_phase = atomic_load(&state->shared->node_task);
         if (* task_phase != last_task_phase) break;
 #if defined(__SSE3__)
-        //Tell the processor we're spinning.  It's a processor hint for spinlocks.
+        // Tell the processor we're spinning.  It's a processor hint for spinlocks.
         _mm_pause();
 #endif
     }
