@@ -12,6 +12,10 @@ magenta=$(tput setaf 5)
 cyan=$(tput setaf 6)
 normal=$(tput sgr0)
 
+
+# Print Help Message
+####################
+
 print_full_help() {
   cat << EOF
 Usage: $PROG [OPTION]... <test_regex> (test_number)
@@ -41,6 +45,10 @@ EOF
   exit 1
 }
 
+
+# Dependency Sanity Check
+#########################
+
 check_dependency() {
   command -v "$1" >/dev/null 2>&1 || {
     abort "$1 is required but not found. Please install it and try again."
@@ -49,6 +57,10 @@ check_dependency() {
 
 check_dependency ctest
 check_dependency cmake
+
+
+# Step 0: Check the args
+########################
 
 if [ x"$1" = x"-h" ] || [ x"$1" = x"--help" ]; then
   print_full_help >&2
@@ -69,14 +81,16 @@ done
 # Shift the option parameters
 shift $((OPTIND - 1))
 
-# Step 0: Check the args
+# Positionial Argument Processing : <test_regex>
 if [ -z "${1}" ]; then
     abort "Test regex is required"
 else
     test_suite=${1:-}
 fi
 
+# Positionial Argument Processing : (test_number)
 test_number=${2:-}
+
 
 # Step 1: Reset and Setup folder context
 ########################################
@@ -91,6 +105,7 @@ fi
 pushd "$repo_root"
 rm -rf "$build_dir" && mkdir "$build_dir" || abort "Failed to make $build_dir"
 
+
 # Step 2: Setup Build Environment and Compile Test Binaries
 ###########################################################
 
@@ -99,6 +114,7 @@ cmake -B "./$build_dir" -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WA
 pushd "$build_dir"
 make -j || abort "Failed to compile"
 popd > /dev/null || exit 1
+
 
 # Step 3: Find all tests available that matches REGEX
 ####################################################
@@ -114,6 +130,7 @@ if [ ${#tests[@]} -eq 0 ]; then
     abort "No tests avaliable... check your compliation process..."
 fi
 popd > /dev/null || exit 1
+
 
 # Step 4: Identify Test Command for Debugging
 #############################################
@@ -151,8 +168,10 @@ popd > /dev/null || exit 1
 single_test_name="${tests[test_number]}"
 single_test_command="${test_args[test_number]}"
 
+
 # Step 5: Execute or GDB Debug
 ##############################
+
 printf "${magenta}Running Test #${test_number}: ${single_test_name}${normal}\n"
 printf "${cyan}single_test_command: ${single_test_command}${normal}\n"
 
@@ -191,4 +210,5 @@ else
 
 fi
 
+# Return to the directory from which the user ran the command.
 popd > /dev/null || exit 1
