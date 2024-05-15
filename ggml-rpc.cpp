@@ -28,7 +28,7 @@
 
 #define UNUSED GGML_UNUSED
 
-#define GGML_DEBUG 1
+#define GGML_DEBUG 0
 #if (GGML_DEBUG >= 1)
 #define GGML_PRINT_DEBUG(...) printf(__VA_ARGS__)
 #else
