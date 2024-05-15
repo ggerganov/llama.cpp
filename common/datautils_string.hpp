@@ -26,6 +26,7 @@
 */
 
 #include <string>
+#include <iomanip>
 
 #include "log.h"
 
@@ -62,24 +63,34 @@ inline size_t mbs_to_wcs(std::wstring &wDest, const std::string &sSrc) {
     return std::mbsrtowcs(wDest.data(), &sSrcP, wDest.length(), &mbState);
 }
 
+inline std::string uint8_as_hex(uint8_t c) {
+    char hex[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+    std::string out = "00";
+    out[0] = hex[((c & 0xf0) >> 4)];
+    out[1] = hex[(c & 0x0f)];
+    return out;
+}
+
 template <typename TString>
-inline void dumphex_string(const TString &sIn, const std::string &msgTag){
-    LDBUG("%s[ ", msgTag.c_str());
+inline std::string string_as_hex(const TString &sIn){
+    std::stringstream ssout;
+    ssout << "[ ";
     for(auto c: sIn) {
         auto cSize = sizeof(c);
         if (cSize == 1) {
-            LDBUG("%02x, ", (uint8_t)c);
+            ssout << uint8_as_hex(c) << ", ";
         } else if (cSize == 2) {
-            LDBUG("%04x, ", (uint16_t)c);
+            ssout << std::setfill('0') << std::setw(cSize*2) << std::hex << static_cast<uint16_t>(c) << ", ";
         } else if (cSize == 4) {
-            LDBUG("%08x, ", (uint32_t)c);
+            ssout << std::setfill('0') << std::setw(cSize*2) << std::hex << static_cast<uint32_t>(c) << ", ";
         } else {
             std::stringstream ss;
             ss << "ERRR:" << __func__ << ":Unsupported char type with size [" << cSize << "]";
             throw std::runtime_error( ss.str().c_str() );
         }
     }
-    LDBUG_LN(" ]");
+    ssout << " ]";
+    return ssout.str();
 }
 
 // Remove chars from begin and end of the passed string, provided the char
@@ -117,8 +128,8 @@ inline void dumphex_string(const TString &sIn, const std::string &msgTag){
 template <typename TString>
 inline TString str_trim_dumb(TString sin, const TString &trimChars=" \t\n") {
 #ifdef DUS_DEBUG_VERBOSE
-    dumphex_string(sin, "DBUG:StrTrimDumb:Str:");
-    dumphex_string(trimChars, "DBUG:StrTrimDumb:TrimChars:");
+    LOG_TEELN("DBUG:StrTrimDumb:Str:%s", string_as_hex(sin).c_str());
+    LOG_TEELN("DBUG:StrTrimDumb:TrimChars:%s", string_as_hex(trimChars).c_str());
 #endif
     sin.erase(sin.find_last_not_of(trimChars)+1);
     sin.erase(0, sin.find_first_not_of(trimChars));
@@ -196,24 +207,24 @@ inline TString str_tolower(const TString &sin) {
     sout.resize(sin.size());
     std::transform(sin.begin(), sin.end(), sout.begin(), [](auto c)->auto {return std::tolower(c);});
 #ifdef DUS_DEBUG_VERBOSE
-    dumphex_string(sin, "DBUG:StrToLower:in:");
-    dumphex_string(sout, "DBUG:StrToLower:out:");
+    LOG_TEELN("DBUG:StrToLower:in:%s", string_as_hex(sin).c_str());
+    LOG_TEELN("DBUG:StrToLower:out:%s", string_as_hex(sout).c_str());
 #endif
     return sout;
 }
 
 inline void str_compare_dump(const std::string &s1, const std::string &s2) {
-    LDBUG_LN("DBUG:%s:%s:Len:%zu", __func__, s1.c_str(), s1.length());
-    LDBUG_LN("DBUG:%s:%s:Len:%zu", __func__, s2.c_str(), s2.length());
+    LOG_TEELN("DBUG:%s:%s:Len:%zu", __func__, s1.c_str(), s1.length());
+    LOG_TEELN("DBUG:%s:%s:Len:%zu", __func__, s2.c_str(), s2.length());
     int minLen = s1.length() < s2.length() ? s1.length() : s2.length();
     for(int i=0; i<minLen; i++) {
-        LDBUG_LN("DBUG:%s:%d:%c:%c", __func__, i, s1[i], s2[i]);
+        LOG_TEELN("DBUG:%s:%d:%c:%c", __func__, i, s1[i], s2[i]);
     }
 }
 
 
 template<typename TypeWithStrSupp>
-std::string str(TypeWithStrSupp value) {
+std::string as_str(TypeWithStrSupp value) {
     std::stringstream ss;
     ss << value;
     return ss.str();
