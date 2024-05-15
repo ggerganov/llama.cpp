@@ -13,14 +13,26 @@
 #include <vector>
 
 int main(int argc, char **argv) {
-    if (argc < 2) {
-        fprintf(stderr, "Usage: %s <vocab-file>\n", argv[0]);
+    if (argc < 2 || argc > 3) {
+        fprintf(stderr, "Usage: %s <vocab-file> [--ignore-merges]\n", argv[0]);
         return 1;
     }
 
     const std::string fname = argv[1];
+    bool ignore_merges = false;
+    if (argc == 3) {
+        if (std::strcmp(argv[2], "--ignore-merges") != 0) {
+            fprintf(stderr, "Usage: %s <vocab-file> [--ignore-merges]\n", argv[0]);
+            return 1;
+        }
+        ignore_merges = true;
+    }
 
     fprintf(stderr, "%s : reading vocab from: '%s'\n", __func__, fname.c_str());
+
+    if (ignore_merges) {
+        fprintf(stderr, "%s : ignoring merges for tokens inside vocab\n", __func__);
+    }
 
     llama_model * model;
     llama_context * ctx;
@@ -65,7 +77,19 @@ int main(int argc, char **argv) {
         std::string str = llama_detokenize_bpe(ctx, std::vector<int>(1, i));
         try {
             auto cps = unicode_cpts_from_utf8(str);
-            std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);
+            std::vector<llama_token> tokens = llama_tokenize(ctx, str, false, true);
+            if (ignore_merges && tokens.size() > 1) {
+                fprintf(stderr,
+                        "%s : error: token %d detokenizes to '%s'(%zu) but "
+                        "tokenization of this to multiple tokens: [",
+                        __func__, i, str.c_str(), str.length());
+                fprintf(stderr, "%d", tokens[0]);
+                for (size_t i = 1; i < tokens.size(); i++) {
+                    fprintf(stderr, ", %d", tokens[i]);
+                }
+                fprintf(stderr, "]\n");
+                return 2;
+            }
             std::string check = llama_detokenize_bpe(ctx, tokens);
             if (check != str) {
                 fprintf(stderr, "%s : error: token %d detokenizes to '%s'(%zu) but tokenization of this detokenizes to '%s'(%zu)\n",

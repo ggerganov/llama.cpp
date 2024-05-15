@@ -12,7 +12,7 @@ import sys
 from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Sequence, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Sequence, TypeVar, cast
 
 import numpy as np
 import torch
@@ -48,7 +48,6 @@ class Model:
 
     dir_model: Path
     ftype: int
-    fname_out: Path
     is_big_endian: bool
     endianess: gguf.GGUFEndian
     use_temp_file: bool
@@ -56,20 +55,20 @@ class Model:
     part_names: list[str]
     is_safetensors: bool
     hparams: dict[str, Any]
-    gguf_writer: gguf.GGUFWriter
     block_count: int
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
+    fname_out: Path
+    gguf_writer: gguf.GGUFWriter
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: int, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool):
-        if self.__class__ == Model:
-            raise TypeError(f"{self.__class__.__name__!r} should not be directly instantiated")
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool):
+        if type(self) is Model:
+            raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
         self.ftype = ftype
-        self.fname_out = fname_out
         self.is_big_endian = is_big_endian
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
@@ -79,10 +78,23 @@ class Model:
         if not self.is_safetensors:
             self.part_names = Model.get_model_part_names(self.dir_model, ".bin")
         self.hparams = Model.load_hparams(self.dir_model)
-        self.gguf_writer = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensor_names = None
+        if self.ftype == gguf.LlamaFileType.GUESSED:
+            # NOTE: can't use field "torch_dtype" in config.json, because some finetunes lie.
+            _, first_tensor = next(self.get_tensors())
+            if first_tensor.dtype == torch.float16:
+                logger.info(f"choosing --outtype f16 from first tensor type ({first_tensor.dtype})")
+                self.ftype = gguf.LlamaFileType.MOSTLY_F16
+            else:
+                logger.info(f"choosing --outtype bf16 from first tensor type ({first_tensor.dtype})")
+                self.ftype = gguf.LlamaFileType.MOSTLY_BF16
+        ftype_up: str = self.ftype.name.partition("_")[2].upper()
+        ftype_lw: str = ftype_up.lower()
+        # allow templating the file name with the output ftype, useful with the "auto" ftype
+        self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
+        self.gguf_writer = gguf.GGUFWriter(self.fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
 
     @classmethod
     def __init_subclass__(cls):
@@ -142,13 +154,26 @@ class Model:
             raise ValueError(f"Mismatch between weight map and model parts for tensor names: {sym_diff}")
 
     def format_tensor_name(self, key: gguf.MODEL_TENSOR, bid: int | None = None, suffix: str = ".weight") -> str:
-        name: str = gguf.TENSOR_NAMES[key]
         if key not in gguf.MODEL_TENSORS[self.model_arch]:
             raise ValueError(f"Missing {key!r} for MODEL_TENSORS of {self.model_arch!r}")
+        name: str = gguf.TENSOR_NAMES[key]
         if "{bid}" in name:
             assert bid is not None
             name = name.format(bid=bid)
         return name + suffix
+
+    def match_model_tensor_name(self, name: str, key: gguf.MODEL_TENSOR, bid: int | None, suffix: str = ".weight") -> bool:
+        if key not in gguf.MODEL_TENSORS[self.model_arch]:
+            return False
+        key_name: str = gguf.TENSOR_NAMES[key]
+        if "{bid}" in key_name:
+            if bid is None:
+                return False
+            key_name = key_name.format(bid=bid)
+        else:
+            if bid is not None:
+                return False
+        return name == (key_name + suffix)
 
     def map_tensor_name(self, name: str, try_suffixes: Sequence[str] = (".weight", ".bias")) -> str:
         new_name = self.tensor_map.get_name(key=name, try_suffixes=try_suffixes)
@@ -239,35 +264,64 @@ class Model:
                 data: np.ndarray = data  # type hint
                 n_dims = len(data.shape)
                 data_dtype = data.dtype
-
-                # if f32 desired, convert any float16 to float32
-                if self.ftype == 0 and data_dtype == np.float16:
-                    data = data.astype(np.float32)
+                data_qtype: gguf.GGMLQuantizationType | None = None
 
                 # when both are True, f32 should win
                 extra_f32 = self.extra_f32_tensors(name, new_name, bid, n_dims)
                 extra_f16 = self.extra_f16_tensors(name, new_name, bid, n_dims)
 
                 # Most of the codebase that takes in 1D tensors or norms only handles F32 tensors
-                extra_f32 = extra_f32 or n_dims == 1 or new_name.endswith("_norm.weight")
+                # Conditions should closely match those in llama_model_quantize_internal in llama.cpp
+                extra_f32 = any(cond for cond in (
+                    extra_f32,
+                    n_dims == 1,
+                    new_name.endswith("_norm.weight"),
+                ))
+
+                # Some tensor types are always in float32
+                extra_f32 = extra_f32 or any(self.match_model_tensor_name(new_name, key, bid) for key in (
+                    gguf.MODEL_TENSOR.FFN_GATE_INP,
+                    gguf.MODEL_TENSOR.POS_EMBD,
+                    gguf.MODEL_TENSOR.TOKEN_TYPES,
+                ))
 
                 # if f16 desired, convert any float32 2-dim weight tensors to float16
-                extra_f16 = extra_f16 or (name.endswith(".weight") and n_dims >= 2)
+                extra_f16 = any(cond for cond in (
+                    extra_f16,
+                    (name.endswith(".weight") and n_dims >= 2),
+                ))
 
-                # when both extra_f32 and extra_f16 are False, convert to float32 by default
-                if self.ftype == 1 and data_dtype == np.float16 and (extra_f32 or not extra_f16):
-                    data = data.astype(np.float32)
+                if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
+                    if self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
+                        data = gguf.quantize_bf16(data)
+                        assert data.dtype == np.int16
+                        data_qtype = gguf.GGMLQuantizationType.BF16
 
-                if self.ftype == 1 and data_dtype == np.float32 and extra_f16 and not extra_f32:
-                    data = data.astype(np.float16)
+                    elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0 and gguf.can_quantize_to_q8_0(data):
+                        data = gguf.quantize_q8_0(data)
+                        assert data.dtype == np.uint8
+                        data_qtype = gguf.GGMLQuantizationType.Q8_0
 
+                    else:  # default to float16 for quantized tensors
+                        if data_dtype != np.float16:
+                            data = data.astype(np.float16)
+                        data_qtype = gguf.GGMLQuantizationType.F16
+
+                if data_qtype is None:  # by default, convert to float32
+                    if data_dtype != np.float32:
+                        data = data.astype(np.float32)
+                    data_qtype = gguf.GGMLQuantizationType.F32
+
+                block_size, type_size = gguf.GGML_QUANT_SIZES[data_qtype]
                 # reverse shape to make it similar to the internal ggml dimension order
-                shape_str = f"{{{', '.join(str(n) for n in reversed(data.shape))}}}"
+                shape_str = f"""{{{', '.join(str(n) for n in reversed(
+                    (*data.shape[:-1], data.shape[-1] * data.dtype.itemsize // type_size * block_size))
+                )}}}"""
 
                 # n_dims is implicit in the shape
-                logger.info(f"{f'%-{max_name_len}s' % f'{new_name},'} {old_dtype} --> {data.dtype}, shape = {shape_str}")
+                logger.info(f"{f'%-{max_name_len}s' % f'{new_name},'} {old_dtype} --> {data_qtype.name}, shape = {shape_str}")
 
-                self.gguf_writer.add_tensor(new_name, data)
+                self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
 
     def write(self):
         self.write_tensors()
@@ -404,8 +458,17 @@ class Model:
             # ref: https://huggingface.co/allenai/OLMo-1.7-7B-hf
             res = "olmo"
         if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
-            # ref: https://huggingface.co/databricks/dbrx-instruct
+            # ref: https://huggingface.co/databricks/dbrx-base
             res = "dbrx"
+        if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
+            res = "jina-v2-en"
+        if chkhsh == "171aeeedd6fb548d418a7461d053f11b6f1f1fc9b387bd66640d28a4b9f5c643":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-es
+            res = "jina-v2-es"
+        if chkhsh == "27949a2493fc4a9f53f5b9b029c82689cfbe5d3a1929bb25e043089e28466de6":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
+            res = "jina-v2-de"
 
         if res is None:
             logger.warning("\n")
@@ -783,6 +846,7 @@ class BaichuanModel(Model):
         self.gguf_writer.add_head_count(head_count)
         self.gguf_writer.add_head_count_kv(head_count_kv)
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
 
         if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
             if self.hparams["rope_scaling"].get("type") == "linear":
@@ -905,6 +969,7 @@ class XverseModel(Model):
         self.gguf_writer.add_head_count(head_count)
         self.gguf_writer.add_head_count_kv(head_count_kv)
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
 
         if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
             if self.hparams["rope_scaling"].get("type") == "linear":
@@ -1012,6 +1077,18 @@ class StarCoderModel(Model):
 @Model.register("GPTRefactForCausalLM")
 class RefactModel(Model):
     model_arch = gguf.MODEL_ARCH.REFACT
+
+    def set_vocab(self):
+        super().set_vocab()
+
+        # TODO: how to determine special FIM tokens automatically?
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
+                                          special_token_types = ['prefix', 'suffix', 'middle', 'fsep', 'eot'])
+        special_vocab._set_special_token("prefix", 1)
+        special_vocab._set_special_token("suffix", 3)
+        special_vocab._set_special_token("middle", 2)
+        special_vocab._set_special_token("fsep",   4) # is this correct?
+        special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
         hidden_dim = self.hparams["n_embd"]
@@ -1127,6 +1204,7 @@ class StableLMModel(Model):
         self.gguf_writer.add_head_count_kv(hparams["num_key_value_heads"])
         self.gguf_writer.add_parallel_residual(hparams["use_parallel_residual"] if "use_parallel_residual" in hparams else True)
         self.gguf_writer.add_layer_norm_eps(self.find_hparam(["layer_norm_eps", "norm_eps"]))
+        self.gguf_writer.add_file_type(self.ftype)
 
     _q_norms: list[dict[str, Tensor]] | None = None
     _k_norms: list[dict[str, Tensor]] | None = None
@@ -1503,6 +1581,7 @@ class QwenModel(Model):
         self.gguf_writer.add_rope_dimension_count(self.hparams["hidden_size"] // self.hparams["num_attention_heads"])
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
 
 
 @Model.register("Qwen2ForCausalLM")
@@ -1740,6 +1819,7 @@ class PlamoModel(Model):
         self.gguf_writer.add_head_count(hparams["num_attention_heads"])
         self.gguf_writer.add_head_count_kv(5)  # hparams["num_key_value_heads"]) is wrong
         self.gguf_writer.add_layer_norm_rms_eps(hparams["rms_norm_eps"])
+        self.gguf_writer.add_file_type(self.ftype)
 
     def shuffle_attn_q_weight(self, data_torch):
         assert data_torch.size() == (5120, 5120)
@@ -1919,6 +1999,7 @@ in chat mode so that the conversation can end normally.")
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
         self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
+        self.gguf_writer.add_file_type(self.ftype)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         num_heads = self.hparams["num_attention_heads"]
@@ -2022,12 +2103,6 @@ class BertModel(Model):
             return [] # we don't need these
 
         return [(self.map_tensor_name(name), data_torch)]
-
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
-        del new_name, bid, n_dims  # unused
-
-        # not used with get_rows, must be F32
-        return name == "embeddings.token_type_embeddings.weight"
 
 
 @Model.register("NomicBertModel")
@@ -2277,6 +2352,43 @@ class OlmoModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
+@Model.register("JinaBertModel", "JinaBertForMaskedLM")
+class JinaBertV2Model(BertModel):
+    model_arch = gguf.MODEL_ARCH.JINA_BERT_V2
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.intermediate_size = self.hparams["intermediate_size"]
+
+    def get_tensors(self):
+        for name, data in super().get_tensors():
+            if 'gated_layers' in name:
+                d1 = data[:self.intermediate_size, :]
+                name1 = name.replace('gated_layers', 'gated_layers_w')
+                d2 = data[self.intermediate_size:, :]
+                name2 = name.replace('gated_layers', 'gated_layers_v')
+                yield name1, d1
+                yield name2, d2
+                continue
+
+            yield name, data
+
+    def set_vocab(self, *args, **kwargs):
+        tokenizer_class = 'BertTokenizer'
+        with open(self.dir_model / "tokenizer_config.json", "r", encoding="utf-8") as f:
+            tokenizer_class = json.load(f)['tokenizer_class']
+
+        if tokenizer_class == 'BertTokenizer':
+            super().set_vocab()
+        elif tokenizer_class == 'RobertaTokenizer':
+            self._set_vocab_gpt2()
+            self.gguf_writer.add_token_type_count(2)
+        else:
+            raise NotImplementedError(f'Tokenizer {tokenizer_class} is not supported for JinaBertModel')
+        self.gguf_writer.add_add_bos_token(True)
+        self.gguf_writer.add_add_eos_token(True)
+
+
 @Model.register("ArcticForCausalLM")
 class ArcticModel(Model):
     model_arch = gguf.MODEL_ARCH.ARCTIC
@@ -2432,92 +2544,30 @@ class ArcticModel(Model):
 
 
 # tree of lazy tensors
-class LazyTorchTensor:
-    _meta: Tensor
-    _data: Tensor | None
-    _args: tuple
-    _func: Callable[[tuple], Tensor] | None
+class LazyTorchTensor(gguf.LazyBase):
+    _tensor_type = torch.Tensor
+    # to keep the type-checker happy
+    dtype: torch.dtype
+    shape: torch.Size
 
-    def __init__(self, *, meta: Tensor, data: Tensor | None = None, args: tuple = (), func: Callable[[tuple], Tensor] | None = None):
-        self._meta = meta
-        self._data = data
-        self._args = args
-        self._func = func
-
-    @staticmethod
-    def _recurse_apply(o: Any, fn: Callable[[Any], Any]) -> Any:
-        # TODO: dict and set
-        if isinstance(o, (list, tuple)):
-            L = []
-            for item in o:
-                L.append(LazyTorchTensor._recurse_apply(item, fn))
-            if isinstance(o, tuple):
-                L = tuple(L)
-            return L
-        elif isinstance(o, LazyTorchTensor):
-            return fn(o)
-        else:
-            return o
-
-    def _wrap_fn(self, fn: Callable, use_self: bool = False) -> Callable[[Any], LazyTorchTensor]:
-        def wrapped_fn(*args, **kwargs):
-            if kwargs is None:
-                kwargs = {}
-            args = ((self,) if use_self else ()) + args
-
-            meta_args = LazyTorchTensor._recurse_apply(args, lambda t: t._meta)
-
-            return LazyTorchTensor(meta=fn(*meta_args, **kwargs), args=args, func=lambda a: fn(*a, **kwargs))
-        return wrapped_fn
-
-    def __getattr__(self, __name: str) -> Any:
-        meta_attr = getattr(self._meta, __name)
-        if callable(meta_attr):
-            return self._wrap_fn(getattr(torch.Tensor, __name), use_self=True)
-        elif isinstance(meta_attr, torch.Tensor):
-            # for things like self.T
-            return self._wrap_fn(lambda s: getattr(s, __name))(self)
-        else:
-            return meta_attr
-
+    # only used when converting a torch.Tensor to a np.ndarray
     _dtype_map: dict[torch.dtype, type] = {
         torch.float16: np.float16,
         torch.float32: np.float32,
     }
 
-    def numpy(self) -> gguf.LazyTensor:
+    def numpy(self) -> gguf.LazyNumpyTensor:
         dtype = self._dtype_map[self.dtype]
-        return gguf.LazyTensor(lambda: LazyTorchTensor.to_eager(self).numpy(), dtype=dtype, shape=self.shape)
+        return gguf.LazyNumpyTensor(
+            meta=gguf.LazyNumpyTensor.meta_with_dtype_and_shape(dtype, self.shape),
+            lazy=self._lazy,
+            args=(self,),
+            func=(lambda s: s[0].numpy())
+        )
 
-    @overload
-    @staticmethod
-    def to_eager(t: Tensor | LazyTorchTensor) -> Tensor: ...
-
-    @overload
-    @staticmethod
-    def to_eager(t: tuple) -> tuple: ...
-
-    @staticmethod
-    def to_eager(t: Any) -> Any:
-        def simple_to_eager(_t: LazyTorchTensor) -> Tensor:
-            # wake up the lazy tensor
-            if _t._data is None and _t._func is not None:
-                # recurse into its arguments
-                _t._args = LazyTorchTensor.to_eager(_t._args)
-                _t._data = _t._func(_t._args)
-            if _t._data is not None:
-                return _t._data
-            else:
-                raise ValueError(f"Could not compute lazy tensor {_t!r} with args {_t._args!r}")
-
-        # recurse into lists and/or tuples, keeping their structure
-        return LazyTorchTensor._recurse_apply(t, simple_to_eager)
-
-    @staticmethod
-    def from_eager(t: Tensor) -> Tensor:
-        if (t.__class__ == LazyTorchTensor):
-            return t
-        return LazyTorchTensor(meta=t.detach().to("meta"), data=t)  # type: ignore
+    @classmethod
+    def meta_with_dtype_and_shape(cls, dtype: torch.dtype, shape: torch.Size) -> Tensor:
+        return torch.empty(size=shape, dtype=dtype, device="meta")
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -2528,28 +2578,8 @@ class LazyTorchTensor:
 
         if func is torch.Tensor.numpy:
             return args[0].numpy()
-        if func is torch.equal:
-            eager_args = LazyTorchTensor.to_eager(args)
-            return func(*eager_args, **kwargs)
 
-        return LazyTorchTensor._wrap_fn(args[0], func)(*args, **kwargs)
-
-    # special methods bypass __getattr__, so they need to be added manually
-    # ref: https://docs.python.org/3/reference/datamodel.html#special-lookup
-    # NOTE: LazyTorchTensor can't be a subclass of Tensor (and then be used
-    #       as self._meta is currently used), because then the following
-    #       operations would by default not be wrapped, and so not propagated
-    #       when the tensor is made eager.
-    #       It's better to get non-silent errors for not-yet-supported operators.
-    # TODO: add more when needed to avoid clutter, or find a more concise way
-    def __neg__(self, *args):  # mamba
-        return self._wrap_fn(torch.Tensor.__neg__)(self, *args)
-
-    def __add__(self, *args):  # gemma
-        return self._wrap_fn(torch.Tensor.__add__)(self, *args)
-
-    def __getitem__(self, *args):  # bloom falcon refact internlm2
-        return self._wrap_fn(torch.Tensor.__getitem__)(self, *args)
+        return LazyTorchTensor._wrap_fn(func)(*args, **kwargs)
 
 
 def parse_args() -> argparse.Namespace:
@@ -2565,11 +2595,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--outfile", type=Path,
-        help="path to write to; default: based on input",
+        help="path to write to; default: based on input. {ftype} will be replaced by the outtype.",
     )
     parser.add_argument(
-        "--outtype", type=str, choices=["f32", "f16"], default="f16",
-        help="output format - use f32 for float32, f16 for float16",
+        "--outtype", type=str, choices=["f32", "f16", "bf16", "q8_0", "auto"], default="f16",
+        help="output format - use f32 for float32, f16 for float16, bf16 for bfloat16, q8_0 for Q8_0, auto for the highest-fidelity 16-bit float type depending on the first loaded tensor type",
     )
     parser.add_argument(
         "--bigendian", action="store_true",
@@ -2623,16 +2653,19 @@ def main() -> None:
         logger.error(f'Error: {args.model} is not a directory')
         sys.exit(1)
 
-    ftype_map = {
-        "f32": gguf.GGMLQuantizationType.F32,
-        "f16": gguf.GGMLQuantizationType.F16,
+    ftype_map: dict[str, gguf.LlamaFileType] = {
+        "f32": gguf.LlamaFileType.ALL_F32,
+        "f16": gguf.LlamaFileType.MOSTLY_F16,
+        "bf16": gguf.LlamaFileType.MOSTLY_BF16,
+        "q8_0": gguf.LlamaFileType.MOSTLY_Q8_0,
+        "auto": gguf.LlamaFileType.GUESSED,
     }
 
     if args.outfile is not None:
         fname_out = args.outfile
     else:
         # output in the same directory as the model by default
-        fname_out = dir_model / f'ggml-model-{args.outtype}.gguf'
+        fname_out = dir_model / 'ggml-model-{ftype}.gguf'
 
     logger.info(f"Loading model: {dir_model.name}")
 
@@ -2648,14 +2681,16 @@ def main() -> None:
         logger.info("Set model tokenizer")
         model_instance.set_vocab()
 
+        model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
+
         if args.vocab_only:
-            logger.info(f"Exporting model vocab to '{fname_out}'")
+            logger.info(f"Exporting model vocab to '{model_instance.fname_out}'")
             model_instance.write_vocab()
         else:
-            logger.info(f"Exporting model to '{fname_out}'")
+            logger.info(f"Exporting model to '{model_instance.fname_out}'")
             model_instance.write()
 
-        logger.info(f"Model successfully exported to '{fname_out}'")
+        logger.info(f"Model successfully exported to '{model_instance.fname_out}'")
 
 
 if __name__ == '__main__':

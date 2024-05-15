@@ -81,7 +81,7 @@ struct llama_sampling_context {
     // TODO: replace with ring-buffer
     std::vector<llama_token>      prev;
     std::vector<llama_token_data> cur;
-    size_t n_considered;
+    size_t n_valid; // Number of correct top tokens with correct probabilities.
 
     std::mt19937 rng;
 };

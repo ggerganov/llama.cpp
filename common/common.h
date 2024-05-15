@@ -82,6 +82,7 @@ struct gpt_params {
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
+    std::string rpc_servers       = "";    // comma separated list of RPC servers
 
     ggml_backend_sched_eval_callback cb_eval = nullptr;
     void * cb_eval_user_data                 = nullptr;
@@ -140,6 +141,7 @@ struct gpt_params {
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
+    bool interactive_specials = false; // whether to allow special tokens from user, during interactive mode
     bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
     bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
