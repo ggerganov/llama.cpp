@@ -14,6 +14,8 @@
 #include <stdlib.h> // for qsort
 #include <stdio.h>  // for GGML_ASSERT
 
+#define GROUP_MAX_EPS 1e-7f
+
 #if defined(_MSC_VER)
 // disable "possible loss of data" to avoid warnings for hundreds of casts
 // we should just be careful :)
@@ -1109,7 +1111,7 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
         float ax = fabsf(x[i]);
         if (ax > amax) { amax = ax; max = x[i]; }
     }
-    if (amax < 1e-20f) { // all zero
+    if (amax < GROUP_MAX_EPS) { // all zero
         for (int i = 0; i < n; ++i) {
             L[i] = 0;
         }
@@ -1177,7 +1179,7 @@ static float make_q3_quants(int n, int nmax, const float * restrict x, int8_t * 
         float ax = fabsf(x[i]);
         if (ax > amax) { amax = ax; max = x[i]; }
     }
-    if (amax < 1e20f) { // all zero
+    if (amax < GROUP_MAX_EPS) { // all zero
         for (int i = 0; i < n; ++i) { L[i] = 0; }
         return 0.f;
     }
@@ -2653,7 +2655,7 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
 
         }
 
-        if (max_abs_scale < 1e-20f) {
+        if (max_abs_scale < GROUP_MAX_EPS) {
             memset(&y[i], 0, sizeof(block_q6_K));
             y[i].d = GGML_FP32_TO_FP16(0.f);
             x += QK_K;
@@ -2805,7 +2807,7 @@ static void quantize_row_q6_K_impl(const float * restrict x, block_q6_K * restri
 
         }
 
-        if (max_abs_scale < 1e-20f) {
+        if (max_abs_scale < GROUP_MAX_EPS) {
             memset(&y[i], 0, sizeof(block_q6_K));
             y[i].d = GGML_FP32_TO_FP16(0.f);
             x += QK_K;
@@ -12772,7 +12774,7 @@ static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict v
             }
             float max = xval[0];
             for (int i = 1; i < 16; ++i) max = MAX(max, xval[i]);
-            if (!max) {
+            if (max < GROUP_MAX_EPS) {
                 scales[ib] = 0;
                 memset(L, 0, 16);
                 continue;
@@ -13213,7 +13215,7 @@ static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, v
             }
             float max = xval[0];
             for (int i = 1; i < 32; ++i) max = MAX(max, xval[i]);
-            if (max < 1e-20f) {
+            if (max < GROUP_MAX_EPS) {
                 scales[ib] = 0;
                 memset(L, 0, 32);
                 continue;
@@ -13753,7 +13755,7 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
             for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
             float max = fabsf(xb[0]);
             for (int i = 1; i < block_size; ++i) max = MAX(max, fabsf(xb[i]));
-            if (!max) {
+            if (max < GROUP_MAX_EPS) {
                 scales[ib] = 0;
                 memset(L, 1, block_size);
                 continue;
@@ -13941,7 +13943,7 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
             }
             float max = fabsf(xb[0]);
             for (int i = 1; i < block_size; ++i) max = MAX(max, fabsf(xb[i]));
-            if (max < 1e-20f) {
+            if (max < GROUP_MAX_EPS) {
                 scales[ib] = 0;
                 memset(L, 1, block_size);
                 continue;
@@ -14205,7 +14207,7 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
                 amax = ax; max = xb[j];
             }
         }
-        if (amax < 1e-20f) {
+        if (amax < GROUP_MAX_EPS) {
             scales[ib] = 0;
             continue;
         }
@@ -14426,7 +14428,7 @@ static void quantize_row_iq2_s_impl(const float * restrict x, void * restrict vy
             }
             float max = xval[0];
             for (int i = 1; i < 16; ++i) max = MAX(max, xval[i]);
-            if (max < 1e-20f) {
+            if (max < GROUP_MAX_EPS) {
                 scales[ib] = 0;
                 continue;
             }

@@ -53,7 +53,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
     // test quantization with very small values that may result in nan scales due to division by zero
     if (ggml_is_quantized(tensor->type)) {
         for (int i = 0; i < 256; i++) {
-            data[i] = 1e-24f;
+            data[i] = 1e-7f;
         }
     }
 #endif
