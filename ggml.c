@@ -11899,6 +11899,12 @@ static void ggml_compute_forward_mul_mat(
     GGML_ASSERT(nb1 <= nb2);
     GGML_ASSERT(nb2 <= nb3);
 
+    // broadcast factors
+    const int64_t r2 = ne12 / ne02;
+    const int64_t r3 = ne13 / ne03;
+    UNUSED(r2);
+    UNUSED(r3);
+
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
@@ -11980,10 +11986,6 @@ static void ggml_compute_forward_mul_mat(
 
 #if GGML_USE_LLAMAFILE
     const bool src1_cont = ggml_is_contiguous(src1);
-
-    // broadcast factors
-    const int64_t r2 = ne12 / ne02;
-    const int64_t r3 = ne13 / ne03;
 
     if (src1_cont) {
         for (int64_t i13 = 0; i13 < ne13; i13++)
