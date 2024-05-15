@@ -7,6 +7,11 @@
 #endif
 
 #include "ggml-rpc.h"
+#ifdef _WIN32
+#  include <windows.h>
+#else
+#  include <unistd.h>
+#endif
 #include <string>
 #include <stdio.h>
 
@@ -84,9 +89,18 @@ static void get_backend_memory(size_t * free_mem, size_t * total_mem) {
 #ifdef GGML_USE_CUDA
     ggml_backend_cuda_get_device_memory(0, free_mem, total_mem);
 #else
-    // TODO: implement for other backends
-    *free_mem = 1;
-    *total_mem = 1;
+    #ifdef _WIN32
+        MEMORYSTATUSEX status;
+        status.dwLength = sizeof(status);
+        GlobalMemoryStatusEx(&status);
+        *total_mem = status.ullTotalPhys;
+        *free_mem = status.ullAvailPhys;
+    #else
+        long pages = sysconf(_SC_PHYS_PAGES);
+        long page_size = sysconf(_SC_PAGE_SIZE);
+        *total_mem = pages * page_size;
+        *free_mem = *total_mem;
+    #endif
 #endif
 }
 
