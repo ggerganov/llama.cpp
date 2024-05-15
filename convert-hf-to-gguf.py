@@ -2805,85 +2805,18 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_rope_dimension_count(64)
         self.gguf_writer.add_add_bos_token(False)
 
-    def write_tensors(self):
-        block_count = self.hparams["num_layers"]
-        tensors = dict(self.get_tensors())
-        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
-        has_lm_head = True
-        n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
-        n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        if name.endswith(".rotary_pos_emb.inv_freq"):
+            return []
 
-        for name, data_torch in tensors.items():
-            if name.endswith(".rotary_pos_emb.inv_freq"):
-                continue
+        del bid  # unused
 
-            if "lm_head.weight" not in tensors.keys() and "output.weight" not in tensors.keys():
-                has_lm_head = False
+        name = re.sub(r'transformer\.', '', name)
 
-            name = re.sub(r'transformer\.', '', name)
+        if name == "word_embeddings.weight":
+            assert self.tensor_names is not None
 
-            old_dtype = data_torch.dtype
-
-            # convert any unsupported data types to float32
-            if data_torch.dtype not in (torch.float16, torch.float32):
-                data_torch = data_torch.to(torch.float32)
-
-            data = data_torch.squeeze().numpy()
-
-            if re.match(r"h\.\d+\.self_attention\.query_key_value\.weight", name):
-                # Map bloom-style qkv_linear to gpt-style qkv_linear
-                # bloom: https://github.com/huggingface/transformers/blob/main/src/transformers/models/bloom/modeling_bloom.py#L238-L252  # noqa
-                # gpt-2: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py#L312  # noqa
-                qkv_weights = data.reshape((n_head, 3, n_embed // n_head, n_embed))
-                data = np.concatenate(
-                    (
-                        qkv_weights[:, 0, :, :].reshape((-1, n_embed)),
-                        qkv_weights[:, 1, :, :].reshape((-1, n_embed)),
-                        qkv_weights[:, 2, :, :].reshape((-1, n_embed)),
-                    ),
-                    axis=0,
-                )
-                print("re-format attention.linear_qkv.weight")
-            elif re.match(r"h\.\d+\.self_attention\.query_key_value\.bias", name):
-                qkv_bias = data.reshape((n_head, 3, n_embed // n_head))
-                data = np.concatenate(
-                    (
-                        qkv_bias[:, 0, :].reshape((n_embed,)),
-                        qkv_bias[:, 1, :].reshape((n_embed,)),
-                        qkv_bias[:, 2, :].reshape((n_embed,)),
-                    ),
-                    axis=0,
-                )
-                print("re-format attention.linear_qkv.bias")
-
-            # map tensor names
-            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
-            if new_name is None:
-                print(f"Can not map tensor {name!r}")
-                sys.exit()
-
-            n_dims = len(data.shape)
-            data_dtype = data.dtype
-
-            # if f32 desired, convert any float16 to float32
-            if self.ftype == 0 and data_dtype == np.float16:
-                data = data.astype(np.float32)
-
-            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
-            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
-                data = data.astype(np.float32)
-
-            # if f16 desired, convert any float32 2-dim weight tensors to float16
-            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
-                data = data.astype(np.float16)
-
-            print(f"=> {new_name}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
-
-            self.gguf_writer.add_tensor(new_name, data)
-
-            if not has_lm_head and name == "word_embeddings.weight":
-                self.gguf_writer.add_tensor("output.weight", data)
-                print(name, f"=> output.weight, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+        return [(self.map_tensor_name(name), data_torch)]
 
 
 ###### CONVERSION LOGIC ######
