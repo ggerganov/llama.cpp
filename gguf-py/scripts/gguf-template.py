@@ -76,6 +76,7 @@ def render_chat_template(
             {"role": "assistant", "content": "Hello! How may I assist you today?"},
             {"role": "user", "content": "Can you tell me what pickled mayonnaise is?"},
             {"role": "assistant", "content": "Certainly! What would you like to know about it?"},
+            {"role": "user", "content": "Is it just regular mayonnaise with vinegar or something else?"},
         ]
 
         try:
