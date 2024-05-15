@@ -13989,7 +13989,7 @@ inline void ggml_sycl_op_upscale(const ggml_tensor *src0,
 
 #pragma message("TODO: generalize upscale operator")
 #pragma message("      https://github.com/ggerganov/ggml/pull/814")
-    GGML_ASSERT(false && "TODO: generalize upscale operator);
+    GGML_ASSERT(false && "TODO: generalize upscale operator");
 
     const int scale_factor = dst->op_params[0];
 
