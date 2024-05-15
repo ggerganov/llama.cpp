@@ -83,11 +83,11 @@ static void ggml_cuda_log(enum ggml_log_level level, const char * format, ...) {
         if (len < 128) {
             ggml_cuda_log_callback(level, buffer, ggml_cuda_log_user_data);
         } else {
-            std::string buffer2(len, '\0');
+            std::vector<char> buffer2(len + 1);  // vsnprintf adds a null terminator
             va_end(args);
             va_start(args, format);
-            vsnprintf(&buffer2[0], len + 1, format, args);
-            ggml_cuda_log_callback(level, buffer2.c_str(), ggml_cuda_log_user_data);
+            vsnprintf(&buffer2[0], buffer2.size(), format, args);
+            ggml_cuda_log_callback(level, buffer2.data(), ggml_cuda_log_user_data);
         }
         va_end(args);
     }
