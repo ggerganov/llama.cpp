@@ -526,7 +526,7 @@ class Model:
 
         # for this kind of tokenizer, added_vocab is not a subset of vocab, so they need to be combined
         added_vocab = tokenizer.special_tokens
-        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in (vocab | added_vocab).items()}
+        reverse_vocab = {id_ : encoded_tok for encoded_tok, id_ in {**vocab, **added_vocab}.items()}
 
         for i in range(vocab_size):
             if i not in reverse_vocab:
