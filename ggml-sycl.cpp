@@ -13987,6 +13987,10 @@ inline void ggml_sycl_op_upscale(const ggml_tensor *src0,
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
     GGML_ASSERT(src0->ne[3] == 1 && dst->ne[3] == 1); // just 3D tensors
 
+#pragma message("TODO: generalize upscale operator")
+#pragma message("      https://github.com/ggerganov/ggml/pull/814")
+    GGML_ASSERT(false && "TODO: generalize upscale operator);
+
     const int scale_factor = dst->op_params[0];
 
     upscale_f32_sycl(src0_dd, dst_dd, src0->ne[0], src0->ne[1], src0->ne[2], scale_factor, main_stream);
