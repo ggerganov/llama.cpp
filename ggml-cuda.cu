@@ -2558,7 +2558,7 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
         }
 
         // Disable CUDA graphs (from the next token) if the use-case is demanding too many consecutive graph updates.
-        if (cuda_graph_update_required) {
+        if (use_cuda_graph && cuda_graph_update_required) {
             cuda_ctx->cuda_graph->number_consecutive_updates++;
         } else {
             cuda_ctx->cuda_graph->number_consecutive_updates = 0;
