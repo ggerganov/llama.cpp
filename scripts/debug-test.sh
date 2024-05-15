@@ -110,7 +110,7 @@ rm -rf "$build_dir" && mkdir "$build_dir" || abort "Failed to make $build_dir"
 ###########################################################
 
 # Note: test-eval-callback requires -DLLAMA_CURL
-cmake -B "./$build_dir" -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=1 || abort "Failed to build enviroment"
+cmake -B "./$build_dir" -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_CURL=1 || abort "Failed to build enviroment"
 pushd "$build_dir"
 make -j || abort "Failed to compile"
 popd > /dev/null || exit 1
@@ -176,20 +176,9 @@ printf "${magenta}Running Test #${test_number}: ${single_test_name}${normal}\n"
 printf "${cyan}single_test_command: ${single_test_command}${normal}\n"
 
 if [ "$gdb_mode" = "true" ]; then
-    printf "${blue}Replacing single test command string that may have /../ in them with the relative path, i.e. path/../path -> ../path.${normal}\n"
-    gdb_args=()
-    for piece in $(echo ${single_test_command} | sed -e 's/"\/\<//' -e 's/\>"//')
-    do
-        transformed_piece=($(echo $piece | sed -e 's/.*\/..\//..\//'))
-        printf "${blue} - '${piece}' --> '${transformed_piece}' ${normal}\n"
-        gdb_args+="$transformed_piece"
-    done
-
-    printf "${yellow}gdb_args[@]: ${gdb_args[@]}${normal}\n"
-
     # Execute debugger
     pushd "$repo_root" || exit 1
-    gdb --args ${gdb_args[@]}
+    eval "gdb --args ${single_test_command}"
     popd > /dev/null || exit 1
 
 else
