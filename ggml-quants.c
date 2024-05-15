@@ -4852,10 +4852,10 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
             const block_q8_0 * restrict b_x1 = &vx1[i];
             const block_q8_0 * restrict b_y1 = &vy1[i];
 
-            const int8x16_t x0_l = vld1q_s8((const int8_t*)b_x0->qs);
-            const int8x16_t x0_h = vld1q_s8((const int8_t*)b_x0->qs + 16);
-            const int8x16_t x1_l = vld1q_s8((const int8_t*)b_x1->qs);
-            const int8x16_t x1_h = vld1q_s8((const int8_t*)b_x1->qs + 16);
+            const int8x16_t x0_l = vld1q_s8(b_x0->qs);
+            const int8x16_t x0_h = vld1q_s8(b_x0->qs + 16);
+            const int8x16_t x1_l = vld1q_s8(b_x1->qs);
+            const int8x16_t x1_h = vld1q_s8(b_x1->qs + 16);
 
             // load y
             const int8x16_t y0_l = vld1q_s8(b_y0->qs);
