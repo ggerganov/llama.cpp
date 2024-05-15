@@ -3178,6 +3178,12 @@ static struct ggml_tensor * ggml_new_tensor_impl(
 
     struct ggml_tensor * const result = (struct ggml_tensor *)((char *)ctx->mem_buffer + obj_new->offs);
 
+#ifdef __clang__
+    // temporary until ggml_tensor::backend is removed
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
     *result = (struct ggml_tensor) {
         /*.type         =*/ type,
         /*.backend      =*/ GGML_BACKEND_TYPE_CPU,
@@ -3199,6 +3205,10 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         /*.extra        =*/ NULL,
         /*.padding      =*/ { 0 },
     };
+
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 
     // TODO: this should not be needed as long as we don't rely on aligned SIMD loads
     //ggml_assert_aligned(result->data);
