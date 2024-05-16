@@ -326,6 +326,8 @@ class ChatTemplates : public GroupKV {
 
 public:
 
+    std::string tmplFallback;
+
     ChatTemplates(GroupKVMapMapVariant defaultMap) : GroupKV(defaultMap) {}
 
     /**
@@ -450,7 +452,7 @@ public:
      * cntUserMsgCnt arguments.
     */
     bool chaton_tmpl_apply_ex(
-            const std::string &tmpl,
+            const std::string &tmplId,
             const std::vector<const llama_chat_message *> &msgs,
             bool alertAssistantAtEnd,
             bool applyGlobalIfAny,
@@ -460,8 +462,13 @@ public:
             int curSystemMsgCnt = 0,
             int curUserMsgCnt = 0
             ) {
+        std::string tmpl = tmplId;
         if (!tmpl_exists(tmpl)) {
-            return false;
+            tmpl = tmplFallback;
+            LDBUG_LN("DBUG:%s:Tmpl [%s] missing, fallback to [%s]", __func__, tmplId, tmpl);
+            if (!tmpl_exists(tmpl)) {
+                return false;
+            }
         }
         ChatParts cp = {};
         if (applyGlobalIfAny) {
@@ -771,6 +778,13 @@ inline std::vector<llama_token> chaton_llama_tokenize_ex(
     return tokens;
 }
 
+
+inline void chaton_meta_fallback(std::string &tmpl, ChatTemplates *ct=nullptr) {
+    if (ct == nullptr) {
+        ct = &gCT;
+    }
+    ct->tmplFallback = tmpl;
+}
 
 /**
  * Validate specified chaton-template-id and inturn dump the contents related to that
