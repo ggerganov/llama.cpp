@@ -849,8 +849,6 @@ function(get_flags CCID CCVER)
     set(GF_CXX_FLAGS ${CXX_FLAGS} PARENT_SCOPE)
 endfunction()
 
-list(APPEND CXX_FLAGS -std=c++17)
-
 if (LLAMA_FATAL_WARNINGS)
     if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         list(APPEND C_FLAGS   -Werror)
