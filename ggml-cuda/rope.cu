@@ -166,7 +166,7 @@ static void rope_cuda(
 template<typename T>
 static void rope_neox_cuda(
     const T * x, T * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
-    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float* freq_factors, cudaStream_t stream
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, cudaStream_t stream
 ) {
     GGML_ASSERT(ncols % 2 == 0);
     const dim3 block_dims(1, CUDA_ROPE_BLOCK_SIZE, 1);
@@ -233,14 +233,14 @@ static void rope_cuda_f32(
 
 static void rope_neox_cuda_f16(
     const half * x, half * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
-    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float* freq_factors, cudaStream_t stream) {
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, cudaStream_t stream) {
 
     rope_neox_cuda<half>(x, dst, ncols, n_dims, nrows, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, stream);
 }
 
 static void rope_neox_cuda_f32(
     const float * x, float * dst, int ncols, int n_dims, int nrows, const int32_t * pos, float freq_scale, int p_delta_rows,
-    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float* freq_factors, cudaStream_t stream
+    float freq_base, float ext_factor, float attn_factor, rope_corr_dims corr_dims, const float * freq_factors, cudaStream_t stream
 ) {
 
     rope_neox_cuda<float>(x, dst, ncols, n_dims, nrows, pos, freq_scale, p_delta_rows, freq_base, ext_factor, attn_factor, corr_dims, freq_factors, stream);
@@ -288,16 +288,10 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const bool is_glm  = mode & 4;
 
     if (is_neox) {
-        // TODO: move these asserts to ggml.c
-        GGML_ASSERT(src1->type == GGML_TYPE_I32);
-        GGML_ASSERT(src1->ne[0] == ne2);
         pos = (const int32_t *) src1_d;
 
         if (src2 != nullptr) {
-            // TODO: move these asserts to ggml.c
-            GGML_ASSERT(src2->type == GGML_TYPE_F32);
-            GGML_ASSERT(src2->ne[0] >= n_dims / 2);
-            freq_factors = (const float*) src2->data;
+            freq_factors = (const float *) src2->data;
         }
     } else {
         GGML_ASSERT(src2 == nullptr && "TODO: freq_factors not implemented for mode 1");
