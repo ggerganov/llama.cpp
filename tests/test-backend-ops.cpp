@@ -1763,14 +1763,14 @@ struct test_llama : public test_llm {
                 struct ggml_tensor * Kcur = ggml_mul_mat(ctx, wk, cur);
                 struct ggml_tensor * Vcur = ggml_mul_mat(ctx, wv, cur);
 
-                Qcur = ggml_rope_custom(
-                    ctx, ggml_reshape_3d(ctx, Qcur, hp.n_embd_head, hp.n_head,    hp.n_tokens), inp_pos,
+                Qcur = ggml_rope_ext(
+                    ctx, ggml_reshape_3d(ctx, Qcur, hp.n_embd_head, hp.n_head,    hp.n_tokens), inp_pos, nullptr,
                     hp.n_rot, 0, 0, hp.n_orig_ctx, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
-                Kcur = ggml_rope_custom(
-                    ctx, ggml_reshape_3d(ctx, Kcur, hp.n_embd_head, hp.n_head_kv, hp.n_tokens), inp_pos,
+                Kcur = ggml_rope_ext(
+                    ctx, ggml_reshape_3d(ctx, Kcur, hp.n_embd_head, hp.n_head_kv, hp.n_tokens), inp_pos, nullptr,
                     hp.n_rot, 0, 0, hp.n_orig_ctx, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
@@ -1889,13 +1889,13 @@ struct test_falcon : public test_llm {
                 Kcur = ggml_reshape_3d(ctx, Kcur, hp.n_embd_head, hp.n_head_kv, hp.n_tokens);
 
                 // using mode = 2 for neox mode
-                Qcur = ggml_rope_custom(
-                    ctx, Qcur, inp_pos, hp.n_rot, 2, 0, hp.n_orig_ctx,
+                Qcur = ggml_rope_ext(
+                    ctx, Qcur, inp_pos, nullptr, hp.n_rot, 2, 0, hp.n_orig_ctx,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
-                Kcur = ggml_rope_custom(
-                    ctx, Kcur, inp_pos, hp.n_rot, 2, 0, hp.n_orig_ctx,
+                Kcur = ggml_rope_ext(
+                    ctx, Kcur, inp_pos, nullptr, hp.n_rot, 2, 0, hp.n_orig_ctx,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
