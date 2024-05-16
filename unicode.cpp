@@ -12,7 +12,6 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#include <array>
 #include <locale>
 #include <codecvt>
 
@@ -110,8 +109,8 @@ static uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset)
 //    return result;
 //}
 
-static std::array<codepoint_flags, MAX_CODEPOINTS> unicode_cpt_flags_array() {
-    std::array<codepoint_flags, MAX_CODEPOINTS> cpt_flags;
+static std::vector<codepoint_flags> unicode_cpt_flags_array() {
+    std::vector<codepoint_flags> cpt_flags(MAX_CODEPOINTS, codepoint_flags::UNDEFINED);
 
     assert (unicode_ranges_flags.front().first == 0);
     assert (unicode_ranges_flags.back().first == MAX_CODEPOINTS);
