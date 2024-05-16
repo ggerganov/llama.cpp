@@ -2752,13 +2752,15 @@ class ChatGLMModel(Model):
 
             text = piece.encode("utf-8")
             score = 0.0
-            if len(piece) != 0 and token_id < 64789:
+            # Referencing the tokenizer Python implementation(https://huggingface.co/THUDM/chatglm3-6b/blob/main/tokenization_chatglm.py),
+            # it is only valid if it is less than tokenizer.tokenizer.sp_model.vocab_size()
+            if len(piece) != 0 and token_id < tokenizer.tokenizer.sp_model.vocab_size():
                 score = tokenizer.tokenizer.sp_model.get_score(token_id)
 
             if len(piece) == 0:
                 text = f"[PAD{token_id}]".encode("utf-8")
 
-            if token_id >= 64789:
+            if token_id >= tokenizer.tokenizer.sp_model.vocab_size():
                 toktype = SentencePieceTokenTypes.UNKNOWN
                 tokens.append(text)
                 scores.append(score)
@@ -2788,7 +2790,7 @@ class ChatGLMModel(Model):
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
-        self.gguf_writer.add_name("ChatGLM-6b-chat")
+        self.gguf_writer.add_name(self.dir_model.name)
         n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
         n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
         n_head_kv = self.hparams.get("multi_query_group_num", n_head)
@@ -2804,16 +2806,12 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_add_bos_token(False)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
         if name.endswith(".rotary_pos_emb.inv_freq"):
             return []
 
-        del bid  # unused
-
-        name = re.sub(r'transformer\.', '', name)
-
-        if name == "word_embeddings.weight":
-            assert self.tensor_names is not None
-
+        name = name.removeprefix("transformer.")
         return [(self.map_tensor_name(name), data_torch)]
 
 
