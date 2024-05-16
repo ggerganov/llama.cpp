@@ -14454,8 +14454,8 @@ inline void ggml_sycl_op_rope(const ggml_tensor *src0, const ggml_tensor *src1,
                               ggml_tensor *dst, const float *src0_dd,
                               const float *src1_dd, float *dst_dd,
                               const dpct::queue_ptr &main_stream) {
-#pragma message("TODO: implement phi3 frequency factors support");
-#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225");
+#pragma message("TODO: implement phi3 frequency factors support")
+#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225")
     GGML_ASSERT(dst->src[2] == nullptr && "phi3 frequency factors not implemented yet");
 
     GGML_ASSERT(src0->type == GGML_TYPE_F32 || src0->type == GGML_TYPE_F16);

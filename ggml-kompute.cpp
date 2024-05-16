@@ -1677,8 +1677,8 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
                     } break;
                 case GGML_OP_ROPE:
                     {
-#pragma message("TODO: implement phi3 frequency factors support");
-#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225");
+#pragma message("TODO: implement phi3 frequency factors support")
+#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225")
                         GGML_ASSERT(dst->src[2] == nullptr && "phi3 frequency factors not implemented yet");
 
                         GGML_ASSERT(ne10 == ne02);
