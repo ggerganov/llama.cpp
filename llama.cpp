@@ -17015,13 +17015,13 @@ static size_t llama_state_seq_get_data_internal(struct llama_context * ctx, llam
             }
             else {
                 if (cell_range_begin != kv_self.size) {
-                    cell_ranges.push_back({ cell_range_begin, i });
+                    cell_ranges.emplace_back(cell_range_begin, i);
                     cell_range_begin = kv_self.size;
                 }
             }
         }
         if (cell_range_begin != kv_self.size) {
-            cell_ranges.push_back({ cell_range_begin, kv_self.size });
+            cell_ranges.emplace_back(cell_range_begin, kv_self.size);
         }
 
         // DEBUG CHECK: Sum of cell counts in ranges should equal the total cell count
