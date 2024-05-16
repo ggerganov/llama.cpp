@@ -182,22 +182,19 @@ static void rope_neox_cuda(
                 x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
                 theta_scale, inv_ndims, freq_factors
                 );
-        }
-        else {
+        } else {
             rope_neox<T, false, true><<<block_nums, block_dims, 0, stream>>>(
                 x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
                 theta_scale, inv_ndims, freq_factors
                 );
         }
-    }
-    else {
+    } else {
         if (freq_factors == nullptr) {
             rope_neox<T, true, false><<<block_nums, block_dims, 0, stream>>>(
                 x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
                 theta_scale, inv_ndims, freq_factors
                 );
-        }
-        else {
+        } else {
             rope_neox<T, true, true><<<block_nums, block_dims, 0, stream>>>(
                 x, dst, ncols, n_dims, pos, freq_scale, p_delta_rows, ext_factor, attn_factor, corr_dims,
                 theta_scale, inv_ndims, freq_factors
