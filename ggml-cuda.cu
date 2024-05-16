@@ -51,14 +51,9 @@
 static_assert(sizeof(half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 static void ggml_cuda_default_log_callback(enum ggml_log_level level, const char * msg, void * user_data) {
+    GGML_UNUSED(level);
     GGML_UNUSED(user_data);
-    if (level == GGML_LOG_LEVEL_WARN) {
-        fprintf(stderr, "warning: %s", msg);
-    } else if (level == GGML_LOG_LEVEL_ERROR) {
-        fprintf(stderr, "error: %s", msg);
-    } else {
-        fprintf(stderr, "%s", msg);
-    }
+    fprintf(stderr, "%s", msg);
 }
 
 ggml_log_callback ggml_cuda_log_callback = ggml_cuda_default_log_callback;
@@ -98,9 +93,9 @@ void ggml_cuda_error(const char * stmt, const char * func, const char * file, in
     int id = -1; // in case cudaGetDevice fails
     cudaGetDevice(&id);
 
-    GGML_CUDA_LOG_INFO("CUDA error: %s\n", msg);
-    GGML_CUDA_LOG_INFO("  current device: %d, in function %s at %s:%d\n", id, func, file, line);
-    GGML_CUDA_LOG_INFO("  %s\n", stmt);
+    GGML_CUDA_LOG_ERROR("CUDA error: %s\n", msg);
+    GGML_CUDA_LOG_ERROR("  current device: %d, in function %s at %s:%d\n", id, func, file, line);
+    GGML_CUDA_LOG_ERROR("  %s\n", stmt);
     // abort with GGML_ASSERT to get a stack trace
     GGML_ASSERT(!"CUDA error");
 }
