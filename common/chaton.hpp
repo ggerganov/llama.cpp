@@ -465,7 +465,7 @@ public:
         std::string tmpl = tmplId;
         if (!tmpl_exists(tmpl)) {
             tmpl = tmplFallback;
-            LDBUG_LN("DBUG:%s:Tmpl [%s] missing, fallback to [%s]", __func__, tmplId, tmpl);
+            LDBUG_LN("DBUG:%s:Tmpl [%s] missing, fallback to [%s]", __func__, tmplId.c_str(), tmpl.c_str());
             if (!tmpl_exists(tmpl)) {
                 return false;
             }
