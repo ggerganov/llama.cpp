@@ -244,6 +244,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.mlp.fc11",                          # nomic-bert
             "model.layers.{bid}.mlp.c_fc",                            # starcoder2
             "encoder.layer.{bid}.mlp.gated_layers_v",                 # jina-bert-v2
+            "model.layers.{bid}.residual_mlp.w3",                     # arctic
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -272,6 +273,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.mlp.fc12",              # nomic-bert
             "encoder.layer.{bid}.mlp.gated_layers_w",     # jina-bert-v2
             "transformer.h.{bid}.mlp.linear_1",           # refact
+            "model.layers.{bid}.residual_mlp.w1",         # arctic
         ),
 
         MODEL_TENSOR.FFN_GATE_EXP: (
@@ -306,6 +308,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.mlp.fc2",                           # nomic-bert
             "model.layers.{bid}.mlp.c_proj",                          # starcoder2
             "encoder.layer.{bid}.mlp.wo",                             # jina-bert-v2
+            "model.layers.{bid}.residual_mlp.w2",                     # arctic
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
@@ -380,59 +383,13 @@ class TensorNameMap:
             "model.layers.{bid}.out_proj",
             "backbone.layers.{bid}.mixer.out_proj",
         ),
-
     }
 
     # architecture-specific block mappings
     arch_block_mappings_cfg: dict[MODEL_ARCH, dict[MODEL_TENSOR, tuple[str, ...]]] = {
         MODEL_ARCH.ARCTIC: {
-            MODEL_TENSOR.TOKEN_EMBD: (
-                "model.embed_tokens",
-            ),
-            MODEL_TENSOR.OUTPUT_NORM: (
-                "model.norm",
-            ),
-            MODEL_TENSOR.OUTPUT: (
-                "lm_head",
-            ),
-            MODEL_TENSOR.ATTN_NORM: (
-                "model.layers.{bid}.input_layernorm",
-            ),
-            MODEL_TENSOR.ATTN_Q: (
-                "model.layers.{bid}.self_attn.q_proj",
-            ),
-            MODEL_TENSOR.ATTN_K: (
-                "model.layers.{bid}.self_attn.k_proj",
-            ),
-            MODEL_TENSOR.ATTN_V: (
-                "model.layers.{bid}.self_attn.v_proj",
-            ),
-            MODEL_TENSOR.ATTN_OUT: (
-                "model.layers.{bid}.self_attn.o_proj",
-            ),
-            MODEL_TENSOR.FFN_GATE_INP: (
-                "model.layers.{bid}.block_sparse_moe.gate",
-            ),
             MODEL_TENSOR.FFN_NORM: (
                 "model.layers.{bid}.residual_layernorm",
-            ),
-            MODEL_TENSOR.FFN_GATE: (
-                "model.layers.{bid}.residual_mlp.w1",
-            ),
-            MODEL_TENSOR.FFN_DOWN: (
-                "model.layers.{bid}.residual_mlp.w2",
-            ),
-            MODEL_TENSOR.FFN_UP: (
-                "model.layers.{bid}.residual_mlp.w3",
-            ),
-            MODEL_TENSOR.FFN_GATE_EXP: (
-                "layers.{bid}.feed_forward.experts.w1",
-            ),
-            MODEL_TENSOR.FFN_DOWN_EXP: (
-                "layers.{bid}.feed_forward.experts.w2",
-            ),
-            MODEL_TENSOR.FFN_UP_EXP: (
-                "layers.{bid}.feed_forward.experts.w3",
             ),
             MODEL_TENSOR.FFN_NORM_EXP: (
                 "model.layers.{bid}.post_attention_layernorm",
@@ -452,11 +409,9 @@ class TensorNameMap:
             for key in keys:
                 self.mapping[key] = (tensor, tensor_name)
         if arch in self.arch_block_mappings_cfg:
-            block_mappings = self.arch_block_mappings_cfg[arch]
-        else:
-            block_mappings = self.block_mappings_cfg
+            self.block_mappings_cfg.update(self.arch_block_mappings_cfg[arch])
         for bid in range(n_blocks):
-            for tensor, keys in block_mappings.items():
+            for tensor, keys in self.block_mappings_cfg.items():
                 if tensor not in MODEL_TENSORS[arch]:
                     continue
                 # TODO: make this configurable
