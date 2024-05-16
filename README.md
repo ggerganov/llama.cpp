@@ -532,7 +532,7 @@ Building the program with BLAS support may lead to some performance improvements
         cmake -B build -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
         && cmake --build build --config Release -- -j 16
     ```
-    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
+    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON`.
     However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
 
   - Using `make` (example for target gfx1030, build with 16 CPU threads):
@@ -711,6 +711,9 @@ Building the program with BLAS support may lead to some performance improvements
   ```
 
 ### Prepare and Quantize
+
+> [!NOTE]
+> You can use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space on Hugging Face to quantise your model weights without any setup too. It is synced from `llama.cpp` main every 6 hours.
 
 To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 

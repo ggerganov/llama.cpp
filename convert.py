@@ -1109,7 +1109,7 @@ class OutputFile:
         if metadata is not None and metadata.name is not None:
             name = metadata.name
         elif params.path_model is not None:
-            name = str(params.path_model.parent).split("/")[-1]
+            name = params.path_model.name
         elif params.n_ctx == 4096:
             # Heuristic detection of LLaMA v2 model
             name = "LLaMA v2"
