@@ -9,7 +9,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN make
+RUN make -j
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
 
