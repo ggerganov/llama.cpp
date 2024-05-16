@@ -134,7 +134,13 @@ static bool set_no_delay(sockfd_t sockfd) {
     int flag = 1;
     // set TCP_NODELAY to disable Nagle's algorithm
     int ret = setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
-    return ret >= 0;
+    return ret == 0;
+}
+
+static bool set_reuse_addr(sockfd_t sockfd) {
+    int flag = 1;
+    int ret = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (char *)&flag, sizeof(int));
+    return ret == 0;
 }
 
 static std::shared_ptr<socket_t> socket_connect(const char * host, int port) {
@@ -181,7 +187,10 @@ static std::shared_ptr<socket_t> create_server_socket(const char * host, int por
     if (sock == nullptr) {
         return nullptr;
     }
-
+    if (!set_reuse_addr(sockfd)) {
+        fprintf(stderr, "Failed to set SO_REUSEADDR\n");
+        return nullptr;
+    }
     struct sockaddr_in serv_addr;
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = inet_addr(host);
