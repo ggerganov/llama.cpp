@@ -1,5 +1,4 @@
 //This is auto created/converted from chaton-meta-json file
-#pragma once
 
 #include "chaton.hpp"
 

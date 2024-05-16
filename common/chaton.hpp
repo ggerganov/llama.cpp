@@ -537,9 +537,8 @@ public:
 
 };
 
-// The compiled-in configurable template data (the meta)
-#include "chaton_meta.hpp"
-//ChatTemplates gCT = {{}};
+// The compiled-in configurable template data (the meta) from chaton_meta.cpp
+extern ChatTemplates gCT;
 
 
 inline bool chaton_tmpl_exists(const std::string &tmpl) {

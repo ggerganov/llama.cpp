@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Convert chaton meta json file to c++ hpp file
+# Convert chaton meta json file to equivalent c++ cpp format
 # by Humans for All
 
 import sys
@@ -19,7 +19,7 @@ def kv_bool(j, tmpl, k1, comma):
 fp=open(sys.argv[1])
 j=json.load(fp)
 print("//This is auto created/converted from chaton-meta-json file")
-print("#pragma once\n\n#include \"chaton.hpp\"\n\nChatTemplates gCT = {{")
+print("\n\n#include \"chaton.hpp\"\n\nChatTemplates gCT = {{")
 
 for tmpl in j:
     print("\t{{ \"{}\", {{".format(tmpl))
