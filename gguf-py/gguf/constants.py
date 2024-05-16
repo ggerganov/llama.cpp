@@ -139,6 +139,7 @@ class MODEL_ARCH(IntEnum):
     COMMAND_R  = auto()
     DBRX       = auto()
     OLMO       = auto()
+    DEEPSEEK2  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -181,6 +182,12 @@ class MODEL_TENSOR(IntEnum):
     SSM_A              = auto()
     SSM_D              = auto()
     SSM_OUT            = auto()
+    ATTN_Q_A           = auto()
+    ATTN_Q_B           = auto()
+    ATTN_KV_A_MQA      = auto()
+    ATTN_KV_B          = auto()
+    ATTN_Q_A_NORM      = auto()
+    ATTN_KV_A_NORM     = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -217,6 +224,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
+    MODEL_ARCH.DEEPSEEK2:      "deepseek2",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -259,6 +267,12 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.SSM_A:              "blk.{bid}.ssm_a",
     MODEL_TENSOR.SSM_D:              "blk.{bid}.ssm_d",
     MODEL_TENSOR.SSM_OUT:            "blk.{bid}.ssm_out",
+    MODEL_TENSOR.ATTN_Q_A:           "blk.{bid}.attn_q_a",
+    MODEL_TENSOR.ATTN_Q_B:           "blk.{bid}.attn_q_b",
+    MODEL_TENSOR.ATTN_KV_A_MQA:      "blk.{bid}.attn_kv_a_mqa",
+    MODEL_TENSOR.ATTN_KV_B:          "blk.{bid}.attn_kv_b",
+    MODEL_TENSOR.ATTN_Q_A_NORM:      "blk.{bid}.attn_q_a_norm",
+    MODEL_TENSOR.ATTN_KV_A_NORM:     "blk.{bid}.attn_kv_a_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -743,6 +757,32 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.DEEPSEEK2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q_A,
+        MODEL_TENSOR.ATTN_Q_B,
+        MODEL_TENSOR.ATTN_KV_A_MQA,
+        MODEL_TENSOR.ATTN_KV_B,
+        MODEL_TENSOR.ATTN_Q_A_NORM,
+        MODEL_TENSOR.ATTN_KV_A_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+    ],
     # TODO
 }
 
@@ -776,6 +816,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
     MODEL_ARCH.XVERSE: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.DEEPSEEK2: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
