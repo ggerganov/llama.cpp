@@ -2263,18 +2263,8 @@ static enum ggml_status ggml_metal_graph_compute(
 
                         GGML_ASSERT(!is_glm && "GLM RoPE not implemented in Metal");
 
-                        if (is_neox) {
-                            // TODO: move these asserts to ggml.c
-                            GGML_ASSERT(src1->type == GGML_TYPE_I32);
-                            GGML_ASSERT(src1->ne[0] == ne2);
-
-                            if (id_src2 != nil) {
-                                // TODO: move these asserts to ggml.c
-                                GGML_ASSERT(src2->type == GGML_TYPE_F32);
-                                GGML_ASSERT(src2->ne[0] >= n_dims / 2);
-                            }
-                        } else {
-                            GGML_ASSERT(id_src2 == nil && "TODO: freq_factors not implemented for mode 1");
+                        if (!is_neox) {
+                            GGML_ASSERT(id_src2 == nil && "TODO: freq_factors not implemented for !is_neox");
                         }
 
                         id<MTLComputePipelineState> pipeline = nil;

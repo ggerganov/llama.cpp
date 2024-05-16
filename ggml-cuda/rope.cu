@@ -291,7 +291,7 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
             freq_factors = (const float *) src2->data;
         }
     } else {
-        GGML_ASSERT(src2 == nullptr && "TODO: freq_factors not implemented for mode 1");
+        GGML_ASSERT(src2 == nullptr && "TODO: freq_factors not implemented for !is_neox");
     }
 
     rope_corr_dims corr_dims;
