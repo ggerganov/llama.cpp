@@ -249,8 +249,11 @@ static void rope_neox_cuda_f32(
 void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0 = dst->src[0];
     const ggml_tensor * src1 = dst->src[1];
+    const ggml_tensor * src2 = dst->src[2];
+
     const float * src0_d = (const float *)src0->data;
     const float * src1_d = (const float *)src1->data;
+
     float * dst_d = (float *)dst->data;
     cudaStream_t stream = ctx.stream();
 
@@ -278,22 +281,27 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
     memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
-    const float* freq_factors = nullptr;
+    const float * freq_factors = nullptr;
     const int32_t * pos = nullptr;
-    if ((mode & 1) == 0) {
+
+    const bool is_neox = mode & 2;
+    const bool is_glm  = mode & 4;
+
+    if (is_neox) {
+        // TODO: move these asserts to ggml.c
         GGML_ASSERT(src1->type == GGML_TYPE_I32);
         GGML_ASSERT(src1->ne[0] == ne2);
         pos = (const int32_t *) src1_d;
 
-        if (dst->src[2] != nullptr) {
-            GGML_ASSERT(dst->src[2]->type == GGML_TYPE_F32);
-            GGML_ASSERT(dst->src[2]->ne[0] >= n_dims / 2);
-            freq_factors = (const float*) dst->src[2]->data;
+        if (src2 != nullptr) {
+            // TODO: move these asserts to ggml.c
+            GGML_ASSERT(src2->type == GGML_TYPE_F32);
+            GGML_ASSERT(src2->ne[0] >= n_dims / 2);
+            freq_factors = (const float*) src2->data;
         }
+    } else {
+        GGML_ASSERT(src2 == nullptr && "TODO: freq_factors not implemented for mode 1");
     }
-
-    const bool is_neox = mode & 2;
-    const bool is_glm  = mode & 4;
 
     rope_corr_dims corr_dims;
     ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims.v);

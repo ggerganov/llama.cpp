@@ -1640,6 +1640,7 @@ static void rope_yarn_corr_dims(
 typedef void (rope_t)(
         device const    void * src0,
         device const int32_t * src1,
+        device const   float * src2,
         device         float * dst,
         constant     int64_t & ne00,
         constant     int64_t & ne01,
@@ -1675,6 +1676,7 @@ template<typename T>
 kernel void kernel_rope(
         device const    void * src0,
         device const int32_t * src1,
+        device const   float * src2,
         device         float * dst,
         constant     int64_t & ne00,
         constant     int64_t & ne01,
@@ -1744,8 +1746,10 @@ kernel void kernel_rope(
 
                 // simplified from `(ib * n_dims + ic) * inv_ndims`
                 const float cur_rot = inv_ndims*ic - ib;
+                const float freq_factor = src2 != src0 ? src2[ic/2] : 1.0f;
 
-                const float theta = theta_0 * pow(freq_base, cur_rot);
+                const float theta = theta_0 * pow(freq_base, cur_rot) / freq_factor;
+
                 float cos_theta, sin_theta;
                 rope_yarn(theta, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
 

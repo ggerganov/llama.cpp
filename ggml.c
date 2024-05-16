@@ -14311,6 +14311,7 @@ static void ggml_compute_forward_rope_f32(
 
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
+    const struct ggml_tensor * src2 = dst->src[2];
 
     if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
         return;
@@ -14370,13 +14371,15 @@ static void ggml_compute_forward_rope_f32(
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
 
-    const float* freq_factors = NULL;
+    const float * freq_factors = NULL;
     if (is_neox) {
-        if (dst->src[2] != NULL) {
-            GGML_ASSERT(dst->src[2]->type == GGML_TYPE_F32);
-            GGML_ASSERT(dst->src[2]->ne[0] >= n_dims / 2);
-            freq_factors = (const float*) dst->src[2]->data;
+        if (src2 != NULL) {
+            GGML_ASSERT(src2->type == GGML_TYPE_F32);
+            GGML_ASSERT(src2->ne[0] >= n_dims / 2);
+            freq_factors = (const float *) src2->data;
         }
+    } else {
+        GGML_ASSERT(src2 == NULL && "TODO: freq_factors not implemented for mode 1");
     }
 
     // backward process uses inverse rotation by cos and sin.
