@@ -3847,11 +3847,10 @@ static void concat_f32(const float  *x,const float  *y, float *dst, const int ne
     }
 }
 
-static void upscale_f32(const float  *x, float *dst,
-        const int nb00, const int nb01, const int nb02, const int nb03,
-        const int ne10, const int ne11, const int ne12, const int ne13,
-        const float sf0, const float sf1, const float sf2, const float sf3,
-                        const sycl::nd_item<1> &item_ct1) {
+static void upscale_f32(const float  *x, float *dst, const int nb00, const int nb01,
+                        const int nb02, const int nb03, const int ne10, const int ne11,
+                        const int ne12, const int ne13, const float sf0, const float sf1,
+                        const float sf2, const float sf3, const sycl::nd_item<1> &item_ct1) {
     int index = item_ct1.get_local_id(0) +
                item_ct1.get_group(0) * item_ct1.get_local_range(0);
     if (index >= ne10 * ne11 * ne12 * ne13) {
@@ -10092,11 +10091,10 @@ static void concat_f32_sycl(const float *x, const float *y, float *dst,
         });
 }
 
-static void upscale_f32_sycl(const float *x, float *dst,
-                             const int nb00, const int nb01, const int nb02, const int nb03,
-                             const int ne10, const int ne11, const int ne12, const int ne13,
-                             const float sf0, const float sf1, const float sf2, const float sf3,
-                             dpct::queue_ptr stream) {
+static void upscale_f32_sycl(const float *x, float *dst, const int nb00, const int nb01,
+                             const int nb02, const int nb03, const int ne10, const int ne11,
+                             const int ne12, const int ne13, const float sf0, const float sf1,
+                             const float sf2, const float sf3, dpct::queue_ptr stream) {
     int dst_size = ne10 * ne11 * ne12 * ne13;
     int num_blocks = (dst_size + SYCL_UPSCALE_BLOCK_SIZE - 1) / SYCL_UPSCALE_BLOCK_SIZE;
     sycl::range<1> gridDim(num_blocks * SYCL_UPSCALE_BLOCK_SIZE);
@@ -14001,7 +13999,9 @@ inline void ggml_sycl_op_upscale(const ggml_tensor *src0,
     const float sf2 = (float)dst->ne[2]/src0->ne[2];
     const float sf3 = (float)dst->ne[3]/src0->ne[3];
 
-    upscale_f32_sycl(src0_dd, dst_dd, src0->nb[0], src0->nb[1], src0->nb[2], src0->nb[3], dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], sf0, sf1, sf2, sf3, main_stream);
+    upscale_f32_sycl(src0_dd, dst_dd, src0->nb[0], src0->nb[1], src0->nb[2], src0->nb[3],
+                     dst->ne[0], dst->ne[1], dst->ne[2], dst->ne[3], sf0, sf1, sf2, sf3,
+                     main_stream);
 
     (void) src1;
     (void) dst;
