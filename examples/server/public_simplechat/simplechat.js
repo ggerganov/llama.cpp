@@ -90,11 +90,19 @@ class SimpleChat {
 
 /**
  * Handle submit request by user
+ * @param {HTMLInputElement} inputSystem
  * @param {HTMLInputElement} inputUser
  * @param {HTMLDivElement} divChat
  * @param {string} apiEP
  */
-async function handle_submit(inputUser, divChat, apiEP) {
+async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
+
+    if (gChat.xchat.length == 0) {
+        let sysPrompt = inputSystem.value;
+        if (sysPrompt.length > 0) {
+            gChat.add(Roles.System, sysPrompt);
+        }
+    }
 
     let content = inputUser?.value;
     gChat.add(Roles.User, content);
@@ -159,6 +167,7 @@ const gbCompletionFreshChatAlways = true;
 
 function startme() {
 
+    let inputSystem = /** @type{HTMLInputElement} */(document.getElementById("system"));
     let divChat = /** @type{HTMLDivElement} */(document.getElementById("chat"));
     let btnSubmit = document.getElementById("submit");
     let inputUser = /** @type{HTMLInputElement} */(document.getElementById("user"));
@@ -172,7 +181,7 @@ function startme() {
         if (inputUser.disabled) {
             return;
         }
-        handle_submit(inputUser, divChat, selectApiEP.value);
+        handle_submit(inputSystem, inputUser, divChat, selectApiEP.value);
     });
 
     inputUser?.addEventListener("keyup", (ev)=> {
