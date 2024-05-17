@@ -20,11 +20,13 @@
 # - Update llama.cpp with the new pre-tokenizer if necessary
 #
 # TODO: generate tokenizer tests for llama.cpp
-# TODO: automate the update of convert-hf-to-gguf.py
 #
 
 import logging
 import os
+import pathlib
+import re
+
 import requests
 import sys
 import json
@@ -135,7 +137,6 @@ for model in models:
     download_file_with_auth(url, token, save_path)
 
 # generate the source code for the convert-hf-to-gguf.py:get_vocab_base_pre() function:
-# TODO: auto-update convert-hf-to-gguf.py with the generated function
 
 src_ifs = ""
 for model in models:
@@ -224,11 +225,18 @@ src_func = f"""
         return res
 """
 
-print(src_func) # noqa: NP100
+convert_py_pth = pathlib.Path("convert-hf-to-gguf.py")
+convert_py = convert_py_pth.read_text()
+convert_py = re.sub(
+    r"(# Marker: Start get_vocab_base_pre)(.+?)( +# Marker: End get_vocab_base_pre)",
+    lambda m: m.group(1) + src_func + m.group(3),
+    convert_py,
+    flags=re.DOTALL | re.MULTILINE,
+)
 
-logger.info("\n")
-logger.info("!!! Copy-paste the function above into convert-hf-to-gguf.py !!!")
-logger.info("\n")
+convert_py_pth.write_text(convert_py)
+
+logger.info("+++ convert-hf-to-gguf.py was updated")
 
 # generate tests for each tokenizer model
 
