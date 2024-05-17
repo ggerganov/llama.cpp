@@ -141,6 +141,13 @@ function startme() {
         handle_submit(inputUser, divChat, gChatURL);
     });
 
+    inputUser?.addEventListener("keyup", (ev)=> {
+        if (ev.key === "Enter") {
+            btnSubmit?.click();
+            ev.preventDefault();
+        }
+    });
+
 }
 
 
