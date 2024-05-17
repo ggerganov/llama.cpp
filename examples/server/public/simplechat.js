@@ -97,6 +97,7 @@ async function handle_submit(inputUser, divChat, urlApi, bMessages=true) {
     } else {
         theBody = gChat.request_prompt_jsonstr();
     }
+    inputUser.scrollIntoView(true);
     inputUser.value = "working...";
     inputUser.disabled = true;
     console.debug("DBUG:HandleSubmit:ReqBody:", theBody);
@@ -114,6 +115,7 @@ async function handle_submit(inputUser, divChat, urlApi, bMessages=true) {
     let assistantMsg = respBody["choices"][0]["message"]["content"];
     gChat.add(Roles.Assistant, assistantMsg);
     gChat.show(divChat);
+    inputUser.scrollIntoView(true);
 }
 
 
