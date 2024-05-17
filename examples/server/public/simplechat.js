@@ -3,7 +3,11 @@
 class SimpleChat {
 
     constructor() {
-        this.xchat = /** @type {{role: string, content: string}[]} */([]);
+        /**
+         * Maintain in a form suitable for common LLM web service chat/completions' messages entry
+         * @type {{role: string, content: string}[]}
+         */
+        this.xchat = [];
     }
 
     /**
@@ -31,5 +35,23 @@ class SimpleChat {
         }
     }
 
+    request_json() {
+        let req = {
+            messages: this.xchat,
+            temperature: 0.7
+        }
+        return JSON.stringify(req);
+    }
+
 }
 
+
+let gChat = new SimpleChat();
+let gBaseURL = "http://127.0.0.1:8080";
+let gChatURL = `${gBaseURL}/chat/completions`;
+
+
+function startme() {
+    let divChat = document.getElementById("chat");
+    let btnSubmit = document.getElementById()
+}
