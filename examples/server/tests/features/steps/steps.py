@@ -23,6 +23,7 @@ from prometheus_client import parser
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
+    context.n_threads = None
     context.n_gpu_layer = None
     if 'PORT' in os.environ:
         context.server_port = int(os.environ['PORT'])
@@ -107,6 +108,11 @@ def step_n_gpu_layer(context, ngl):
             print(f"-ngl upgraded from {ngl} to {new_ngl}")
         ngl = new_ngl
     context.n_gpu_layer = ngl
+
+
+@step('{n_threads:d} threads')
+def step_n_threads(context, n_threads):
+    context.n_thread = n_threads
 
 
 @step('{draft:d} as draft')
@@ -274,10 +280,19 @@ async def step_predictions_equal(context):
 
 @step('all predictions are different')
 @async_run_until_complete
-async def step_predictions_equal(context):
+async def step_predictions_different(context):
     n_completions = await gather_tasks_results(context)
     assert n_completions >= 2, "need at least 2 completions"
     assert_all_predictions_different(context.tasks_result)
+    context.tasks_result = []
+
+
+@step('all token probabilities are equal')
+@async_run_until_complete
+async def step_token_probabilities_equal(context):
+    n_completions = await gather_tasks_results(context)
+    assert n_completions >= 2, "need at least 2 completions"
+    assert_all_token_probabilities_equal(context.tasks_result)
     context.tasks_result = []
 
 
@@ -869,6 +884,7 @@ async def request_completion(prompt,
                                     "id_slot": id_slot,
                                     "seed": seed if seed is not None else 42,
                                     "temperature": temperature if temperature is not None else "0.8f",
+                                    "n_probs": 2,
                                 },
                                 headers=headers,
                                 timeout=3600) as response:
@@ -1123,6 +1139,23 @@ def assert_all_predictions_different(completion_responses):
         assert content_i != content_j, "contents not different"
 
 
+def assert_all_token_probabilities_equal(completion_responses):
+    n_predict = len(completion_responses[0]['completion_probabilities'])
+    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+        for pos in range(n_predict):
+            for i, response_i in enumerate(completion_responses):
+                probs_i = response_i['completion_probabilities'][pos]['probs']
+                print(f"pos {pos}, probs {i}: {probs_i}")
+    for pos in range(n_predict):
+        for i, response_i in enumerate(completion_responses):
+            probs_i = response_i['completion_probabilities'][pos]['probs']
+            for j, response_j in enumerate(completion_responses):
+                if i == j:
+                    continue
+                probs_j = response_j['completion_probabilities'][pos]['probs']
+            assert probs_i == probs_j, "contents not equal"
+
+
 async def gather_tasks_results(context):
     n_tasks = len(context.concurrent_tasks)
     if context.debug:
@@ -1261,6 +1294,8 @@ def start_server_background(context):
         server_args.extend(['--batch-size', context.n_batch])
     if context.n_ubatch:
         server_args.extend(['--ubatch-size', context.n_ubatch])
+    if context.n_threads:
+        server_args.extend(['--threads', context.threads])
     if context.n_gpu_layer:
         server_args.extend(['--n-gpu-layers', context.n_gpu_layer])
     if context.draft is not None:
