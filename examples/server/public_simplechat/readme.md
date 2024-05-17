@@ -27,3 +27,14 @@ next run this web front end in examples/server/public_simplechat
 Open this simple web front end from your local browser as noted in the message printed when simplechat.sh is run
 * by default it is http://127.0.0.1:9000/simplechat.html
 
+Once inside
+* Select between chat and completion mode. By default it is set to chat mode.
+* If you want to provide a system prompt, then enter it first, before entering any user query.
+  * you cant change the system prompt, after it is has been submitted once along with user query.
+  * you cant set a system prompt, after you have submitted any user query
+* Enter your query and either press enter or click on the submit button
+* Wait for the logic to communicate with the server and get the response.
+  * the user is not allowed to enter any fresh query during this time.
+  * the user input box will be disabled and a working message will be shown in it.
+* just refresh the page, to reset wrt the chat history and or system prompt and start afresh.
+
