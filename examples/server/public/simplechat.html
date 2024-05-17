@@ -1,10 +1,25 @@
 <html>
     <head>
         <title>Simple LlamaCPP Chat</title>
+        <meta name="message" content="Save Nature Save Earth" />
+        <meta name="description" content="Simple chat / test LLM web service endpoints /completions and /chat/completions" />
+        <meta name="author" content="by Humans for All" />
         <script src="simplechat.js"></script>
+        <style>
+            .role-user {
+                background-color: lightgray;
+            }
+            #user {
+                width: 90vh;
+            }
+        </style>
     </head>
     <body>
-        <div id="chat"></div>
+        <p> SimpleChat </p>
+        <hr>
+        <div id="chat">
+            <p> Enter your text to the ai assistant below</p>
+        </div>
         <hr>
         <input type="text" id="user"/>
         <button id="submit">submit</button>

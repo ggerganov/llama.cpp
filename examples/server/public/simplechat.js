@@ -1,4 +1,6 @@
 // @ts-check
+// A simple completions and chat/completions test related web front end logic
+// by Humans for All
 
 class Roles {
     static System = "system";
@@ -39,6 +41,7 @@ class SimpleChat {
         }
         for(const x of this.xchat) {
             let entry = document.createElement("p");
+            entry.className = `role-${x.role}`;
             entry.innerText = `${x.role}: ${x.content}`;
             div.appendChild(entry);
         }
