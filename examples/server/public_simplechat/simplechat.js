@@ -123,7 +123,7 @@ async function handle_submit(inputUser, divChat, apiEP) {
     inputUser.value = "";
     inputUser.disabled = false;
     let respBody = await resp.json();
-    console.log("DBUG:HandleSubmit:RespBody:", respBody);
+    console.debug("DBUG:HandleSubmit:RespBody:", respBody);
     let assistantMsg = respBody["choices"][0]["message"]["content"];
     gChat.add(Roles.Assistant, assistantMsg);
     gChat.show(divChat);
@@ -152,6 +152,9 @@ function startme() {
     }
 
     btnSubmit?.addEventListener("click", (ev)=>{
+        if (inputUser.disabled) {
+            return;
+        }
         handle_submit(inputUser, divChat, selectApiEP.value);
     });
 
