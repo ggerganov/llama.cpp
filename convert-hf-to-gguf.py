@@ -1723,6 +1723,7 @@ class Phi2Model(Model):
         n_head = self.find_hparam(["num_attention_heads", "n_head"])
 
         self.gguf_writer.add_name("Phi2")
+        self.gguf_writer.add_tokenizer_pre("gpt-2")
         self.gguf_writer.add_context_length(self.find_hparam(["n_positions", "max_position_embeddings"]))
 
         self.gguf_writer.add_embedding_length(n_embd)
