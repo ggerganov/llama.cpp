@@ -128,7 +128,7 @@ for tuple in table_uppercase:
     out("{0x%06X, 0x%06X}," % tuple)
 out("};\n")
 
-out("const std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> unicode_ranges_nfd = {  // start, last, nfd")
+out("const std::vector<range_nfd> unicode_ranges_nfd = {  // start, last, nfd")
 for triple in ranges_nfd:
     out("{0x%06X, 0x%06X, 0x%06X}," % triple)
 out("};\n")

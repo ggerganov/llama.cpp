@@ -5150,7 +5150,7 @@ const std::unordered_map<uint32_t, uint32_t> unicode_map_uppercase = {
 {0x01E943, 0x01E921},
 };
 
-const std::vector<std::tuple<uint32_t, uint32_t, uint32_t>> unicode_ranges_nfd = {  // start, last, nfd
+const std::vector<range_nfd> unicode_ranges_nfd = {  // start, last, nfd
 {0x000000, 0x000000, 0x000000},
 {0x0000C0, 0x0000C5, 0x000041},
 {0x0000C7, 0x0000C7, 0x000043},
