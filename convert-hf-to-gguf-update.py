@@ -37,6 +37,7 @@ from transformers import AutoTokenizer
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("convert-hf-to-gguf-update")
+sess = requests.Session()
 
 
 class TOKENIZER_TYPE(IntEnum):
@@ -81,60 +82,42 @@ models = [
     {"name": "jina-v2-de",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-de", },
 ]
 
-# make directory "models/tokenizers" if it doesn't exist
-if not os.path.exists("models/tokenizers"):
-    os.makedirs("models/tokenizers")
-
 
 def download_file_with_auth(url, token, save_path):
     headers = {"Authorization": f"Bearer {token}"}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        with open(save_path, 'wb') as f:
-            f.write(response.content)
-        logger.info(f"File {save_path} downloaded successfully")
-    else:
-        logger.info(f"Failed to download file. Status code: {response.status_code}")
+    response = sess.get(url, headers=headers)
+    response.raise_for_status()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with open(save_path, 'wb') as f:
+        f.write(response.content)
+    logger.info(f"File {save_path} downloaded successfully")
 
 
-# download the tokenizer models
-for model in models:
+def download_model(model):
     name = model["name"]
     repo = model["repo"]
     tokt = model["tokt"]
 
-    if not os.path.exists(f"models/tokenizers/{name}"):
-        os.makedirs(f"models/tokenizers/{name}")
-    else:
-        logger.info(f"Directory models/tokenizers/{name} already exists - skipping")
-        continue
+    os.makedirs(f"models/tokenizers/{name}", exist_ok=True)
 
-    logger.info(f"Downloading {name} to models/tokenizers/{name}")
-
-    url = f"{repo}/raw/main/config.json"
-    save_path = f"models/tokenizers/{name}/config.json"
-    download_file_with_auth(url, token, save_path)
-
-    url = f"{repo}/raw/main/tokenizer.json"
-    save_path = f"models/tokenizers/{name}/tokenizer.json"
-    download_file_with_auth(url, token, save_path)
-
-    # if downloaded file is less than 1KB, we likely need to download an LFS instead
-    if os.path.getsize(save_path) < 1024:
-        # remove the file
-        os.remove(save_path)
-        url = f"{repo}/resolve/main/tokenizer.json"
-        save_path = f"models/tokenizers/{name}/tokenizer.json"
-        download_file_with_auth(url, token, save_path)
-
+    files = ["config.json", "tokenizer.json", "tokenizer_config.json"]
     if tokt == TOKENIZER_TYPE.SPM:
-        url = f"{repo}/resolve/main/tokenizer.model"
-        save_path = f"models/tokenizers/{name}/tokenizer.model"
-        download_file_with_auth(url, token, save_path)
+        files.append("tokenizer.model")
 
-    url = f"{repo}/raw/main/tokenizer_config.json"
-    save_path = f"models/tokenizers/{name}/tokenizer_config.json"
-    download_file_with_auth(url, token, save_path)
+    for file in files:
+        save_path = f"models/tokenizers/{name}/{file}"
+        if os.path.isfile(save_path):
+            logger.info(f"{name}: File {save_path} already exists - skipping")
+            continue
+        download_file_with_auth(f"{repo}/resolve/main/{file}", token, save_path)
+
+
+for model in models:
+    try:
+        download_model(model)
+    except Exception as e:
+        logger.error(f"Failed to download model {model['name']}. Error: {e}")
+
 
 # generate the source code for the convert-hf-to-gguf.py:get_vocab_base_pre() function:
 
