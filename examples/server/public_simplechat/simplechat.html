@@ -16,10 +16,18 @@
     </head>
     <body>
         <p> SimpleChat </p>
+
+        <label for="api-ep">Mode:</label>
+        <select name="api-ep" id="api-ep">
+          <option value="chat">Chat</option>
+          <option value="completion">Completion</option>
+        </select>
+
         <hr>
         <div id="chat">
             <p> Enter your text to the ai assistant below</p>
         </div>
+
         <hr>
         <input type="text" id="user"/>
         <button id="submit">submit</button>

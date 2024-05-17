@@ -8,6 +8,11 @@ class Roles {
     static Assistant = "assistant";
 }
 
+class ApiEP {
+    static Chat = "chat";
+    static Completion = "completion";
+}
+
 class SimpleChat {
 
     constructor() {
@@ -87,30 +92,34 @@ class SimpleChat {
  * Handle submit request by user
  * @param {HTMLInputElement} inputUser
  * @param {HTMLDivElement} divChat
- * @param {RequestInfo | URL} urlApi
- * @param {boolean} [bMessages]
+ * @param {string} apiEP
  */
-async function handle_submit(inputUser, divChat, urlApi, bMessages=true) {
+async function handle_submit(inputUser, divChat, apiEP) {
+
     let content = inputUser?.value;
     gChat.add(Roles.User, content);
     gChat.show(divChat);
+
     let theBody;
-    if (bMessages) {
+    let theUrl = gChatURL[apiEP]
+    if (apiEP == ApiEP.Chat) {
         theBody = gChat.request_messages_jsonstr();
     } else {
         theBody = gChat.request_prompt_jsonstr();
     }
+
     inputUser.scrollIntoView(true);
     inputUser.value = "working...";
     inputUser.disabled = true;
-    console.debug("DBUG:HandleSubmit:ReqBody:", theBody);
-    let resp = await fetch(urlApi, {
+    console.debug(`DBUG:HandleSubmit:${theUrl}:ReqBody:${theBody}`);
+    let resp = await fetch(theUrl, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
-        body: gChat.request_messages_jsonstr(),
+        body: theBody,
     });
+
     inputUser.value = "";
     inputUser.disabled = false;
     let respBody = await resp.json();
@@ -119,12 +128,16 @@ async function handle_submit(inputUser, divChat, urlApi, bMessages=true) {
     gChat.add(Roles.Assistant, assistantMsg);
     gChat.show(divChat);
     inputUser.scrollIntoView(true);
+
 }
 
 
 let gChat = new SimpleChat();
 let gBaseURL = "http://127.0.0.1:8080";
-let gChatURL = `${gBaseURL}/chat/completions`;
+let gChatURL = {
+    'chat': `${gBaseURL}/chat/completions`,
+    'completion': `${gBaseURL}/completions`,
+}
 
 
 function startme() {
@@ -132,13 +145,14 @@ function startme() {
     let divChat = /** @type{HTMLDivElement} */(document.getElementById("chat"));
     let btnSubmit = document.getElementById("submit");
     let inputUser = /** @type{HTMLInputElement} */(document.getElementById("user"));
+    let selectApiEP = /** @type{HTMLInputElement} */(document.getElementById("api-ep"));
 
     if (divChat == null) {
         throw Error("ERRR:StartMe:Chat element missing");
     }
 
     btnSubmit?.addEventListener("click", (ev)=>{
-        handle_submit(inputUser, divChat, gChatURL);
+        handle_submit(inputUser, divChat, selectApiEP.value);
     });
 
     inputUser?.addEventListener("keyup", (ev)=> {
