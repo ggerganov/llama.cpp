@@ -474,6 +474,7 @@ class Model:
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
             res = "jina-v2-de"
         
+        
         if res is None:
             logger.warning("\n")
             logger.warning("**************************************************************************************")
