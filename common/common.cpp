@@ -1354,7 +1354,8 @@ void gpt_params_handle_model_default(gpt_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = "models/" + string_split(params.hf_file, '/').back();
+            const char* cache_dir = getenv("LLAMA_CACHE") ? getenv("LLAMA_CACHE") : DEFAULT_LLAMA_CACHE;
+            params.model = cache_dir + string_split(params.hf_file, '/').back();
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
@@ -2073,6 +2074,17 @@ static bool llama_download_file(const std::string & url, const std::string & pat
             if (remove(path.c_str()) != 0) {
                 fprintf(stderr, "%s: unable to delete file: %s\n", __func__, path.c_str());
                 return false;
+            }
+        }
+
+        // Create parent directories if not exist
+        const std::vector<std::string> path_parts = string_split(path_temporary, DIRECTORY_SEPARATOR);
+        std::string parent_dir = "";
+        struct stat st;
+        for (unsigned i = 0; i < path_parts.size() - 1; i++) {
+            parent_dir += path_parts[i] + DIRECTORY_SEPARATOR;
+            if (stat(parent_dir.c_str(), &st) != 0) {
+                mkdir(parent_dir.c_str(), S_IRWXU);
             }
         }
 
