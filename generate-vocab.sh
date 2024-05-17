@@ -21,6 +21,6 @@ python3 convert-hf-to-gguf.py models/tokenizers/command-r --outfile models/ggml-
 python3 convert-hf-to-gguf.py models/tokenizers/qwen2 --outfile models/ggml-vocab-qwen2.gguf --vocab-only
 python3 convert-hf-to-gguf.py models/tokenizers/olmo --outfile models/ggml-vocab-olmo.gguf --vocab-only
 python3 convert-hf-to-gguf.py models/tokenizers/dbrx --outfile models/ggml-vocab-dbrx.gguf --vocab-only
-python3 convert-hf-to-gguf.py models/tokenizers/jina-en --outfile models/ggml-vocab-jina-en.gguf --vocab-only
-python3 convert-hf-to-gguf.py models/tokenizers/jina-es --outfile models/ggml-vocab-jina-es.gguf --vocab-only
-python3 convert-hf-to-gguf.py models/tokenizers/jina-de --outfile models/ggml-vocab-jina-de.gguf --vocab-only
+python3 convert-hf-to-gguf.py models/tokenizers/jina-v2-en --outfile models/ggml-vocab-jina-v2-en.gguf --vocab-only
+python3 convert-hf-to-gguf.py models/tokenizers/jina-v2-es --outfile models/ggml-vocab-jina-v2-es.gguf --vocab-only
+python3 convert-hf-to-gguf.py models/tokenizers/jina-v2-de --outfile models/ggml-vocab-jina-v2-de.gguf --vocab-only
