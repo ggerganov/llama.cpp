@@ -44,9 +44,21 @@ class SimpleChat {
         }
     }
 
-    request_json() {
+    request_messages_jsonstr() {
         let req = {
             messages: this.xchat,
+            temperature: 0.7
+        }
+        return JSON.stringify(req);
+    }
+
+    request_prompt_jsonstr() {
+        let prompt = "";
+        for(const chat of this.xchat) {
+            prompt += `${chat.role}: ${chat.content}\n`;
+        }
+        let req = {
+            prompt: prompt,
             temperature: 0.7
         }
         return JSON.stringify(req);
@@ -75,8 +87,11 @@ function startme() {
         console.debug("DBUG:BtnSubmit:Click:", content)
         gChat.add(Roles.User, content);
         gChat.show(divChat);
+        console.log("DBUG:BtnSubmit:Messages:", gChat.request_messages_jsonstr());
+        console.log("DBUG:BtnSubmit:Messages:", gChat.request_prompt_jsonstr());
     });
 
 }
+
 
 document.addEventListener("DOMContentLoaded", startme);
