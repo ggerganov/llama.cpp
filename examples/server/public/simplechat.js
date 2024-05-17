@@ -80,6 +80,20 @@ class SimpleChat {
 
 }
 
+/**
+ * Handle submit request by user
+ * @param {HTMLInputElement} inputUser
+ * @param {HTMLDivElement} divChat
+ */
+function handle_submit(inputUser, divChat) {
+    let content = inputUser?.value;
+    console.debug("DBUG:BtnSubmit:Click:", content)
+    gChat.add(Roles.User, content);
+    gChat.show(divChat);
+    console.log("DBUG:BtnSubmit:Messages:", gChat.request_messages_jsonstr());
+    console.log("DBUG:BtnSubmit:Messages:", gChat.request_prompt_jsonstr());
+}
+
 
 let gChat = new SimpleChat();
 let gBaseURL = "http://127.0.0.1:8080";
@@ -97,12 +111,7 @@ function startme() {
     }
 
     btnSubmit?.addEventListener("click", (ev)=>{
-        let content = inputUser?.value;
-        console.debug("DBUG:BtnSubmit:Click:", content)
-        gChat.add(Roles.User, content);
-        gChat.show(divChat);
-        console.log("DBUG:BtnSubmit:Messages:", gChat.request_messages_jsonstr());
-        console.log("DBUG:BtnSubmit:Messages:", gChat.request_prompt_jsonstr());
+        handle_submit(inputUser, divChat);
     });
 
 }
