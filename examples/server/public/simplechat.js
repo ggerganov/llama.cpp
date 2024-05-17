@@ -85,15 +85,21 @@ class SimpleChat {
  * @param {HTMLInputElement} inputUser
  * @param {HTMLDivElement} divChat
  * @param {RequestInfo | URL} urlApi
+ * @param {boolean} [bMessages]
  */
-async function handle_submit(inputUser, divChat, urlApi) {
+async function handle_submit(inputUser, divChat, urlApi, bMessages=true) {
     let content = inputUser?.value;
-    console.debug("DBUG:BtnSubmit:Click:", content)
     gChat.add(Roles.User, content);
     gChat.show(divChat);
-    console.log("DBUG:BtnSubmit:Messages:", gChat.request_messages_jsonstr());
-    console.log("DBUG:BtnSubmit:Messages:", gChat.request_prompt_jsonstr());
-    inputUser.value = "";
+    let theBody;
+    if (bMessages) {
+        theBody = gChat.request_messages_jsonstr();
+    } else {
+        theBody = gChat.request_prompt_jsonstr();
+    }
+    inputUser.value = "working...";
+    inputUser.disabled = true;
+    console.debug("DBUG:HandleSubmit:ReqBody:", theBody);
     let resp = await fetch(urlApi, {
         method: "POST",
         headers: {
@@ -101,8 +107,10 @@ async function handle_submit(inputUser, divChat, urlApi) {
         },
         body: gChat.request_messages_jsonstr(),
     });
+    inputUser.value = "";
+    inputUser.disabled = false;
     let respBody = await resp.json();
-    console.log("DBUG:HandleSubmit:Resp:", respBody);
+    console.log("DBUG:HandleSubmit:RespBody:", respBody);
     let assistantMsg = respBody["choices"][0]["message"]["content"];
     gChat.add(Roles.Assistant, assistantMsg);
     gChat.show(divChat);
