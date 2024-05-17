@@ -1986,7 +1986,7 @@ static void quantize_row_q3_K_impl(const float * restrict x, block_q3_K * restri
 
         for (int j = 0; j < QK_K/16; ++j) {
             if (quant_weights) {
-                const float * qw = quant_weights ? quant_weights + QK_K * i + 16*j : NULL;
+                const float * qw = quant_weights + QK_K * i + 16*j;
                 for (int l = 0; l < 16; ++l) weight[l] = qw[l] * sqrtf(sigma2 + x[16*j+l]*x[16*j+l]);
             } else {
                 for (int l = 0; l < 16; ++l) weight[l] = x[16*j+l]*x[16*j+l];

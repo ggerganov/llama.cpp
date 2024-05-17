@@ -13904,9 +13904,7 @@ llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_
 
     // Sample the next word X using top-k sampling
     llama_sample_top_k(nullptr, candidates, int(k), 1);
-    if (ctx) {
-        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     llama_token X = llama_sample_token(ctx, candidates);
     t_start_sample_us = ggml_time_us();
 
@@ -13920,9 +13918,7 @@ llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_
     // Update mu using the learning rate and error
     *mu = *mu - eta * e;
 
-    if (ctx) {
-        ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
+    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
     return X;
 }
 
