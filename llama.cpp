@@ -12576,16 +12576,16 @@ struct llm_tokenizer_wpm {
         // to lowercase, pad chinese characters, pad punctuation
         std::string new_str = "";
         for (uint32_t code : cpts_nfd) {
-            int type = unicode_cpt_type(code);
-            if (type == CODEPOINT_TYPE_ACCENT_MARK || type == CODEPOINT_TYPE_CONTROL) {
+            const codepoint_flags flags = unicode_cpt_flags(code);
+            if (flags.is_accent_mark || flags.is_control) {
                 continue;
             }
             code = unicode_tolower(code);
-            if (type == CODEPOINT_TYPE_SEPARATOR) {
+            if (flags.is_separator || flags.is_whitespace) {  //####FIXME: is_separator ?
                 code = ' ';
             }
             std::string s = unicode_cpt_to_utf8(code);
-            if (type == CODEPOINT_TYPE_PUNCTUATION || is_ascii_punct(code) || is_chinese_char(code)) {
+            if (flags.is_punctuation || is_ascii_punct(code) || is_chinese_char(code)) {
                 new_str += " ";
                 new_str += s;
                 new_str += " ";
