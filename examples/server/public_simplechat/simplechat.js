@@ -89,15 +89,12 @@ class SimpleChat {
 
 }
 
-/**
- * Handle submit request by user
- * @param {HTMLInputElement} inputSystem
- * @param {HTMLInputElement} inputUser
- * @param {HTMLDivElement} divChat
- * @param {string} apiEP
- */
-async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
 
+/**
+ * Handle setting of system prompt.
+ * @param {HTMLInputElement} inputSystem
+ */
+function handle_systemprompt(inputSystem) {
     let sysPrompt = inputSystem.value;
     if (gChat.xchat.length == 0) {
         if (sysPrompt.length > 0) {
@@ -114,6 +111,18 @@ async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
             }
         }
     }
+}
+
+/**
+ * Handle submit request by user
+ * @param {HTMLInputElement} inputSystem
+ * @param {HTMLInputElement} inputUser
+ * @param {HTMLDivElement} divChat
+ * @param {string} apiEP
+ */
+async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
+
+    handle_systemprompt(inputSystem);
 
     let content = inputUser?.value;
     if (!gChat.add(Roles.User, content)) {
