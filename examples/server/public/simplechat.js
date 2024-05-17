@@ -44,14 +44,29 @@ class SimpleChat {
         }
     }
 
+    /**
+     * Add needed fields wrt json object to be sent wrt LLM web services completions endpoint
+     * Convert the json into string.
+     * @param {Object} obj
+     */
+    request_jsonstr(obj) {
+        obj["temperature"] = 0.7;
+        return JSON.stringify(obj);
+    }
+
+    /**
+     * Return a string form of json object suitable for chat/completions
+     */
     request_messages_jsonstr() {
         let req = {
             messages: this.xchat,
-            temperature: 0.7
         }
-        return JSON.stringify(req);
+        return this.request_jsonstr(req);
     }
 
+    /**
+     * Return a string form of json object suitable for /completions
+     */
     request_prompt_jsonstr() {
         let prompt = "";
         for(const chat of this.xchat) {
@@ -59,9 +74,8 @@ class SimpleChat {
         }
         let req = {
             prompt: prompt,
-            temperature: 0.7
         }
-        return JSON.stringify(req);
+        return this.request_jsonstr(req);
     }
 
 }
