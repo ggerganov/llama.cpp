@@ -1,5 +1,11 @@
 // @ts-check
 
+class Roles {
+    static System = "system";
+    static User = "user";
+    static Assistant = "assistant";
+}
+
 class SimpleChat {
 
     constructor() {
@@ -13,9 +19,12 @@ class SimpleChat {
     /**
      * Add an entry into xchat
      * @param {string} role
-     * @param {string} content
+     * @param {string|undefined|null} content
      */
     add(role, content) {
+        if ((content == undefined) || (content == null) || (content == "")) {
+            return;
+        }
         this.xchat.push( {role: role, content: content} );
     }
 
@@ -52,6 +61,22 @@ let gChatURL = `${gBaseURL}/chat/completions`;
 
 
 function startme() {
-    let divChat = document.getElementById("chat");
-    let btnSubmit = document.getElementById()
+
+    let divChat = /** @type{HTMLDivElement} */(document.getElementById("chat"));
+    let btnSubmit = document.getElementById("submit");
+    let inputUser = document.getElementById("user");
+
+    if (divChat == null) {
+        throw Error("ERRR:StartMe:Chat element missing");
+    }
+
+    btnSubmit?.addEventListener("click", (ev)=>{
+        let content = inputUser?.textContent;
+        console.debug("DBUG:BtnSubmit:Click:", content)
+        gChat.add(Roles.User, content);
+        gChat.show(divChat);
+    });
+
 }
+
+document.addEventListener("DOMContentLoaded", startme);
