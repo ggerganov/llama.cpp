@@ -98,10 +98,20 @@ class SimpleChat {
  */
 async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
 
+    let sysPrompt = inputSystem.value;
     if (gChat.xchat.length == 0) {
-        let sysPrompt = inputSystem.value;
         if (sysPrompt.length > 0) {
             gChat.add(Roles.System, sysPrompt);
+        }
+    } else {
+        if (sysPrompt.length > 0) {
+            if (gChat.xchat[0].role !== Roles.System) {
+                console.error("ERRR:HandleSubmit:You need to specify system prompt before any user query, ignoring...");
+            } else {
+                if (gChat.xchat[0].content !== sysPrompt) {
+                    console.error("ERRR:HandleSubmit:You cant change system prompt, mid way through, ignoring...");
+                }
+            }
         }
     }
 
