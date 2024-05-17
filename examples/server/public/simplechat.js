@@ -64,14 +64,14 @@ function startme() {
 
     let divChat = /** @type{HTMLDivElement} */(document.getElementById("chat"));
     let btnSubmit = document.getElementById("submit");
-    let inputUser = document.getElementById("user");
+    let inputUser = /** @type{HTMLInputElement} */(document.getElementById("user"));
 
     if (divChat == null) {
         throw Error("ERRR:StartMe:Chat element missing");
     }
 
     btnSubmit?.addEventListener("click", (ev)=>{
-        let content = inputUser?.textContent;
+        let content = inputUser?.value;
         console.debug("DBUG:BtnSubmit:Click:", content)
         gChat.add(Roles.User, content);
         gChat.show(divChat);
