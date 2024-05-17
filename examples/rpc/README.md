@@ -42,7 +42,7 @@ cmake --build . --config Release
 Then, start the `rpc-server` with the backend:
 
 ```bash
-$ bin/rpc-server 0.0.0.0 50052
+$ bin/rpc-server -p 50052
 create_backend: using CUDA backend
 ggml_cuda_init: GGML_CUDA_FORCE_MMQ:   no
 ggml_cuda_init: CUDA_USE_TENSOR_CORES: yes
@@ -53,7 +53,7 @@ Starting RPC server on 0.0.0.0:50052
 
 When using the CUDA backend, you can specify the device with the `CUDA_VISIBLE_DEVICES` environment variable, e.g.:
 ```bash
-$ CUDA_VISIBLE_DEVICES=0 bin/rpc-server 0.0.0.0 50052
+$ CUDA_VISIBLE_DEVICES=0 bin/rpc-server -p 50052
 ```
 This way you can run multiple `rpc-server` instances on the same host, each with a different CUDA device.
 
