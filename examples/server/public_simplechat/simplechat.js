@@ -124,7 +124,16 @@ async function handle_submit(inputUser, divChat, apiEP) {
     inputUser.disabled = false;
     let respBody = await resp.json();
     console.debug("DBUG:HandleSubmit:RespBody:", respBody);
-    let assistantMsg = respBody["choices"][0]["message"]["content"];
+    let assistantMsg;
+    if (apiEP == ApiEP.Chat) {
+        assistantMsg = respBody["choices"][0]["message"]["content"];
+    } else {
+        try {
+            assistantMsg = respBody["choices"][0]["text"];
+        } catch {
+            assistantMsg = respBody["content"];
+        }
+    }
     gChat.add(Roles.Assistant, assistantMsg);
     gChat.show(divChat);
     inputUser.scrollIntoView(true);
