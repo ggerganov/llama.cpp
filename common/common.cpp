@@ -1354,7 +1354,12 @@ void gpt_params_handle_model_default(gpt_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = get_cache_directory() + string_split(params.hf_file, '/').back();
+            std::string cache_directory = get_cache_directory();
+            const bool success = create_directory_with_parents(cache_directory);
+            if (!success) {
+                throw std::runtime_error("failed to create cache directory: " + cache_directory);
+            }
+            params.model = cache_directory + string_split(params.hf_file, '/').back();
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
@@ -2549,12 +2554,10 @@ std::string get_cache_directory() {
         cache_directory += "llama.cpp";
         cache_directory += DIRECTORY_SEPARATOR;
     }
-
     const bool success = create_directory_with_parents(cache_directory);
     if (!success) {
         throw std::runtime_error("failed to create cache directory: " + cache_directory);
     }
-
     return cache_directory;
 }
 
