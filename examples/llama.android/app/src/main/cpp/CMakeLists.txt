@@ -16,7 +16,7 @@ include(FetchContent)
 FetchContent_Declare(
         llama
         GIT_REPOSITORY https://github.com/ggerganov/llama.cpp
-        GIT_TAG        master
+        GIT_TAG        ci-android
 )
 
 # Also provides "common"
