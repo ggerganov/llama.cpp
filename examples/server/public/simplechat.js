@@ -84,14 +84,24 @@ class SimpleChat {
  * Handle submit request by user
  * @param {HTMLInputElement} inputUser
  * @param {HTMLDivElement} divChat
+ * @param {RequestInfo | URL} urlApi
  */
-function handle_submit(inputUser, divChat) {
+async function handle_submit(inputUser, divChat, urlApi) {
     let content = inputUser?.value;
     console.debug("DBUG:BtnSubmit:Click:", content)
     gChat.add(Roles.User, content);
     gChat.show(divChat);
     console.log("DBUG:BtnSubmit:Messages:", gChat.request_messages_jsonstr());
     console.log("DBUG:BtnSubmit:Messages:", gChat.request_prompt_jsonstr());
+    inputUser.value = "";
+    let resp = await fetch(urlApi, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: gChat.request_messages_jsonstr(),
+    });
+    console.log("DBUG:HandleSubmit:Resp:", resp);
 }
 
 
@@ -111,7 +121,7 @@ function startme() {
     }
 
     btnSubmit?.addEventListener("click", (ev)=>{
-        handle_submit(inputUser, divChat);
+        handle_submit(inputUser, divChat, gChatURL);
     });
 
 }
