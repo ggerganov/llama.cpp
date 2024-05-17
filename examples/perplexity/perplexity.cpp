@@ -1425,7 +1425,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
         // Use all tasks
         tasks.resize(n_task);
         printf("%s: reading tasks", __func__);
-        int n_dot = n_task/100;
+        int n_dot = std::max((int) n_task/100, 1);
         int i = 0;
         for (auto& task : tasks) {
             ++i;
@@ -1675,7 +1675,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
 
     llama_batch_free(batch);
 
-    if (n_done < 100) return;
+    if (n_done < 100 && (params.multiple_choice_tasks != 0 && params.multiple_choice_tasks < (size_t)n_task)) return;
 
     float p = 1.f*n_correct/n_done;
     float sigma = sqrt(p*(1-p)/(n_done-1));
