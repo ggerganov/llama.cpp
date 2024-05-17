@@ -136,6 +136,13 @@ async function handle_submit(inputUser, divChat, apiEP) {
     }
     gChat.add(Roles.Assistant, assistantMsg);
     gChat.show(divChat);
+    // Purposefully clear at end rather than begin of this function
+    // so that one can switch from chat to completion mode and sequece
+    // in a completion mode with multiple user-assistant chat data
+    // from before to be sent/occur once.
+    if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
+        gChat.xchat.length = 0;
+    }
     inputUser.scrollIntoView(true);
 
 }
@@ -147,6 +154,7 @@ let gChatURL = {
     'chat': `${gBaseURL}/chat/completions`,
     'completion': `${gBaseURL}/completions`,
 }
+const gbCompletionFreshChatAlways = true;
 
 
 function startme() {
