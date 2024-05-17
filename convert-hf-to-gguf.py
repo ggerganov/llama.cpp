@@ -476,6 +476,9 @@ class Model:
         if chkhsh == "c136ed14d01c2745d4f60a9596ae66800e2b61fa45643e72436041855ad4089d":
             # ref: https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct
             res = "smaug-bpe"
+        if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
+            # ref: https://huggingface.co/LumiOpen/Viking-7B
+            res = "viking"
 
         if res is None:
             logger.warning("\n")

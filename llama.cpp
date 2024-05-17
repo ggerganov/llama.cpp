@@ -4549,9 +4549,10 @@ static void llm_load_vocab(
                     tokenizer_pre == "default") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             } else if (
-                    tokenizer_pre == "llama3"   ||
-                    tokenizer_pre == "llama-v3" ||
-                    tokenizer_pre == "llama-bpe") {
+                    tokenizer_pre == "llama3"    ||
+                    tokenizer_pre == "llama-v3"  ||
+                    tokenizer_pre == "llama-bpe" ||
+                    tokenizer_pre == "viking-7b") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
             } else if (
                     tokenizer_pre == "deepseek-llm") {
@@ -12578,6 +12579,11 @@ struct llm_tokenizer_bpe {
                             // original regex from tokenizer.json
                             // "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
                             "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_VIKING:
+                        word_collection = unicode_regex_split(text, {
+                            " ?[^(\\s|[.,!?…。，、।۔،])]+",
                         });
                         break;
                     default:
