@@ -13991,9 +13991,6 @@ inline void ggml_sycl_op_upscale(const ggml_tensor *src0,
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
-#pragma message("TODO: generalize upscale operator")
-#pragma message("      https://github.com/ggerganov/ggml/pull/814")
-
     const float sf0 = (float)dst->ne[0]/src0->ne[0];
     const float sf1 = (float)dst->ne[1]/src0->ne[1];
     const float sf2 = (float)dst->ne[2]/src0->ne[2];
