@@ -166,6 +166,7 @@ class MODEL_TENSOR(IntEnum):
     FFN_DOWN           = auto()
     FFN_UP             = auto()
     FFN_ACT            = auto()
+    FFN_NORM_EXP       = auto()
     FFN_GATE_EXP       = auto()
     FFN_DOWN_EXP       = auto()
     FFN_UP_EXP         = auto()
@@ -182,7 +183,6 @@ class MODEL_TENSOR(IntEnum):
     SSM_A              = auto()
     SSM_D              = auto()
     SSM_OUT            = auto()
-    FFN_NORM_EXP       = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -251,6 +251,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_DOWN_SHEXP:     "blk.{bid}.ffn_down_shexp",
     MODEL_TENSOR.FFN_UP_SHEXP:       "blk.{bid}.ffn_up_shexp",
     MODEL_TENSOR.FFN_ACT:            "blk.{bid}.ffn",
+    MODEL_TENSOR.FFN_NORM_EXP:       "blk.{bid}.ffn_norm_exps",
     MODEL_TENSOR.FFN_GATE_EXP:       "blk.{bid}.ffn_gate_exps",
     MODEL_TENSOR.FFN_DOWN_EXP:       "blk.{bid}.ffn_down_exps",
     MODEL_TENSOR.FFN_UP_EXP:         "blk.{bid}.ffn_up_exps",
@@ -262,7 +263,6 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.SSM_A:              "blk.{bid}.ssm_a",
     MODEL_TENSOR.SSM_D:              "blk.{bid}.ssm_d",
     MODEL_TENSOR.SSM_OUT:            "blk.{bid}.ssm_out",
-    MODEL_TENSOR.FFN_NORM_EXP:       "blk.{bid}.ffn_norm_exps",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -763,10 +763,10 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_NORM_EXP,
         MODEL_TENSOR.FFN_GATE_EXP,
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
-        MODEL_TENSOR.FFN_NORM_EXP,
     ],
     # TODO
 }
