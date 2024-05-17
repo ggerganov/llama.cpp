@@ -2553,7 +2553,7 @@ void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const cha
     size_t pos_start = 0;
     size_t pos_found = 0;
 
-    if (!data_str.empty() && (std::isspace(data_str[0]) || std::isspace(data_str.back()))) {
+    if (std::isspace(data_str[0]) || std::isspace(data_str.back())) {
         data_str = std::regex_replace(data_str, std::regex("\n"), "\\n");
         data_str = std::regex_replace(data_str, std::regex("\""), "\\\"");
         data_str = std::regex_replace(data_str, std::regex(R"(\\[^n"])"), R"(\$&)");

@@ -56,6 +56,10 @@ static bool rpc_server_params_parse(int argc, char ** argv, rpc_server_params & 
         } else if (arg == "-h" || arg == "--help") {
             print_usage(argc, argv, params);
             exit(0);
+        } else {
+            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
+            print_usage(argc, argv, params);
+            exit(0);
         }
     }
     return true;
