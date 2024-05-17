@@ -101,7 +101,11 @@ async function handle_submit(inputUser, divChat, urlApi) {
         },
         body: gChat.request_messages_jsonstr(),
     });
-    console.log("DBUG:HandleSubmit:Resp:", resp);
+    let respBody = await resp.json();
+    console.log("DBUG:HandleSubmit:Resp:", respBody);
+    let assistantMsg = respBody["choices"][0]["message"]["content"];
+    gChat.add(Roles.Assistant, assistantMsg);
+    gChat.show(divChat);
 }
 
 
