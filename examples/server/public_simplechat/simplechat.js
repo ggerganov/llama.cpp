@@ -30,9 +30,10 @@ class SimpleChat {
      */
     add(role, content) {
         if ((content == undefined) || (content == null) || (content == "")) {
-            return;
+            return false;
         }
         this.xchat.push( {role: role, content: content} );
+        return true;
     }
 
     /**
@@ -105,7 +106,10 @@ async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
     }
 
     let content = inputUser?.value;
-    gChat.add(Roles.User, content);
+    if (!gChat.add(Roles.User, content)) {
+        console.debug("WARN:HandleSubmit:Ignoring empty user input...");
+        return;
+    }
     gChat.show(divChat);
 
     let theBody;
