@@ -21,6 +21,7 @@ class SimpleChat {
          * @type {{role: string, content: string}[]}
          */
         this.xchat = [];
+        this.iLastSys = -1;
     }
 
     /**
@@ -33,6 +34,9 @@ class SimpleChat {
             return false;
         }
         this.xchat.push( {role: role, content: content} );
+        if (role == Roles.System) {
+            this.iLastSys = this.xchat.length - 1;
+        }
         return true;
     }
 
@@ -96,10 +100,10 @@ class SimpleChat {
 
 
 /**
- * Handle setting of system prompt.
+ * Handle setting of system prompt, but only at begining.
  * @param {HTMLInputElement} inputSystem
  */
-function handle_systemprompt(inputSystem) {
+function handle_systemprompt_begin(inputSystem) {
     let sysPrompt = inputSystem.value;
     if (gChat.xchat.length == 0) {
         if (sysPrompt.length > 0) {
@@ -119,6 +123,29 @@ function handle_systemprompt(inputSystem) {
 }
 
 /**
+ * Handle setting of system prompt, at any time.
+ * @param {HTMLInputElement} inputSystem
+ */
+function handle_systemprompt_anytime(inputSystem) {
+    let sysPrompt = inputSystem.value;
+    if (sysPrompt.length <= 0) {
+        return;
+    }
+
+    if (gChat.iLastSys < 0) {
+        gChat.add(Roles.System, sysPrompt);
+        return;
+    }
+
+    let lastSys = gChat.xchat[gChat.iLastSys].content;
+    if (lastSys !== sysPrompt) {
+        gChat.add(Roles.System, sysPrompt);
+        return;
+    }
+}
+
+
+/**
  * Handle submit request by user
  * @param {HTMLInputElement} inputSystem
  * @param {HTMLInputElement} inputUser
@@ -127,7 +154,7 @@ function handle_systemprompt(inputSystem) {
  */
 async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
 
-    handle_systemprompt(inputSystem);
+    handle_systemprompt_anytime(inputSystem);
 
     let content = inputUser?.value;
     if (!gChat.add(Roles.User, content)) {
