@@ -48,12 +48,11 @@ class HuggingFaceHub:
             f.write(content)
         self.logger.info(f"Wrote {len(content)} bytes to {path} successfully")
 
-    def resolve_path(self, repo: str, file: str) -> str:
+    def resolve_url(self, repo: str, file: str) -> str:
         return f"{self._base_url}/{repo}/resolve/main/{file}"
 
-    def download_file(self, repo: str, file: str):
-        resolve_path = self.resolve_path(repo, file)
-        response = self._session.get(resolve_path, headers=self.headers)
+    def download_file(self, url: str) -> requests.Response:
+        response = self._session.get(url, headers=self.headers)
         self.logger.info(f"Response status was {response.status_code}")
         response.raise_for_status()
         return response
@@ -62,19 +61,22 @@ class HuggingFaceHub:
 class HFTokenizerRequest:
     def __init__(
         self,
-        dl_path: pathlib.Path,
+        dl_path: None | str | pathlib.Path,
         auth_token: str,
         logger: None | logging.Logger
     ):
         self._hub = HuggingFaceHub(auth_token, logger)
-        self._models = MODEL_REPOS
 
         if dl_path is None:
-            self._download_path = pathlib.Path("models/tokenizers")
+            self._local_path = pathlib.Path("models/tokenizers")
         else:
-            self._download_path = dl_path
+            self._local_path = dl_path
 
-        self._files = ["config.json", "tokenizer_config.json", "tokenizer.json"]
+        # Set the logger
+        if logger is None:
+            logging.basicConfig(level=logging.DEBUG)
+            logger = logging.getLogger("hf-tok-req")
+        self.logger = logger
 
     @property
     def hub(self) -> HuggingFaceHub:
@@ -82,21 +84,37 @@ class HFTokenizerRequest:
 
     @property
     def models(self) -> list[dict[str, object]]:
-        return self._models
+        return MODEL_REPOS
 
     @property
-    def download_path(self) -> pathlib.Path:
-        return self._download_path
-
-    @download_path.setter
-    def download_path(self, value: pathlib.Path):
-        self._download_path = value
+    def tokenizer_type(self) -> TokenizerType:
+        return TokenizerType
 
     @property
-    def files(self) -> list[str]:
-        return self._files
+    def local_path(self) -> pathlib.Path:
+        return self._local_path
 
-    def download_file_with_auth(self, repo, file, directory):
-        response = self.hub.download_file(repo, file)
-        os.makedirs(os.path.dirname(directory), exist_ok=True)
-        self.hub.write_file(response.content, directory)
+    @local_path.setter
+    def local_path(self, value: pathlib.Path):
+        self._local_path = value
+
+    def download_model(self) -> None:
+        for model in self.models:
+            name, repo, tokt = model['name'], model['repo'], model['tokt']
+            os.makedirs(f"{self.local_path}/{name}", exist_ok=True)
+
+            filenames = ["config.json", "tokenizer_config.json", "tokenizer.json"]
+            if tokt == self.tokenizer_type.SPM:
+                filenames.append("tokenizer.model")
+
+            for file_name in filenames:
+                file_path = pathlib.Path(f"{self.local_path}/{name}/{file_name}")
+                if file_path.is_file():
+                    self.logger.info(f"skipped pre-existing tokenizer {name} at {file_path}")
+                    continue
+                try:  # NOTE: Do not use bare exceptions! They mask issues!
+                    resolve_url = self.hub.resolve_url(repo, file_name)
+                    response = self.hub.download_file(resolve_url)
+                    self.hub.write_file(response.content, file_path)
+                except requests.exceptions.HTTPError as e:
+                    self.logger.error(f"Failed to download tokenizer {name}: {e}")
