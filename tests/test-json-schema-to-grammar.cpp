@@ -166,7 +166,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "maximum": 30
         })""",
         R"""(
-            root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | [1-2] [0-9] | [3] "0") space
+            root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | ([1-2] [0-9] | [3] "0")) space
             space ::= " "?
         )"""
     });
@@ -205,7 +205,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "maximum": 100
         })""",
         R"""(
-            root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | [1-8] [0-9] | [9] [0-9] | "100") space
+            root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | ([1-8] [0-9] | [9] [0-9]) | "100") space
             space ::= " "?
         )"""
     });
@@ -219,7 +219,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "maximum": 23
         })""",
         R"""(
-            root ::= ([0-9] | [1] [0-9] | [2] [0-3]) space
+            root ::= ([0-9] | ([1] [0-9] | [2] [0-3])) space
             space ::= " "?
         )"""
     });
@@ -233,7 +233,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "maximum": 300
         })""",
         R"""(
-            root ::= ([1] ([5-9]) | [2-9] [0-9] | [1-2] [0-9]{2} | [3] "00") space
+            root ::= (([1] ([5-9]) | [2-9] [0-9]) | ([1-2] [0-9]{2} | [3] "00")) space
             space ::= " "?
         )"""
     });
@@ -247,7 +247,21 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "maximum": 30
         })""",
         R"""(
-            root ::= ([5-9] | [1-2] [0-9] | [3] "0") space
+            root ::= ([5-9] | ([1-2] [0-9] | [3] "0")) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min -123 max 42",
+        R"""({
+            "type": "integer",
+            "minimum": -123,
+            "maximum": 42
+        })""",
+        R"""(
+            root ::= ("-" ([0-9] | ([1-8] [0-9] | [9] [0-9]) | "1" ([0-1] [0-9] | [2] [0-3])) | [0-9] | ([1-3] [0-9] | [4] [0-2])) space
             space ::= " "?
         )"""
     });
@@ -582,14 +596,14 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""({
             "items": {
                 "type": "integer",
-                "minimum": -122,
+                "minimum": -12,
                 "maximum": 207
             },
             "minItems": 3,
             "maxItems": 5
         })""",
         R"""(
-            item ::= ("-" ([0-9] | [1-8] [0-9] | [9] [0-9] | "1" [0-1] [0-9] | [2] [0-2]) | [0-9] | [1-8] [0-9] | [9] [0-9] | [1] [0-9]{2} | [2] "0" [0-7]) space
+            item ::= ("-" ([0-9] | "1" [0-2]) | [0-9] | ([1-8] [0-9] | [9] [0-9]) | ([1] [0-9]{2} | [2] "0" [0-7])) space
             root ::= "[" space item ("," space item){2,4} "]" space
             space ::= " "?
         )"""
@@ -601,14 +615,14 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""({
             "items": {
                 "type": "integer",
-                "minimum": 122,
+                "minimum": 12,
                 "maximum": 207
             },
             "minItems": 3,
             "maxItems": 5
         })""",
         R"""(
-            item ::= ([1] ([2] ([2-9]) | [3-9] [0-9]) | [2] "0" [0-7]) space
+            item ::= (([1] ([2-9]) | [2-9] [0-9]) | ([1] [0-9]{2} | [2] "0" [0-7])) space
             root ::= "[" space item ("," space item){2,4} "]" space
             space ::= " "?
         )"""
@@ -1094,6 +1108,7 @@ int main() {
         }
     });
 
+    if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python --version") == 0)) {
         test_all("Python", [](const TestCase & tc) {
             write("test-json-schema-input.tmp", tc.schema);
             tc.verify_status(std::system(

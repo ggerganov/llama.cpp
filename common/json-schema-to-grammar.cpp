@@ -202,6 +202,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
             }
             auto sub_len = from.length() - i - 1;
             if (sub_len > 0) {
+                out << "(";
                 auto from_sub = from.substr(i + 1);
                 auto to_sub = to.substr(i + 1);
                 auto sub_zeros = repeat("0", sub_len);
@@ -235,6 +236,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
                     out << " ";
                     uniform_range(sub_zeros, to_sub);
                 }
+                out << ")";
             } else {
                 out << "[" << from[i] << "-" << to[i] << "]";
             }

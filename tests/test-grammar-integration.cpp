@@ -151,6 +151,29 @@ static void test_simple_grammar() {
         }
     );
     test_schema(
+        "simple min -1 max 1",
+        R"""({
+            "type": "integer",
+            "minimum": -1,
+            "maximum": 1
+        })""",
+        // Passing strings
+        {
+            "-1",
+            "0",
+            "1",
+        },
+        // Failing strings
+        {
+            "-11",
+            "-10",
+            "-2",
+            "2",
+            "10",
+            "11",
+        }
+    );
+    test_schema(
         "simple min -123 max 42",
         R"""({
             "type": "integer",
