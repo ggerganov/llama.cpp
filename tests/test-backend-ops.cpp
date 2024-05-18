@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
     // static RNG initialization (revisit if n_threads stops being constant)
     static const size_t n_threads = std::thread::hardware_concurrency();
@@ -49,6 +50,22 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         t.join();
     }
 
+#if 0
+    const char * val_str = getenv("GGML_TEST_EPS");
+    float val = 1e-9f;
+    if (val_str != nullptr) {
+        val = std::stof(val_str);
+        printf("GGML_TEST_EPS=%e\n", val);
+    }
+
+    // test quantization with very small values that may result in nan scales due to division by zero
+    if (ggml_is_quantized(tensor->type)) {
+        for (int i = 0; i < 256; i++) {
+            data[i] = val;
+        }
+    }
+#endif
+
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
     } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16 || tensor->type == GGML_TYPE_BF16) {
@@ -64,6 +81,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
             }
         }
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], im);
+        GGML_ASSERT(ggml_validate_row_data(tensor->type, dataq.data(), dataq.size()));
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
