@@ -2119,6 +2119,7 @@ static size_t ggml_backend_opencl_buffer_type_get_alignment(ggml_backend_buffer_
     if (alignment == (cl_uint)-1) {
         ggml_cl_init();
         clGetDeviceInfo(device, CL_DEVICE_MEM_BASE_ADDR_ALIGN, sizeof(cl_uint), &alignment, NULL);
+        alignment /= 8; // bits to bytes
     }
     return alignment;
 

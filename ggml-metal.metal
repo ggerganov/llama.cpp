@@ -229,6 +229,13 @@ kernel void kernel_relu(
     dst[tpig] = max(0.0f, src0[tpig]);
 }
 
+kernel void kernel_sigmoid(
+        device const float * src0,
+        device       float * dst,
+        uint tpig[[thread_position_in_grid]]) {
+    dst[tpig] = 1.0f / (1.0f + exp(-src0[tpig]));
+}
+
 kernel void kernel_tanh(
         device const float * src0,
         device       float * dst,
@@ -356,7 +363,6 @@ template<typename T>
 kernel void kernel_soft_max(
         device const  char * src0,
         device const  char * src1,
-        device const  char * src2,
         device        char * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
@@ -378,10 +384,9 @@ kernel void kernel_soft_max(
 
     device const float * psrc0 = (device const float *) src0 + (i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00);
     device const     T * pmask = src1 != src0 ? (device const    T *) src1         + i01*ne00 : nullptr;
-    device const     T * ppos  = src2 != src0 ? (device const    T *) src2                    : nullptr;
     device       float * pdst  = (device       float *) dst  + (i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00);
 
-    float slope = 0.0f;
+    float slope = 1.0f;
 
     // ALiBi
     if (max_bias > 0.0f) {
@@ -397,7 +402,7 @@ kernel void kernel_soft_max(
     float lmax = -INFINITY;
 
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-        lmax = MAX(lmax, psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f));
+        lmax = MAX(lmax, psrc0[i00]*scale + (pmask ? slope*pmask[i00] : 0.0f));
     }
 
     // find the max value in the block
@@ -422,7 +427,7 @@ kernel void kernel_soft_max(
     // parallel sum
     float lsum = 0.0f;
     for (int i00 = tpitg; i00 < ne00; i00 += ntg) {
-        const float exp_psrc0 = exp((psrc0[i00]*scale + (pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f)) - max_val);
+        const float exp_psrc0 = exp((psrc0[i00]*scale + (pmask ? slope*pmask[i00] : 0.0f)) - max_val);
         lsum += exp_psrc0;
         pdst[i00] = exp_psrc0;
     }
@@ -461,7 +466,6 @@ template<typename T>
 kernel void kernel_soft_max_4(
         device const  char * src0,
         device const  char * src1,
-        device const  char * src2,
         device        char * dst,
         constant   int64_t & ne00,
         constant   int64_t & ne01,
@@ -483,10 +487,9 @@ kernel void kernel_soft_max_4(
 
     device const float4 * psrc4 = (device const float4 *) src0 + (i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00)/4;
     device const      T * pmask = src1 != src0 ? (device const     T *) src1         + i01*ne00/4 : nullptr;
-    device const      T * ppos  = src2 != src0 ? (device const     T *) src2                      : nullptr;
     device       float4 * pdst4 = (device       float4 *) dst  + (i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00)/4;
 
-    float slope = 0.0f;
+    float slope = 1.0f;
 
     if (max_bias > 0.0f) {
         const int64_t h = i02;
@@ -501,7 +504,7 @@ kernel void kernel_soft_max_4(
     float4 lmax4 = -INFINITY;
 
     for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
-        lmax4 = fmax(lmax4, psrc4[i00]*scale + (float4)((pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f)));
+        lmax4 = fmax(lmax4, psrc4[i00]*scale + (float4)((pmask ? slope*pmask[i00] : 0.0f)));
     }
 
     const float lmax = MAX(MAX(lmax4[0], lmax4[1]), MAX(lmax4[2], lmax4[3]));
@@ -527,7 +530,7 @@ kernel void kernel_soft_max_4(
     // parallel sum
     float4 lsum4 = 0.0f;
     for (int i00 = tpitg; i00 < ne00/4; i00 += ntg) {
-        const float4 exp_psrc4 = exp((psrc4[i00]*scale + (float4)((pmask ? pmask[i00] : 0.0f) + (ppos ? slope*ppos[i00] : 0.0f))) - max_val);
+        const float4 exp_psrc4 = exp((psrc4[i00]*scale + (float4)((pmask ? slope*pmask[i00] : 0.0f))) - max_val);
         lsum4 += exp_psrc4;
         pdst4[i00] = exp_psrc4;
     }
@@ -1595,60 +1598,6 @@ kernel void kernel_mul_mv_f16_f32_l4(
     }
 }
 
-kernel void kernel_alibi_f32(
-        device const float * src0,
-        device       float * dst,
-        constant   int64_t & ne00,
-        constant   int64_t & ne01,
-        constant   int64_t & ne02,
-        constant   int64_t & ne03,
-        constant  uint64_t & nb00,
-        constant  uint64_t & nb01,
-        constant  uint64_t & nb02,
-        constant  uint64_t & nb03,
-        constant   int64_t & ne0,
-        constant   int64_t & ne1,
-        constant   int64_t & ne2,
-        constant   int64_t & ne3,
-        constant  uint64_t & nb0,
-        constant  uint64_t & nb1,
-        constant  uint64_t & nb2,
-        constant  uint64_t & nb3,
-        constant     float & m0,
-        constant     float & m1,
-        constant       int & n_heads_log2_floor,
-        uint3 tgpig[[threadgroup_position_in_grid]],
-        uint3 tpitg[[thread_position_in_threadgroup]],
-        uint3   ntg[[threads_per_threadgroup]]) {
-    const int64_t i03 = tgpig[2];
-    const int64_t i02 = tgpig[1];
-    const int64_t i01 = tgpig[0];
-
-    const int64_t n = i03*ne02*ne01*ne00 + i02*ne01*ne00 + i01*ne00;
-
-    const int64_t i3 = n / (ne2*ne1*ne0);
-    const int64_t i2 = (n - i3*ne2*ne1*ne0) / (ne1*ne0);
-    const int64_t i1 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0) / ne0;
-  //const int64_t i0 = (n - i3*ne2*ne1*ne0 - i2*ne1*ne0 - i1*ne0);
-
-    const int64_t k = i3*ne3 + i2;
-
-    float m_k;
-    if (k < n_heads_log2_floor) {
-        m_k = pow(m0, k + 1);
-    } else {
-        m_k = pow(m1, 2 * (k - n_heads_log2_floor) + 1);
-    }
-
-    device       char * dst_row = (device char *) dst + i3*nb3 + i2*nb2 + i1*nb1;
-    device const char * src_row = (device char *) src0 + i03*nb03 + i02*nb02 + i01*nb01;
-    for (int64_t i00 = tpitg.x; i00 < ne00; i00 += ntg.x) {
-        const  float   src_v = *(device float *)(src_row + i00*nb00);
-        device float * dst_v =  (device float *)(dst_row + i00*nb0);
-        *dst_v = i00 * m_k + src_v;
-    }
-}
-
 static float rope_yarn_ramp(const float low, const float high, const int i0) {
     const float y = (i0 / 2 - low) / max(0.001f, high - low);
     return 1.0f - min(1.0f, max(0.0f, y));
@@ -1903,7 +1852,10 @@ kernel void kernel_upscale_f32(
     constant  uint64_t & nb1,
     constant  uint64_t & nb2,
     constant  uint64_t & nb3,
-    constant   int32_t & sf,
+    constant     float & sf0,
+    constant     float & sf1,
+    constant     float & sf2,
+    constant     float & sf3,
     uint3 tgpig[[threadgroup_position_in_grid]],
     uint3 tpitg[[thread_position_in_threadgroup]],
     uint3   ntg[[threads_per_threadgroup]]) {
@@ -1912,15 +1864,17 @@ kernel void kernel_upscale_f32(
     const int64_t i2 = tgpig.y;
     const int64_t i1 = tgpig.x;
 
-    const int64_t i03 = i3;
-    const int64_t i02 = i2;
-    const int64_t i01 = i1/sf;
-
-    device const float * src0_ptr = (device const float *) (src0 + i03*nb03 + i02*nb02 + i01*nb01);
-    device       float * dst_ptr  = (device       float *) (dst  +  i3*nb3  +  i2*nb2  +  i1*nb1);
+    const int64_t i03 = i3/sf3;
+    const int64_t i02 = i2/sf2;
+    const int64_t i01 = i1/sf1;
 
     for (int i0 = tpitg.x; i0 < ne0; i0 += ntg.x) {
-        dst_ptr[i0] = src0_ptr[i0/sf];
+        const int64_t i00 = i0/sf0;
+
+        device const float * src0_ptr = (device const float *) (src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
+        device       float * dst_ptr  = (device       float *) (dst  +  i3*nb3  +  i2*nb2  +  i1*nb1  +  i0*nb0);
+
+        dst_ptr[0] = src0_ptr[0];
     }
 }
 
@@ -2100,29 +2054,29 @@ typedef void (flash_attn_ext_f16_t)(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
-        constant   int64_t & ne31,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
+        constant     float & max_bias,
+        constant     float & m0,
+        constant     float & m1,
+        constant  uint32_t & n_head_log2,
         threadgroup   half * shared,
         uint3  tgpig[[threadgroup_position_in_grid]],
         uint3  tpitg[[thread_position_in_threadgroup]],
@@ -2138,29 +2092,29 @@ kernel void kernel_flash_attn_ext_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
-        constant   int64_t & ne31,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
+        constant     float & max_bias,
+        constant     float & m0,
+        constant     float & m1,
+        constant  uint32_t & n_head_log2,
         threadgroup   half * shared [[threadgroup(0)]],
         uint3  tgpig[[threadgroup_position_in_grid]],
         uint3  tpitg[[thread_position_in_threadgroup]],
@@ -2175,7 +2129,7 @@ kernel void kernel_flash_attn_ext_f16(
 
     const short D4 = D/4;
     const short D8 = D/8;
-    const short Q8 = Q/8;
+  //const short Q8 = Q/8;
     const short NW = N_SIMDWIDTH;
     const short SH = (C + Q); // shared memory per simdgroup in (half)
 
@@ -2225,10 +2179,6 @@ kernel void kernel_flash_attn_ext_f16(
         const short ne22 = ne12;
         const short ne23 = ne13;
 
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
-
         // broadcast
         const short rk2 = ne02/ne12;
         const short rk3 = ne03/ne13;
@@ -2257,6 +2207,19 @@ kernel void kernel_flash_attn_ext_f16(
         // prepare diagonal scale matrix
         simdgroup_float8x8 mscale(scale);
 
+        // prepare diagonal slope matrix
+        simdgroup_float8x8 mslope(1.0f);
+
+        // ALiBi
+        if (max_bias > 0.0f) {
+            const uint32_t h = iq2;
+
+            const float base = h < n_head_log2 ? m0 : m1;
+            const int   exph = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
+
+            mslope = simdgroup_float8x8(pow(base, exph));
+        }
+
         // loop over the KV cache
         // each simdgroup handles blocks of Q rows and C columns
         for (int ic0 = 0; ic0 < ne11; ic0 += C*nsg) {
@@ -2279,10 +2242,16 @@ kernel void kernel_flash_attn_ext_f16(
                         simdgroup_multiply_accumulate(mqk, mq[i], mk, mqk);
                     }
 
-                    // mqk = mqk*scale + mask
-                    simdgroup_half8x8 mm;
-                    simdgroup_load(mm, mp + ic + 8*cc, nb31/sizeof(half), 0, false);
-                    simdgroup_multiply_accumulate(mqk, mqk, mscale, mm);
+                    if (mask != q) {
+                        // mqk = mqk*scale + mask*slope
+                        simdgroup_half8x8 mm;
+                        simdgroup_load(mm, mp + ic + 8*cc, nb31/sizeof(half), 0, false);
+                        simdgroup_multiply(mm, mslope, mm);
+                        simdgroup_multiply_accumulate(mqk, mqk, mscale, mm);
+                    } else {
+                        // mqk = mqk*scale
+                        simdgroup_multiply(mqk, mscale, mqk);
+                    }
 
                     simdgroup_store(mqk, ss + 8*cc, TF, 0, false);
                 }
@@ -2456,29 +2425,29 @@ kernel void kernel_flash_attn_ext_vec_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
-        constant   int64_t & ne31,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
+        constant     float & max_bias,
+        constant     float & m0,
+        constant     float & m1,
+        constant  uint32_t & n_head_log2,
         threadgroup   half * shared [[threadgroup(0)]],
         uint3  tgpig[[threadgroup_position_in_grid]],
         uint3  tpitg[[thread_position_in_threadgroup]],
@@ -2496,6 +2465,18 @@ kernel void kernel_flash_attn_ext_vec_f16(
     const short SH = (C + Q); // shared memory per simdgroup in (half)
 
     const short T  = D + 2*nsg*SH; // shared memory size per query in (half)
+
+    float slope = 1.0f;
+
+    // ALiBi
+    if (max_bias > 0.0f) {
+        const uint32_t h = iq2;
+
+        const float base = h < n_head_log2 ? m0 : m1;
+        const int   exp  = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
+
+        slope = pow(base, exp);
+    }
 
   //threadgroup half   * sq  = (threadgroup half   *) (shared +              0*D); // holds the query data
     threadgroup half4  * sq4 = (threadgroup half4  *) (shared +              0*D); // same as above but in half4
@@ -2536,10 +2517,6 @@ kernel void kernel_flash_attn_ext_vec_f16(
         // assume K and V are same shape
         const short ne22 = ne12;
         const short ne23 = ne13;
-
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
 
         // broadcast
         const short rk2 = ne02/ne12;
@@ -2603,10 +2580,9 @@ kernel void kernel_flash_attn_ext_vec_f16(
                     mqk += simd_shuffle_down(mqk,  2);
                     mqk += simd_shuffle_down(mqk,  1);
 
-                    // mqk = mqk*scale + mask
+                    // mqk = mqk*scale + mask*slope
                     if (tiisg == 0) {
-                        float4 mm = (float4) mp4[ic/4 + cc];
-                        mqk = mqk*scale + mm;
+                        mqk = mqk*scale + ((mask != q) ? ((float4) mp4[ic/4 + cc])*slope : (float4) 0.0f);
 
                         ss4[cc] = mqk;
                     }
@@ -2840,7 +2816,8 @@ kernel void kernel_cpy_f32_f16(
     for (int64_t i00 = tpitg.x; i00 < ne00; i00 += ntg.x) {
         device const float * src = (device float *)((device char *) src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
 
-        dst_data[i00] = src[0];
+        // TODO: is there a better way to handle -INFINITY?
+        dst_data[i00] = src[0] == -INFINITY ? -MAXHALF : src[0];
     }
 }
 

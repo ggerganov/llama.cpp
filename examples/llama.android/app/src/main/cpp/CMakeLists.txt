@@ -12,15 +12,17 @@ cmake_minimum_required(VERSION 3.22.1)
 # build script scope).
 project("llama-android")
 
-include(FetchContent)
-FetchContent_Declare(
-        llama
-        GIT_REPOSITORY https://github.com/ggerganov/llama.cpp
-        GIT_TAG        master
-)
+#include(FetchContent)
+#FetchContent_Declare(
+#        llama
+#        GIT_REPOSITORY https://github.com/ggerganov/llama.cpp
+#        GIT_TAG        ci-android
+#)
+#
+## Also provides "common"
+#FetchContent_MakeAvailable(llama)
 
-# Also provides "common"
-FetchContent_MakeAvailable(llama)
+add_subdirectory(../../../../../../ please-work)
 
 # Creates and names a library, sets it as either STATIC
 # or SHARED, and provides the relative paths to its source code.

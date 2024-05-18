@@ -2,7 +2,7 @@
 
 This example reads weights from project [llama2.c](https://github.com/karpathy/llama2.c) and saves them in ggml compatible format. The vocab that is available in `models/ggml-vocab.bin` is used by default.
 
-To convert the model first download the models from the [llma2.c](https://github.com/karpathy/llama2.c) repository:
+To convert the model first download the models from the [llama2.c](https://github.com/karpathy/llama2.c) repository:
 
 `$ make -j`
 

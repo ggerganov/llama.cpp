@@ -79,6 +79,11 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_MPT            = 5,
         LLAMA_VOCAB_PRE_TYPE_STARCODER      = 6,
         LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
+        LLAMA_VOCAB_PRE_TYPE_REFACT         = 8,
+        LLAMA_VOCAB_PRE_TYPE_COMMAND_R      = 9,
+        LLAMA_VOCAB_PRE_TYPE_QWEN2          = 10,
+        LLAMA_VOCAB_PRE_TYPE_OLMO           = 11,
+        LLAMA_VOCAB_PRE_TYPE_DBRX           = 12,
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -134,6 +139,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ2_M         = 29, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_BF16          = 32, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -171,7 +177,7 @@ extern "C" {
         bool sorted;
     } llama_token_data_array;
 
-    typedef bool (*llama_progress_callback)(float progress, void *ctx);
+    typedef bool (*llama_progress_callback)(float progress, void * user_data);
 
     // Input data for llama_decode
     // A llama_batch object can contain input about one or many sequences
@@ -235,6 +241,9 @@ extern "C" {
 
         // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
         const float * tensor_split;
+
+        // comma separated list of RPC servers to use for offloading
+        const char * rpc_servers;
 
         // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
         // If the provided progress_callback returns true, model loading continues.

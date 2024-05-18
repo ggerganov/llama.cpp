@@ -28,5 +28,4 @@ void ggml_cuda_op_scale(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     memcpy(&scale, dst->op_params, sizeof(float));
 
     scale_f32_cuda(src0_d, dst_d, scale, ggml_nelements(src0), stream);
-    CUDA_CHECK(cudaGetLastError());
 }

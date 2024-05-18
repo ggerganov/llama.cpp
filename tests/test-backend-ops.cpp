@@ -2,6 +2,7 @@
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
 #include <ggml-backend-impl.h>
+
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -14,6 +15,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+
 
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
     // static RNG initialization (revisit if n_threads stops being constant)
@@ -48,9 +50,25 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         t.join();
     }
 
+#if 0
+    const char * val_str = getenv("GGML_TEST_EPS");
+    float val = 1e-9f;
+    if (val_str != nullptr) {
+        val = std::stof(val_str);
+        printf("GGML_TEST_EPS=%e\n", val);
+    }
+
+    // test quantization with very small values that may result in nan scales due to division by zero
+    if (ggml_is_quantized(tensor->type)) {
+        for (int i = 0; i < 256; i++) {
+            data[i] = val;
+        }
+    }
+#endif
+
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
         ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
-    } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16) {
+    } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16 || tensor->type == GGML_TYPE_BF16) {
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
         std::vector<float> imatrix(tensor->ne[0], 1.0f); // dummy importance matrix
@@ -63,6 +81,7 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
             }
         }
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], im);
+        GGML_ASSERT(ggml_validate_row_data(tensor->type, dataq.data(), dataq.size()));
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
@@ -92,6 +111,8 @@ static std::vector<float> tensor_to_float(const ggml_tensor * t) {
                     size_t i = i3*t->nb[3] + i2*t->nb[2] + i1*t->nb[1] + i0/bs*t->nb[0];
                     if (t->type == GGML_TYPE_F16) {
                         tv.push_back(ggml_fp16_to_fp32(*(ggml_fp16_t*)&buf[i]));
+                    } else if (t->type == GGML_TYPE_BF16) {
+                        tv.push_back(ggml_bf16_to_fp32(*(ggml_bf16_t*)&buf[i]));
                     } else if (t->type == GGML_TYPE_F32) {
                         tv.push_back(*(float *) &buf[i]);
                     } else if (t->type == GGML_TYPE_I32) {
@@ -1109,11 +1130,7 @@ struct test_soft_max : public test_case {
         if (this->mask) {
             mask = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, ne[0], ne[1]);
         }
-        ggml_tensor * pos = nullptr;
-        if (max_bias > 0.0f) {
-            pos = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, ne[0]);
-        }
-        ggml_tensor * out = ggml_soft_max_ext(ctx, a, mask, pos, scale, max_bias);
+        ggml_tensor * out = ggml_soft_max_ext(ctx, a, mask, scale, max_bias);
         return out;
     }
 };
@@ -1330,19 +1347,43 @@ struct test_upscale : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
     const int32_t scale_factor;
+    const bool transpose;
 
     std::string vars() override {
-        return VARS_TO_STR3(type, ne, scale_factor);
+        return VARS_TO_STR4(type, ne, scale_factor, transpose);
     }
 
     test_upscale(ggml_type type = GGML_TYPE_F32,
             std::array<int64_t, 4> ne = {512, 512, 3, 1},
-            int32_t scale_factor = 2)
-        : type(type), ne(ne), scale_factor(scale_factor) {}
+            int32_t scale_factor = 2, bool transpose = false)
+        : type(type), ne(ne), scale_factor(scale_factor), transpose(transpose) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        if (transpose) a = ggml_transpose(ctx, a);
         ggml_tensor * out = ggml_upscale(ctx, a, scale_factor);
+        return out;
+    }
+};
+
+// GGML_OP_UPSCALE (ext)
+struct test_upscale_ext : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne;
+    const std::array<int64_t, 4> ne_tgt;
+
+    std::string vars() override {
+        return VARS_TO_STR3(type, ne, ne_tgt);
+    }
+
+    test_upscale_ext(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne     = {2, 5,  7, 11},
+            std::array<int64_t, 4> ne_tgt = {5, 7, 11, 13})
+        : type(type), ne(ne), ne_tgt(ne_tgt) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_tensor * out = ggml_upscale_ext(ctx, a, ne_tgt[0], ne_tgt[1],ne_tgt[2], ne_tgt[3]);
         return out;
     }
 };
@@ -1488,23 +1529,27 @@ struct test_flash_attn_ext : public test_case {
     const int64_t kv; // kv size
     const int64_t nb; // batch size
 
+    const bool mask; // use mask
+
+    const float max_bias; // ALiBi
+
     std::string vars() override {
-        return VARS_TO_STR4(hs, nh, kv, nb);
+        return VARS_TO_STR6(hs, nh, kv, nb, mask, max_bias);
     }
 
     double max_nmse_err() override {
         return 5e-4;
     }
 
-    test_flash_attn_ext(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8)
-        : hs(hs), nh(nh), kv(kv), nb(nb) {}
+    test_flash_attn_ext(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8, bool mask = true, float max_bias = 0.0f)
+        : hs(hs), nh(nh), kv(kv), nb(nb), mask(mask), max_bias(max_bias) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * q = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, hs, nb, nh, 1);
         ggml_tensor * k = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, hs, kv, nh, 1);
         ggml_tensor * v = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, hs, kv, nh, 1);
-        ggml_tensor * mask = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, kv, GGML_PAD(nb, GGML_KQ_MASK_PAD), 1, 1);
-        ggml_tensor * out = ggml_flash_attn_ext(ctx, q, k, v, mask, 1.0f/sqrtf(hs));
+        ggml_tensor * m = mask ? ggml_new_tensor_4d(ctx, GGML_TYPE_F16, kv, GGML_PAD(nb, GGML_KQ_MASK_PAD), 1, 1) : nullptr;
+        ggml_tensor * out = ggml_flash_attn_ext(ctx, q, k, v, m, 1.0f/sqrtf(hs), max_bias);
         return out;
     }
 };
@@ -1609,7 +1654,7 @@ public:
 
         struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
 
-        kq = ggml_soft_max_ext(ctx, kq, kq_mask, nullptr, kq_scale, 0.0f);
+        kq = ggml_soft_max_ext(ctx, kq, kq_mask, kq_scale, 0.0f);
 
         // split cached v into n_head heads
         struct ggml_tensor * v =
@@ -1898,7 +1943,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     std::default_random_engine rng(0);
 
     const ggml_type all_types[] = {
-        GGML_TYPE_F32, GGML_TYPE_F16,
+        GGML_TYPE_F32, GGML_TYPE_F16, GGML_TYPE_BF16,
         GGML_TYPE_Q4_0, GGML_TYPE_Q4_1,
         GGML_TYPE_Q5_0, GGML_TYPE_Q5_1,
         GGML_TYPE_Q8_0,
@@ -2126,6 +2171,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 #endif
     for (bool mask : {false, true}) {
         for (float max_bias : {0.0f, 8.0f}) {
+            if (!mask && max_bias > 0.0f) continue;
             for (float scale : {1.0f, 0.1f}) {
                 for (int64_t ne0 : {16, 1024}) {
                     for (int64_t ne1 : {16, 1024}) {
@@ -2139,7 +2185,6 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 2, 32, 1}, false, 0.1f, 0.0f));
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {32, 2, 32, 1}, true,  0.1f, 0.0f));
-    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 2, 32, 1}, false, 0.1f, 8.0f));
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {32, 2, 32, 1}, true,  0.1f, 8.0f));
 
     for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
@@ -2166,6 +2211,8 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
 
     test_cases.emplace_back(new test_sum_rows());
     test_cases.emplace_back(new test_upscale());
+    test_cases.emplace_back(new test_upscale(GGML_TYPE_F32, { 512, 512, 3, 1 }, 2, true));
+    test_cases.emplace_back(new test_upscale_ext());
     test_cases.emplace_back(new test_group_norm());
     test_cases.emplace_back(new test_acc());
     test_cases.emplace_back(new test_pad());
@@ -2174,10 +2221,15 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_leaky_relu());
 
     for (int hs : { 64, 80, 128, 256, }) {
-        for (int nh : { 32, }) {
-            for (int kv : { 512, 1024, }) {
-                for (int nb : { 1, 2, 4, 8, }) {
-                    test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb));
+        for (bool mask : { true, false } ) {
+            for (float max_bias : { 0.0f, 8.0f }) {
+                if (!mask && max_bias > 0.0f) continue;
+                for (int nh : { 32, }) {
+                    for (int kv : { 512, 1024, }) {
+                        for (int nb : { 1, 2, 4, 8, }) {
+                            test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb, mask, max_bias));
+                        }
+                    }
                 }
             }
         }
