@@ -271,40 +271,40 @@ jobs:
           path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
           name: llama-bin-ubuntu-x64.zip
 
-#  ubuntu-latest-cmake-sanitizer:
-#    runs-on: ubuntu-latest
-#
-#    continue-on-error: true
-#
-#    strategy:
-#      matrix:
-#        sanitizer: [ADDRESS, THREAD, UNDEFINED]
-#        build_type: [Debug, Release]
-#
-#    steps:
-#      - name: Clone
-#        id: checkout
-#        uses: actions/checkout@v4
-#
-#      - name: Dependencies
-#        id: depends
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install build-essential
-#
-#      - name: Build
-#        id: cmake_build
-#        run: |
-#          mkdir build
-#          cd build
-#          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-#          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
-#
-#      - name: Test
-#        id: cmake_test
-#        run: |
-#          cd build
-#          ctest -L main --verbose --timeout 900
+  ubuntu-latest-cmake-sanitizer:
+    runs-on: ubuntu-latest
+
+    continue-on-error: true
+
+    strategy:
+      matrix:
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential
+
+      - name: Build
+        id: cmake_build
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
+
+      - name: Test
+        id: cmake_test
+        run: |
+          cd build
+          ctest -L main --verbose --timeout 900
 
   ubuntu-latest-cmake-mpi:
     runs-on: ubuntu-latest
