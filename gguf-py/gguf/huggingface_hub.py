@@ -43,13 +43,13 @@ class HuggingFaceHub:
     def base_url(self) -> str:
         return self._base_url
 
-    def write_file(self, content: bytes, path: pathlib.Path) -> None:
-        with open(path, 'wb') as f:
+    def write_file(self, content: bytes, filepath: pathlib.Path) -> None:
+        with open(filepath, 'wb') as f:
             f.write(content)
-        self.logger.info(f"Wrote {len(content)} bytes to {path} successfully")
+        self.logger.info(f"Wrote {len(content)} bytes to {filepath} successfully")
 
-    def resolve_url(self, repo: str, file: str) -> str:
-        return f"{self._base_url}/{repo}/resolve/main/{file}"
+    def resolve_url(self, repo: str, filename: str) -> str:
+        return f"{self._base_url}/{repo}/resolve/main/{filename}"
 
     def download_file(self, url: str) -> requests.Response:
         response = self._session.get(url, headers=self.headers)
@@ -98,23 +98,32 @@ class HFTokenizerRequest:
     def local_path(self, value: pathlib.Path):
         self._local_path = value
 
+    def resolve_filenames(self, tokt: TokenizerType) -> tuple[str]:
+        filenames = ["config.json", "tokenizer_config.json", "tokenizer.json"]
+        if tokt == self.tokenizer_type.SPM:
+            filenames.append("tokenizer.model")
+        return tuple(filenames)
+
+    def resolve_tokenizer_model(
+        self,
+        filename: str,
+        filepath: pathlib.Path,
+        model: dict[str, object]
+    ) -> None:
+        try:  # NOTE: Do not use bare exceptions! They mask issues!
+            resolve_url = self.hub.resolve_url(model['repo'], filename)
+            response = self.hub.download_file(resolve_url)
+            self.hub.write_file(response.content, filepath)
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"Failed to download tokenizer {model['name']}: {e}")
+
     def download_model(self) -> None:
         for model in self.models:
-            name, repo, tokt = model['name'], model['repo'], model['tokt']
-            os.makedirs(f"{self.local_path}/{name}", exist_ok=True)
-
-            filenames = ["config.json", "tokenizer_config.json", "tokenizer.json"]
-            if tokt == self.tokenizer_type.SPM:
-                filenames.append("tokenizer.model")
-
-            for file_name in filenames:
-                file_path = pathlib.Path(f"{self.local_path}/{name}/{file_name}")
-                if file_path.is_file():
-                    self.logger.info(f"skipped pre-existing tokenizer {name} at {file_path}")
+            os.makedirs(f"{self.local_path}/{model['name']}", exist_ok=True)
+            filenames = self.resolve_filenames(model['tokt'])
+            for filename in filenames:
+                filepath = pathlib.Path(f"{self.local_path}/{model['name']}/{filename}")
+                if filepath.is_file():
+                    self.logger.info(f"skipped pre-existing tokenizer {model['name']} at {filepath}")
                     continue
-                try:  # NOTE: Do not use bare exceptions! They mask issues!
-                    resolve_url = self.hub.resolve_url(repo, file_name)
-                    response = self.hub.download_file(resolve_url)
-                    self.hub.write_file(response.content, file_path)
-                except requests.exceptions.HTTPError as e:
-                    self.logger.error(f"Failed to download tokenizer {name}: {e}")
+                self.resolve_tokenizer_model(filename, filepath, model)
