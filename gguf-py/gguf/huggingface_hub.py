@@ -1,10 +1,48 @@
 import logging
 import os
 import pathlib
+from enum import IntEnum, auto
 
 import requests
+from transformers import AutoTokenizer
 
-from .constants import MODEL_REPOS, TokenizerType
+
+class TokenizerType(IntEnum):
+    SPM = auto()  # SentencePiece
+    BPE = auto()  # BytePair
+    WPM = auto()  # WordPiece
+
+
+class ModelType(IntEnum):
+    PTH = auto()  # PyTorch
+    SFT = auto()  # SafeTensor
+
+
+# NOTE:
+#   - Repository paths are required
+#   - Allow the user to specify the tokenizer model type themselves
+#   - Use architecture types because they are explicitly defined
+#   - Possible tokenizer model types are: SentencePiece, WordPiece, or BytePair
+MODELS = (
+    {"tokt": TokenizerType.SPM, "repo": "meta-llama/Llama-2-7b-hf", },
+    {"tokt": TokenizerType.BPE, "repo": "meta-llama/Meta-Llama-3-8B", },
+    {"tokt": TokenizerType.SPM, "repo": "microsoft/Phi-3-mini-4k-instruct", },
+    {"tokt": TokenizerType.BPE, "repo": "deepseek-ai/deepseek-llm-7b-base", },
+    {"tokt": TokenizerType.BPE, "repo": "deepseek-ai/deepseek-coder-6.7b-base", },
+    {"tokt": TokenizerType.BPE, "repo": "tiiuae/falcon-7b", },
+    {"tokt": TokenizerType.WPM, "repo": "BAAI/bge-small-en-v1.5", },
+    {"tokt": TokenizerType.BPE, "repo": "mosaicml/mpt-7b", },
+    {"tokt": TokenizerType.BPE, "repo": "bigcode/starcoder2-3b", },
+    {"tokt": TokenizerType.BPE, "repo": "openai-community/gpt2", },
+    {"tokt": TokenizerType.BPE, "repo": "smallcloudai/Refact-1_6-base", },
+    {"tokt": TokenizerType.BPE, "repo": "CohereForAI/c4ai-command-r-v01", },
+    {"tokt": TokenizerType.BPE, "repo": "Qwen/Qwen1.5-7B", },
+    {"tokt": TokenizerType.BPE, "repo": "allenai/OLMo-1.7-7B-hf", },
+    {"tokt": TokenizerType.BPE, "repo": "databricks/dbrx-base", },
+    {"tokt": TokenizerType.WPM, "repo": "jinaai/jina-embeddings-v2-base-en", }, # WPM!
+    {"tokt": TokenizerType.BPE, "repo": "jinaai/jina-embeddings-v2-base-es", },
+    {"tokt": TokenizerType.BPE, "repo": "jinaai/jina-embeddings-v2-base-de", },
+)
 
 
 class HuggingFaceHub:
@@ -127,3 +165,6 @@ class HFTokenizerRequest:
                     self.logger.info(f"skipped pre-existing tokenizer {model['name']} at {filepath}")
                     continue
                 self.resolve_tokenizer_model(filename, filepath, model)
+
+    def generate_checksums(self) -> None:
+        pass
