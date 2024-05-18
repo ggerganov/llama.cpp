@@ -176,4 +176,15 @@ class HFTokenizerRequest:
                 self.resolve_tokenizer_model(filename, filepath, model)
 
     def generate_checksums(self) -> None:
-        pass
+        checksums = []
+        for model in self.models:
+            mapping = {}
+            filepath = f"{self.local_path}/{model['repo']}"
+            tokenizer = AutoTokenizer.from_pretrained(filepath, trust_remote=True)
+            mapping.update(model)
+            mapping['checksum'] = sha256(str(tokenizer.vocab).encode()).hexdigest()
+            self.logger.info(f"Hashed {model['repo']} as {mapping['checksum']}")
+            checksums.append(mapping)
+
+        with open(f"{self.local_path.parent}/checksums.json") as file:
+            json.dump(checksums, file)
