@@ -1,29 +1,5 @@
 # https://github.com/actions/labeler
 
-## AUTO DIFFICULTIES MARKER
-############################
-
-"review complexity : high":
-    - changed-files:
-        - any-glob-to-any-file:
-            - ggml-cuda/*.cu
-            - ggml-cuda/*.cuh
-            - ggml-vulkan.cpp
-            - ggml-sycl.cpp
-            - ggml_vk_generate_shaders.py
-            - ggml-sycl.cpp
-"review complexity : medium":
-    - changed-files:
-        - any-glob-to-any-file:
-            - .devops/**
-            - .github/**
-            - ci/**
-#'review complexity : low':
-
-
-## AUTO CATEGORIZATION
-#######################
-
 SYCL:
     - changed-files:
         - any-glob-to-any-file:
