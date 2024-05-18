@@ -49,3 +49,8 @@ may not be visible. Also remember that just refreshing/reloading page in browser
 matter clearing site data, dont directly override site caching in all cases. Worst case you may
 have to change port.
 
+Concept of multiple chat sessions with same or different system prompts, as well as saving and
+restoring of those across browser usage sessions, can be woven around the SimpleChat class and
+its instances relatively easily, however given the current goal of keeping this simple, it has
+not been added, for now.
+
