@@ -45,11 +45,16 @@ class SimpleChat {
         if (bClear) {
             div.replaceChildren();
         }
+        let last = undefined;
         for(const x of this.xchat) {
             let entry = document.createElement("p");
             entry.className = `role-${x.role}`;
             entry.innerText = `${x.role}: ${x.content}`;
             div.appendChild(entry);
+            last = entry;
+        }
+        if (last !== undefined) {
+            last.scrollIntoView(true);
         }
     }
 
@@ -139,7 +144,6 @@ async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
         theBody = gChat.request_prompt_jsonstr();
     }
 
-    inputUser.scrollIntoView(true);
     inputUser.value = "working...";
     inputUser.disabled = true;
     console.debug(`DBUG:HandleSubmit:${theUrl}:ReqBody:${theBody}`);
@@ -174,7 +178,6 @@ async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
     if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
         gChat.xchat.length = 0;
     }
-    inputUser.scrollIntoView(true);
 
 }
 
