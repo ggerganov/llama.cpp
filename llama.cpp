@@ -18038,7 +18038,7 @@ void llama_log_set(ggml_log_callback log_callback, void * user_data) {
     g_state.log_callback_user_data = user_data;
 #ifdef GGML_USE_METAL
     ggml_backend_metal_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
-#elif GGML_USE_CUDA
+#elif defined(GGML_USE_CUDA)
     ggml_backend_cuda_log_set_callback(g_state.log_callback, g_state.log_callback_user_data);
 #endif
 }
