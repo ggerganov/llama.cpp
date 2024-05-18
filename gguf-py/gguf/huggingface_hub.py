@@ -4,14 +4,14 @@ import pathlib
 
 import requests
 
-from .constants import TokenizerType
+from .constants import MODEL_REPOS, TokenizerType
 
 
 class HuggingFaceHub:
     def __init__(self, auth_token: None | str, logger: None | logging.Logger):
         # Set headers if authentication is available
         if auth_token is None:
-            self._headers = {}
+            self._headers = None
         else:
             self._headers = {"Authorization": f"Bearer {auth_token}"}
 
@@ -43,11 +43,10 @@ class HuggingFaceHub:
     def base_url(self) -> str:
         return self._base_url
 
-    @staticmethod
-    def write_file(self, content: bytes, save_path: pathlib.Path) -> None:
-        with open(save_path, 'wb') as f:
+    def write_file(self, content: bytes, path: pathlib.Path) -> None:
+        with open(path, 'wb') as f:
             f.write(content)
-        self.logger.info(f"File {save_path} downloaded successfully")
+        self.logger.info(f"Wrote {len(content)} bytes to {path} successfully")
 
     def resolve_path(self, repo: str, file: str) -> str:
         return f"{self._base_url}/{repo}/resolve/main/{file}"
