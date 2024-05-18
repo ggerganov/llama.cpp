@@ -160,9 +160,8 @@ function gg_run_test_scripts_debug {
 
     set -e
 
-    # TODO: too slow, run on dedicated node
     (cd ./examples/gguf-split && time bash tests.sh "$SRC/build-ci-debug/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
-   #(cd ./examples/quantize   && time bash tests.sh "$SRC/build-ci-debug/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
+    (cd ./examples/quantize   && time bash tests.sh "$SRC/build-ci-debug/bin" "$MNT/models") 2>&1 | tee -a $OUT/${ci}-scripts.log
 
     set +e
 }
@@ -336,7 +335,8 @@ function gg_run_open_llama_3b_v2 {
 
     (time ./bin/imatrix --model ${model_f16} -f ${wiki_test_60} -c 128 -b 128 --chunks 1 ) 2>&1 | tee -a $OUT/${ci}-imatrix.log
 
-    (time ./bin/save-load-state --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
+    (time ./bin/save-load-state     --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
+    (time ./bin/save-load-state -fa --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
 
     function check_ppl {
         qnt="$1"
@@ -365,47 +365,6 @@ function gg_run_open_llama_3b_v2 {
 
     cat $OUT/${ci}-imatrix.log | grep "Final" >> $OUT/${ci}-imatrix-sum.log
 
-    # lora
-    function compare_ppl {
-        qnt="$1"
-        ppl1=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
-        ppl2=$(echo "$3" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
-
-        if [ $(echo "$ppl1 < $ppl2" | bc) -eq 1 ]; then
-            printf '  - %s @ %s (FAIL: %s > %s)\n' "$qnt" "$ppl" "$ppl1" "$ppl2"
-            return 20
-        fi
-
-        printf '  - %s @ %s %s OK\n' "$qnt" "$ppl1" "$ppl2"
-        return 0
-    }
-
-    path_lora="../models-mnt/open-llama/3B-v2/lora"
-    path_shakespeare="../models-mnt/shakespeare"
-
-    shakespeare="${path_shakespeare}/shakespeare.txt"
-    lora_shakespeare="${path_lora}/ggml-adapter-model.bin"
-
-    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_3b_v2_shakespeare_lora/resolve/main/adapter_config.json
-    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_3b_v2_shakespeare_lora/resolve/main/adapter_model.bin
-    gg_wget ${path_shakespeare} https://huggingface.co/slaren/open_llama_3b_v2_shakespeare_lora/resolve/main/shakespeare.txt
-
-    python3 ../convert-lora-to-ggml.py ${path_lora}
-
-    # f16
-    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare}                            -c 128 -b 128 --chunks 1 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-f16.log
-    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare} --lora ${lora_shakespeare} -c 128 -b 128 --chunks 1 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-f16.log
-    compare_ppl "f16 shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-f16.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
-
-    # q8_0
-    (time ./bin/perplexity --model ${model_q8_0} -f ${shakespeare}                            -c 128 -b 128 --chunks 1 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-q8_0.log
-    (time ./bin/perplexity --model ${model_q8_0} -f ${shakespeare} --lora ${lora_shakespeare} -c 128 -b 128 --chunks 1 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-q8_0.log
-    compare_ppl "q8_0 shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-q8_0.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
-
-    # q8_0 + f16 lora-base
-    (time ./bin/perplexity --model ${model_q8_0} -f ${shakespeare} --lora ${lora_shakespeare} --lora-base ${model_f16} -c 128 -b 128 --chunks 1 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log
-    compare_ppl "q8_0 / f16 base shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-q8_0.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
-
     set +e
 }
 
@@ -416,7 +375,6 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
     gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
-    gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
     gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
     gg_printf '- q4_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_0.log)"
@@ -429,11 +387,6 @@ function gg_sum_open_llama_3b_v2 {
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
     gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
     gg_printf '- save-load-state: \n```\n%s\n```\n' "$(cat $OUT/${ci}-save-load-state.log)"
-    gg_printf '- shakespeare (f16):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-f16.log)"
-    gg_printf '- shakespeare (f16 lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log)"
-    gg_printf '- shakespeare (q8_0):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-q8_0.log)"
-    gg_printf '- shakespeare (q8_0 lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0.log)"
-    gg_printf '- shakespeare (q8_0 / f16 base lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log)"
 }
 
 # open_llama_7b_v2
@@ -517,7 +470,10 @@ function gg_run_open_llama_7b_v2 {
 
     (time ./bin/imatrix --model ${model_f16} -f ${wiki_test} -t 1 -ngl 999 -c 2048 -b 512 --chunks 4 ) 2>&1 | tee -a $OUT/${ci}-imatrix.log
 
-    (time ./bin/save-load-state --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
+    (time ./bin/save-load-state     -ngl 10 --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
+    (time ./bin/save-load-state -fa -ngl 10 --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
+    (time ./bin/save-load-state     -ngl 99 --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
+    (time ./bin/save-load-state -fa -ngl 99 --model ${model_q4_0} ) 2>&1 | tee -a $OUT/${ci}-save-load-state.log
 
     function check_ppl {
         qnt="$1"
@@ -546,48 +502,6 @@ function gg_run_open_llama_7b_v2 {
 
     cat $OUT/${ci}-imatrix.log | grep "Final" >> $OUT/${ci}-imatrix-sum.log
 
-    # lora
-    function compare_ppl {
-        qnt="$1"
-        ppl1=$(echo "$2" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
-        ppl2=$(echo "$3" | grep -oE "[0-9]+\.[0-9]+" | tail -n 1)
-
-        if [ $(echo "$ppl1 < $ppl2" | bc) -eq 1 ]; then
-            printf '  - %s @ %s (FAIL: %s > %s)\n' "$qnt" "$ppl" "$ppl1" "$ppl2"
-            return 20
-        fi
-
-        printf '  - %s @ %s %s OK\n' "$qnt" "$ppl1" "$ppl2"
-        return 0
-    }
-
-    path_lora="../models-mnt/open-llama/7B-v2/lora"
-    path_shakespeare="../models-mnt/shakespeare"
-
-    shakespeare="${path_shakespeare}/shakespeare.txt"
-    lora_shakespeare="${path_lora}/ggml-adapter-model.bin"
-
-    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/adapter_config.json
-    gg_wget ${path_lora} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/adapter_model.bin
-    gg_wget ${path_shakespeare} https://huggingface.co/slaren/open_llama_7b_v2_shakespeare_lora/resolve/main/shakespeare.txt
-
-    python3 ../convert-lora-to-ggml.py ${path_lora}
-
-    # f16
-    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare}                            -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-f16.log
-    (time ./bin/perplexity --model ${model_f16} -f ${shakespeare} --lora ${lora_shakespeare} -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-f16.log
-    compare_ppl "f16 shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-f16.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
-
-    # currently not supported by the CUDA backend
-    # q8_0
-    #(time ./bin/perplexity --model ${model_q8_0} -f ${shakespeare}                            -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-q8_0.log
-    #(time ./bin/perplexity --model ${model_q8_0} -f ${shakespeare} --lora ${lora_shakespeare} -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-q8_0.log
-    #compare_ppl "q8_0 shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-q8_0.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
-
-    # q8_0 + f16 lora-base
-    #(time ./bin/perplexity --model ${model_q8_0} -f ${shakespeare} --lora ${lora_shakespeare} --lora-base ${model_f16} -t 1 -ngl 999 -c 2048 -b 512 --chunks 3 ) 2>&1 | tee -a $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log
-    #compare_ppl "q8_0 / f16 shakespeare" "$(cat $OUT/${ci}-ppl-shakespeare-q8_0.log | grep "^\[1\]")" "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log | grep "^\[1\]")" | tee -a $OUT/${ci}-lora-ppl.log
-
     set +e
 }
 
@@ -598,7 +512,6 @@ function gg_sum_open_llama_7b_v2 {
     gg_printf '- status: %s\n' "$(cat $OUT/${ci}.exit)"
     gg_printf '- perplexity:\n%s\n' "$(cat $OUT/${ci}-ppl.log)"
     gg_printf '- imatrix:\n```\n%s\n```\n' "$(cat $OUT/${ci}-imatrix-sum.log)"
-    gg_printf '- lora:\n%s\n' "$(cat $OUT/${ci}-lora-ppl.log)"
     gg_printf '- f16: \n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-f16.log)"
     gg_printf '- q8_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q8_0.log)"
     gg_printf '- q4_0:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q4_0.log)"
@@ -611,11 +524,6 @@ function gg_sum_open_llama_7b_v2 {
     gg_printf '- q5_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q5_k.log)"
     gg_printf '- q6_k:\n```\n%s\n```\n' "$(cat $OUT/${ci}-tg-q6_k.log)"
     gg_printf '- save-load-state: \n```\n%s\n```\n' "$(cat $OUT/${ci}-save-load-state.log)"
-    gg_printf '- shakespeare (f16):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-f16.log)"
-    gg_printf '- shakespeare (f16 lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-f16.log)"
-    #gg_printf '- shakespeare (q8_0):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-q8_0.log)"
-    #gg_printf '- shakespeare (q8_0 lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0.log)"
-    #gg_printf '- shakespeare (q8_0 / f16 base lora):\n```\n%s\n```\n' "$(cat $OUT/${ci}-ppl-shakespeare-lora-q8_0-f16.log)"
 }
 
 # bge-small
@@ -691,8 +599,10 @@ test $ret -eq 0 && gg_run ctest_release
 if [ -z ${GG_BUILD_LOW_PERF} ]; then
     test $ret -eq 0 && gg_run embd_bge_small
 
-    test $ret -eq 0 && gg_run test_scripts_debug
-    test $ret -eq 0 && gg_run test_scripts_release
+    if [ -z ${GG_BUILD_CLOUD} ] || [ ${GG_BUILD_EXTRA_TESTS_0} ]; then
+        test $ret -eq 0 && gg_run test_scripts_debug
+        test $ret -eq 0 && gg_run test_scripts_release
+    fi
 
     if [ -z ${GG_BUILD_VRAM_GB} ] || [ ${GG_BUILD_VRAM_GB} -ge 8 ]; then
         if [ -z ${GG_BUILD_CUDA} ]; then

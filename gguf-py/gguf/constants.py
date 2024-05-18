@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from enum import Enum, IntEnum, auto
 from typing import Any
 
@@ -11,6 +10,7 @@ from typing import Any
 GGUF_MAGIC             = 0x46554747  # "GGUF"
 GGUF_VERSION           = 3
 GGUF_DEFAULT_ALIGNMENT = 32
+GGML_QUANT_VERSION     = 2  # GGML_QNT_VERSION from ggml.h
 
 #
 # metadata keys
@@ -72,6 +72,7 @@ class Keys:
 
     class Tokenizer:
         MODEL            = "tokenizer.ggml.model"
+        PRE              = "tokenizer.ggml.pre"
         LIST             = "tokenizer.ggml.tokens"
         TOKEN_TYPE       = "tokenizer.ggml.token_type"
         TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # for BERT-style token types
@@ -118,6 +119,7 @@ class MODEL_ARCH(IntEnum):
     REFACT     = auto()
     BERT       = auto()
     NOMIC_BERT = auto()
+    JINA_BERT_V2 = auto()
     BLOOM      = auto()
     STABLELM   = auto()
     QWEN       = auto()
@@ -195,6 +197,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.NOMIC_BERT:     "nomic-bert",
+    MODEL_ARCH.JINA_BERT_V2:   "jina-bert-v2",
     MODEL_ARCH.BLOOM:          "bloom",
     MODEL_ARCH.STABLELM:       "stablelm",
     MODEL_ARCH.QWEN:           "qwen",
@@ -378,6 +381,22 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.LAYER_OUT_NORM,
+    ],
+    MODEL_ARCH.JINA_BERT_V2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.TOKEN_TYPES,
+        MODEL_TENSOR.ATTN_OUT_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.LAYER_OUT_NORM,
     ],
     MODEL_ARCH.MPT: [
@@ -817,6 +836,50 @@ class GGMLQuantizationType(IntEnum):
     I64     = 27
     F64     = 28
     IQ1_M   = 29
+    BF16    = 30
+
+
+# TODO: add GGMLFileType from ggml_ftype in ggml.h
+
+
+# from llama_ftype in llama.h
+# ALL VALUES SHOULD BE THE SAME HERE AS THEY ARE OVER THERE.
+class LlamaFileType(IntEnum):
+    ALL_F32              = 0
+    MOSTLY_F16           = 1   # except 1d tensors
+    MOSTLY_Q4_0          = 2   # except 1d tensors
+    MOSTLY_Q4_1          = 3   # except 1d tensors
+    MOSTLY_Q4_1_SOME_F16 = 4   # tok_embeddings.weight and output.weight are F16
+    # MOSTLY_Q4_2        = 5   # support has been removed
+    # MOSTLY_Q4_3        = 6   # support has been removed
+    MOSTLY_Q8_0          = 7   # except 1d tensors
+    MOSTLY_Q5_0          = 8   # except 1d tensors
+    MOSTLY_Q5_1          = 9   # except 1d tensors
+    MOSTLY_Q2_K          = 10  # except 1d tensors
+    MOSTLY_Q3_K_S        = 11  # except 1d tensors
+    MOSTLY_Q3_K_M        = 12  # except 1d tensors
+    MOSTLY_Q3_K_L        = 13  # except 1d tensors
+    MOSTLY_Q4_K_S        = 14  # except 1d tensors
+    MOSTLY_Q4_K_M        = 15  # except 1d tensors
+    MOSTLY_Q5_K_S        = 16  # except 1d tensors
+    MOSTLY_Q5_K_M        = 17  # except 1d tensors
+    MOSTLY_Q6_K          = 18  # except 1d tensors
+    MOSTLY_IQ2_XXS       = 19  # except 1d tensors
+    MOSTLY_IQ2_XS        = 20  # except 1d tensors
+    MOSTLY_Q2_K_S        = 21  # except 1d tensors
+    MOSTLY_IQ3_XS        = 22  # except 1d tensors
+    MOSTLY_IQ3_XXS       = 23  # except 1d tensors
+    MOSTLY_IQ1_S         = 24  # except 1d tensors
+    MOSTLY_IQ4_NL        = 25  # except 1d tensors
+    MOSTLY_IQ3_S         = 26  # except 1d tensors
+    MOSTLY_IQ3_M         = 27  # except 1d tensors
+    MOSTLY_IQ2_S         = 28  # except 1d tensors
+    MOSTLY_IQ2_M         = 29  # except 1d tensors
+    MOSTLY_IQ4_XS        = 30  # except 1d tensors
+    MOSTLY_IQ1_M         = 31  # except 1d tensors
+    MOSTLY_BF16          = 32  # except 1d tensors
+
+    GUESSED              = 1024  # not specified in the model file
 
 
 class GGUFEndian(IntEnum):
@@ -853,14 +916,13 @@ class GGUFValueType(IntEnum):
             return GGUFValueType.INT32
         # TODO: need help with 64-bit types in Python
         else:
-            print("Unknown type:", type(val))
-            sys.exit()
+            raise ValueError(f"Unknown type: {type(val)}")
 
 
 # Note: Does not support GGML_QKK_64
 QK_K = 256
 # Items here are (block size, type size)
-GGML_QUANT_SIZES = {
+GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),
     GGMLQuantizationType.Q4_0:    (32, 2 + 16),
@@ -889,6 +951,7 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.I64:     (1, 8),
     GGMLQuantizationType.F64:     (1, 8),
     GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
+    GGMLQuantizationType.BF16:    (1, 2),
 }
 
 
@@ -940,6 +1003,7 @@ KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
+KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
 KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
 KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES

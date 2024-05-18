@@ -2,7 +2,7 @@
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
@@ -20,7 +20,9 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- **MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387**
+- **Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021**
+- BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
+- MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
 - Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
 - Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
 - Multi-GPU pipeline parallelism support https://github.com/ggerganov/llama.cpp/pull/6017
@@ -174,6 +176,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [nat/openplayground](https://github.com/nat/openplayground)
 - [Faraday](https://faraday.dev/) (proprietary)
 - [LMStudio](https://lmstudio.ai/) (proprietary)
+- [Layla](https://play.google.com/store/apps/details?id=com.laylalite) (proprietary)
 - [LocalAI](https://github.com/mudler/LocalAI) (MIT)
 - [LostRuins/koboldcpp](https://github.com/LostRuins/koboldcpp) (AGPL)
 - [Mozilla-Ocho/llamafile](https://github.com/Mozilla-Ocho/llamafile)
@@ -307,6 +310,8 @@ In order to build llama.cpp you have three different options.
       make
       ```
 
+      **Note**: for `Debug` builds, run `make LLAMA_DEBUG=1`
+
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
@@ -321,11 +326,25 @@ In order to build llama.cpp you have three different options.
 - Using `CMake`:
 
     ```bash
-    mkdir build
-    cd build
-    cmake ..
-    cmake --build . --config Release
+    cmake -B build
+    cmake --build build --config Release
     ```
+
+    **Note**: for `Debug` builds, there are two cases:
+
+    - Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
+
+      ```bash
+      cmake -B build -DCMAKE_BUILD_TYPE=Debug
+      cmake --build build
+      ```
+
+    - Multi-config generators (`-G` param set to Visual Studio, XCode...):
+
+      ```bash
+      cmake -B build -G "Xcode"
+      cmake --build build --config Debug
+      ```
 
 - Using `Zig` (version 0.11 or later):
 
@@ -438,10 +457,8 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake` on Linux:
 
       ```bash
-      mkdir build
-      cd build
-      cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
-      cmake --build . --config Release
+      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+      cmake --build build --config Release
       ```
 
 - #### BLIS
@@ -461,11 +478,9 @@ Building the program with BLAS support may lead to some performance improvements
   - Using manual oneAPI installation:
     By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
       ```bash
-      mkdir build
-      cd build
       source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit docker image, only required for manual installation
-      cmake .. -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
-      cmake --build . --config Release
+      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
+      cmake --build build --config Release
       ```
 
   - Using oneAPI docker image:
@@ -486,10 +501,8 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake`:
 
     ```bash
-    mkdir build
-    cd build
-    cmake .. -DLLAMA_CUDA=ON
-    cmake --build . --config Release
+    cmake -B build -DLLAMA_CUDA=ON
+    cmake --build build --config Release
     ```
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
@@ -515,12 +528,27 @@ Building the program with BLAS support may lead to some performance improvements
     ```
   - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
     ```bash
-    CC=/opt/rocm/llvm/bin/clang CXX=/opt/rocm/llvm/bin/clang++ \
-        cmake -H. -Bbuild -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+    HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
+        cmake -S . -B build -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build --config Release -- -j 16
+    ```
+    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON`.
+    However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
+
+    Note that if you get the following error:
+    ```
+    clang: error: cannot find ROCm device library; provide its path via '--rocm-path' or '--rocm-device-lib-path', or pass '-nogpulib' to build without ROCm device library
+    ```
+    Try searching for a directory under `HIP_PATH` that contains the file
+    `oclc_abi_version_400.bc`. Then, add the following to the start of the
+    command: `HIP_DEVICE_LIB_PATH=<directory-you-just-found>`, so something
+    like:
+    ```bash
+    HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -p)" \
+    HIP_DEVICE_LIB_PATH=<directory-you-just-found> \
+        cmake -S . -B build -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
         && cmake --build build -- -j 16
     ```
-    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON"`.
-    However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
 
   - Using `make` (example for target gfx1030, build with 16 CPU threads):
     ```bash
@@ -530,10 +558,8 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
     ```bash
     set PATH=%HIP_PATH%\bin;%PATH%
-    mkdir build
-    cd build
-    cmake -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release ..
-    cmake --build .
+    cmake -S . -B build -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
+    cmake --build build
     ```
     Make sure that `AMDGPU_TARGETS` is set to the GPU arch you want to compile for. The above example uses `gfx1100` that corresponds to Radeon RX 7900XTX/XT/GRE. You can find a list of targets [here](https://llvm.org/docs/AMDGPUUsage.html#processors)
     Find your gpu version string by matching the most significant version information from `rocminfo | grep gfx | head -1 | awk '{print $2}'` with the list of processors, e.g. `gfx1035` maps to `gfx1030`.
@@ -563,15 +589,14 @@ Building the program with BLAS support may lead to some performance improvements
 
         ```sh
         git clone --recurse-submodules https://github.com/KhronosGroup/OpenCL-SDK.git
-        mkdir OpenCL-SDK/build
-        cd OpenCL-SDK/build
-        cmake .. -DBUILD_DOCS=OFF \
+        cd OpenCL-SDK
+        cmake -B build -DBUILD_DOCS=OFF \
           -DBUILD_EXAMPLES=OFF \
           -DBUILD_TESTING=OFF \
           -DOPENCL_SDK_BUILD_SAMPLES=OFF \
           -DOPENCL_SDK_TEST_SAMPLES=OFF
-        cmake --build . --config Release
-        cmake --install . --prefix /some/path
+        cmake --build build
+        cmake --install build --prefix /some/path
         ```
       </details>
 
@@ -593,23 +618,23 @@ Building the program with BLAS support may lead to some performance improvements
       ```cmd
       set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
       git clone https://github.com/CNugteren/CLBlast.git
-      mkdir CLBlast\build
-      cd CLBlast\build
-      cmake .. -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
-      cmake --build . --config Release
-      cmake --install . --prefix C:/CLBlast
+      cd CLBlast
+      cmake -B build -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
+      cmake --build build --config Release
+      cmake --install build --prefix C:/CLBlast
       ```
+
+      (note: `--config Release` at build time is the default and only relevant for Visual Studio builds - or multi-config Ninja builds)
 
   - <details>
     <summary>Unix:</summary>
 
       ```sh
       git clone https://github.com/CNugteren/CLBlast.git
-      mkdir CLBlast/build
-      cd CLBlast/build
-      cmake .. -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
-      cmake --build . --config Release
-      cmake --install . --prefix /some/path
+      cd CLBlast
+      cmake -B build -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
+      cmake --build build --config Release
+      cmake --install build --prefix /some/path
       ```
 
       Where `/some/path` is where the built library will be installed (default is `/usr/local`).
@@ -623,21 +648,17 @@ Building the program with BLAS support may lead to some performance improvements
     ```
   - CMake (Unix):
     ```sh
-    mkdir build
-    cd build
-    cmake .. -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
-    cmake --build . --config Release
+    cmake -B build -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
+    cmake --build build --config Release
     ```
   - CMake (Windows):
     ```cmd
     set CL_BLAST_CMAKE_PKG="C:/CLBlast/lib/cmake/CLBlast"
     git clone https://github.com/ggerganov/llama.cpp
     cd llama.cpp
-    mkdir build
-    cd build
-    cmake .. -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
-    cmake --build . --config Release
-    cmake --install . --prefix C:/LlamaCPP
+    cmake -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
+    cmake --build build --config Release
+    cmake --install build --prefix C:/LlamaCPP
     ```
 
   ##### Running Llama with CLBlast
@@ -693,10 +714,8 @@ Building the program with BLAS support may lead to some performance improvements
   Then, build llama.cpp using the cmake command below:
 
   ```bash
-  mkdir -p build
-  cd build
-  cmake .. -DLLAMA_VULKAN=1
-  cmake --build . --config Release
+  cmake -B build -DLLAMA_VULKAN=1
+  cmake --build build --config Release
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
   ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
 
@@ -706,7 +725,12 @@ Building the program with BLAS support may lead to some performance improvements
 
 ### Prepare and Quantize
 
+> [!NOTE]
+> You can use the [GGUF-my-repo](https://huggingface.co/spaces/ggml-org/gguf-my-repo) space on Hugging Face to quantise your model weights without any setup too. It is synced from `llama.cpp` main every 6 hours.
+
 To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
+
+Note: `convert.py` does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
 
 ```bash
 # obtain the official LLaMA model weights and place them in ./models
@@ -929,17 +953,25 @@ If your issue is with model generation quality, then please at least scan the fo
 
 ### Android
 
+#### Build on Android using Termux
+[Termux](https://github.com/termux/termux-app#installation) is a method to execute `llama.cpp` on an Android device (no root required).
+```
+apt update && apt upgrade -y
+apt install git make cmake
+```
+
+It's recommended to move your model inside the `~/` directory for best performance:
+```
+cd storage/downloads
+mv model.gguf ~/
+```
+
+[Get the code](https://github.com/ggerganov/llama.cpp#get-the-code) & [follow the Linux build instructions](https://github.com/ggerganov/llama.cpp#build) to build `llama.cpp`.
+
 #### Building the Project using Android NDK
-You can easily run `llama.cpp` on Android device with [termux](https://termux.dev/).
+Obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake.
 
-First, install the essential packages for termux:
-```
-pkg install clang wget git cmake
-```
-Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
-
-You can execute the following commands on your computer to avoid downloading the NDK to your mobile. Of course, you can also do this in Termux.
-
+Execute the following commands on your computer to avoid downloading the NDK to your mobile. Alternatively, you can also do this in Termux:
 ```
 $ mkdir build-android
 $ cd build-android
@@ -947,7 +979,9 @@ $ export NDK=<your_ndk_directory>
 $ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DCMAKE_C_FLAGS=-march=armv8.4a+dotprod ..
 $ make
 ```
-Install [termux](https://termux.dev/) on your device and run `termux-setup-storage` to get access to your SD card.
+
+Install [termux](https://github.com/termux/termux-app#installation) on your device and run `termux-setup-storage` to get access to your SD card (if Android 11+ then run the command twice).
+
 Finally, copy these built `llama` binaries and the model file to your device storage. Because the file permissions in the Android sdcard cannot be changed, you can copy the executable files to the `/data/data/com.termux/files/home/bin` path, and then execute the following commands in Termux to add executable permission:
 
 (Assumed that you have pushed the built executable files to the /sdcard/llama.cpp/bin path using `adb push`)
@@ -969,52 +1003,9 @@ $cd /data/data/com.termux/files/home/bin
 $./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
 ```
 
-Here is a demo of an interactive session running on Pixel 5 phone:
+Here's a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
-
-#### Building the Project using Termux (F-Droid)
-Termux from F-Droid offers an alternative route to execute the project on an Android device. This method empowers you to construct the project right from within the terminal, negating the requirement for a rooted device or SD Card.
-
-Outlined below are the directives for installing the project using OpenBLAS and CLBlast. This combination is specifically designed to deliver peak performance on recent devices that feature a GPU.
-
-If you opt to utilize OpenBLAS, you'll need to install the corresponding package.
-```
-apt install libopenblas
-```
-
-Subsequently, if you decide to incorporate CLBlast, you'll first need to install the requisite OpenCL packages:
-```
-apt install ocl-icd opencl-headers opencl-clhpp clinfo
-```
-
-In order to compile CLBlast, you'll need to first clone the respective Git repository, which can be found at this URL: https://github.com/CNugteren/CLBlast. Alongside this, clone this repository into your home directory. Once this is done, navigate to the CLBlast folder and execute the commands detailed below:
-```
-cmake .
-make
-cp libclblast.so* $PREFIX/lib
-cp ./include/clblast.h ../llama.cpp
-```
-
-Following the previous steps, navigate to the LlamaCpp directory. To compile it with OpenBLAS and CLBlast, execute the command provided below:
-```
-cp /data/data/com.termux/files/usr/include/openblas/cblas.h .
-cp /data/data/com.termux/files/usr/include/openblas/openblas_config.h .
-make LLAMA_CLBLAST=1 //(sometimes you need to run this command twice)
-```
-
-Upon completion of the aforementioned steps, you will have successfully compiled the project. To run it using CLBlast, a slight adjustment is required: a command must be issued to direct the operations towards your device's physical GPU, rather than the virtual one. The necessary command is detailed below:
-```
-GGML_OPENCL_PLATFORM=0
-GGML_OPENCL_DEVICE=0
-export LD_LIBRARY_PATH=/vendor/lib64:$LD_LIBRARY_PATH
-```
-
-(Note: some Android devices, like the Zenfone 8, need the following command instead - "export LD_LIBRARY_PATH=/system/vendor/lib64:$LD_LIBRARY_PATH". Source: https://www.reddit.com/r/termux/comments/kc3ynp/opencl_working_in_termux_more_in_comments/ )
-
-For easy and swift re-execution, consider documenting this final part in a .sh script file. This will enable you to rerun the process with minimal hassle.
-
-Place your desired model into the `~/llama.cpp/models/` directory and execute the `./main (...)` script.
 
 ### Docker
 

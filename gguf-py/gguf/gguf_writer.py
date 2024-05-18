@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import struct
@@ -12,6 +13,7 @@ from string import ascii_letters, digits
 import numpy as np
 
 from .constants import (
+    GGML_QUANT_SIZES,
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
     GGUF_VERSION,
@@ -23,6 +25,8 @@ from .constants import (
     PoolingType,
     TokenType,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class WriterState(Enum):
@@ -63,10 +67,11 @@ class GGUFWriter:
         self.kv_data_count = 0
         self.ti_data = bytearray()
         self.ti_data_count = 0
+        self.ti_names = set()
         self.use_temp_file = use_temp_file
         self.temp_file = None
         self.tensors = []
-        print("gguf: This GGUF file is for {0} Endian only".format(
+        logger.info("gguf: This GGUF file is for {0} Endian only".format(
             "Big" if self.endianess == GGUFEndian.BIG else "Little",
         ))
         self.state = WriterState.EMPTY
@@ -172,7 +177,7 @@ class GGUFWriter:
         if pack_fmt is not None:
             self.kv_data += self._pack(pack_fmt, val, skip_pack_prefix = vtype == GGUFValueType.BOOL)
         elif vtype == GGUFValueType.STRING:
-            encoded_val = val.encode("utf8") if isinstance(val, str) else val
+            encoded_val = val.encode("utf-8") if isinstance(val, str) else val
             self.kv_data += self._pack("Q", len(encoded_val))
             self.kv_data += encoded_val
         elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and val:
@@ -191,19 +196,19 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def add_tensor_info(
-        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype[np.float16] | np.dtype[np.float32],
+        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype,
         tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None,
     ) -> None:
         if self.state is not WriterState.EMPTY:
             raise ValueError(f'Expected output file to be empty, got {self.state}')
 
-        encoded_name = name.encode("utf8")
+        if name in self.ti_names:
+            raise ValueError(f'Duplicated tensor name {name}')
+        self.ti_names.add(name)
+
+        encoded_name = name.encode("utf-8")
         self.ti_data += self._pack("Q", len(encoded_name))
         self.ti_data += encoded_name
-        n_dims = len(tensor_shape)
-        self.ti_data += self._pack("I", n_dims)
-        for i in range(n_dims):
-            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             if tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
@@ -223,6 +228,15 @@ class GGUFWriter:
                 raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
             dtype = raw_dtype
+            if tensor_dtype == np.uint8:
+                block_size, type_size = GGML_QUANT_SIZES[raw_dtype]
+                if tensor_shape[-1] % type_size != 0:
+                    raise ValueError(f"Quantized tensor row size ({tensor_shape[-1]}) is not a multiple of {dtype.name} type size ({type_size})")
+                tensor_shape = tuple(tensor_shape[:-1]) + (tensor_shape[-1] // type_size * block_size,)
+        n_dims = len(tensor_shape)
+        self.ti_data += self._pack("I", n_dims)
+        for i in range(n_dims):
+            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         self.ti_data += self._pack("I", dtype)
         self.ti_data += self._pack("Q", self.offset_tensor)
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
@@ -264,15 +278,33 @@ class GGUFWriter:
         tensor.tofile(self.fout)
         self.write_padding(self.fout, tensor.nbytes)
 
-    def write_tensors_to_file(self) -> None:
+    def write_tensors_to_file(self, *, progress: bool = False) -> None:
         self.write_ti_data_to_file()
 
         self.write_padding(self.fout, self.fout.tell())
 
         if self.temp_file is None:
+            self.tensors.reverse()  # to pop from the "beginning" in constant time
+
+            if progress:
+                from tqdm import tqdm
+
+                total_bytes = sum(t.nbytes for t in self.tensors)
+
+                bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
+
+                while True:
+                    try:
+                        tensor = self.tensors.pop()
+                    except IndexError:
+                        break
+                    tensor.tofile(self.fout)
+                    bar.update(tensor.nbytes)
+                    self.write_padding(self.fout, tensor.nbytes)
+                return
             while True:
                 try:
-                    tensor = self.tensors.pop(0)
+                    tensor = self.tensors.pop()
                 except IndexError:
                     break
                 tensor.tofile(self.fout)
@@ -324,7 +356,7 @@ class GGUFWriter:
     def add_name(self, name: str) -> None:
         self.add_string(Keys.General.NAME, name)
 
-    def add_quantization_version(self, quantization_version: GGMLQuantizationType) -> None:
+    def add_quantization_version(self, quantization_version: int) -> None:
         self.add_uint32(
             Keys.General.QUANTIZATION_VERSION, quantization_version)
 
@@ -422,6 +454,9 @@ class GGUFWriter:
     def add_tokenizer_model(self, model: str) -> None:
         self.add_string(Keys.Tokenizer.MODEL, model)
 
+    def add_tokenizer_pre(self, pre: str) -> None:
+        self.add_string(Keys.Tokenizer.PRE, pre)
+
     def add_token_list(self, tokens: Sequence[str] | Sequence[bytes] | Sequence[bytearray]) -> None:
         self.add_array(Keys.Tokenizer.LIST, tokens)
 
@@ -468,7 +503,7 @@ class GGUFWriter:
         self.add_bool(Keys.Tokenizer.ADD_PREFIX, value)
 
     def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
-        if isinstance(value, list):
+        if not isinstance(value, str):
             template_default = None
             template_names = set()
 
