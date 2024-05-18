@@ -581,7 +581,7 @@ if (LLAMA_HIPBLAS)
     else()
         # Forward AMDGPU_TARGETS to CMAKE_HIP_ARCHITECTURES.
         if(AMDGPU_TARGETS AND NOT CMAKE_HIP_ARCHITECTURES)
-            set(CMAKE_HIP_ARCHITECTURES ${AMDGPU_ARGETS})
+            set(CMAKE_HIP_ARCHITECTURES ${AMDGPU_TARGETS})
         endif()
         cmake_minimum_required(VERSION 3.21)
         enable_language(HIP)
