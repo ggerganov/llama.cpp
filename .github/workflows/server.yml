@@ -32,13 +32,14 @@ jobs:
 
     strategy:
       matrix:
-        # TODO: temporary disabled due to linux kernel issues
-        #sanitizer: [ADDRESS, THREAD, UNDEFINED]
-        sanitizer: [UNDEFINED]
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
         build_type: [Debug]
         include:
           - build_type: Release
             sanitizer: ""
+          - build_type: Debug
+            sanitizer: THREAD
+            disabled_on_pr: true
       fail-fast: false # While -DLLAMA_SANITIZE_THREAD=ON is broken
 
     steps:

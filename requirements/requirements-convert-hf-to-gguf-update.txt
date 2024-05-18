@@ -1,3 +1,2 @@
 -r ./requirements-convert.txt
 torch~=2.1.1
-einops~=0.7.0

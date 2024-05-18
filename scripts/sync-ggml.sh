@@ -20,6 +20,8 @@ cp -rpv ../ggml/src/ggml-opencl.cpp         ./ggml-opencl.cpp
 cp -rpv ../ggml/src/ggml-opencl.h           ./ggml-opencl.h
 cp -rpv ../ggml/src/ggml-quants.c           ./ggml-quants.c
 cp -rpv ../ggml/src/ggml-quants.h           ./ggml-quants.h
+cp -rpv ../ggml/src/ggml-rpc.cpp            ./ggml-rpc.cpp
+cp -rpv ../ggml/src/ggml-rpc.h              ./ggml-rpc.h
 cp -rpv ../ggml/src/ggml-sycl.cpp           ./ggml-sycl.cpp
 cp -rpv ../ggml/src/ggml-sycl.h             ./ggml-sycl.h
 cp -rpv ../ggml/src/ggml-vulkan.cpp         ./ggml-vulkan.cpp

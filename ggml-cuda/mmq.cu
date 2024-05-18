@@ -1735,8 +1735,7 @@ static void ggml_mul_mat_q4_0_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -1780,8 +1779,7 @@ static void ggml_mul_mat_q4_1_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -1825,8 +1823,7 @@ static void ggml_mul_mat_q5_0_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -1870,8 +1867,7 @@ static void ggml_mul_mat_q5_1_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -1915,8 +1911,7 @@ static void ggml_mul_mat_q8_0_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -1960,8 +1955,7 @@ static void ggml_mul_mat_q2_K_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -2007,8 +2001,7 @@ static void ggml_mul_mat_q3_K_q8_1_cuda(
 
 #if QK_K == 256
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -2053,8 +2046,7 @@ static void ggml_mul_mat_q4_K_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -2098,8 +2090,7 @@ static void ggml_mul_mat_q5_K_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;
@@ -2143,8 +2134,7 @@ static void ggml_mul_mat_q6_K_q8_1_cuda(
     const void * vx, const void * vy, float * dst, const int ncols_x, const int nrows_x,
     const int ncols_y, const int nrows_y, const int nrows_dst, cudaStream_t stream) {
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
     const int compute_capability = ggml_cuda_info().devices[id].cc;
 
     int mmq_x, mmq_y, nwarps;

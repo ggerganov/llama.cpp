@@ -4,6 +4,7 @@
 #
 from __future__ import annotations
 
+import logging
 import os
 from collections import OrderedDict
 from typing import Any, Literal, NamedTuple, TypeVar, Union
@@ -27,6 +28,7 @@ from gguf.constants import (
     GGUFValueType,
 )
 
+logger = logging.getLogger(__name__)
 
 READER_SUPPORTED_VERSIONS = [2, GGUF_VERSION]
 
@@ -63,7 +65,7 @@ class ReaderTensor(NamedTuple):
 
 class GGUFReader:
     # I - same as host, S - swapped
-    byte_order: Literal['I' | 'S'] = 'I'
+    byte_order: Literal['I'] | Literal['S'] = 'I'
     alignment: int = GGUF_DEFAULT_ALIGNMENT
 
     # Note: Internal helper, API may change.
@@ -81,7 +83,7 @@ class GGUFReader:
         GGUFValueType.BOOL:    np.bool_,
     }
 
-    def __init__(self, path: os.PathLike[str] | str, mode: Literal['r' | 'r+' | 'c'] = 'r'):
+    def __init__(self, path: os.PathLike[str] | str, mode: Literal['r'] | Literal['r+'] | Literal['c'] = 'r'):
         self.data = np.memmap(path, mode = mode)
         offs = 0
         if self._get(offs, np.uint32, override_order = '<')[0] != GGUF_MAGIC:
@@ -126,7 +128,7 @@ class GGUFReader:
         return self.tensors[idx]
 
     def _get(
-        self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I' | 'S' | '<'] = None,
+        self, offset: int, dtype: npt.DTypeLike, count: int = 1, override_order: None | Literal['I'] | Literal['S'] | Literal['<'] = None,
     ) -> npt.NDArray[Any]:
         count = int(count)
         itemsize = int(np.empty([], dtype = dtype).itemsize)
@@ -142,7 +144,7 @@ class GGUFReader:
             # TODO: add option to generate error on duplicate keys
             # raise KeyError(f'Duplicate {field.name} already in list at offset {field.offset}')
 
-            print(f'Warning: Duplicate key {field.name} at offset {field.offset}')
+            logger.warning(f'Duplicate key {field.name} at offset {field.offset}')
             self.fields[field.name + '_{}'.format(field.offset)] = field
         else:
             self.fields[field.name] = field
@@ -248,7 +250,7 @@ class GGUFReader:
                 raise ValueError(f'Found duplicated tensor with name {tensor_name}')
             tensor_names.add(tensor_name)
             ggml_type = GGMLQuantizationType(raw_dtype[0])
-            n_elems = np.prod(dims)
+            n_elems = int(np.prod(dims))
             block_size, type_size = GGML_QUANT_SIZES[ggml_type]
             n_bytes = n_elems * type_size // block_size
             data_offs = int(start_offs + offset_tensor[0])
