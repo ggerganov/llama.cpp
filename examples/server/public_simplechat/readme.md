@@ -9,8 +9,11 @@ This simple web frontend, allows triggering/testing the server's /completions or
 in a simple way with minimal code from a common code base. And also allows trying to maintain a basic back
 and forth chatting to an extent.
 
+User can set a system prompt, as well as try and chat with the model over a series of back and forth chat
+messages.
+
 NOTE: Given that the idea is for basic minimal testing, it doesnt bother with any model context length and
-culling of old messages from the chat. Also currently I havent added input for a system prompt, but may add it.
+culling of old messages from the chat.
 
 NOTE: It doesnt set any parameters other than temperature for now. However if someone wants they can update
 the js file as needed.
@@ -37,4 +40,12 @@ Once inside
   * the user is not allowed to enter any fresh query during this time.
   * the user input box will be disabled and a working message will be shown in it.
 * just refresh the page, to reset wrt the chat history and or system prompt and start afresh.
+
+
+## Devel note
+
+Sometimes the browser may be stuborn with caching of the file, so your updates to html/css/js
+may not be visible. Also remember that just refreshing/reloading page in browser or for that
+matter clearing site data, dont directly override site caching in all cases. Worst case you may
+have to change port.
 
