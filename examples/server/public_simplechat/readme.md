@@ -32,9 +32,14 @@ Open this simple web front end from your local browser as noted in the message p
 
 Once inside
 * Select between chat and completion mode. By default it is set to chat mode.
-* If you want to provide a system prompt, then enter it first, before entering any user query.
-  * you cant change the system prompt, after it is has been submitted once along with user query.
-  * you cant set a system prompt, after you have submitted any user query
+* If you want to provide a system prompt, then ideally enter it first, before entering any user query.
+  * if handle_systemprompt_begin is used
+    * you cant change the system prompt, after it is has been submitted once along with user query.
+    * you cant set a system prompt, after you have submitted any user query
+  * if handle_systemprompt_anytime is used
+    * one can change the system prompt any time during chat, by changing the contents of system prompt.
+    * inturn the updated/changed system prompt will be inserted into the chat session.
+    * this allows for the subsequent user chatting to be driven by the new system prompt set above.
 * Enter your query and either press enter or click on the submit button
 * Wait for the logic to communicate with the server and get the response.
   * the user is not allowed to enter any fresh query during this time.
@@ -54,3 +59,5 @@ restoring of those across browser usage sessions, can be woven around the Simple
 its instances relatively easily, however given the current goal of keeping this simple, it has
 not been added, for now.
 
+By switching between handle_systemprompt_begin/anytime, one can control whether one can change
+the system prompt, anytime during the conversation or only at the beginning.
