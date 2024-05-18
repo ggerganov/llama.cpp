@@ -337,7 +337,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
         return;
     }
 
-    assert(false);
+    throw std::runtime_error("At least one of min_value or max_value must be set");
 }
 
 class SchemaConverter {
