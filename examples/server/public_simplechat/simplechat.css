@@ -1,0 +1,23 @@
+/**
+ * the styling of the simplechat web frontend
+ * by Humans for All
+ */
+
+ .heading {
+    background-color: lightgray;
+}
+.role-system {
+    background-color: lightblue;
+}
+.role-user {
+    background-color: lightgray;
+}
+.wideinput {
+    width: 90vw;
+}
+.float-right {
+    float: right;
+}
+* {
+    margin: 0.4vh;
+}
