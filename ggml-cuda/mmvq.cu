@@ -89,8 +89,7 @@ static void mul_mat_vec_q_cuda(
     GGML_ASSERT(ncols_x % qk == 0);
     GGML_ASSERT(ncols_y <= MMVQ_MAX_BATCH_SIZE);
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
 
     int64_t nwarps = 1;
     int64_t rows_per_cuda_block = 1;
@@ -328,8 +327,7 @@ void ggml_cuda_op_mul_mat_vec_q(
 
     const int64_t ne0 = dst->ne[0];
 
-    int id;
-    CUDA_CHECK(cudaGetDevice(&id));
+    int id = ggml_cuda_get_device();
 
     // the main device has a larger memory buffer to hold the results from all GPUs
     // nrows_dst == nrows of the matrix that the kernel writes into

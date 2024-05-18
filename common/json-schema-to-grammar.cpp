@@ -235,7 +235,7 @@ private:
                     if (literal.empty()) {
                         return false;
                     }
-                    ret.push_back(std::make_pair(literal, true));
+                    ret.emplace_back(literal, true);
                     literal.clear();
                     return true;
                 };
@@ -261,7 +261,7 @@ private:
             while (i < length) {
                 char c = sub_pattern[i];
                 if (c == '.') {
-                    seq.push_back(std::make_pair(get_dot(), false));
+                    seq.emplace_back(get_dot(), false);
                     i++;
                 } else if (c == '(') {
                     i++;
@@ -270,7 +270,7 @@ private:
                             _warnings.push_back("Unsupported pattern syntax");
                         }
                     }
-                    seq.push_back(std::make_pair("(" + to_rule(transform()) + ")", false));
+                    seq.emplace_back("(" + to_rule(transform()) + ")", false);
                 } else if (c == ')') {
                     i++;
                     if (start > 0 && sub_pattern[start - 1] != '(') {
@@ -294,9 +294,9 @@ private:
                     }
                     square_brackets += ']';
                     i++;
-                    seq.push_back(std::make_pair(square_brackets, false));
+                    seq.emplace_back(square_brackets, false);
                 } else if (c == '|') {
-                    seq.push_back(std::make_pair("|", false));
+                    seq.emplace_back("|", false);
                     i++;
                 } else if (c == '*' || c == '+' || c == '?') {
                     seq.back() = std::make_pair(to_rule(seq.back()) + c, false);
@@ -379,7 +379,7 @@ private:
                         }
                     }
                     if (!literal.empty()) {
-                        seq.push_back(std::make_pair(literal, true));
+                        seq.emplace_back(literal, true);
                     }
                 }
             }
