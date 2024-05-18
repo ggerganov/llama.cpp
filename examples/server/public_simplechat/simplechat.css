@@ -18,6 +18,10 @@
 .float-right {
     float: right;
 }
+#chat {
+    height: 75vh;
+    overflow: scroll;
+}
 * {
     margin: 0.4vh;
 }
