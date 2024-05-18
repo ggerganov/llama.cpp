@@ -4,6 +4,8 @@ import pathlib
 
 import requests
 
+from .constants import TokenizerType
+
 
 class HuggingFaceHub:
     def __init__(self, auth_token: None | str, logger: None | logging.Logger):
@@ -51,7 +53,8 @@ class HuggingFaceHub:
         return f"{self._base_url}/{repo}/resolve/main/{file}"
 
     def download_file(self, repo: str, file: str):
-        endpoint = self.resolve_path(repo, file)
-        response = self._session.get(endpoint, headers=self.headers)
+        resolve_path = self.resolve_path(repo, file)
+        response = self._session.get(resolve_path, headers=self.headers)
+        self.logger.info(f"Response status was {response.status_code}")
         response.raise_for_status()
         return response
