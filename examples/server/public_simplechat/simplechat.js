@@ -54,7 +54,7 @@ class SimpleChat {
             last = entry;
         }
         if (last !== undefined) {
-            last.scrollIntoView(true);
+            last.scrollIntoView(false);
         }
     }
 
@@ -178,6 +178,7 @@ async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
     if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
         gChat.xchat.length = 0;
     }
+    inputUser.focus();
 
 }
 
