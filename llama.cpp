@@ -12816,7 +12816,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
                         if (special_token_rtrim) {
-                            uint num_whitespaces = 0;
+                            size_t num_whitespaces = 0;
                             while (isspace(raw_text[num_whitespaces])) {
                                 num_whitespaces++;
                             }
