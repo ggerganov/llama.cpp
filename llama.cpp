@@ -6114,9 +6114,7 @@ static bool llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
                     }
                 } break;
-        case LLM_ARCH_OPENELM:
-        {
-            {
+            case LLM_ARCH_OPENELM:
                 {
                     std::vector<int> num_kv_heads = {3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5};
                     std::vector<int> num_query_heads = {12, 12, 12, 12, 12, 16, 16, 16, 16, 16, 16, 16, 20, 20, 20, 20};
@@ -6157,9 +6155,7 @@ static bool llm_load_tensors(
                         layer.ffn_up = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP, "weight", i), { n_embd, 2 * ffn_inter });
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), { ffn_inter, n_embd });
                     }
-                }
-            }
-        } break;
+                } break;
             default:
                 throw std::runtime_error("unknown architecture");
         }
