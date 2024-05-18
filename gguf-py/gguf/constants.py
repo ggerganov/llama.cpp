@@ -781,11 +781,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     ],
 }
 
+
 #
 # types
 #
-
-
 class TokenType(IntEnum):
     NORMAL       = 1
     UNKNOWN      = 2
