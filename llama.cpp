@@ -10931,7 +10931,7 @@ struct llm_build_context {
 
         bool is_lite = (hparams.n_layer == 27);
 
-        const float mscale = hparams.mscale_all_dim * 1.0f + 0.1f * logf(1.0f / freq_scale);
+        const float mscale = 1.0f + 0.1f * hparams.mscale_all_dim * logf(1.0f / freq_scale);
         const float kq_scale = 1.0f*mscale*mscale/sqrtf(float(hparams.n_embd_head_k));
 
         // kept original names of these parameters from HF transformers code for clarity
@@ -11107,10 +11107,8 @@ struct llm_build_context {
                             LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                     cb(ffn_shexp, "ffn_shexp", il);
     
-                    moe_out = ggml_add(ctx0, moe_out, ffn_shexp);
-                    cb(moe_out, "ffn_out", il);
-    
-                    cur = moe_out;
+                    cur = ggml_add(ctx0, moe_out, ffn_shexp);
+                    cb(cur, "ffn_out", il);
                 }
             }
 
