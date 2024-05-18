@@ -2395,6 +2395,50 @@ class JinaBertV2Model(BertModel):
         self.gguf_writer.add_add_eos_token(True)
 
 
+@Model.register("OpenELMForCausalLM")
+class OpenELMModel(Model):
+    model_arch = gguf.MODEL_ARCH.OPENELM
+
+    # Copied from LlamaModel
+    def set_vocab(self):
+        try:
+            self. _set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_llama_hf()
+
+    def set_gguf_parameters(self):
+        # TODO: Look closer at these
+
+        self.gguf_writer.add_name("OpenELM")
+        self.block_count = self.find_hparam(["num_transformer_layers"])
+        self.gguf_writer.add_layer_norm_eps(1e-5)
+        # https://huggingface.co/apple/OpenELM-270M-Instruct/blob/c401df2/modeling_openelm.py#L30
+        self.gguf_writer.add_layer_norm_rms_eps(1e-6)
+        n_embd = self.find_hparam(["model_dim"])
+        self.gguf_writer.add_embedding_length(n_embd)
+        head_dim = self.find_hparam(["head_dim"])
+        n_head = n_embd // head_dim
+        rot_pct = 1.0
+        self.gguf_writer.add_context_length(self.find_hparam(["max_context_length"]))
+        self.gguf_writer.add_block_count(self.block_count)
+        self.gguf_writer.add_head_count_kv(n_head*10)
+        self.gguf_writer.add_head_count(n_head*10)
+        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_feed_forward_length(0) # dynamically calculated
+
+    def find_hparam(self, keys: Iterable[str], optional: bool = False) -> Any:
+        # TODO: Read configuration!
+        if "n_layers" in keys:
+            return 16 # num_transformer_layers
+        if "hidden_size" in keys:
+            return 1280 # model_dim
+        if "num_attention_heads" in keys:
+            return 64 # head_dim
+
+        return super().find_hparam(keys, optional)
+
+
 ###### CONVERSION LOGIC ######
 
 
