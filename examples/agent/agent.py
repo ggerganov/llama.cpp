@@ -109,10 +109,11 @@ def completion_with_tool_usage(
                 if content:
                     print(f'💭 {content}')
 
-                pretty_call = f'{tool_call.function.name}({", ".join(f"{k}={v.model_dump_json() if isinstance(v, BaseModel) else json.dumps(v)}" for k, v in tool_call.function.arguments.items())})'
+                args = json.loads(tool_call.function.arguments)
+                pretty_call = f'{tool_call.function.name}({", ".join(f"{k}={v.model_dump_json() if isinstance(v, BaseModel) else json.dumps(v)}" for k, v in args.items())})'
                 sys.stdout.write(f'⚙️  {pretty_call}')
                 sys.stdout.flush()
-                tool_result = tool_map[tool_call.function.name](**tool_call.function.arguments)
+                tool_result = tool_map[tool_call.function.name](**args)
                 sys.stdout.write(f" → {tool_result}\n")
                 messages.append(Message(
                     tool_call_id=tool_call.id,
