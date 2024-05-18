@@ -183,8 +183,20 @@ class HFTokenizerRequest:
             tokenizer = AutoTokenizer.from_pretrained(filepath, trust_remote=True)
             mapping.update(model)
             mapping['checksum'] = sha256(str(tokenizer.vocab).encode()).hexdigest()
-            self.logger.info(f"Hashed {model['repo']} as {mapping['checksum']}")
+            self.logger.info(f"Hashed {mapping['repo']} as {mapping['checksum']}")
             checksums.append(mapping)
 
         with open(f"{self.local_path.parent}/checksums.json") as file:
             json.dump(checksums, file)
+
+    def log_pre_tokenizer_info(self) -> None:
+        for model in self.models:
+            with open(f"{self.local_path}/{model['repo']}/tokenizer.json", "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                self.logger.info(f"normalizer: {json.dumps(cfg['normalizer'], indent=4)}")
+                self.logger.info(f"pre_tokenizer: {json.dumps(cfg['pre_tokenizer'], indent=4)}")
+                if "type" in cfg["model"]:
+                    self.logger.info(f"type: {json.dumps(cfg['model']['type'])}")
+                if "ignore_merges" in cfg["model"]:
+                    self.logger.info(f"ignore_merges: {json.dumps(cfg['model']['ignore_merges'], indent=4)}")
+            self.logger.info("")
