@@ -37,11 +37,14 @@ class Keys:
         CONTEXT_LENGTH        = "{arch}.context_length"
         EMBEDDING_LENGTH      = "{arch}.embedding_length"
         BLOCK_COUNT           = "{arch}.block_count"
+        LEADING_DENSE_BLOCK_COUNT = "{arch}.leading_dense_block_count"
         FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
+        EXPERT_FEED_FORWARD_LENGTH = "{arch}.expert_feed_forward_length"
         USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
         TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
         EXPERT_COUNT          = "{arch}.expert_count"
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
+        EXPERT_SHARED_COUNT   = "{arch}.expert_shared_count"
         POOLING_TYPE          = "{arch}.pooling_type"
         LOGIT_SCALE           = "{arch}.logit_scale"
 
@@ -55,6 +58,8 @@ class Keys:
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
         CAUSAL            = "{arch}.attention.causal"
+        Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
+        KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
 
     class Rope:
         DIMENSION_COUNT      = "{arch}.rope.dimension_count"

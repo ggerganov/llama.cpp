@@ -288,11 +288,14 @@ enum llm_kv {
     LLM_KV_CONTEXT_LENGTH,
     LLM_KV_EMBEDDING_LENGTH,
     LLM_KV_BLOCK_COUNT,
+    LLM_KV_LEADING_DENSE_BLOCK_COUNT,
     LLM_KV_FEED_FORWARD_LENGTH,
+    LLM_KV_EXPERT_FEED_FORWARD_LENGTH,
     LLM_KV_USE_PARALLEL_RESIDUAL,
     LLM_KV_TENSOR_DATA_LAYOUT,
     LLM_KV_EXPERT_COUNT,
     LLM_KV_EXPERT_USED_COUNT,
+    LLM_KV_EXPERT_SHARED_COUNT,
     LLM_KV_POOLING_TYPE,
     LLM_KV_LOGIT_SCALE,
 
@@ -305,6 +308,8 @@ enum llm_kv {
     LLM_KV_ATTENTION_LAYERNORM_EPS,
     LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,
     LLM_KV_ATTENTION_CAUSAL,
+    LLM_KV_ATTENTION_Q_LORA_RANK,
+    LLM_KV_ATTENTION_KV_LORA_RANK,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
@@ -365,11 +370,14 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"        },
     { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"      },
     { LLM_KV_BLOCK_COUNT,                   "%s.block_count"           },
+    { LLM_KV_LEADING_DENSE_BLOCK_COUNT,     "%s.leading_dense_block_count" },
     { LLM_KV_FEED_FORWARD_LENGTH,           "%s.feed_forward_length"   },
+    { LLM_KV_EXPERT_FEED_FORWARD_LENGTH,    "%s.expert_feed_forward_length" },
     { LLM_KV_USE_PARALLEL_RESIDUAL,         "%s.use_parallel_residual" },
     { LLM_KV_TENSOR_DATA_LAYOUT,            "%s.tensor_data_layout"    },
     { LLM_KV_EXPERT_COUNT,                  "%s.expert_count"          },
     { LLM_KV_EXPERT_USED_COUNT,             "%s.expert_used_count"     },
+    { LLM_KV_EXPERT_SHARED_COUNT,           "%s.expert_shared_count"   },
     { LLM_KV_POOLING_TYPE ,                 "%s.pooling_type"          },
     { LLM_KV_LOGIT_SCALE,                   "%s.logit_scale"           },
 
@@ -382,6 +390,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_LAYERNORM_EPS,       "%s.attention.layer_norm_epsilon"     },
     { LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,   "%s.attention.layer_norm_rms_epsilon" },
     { LLM_KV_ATTENTION_CAUSAL,              "%s.attention.causal"                 },
+    { LLM_KV_ATTENTION_Q_LORA_RANK,         "%s.attention.q_lora_rank"            },
+    { LLM_KV_ATTENTION_KV_LORA_RANK,        "%s.attention.kv_lora_rank"           },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
@@ -1803,6 +1813,12 @@ struct llama_hparams {
     uint32_t n_expert_used = 0;
     uint32_t n_vocab_type = 0; // for BERT-style token types
 
+    uint32_t n_leading_dense_layer = 0;
+    uint32_t n_lora_q = 0;
+    uint32_t n_lora_kv = 0;
+    uint32_t n_expert_ff = 0;
+    uint32_t n_expert_shared = 0;
+
     float f_norm_eps;
     float f_norm_rms_eps;
 
@@ -1841,6 +1857,12 @@ struct llama_hparams {
         if (this->n_ff          != other.n_ff)          return true;
         if (this->n_expert      != other.n_expert)      return true;
         if (this->n_expert_used != other.n_expert_used) return true;
+
+        if (this->n_leading_dense_layer != other.n_leading_dense_layer) return true;
+        if (this->n_lora_q              != other.n_lora_q)              return true;
+        if (this->n_lora_kv             != other.n_lora_kv)             return true;
+        if (this->n_expert_ff           != other.n_expert_ff)           return true;
+        if (this->n_expert_shared       != other.n_expert_shared)       return true;
 
         if (this->rope_finetuned  != other.rope_finetuned)  return true;
         if (this->n_yarn_orig_ctx != other.n_yarn_orig_ctx) return true;
@@ -4306,6 +4328,12 @@ static void llm_load_hparams(
         case LLM_ARCH_DEEPSEEK2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT, hparams.n_leading_dense_layer);
+                ml.get_key(LLM_KV_ATTENTION_Q_LORA_RANK, hparams.n_lora_q);
+                ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK, hparams.n_lora_kv);
+                ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_expert_ff);
+                ml.get_key(LLM_KV_EXPERT_SHARED_COUNT, hparams.n_expert_shared);
+
                 model.type = e_model::MODEL_UNKNOWN;
             } break;
         default: (void)0;
@@ -6107,16 +6135,12 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_DEEPSEEK2:
                 {
-                    // TODO maybe move some of these to hparams
-                    const uint32_t n_shared_experts = 2;
-                    const uint32_t moe_intermediate_size = 1536;
-                    const uint32_t q_lora_rank = 1536;
-                    const uint32_t kv_lora_rank = 512;
-                    const uint32_t first_k_dense_replace = 1;
-
                     // kept original names of these parameters from HF transformers code for clarity
                     const uint32_t qk_rope_head_dim = hparams.n_rot;
                     const uint32_t qk_nope_head_dim = hparams.n_embd_head_k - hparams.n_rot;
+                    const uint32_t q_lora_rank = hparams.n_lora_q;
+                    const uint32_t kv_lora_rank = hparams.n_lora_kv;
+                    const uint32_t moe_intermediate_size = hparams.n_expert_ff;
 
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
@@ -6144,7 +6168,7 @@ static bool llm_load_tensors(
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
 
-                        if ((uint32_t) i < first_k_dense_replace) {
+                        if ((uint32_t) i < hparams.n_leading_dense_layer) {
                             layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
                             layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                             layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
@@ -6160,9 +6184,9 @@ static bool llm_load_tensors(
                             layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {  n_embd, moe_intermediate_size, n_expert});
 
                             // Shared expert branch
-                            layer.ffn_gate_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SHEXP, "weight", i), {n_embd,   moe_intermediate_size * n_shared_experts});
-                            layer.ffn_down_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SHEXP, "weight", i), {  moe_intermediate_size * n_shared_experts, n_embd});
-                            layer.ffn_up_shexp   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SHEXP,   "weight", i), {n_embd,   moe_intermediate_size * n_shared_experts});
+                            layer.ffn_gate_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SHEXP, "weight", i), {n_embd,   moe_intermediate_size * hparams.n_expert_shared});
+                            layer.ffn_down_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SHEXP, "weight", i), {  moe_intermediate_size * hparams.n_expert_shared, n_embd});
+                            layer.ffn_up_shexp   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SHEXP,   "weight", i), {n_embd,   moe_intermediate_size * hparams.n_expert_shared});
                         }
                     }
                 } break;
@@ -10893,13 +10917,10 @@ struct llm_build_context {
         // mutable variable, needed during the last layer of the computation to skip unused tokens
         int32_t n_tokens = this->n_tokens;
 
-        // TODO maybe move some of these to hparams
-        const uint32_t first_k_dense_replace = 1;
-        const uint32_t kv_lora_rank = 512;
-
         // kept original names of these parameters from HF transformers code for clarity
         const uint32_t qk_rope_head_dim = hparams.n_rot;
         const uint32_t qk_nope_head_dim = hparams.n_embd_head_k - hparams.n_rot;
+        const uint32_t kv_lora_rank = hparams.n_lora_kv;
 
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
@@ -11022,7 +11043,7 @@ struct llm_build_context {
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
             cb(ffn_inp, "ffn_inp", il);
 
-            if ((uint32_t) il < first_k_dense_replace) {
+            if ((uint32_t) il < hparams.n_leading_dense_layer) {
                 cur = llm_build_norm(ctx0, ffn_inp, hparams,
                         model.layers[il].ffn_norm, NULL,
                         LLM_NORM_RMS, cb, il);

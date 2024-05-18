@@ -376,8 +376,14 @@ class GGUFWriter:
     def add_block_count(self, length: int) -> None:
         self.add_uint32(Keys.LLM.BLOCK_COUNT.format(arch=self.arch), length)
 
+    def add_leading_dense_block_count(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.LEADING_DENSE_BLOCK_COUNT.format(arch=self.arch), length)
+
     def add_feed_forward_length(self, length: int) -> None:
         self.add_uint32(Keys.LLM.FEED_FORWARD_LENGTH.format(arch=self.arch), length)
+
+    def add_expert_feed_forward_length(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
 
     def add_parallel_residual(self, use: bool) -> None:
         self.add_bool(Keys.LLM.USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
@@ -409,6 +415,9 @@ class GGUFWriter:
     def add_expert_used_count(self, count: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_USED_COUNT.format(arch=self.arch), count)
 
+    def add_expert_shared_count(self, count: int) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_SHARED_COUNT.format(arch=self.arch), count)
+
     def add_layer_norm_eps(self, value: float) -> None:
         self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
 
@@ -417,6 +426,12 @@ class GGUFWriter:
 
     def add_causal_attention(self, value: bool) -> None:
         self.add_bool(Keys.Attention.CAUSAL.format(arch=self.arch), value)
+
+    def add_q_lora_rank(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.Q_LORA_RANK.format(arch=self.arch), length)
+
+    def add_kv_lora_rank(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.KV_LORA_RANK.format(arch=self.arch), length)
 
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)

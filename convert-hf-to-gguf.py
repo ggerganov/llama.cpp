@@ -2401,7 +2401,16 @@ class DeepseekV2Model(Model):
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         hparams = self.hparams
+
+        self.gguf_writer.add_leading_dense_block_count(hparams["first_k_dense_replace"])
         self.gguf_writer.add_vocab_size(hparams["vocab_size"])
+        self.gguf_writer.add_q_lora_rank(hparams["q_lora_rank"])
+        self.gguf_writer.add_kv_lora_rank(hparams["kv_lora_rank"])
+        self.gguf_writer.add_key_length(hparams["qk_nope_head_dim"] + hparams["qk_rope_head_dim"])
+        self.gguf_writer.add_value_length(hparams["v_head_dim"])
+        self.gguf_writer.add_expert_feed_forward_length(hparams["moe_intermediate_size"])
+        self.gguf_writer.add_expert_count(hparams["n_routed_experts"])
+        self.gguf_writer.add_expert_shared_count(hparams["n_shared_experts"])
         self.gguf_writer.add_rope_dimension_count(hparams["qk_rope_head_dim"])
 
         if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
@@ -2409,10 +2418,6 @@ class DeepseekV2Model(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.YARN)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
                 self.gguf_writer.add_rope_scaling_orig_ctx_len(self.hparams["rope_scaling"]["original_max_position_embeddings"])
-
-        self.gguf_writer.add_key_length(hparams["qk_nope_head_dim"] + hparams["qk_rope_head_dim"])
-        self.gguf_writer.add_value_length(hparams["v_head_dim"])
-        self.gguf_writer.add_expert_count(hparams["n_routed_experts"])
 
     _experts: list[dict[str, Tensor]] | None = None
 
