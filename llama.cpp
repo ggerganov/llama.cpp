@@ -4464,6 +4464,9 @@ static void llm_load_vocab(
                 tokenizer_pre == "qwen2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_QWEN2;
             } else if (
+                tokenizer_pre == "stablelm2") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_STABLELM2;
+            } else if (
                 tokenizer_pre == "olmo") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_OLMO;
             } else if (
@@ -12363,6 +12366,7 @@ struct llm_tokenizer_bpe {
                             "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                         });
                         break;
+                    case LLAMA_VOCAB_PRE_TYPE_STABLELM2:
                     case LLAMA_VOCAB_PRE_TYPE_QWEN2:
                         word_collection = unicode_regex_split(text, {
                             // original regex from tokenizer.json
