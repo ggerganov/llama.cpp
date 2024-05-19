@@ -464,7 +464,7 @@ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
     const int32_t precision = KQV->op_params[2];
 
-    if (ggml_is_quantized(K->type) || ggml_is_quantized(V->type)) {
+    if (true || ggml_is_quantized(K->type) || ggml_is_quantized(V->type)) {
         ggml_cuda_flash_attn_ext_tile_f16(ctx, dst);
         return;
     }
