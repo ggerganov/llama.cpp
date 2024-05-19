@@ -1528,24 +1528,6 @@ static inline void __sse_f16x4_store(ggml_fp16_t *x, __m128 y) {
 #define GGML_SIMD
 
 // F32 LASX
-
-typedef union
-{
-    int32_t i;
-    float f;
-} FloatInt;
-/* float type data load instructions */
-static __m128 __lsx_vreplfr2vr_s(float val)
-{
-    FloatInt fi_tmpval = {.f = val};
-    return (__m128)__lsx_vreplgr2vr_w(fi_tmpval.i);
-}
-
-static __m256 __lasx_xvreplfr2vr_s(float val)
-{
-    FloatInt fi_tmpval = {.f = val};
-    return (__m256)__lasx_xvreplgr2vr_w(fi_tmpval.i);
-}
 #define GGML_F32_STEP 32
 #define GGML_F32_EPR  8
 
@@ -1597,7 +1579,7 @@ do {                                                              \
 #define GGML_F32Cx8_ZERO    (__m256)__lasx_xvldi(0)
 #define GGML_F32Cx8_SET1(x) (__m256)__lasx_xvreplgr2vr_w((x))
 
-static inline __m256 __avx_f32cx8_load(ggml_fp16_t *x) {
+static inline __m256 __lasx_f32cx8_load(ggml_fp16_t *x) {
     float tmp[8];
 
     for (int i = 0; i < 8; i++) {
@@ -1606,7 +1588,7 @@ static inline __m256 __avx_f32cx8_load(ggml_fp16_t *x) {
 
     return (__m256)__lasx_xvld(tmp, 0);
 }
-static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
+static inline void __lasx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
     float arr[8];
 
     __lasx_xvst(y, arr, 0);
@@ -1614,8 +1596,8 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
     for (int i = 0; i < 8; i++)
         x[i] = GGML_FP32_TO_FP16(arr[i]);
 }
-#define GGML_F32Cx8_LOAD(x)     __avx_f32cx8_load(x)
-#define GGML_F32Cx8_STORE(x, y) __avx_f32cx8_store(x, y)
+#define GGML_F32Cx8_LOAD(x)     __lasx_f32cx8_load(x)
+#define GGML_F32Cx8_STORE(x, y) __lasx_f32cx8_store(x, y)
 
 #define GGML_F32Cx8_FMA         GGML_F32x8_FMA
 #define GGML_F32Cx8_ADD         __lasx_xvfadd_s
@@ -1631,7 +1613,6 @@ static inline void __avx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F16_VEC_ADD            GGML_F32Cx8_ADD
 #define GGML_F16_VEC_MUL            GGML_F32Cx8_MUL
 #define GGML_F16_VEC_REDUCE         GGML_F32Cx8_REDUCE
-
 
 #elif defined(__loongarch_sx)
 

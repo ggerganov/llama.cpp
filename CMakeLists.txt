@@ -1132,7 +1132,7 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
         list(APPEND ARCH_FLAGS -mcpu=native -mtune=native)
         #TODO: Add  targets for Power8/Power9 (Altivec/VSX) and Power10(MMA) and query for big endian systems (ppc64/le/be)
     endif()
-elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "loongarch64")
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")
     message(STATUS "loongarch64 detected")
 
     list(APPEND ARCH_FLAGS -march=loongarch64)
