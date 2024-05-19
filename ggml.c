@@ -2076,7 +2076,7 @@ inline static float ggml_silu_f32(float x) {
     return x/(1.0f + expf(-x));
 }
 
-#if defined(__ARM_NEON)
+#if defined(__ARM_NEON) && defined(__aarch64__)
 
 // adapted from arm limited optimized routine
 // the maximum error is 1.45358 plus 0.5 ulps
@@ -2288,7 +2288,7 @@ static void ggml_vec_silu_f32(const int n, float * y, const float * x) {
     for (; i + 3 < n; i += 4) {
         _mm_storeu_ps(y + i, ggml_v_silu(_mm_loadu_ps(x + i)));
     }
-#elif defined(__ARM_NEON)
+#elif defined(__ARM_NEON) && defined(__aarch64__)
     for (; i + 3 < n; i += 4) {
         vst1q_f32(y + i, ggml_v_silu(vld1q_f32(x + i)));
     }
@@ -2335,7 +2335,7 @@ static ggml_float ggml_vec_soft_max_f32(const int n, float * y, const float * x,
 #endif
         sum += (ggml_float)_mm_cvtss_f32(val);
     }
-#elif defined(__ARM_NEON)
+#elif defined(__ARM_NEON) && defined(__aarch64__)
     for (; i + 3 < n; i += 4) {
         float32x4_t val = ggml_v_expf(vsubq_f32(vld1q_f32(x + i),
                                                 vdupq_n_f32(max)));

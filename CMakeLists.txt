@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)  # for add_link_options and implicit target directories.
+cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
 include(CheckIncludeFileCXX)
 
@@ -581,7 +581,7 @@ if (LLAMA_HIPBLAS)
     else()
         # Forward AMDGPU_TARGETS to CMAKE_HIP_ARCHITECTURES.
         if(AMDGPU_TARGETS AND NOT CMAKE_HIP_ARCHITECTURES)
-            set(CMAKE_HIP_ARCHITECTURES ${AMDGPU_ARGETS})
+            set(CMAKE_HIP_ARCHITECTURES ${AMDGPU_TARGETS})
         endif()
         cmake_minimum_required(VERSION 3.21)
         enable_language(HIP)
