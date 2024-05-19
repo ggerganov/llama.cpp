@@ -102,7 +102,6 @@ struct slot_params {
     bool stream       = true;
     bool cache_prompt = false; // remember the prompt to avoid reprocessing all prompt
 
-    uint32_t seed      = -1; // RNG seed
     int32_t  n_keep    =  0; // number of tokens to keep from initial prompt
     int32_t  n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
     int32_t  n_predict = -1; // new tokens to predict
@@ -1264,7 +1263,7 @@ struct server_context {
             {"n_ctx",                     slot.n_ctx},
             {"n_predict",                 slot.n_predict},
             {"model",                     params.model_alias},
-            {"seed",                      slot.params.seed},
+            {"seed",                      slot.sparams.seed},
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
