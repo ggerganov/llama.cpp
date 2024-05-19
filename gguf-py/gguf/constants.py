@@ -45,6 +45,7 @@ class Keys:
         EXPERT_COUNT          = "{arch}.expert_count"
         EXPERT_USED_COUNT     = "{arch}.expert_used_count"
         EXPERT_SHARED_COUNT   = "{arch}.expert_shared_count"
+        EXPERT_WEIGHTS_SCALE  = "{arch}.expert_weights_scale"
         POOLING_TYPE          = "{arch}.pooling_type"
         LOGIT_SCALE           = "{arch}.logit_scale"
 

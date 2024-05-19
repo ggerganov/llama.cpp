@@ -296,6 +296,7 @@ enum llm_kv {
     LLM_KV_EXPERT_COUNT,
     LLM_KV_EXPERT_USED_COUNT,
     LLM_KV_EXPERT_SHARED_COUNT,
+    LLM_KV_EXPERT_WEIGHTS_SCALE,
     LLM_KV_POOLING_TYPE,
     LLM_KV_LOGIT_SCALE,
 
@@ -378,6 +379,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_EXPERT_COUNT,                  "%s.expert_count"          },
     { LLM_KV_EXPERT_USED_COUNT,             "%s.expert_used_count"     },
     { LLM_KV_EXPERT_SHARED_COUNT,           "%s.expert_shared_count"   },
+    { LLM_KV_EXPERT_WEIGHTS_SCALE,          "%s.expert_weights_scale"  },
     { LLM_KV_POOLING_TYPE ,                 "%s.pooling_type"          },
     { LLM_KV_LOGIT_SCALE,                   "%s.logit_scale"           },
 
@@ -1819,6 +1821,7 @@ struct llama_hparams {
     uint32_t n_lora_kv = 0;
     uint32_t n_expert_ff = 0;
     uint32_t n_expert_shared = 0;
+    float    expert_weights_scale = 0.0;
 
     float f_norm_eps;
     float f_norm_rms_eps;
@@ -1881,6 +1884,7 @@ struct llama_hparams {
         if (!is_float_close(this->f_norm_rms_eps,        other.f_norm_rms_eps,        EPSILON)) return true;
         if (!is_float_close(this->rope_freq_base_train,  other.rope_freq_base_train,  EPSILON)) return true;
         if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
+        if (!is_float_close(this->expert_weights_scale,  other.expert_weights_scale,EPSILON)) return true;
 
         return false;
     }
@@ -4338,6 +4342,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK, hparams.n_lora_kv);
                 ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_expert_ff);
                 ml.get_key(LLM_KV_EXPERT_SHARED_COUNT, hparams.n_expert_shared);
+                ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE, hparams.expert_weights_scale);
 
                 model.type = e_model::MODEL_UNKNOWN;
             } break;
@@ -6659,6 +6664,8 @@ static struct ggml_tensor * llm_build_moe_ffn(
                     int64_t   n_expert_used,
             llm_ffn_op_type   type_op,
                        bool   norm_w,
+                       bool   scale_w,
+                      float   w_scale,
          const llm_build_cb & cb,
                         int   il) {
     int64_t n_embd = cur->ne[0];
@@ -6689,6 +6696,10 @@ static struct ggml_tensor * llm_build_moe_ffn(
         cb(weights, "ffn_moe_weights_norm", il);
 
         weights = ggml_reshape_3d(ctx, weights, 1, n_expert_used, n_tokens);
+    }
+    if (scale_w) {
+        weights = ggml_scale(ctx, weights, w_scale);
+        cb(weights, "ffn_moe_weights_scaled", il);
     }
 
     cur = ggml_reshape_3d(ctx, cur, n_embd, 1, n_tokens);
@@ -7306,6 +7317,7 @@ struct llm_build_context {
                         model.layers[il].ffn_down_exps,
                         n_expert, n_expert_used,
                         LLM_FFN_SILU, true,
+                        false, 0.0,
                         cb, il);
                 cb(cur, "ffn_moe_out", il);
             }
@@ -7787,6 +7799,7 @@ struct llm_build_context {
                     model.layers[il].ffn_down_exps,
                     n_expert, n_expert_used,
                     LLM_FFN_GELU, true,
+                    false, 0.0,
                     cb, il);
             cb(cur, "ffn_moe_out", il);
 
@@ -7930,6 +7943,7 @@ struct llm_build_context {
                     model.layers[il].ffn_down_exps,
                     n_expert, n_expert_used,
                     LLM_FFN_SILU, true,
+                    false, 0.0,
                     cb, il);
             cb(cur, "ffn_moe_out", il);
 
@@ -9275,6 +9289,7 @@ struct llm_build_context {
                         model.layers[il].ffn_down_exps,
                         n_expert, n_expert_used,
                         LLM_FFN_SILU, false,
+                        false, 0.0,
                         cb, il);
             cb(cur, "ffn_moe_out", il);
 
@@ -11093,7 +11108,8 @@ struct llm_build_context {
                             model.layers[il].ffn_gate_exps,
                             model.layers[il].ffn_down_exps,
                             n_expert, n_expert_used,
-                            LLM_FFN_SILU, true,
+                            LLM_FFN_SILU, false,
+                            true, hparams.expert_weights_scale,
                             cb, il);
                 cb(moe_out, "ffn_moe_out", il);
     
