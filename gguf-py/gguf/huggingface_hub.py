@@ -172,7 +172,7 @@ class HFVocabRequest(HFHubBase):
             response = self.hub.download_file(resolve_url)
             self.hub.write_file(response.content, filepath)
         except requests.exceptions.HTTPError as e:
-            self.logger.error(f"Failed to download tokenizer {model['name']}: {e}")
+            self.logger.error(f"Failed to download tokenizer {model['repo']}: {e}")
 
     def download_models(self) -> None:
         for model in self.models:
@@ -190,26 +190,36 @@ class HFVocabRequest(HFHubBase):
         for model in self.models:
             mapping = {}
             filepath = f"{self.model_path}/{model['repo']}"
-            tokenizer = AutoTokenizer.from_pretrained(filepath, trust_remote=True)
+
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(filepath, trust_remote=True)
+            except OSError as e:
+                self.logger.error(f"Failed to hash tokenizer {model['repo']}: {e}")
+                continue
+
             mapping.update(model)
             mapping['checksum'] = sha256(str(tokenizer.vocab).encode()).hexdigest()
             self.logger.info(f"Hashed {mapping['repo']} as {mapping['checksum']}")
             checksums.append(mapping)
 
-        with open(f"{self.model_path.parent}/checksums.json") as file:
+        with open(f"{self.model_path}/checksums.json", mode="w") as file:
             json.dump(checksums, file)
 
     def log_pre_tokenizer_info(self) -> None:
         for model in self.models:
-            with open(f"{self.model_path}/{model['repo']}/tokenizer.json", "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-                self.logger.info(f"normalizer: {json.dumps(cfg['normalizer'], indent=4)}")
-                self.logger.info(f"pre_tokenizer: {json.dumps(cfg['pre_tokenizer'], indent=4)}")
-                if "type" in cfg["model"]:
-                    self.logger.info(f"type: {json.dumps(cfg['model']['type'])}")
-                if "ignore_merges" in cfg["model"]:
-                    self.logger.info(f"ignore_merges: {json.dumps(cfg['model']['ignore_merges'], indent=4)}")
-            self.logger.info("")
+            try:
+                with open(f"{self.model_path}/{model['repo']}/tokenizer.json", "r", encoding="utf-8") as f:
+                    self.logger.info(f"Start: {model['repo']}")
+                    cfg = json.load(f)
+                    self.logger.info(f"normalizer: {json.dumps(cfg['normalizer'], indent=4)}")
+                    self.logger.info(f"pre_tokenizer: {json.dumps(cfg['pre_tokenizer'], indent=4)}")
+                    if "type" in cfg["model"]:
+                        self.logger.info(f"type: {json.dumps(cfg['model']['type'])}")
+                    if "ignore_merges" in cfg["model"]:
+                        self.logger.info(f"ignore_merges: {json.dumps(cfg['model']['ignore_merges'], indent=4)}")
+                self.logger.info(f"End: {model['repo']}")
+            except FileNotFoundError as e:
+                self.logger.error(f"Failed to log tokenizer {model['repo']}: {e}")
 
 
 # TODO:
