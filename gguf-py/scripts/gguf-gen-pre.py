@@ -151,13 +151,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("hf_auth_token", help="A huggingface read auth token")
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="A huggingface read auth token"
+        "-v", "--verbose", action="store_true", help="Increase output verbosity."
     )
     parser.add_argument(
         "-m", "--model-path", default=None, help="The models storage path. Default is 'models/'."
     )
     parser.add_argument(
-        "-t", "--gen-tests", action="store_true", help="Generate the tokenizer tests. Default is False."
+        "-t", "--gen-vocab-tests", action="store_true", help="Generate the tokenizer tests. Default is False."
     )
     parser.add_argument(
         "-s", "--gen-vocab-script", action="store_true", help="Generate the gguf vocab files. Default is False."
