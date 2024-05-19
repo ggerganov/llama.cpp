@@ -177,7 +177,7 @@ def main():
     hf_vocab_req.generate_checksums()
     hf_vocab_req.log_pre_tokenizer_info()
 
-    if args.gen_tests:
+    if args.gen_vocab_tests:
         test_pre_tok(hf_vocab_req)
 
     if args.gen_vocab_script:
