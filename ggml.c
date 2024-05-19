@@ -14073,8 +14073,6 @@ static void rope_yarn(
         // Get n-d magnitude scaling corrected for interpolation
         mscale *= 1.0f + 0.1f * logf(1.0f / freq_scale);
     }
-    // TODO ugly hack for DeepSeek-V2 until we find a solution
-    mscale = 1.0;
     *cos_theta = cosf(theta) * mscale;
     *sin_theta = sinf(theta) * mscale;
 }

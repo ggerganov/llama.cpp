@@ -10949,6 +10949,14 @@ struct llm_build_context {
         const float mscale = 1.0f + 0.1f * hparams.mscale_all_dim * logf(1.0f / freq_scale);
         const float kq_scale = 1.0f*mscale*mscale/sqrtf(float(hparams.n_embd_head_k));
 
+        // DeepSeek-V2 uses non-standard YaRN mscale calculation from mscale and mscale_all_dim
+        // config.json parameters. However, both of these are equal to 0.707 in released models,
+        // which results in the final mscale value equal to 1.0. To get the same value we
+        // pre-scale the attn_factor.
+        // TODO Get rid of this when other models start using DeepSeek-V2
+        // variant of mscale calculation resulting in the API change.
+        const float attn_factor_scaled = 1.0f / (1.0f + 0.1f * logf(1.0f / freq_scale));
+
         // kept original names of these parameters from HF transformers code for clarity
         const uint32_t qk_rope_head_dim = hparams.n_rot;
         const uint32_t qk_nope_head_dim = hparams.n_embd_head_k - hparams.n_rot;
@@ -11040,7 +11048,7 @@ struct llm_build_context {
                 q_pe = ggml_rope_custom(
                     ctx0, q_pe, inp_pos,
                     n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
-                    ext_factor, attn_factor, beta_fast, beta_slow
+                    ext_factor, attn_factor_scaled, beta_fast, beta_slow
                 );
                 cb(q_pe, "q_pe", il);
 
@@ -11048,7 +11056,7 @@ struct llm_build_context {
                 k_pe = ggml_rope_custom(
                     ctx0, ggml_view_3d(ctx0, k_pe, qk_rope_head_dim, 1, n_tokens, k_pe->nb[0], k_pe->nb[1], 0), inp_pos,
                     n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
-                    ext_factor, attn_factor, beta_fast, beta_slow
+                    ext_factor, attn_factor_scaled, beta_fast, beta_slow
                 );
                 cb(k_pe, "k_pe", il);
 
