@@ -1149,7 +1149,7 @@ static float make_qx_quants(int n, int nmax, const float * restrict x, int8_t * 
         sumlx += w*x[i]*l;
         suml2 += w*l*l;
     }
-    float scale = sumlx/suml2;
+    float scale = suml2 ? sumlx/suml2 : 0.0f;
     if (return_early) return suml2 > 0 ? 0.5f*(scale + 1/iscale) : 1/iscale;
     float best = scale * sumlx;
     for (int is = -9; is <= 9; ++is) {
