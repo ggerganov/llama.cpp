@@ -12820,13 +12820,13 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                             while (isspace(raw_text[num_whitespaces])) {
                                 num_whitespaces++;
                             }
-                            if(num_whitespaces == raw_text.size()) {
+                            if (num_whitespaces == raw_text.size()) {
                                 continue; // skip if all whitespaces
                             }
                             raw_text = raw_text.substr(num_whitespaces);
                         }
 
-                        if(vocab.add_space_prefix) {
+                        if (vocab.add_space_prefix) {
                             if (!output.size() || is_prev_special) {  // prefix with space if first token
                                 raw_text = " " + raw_text;
                             }
