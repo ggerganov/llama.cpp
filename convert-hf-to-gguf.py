@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
-import logging
 import argparse
 import contextlib
 import json
+import logging
 import os
 import re
 import sys
 from enum import IntEnum
-from pathlib import Path
 from hashlib import sha256
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Sequence, TypeVar, cast
+from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ContextManager,
+    Iterable,
+    Iterator,
+    Sequence,
+    TypeVar,
+    cast,
+)
 
 import numpy as np
 import torch
@@ -409,87 +419,36 @@ class Model:
         # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
         # use in llama.cpp to implement the same pre-tokenizer
 
-        chktxt = '\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶\u200d🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български \'\'\'\'\'\'```````""""......!!!!!!?????? I\'ve been \'told he\'s there, \'RE you sure? \'M not sure I\'ll make it, \'D you like some tea? We\'Ve a\'lL'
+        checksum = sha256(str(tokenizer.vocab).encode()).hexdigest()
+        logger.debug(f"checksum: {checksum}")
 
-        chktok = tokenizer.encode(chktxt)
-        chkhsh = sha256(str(chktok).encode()).hexdigest()
+        # NOTE: IF you get an error here:
+        #       Update the huggingface_hub.py module and add the vocab, model, and repo.
+        #       Run the `gguf-py/scripts/gguf-gen-pre.py` script to generate the checksums.
+        #       This script should ideally pull in the latest version of the model from HuggingFace.
+        #       DO NOT MANUALLY EDIT THIS METHOD!
+        models = json.load("models/checksums.json")
+        for model in models:
+            if checksum == model["checksum"]:
+                if 
+                logger.debug(f"tokenizer.ggml.pre: {repr(result)}")
+                logger.debug(f"tokenizer checksum: {checksum}")
+                return model["tokt"]  # NOTE: Use the enum to id the vocab
 
-        logger.debug(f"chktok: {chktok}")
-        logger.debug(f"chkhsh: {chkhsh}")
+        logger.warning("\n")
+        logger.warning("**************************************************************************************")
+        logger.warning("** WARNING: The BPE pre-tokenizer was not recognized!")
+        logger.warning("**          There are 2 possible reasons for this:")
+        logger.warning("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
+        logger.warning("**          - the pre-tokenization config has changed upstream")
+        logger.warning("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
+        logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
+        logger.warning("**")
+        logger.warning(f"** tokenizer checksum:  {checksum}")
+        logger.warning("**************************************************************************************")
+        logger.warning("\n")
+        raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
 
-        res = None
-
-        # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script
-        #       or pull the latest version of the model from Huggingface
-        #       don't edit the hashes manually!
-        if chkhsh == "0ef9807a4087ebef797fc749390439009c3b9eda9ad1a097abbe738f486c01e5":
-            # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
-            res = "llama-bpe"
-        if chkhsh == "049ecf7629871e3041641907f3de7c733e4dbfdc736f57d882ba0b0845599754":
-            # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-base
-            res = "deepseek-llm"
-        if chkhsh == "347715f544604f9118bb75ed199f68779f423cabb20db6de6f31b908d04d7821":
-            # ref: https://huggingface.co/deepseek-ai/deepseek-coder-6.7b-base
-            res = "deepseek-coder"
-        if chkhsh == "8aeee3860c56296a157a1fe2fad249ec40aa59b1bb5709f4ade11c4e6fe652ed":
-            # ref: https://huggingface.co/tiiuae/falcon-7b
-            res = "falcon"
-        if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
-            # ref: https://huggingface.co/BAAI/bge-small-en-v1.5
-            res = "bert-bge"
-        if chkhsh == "b6dc8df998e1cfbdc4eac8243701a65afe638679230920b50d6f17d81c098166":
-            # ref: https://huggingface.co/mosaicml/mpt-7b
-            res = "mpt"
-        if chkhsh == "35d91631860c815f952d711435f48d356ebac988362536bed955d43bfa436e34":
-            # ref: https://huggingface.co/bigcode/starcoder2-3b
-            res = "starcoder"
-        if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
-            # ref: https://huggingface.co/openai-community/gpt2
-            res = "gpt-2"
-        if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
-            # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
-            res = "refact"
-        if chkhsh == "9c2227e4dd922002fb81bde4fc02b0483ca4f12911410dee2255e4987644e3f8":
-            # ref: https://huggingface.co/CohereForAI/c4ai-command-r-v01
-            res = "command-r"
-        if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
-            # ref: https://huggingface.co/Qwen/Qwen1.5-7B
-            res = "qwen2"
-        if chkhsh == "b6dc8df998e1cfbdc4eac8243701a65afe638679230920b50d6f17d81c098166":
-            # ref: https://huggingface.co/allenai/OLMo-1.7-7B-hf
-            res = "olmo"
-        if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
-            # ref: https://huggingface.co/databricks/dbrx-base
-            res = "dbrx"
-        if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
-            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
-            res = "jina-v2-en"
-        if chkhsh == "171aeeedd6fb548d418a7461d053f11b6f1f1fc9b387bd66640d28a4b9f5c643":
-            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-es
-            res = "jina-v2-es"
-        if chkhsh == "27949a2493fc4a9f53f5b9b029c82689cfbe5d3a1929bb25e043089e28466de6":
-            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
-            res = "jina-v2-de"
-
-        if res is None:
-            logger.warning("\n")
-            logger.warning("**************************************************************************************")
-            logger.warning("** WARNING: The BPE pre-tokenizer was not recognized!")
-            logger.warning("**          There are 2 possible reasons for this:")
-            logger.warning("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
-            logger.warning("**          - the pre-tokenization config has changed upstream")
-            logger.warning("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
-            logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
-            logger.warning("**")
-            logger.warning(f"** chkhsh:  {chkhsh}")
-            logger.warning("**************************************************************************************")
-            logger.warning("\n")
-            raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
-
-        logger.debug(f"tokenizer.ggml.pre: {repr(res)}")
-        logger.debug(f"chkhsh: {chkhsh}")
-
-        return res
         # Marker: End get_vocab_base_pre
 
     def _set_vocab_gpt2(self) -> None:
