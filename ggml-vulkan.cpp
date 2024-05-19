@@ -381,7 +381,7 @@ struct ggml_backend_vk_context {
     size_t idx;
 };
 
-struct vk_instance {
+struct vk_instance_t {
     vk::Instance instance;
 
     std::vector<size_t> device_indices;
@@ -423,7 +423,7 @@ static void ggml_vk_check_results_1(ggml_backend_vk_context * ctx, ggml_compute_
 typedef void (*ggml_vk_func_t)(ggml_backend_vk_context * ctx, vk_context * subctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst);
 
 static bool vk_instance_initialized = false;
-static vk_instance vk_instance;
+static vk_instance_t vk_instance;
 
 GGML_CALL static void ggml_backend_vk_free(ggml_backend_t backend);
 
@@ -5109,6 +5109,10 @@ static void ggml_vk_preallocate_buffers_graph(ggml_backend_vk_context * ctx, ggm
 #endif
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
 
+    if (extra == nullptr) {
+        return;
+    }
+
     ggml_tensor * src0 = node->src[0];
     ggml_tensor * src1 = node->src[1];
 
@@ -5386,7 +5390,9 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
 }
 
 static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * node, bool last_node){
-    if (ggml_is_empty(node)) {
+    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
+
+    if (ggml_is_empty(node) || extra == nullptr) {
         return;
     }
 
@@ -5398,8 +5404,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
 
     const ggml_tensor * src0 = node->src[0];
     const ggml_tensor * src1 = node->src[1];
-
-    ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
 
     switch (node->op) {
     case GGML_OP_UNARY:
