@@ -430,8 +430,7 @@ class Model:
         models = json.load("models/checksums.json")
         for model in models:
             if checksum == model["checksum"]:
-                if 
-                logger.debug(f"tokenizer.ggml.pre: {repr(result)}")
+                logger.debug(f"tokenizer.ggml.pre: {repr(model['repo'])}")
                 logger.debug(f"tokenizer checksum: {checksum}")
                 return model["tokt"]  # NOTE: Use the enum to id the vocab
 
@@ -448,7 +447,6 @@ class Model:
         logger.warning("**************************************************************************************")
         logger.warning("\n")
         raise NotImplementedError("BPE pre-tokenizer was not recognized - update get_vocab_base_pre()")
-
         # Marker: End get_vocab_base_pre
 
     def _set_vocab_gpt2(self) -> None:
