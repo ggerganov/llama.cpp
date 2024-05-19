@@ -399,13 +399,6 @@ ifndef LLAMA_NO_ACCELERATE
 	endif
 endif # LLAMA_NO_ACCELERATE
 
-ifdef LLAMA_MPI
-	MK_CPPFLAGS += -DGGML_USE_MPI
-	MK_CFLAGS   += -Wno-cast-qual
-	MK_CXXFLAGS += -Wno-cast-qual
-	OBJS        += ggml-mpi.o
-endif # LLAMA_MPI
-
 ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
@@ -628,11 +621,6 @@ ggml-metal-embed.o: ggml-metal.metal ggml-common.h
 	@rm -f ${TEMP_ASSEMBLY}
 endif
 endif # LLAMA_METAL
-
-ifdef LLAMA_MPI
-ggml-mpi.o: ggml-mpi.c ggml-mpi.h
-	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_MPI
 
 ifndef LLAMA_NO_LLAMAFILE
 sgemm.o: sgemm.cpp sgemm.h ggml.h
