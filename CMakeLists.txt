@@ -123,6 +123,7 @@ set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
 set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
 option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
+option(LLAMA_DISABLE_OMP                     "Disable OpenMP support"                           OFF)
 option(LLAMA_RPC                             "llama: use RPC"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
@@ -1241,6 +1242,25 @@ if (BUILD_SHARED_LIBS)
     target_link_libraries(ggml_shared PUBLIC Threads::Threads ${LLAMA_EXTRA_LIBS})
     install(TARGETS ggml_shared LIBRARY)
 endif()
+
+
+if (NOT LLAMA_DISABLE_OMP)
+    find_package(OpenMP)
+    if(OpenMP_CXX_FOUND)
+        message(STATUS "OpenMP found")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+        target_link_libraries(ggml PUBLIC OpenMP::OpenMP_CXX)
+    else()
+        message(STATUS "OpenMP NOT found activating standard threading")
+        add_compile_definitions(GGML_NO_OMP)
+    endif()
+else()
+    message(STATUS "OpenMP disabled activating standard threading")
+    add_compile_definitions(GGML_NO_OMP)
+endif()
+
 
 # llama
 

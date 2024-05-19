@@ -19334,8 +19334,12 @@ typedef int ggml_lock_t;
 
 #endif
 
+#ifdef GGML_NO_OMP
+
+
 // Android's libc implementation "bionic" does not support setting affinity
 #if defined(__gnu_linux__)
+
 static void set_numa_thread_affinity(int thread_n) {
     if (!ggml_is_numa()) {
         return;
@@ -19401,11 +19405,16 @@ static void clear_numa_thread_affinity(void) {
 
     CPU_FREE(cpus);
 }
+
 #else
 // TODO: Windows etc.
 // (the linux implementation may also work on BSD, someone should test)
 static void set_numa_thread_affinity(int thread_n) { UNUSED(thread_n);  }
 static void clear_numa_thread_affinity(void) {}
+
+#endif
+
+
 #endif
 
 static void ggml_graph_compute_perf_stats_node(struct ggml_tensor * node, const struct ggml_compute_state_shared * st) {
@@ -19713,7 +19722,9 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
     const int   n_threads   = state->shared->n_threads;
 
+#ifdef GGML_NO_OMP
     set_numa_thread_affinity(state->ith);
+#endif
 
     int node_n     = -1;
     int task_phase = GGML_TASK_TYPE_FINALIZE;
@@ -20086,44 +20097,50 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     };
     struct ggml_compute_state * workers = alloca(sizeof(struct ggml_compute_state)*n_threads);
 
-    // create thread pool
-    if (n_threads > 1) {
-        for (int j = 1; j < n_threads; ++j) {
-            workers[j] = (struct ggml_compute_state) {
-                .thrd   = 0,
-                .ith = j,
-                .shared = &state_shared,
-                .ec = GGML_STATUS_SUCCESS,
-            };
+    const int64_t perf_start_cycles  = ggml_perf_cycles();
+    const int64_t perf_start_time_us = ggml_perf_time_us();
 
+    /* Loop is reversed as in the NO_OMP case we want threads to start
+    before the main thread (j==0) */
+    #pragma omp parallel for shared(workers,state_shared)
+    for (int j = n_threads - 1; 0 <= j; j--) {
+        workers[j] = (struct ggml_compute_state) {
+            .ith = j,
+            .shared = &state_shared,
+            .ec = GGML_STATUS_SUCCESS,
+        };
+
+#ifdef GGML_NO_OMP
+        if(j == 0)
+        {
+            /* No need to spawn a thread for main */
+            ggml_graph_compute_thread(&workers[j]);
+        }
+        else
+        {
             const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
             GGML_ASSERT(rc == 0);
             UNUSED(rc);
         }
+#else
+        ggml_graph_compute_thread(&workers[j]);
+#endif
     }
 
-    workers[0].ith = 0;
-    workers[0].shared = &state_shared;
-    workers[0].ec = GGML_STATUS_SUCCESS;
+#ifdef GGML_NO_OMP
+    clear_numa_thread_affinity();
+#endif
 
-    const int64_t perf_start_cycles  = ggml_perf_cycles();
-    const int64_t perf_start_time_us = ggml_perf_time_us();
-
-    // this is a work thread too
-    ggml_graph_compute_thread(&workers[0]);
     enum ggml_status compute_status = workers[0].ec;
 
-    // don't leave affinity set on the main thread
-    clear_numa_thread_affinity();
-
     // join or kill thread pool
-    if (n_threads > 1) {
-        for (int j = 1; j < n_threads; j++) {
-            const int rc = ggml_thread_join(workers[j].thrd, NULL);
-            GGML_ASSERT(rc == 0);
-            if (workers[j].ec != GGML_STATUS_SUCCESS)
-                compute_status = workers[j].ec;
-        }
+    for (int j = 1; j < n_threads; j++) {
+#ifdef GGML_NO_OMP
+        const int rc = ggml_thread_join(workers[j].thrd, NULL);
+        GGML_ASSERT(rc == 0);
+#endif
+        if (workers[j].ec != GGML_STATUS_SUCCESS)
+            compute_status = workers[j].ec;
     }
 
     // performance stats (graph)

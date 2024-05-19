@@ -406,6 +406,14 @@ ifdef LLAMA_MPI
 	OBJS        += ggml-mpi.o
 endif # LLAMA_MPI
 
+ifndef LLAMA_NO_OMP
+	MK_CPPFLAGS+= -fopenmp
+	MK_CFLAGS+= -fopenmp
+	MK_LDFLAGS+= -fopenmp
+else
+	MK_CPPFLAGS+= -DGGML_NO_OMP
+endif
+
 ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
