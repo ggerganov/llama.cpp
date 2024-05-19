@@ -122,7 +122,6 @@ set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
                                              "llama: metal minimum macOS version")
 set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
-option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_RPC                             "llama: use RPC"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
@@ -463,35 +462,6 @@ if (LLAMA_CUDA)
 
     else()
         message(WARNING "CUDA not found")
-    endif()
-endif()
-
-if (LLAMA_MPI)
-    cmake_minimum_required(VERSION 3.10)
-    find_package(MPI)
-    if (MPI_C_FOUND)
-        message(STATUS "MPI found")
-
-        set(GGML_HEADERS_MPI ggml-mpi.h)
-        set(GGML_SOURCES_MPI ggml-mpi.c)
-
-        add_compile_definitions(GGML_USE_MPI)
-        add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})
-
-        if (NOT MSVC)
-            add_compile_options(-Wno-cast-qual)
-        endif()
-
-        set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${MPI_C_LIBRARIES})
-        set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${MPI_C_INCLUDE_DIRS})
-
-        # Even if you're only using the C header, C++ programs may bring in MPI
-        # C++ functions, so more linkage is needed
-        if (MPI_CXX_FOUND)
-            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}     ${MPI_CXX_LIBRARIES})
-        endif()
-    else()
-        message(WARNING "MPI not found")
     endif()
 endif()
 
@@ -1218,7 +1188,6 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL}    ${GGML_HEADERS_OPENCL}
             ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
-            ${GGML_SOURCES_MPI}       ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_RPC}       ${GGML_HEADERS_RPC}
             ${GGML_SOURCES_EXTRA}     ${GGML_HEADERS_EXTRA}
             ${GGML_SOURCES_SYCL}      ${GGML_HEADERS_SYCL}
@@ -1306,7 +1275,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
 
 set(GGML_PUBLIC_HEADERS "ggml.h" "ggml-alloc.h" "ggml-backend.h"
         "${GGML_HEADERS_CUDA}"  "${GGML_HEADERS_OPENCL}"
-        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
+        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_EXTRA}")
 
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 install(TARGETS ggml PUBLIC_HEADER)
