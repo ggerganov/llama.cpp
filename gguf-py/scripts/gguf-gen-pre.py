@@ -128,8 +128,23 @@ def test_pre_tok(hf_voc_req: HFVocabRequest) -> None:
         logger.info(f"Tests for {model["repo"]} written in {final}.*")
 
 
-def generate_tokenizers(hf_voc_req: HFVocabRequest) -> None:
-    pass
+def generate_vocab_script(hf_voc_req: HFVocabRequest) -> None:
+    # generate commands for creating vocab files
+    shscript = "#!/usr/bin/env bash\n\n"
+
+    for model in hf_voc_req.models:
+        # get the repo path
+        path = Path(f"{hf_voc_req.model_path}/{model["repo"]}")
+        # set the vocab path
+        vocab = path / f"ggml-vocab-{path.stem.lower()}.gguf"
+        # set the command line
+        tmpline = f"python3 convert-hf-to-gguf.py {path} --outfile {vocab} --vocab-only\n"
+        shscript += tmpline
+        logger.info(tmpline.strip())
+
+    with open("generate-vocab.sh", "w", encoding="utf-8") as f:
+        f.writelines(shscript)
+        logger.info(f"Wrote {len(shscript)} bytes to generate-vocab.sh")
 
 
 def main():
@@ -145,7 +160,7 @@ def main():
         "-t", "--gen-tests", action="store_true", help="Generate the tokenizer tests. Default is False."
     )
     parser.add_argument(
-        "-g", "--gen-toks", action="store_true", help="Generate the gguf vocab files. Default is False."
+        "-s", "--gen-vocab-script", action="store_true", help="Generate the gguf vocab files. Default is False."
     )
     args = parser.parse_args()
 
@@ -165,8 +180,8 @@ def main():
     if args.gen_tests:
         test_pre_tok(hf_vocab_req)
 
-    if args.gen_toks:
-        generate_tokenizers(hf_vocab_req)
+    if args.gen_vocab_script:
+        generate_vocab_script(hf_vocab_req)
 
 
 if __name__ == '__main__':
