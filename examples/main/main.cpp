@@ -18,6 +18,7 @@
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
+#define CONTROL_TOKEN_FILE_DESCRIPTOR (3)
 #elif defined (_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
@@ -528,21 +529,6 @@ int main(int argc, char ** argv) {
         exit(1);
     }
 
-    // Create the pipe for special token handling
-    int stok_pipe[2] = {0};
-    if (pipe(stok_pipe) == -1) {
-        fprintf(stderr, "%s: failed to initialize special token output stream\n", __func__);
-        exit(1);
-    }
-
-    close(stok_pipe[0]); // Read Special Token Not In Use
-
-    FILE *special_token_stream_output_fd = fdopen(stok_pipe[1], "w");
-    if (special_token_stream_output_fd == NULL) {
-        fprintf(stderr, "%s: failed to open special token output stream\n", __func__);
-        exit(1);
-    }
-
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (!embd.empty()) {
@@ -758,12 +744,22 @@ int main(int argc, char ** argv) {
                 const std::string token_str = llama_token_to_piece(ctx, id);
 
                 // Console/Stream Output
-                if (llama_token_is_control_token(llama_get_model(ctx), id)) {
-                    // Stream Output Token To Special Token Output
-                    fprintf(special_token_stream_output_fd, "%s", token_str.c_str());
-                } else {
+                if (!llama_token_is_control_token(llama_get_model(ctx), id)) {
                     // Stream Output Token To Standard Output
                     fprintf(stdout, "%s", token_str.c_str());
+                } else if (!params.ctrl_token_no_out) {
+#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+                    if (params.ctrl_token_fd_out) {
+                        // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
+                        dprintf(CONTROL_TOKEN_FILE_DESCRIPTOR, "%s", token_str.c_str());
+                    }
+                    else
+#endif
+                    if (!params.conversation && sparams.grammar.empty())
+                    {
+                        // Stream Control Token To Standard Output as long as we are not in a conversation or grammar output
+                        fprintf(stdout, "%s", token_str.c_str());
+                    }
                 }
 
                 // Record Displayed Tokens To Log
@@ -982,8 +978,6 @@ int main(int argc, char ** argv) {
 
     llama_sampling_free(ctx_sampling);
     llama_backend_free();
-
-    fclose(special_token_stream_output_fd);
 
 #ifndef LOG_DISABLE_LOGS
     LOG_TEE("Log end\n");
