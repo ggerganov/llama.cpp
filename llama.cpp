@@ -10946,15 +10946,10 @@ struct llm_build_context {
 
         bool is_lite = (hparams.n_layer == 27);
 
+        // We have to pre-scale kq_scale and attn_factor to make the YaRN RoPE work correctly.
+        // See https://github.com/ggerganov/llama.cpp/discussions/7416 for detailed explanation.
         const float mscale = 1.0f + 0.1f * hparams.mscale_all_dim * logf(1.0f / freq_scale);
         const float kq_scale = 1.0f*mscale*mscale/sqrtf(float(hparams.n_embd_head_k));
-
-        // DeepSeek-V2 uses non-standard YaRN mscale calculation from mscale and mscale_all_dim
-        // config.json parameters. However, both of these are equal to 0.707 in released models,
-        // which results in the final mscale value equal to 1.0. To get the same value we
-        // pre-scale the attn_factor.
-        // TODO Get rid of this when other models start using DeepSeek-V2
-        // variant of mscale calculation resulting in the API change.
         const float attn_factor_scaled = 1.0f / (1.0f + 0.1f * logf(1.0f / freq_scale));
 
         // kept original names of these parameters from HF transformers code for clarity
