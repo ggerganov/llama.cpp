@@ -144,79 +144,13 @@ class SimpleChat {
 }
 
 
-
-/**
- * Handle submit request by user
- * @param {HTMLInputElement} inputSystem
- * @param {HTMLInputElement} inputUser
- * @param {HTMLDivElement} divChat
- * @param {string} apiEP
- */
-async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
-
-    gChat.add_system_anytime(inputSystem.value, "0");
-
-    let content = inputUser?.value;
-    if (!gChat.add(Roles.User, content)) {
-        console.debug("WARN:HandleSubmit:Ignoring empty user input...");
-        return;
-    }
-    gChat.show(divChat);
-
-    let theBody;
-    let theUrl = gChatURL[apiEP]
-    if (apiEP == ApiEP.Chat) {
-        theBody = gChat.request_messages_jsonstr();
-    } else {
-        theBody = gChat.request_prompt_jsonstr();
-    }
-
-    inputUser.value = "working...";
-    inputUser.disabled = true;
-    console.debug(`DBUG:HandleSubmit:${theUrl}:ReqBody:${theBody}`);
-    let resp = await fetch(theUrl, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: theBody,
-    });
-
-    inputUser.value = "";
-    inputUser.disabled = false;
-    let respBody = await resp.json();
-    console.debug("DBUG:HandleSubmit:RespBody:", respBody);
-    let assistantMsg;
-    if (apiEP == ApiEP.Chat) {
-        assistantMsg = respBody["choices"][0]["message"]["content"];
-    } else {
-        try {
-            assistantMsg = respBody["choices"][0]["text"];
-        } catch {
-            assistantMsg = respBody["content"];
-        }
-    }
-    gChat.add(Roles.Assistant, assistantMsg);
-    gChat.show(divChat);
-    // Purposefully clear at end rather than begin of this function
-    // so that one can switch from chat to completion mode and sequece
-    // in a completion mode with multiple user-assistant chat data
-    // from before to be sent/occur once.
-    if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
-        gChat.xchat.length = 0;
-    }
-    inputUser.focus();
-
-}
-
-
-let gChat = new SimpleChat();
 let gBaseURL = "http://127.0.0.1:8080";
 let gChatURL = {
     'chat': `${gBaseURL}/chat/completions`,
     'completion': `${gBaseURL}/completions`,
 }
 const gbCompletionFreshChatAlways = true;
+
 
 class MultiChatUI {
 
@@ -228,14 +162,82 @@ class MultiChatUI {
     }
 
     /**
-     * Start a new chat
+     * Start a new chat session
      */
     new_chat() {
         this.simpleChats.push(new SimpleChat());
         this.iChat = this.simpleChats.length - 1;
     }
 
+    /**
+     * Handle user query submit request, wrt current chat session.
+     * @param {HTMLInputElement} inputSystem
+     * @param {HTMLInputElement} inputUser
+     * @param {HTMLDivElement} divChat
+     * @param {string} apiEP
+     */
+    async handle_user_submit(inputSystem, inputUser, divChat, apiEP) {
+
+        let chat = this.simpleChats[this.iChat];
+
+        chat.add_system_anytime(inputSystem.value, "0");
+
+        let content = inputUser.value;
+        if (!chat.add(Roles.User, content)) {
+            console.debug("WARN:MCUI:HandleUserSubmit:Ignoring empty user input...");
+            return;
+        }
+        chat.show(divChat);
+
+        let theBody;
+        let theUrl = gChatURL[apiEP]
+        if (apiEP == ApiEP.Chat) {
+            theBody = chat.request_messages_jsonstr();
+        } else {
+            theBody = chat.request_prompt_jsonstr();
+        }
+
+        inputUser.value = "working...";
+        inputUser.disabled = true;
+        console.debug(`DBUG:MCUI:HandleUserSubmit:${theUrl}:ReqBody:${theBody}`);
+        let resp = await fetch(theUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: theBody,
+        });
+
+        inputUser.value = "";
+        inputUser.disabled = false;
+        let respBody = await resp.json();
+        console.debug("DBUG:MCUI:HandleUserSubmit:RespBody:", respBody);
+        let assistantMsg;
+        if (apiEP == ApiEP.Chat) {
+            assistantMsg = respBody["choices"][0]["message"]["content"];
+        } else {
+            try {
+                assistantMsg = respBody["choices"][0]["text"];
+            } catch {
+                assistantMsg = respBody["content"];
+            }
+        }
+        chat.add(Roles.Assistant, assistantMsg);
+        chat.show(divChat);
+        // Purposefully clear at end rather than begin of this function
+        // so that one can switch from chat to completion mode and sequece
+        // in a completion mode with multiple user-assistant chat data
+        // from before to be sent/occur once.
+        if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
+            chat.xchat.length = 0;
+        }
+        inputUser.focus();
+    }
+
 }
+
+
+let gMuitChat = new MultiChatUI();
 
 
 function startme() {
@@ -250,11 +252,13 @@ function startme() {
         throw Error("ERRR:StartMe:Chat element missing");
     }
 
+    gMuitChat.new_chat();
+
     btnSubmit?.addEventListener("click", (ev)=>{
         if (inputUser.disabled) {
             return;
         }
-        handle_submit(inputSystem, inputUser, divChat, selectApiEP.value);
+        gMuitChat.handle_user_submit(inputSystem, inputUser, divChat, selectApiEP.value);
     });
 
     inputUser?.addEventListener("keyup", (ev)=> {
