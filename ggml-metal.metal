@@ -1852,7 +1852,10 @@ kernel void kernel_upscale_f32(
     constant  uint64_t & nb1,
     constant  uint64_t & nb2,
     constant  uint64_t & nb3,
-    constant   int32_t & sf,
+    constant     float & sf0,
+    constant     float & sf1,
+    constant     float & sf2,
+    constant     float & sf3,
     uint3 tgpig[[threadgroup_position_in_grid]],
     uint3 tpitg[[thread_position_in_threadgroup]],
     uint3   ntg[[threads_per_threadgroup]]) {
@@ -1861,15 +1864,17 @@ kernel void kernel_upscale_f32(
     const int64_t i2 = tgpig.y;
     const int64_t i1 = tgpig.x;
 
-    const int64_t i03 = i3;
-    const int64_t i02 = i2;
-    const int64_t i01 = i1/sf;
-
-    device const float * src0_ptr = (device const float *) (src0 + i03*nb03 + i02*nb02 + i01*nb01);
-    device       float * dst_ptr  = (device       float *) (dst  +  i3*nb3  +  i2*nb2  +  i1*nb1);
+    const int64_t i03 = i3/sf3;
+    const int64_t i02 = i2/sf2;
+    const int64_t i01 = i1/sf1;
 
     for (int i0 = tpitg.x; i0 < ne0; i0 += ntg.x) {
-        dst_ptr[i0] = src0_ptr[i0/sf];
+        const int64_t i00 = i0/sf0;
+
+        device const float * src0_ptr = (device const float *) (src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
+        device       float * dst_ptr  = (device       float *) (dst  +  i3*nb3  +  i2*nb2  +  i1*nb1  +  i0*nb0);
+
+        dst_ptr[0] = src0_ptr[0];
     }
 }
 
@@ -2049,27 +2054,24 @@ typedef void (flash_attn_ext_f16_t)(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2090,27 +2092,24 @@ kernel void kernel_flash_attn_ext_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2180,10 +2179,6 @@ kernel void kernel_flash_attn_ext_f16(
         const short ne22 = ne12;
         const short ne23 = ne13;
 
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
-
         // broadcast
         const short rk2 = ne02/ne12;
         const short rk3 = ne03/ne13;
@@ -2247,11 +2242,16 @@ kernel void kernel_flash_attn_ext_f16(
                         simdgroup_multiply_accumulate(mqk, mq[i], mk, mqk);
                     }
 
-                    // mqk = mqk*scale + mask*slope
-                    simdgroup_half8x8 mm;
-                    simdgroup_load(mm, mp + ic + 8*cc, nb31/sizeof(half), 0, false);
-                    simdgroup_multiply(mm, mslope, mm);
-                    simdgroup_multiply_accumulate(mqk, mqk, mscale, mm);
+                    if (mask != q) {
+                        // mqk = mqk*scale + mask*slope
+                        simdgroup_half8x8 mm;
+                        simdgroup_load(mm, mp + ic + 8*cc, nb31/sizeof(half), 0, false);
+                        simdgroup_multiply(mm, mslope, mm);
+                        simdgroup_multiply_accumulate(mqk, mqk, mscale, mm);
+                    } else {
+                        // mqk = mqk*scale
+                        simdgroup_multiply(mqk, mscale, mqk);
+                    }
 
                     simdgroup_store(mqk, ss + 8*cc, TF, 0, false);
                 }
@@ -2425,27 +2425,24 @@ kernel void kernel_flash_attn_ext_vec_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2521,10 +2518,6 @@ kernel void kernel_flash_attn_ext_vec_f16(
         const short ne22 = ne12;
         const short ne23 = ne13;
 
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
-
         // broadcast
         const short rk2 = ne02/ne12;
         const short rk3 = ne03/ne13;
@@ -2589,8 +2582,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
 
                     // mqk = mqk*scale + mask*slope
                     if (tiisg == 0) {
-                        float4 mm = (float4) mp4[ic/4 + cc];
-                        mqk = mqk*scale + mm*slope;
+                        mqk = mqk*scale + ((mask != q) ? ((float4) mp4[ic/4 + cc])*slope : (float4) 0.0f);
 
                         ss4[cc] = mqk;
                     }

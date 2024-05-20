@@ -7,6 +7,8 @@ Also note that finetunes typically result in a higher perplexity value even thou
 
 Within llama.cpp the perplexity of base models is used primarily to judge the quality loss from e.g. quantized models vs. FP16.
 The convention among contributors is to use the Wikitext-2 test set for testing unless noted otherwise (can be obtained with `scripts/get-wikitext-2.sh`).
+When numbers are listed all command line arguments and compilation options are left at their defaults unless noted otherwise.
+llama.cpp numbers are **not** directly comparable to those of other projects because the exact values depend strongly on the implementation details.
 
 By default only the mean perplexity value and the corresponding uncertainty is calculated.
 The uncertainty is determined empirically by assuming a Gaussian distribution of the "correct" logits per and then applying error propagation.
@@ -32,12 +34,21 @@ In addition to the KL divergence the following statistics are calculated with `-
 
 ## LLaMA 3 8b Scoreboard
 
-Results are sorted by Kullback-Leibler divergence relative to FP16.
+| Revision | f364eb6f           |
+|:---------|:-------------------|
+| Backend  | CUDA               |
+| CPU      | AMD Epyc 7742      |
+| GPU      | 1x NVIDIA RTX 4090 |
+
+Results were generated using the CUDA backend and are sorted by Kullback-Leibler divergence relative to FP16.
 The "WT" importance matrices were created using varying numbers of Wikitext tokens and can be found [here](https://huggingface.co/JohannesGaessler/llama.cpp_importance_matrices/blob/main/imatrix-llama_3-8b-f16-2.7m_tokens.dat).
+Note: the FP16 logits used for the calculation of all metrics other than perplexity are stored in a binary file between runs.
+In order to save space this file does **not** contain the exact same FP32 logits but instead casts them to 16 bit unsigned integers (with some scaling).
+So the "f16" results are to be understood as the difference resulting only from this downcast.
 
 | Quantization | imatrix | Model size [GiB] | PPL                    | ΔPPL                   | KLD                   | Mean Δp           | RMS Δp           |
 |--------------|---------|------------------|------------------------|------------------------|-----------------------|-------------------|------------------|
-| f16          | None    |            14.97 | 6.233160 ±   0.037828  | -                      | -                     | -                 | -                |
+| f16          | None    |            14.97 | 6.233160 ±   0.037828  | 0.001524 ±   0.000755  | 0.000551 ±   0.000002 |  0.001 ± 0.002 %  | 0.787 ± 0.004 %  |
 | q8_0         | None    |             7.96 | 6.234284 ±   0.037878  | 0.002650 ±   0.001006  | 0.001355 ±   0.000006 | -0.019 ± 0.003 %  | 1.198 ± 0.007 %  |
 | q6_K         | None    |             6.14 | 6.253382 ±   0.038078  | 0.021748 ±   0.001852  | 0.005452 ±   0.000035 | -0.007 ± 0.006 %  | 2.295 ± 0.019 %  |
 | q5_K_M       | None    |             5.33 | 6.288607 ±   0.038338  | 0.056974 ±   0.002598  | 0.010762 ±   0.000079 | -0.114 ± 0.008 %  | 3.160 ± 0.031 %  |
@@ -89,6 +100,12 @@ K-quants score better on mean Δp than the legacy quants than e.g. KL divergence
 
 ## LLaMA 2 vs. LLaMA 3 Quantization comparison
 
+| Revision | f364eb6f           |
+|:---------|:-------------------|
+| Backend  | CUDA               |
+| CPU      | AMD Epyc 7742      |
+| GPU      | 1x NVIDIA RTX 4090 |
+
 | Metric          |          L2 7b q2_K |          L3 8b q2_K |        L2 7b q4_K_M |        L3 8b q4_K_M |          L2 7b q6_K |          L3 8b q6_K |          L2 7b q8_0 |          L3 8b q8_0 |
 |-----------------|---------------------|---------------------|---------------------|---------------------|---------------------|---------------------|---------------------|---------------------|
 | Mean PPL        | 5.794552 ± 0.032298 | 9.751568 ± 0.063312 | 5.877078 ± 0.032781 | 6.407115 ± 0.039119 | 5.808494 ± 0.032425 | 6.253382 ± 0.038078 | 5.798542 ± 0.032366 | 6.234284 ± 0.037878 |
@@ -107,6 +124,50 @@ K-quants score better on mean Δp than the legacy quants than e.g. KL divergence
 | RMS Δp          |     9.762 ± 0.053 % |    21.421 ± 0.079 % |     3.252 ± 0.024 % |     5.519 ± 0.050 % |     1.339 ± 0.010 % |     2.295 ± 0.019 % |     0.618 ± 0.011 % |     1.198 ± 0.007 % |
 | Same top p      |    85.584 ± 0.086 % |    71.138 ± 0.119 % |    94.665 ± 0.055 % |    91.901 ± 0.072 % |    97.520 ± 0.038 % |    96.031 ± 0.051 % |    98.846 ± 0.026 % |    97.674 ± 0.040 % |
 
+## LLaMA 3 BF16 vs. FP16 comparison
+
+| Revision | 83330d8c      |
+|:---------|:--------------|
+| Backend  | CPU           |
+| CPU      | AMD Epyc 7742 |
+| GPU      | N/A           |
+
+Results were calculated with LLaMA 3 8b BF16 as `--kl-divergence-base` and LLaMA 3 8b FP16 as the `--model` for comparison.
+
+| Metric                         |                    Value |
+|--------------------------------|--------------------------|
+| Mean PPL(Q)                    |      6.227711 ± 0.037833 |
+| Mean PPL(base)                 |      6.225194 ± 0.037771 |
+| Cor(ln(PPL(Q)), ln(PPL(base))) |                  99.990% |
+| Mean ln(PPL(Q)/PPL(base))      |      0.000404 ± 0.000086 |
+| Mean PPL(Q)/PPL(base)          |      1.000404 ± 0.000086 |
+| Mean PPL(Q)-PPL(base)          |      0.002517 ± 0.000536 |
+| Mean    KLD                    |  0.00002515 ± 0.00000020 |
+| Maximum KLD                    |                 0.012206 |
+| 99.9%   KLD                    |                 0.000799 |
+| 99.0%   KLD                    |                 0.000222 |
+| 99.0%   KLD                    |                 0.000222 |
+| Median  KLD                    |                 0.000013 |
+| 10.0%   KLD                    |                -0.000002 |
+| 5.0%   KLD                     |                -0.000008 |
+| 1.0%   KLD                     |                -0.000023 |
+| Minimum KLD                    |                -0.000059 |
+| Mean    Δp                     | -0.0000745 ± 0.0003952 % |
+| Maximum Δp                     |                   4.186% |
+| 99.9%   Δp                     |                   1.049% |
+| 99.0%   Δp                     |                   0.439% |
+| 95.0%   Δp                     |                   0.207% |
+| 90.0%   Δp                     |                   0.125% |
+| 75.0%   Δp                     |                   0.029% |
+| Median  Δp                     |                   0.000% |
+| 25.0%   Δp                     |                  -0.030% |
+| 10.0%   Δp                     |                  -0.126% |
+| 5.0%   Δp                      |                  -0.207% |
+| 1.0%   Δp                      |                  -0.434% |
+| 0.1%   Δp                      |                  -1.016% |
+| Minimum Δp                     |                  -4.672% |
+| RMS Δp                         |          0.150 ± 0.001 % |
+| Same top p                     |         99.739 ± 0.013 % |
 
 ## Old Numbers
 

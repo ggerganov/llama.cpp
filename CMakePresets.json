@@ -1,0 +1,45 @@
+﻿{
+  "version": 4,
+  "configurePresets": [
+    {
+        "name":  "base",
+        "hidden": true,
+        "generator":   "Ninja",
+        "binaryDir":   "${sourceDir}/build-${presetName}",
+        "cacheVariables": {
+            "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+            "CMAKE_INSTALL_RPATH": "$ORIGIN;$ORIGIN/.."
+        }
+    },
+
+    { "name": "debug",   "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+    { "name": "release", "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+    { "name": "static",  "hidden": true, "cacheVariables": { "LLAMA_STATIC": "ON" } },
+
+    {
+        "name": "arm64-windows-msvc", "hidden": true,
+        "architecture": { "value": "arm64",       "strategy": "external" },
+        "toolset":      { "value": "host=x86_64", "strategy": "external" },
+        "cacheVariables": {
+            "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/arm64-windows-msvc.cmake"
+        }
+    },
+
+    {
+        "name": "arm64-windows-llvm", "hidden": true,
+        "architecture": { "value": "arm64",       "strategy": "external" },
+        "toolset":      { "value": "host=x86_64", "strategy": "external" },
+        "cacheVariables": {
+            "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/cmake/arm64-windows-llvm.cmake"
+        }
+    },
+
+    { "name": "arm64-windows-llvm-debug"  , "inherits": [ "base", "arm64-windows-llvm",  "debug"   ] },
+    { "name": "arm64-windows-llvm-release", "inherits": [ "base", "arm64-windows-llvm",  "release" ] },
+    { "name": "arm64-windows-llvm+static-release", "inherits": [ "base", "arm64-windows-llvm",  "release", "static" ] },
+
+    { "name": "arm64-windows-msvc-debug"  , "inherits": [ "base", "arm64-windows-msvc",  "debug"   ] },
+    { "name": "arm64-windows-msvc-release", "inherits": [ "base", "arm64-windows-msvc",  "release" ] },
+    { "name": "arm64-windows-msvc+static-release", "inherits": [ "base", "arm64-windows-msvc",  "release", "static" ] }
+  ]
+}

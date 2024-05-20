@@ -1378,7 +1378,7 @@ static enum ggml_status ggml_metal_graph_compute(
                         const bool use_f16 = (src1 && src1->type == GGML_TYPE_F16);
 
                         if (ne00%4 == 0) {
-                            while (nth < ne00/4 && nth < 256) {
+                            while (nth < ne00/4 && nth*ne01*ne02*ne03 < 256) {
                                 nth *= 2;
                             }
                             if (use_f16) {
@@ -1387,7 +1387,7 @@ static enum ggml_status ggml_metal_graph_compute(
                                 pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SOFT_MAX_F32_4].pipeline;
                             }
                         } else {
-                            while (nth < ne00 && nth < 1024) {
+                            while (nth < ne00 && nth*ne01*ne02*ne03 < 256) {
                                 nth *= 2;
                             }
                             if (use_f16) {
@@ -2353,7 +2353,10 @@ static enum ggml_status ggml_metal_graph_compute(
                     {
                         GGML_ASSERT(src0->type == GGML_TYPE_F32);
 
-                        const int sf = dst->op_params[0];
+                        const float sf0 = (float)ne0/src0->ne[0];
+                        const float sf1 = (float)ne1/src0->ne[1];
+                        const float sf2 = (float)ne2/src0->ne[2];
+                        const float sf3 = (float)ne3/src0->ne[3];
 
                         const id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_UPSCALE_F32].pipeline;
 
@@ -2376,7 +2379,10 @@ static enum ggml_status ggml_metal_graph_compute(
                         [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:15];
                         [encoder setBytes:&nb2  length:sizeof(nb2)  atIndex:16];
                         [encoder setBytes:&nb3  length:sizeof(nb3)  atIndex:17];
-                        [encoder setBytes:&sf   length:sizeof(sf)   atIndex:18];
+                        [encoder setBytes:&sf0  length:sizeof(sf0)  atIndex:18];
+                        [encoder setBytes:&sf1  length:sizeof(sf1)  atIndex:19];
+                        [encoder setBytes:&sf2  length:sizeof(sf2)  atIndex:20];
+                        [encoder setBytes:&sf3  length:sizeof(sf3)  atIndex:21];
 
                         const int nth = MIN((int) pipeline.maxTotalThreadsPerThreadgroup, ne0);
 
@@ -2512,13 +2518,14 @@ static enum ggml_status ggml_metal_graph_compute(
                     } break;
                 case GGML_OP_FLASH_ATTN_EXT:
                     {
-                        GGML_ASSERT(ne00 % 4 == 0);
+                        GGML_ASSERT(ne00 % 4  == 0);
+                        GGML_ASSERT(ne11 % 32 == 0);
+
                         GGML_ASSERT(src0->type == GGML_TYPE_F32);
 
-                        struct ggml_tensor * src3 = gf->nodes[i]->src[3];
+                        GGML_ASSERT(ggml_are_same_shape (src1, src2));
 
-                        GGML_ASSERT(ggml_are_same_shape(src1, src2));
-                        GGML_ASSERT(src3);
+                        struct ggml_tensor * src3 = gf->nodes[i]->src[3];
 
                         size_t offs_src3 = 0;
 
@@ -2527,6 +2534,11 @@ static enum ggml_status ggml_metal_graph_compute(
                         GGML_ASSERT(!src3 || src3->type == GGML_TYPE_F16);
                         GGML_ASSERT(!src3 || src3->ne[1] >= GGML_PAD(src0->ne[1], 8) &&
                                 "the Flash-Attention Metal kernel requires the mask to be padded to 8 and at least n_queries big");
+
+                        const uint64_t nb20 = src2 ? src2->nb[0] : 0; GGML_UNUSED(nb20);
+                        const uint64_t nb21 = src2 ? src2->nb[1] : 0;
+                        const uint64_t nb22 = src2 ? src2->nb[2] : 0;
+                        const uint64_t nb23 = src2 ? src2->nb[3] : 0;
 
                         const int64_t  ne30 = src3 ? src3->ne[0] : 0; GGML_UNUSED(ne30);
                       //const int64_t  ne31 = src3 ? src3->ne[1] : 0;
@@ -2590,34 +2602,35 @@ static enum ggml_status ggml_metal_graph_compute(
                         [encoder setBuffer:id_src0     offset:offs_src0           atIndex:0];
                         [encoder setBuffer:id_src1     offset:offs_src1           atIndex:1];
                         [encoder setBuffer:id_src2     offset:offs_src2           atIndex:2];
-                        [encoder setBuffer:id_src3     offset:offs_src3           atIndex:3];
+                        if (id_src3) {
+                            [encoder setBuffer:id_src3     offset:offs_src3           atIndex:3];
+                        } else {
+                            [encoder setBuffer:id_src0     offset:offs_src0           atIndex:3];
+                        }
                         [encoder setBuffer:id_dst      offset:offs_dst            atIndex:4];
-                        [encoder setBytes:&ne00        length:sizeof( int64_t)    atIndex:5];
-                        [encoder setBytes:&ne01        length:sizeof( int64_t)    atIndex:6];
-                        [encoder setBytes:&ne02        length:sizeof( int64_t)    atIndex:7];
-                        [encoder setBytes:&ne03        length:sizeof( int64_t)    atIndex:8];
-                        [encoder setBytes:&nb00        length:sizeof(uint64_t)    atIndex:9];
-                        [encoder setBytes:&nb01        length:sizeof(uint64_t)    atIndex:10];
-                        [encoder setBytes:&nb02        length:sizeof(uint64_t)    atIndex:11];
-                        [encoder setBytes:&nb03        length:sizeof(uint64_t)    atIndex:12];
-                        [encoder setBytes:&ne10        length:sizeof( int64_t)    atIndex:13];
-                        [encoder setBytes:&ne11        length:sizeof( int64_t)    atIndex:14];
-                        [encoder setBytes:&ne12        length:sizeof( int64_t)    atIndex:15];
-                        [encoder setBytes:&ne13        length:sizeof( int64_t)    atIndex:16];
-                        [encoder setBytes:&nb10        length:sizeof(uint64_t)    atIndex:17];
-                        [encoder setBytes:&nb11        length:sizeof(uint64_t)    atIndex:18];
-                        [encoder setBytes:&nb12        length:sizeof(uint64_t)    atIndex:19];
-                        [encoder setBytes:&nb13        length:sizeof(uint64_t)    atIndex:20];
-                        [encoder setBytes:&nb31        length:sizeof(uint64_t)    atIndex:21];
-                        [encoder setBytes:&ne0         length:sizeof( int64_t)    atIndex:22];
-                        [encoder setBytes:&ne1         length:sizeof( int64_t)    atIndex:23];
-                        [encoder setBytes:&ne2         length:sizeof( int64_t)    atIndex:24];
-                        [encoder setBytes:&ne3         length:sizeof( int64_t)    atIndex:25];
-                        [encoder setBytes:&scale       length:sizeof(   float)    atIndex:26];
-                        [encoder setBytes:&max_bias    length:sizeof(   float)    atIndex:27];
-                        [encoder setBytes:&m0          length:sizeof(m0)          atIndex:28];
-                        [encoder setBytes:&m1          length:sizeof(m1)          atIndex:29];
-                        [encoder setBytes:&n_head_log2 length:sizeof(n_head_log2) atIndex:30];
+                        [encoder setBytes:&ne01        length:sizeof( int64_t)    atIndex:5];
+                        [encoder setBytes:&ne02        length:sizeof( int64_t)    atIndex:6];
+                        [encoder setBytes:&ne03        length:sizeof( int64_t)    atIndex:7];
+                        [encoder setBytes:&nb01        length:sizeof(uint64_t)    atIndex:8];
+                        [encoder setBytes:&nb02        length:sizeof(uint64_t)    atIndex:9];
+                        [encoder setBytes:&nb03        length:sizeof(uint64_t)    atIndex:10];
+                        [encoder setBytes:&ne11        length:sizeof( int64_t)    atIndex:11];
+                        [encoder setBytes:&ne12        length:sizeof( int64_t)    atIndex:12];
+                        [encoder setBytes:&ne13        length:sizeof( int64_t)    atIndex:13];
+                        [encoder setBytes:&nb11        length:sizeof(uint64_t)    atIndex:14];
+                        [encoder setBytes:&nb12        length:sizeof(uint64_t)    atIndex:15];
+                        [encoder setBytes:&nb13        length:sizeof(uint64_t)    atIndex:16];
+                        [encoder setBytes:&nb21        length:sizeof(uint64_t)    atIndex:17];
+                        [encoder setBytes:&nb22        length:sizeof(uint64_t)    atIndex:18];
+                        [encoder setBytes:&nb23        length:sizeof(uint64_t)    atIndex:19];
+                        [encoder setBytes:&nb31        length:sizeof(uint64_t)    atIndex:20];
+                        [encoder setBytes:&ne1         length:sizeof( int64_t)    atIndex:21];
+                        [encoder setBytes:&ne2         length:sizeof( int64_t)    atIndex:22];
+                        [encoder setBytes:&scale       length:sizeof(   float)    atIndex:23];
+                        [encoder setBytes:&max_bias    length:sizeof(   float)    atIndex:24];
+                        [encoder setBytes:&m0          length:sizeof(m0)          atIndex:25];
+                        [encoder setBytes:&m1          length:sizeof(m1)          atIndex:26];
+                        [encoder setBytes:&n_head_log2 length:sizeof(n_head_log2) atIndex:27];
 
                         if (!use_vec_kernel) {
                             // half8x8 kernel
