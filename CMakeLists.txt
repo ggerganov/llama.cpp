@@ -134,6 +134,8 @@ set(LLAMA_SCHED_MAX_COPIES  "4" CACHE STRING "llama: max input copies for pipeli
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
+option(LLAMA_LASX                            "llama: enable lasx"                               ON)
+option(LLAMA_LSX                             "llama: enable lsx"                                ON)
 
 # add perf arguments
 option(LLAMA_PERF                            "llama: enable perf"                               OFF)
@@ -1108,6 +1110,17 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
         list(APPEND ARCH_FLAGS -mcpu=native -mtune=native)
         #TODO: Add  targets for Power8/Power9 (Altivec/VSX) and Power10(MMA) and query for big endian systems (ppc64/le/be)
     endif()
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")
+    message(STATUS "loongarch64 detected")
+
+    list(APPEND ARCH_FLAGS -march=loongarch64)
+    if (LLAMA_LASX)
+        list(APPEND ARCH_FLAGS -mlasx)
+    endif()
+    if (LLAMA_LSX)
+        list(APPEND ARCH_FLAGS -mlsx)
+    endif()
+
 else()
     message(STATUS "Unknown architecture")
 endif()

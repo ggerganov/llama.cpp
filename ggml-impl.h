@@ -455,6 +455,34 @@ static inline ggml_fp16_t ggml_compute_fp32_to_fp16(float f) {
 #include <riscv_vector.h>
 #endif
 
+#if defined(__loongarch64)
+#if defined(__loongarch_asx)
+#include <lasxintrin.h>
+#endif
+#if defined(__loongarch_sx)
+#include <lsxintrin.h>
+#endif
+#endif
+
+#if defined(__loongarch_asx)
+
+typedef union {
+    int32_t i;
+    float f;
+} ft_union;
+
+/* float type data load instructions */
+static __m128 __lsx_vreplfr2vr_s(float val) {
+    ft_union fi_tmpval = {.f = val};
+    return (__m128)__lsx_vreplgr2vr_w(fi_tmpval.i);
+}
+
+static __m256 __lasx_xvreplfr2vr_s(float val) {
+    ft_union fi_tmpval = {.f = val};
+    return (__m256)__lasx_xvreplgr2vr_w(fi_tmpval.i);
+}
+#endif
+
 #ifdef __F16C__
 
 #ifdef _MSC_VER
