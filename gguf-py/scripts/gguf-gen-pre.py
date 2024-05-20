@@ -92,7 +92,7 @@ def test_pre_tok(hf_voc_req: HFVocabRequest) -> None:
     params = test_pre_tok_params()
     for model in hf_voc_req.models:
         # set the model path, e.g. 'models/meta-llama/Llama-2-7b-hf'
-        path = Path(f"{hf_voc_req.model_path}/{model["repo"]}")
+        path = Path(f"{hf_voc_req.model_path}/{model['repo']}")
         # set the model name, e.g. llama-2-7b-hf
         name = path.stem.lower()
         # model input encodings, e.g. 'models/meta-llama/Llama-2-7b-hf/llama-2-7b-hf.vocab.gguf.inp'
@@ -125,7 +125,7 @@ def test_pre_tok(hf_voc_req: HFVocabRequest) -> None:
                     f.write(f" {encoding}")
                 f.write("\n")
 
-        logger.info(f"Tests for {model["repo"]} written in {final}.*")
+        logger.info(f"Tests for {model['repo']} written in {final}.*")
 
 
 def generate_vocab_script(hf_voc_req: HFVocabRequest) -> None:
@@ -134,7 +134,7 @@ def generate_vocab_script(hf_voc_req: HFVocabRequest) -> None:
 
     for model in hf_voc_req.models:
         # get the repo path
-        path = Path(f"{hf_voc_req.model_path}/{model["repo"]}")
+        path = Path(f"{hf_voc_req.model_path}/{model['repo']}")
         # set the vocab path
         vocab = path / f"ggml-vocab-{path.stem.lower()}.gguf"
         # set the command line
