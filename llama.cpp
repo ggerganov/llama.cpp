@@ -1197,11 +1197,13 @@ struct no_init {
 };
 
 struct llama_file {
+    char * name;
     // use FILE * so we don't have to re-open the file to mmap
     FILE * fp;
     size_t size;
 
     llama_file(const char * fname, const char * mode) {
+        name = strdup(fname);
         fp = ggml_fopen(fname, mode);
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
@@ -1265,10 +1267,105 @@ struct llama_file {
         write_raw(&val, sizeof(val));
     }
 
+    size_t read_direct(void * ptr, size_t len, size_t offset) const {
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__APPLE__)
+        int page_size = sysconf(_SC_PAGESIZE);
+        GGML_ASSERT((uintptr_t) ptr % page_size == 0);
+        GGML_ASSERT(len % page_size == 0);
+        GGML_ASSERT(offset % page_size == 0);
+#ifdef __APPLE__
+        int fd = open(name, O_RDONLY);
+        if (fd == -1) {
+            throw std::runtime_error(format("failed to open %s: %s", name, strerror(errno)));
+        }
+        if (fcntl(fd, F_NOCACHE, 1) == -1) {
+            throw std::runtime_error(format("failed to enable direct I/O: %s", strerror(errno)));
+        }
+#else
+        int fd = open(name, O_RDONLY | O_DIRECT);
+        if (fd == -1) {
+            throw std::runtime_error(format("failed to open %s for direct I/O: %s", name, strerror(errno)));
+        }
+#endif
+        size_t bytes_read = 0;
+        while (len > 0) {
+            ssize_t count = pread(fd, ptr, std::min(len, (size_t) INT_MAX & ~(page_size - 1)), offset);
+            if (count == -1) {
+                throw std::runtime_error(format("direct read error: %s", strerror(errno)));
+            }
+            if (count == 0) { // EOF
+                break;
+            }
+            ptr = (char *) ptr + count;
+            offset += count;
+            len -= count;
+            bytes_read += count;
+        }
+
+        close(fd);
+
+        return bytes_read;
+    }
+
+    static constexpr bool DIRECT_IO_SUPPORTED = true;
+#elif defined(_WIN32)
+        SYSTEM_INFO siSysInfo;
+        GetSystemInfo(&siSysInfo);
+        DWORD dwPageSize = siSysInfo.dwPageSize;
+        GGML_ASSERT((uintptr_t) ptr % dwPageSize == 0);
+        GGML_ASSERT(len % dwPageSize == 0);
+        GGML_ASSERT(offset % dwPageSize == 0);
+
+        HANDLE hFile = ReOpenFile((HANDLE) _get_osfhandle(_fileno(fp)), GENERIC_READ, FILE_SHARE_READ, FILE_FLAG_NO_BUFFERING);
+        if (hFile == INVALID_HANDLE_VALUE) {
+            throw std::runtime_error(format("failed to open %s: %s", name, llama_format_win_err(GetLastError()).c_str()));
+        }
+
+        size_t bytes_read = 0;
+        while (len > 0) {
+            OVERLAPPED oOverlap = {0};
+            oOverlap.OffsetHigh = offset >> 32;
+            oOverlap.Offset = offset;
+            DWORD nBytesToRead = std::min(len, (size_t) 0xFFFFFFFF & ~(dwPageSize - 1));
+            DWORD count = 0;
+            if (!ReadFile(hFile, ptr, nBytesToRead, &count, &oOverlap)) {
+                if (GetLastError() == ERROR_HANDLE_EOF) {
+                    bytes_read += count;
+                    break;
+                }
+                throw std::runtime_error(format("direct read error: %s", llama_format_win_err(GetLastError()).c_str()));
+            }
+            bytes_read += count;
+            if (count < nBytesToRead) { // EOF
+                break;
+            }
+            ptr = (char *) ptr + count;
+            offset += count;
+            len -= count;
+        }
+
+        CloseHandle(hFile);
+
+        return bytes_read;
+    }
+
+    static constexpr bool DIRECT_IO_SUPPORTED = true;
+#else
+        GGML_UNUSED(ptr);
+        GGML_UNUSED(len);
+        GGML_UNUSED(offset);
+
+        throw std::runtime_error("direct I/O not supported");
+    }
+
+    static constexpr bool DIRECT_IO_SUPPORTED = false;
+#endif
+
     ~llama_file() {
         if (fp) {
             std::fclose(fp);
         }
+        free(name);
     }
 };
 using llama_files = std::vector<std::unique_ptr<llama_file>>;
@@ -1278,6 +1375,23 @@ struct llama_mmap {
     size_t size;
 
     llama_mmap(const llama_mmap &) = delete;
+
+    static void align_to_next_page(size_t * ptr, size_t page_size) {
+        size_t offset_in_page = *ptr & (page_size - 1);
+        size_t offset_to_page = offset_in_page == 0 ? 0 : page_size - offset_in_page;
+        *ptr += offset_to_page;
+    }
+
+    static void align_to_previous_page(size_t * ptr, size_t page_size) {
+        *ptr = *ptr & ~(page_size - 1);
+    }
+
+    virtual void populate(size_t first, size_t last) const {
+        GGML_UNUSED(first);
+        GGML_UNUSED(last);
+
+        // either already populated or populated dynamically
+    }
 
 #ifdef _POSIX_MAPPED_FILES
     static constexpr bool SUPPORTED = true;
@@ -1324,26 +1438,16 @@ struct llama_mmap {
         mapped_fragments.emplace_back(0, file->size);
     }
 
-    static void align_range(size_t * first, size_t * last, size_t page_size) {
-        // align first to the next page
-        size_t offset_in_page = *first & (page_size - 1);
-        size_t offset_to_page = offset_in_page == 0 ? 0 : page_size - offset_in_page;
-        *first += offset_to_page;
-
-        // align last to the previous page
-        *last = *last & ~(page_size - 1);
-
-        if (*last <= *first) {
-            *last = *first;
-        }
-    }
-
     // partially unmap the file in the range [first, last)
     void unmap_fragment(size_t first, size_t last) {
         // note: this function must not be called multiple times with overlapping ranges
         // otherwise, there is a risk of invalidating addresses that have been repurposed for other mappings
         int page_size = sysconf(_SC_PAGESIZE);
-        align_range(&first, &last, page_size);
+        align_to_next_page(&first, page_size);
+        align_to_previous_page(&last, page_size);
+        if (last <= first) {
+            last = first;
+        }
         size_t len = last - first;
 
         if (len == 0) {
@@ -1384,7 +1488,7 @@ struct llama_mmap {
         mapped_fragments = std::move(new_mapped_fragments);
     }
 
-    ~llama_mmap() {
+    virtual ~llama_mmap() {
         for (const auto & frag : mapped_fragments) {
             if (munmap((char *) addr + frag.first, frag.second - frag.first)) {
                 LLAMA_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
@@ -1447,7 +1551,7 @@ struct llama_mmap {
         GGML_UNUSED(last);
     }
 
-    ~llama_mmap() {
+    virtual ~llama_mmap() {
         if (!UnmapViewOfFile(addr)) {
             LLAMA_LOG_WARN("warning: UnmapViewOfFile failed: %s\n",
                     llama_format_win_err(GetLastError()).c_str());
@@ -1470,8 +1574,99 @@ struct llama_mmap {
 
         throw std::runtime_error("mmap not supported");
     }
+
+    virtual ~llama_mmap() = default;
+#endif
+
+protected:
+    llama_mmap() {}
+};
+
+struct llama_anonymous_mmap : llama_mmap {
+    llama_file * file;
+
+    llama_anonymous_mmap(const llama_anonymous_mmap &) = delete;
+
+#ifdef _POSIX_MAPPED_FILES
+#ifndef MAP_ANONYMOUS
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+    llama_anonymous_mmap(struct llama_file * file) {
+        this->file = file;
+        size = file->size;
+        addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        if (addr == MAP_FAILED) { // NOLINT
+            throw std::runtime_error(format("mmap(.., MAP_ANONYMOUS) failed: %s", strerror(errno)));
+        }
+#ifdef __linux__
+        // THP is enabled by default for anonymous memory mappings on madvise
+        if (madvise(addr, size, MADV_HUGEPAGE)) {
+            LLAMA_LOG_WARN("warning: madvise(.., MADV_HUGEPAGE) failed: %s\n", strerror(errno));
+        }
+#endif
+        mapped_fragments.emplace_back(0, size);
+    }
+
+    void populate(size_t first, size_t last) const {
+        int page_size = sysconf(_SC_PAGESIZE);
+
+        align_to_previous_page(&first, page_size);
+        align_to_next_page(&last, page_size);
+
+        size_t bytes_read = file->read_direct((char *) addr + first, last - first, first);
+        if (bytes_read != std::min(last, file->size) - first) {
+            throw std::runtime_error("unexpectedly reached end of file");
+        }
+    }
+#elif defined(_WIN32)
+    llama_anonymous_mmap(struct llama_file * file) {
+        this->file = file;
+        size = file->size;
+
+        HANDLE hMapping = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, size >> 32, size, NULL);
+        if (hMapping == NULL) {
+            throw std::runtime_error(format("CreateFileMapping failed: %s", llama_format_win_err(GetLastError()).c_str()));
+        }
+
+        addr = MapViewOfFile(hMapping, FILE_MAP_ALL_ACCESS, 0, 0, size);
+        DWORD dwError = GetLastError();
+
+        CloseHandle(hMapping);
+
+        if (addr == NULL) {
+            throw std::runtime_error(format("MapViewOfFile failed: %s", llama_format_win_err(dwError).c_str()));
+        }
+    }
+
+    void populate(size_t first, size_t last) const {
+        SYSTEM_INFO siSysInfo;
+        GetSystemInfo(&siSysInfo);
+        DWORD dwPageSize = siSysInfo.dwPageSize;
+
+        align_to_previous_page(&first, dwPageSize);
+        align_to_next_page(&last, dwPageSize);
+
+        size_t bytes_read = file->read_direct((char *) addr + first, last - first, first);
+        if (bytes_read != std::min(last, file->size) - first) {
+            throw std::runtime_error("unexpectedly reached end of file");
+        }
+    }
+#else
+    llama_anonymous_mmap(struct llama_file * file) {
+        GGML_UNUSED(file);
+
+        throw std::runtime_error("mmap not supported");
+    }
+
+    void populate(size_t first, size_t last) const {
+        GGML_UNUSED(first);
+        GGML_UNUSED(last);
+
+        throw std::runtime_error("mmap not supported");
+    }
 #endif
 };
+
 using llama_mmaps = std::vector<std::unique_ptr<llama_mmap>>;
 
 // Represents some region of memory being locked using mlock or VirtualLock;
@@ -3020,6 +3215,7 @@ struct llama_model_loader {
     size_t  n_bytes    = 0;
 
     bool use_mmap = false;
+    bool use_direct_io = false;
     bool check_tensors;
 
     llama_files files;
@@ -3054,7 +3250,7 @@ struct llama_model_loader {
     std::string arch_name;
     LLM_KV      llm_kv    = LLM_KV(LLM_ARCH_UNKNOWN);
 
-    llama_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
+    llama_model_loader(const std::string & fname, bool use_mmap, bool use_direct_io, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
         int trace = 0;
         if (getenv("LLAMA_TRACE")) {
             trace = atoi(getenv("LLAMA_TRACE"));
@@ -3267,7 +3463,15 @@ struct llama_model_loader {
             use_mmap = false;
         }
 
-        this->use_mmap = use_mmap;
+        if (!llama_file::DIRECT_IO_SUPPORTED && use_direct_io) {
+            LLAMA_LOG_WARN("%s: direct I/O is not supported on this platform\n", __func__);
+            use_direct_io = false;
+        }
+
+        // either file or anonymous mappings
+        this->use_mmap = use_mmap || use_direct_io;
+        this->use_direct_io = use_direct_io;
+
         this->check_tensors = check_tensors;
     }
 
@@ -3463,12 +3667,12 @@ struct llama_model_loader {
         }
     }
 
-    void init_mappings(bool prefetch = true, llama_mlocks * mlock_mmaps = nullptr) {
+    void init_mappings(bool prefetch = true, llama_mlocks * mlock_mmaps = nullptr, bool anonymous = false) {
         if (use_mmap) {
             mappings.reserve(files.size());
             mmaps_used.reserve(files.size());
             for (const auto & file : files) {
-                std::unique_ptr<llama_mmap> mapping(new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa()));
+                std::unique_ptr<llama_mmap> mapping(anonymous ? new llama_anonymous_mmap(file.get()) :  new llama_mmap(file.get(), prefetch ? -1 : 0, ggml_is_numa()));
                 mmaps_used.emplace_back(mapping->size, 0);
                 if (mlock_mmaps) {
                     std::unique_ptr<llama_mlock> mlock_mmap(new llama_mlock());
@@ -3545,6 +3749,15 @@ struct llama_model_loader {
             llama_progress_callback progress_callback,
             void * progress_callback_user_data) {
         GGML_ASSERT(size_data != 0 && "call init_mappings() first");
+
+        if (use_mmap) {
+            for (uint32_t idx = 0; idx < files.size(); idx++) {
+                void * addr = nullptr;
+                size_t first, last;
+                get_mapping_range(&first, &last, &addr, idx, ctx);
+                mappings.at(idx)->populate(first, last);
+            }
+        }
 
         std::vector<no_init<uint8_t>> read_buf;
         std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
@@ -6005,7 +6218,7 @@ static bool llm_load_tensors(
 
     ml.done_getting_tensors();
 
-    ml.init_mappings(true, use_mlock ? &model.mlock_mmaps : nullptr);
+    ml.init_mappings(true, use_mlock ? &model.mlock_mmaps : nullptr, /* anonymous */ ml.use_direct_io);
     model.mappings.reserve(ml.mappings.size());
 
     // create the backend buffers
@@ -6148,7 +6361,7 @@ static bool llm_load_tensors(
 // Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
 static int llama_model_load(const std::string & fname, llama_model & model, llama_model_params & params) {
     try {
-        llama_model_loader ml(fname, params.use_mmap, params.check_tensors, params.kv_overrides);
+        llama_model_loader ml(fname, params.use_mmap, params.use_direct_io, params.check_tensors, params.kv_overrides);
 
         model.hparams.vocab_only = params.vocab_only;
 
@@ -14536,7 +14749,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         auto v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
         kv_overrides = v->data();
     }
-    llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
+    llama_model_loader ml(fname_inp, use_mmap, /* use_direct_io */ false, /*check_tensors*/ true, kv_overrides);
     ml.init_mappings(false); // no prefetching
 
     llama_model model;
@@ -14899,7 +15112,7 @@ static int llama_apply_lora_from_file_internal(
     std::unique_ptr<llama_model_loader> ml;
     if (path_base_model) {
         LLAMA_LOG_INFO("%s: loading base model from '%s'\n", __func__, path_base_model);
-        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*check_tensors*/ false, /*kv_overrides*/ nullptr));
+        ml.reset(new llama_model_loader(path_base_model, /*use_mmap*/ true, /*use_direct_io*/ false, /*check_tensors*/ false, /*kv_overrides*/ nullptr));
         ml->init_mappings(/*prefetch*/ false); // no prefetching
     }
 
@@ -15158,6 +15371,7 @@ struct llama_model_params llama_model_default_params() {
         /*.kv_overrides                =*/ nullptr,
         /*.vocab_only                  =*/ false,
         /*.use_mmap                    =*/ true,
+        /*.use_direct_io               =*/ false,
         /*.use_mlock                   =*/ false,
         /*.check_tensors               =*/ false,
     };
@@ -15244,6 +15458,10 @@ bool llama_supports_mmap(void) {
 
 bool llama_supports_mlock(void) {
     return llama_mlock::SUPPORTED;
+}
+
+bool llama_supports_direct_io(void) {
+    return llama_file::DIRECT_IO_SUPPORTED;
 }
 
 bool llama_supports_gpu_offload(void) {

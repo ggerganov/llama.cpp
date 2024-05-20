@@ -38,6 +38,7 @@ options:
   -nkvo, --no-kv-offload <0|1>        (default: 0)
   -fa, --flash-attn <0|1>             (default: 0)
   -mmp, --mmap <0|1>                  (default: 1)
+  -dio, --direct-io <0|1>             (default: 0)
   --numa <distribute|isolate|numactl> (default: disabled)
   -embd, --embeddings <0|1>           (default: 0)
   -ts, --tensor-split <ts0/ts1/..>    (default: 0)

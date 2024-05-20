@@ -34,6 +34,7 @@ The project is under active development, and we are [looking for feedback and co
 - `-ub N`, `--ubatch-size N`: Physical maximum batch size. Default: `512`
 - `--mlock`: Lock the model in memory, preventing it from being swapped out when memory-mapped.
 - `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed.
+- `--direct-io`: Use direct I/O. Potentially faster uncached loading, fewer pageouts, no page cache pollution.
 - `--numa STRATEGY`: Attempt one of the below optimization strategies that may help on some NUMA systems
 - `--numa distribute`: Spread execution evenly over all nodes
 - `--numa isolate`: Only spawn threads on CPUs on the node that execution started on

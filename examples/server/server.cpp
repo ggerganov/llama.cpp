@@ -2352,6 +2352,9 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     if (llama_supports_mmap()) {
         printf("  --no-mmap                 do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
     }
+    if (llama_supports_direct_io()) {
+        printf("  --direct-io               use direct I/O (potentially faster uncached loading, fewer pageouts, no page cache pollution)\n");
+    }
     printf("  --numa TYPE               attempt optimizations that help on some NUMA systems\n");
     printf("                              - distribute: spread execution evenly over all nodes\n");
     printf("                              - isolate: only spawn threads on CPUs on the node that execution started on\n");
@@ -2754,6 +2757,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             params.use_mlock = true;
         } else if (arg == "--no-mmap") {
             params.use_mmap = false;
+        } else if (arg == "--direct-io") {
+            params.use_direct_io = true;
         } else if (arg == "--numa") {
             if (++i >= argc) {
                 invalid_param = true;
