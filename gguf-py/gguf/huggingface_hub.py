@@ -2,56 +2,12 @@ import json
 import logging
 import os
 import pathlib
-from enum import IntEnum, auto
 from hashlib import sha256
 
 import requests
 from transformers import AutoTokenizer
 
-from .constants import MODEL_ARCH
-
-
-class LLaMaVocabType(IntEnum):
-    NON = auto()  # For models without vocab
-    SPM = auto()  # SentencePiece LLaMa tokenizer
-    BPE = auto()  # BytePair GPT-2 tokenizer
-    WPM = auto()  # WordPiece BERT tokenizer
-
-
-class LLaMaModelType(IntEnum):
-    PTH = auto()  # PyTorch
-    SFT = auto()  # SafeTensor
-
-
-# NOTE:
-#   - Repository paths are required
-#   - Allow the user to specify the tokenizer model type themselves
-#   - Use architecture types because they are explicitly defined
-#   - Possible tokenizer model types are: SentencePiece, WordPiece, or BytePair
-MODELS = (
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.SPM, "repo": "meta-llama/Llama-2-7b-hf", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "meta-llama/Meta-Llama-3-8B", },
-    {"model_arch": MODEL_ARCH.PHI3, "vocab_type": LLaMaVocabType.SPM, "repo": "microsoft/Phi-3-mini-4k-instruct", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "deepseek-ai/deepseek-llm-7b-base", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "deepseek-ai/deepseek-coder-6.7b-base", },
-    {"model_arch": MODEL_ARCH.FALCON, "vocab_type": LLaMaVocabType.BPE, "repo": "tiiuae/falcon-7b", },
-    {"model_arch": MODEL_ARCH.BERT, "vocab_type": LLaMaVocabType.WPM, "repo": "BAAI/bge-small-en-v1.5", },
-    {"model_arch": MODEL_ARCH.MPT, "vocab_type": LLaMaVocabType.BPE, "repo": "mosaicml/mpt-7b", },
-    {"model_arch": MODEL_ARCH.STARCODER2, "vocab_type": LLaMaVocabType.BPE, "repo": "bigcode/starcoder2-3b", },
-    {"model_arch": MODEL_ARCH.GPT2, "vocab_type": LLaMaVocabType.BPE, "repo": "openai-community/gpt2", },
-    {"model_arch": MODEL_ARCH.REFACT, "vocab_type": LLaMaVocabType.BPE, "repo": "smallcloudai/Refact-1_6-base", },
-    {"model_arch": MODEL_ARCH.COMMAND_R, "vocab_type": LLaMaVocabType.BPE, "repo": "CohereForAI/c4ai-command-r-v01", },
-    {"model_arch": MODEL_ARCH.QWEN2, "vocab_type": LLaMaVocabType.BPE, "repo": "Qwen/Qwen1.5-7B", },
-    {"model_arch": MODEL_ARCH.OLMO, "vocab_type": LLaMaVocabType.BPE, "repo": "allenai/OLMo-1.7-7B-hf", },
-    {"model_arch": MODEL_ARCH.DBRX, "vocab_type": LLaMaVocabType.BPE, "repo": "databricks/dbrx-base", },
-    {"model_arch": MODEL_ARCH.JINA_BERT_V2, "vocab_type": LLaMaVocabType.WPM, "repo": "jinaai/jina-embeddings-v2-base-en", },
-    {"model_arch": MODEL_ARCH.JINA_BERT_V2, "vocab_type": LLaMaVocabType.BPE, "repo": "jinaai/jina-embeddings-v2-base-es", },
-    {"model_arch": MODEL_ARCH.JINA_BERT_V2, "vocab_type": LLaMaVocabType.BPE, "repo": "jinaai/jina-embeddings-v2-base-de", },
-    {"model_arch": MODEL_ARCH.PHI2, "vocab_type": LLaMaVocabType.BPE, "repo": "microsoft/phi-1", },
-    {"model_arch": MODEL_ARCH.STABLELM, "vocab_type": LLaMaVocabType.BPE, "repo": "stabilityai/stablelm-2-zephyr-1_6b", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.SPM, "repo": "mistralai/Mistral-7B-Instruct-v0.2", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.SPM, "repo": "mistralai/Mixtral-8x7B-Instruct-v0.1", },
-)
+from .constants import HF_MODEL_MAP, LLaMaModelType, LLaMaVocabType
 
 
 class HFHubRequest:
@@ -125,7 +81,7 @@ class HFHubBase:
         self.logger = logger
 
         self._hub = HFHubRequest(auth_token, logger)
-        self._models = list(MODELS)
+        self._models = list(HF_MODEL_MAP)
 
     @property
     def hub(self) -> HFHubRequest:
