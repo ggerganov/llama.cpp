@@ -96,53 +96,53 @@ class SimpleChat {
         return this.request_jsonstr(req);
     }
 
-}
-
-
-/**
- * Handle setting of system prompt, but only at begining.
- * @param {HTMLInputElement} inputSystem
- */
-function handle_systemprompt_begin(inputSystem) {
-    let sysPrompt = inputSystem.value;
-    if (gChat.xchat.length == 0) {
-        if (sysPrompt.length > 0) {
-            gChat.add(Roles.System, sysPrompt);
-        }
-    } else {
-        if (sysPrompt.length > 0) {
-            if (gChat.xchat[0].role !== Roles.System) {
-                console.error("ERRR:HandleSubmit:You need to specify system prompt before any user query, ignoring...");
-            } else {
-                if (gChat.xchat[0].content !== sysPrompt) {
-                    console.error("ERRR:HandleSubmit:You cant change system prompt, mid way through, ignoring...");
+    /**
+     * Allow setting of system prompt, but only at begining.
+     * @param {string} sysPrompt
+     * @param {string} msgTag
+     */
+    add_system_begin(sysPrompt, msgTag) {
+        if (this.xchat.length == 0) {
+            if (sysPrompt.length > 0) {
+                return this.add(Roles.System, sysPrompt);
+            }
+        } else {
+            if (sysPrompt.length > 0) {
+                if (this.xchat[0].role !== Roles.System) {
+                    console.error(`ERRR:SimpleChat:${msgTag}:You need to specify system prompt before any user query, ignoring...`);
+                } else {
+                    if (this.xchat[0].content !== sysPrompt) {
+                        console.error(`ERRR:SimpleChat:${msgTag}:You cant change system prompt, mid way through, ignoring...`);
+                    }
                 }
             }
         }
+        return false;
     }
+
+    /**
+     * Allow setting of system prompt, at any time.
+     * @param {string} sysPrompt
+     * @param {string} msgTag
+     */
+    add_system_anytime(sysPrompt, msgTag) {
+        if (sysPrompt.length <= 0) {
+            return false;
+        }
+
+        if (this.iLastSys < 0) {
+            return this.add(Roles.System, sysPrompt);
+        }
+
+        let lastSys = this.xchat[this.iLastSys].content;
+        if (lastSys !== sysPrompt) {
+            return this.add(Roles.System, sysPrompt);
+        }
+        return false;
+    }
+
 }
 
-/**
- * Handle setting of system prompt, at any time.
- * @param {HTMLInputElement} inputSystem
- */
-function handle_systemprompt_anytime(inputSystem) {
-    let sysPrompt = inputSystem.value;
-    if (sysPrompt.length <= 0) {
-        return;
-    }
-
-    if (gChat.iLastSys < 0) {
-        gChat.add(Roles.System, sysPrompt);
-        return;
-    }
-
-    let lastSys = gChat.xchat[gChat.iLastSys].content;
-    if (lastSys !== sysPrompt) {
-        gChat.add(Roles.System, sysPrompt);
-        return;
-    }
-}
 
 
 /**
@@ -154,7 +154,7 @@ function handle_systemprompt_anytime(inputSystem) {
  */
 async function handle_submit(inputSystem, inputUser, divChat, apiEP) {
 
-    handle_systemprompt_anytime(inputSystem);
+    gChat.add_system_anytime(inputSystem.value, "0");
 
     let content = inputUser?.value;
     if (!gChat.add(Roles.User, content)) {
