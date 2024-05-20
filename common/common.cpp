@@ -2679,14 +2679,14 @@ void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const l
     }
 
     fprintf(stream, "lora:\n");
-    for (const std::tuple<std::string, float> & la : params.lora_adapter) {
+    for (std::tuple<std::string, float> & la : params.lora_adapter) {
         if (std::get<1>(la) != 1.0f) {
             continue;
         }
         fprintf(stream, "  - %s\n", std::get<0>(la).c_str());
     }
     fprintf(stream, "lora_scaled:\n");
-    for (const std::tuple<std::string, float> & la : params.lora_adapter) {
+    for (std::tuple<std::string, float> & la : params.lora_adapter) {
         if (std::get<1>(la) == 1.0f) {
             continue;
         }
