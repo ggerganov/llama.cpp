@@ -64,7 +64,6 @@ class HFHubRequest:
 
         # Set the logger
         if logger is None:
-            logging.basicConfig(level=logging.DEBUG)
             logger = logging.getLogger(__name__)
         self.logger = logger
 
