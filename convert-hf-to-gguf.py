@@ -1148,45 +1148,6 @@ class RefactModel(Model):
         return tensors
 
 
-@Model.register("PersimmonForCausalLM")
-class PersimmonModel(Model):
-    model_arch = gguf.MODEL_ARCH.PERSIMMON
-
-    def set_gguf_parameters(self):
-        block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
-        head_count = self.hparams["num_attention_heads"]
-        head_count_kv = head_count
-        hidden_size = self.hparams["hidden_size"]
-
-        self.gguf_writer.add_name('persimmon-8b-chat')
-        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
-        self.gguf_writer.add_embedding_length(hidden_size)
-        self.gguf_writer.add_block_count(block_count)
-        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
-
-        # NOTE: not sure about this change - why does the model not have a rope dimension count when it is smaller
-        #       than the head size?
-        #       ref: https://github.com/ggerganov/llama.cpp/pull/4889
-        # self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
-        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count // 2)
-
-        self.gguf_writer.add_head_count(head_count)
-        self.gguf_writer.add_head_count_kv(head_count_kv)
-        self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
-        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
-
-    def set_vocab(self):
-        self._set_vocab_sentencepiece()
-        # self.gguf_writer.add_bos_token_id(71013)
-        # self.gguf_writer.add_eos_token_id(71013)
-
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
-        del name, new_name, bid, n_dims  # unused
-
-        # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
-        return True
-
-
 @Model.register("StableLmForCausalLM", "StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM")
 class StableLMModel(Model):
     model_arch = gguf.MODEL_ARCH.STABLELM
