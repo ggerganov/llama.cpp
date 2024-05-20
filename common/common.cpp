@@ -2081,17 +2081,6 @@ static bool llama_download_file(const std::string & url, const std::string & pat
             }
         }
 
-        // Create parent directories if not exist
-        const std::vector<std::string> path_parts = string_split(path_temporary, DIRECTORY_SEPARATOR);
-        std::string parent_dir = "";
-        struct stat st;
-        for (unsigned i = 0; i < path_parts.size() - 1; i++) {
-            parent_dir += path_parts[i] + DIRECTORY_SEPARATOR;
-            if (stat(parent_dir.c_str(), &st) != 0) {
-                mkdir(parent_dir.c_str(), S_IRWXU);
-            }
-        }
-
         // Set the output file
         std::unique_ptr<FILE, decltype(&fclose)> outfile(fopen(path_temporary.c_str(), "wb"), fclose);
         if (!outfile) {

@@ -32,12 +32,6 @@
 } while(0)
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
-#define DEFAULT_LLAMA_CACHE ".cache/"
-
-#ifdef _WIN32
-#include <direct.h>
-#define mkdir(path, mode) _mkdir(path) // On Windows, _mkdir does not take mode
-#endif
 
 // build info
 extern int LLAMA_BUILD_NUMBER;
