@@ -330,6 +330,18 @@ void launch_fattn_tile_f16_V_type(ggml_backend_cuda_context & ctx, ggml_tensor *
             launch_fattn_tile_f16_64_128<
                 cols_per_block, parallel_blocks, type_k, qkk, qrk, dequantize_k, block_q4_0, QK4_0, QR4_0, dequantize_q4_0>(ctx, dst);
             break;
+        case GGML_TYPE_Q4_1:
+            launch_fattn_tile_f16_64_128<
+                cols_per_block, parallel_blocks, type_k, qkk, qrk, dequantize_k, block_q4_1, QK4_1, QR4_1, dequantize_q4_1>(ctx, dst);
+            break;
+        case GGML_TYPE_Q5_0:
+            launch_fattn_tile_f16_64_128<
+                cols_per_block, parallel_blocks, type_k, qkk, qrk, dequantize_k, block_q5_0, QK5_0, QR5_0, dequantize_q5_0>(ctx, dst);
+            break;
+        case GGML_TYPE_Q5_1:
+            launch_fattn_tile_f16_64_128<
+                cols_per_block, parallel_blocks, type_k, qkk, qrk, dequantize_k, block_q5_1, QK5_1, QR5_1, dequantize_q5_1>(ctx, dst);
+            break;
         case GGML_TYPE_Q8_0:
             launch_fattn_tile_f16_64_128<
                 cols_per_block, parallel_blocks, type_k, qkk, qrk, dequantize_k, block_q8_0, QK8_0, QR8_0, dequantize_q8_0>(ctx, dst);
@@ -351,6 +363,15 @@ void launch_fattn_tile_f16_K_type(ggml_backend_cuda_context & ctx, ggml_tensor *
     switch (K->type) {
         case GGML_TYPE_Q4_0:
             launch_fattn_tile_f16_V_type<cols_per_block, parallel_blocks, block_q4_0, QK4_0, QR4_0, dequantize_q4_0>(ctx, dst);
+            break;
+        case GGML_TYPE_Q4_1:
+            launch_fattn_tile_f16_V_type<cols_per_block, parallel_blocks, block_q4_1, QK4_1, QR4_1, dequantize_q4_1>(ctx, dst);
+            break;
+        case GGML_TYPE_Q5_0:
+            launch_fattn_tile_f16_V_type<cols_per_block, parallel_blocks, block_q5_0, QK5_0, QR5_0, dequantize_q5_0>(ctx, dst);
+            break;
+        case GGML_TYPE_Q5_1:
+            launch_fattn_tile_f16_V_type<cols_per_block, parallel_blocks, block_q5_1, QK5_1, QR5_1, dequantize_q5_1>(ctx, dst);
             break;
         case GGML_TYPE_Q8_0:
             launch_fattn_tile_f16_V_type<cols_per_block, parallel_blocks, block_q8_0, QK8_0, QR8_0, dequantize_q8_0>(ctx, dst);
