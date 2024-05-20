@@ -69,12 +69,13 @@ class Keys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
 
     class Tokenizer:
-        MODEL            = "tokenizer.ggml.model"
-        HASH             = "tokenizer.ggml.hash"
-        TYPE             = "tokenizer.ggml.type"
+        MODEL            = "tokenizer.ggml.model"             # Model arch, e.g. llama
+        TYPE             = "tokenizer.ggml.type"              # BPE, SPM, WPM, etc.
+        PRE              = "tokenizer.ggml.pre"               # Pre-tokenizer reg-ex
+        HASH             = "tokenizer.ggml.hash"              # Merged vocab hash sum
         LIST             = "tokenizer.ggml.tokens"
         TOKEN_TYPE       = "tokenizer.ggml.token_type"
-        TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # for BERT-style token types
+        TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # BERT token types
         SCORES           = "tokenizer.ggml.scores"
         MERGES           = "tokenizer.ggml.merges"
         BOS_ID           = "tokenizer.ggml.bos_token_id"
@@ -1001,8 +1002,9 @@ KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
-KEY_TOKENIZER_HASH      = Keys.Tokenizer.HASH
 KEY_TOKENIZER_TYPE       = Keys.Tokenizer.TYPE
+KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
+KEY_TOKENIZER_HASH       = Keys.Tokenizer.HASH
 KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
 KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
