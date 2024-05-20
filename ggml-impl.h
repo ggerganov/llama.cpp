@@ -17,6 +17,18 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+#if defined(_WIN32)
+
+#define m512bh(p) p
+#define m512i(p) p
+
+#else
+
+#define m512bh(p) (__m512bh)(p)
+#define m512i(p) (__m512i)(p)
+
+#endif
+
 /**
  * Converts brain16 to float32.
  *
@@ -120,8 +132,15 @@ extern "C" {
 #ifndef __F16C__
 #define __F16C__
 #endif
+#endif
+
+// __SSE3__ and __SSSE3__ are not defined in MSVC, but SSE3/SSSE3 are present when AVX/AVX2/AVX512 are available
+#if defined(_MSC_VER) && (defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__))
 #ifndef __SSE3__
 #define __SSE3__
+#endif
+#ifndef __SSSE3__
+#define __SSSE3__
 #endif
 #endif
 

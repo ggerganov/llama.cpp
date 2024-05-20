@@ -565,7 +565,8 @@ extern "C" {
     // n-dimensional tensor
     struct ggml_tensor {
         enum ggml_type         type;
-        enum ggml_backend_type backend;
+
+        GGML_DEPRECATED(enum ggml_backend_type backend, "use the buffer type to find the storage location of the tensor");
 
         struct ggml_backend_buffer * buffer;
 
@@ -766,7 +767,8 @@ extern "C" {
     GGML_API           bool ggml_is_3d        (const struct ggml_tensor * tensor);
     GGML_API           int  ggml_n_dims       (const struct ggml_tensor * tensor); // returns 1 for scalars
 
-    GGML_API bool ggml_are_same_shape(const struct ggml_tensor * t0, const struct ggml_tensor * t1);
+    GGML_API bool ggml_are_same_shape (const struct ggml_tensor * t0, const struct ggml_tensor * t1);
+    GGML_API bool ggml_are_same_stride(const struct ggml_tensor * t0, const struct ggml_tensor * t1);
 
     // use this to compute the memory overhead of a tensor
     GGML_API size_t ggml_tensor_overhead(void);
@@ -1673,11 +1675,23 @@ extern "C" {
             float                 p1);
 
     // nearest interpolate
+    // multiplies ne0 and ne1 by scale factor
     // used in stable-diffusion
     GGML_API struct ggml_tensor * ggml_upscale(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             int                   scale_factor);
+
+    // nearest interpolate
+    // nearest interpolate to specified dimensions
+    // used in tortoise.cpp
+    GGML_API struct ggml_tensor * ggml_upscale_ext(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            int                   ne0,
+            int                   ne1,
+            int                   ne2,
+            int                   ne3);
 
     // pad each dimension with zeros: [x, ..., x] -> [x, ..., x, 0, ..., 0]
     GGML_API struct ggml_tensor * ggml_pad(
@@ -2376,6 +2390,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_avx512     (void);
     GGML_API int ggml_cpu_has_avx512_vbmi(void);
     GGML_API int ggml_cpu_has_avx512_vnni(void);
+    GGML_API int ggml_cpu_has_avx512_bf16(void);
     GGML_API int ggml_cpu_has_fma        (void);
     GGML_API int ggml_cpu_has_neon       (void);
     GGML_API int ggml_cpu_has_arm_fma    (void);
