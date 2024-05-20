@@ -3,6 +3,7 @@
 
 by Humans for All.
 
+
 ## overview
 
 This simple web frontend, allows triggering/testing the server's /completions or /chat/completions endpoints
@@ -24,15 +25,27 @@ the js file as needed.
 
 ## usage
 
+One could run this web frontend directly using server itself or if anyone is thinking of adding a built in web
+frontend to configure the server over http(s) or so, then run this web frontend using something like python's
+http module.
+
+### running using examples/server
+
+bin/server -m path/model.gguf --path ../examples/server/public_simplechat [--port PORT]
+
+### running using python3's server module
+
 first run examples/server
 * bin/server -m path/model.gguf
 
 next run this web front end in examples/server/public_simplechat
-* ./simplechat.sh
-* this uses python3's http.server to host this web front end
+* cd ../examples/server/public_simplechat
+* python3 -m http.server PORT
 
-Open this simple web front end from your local browser as noted in the message printed when simplechat.sh is run
-* by default it is http://127.0.0.1:9000/simplechat.html
+### using the front end
+
+Open this simple web front end from your local browser
+* http://127.0.0.1:PORT/index.html
 
 Once inside
 * Select between chat and completion mode. By default it is set to chat mode.
@@ -44,7 +57,8 @@ Once inside
     * one can change the system prompt any time during chat, by changing the contents of system prompt.
     * inturn the updated/changed system prompt will be inserted into the chat session.
     * this allows for the subsequent user chatting to be driven by the new system prompt set above.
-* Enter your query and either press enter or click on the submit button
+* Enter your query and either press enter or click on the submit button.
+  If you want to insert enter (\n) as part of your chat/query to ai model, use shift+enter.
 * Wait for the logic to communicate with the server and get the response.
   * the user is not allowed to enter any fresh query during this time.
   * the user input box will be disabled and a working message will be shown in it.
@@ -56,7 +70,7 @@ Once inside
 Sometimes the browser may be stuborn with caching of the file, so your updates to html/css/js
 may not be visible. Also remember that just refreshing/reloading page in browser or for that
 matter clearing site data, dont directly override site caching in all cases. Worst case you may
-have to change port.
+have to change port. Or in dev tools of browser, you may be able to disable caching fully.
 
 Concept of multiple chat sessions with same or different system prompts, as well as saving and
 restoring of those across browser usage sessions, can be woven around the SimpleChat class and
