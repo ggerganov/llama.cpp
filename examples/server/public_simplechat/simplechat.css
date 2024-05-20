@@ -47,3 +47,11 @@ button {
 * {
     margin: 0.6vmin;
 }
+
+@media print {
+
+    #fullbody {
+        height: auto;
+    }
+
+}
