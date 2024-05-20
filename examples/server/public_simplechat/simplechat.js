@@ -239,7 +239,9 @@ function startme() {
     });
 
     inputUser?.addEventListener("keyup", (ev)=> {
-        if (ev.key === "Enter") {
+        // allow user to insert enter into their message using shift+enter.
+        // while just pressing enter key will lead to submitting.
+        if ((ev.key === "Enter") && (!ev.shiftKey)) {
             btnSubmit?.click();
             ev.preventDefault();
         }
