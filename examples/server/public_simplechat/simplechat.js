@@ -42,8 +42,8 @@ class SimpleChat {
 
     /**
      * Show the contents in the specified div
-     * @param {HTMLDivElement} div 
-     * @param {boolean} bClear 
+     * @param {HTMLDivElement} div
+     * @param {boolean} bClear
      */
     show(div, bClear=true) {
         if (bClear) {
