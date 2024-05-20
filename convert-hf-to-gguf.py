@@ -1740,6 +1740,38 @@ class Phi3MiniModel(Model):
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
 
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+                added_tokens_decoder = tokenizer_config_json.get("added_tokens_decoder", {})
+                for token_id, foken_data in added_tokens_decoder.items():
+                    token_id = int(token_id)
+                    token = foken_data["content"].encode("utf-8")
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                        assert(tokens[token_id] == token)
+                    tokens[token_id] = token
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    if foken_data.get("special"):
+                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
+
+        tokenizer_file = self.dir_model / 'tokenizer.json'
+        if tokenizer_file.is_file():
+            with open(tokenizer_file, "r", encoding="utf-8") as f:
+                tokenizer_json = json.load(f)
+                added_tokens = tokenizer_json.get("added_tokens", [])
+                for foken_data in added_tokens:
+                    token_id = int(foken_data["id"])
+                    token = foken_data["content"].encode("utf-8")
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                        assert(tokens[token_id] == token)
+                    tokens[token_id] = token
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    if foken_data.get("special"):
+                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
+
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)

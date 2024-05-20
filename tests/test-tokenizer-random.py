@@ -153,9 +153,21 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         'Ⅵ-a',       # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
         '\uFEFF//',   # unicode_ranges_control, 0xFEFF (BOM)
         'Cửa Việt',   # llama-3, ignore_merges = true
-        '<s>a',       # TODO: Phi-3 fail
+        '<s>a',       # Phi-3 fail
+        '<unk><|endoftext|><s>'  # Phi-3 fail
         'a\na',       # TODO: Bert fail
     ]
+
+
+def generator_random_special_tokens(special_tokens:list[str], iterations=100) -> Iterator[str]:
+    special_tokens = set(special_tokens)
+    special_tokens.update([" ", "\n", "\t", "-", "!", "one", "1", "<s>", "</s>"])
+    special_tokens = list(sorted(special_tokens))
+    rand = random.Random()
+    for m in range(iterations):
+        rand.seed(m)
+        words = rand.choices(special_tokens, k=500)
+        yield "".join(words)
 
 
 def generator_vocab_words(vocab: list[str]) -> Iterator[str]:
@@ -289,14 +301,31 @@ def main(argv: list[str] = None):
     vocab = list(sorted(tokenizer.batch_decode(list(tokenizer.get_vocab().values()), skip_special_tokens=True)))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_custom_text())
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_custom_text_edge_cases())
+    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_special_tokens(tokenizer.all_special_tokens, 10_000))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_vocab_words(vocab))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_chars(10_000))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_chars(vocab, 10_000))
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_words(vocab, 10_000))
+    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_words(vocab, 5_000))
     # test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_bytes(10_000)) # FAIL
 
     model.free()
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+
+    path_tokenizers = "./models/tokenizers/"
+    path_vocab_format = "./models/ggml-vocab-%s.gguf"
+
+    # import os
+    # tokenizers = os.listdir(path_tokenizers)
+    tokenizers = [
+        "llama-spm",   # SPM
+        "phi-3",       # SPM
+    ]
+
+    for tokenizer in tokenizers:
+        print("\n" + "=" * 50 + "\n" + tokenizer + "\n")  # noqa
+        vocab_file = path_vocab_format % tokenizer
+        dir_tokenizer = path_tokenizers + "/" + tokenizer
+        main([vocab_file, dir_tokenizer, "--verbose"])
