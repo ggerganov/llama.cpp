@@ -155,36 +155,35 @@ const gbCompletionFreshChatAlways = true;
 class MultiChatUI {
 
     constructor() {
-        /** @type {number} */
-        this.iChat = -1;
-        /** @type {SimpleChat[]} */
-        this.simpleChats = [];
+        /** @type {Object<string, SimpleChat>} */
+        this.simpleChats = {};
     }
 
     /**
      * Start a new chat session
+     * @param {string} chatId
      */
-    new_chat() {
-        this.simpleChats.push(new SimpleChat());
-        this.iChat = this.simpleChats.length - 1;
+    new_chat(chatId) {
+        this.simpleChats[chatId] = new SimpleChat();
     }
 
     /**
-     * Handle user query submit request, wrt current chat session.
+     * Handle user query submit request, wrt specified chat session.
+     * @param {string} chatId
      * @param {HTMLInputElement} inputSystem
      * @param {HTMLInputElement} inputUser
      * @param {HTMLDivElement} divChat
      * @param {string} apiEP
      */
-    async handle_user_submit(inputSystem, inputUser, divChat, apiEP) {
+    async handle_user_submit(chatId, inputSystem, inputUser, divChat, apiEP) {
 
-        let chat = this.simpleChats[this.iChat];
+        let chat = this.simpleChats[chatId];
 
-        chat.add_system_anytime(inputSystem.value, "0");
+        chat.add_system_anytime(inputSystem.value, chatId);
 
         let content = inputUser.value;
         if (!chat.add(Roles.User, content)) {
-            console.debug("WARN:MCUI:HandleUserSubmit:Ignoring empty user input...");
+            console.debug(`WARN:MCUI:${chatId}:HandleUserSubmit:Ignoring empty user input...`);
             return;
         }
         chat.show(divChat);
@@ -199,7 +198,7 @@ class MultiChatUI {
 
         inputUser.value = "working...";
         inputUser.disabled = true;
-        console.debug(`DBUG:MCUI:HandleUserSubmit:${theUrl}:ReqBody:${theBody}`);
+        console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:${theUrl}:ReqBody:${theBody}`);
         let resp = await fetch(theUrl, {
             method: "POST",
             headers: {
@@ -211,7 +210,7 @@ class MultiChatUI {
         inputUser.value = "";
         inputUser.disabled = false;
         let respBody = await resp.json();
-        console.debug("DBUG:MCUI:HandleUserSubmit:RespBody:", respBody);
+        console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:RespBody:${respBody}`);
         let assistantMsg;
         if (apiEP == ApiEP.Chat) {
             assistantMsg = respBody["choices"][0]["message"]["content"];
@@ -238,6 +237,7 @@ class MultiChatUI {
 
 
 let gMuitChat = new MultiChatUI();
+const gChatId = "Default";
 
 
 function startme() {
@@ -251,14 +251,15 @@ function startme() {
     if (divChat == null) {
         throw Error("ERRR:StartMe:Chat element missing");
     }
+    console.log("INFO:StartMe:Starting...");
 
-    gMuitChat.new_chat();
+    gMuitChat.new_chat(gChatId);
 
     btnSubmit?.addEventListener("click", (ev)=>{
         if (inputUser.disabled) {
             return;
         }
-        gMuitChat.handle_user_submit(inputSystem, inputUser, divChat, selectApiEP.value);
+        gMuitChat.handle_user_submit(gChatId, inputSystem, inputUser, divChat, selectApiEP.value);
     });
 
     inputUser?.addEventListener("keyup", (ev)=> {
