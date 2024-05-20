@@ -748,10 +748,11 @@ int main(int argc, char ** argv) {
                     // Stream Output Token To Standard Output
                     fprintf(stdout, "%s", token_str.c_str());
                 } else if (!params.ctrl_token_no_out) {
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
+#ifndef _MSC_VER
                     if (params.ctrl_token_fd_out) {
                         // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
-                        dprintf(CONTROL_TOKEN_FILE_DESCRIPTOR, "%s", token_str.c_str());
+                        ssize_t result = write(CONTROL_TOKEN_FILE_DESCRIPTOR, token_str.c_str(), token_str.length());
+                        (void) result;
                     }
                     else
 #endif
