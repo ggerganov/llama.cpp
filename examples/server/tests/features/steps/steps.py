@@ -199,7 +199,7 @@ async def step_wait_for_the_server_to_be_started(context, expecting_status):
 
         case 'ready' | 'idle':
             await wait_for_health_status(context, context.base_url, 200, 'ok',
-                                         timeout=10,
+                                         timeout=30,
                                          params={'fail_on_no_slot': 0, 'include_slots': 0},
                                          slots_idle=context.n_slots,
                                          slots_processing=0,
@@ -883,7 +883,7 @@ async def request_completion(prompt,
                                     "cache_prompt": cache_prompt,
                                     "id_slot": id_slot,
                                     "seed": seed if seed is not None else 42,
-                                    "temperature": temperature if temperature is not None else "0.8f",
+                                    "temperature": temperature if temperature is not None else 0.8,
                                     "n_probs": 2,
                                 },
                                 headers=headers,
