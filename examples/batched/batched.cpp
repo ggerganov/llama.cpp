@@ -156,7 +156,15 @@ int main(int argc, char ** argv) {
 
     const auto t_main_start = ggml_time_us();
 
+    // debug
+    struct llama_kv_cache_view kvc_view = llama_kv_cache_view_init(ctx, 1);
+
     while (n_cur <= n_len) {
+        if (false) {
+            llama_kv_cache_view_update(ctx, &kvc_view);
+            dump_kv_cache_view_seqs(kvc_view, 40);
+        }
+
         // prepare the next batch
         llama_batch_clear(batch);
 

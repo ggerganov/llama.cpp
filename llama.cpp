@@ -1991,6 +1991,8 @@ struct llama_kv_cache {
     // computed before each graph build
     uint32_t n = 0;
 
+    std::vector<std::pair<int32_t, int32_t>> batch_map;
+
     ggml_type type_k = GGML_TYPE_F16;
     ggml_type type_v = GGML_TYPE_F16;
 
@@ -2485,9 +2487,13 @@ static bool llama_kv_cache_init(
 // to the first cell of the slot.
 static bool llama_kv_cache_find_slot(
            struct llama_kv_cache & cache,
+      const struct llama_cparams & cparams,
         const struct llama_batch & batch) {
     const uint32_t n_ctx    = cache.size;
     const uint32_t n_tokens = batch.n_tokens;
+
+    auto & result = cache.batch_map;
+    result.clear();
 
     if (cache.recurrent) {
         // For recurrent state architectures (like Mamba),
@@ -2532,8 +2538,12 @@ static bool llama_kv_cache_find_slot(
         cache.head = min;
         cache.n    = max - min + 1;
 
+        if (max >= min) {
+            result.emplace_back(min, max);
+        }
+
         // sanity check
-        return max >= min;
+        return max >= min;;
     }
     // otherwise, one cell per token.
 
@@ -2542,6 +2552,7 @@ static bool llama_kv_cache_find_slot(
         return false;
     }
 
+#if 0
     uint32_t n_tested = 0;
 
     while (true) {
@@ -2578,6 +2589,52 @@ static bool llama_kv_cache_find_slot(
             cache.cells[cache.head + i].seq_id.insert(batch.seq_id[i][j]);
         }
     }
+#else
+    // insert tokens from the batch one-by-one
+    for (uint32_t i = 0; i < n_tokens; ++i) {
+        uint32_t n_tested = 0;
+
+        while (true) {
+            if (n_tested > n_ctx) {
+                //LLAMA_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
+                return false;
+            }
+
+            if (cache.head >= n_ctx) {
+                cache.head = 0;
+                continue;
+            }
+
+            if (cache.cells[cache.head].pos >= 0) {
+                cache.head++;
+                n_tested++;
+                continue;
+            }
+
+            if (((cache.head / 32) % cparams.n_seq_max) != (batch.seq_id[i][0] % cparams.n_seq_max)) {
+                cache.head++;
+                n_tested++;
+                continue;
+            }
+
+            break;
+        }
+
+        //printf("token %d: pos = %d, seq_id = %d, placed = %d\n", i, batch.pos[i], batch.seq_id[i][0], cache.head);
+
+        cache.cells[cache.head].pos = batch.pos[i];
+
+        for (int32_t j = 0; j < batch.n_seq_id[i]; j++) {
+            cache.cells[cache.head].seq_id.insert(batch.seq_id[i][j]);
+        }
+
+        if (!result.empty() && result.back().second == (int32_t) cache.head - 1) {
+            result.back().second = cache.head;
+        } else {
+            result.emplace_back(cache.head, cache.head);
+        }
+    }
+#endif
 
     cache.used += n_tokens;
 
@@ -6348,7 +6405,6 @@ static void llm_build_kv_store(
          struct ggml_tensor * k_cur,
          struct ggml_tensor * v_cur,
                     int32_t   n_tokens,
-                    int32_t   kv_head,
          const llm_build_cb & cb,
                     int64_t   il) {
     const int64_t n_ctx = cparams.n_ctx;
@@ -6358,31 +6414,50 @@ static void llm_build_kv_store(
 
     GGML_ASSERT(kv.size == n_ctx);
 
-    struct ggml_tensor * k_cache_view = ggml_view_1d(ctx, kv.k_l[il], n_tokens*n_embd_k_gqa,
-            (ggml_row_size(kv.k_l[il]->type, n_embd_k_gqa))*kv_head);
-    cb(k_cache_view, "k_cache_view", il);
+    int32_t b0 = 0;
 
-    // note: storing RoPE-ed version of K in the KV cache
-    ggml_build_forward_expand(graph, ggml_cpy(ctx, k_cur, k_cache_view));
+    for (auto & bs : kv.batch_map) {
+        const int32_t n_cur = bs.second - bs.first + 1;
 
-    assert(v_cur->ne[0] == n_embd_v_gqa && v_cur->ne[1] == n_tokens);
+        //printf("n_batch = %d, kv_self.batch_map.size() = %d\n", n_tokens, kv.batch_map.size());
 
-    struct ggml_tensor * v_cache_view = nullptr;
+        struct ggml_tensor * k_cur_view = ggml_view_1d(ctx, k_cur, n_cur*n_embd_k_gqa,
+                (ggml_row_size(k_cur->type, n_embd_k_gqa))*b0);
 
-    if (cparams.flash_attn) {
-        v_cache_view = ggml_view_1d(ctx, kv.v_l[il], n_tokens*n_embd_v_gqa,
-                (kv_head)*ggml_row_size(kv.v_l[il]->type, n_embd_v_gqa));
-    } else {
-        // note: the V cache is transposed when not using flash attention
-        v_cache_view = ggml_view_2d(ctx, kv.v_l[il], n_tokens, n_embd_v_gqa,
-                (  n_ctx)*ggml_element_size(kv.v_l[il]),
-                (kv_head)*ggml_element_size(kv.v_l[il]));
+        struct ggml_tensor * k_cache_view = ggml_view_1d(ctx, kv.k_l[il], n_cur*n_embd_k_gqa,
+                (ggml_row_size(kv.k_l[il]->type, n_embd_k_gqa))*bs.first);
+        cb(k_cache_view, "k_cache_view", il);
 
-        v_cur = ggml_transpose(ctx, v_cur);
+        // note: storing RoPE-ed version of K in the KV cache
+        ggml_build_forward_expand(graph, ggml_cpy(ctx, k_cur_view, k_cache_view));
+
+        //assert(v_cur->ne[0] == n_embd_v_gqa && v_cur->ne[1] == n_tokens);
+
+        struct ggml_tensor * v_cur_view = nullptr;
+        struct ggml_tensor * v_cache_view = nullptr;
+
+        v_cur_view = ggml_view_2d(ctx, v_cur, n_embd_v_gqa, n_cur,
+                ggml_row_size(v_cur->type, n_embd_v_gqa),
+                ggml_row_size(v_cur->type, n_embd_v_gqa)*b0);
+
+        if (cparams.flash_attn) {
+            v_cache_view = ggml_view_1d(ctx, kv.v_l[il],
+                    n_cur*n_embd_v_gqa,
+                    (bs.first)*ggml_row_size(kv.v_l[il]->type, n_embd_v_gqa));
+        } else {
+            // note: the V cache is transposed when not using flash attention
+            v_cache_view = ggml_view_2d(ctx, kv.v_l[il], n_cur, n_embd_v_gqa,
+                    (  n_ctx)*ggml_element_size(kv.v_l[il]),
+                    (bs.first)*ggml_element_size(kv.v_l[il]));
+
+            v_cur_view = ggml_transpose(ctx, v_cur_view);
+        }
+        cb(v_cache_view, "v_cache_view", il);
+
+        ggml_build_forward_expand(graph, ggml_cpy(ctx, v_cur_view, v_cache_view));
+
+        b0 += n_cur;
     }
-    cb(v_cache_view, "v_cache_view", il);
-
-    ggml_build_forward_expand(graph, ggml_cpy(ctx, v_cur, v_cache_view));
 }
 
 static struct ggml_tensor * llm_build_norm(
@@ -6735,7 +6810,6 @@ static struct ggml_tensor * llm_build_kv(
          struct ggml_tensor * q_cur,
          struct ggml_tensor * kq_mask,
                     int32_t   n_tokens,
-                    int32_t   kv_head,
                     int32_t   n_kv,
                     float     kq_scale,
          const llm_build_cb & cb,
@@ -6747,7 +6821,7 @@ static struct ggml_tensor * llm_build_kv(
     ggml_build_forward_expand(graph, k_cur);
     ggml_build_forward_expand(graph, v_cur);
 
-    llm_build_kv_store(ctx, hparams, cparams, kv, graph, k_cur, v_cur, n_tokens, kv_head, cb, il);
+    llm_build_kv_store(ctx, hparams, cparams, kv, graph, k_cur, v_cur, n_tokens, cb, il);
 
     struct ggml_tensor * cur;
 
@@ -6791,7 +6865,6 @@ struct llm_build_context {
     const int32_t n_tokens;
     const int32_t n_kv;     // size of KV cache to consider (n_kv <= kv_self.size)
     const int32_t n_outputs;
-    const int32_t kv_head;  // index of where we store new KV data in the cache
     const int32_t n_orig_ctx;
 
     const bool flash_attn;
@@ -6840,7 +6913,6 @@ struct llm_build_context {
         n_tokens         (batch.n_tokens),
         n_kv             (worst_case ? kv_self.size : kv_self.n),
         n_outputs        (worst_case ? n_tokens : lctx.n_outputs),
-        kv_head          (worst_case ? (kv_self.recurrent ? 0 : kv_self.size - n_tokens) : kv_self.head),
         n_orig_ctx       (cparams.n_yarn_orig_ctx),
         flash_attn       (cparams.flash_attn),
         pooling_type     (cparams.pooling_type),
@@ -7124,7 +7196,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7261,7 +7333,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7365,7 +7437,7 @@ struct llm_build_context {
                 cb(Kcur, "Kcur", il);
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7485,7 +7557,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7610,7 +7682,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7762,7 +7834,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -7874,7 +7946,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8078,7 +8150,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Q, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Q, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8171,7 +8243,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8484,7 +8556,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8612,13 +8684,13 @@ struct llm_build_context {
 
                     cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                             model.layers[il].wo, model.layers[il].bo,
-                            Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                            Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 } else {
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
                     cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                             model.layers[il].wo, model.layers[il].bo,
-                            Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                            Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 }
             }
 
@@ -8762,7 +8834,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8880,7 +8952,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -8993,7 +9065,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9107,7 +9179,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9262,7 +9334,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9379,7 +9451,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9492,7 +9564,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
             struct ggml_tensor * sa_out = cur;
 
@@ -9595,7 +9667,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9702,7 +9774,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9818,7 +9890,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -9935,7 +10007,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10065,7 +10137,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10186,7 +10258,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f, cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10305,7 +10377,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10382,10 +10454,10 @@ struct llm_build_context {
             // clear states of sequences which are starting at the beginning of this batch
             {
                 conv_states = ggml_mul(ctx0,
-                    ggml_view_2d(ctx0, conv_states, conv_states->ne[0], n_kv, conv_states->nb[1], kv_head*conv_states->nb[1]),
+                    ggml_view_2d(ctx0, conv_states, conv_states->ne[0], n_kv, conv_states->nb[1], kv_self.head*conv_states->nb[1]),
                     state_mask);
                 ssm_states  = ggml_mul(ctx0,
-                    ggml_view_2d(ctx0, ssm_states, ssm_states->ne[0], n_kv, ssm_states->nb[1], kv_head*ssm_states->nb[1]),
+                    ggml_view_2d(ctx0, ssm_states, ssm_states->ne[0], n_kv, ssm_states->nb[1], kv_self.head*ssm_states->nb[1]),
                     state_mask);
             }
 
@@ -10424,7 +10496,7 @@ struct llm_build_context {
                 ggml_build_forward_expand(gf,
                     ggml_cpy(ctx0,
                         ggml_view_2d(ctx0, x_conv, d_conv - 1, d_inner*n_kv, d_conv*ggml_element_size(x_conv), (1+d_inner*n_tokens)*ggml_element_size(x_conv)),
-                        ggml_view_1d(ctx0, kv_self.k_l[il], (d_conv - 1)*(d_inner)*(n_kv), kv_head*(d_conv - 1)*(d_inner)*ggml_element_size(x_conv))));
+                        ggml_view_1d(ctx0, kv_self.k_l[il], (d_conv - 1)*(d_inner)*(n_kv), kv_self.head*(d_conv - 1)*(d_inner)*ggml_element_size(x_conv))));
 
                 // extract x from x_conv
                 x = ggml_view_2d(ctx0, x_conv, d_inner, n_tokens, d_inner*ggml_element_size(x_conv), 0);
@@ -10458,7 +10530,7 @@ struct llm_build_context {
                 ggml_build_forward_expand(gf,
                     ggml_cpy(ctx0,
                         ggml_view_1d(ctx0, y_ssm_states, d_state*d_inner*n_kv, d_inner*n_tokens*ggml_element_size(y_ssm_states)),
-                        ggml_view_1d(ctx0, kv_self.v_l[il], d_state*d_inner*n_kv, kv_head*d_state*d_inner*ggml_element_size(ssm_states))));
+                        ggml_view_1d(ctx0, kv_self.v_l[il], d_state*d_inner*n_kv, kv_self.head*d_state*d_inner*ggml_element_size(ssm_states))));
 
                 struct ggml_tensor * y = ggml_view_2d(ctx0, y_ssm_states, d_inner, n_tokens, d_inner*ggml_element_size(y_ssm_states), 0);
 
@@ -10595,7 +10667,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -10726,7 +10798,7 @@ struct llm_build_context {
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, nullptr,
-                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
 
             if (il == n_layer - 1) {
@@ -11510,11 +11582,12 @@ static int llama_decode_internal(
 
             // if we have enough unused cells before the current head ->
             //   better to start searching from the beginning of the cache, hoping to fill it
-            if (kv_self.head > kv_self.used + 2*n_tokens) {
-                kv_self.head = 0;
-            }
+            //if (kv_self.head > kv_self.used + 2*n_tokens) {
+            //    kv_self.head = 0;
+            //}
+            kv_self.head = 0;
 
-            if (!llama_kv_cache_find_slot(kv_self, u_batch)) {
+            if (!llama_kv_cache_find_slot(kv_self, cparams, u_batch)) {
                 return 1;
             }
 
@@ -11589,16 +11662,6 @@ static int llama_decode_internal(
         llama_set_inputs(lctx, u_batch);
 
         llama_graph_compute(lctx, gf, n_threads);
-
-        // update the kv ring buffer
-        {
-            kv_self.head += n_tokens;
-
-            // Ensure kv cache head points to a valid index.
-            if (kv_self.head >= kv_self.size) {
-                kv_self.head = 0;
-            }
-        }
 
 #ifdef GGML_PERF
         // print timing information per ggml operation (for debugging purposes)
@@ -17171,7 +17234,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
             batch.n_seq_id[i] = 1;
             batch.seq_id[i][0] = dest_seq_id;
         }
-        if (!llama_kv_cache_find_slot(kv_self, batch)) {
+        if (!llama_kv_cache_find_slot(kv_self, ctx->cparams, batch)) {
             llama_batch_free(batch);
             LLAMA_LOG_ERROR("%s: failed to find available cells in kv cache\n", __func__);
             return 0;

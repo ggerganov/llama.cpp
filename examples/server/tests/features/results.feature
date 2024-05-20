@@ -74,15 +74,12 @@ Feature: Results
       | n_parallel | temp |
       | 1          | 0.0  |
       | 2          | 0.0  |
+      | 3          | 0.0  |
       | 4          | 0.0  |
       | 1          | 1.0  |
-      # FIXME: These tests fail on master.
-      # Problems: unified KV cache (except for CPU backend with LLAMA_NO_LLAMAFILE=1), SIMD nondeterminism.
-      # See https://github.com/ggerganov/whisper.cpp/issues/1941#issuecomment-1986923227
-      # and https://github.com/ggerganov/llama.cpp/pull/6122#discussion_r1531405574
-      # and https://github.com/ggerganov/llama.cpp/pull/7347 .
-      # | 2          | 1.0  |
-      # | 4          | 1.0  |
+      | 2          | 1.0  |
+      | 3          | 1.0  |
+      | 4          | 1.0  |
 
   Scenario Outline: consistent token probs with same seed and prompt
     Given <n_slots> slots
@@ -109,11 +106,11 @@ Feature: Results
       | n_slots | n_kv | n_predict | n_parallel |
       | 4       | 1024 | 1         | 1          |
       | 4       | 1024 | 1         | 4          |
+      | 4       | 1024 | 100       | 1          |
       # FIXME: These tests fail on master.
       # Problems: unified KV cache (except for CPU backend with LLAMA_NO_LLAMAFILE=1), SIMD nondeterminism.
       # See https://github.com/ggerganov/whisper.cpp/issues/1941#issuecomment-1986923227
       # and https://github.com/ggerganov/llama.cpp/pull/6122#discussion_r1531405574
       # and https://github.com/ggerganov/llama.cpp/pull/7347 .
-      # | 4       | 1024 | 100       | 1          |
       # This test still fails even the above patches; the first token probabilities are already different.
       # | 4       | 1024 | 100       | 4          |
