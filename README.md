@@ -301,7 +301,7 @@ cd llama.cpp
 
 ### Build
 
-In order to build llama.cpp you have three different options.
+In order to build llama.cpp you have four different options.
 
 - Using `make`:
   - On Linux or MacOS:
