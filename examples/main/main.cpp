@@ -18,7 +18,8 @@
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
-#define CONTROL_TOKEN_FILE_DESCRIPTOR (3)
+#include <fcntl.h>
+#define CONTROL_TOKEN_FILENO (3)
 #elif defined (_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
@@ -529,6 +530,14 @@ int main(int argc, char ** argv) {
         exit(1);
     }
 
+#ifndef _MSC_VER
+    if (fcntl(CONTROL_TOKEN_FILENO, F_GETFL) == -1) {
+        // Control Token File Descriptor has nothing attached to it
+        // make control token file descriptor be an alias of stdout
+        dup2(STDOUT_FILENO, CONTROL_TOKEN_FILENO);
+    }
+#endif
+
     while ((n_remain != 0 && !is_antiprompt) || params.interactive) {
         // predict
         if (!embd.empty()) {
@@ -746,23 +755,23 @@ int main(int argc, char ** argv) {
                 // Console/Stream Output
                 if (!llama_token_is_control_token(llama_get_model(ctx), id)) {
                     // Stream Output Token To Standard Output
+                    fflush(stdout);
                     fprintf(stdout, "%s", token_str.c_str());
                 } else if (!params.ctrl_token_no_out) {
-#ifndef _MSC_VER
-                    if (params.ctrl_token_fd_out) {
-                        // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
-                        ssize_t result = write(CONTROL_TOKEN_FILE_DESCRIPTOR, token_str.c_str(), token_str.length());
-                        (void) result;
-                    }
-                    else
-#endif
                     if (!params.conversation && sparams.grammar.empty())
                     {
-                        // Stream Control Token To Standard Output as long as we are not in a conversation or grammar output
+                        // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
+                        fflush(stdout);
                         fprintf(stdout, "%s", token_str.c_str());
                     }
+#ifndef _MSC_VER
+                    else {
+                        // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
+                        ssize_t result = write(CONTROL_TOKEN_FILENO, token_str.c_str(), token_str.length());
+                        (void) result;
+                    }
+#endif
                 }
-
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
                 if (embd.size() > 1) {

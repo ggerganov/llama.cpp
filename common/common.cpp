@@ -909,10 +909,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.ctrl_token_no_out = true;
         return true;
     }
-    if (arg == "--ctrl-token-fd-out") {
-        params.ctrl_token_fd_out = true;
-        return true;
-    }
     if (arg == "--embedding") {
         params.embedding = true;
         return true;
@@ -1442,9 +1438,6 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-specials allow special tokens in user text, in interactive mode\n");
     printf("  --ctrl-token-no-out   control tokens output disabled\n");
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
-    printf("  --ctrl-token-fd-out   control tokens sent to file descriptor 3 out of band\n");
-#endif
     printf("  -cnv, --conversation  run in conversation mode (does not print special tokens and suffix/prefix)\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
