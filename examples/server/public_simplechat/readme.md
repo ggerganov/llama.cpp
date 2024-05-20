@@ -12,11 +12,15 @@ and forth chatting to an extent.
 User can set a system prompt, as well as try and chat with the model over a series of back and forth chat
 messages.
 
+The UI follows a responsive web design so that the layout can adapt to available display space in a usable
+enough manner, in general.
+
 NOTE: Given that the idea is for basic minimal testing, it doesnt bother with any model context length and
 culling of old messages from the chat.
 
 NOTE: It doesnt set any parameters other than temperature for now. However if someone wants they can update
 the js file as needed.
+
 
 ## usage
 

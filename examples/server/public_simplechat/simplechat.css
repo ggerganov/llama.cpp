@@ -3,32 +3,47 @@
  * by Humans for All
  */
 
- .heading {
+#fullbody {
+    height: 98vh;
+}
+
+.heading {
     background-color: lightgray;
 }
+
 .role-system {
     background-color: lightblue;
 }
 .role-user {
     background-color: lightgray;
 }
+
 .flex-grow {
     flex-grow: 1;
 }
 .float-right {
     float: right;
 }
+
 #chat {
-    height: 75vh;
     overflow: scroll;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 40vh;
 }
 button {
     min-width: 8vw;
 }
+
 .sameline {
     display: flex;
     flex-direction: row;
 }
+.samecolumn {
+    display: flex;
+    flex-direction: column;
+}
+
 * {
     margin: 0.6vmin;
 }
