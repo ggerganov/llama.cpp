@@ -40,6 +40,7 @@ def test_pre_tok_params() -> list[str]:
         "Привет, мир!", # russian
         "Здравей свят!", # bulgarian
         "សួស្តី​ពិភពលោក!",  # kymer
+        "The quick brown fox jumped over the lazy dog.", # uses every letter in en alpha
         "Le rapide renard brun sauta par dessus le chien paresseux.", # french
         "\tWil je een kopje thee?\n",  # dutch
         " Te gustaría algo de té ?   ",  # spanish
