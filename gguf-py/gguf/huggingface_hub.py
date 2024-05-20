@@ -65,7 +65,7 @@ class HFHubRequest:
         # Set the logger
         if logger is None:
             logging.basicConfig(level=logging.DEBUG)
-            logger = logging.getLogger("huggingface-hub")
+            logger = logging.getLogger(__name__)
         self.logger = logger
 
         # Persist across requests
@@ -122,7 +122,7 @@ class HFHubBase:
         # Set the logger
         if logger is None:
             logging.basicConfig(level=logging.DEBUG)
-            logger = logging.getLogger("hf-tok-req")
+            logger = logging.getLogger(__name__)
         self.logger = logger
 
         self._hub = HFHubRequest(auth_token, logger)
