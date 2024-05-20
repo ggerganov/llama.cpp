@@ -26,9 +26,6 @@
 #ifdef GGML_USE_METAL
 #  include "ggml-metal.h"
 #endif
-#ifdef GGML_USE_MPI
-#  include "ggml-mpi.h"
-#endif
 #ifndef QK_K
 #  ifdef GGML_QKK_64
 #    define QK_K 64
@@ -2270,10 +2267,6 @@ struct llama_context {
 
     // control vectors
     struct llama_control_vector cvec;
-
-#ifdef GGML_USE_MPI
-    ggml_mpi_context * ctx_mpi = NULL;
-#endif
 };
 
 static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int gpu) {
@@ -6336,10 +6329,7 @@ static struct ggml_tensor * llm_build_inp_embd(
 
         inpL = ggml_get_rows(ctx, tok_embd, lctx.inp_tokens);
     } else {
-#ifdef GGML_USE_MPI
-        GGML_ASSERT(false && "not implemented");
-#endif
-        lctx.inp_embd = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, batch.n_tokens);
+       lctx.inp_embd = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, batch.n_tokens);
         inpL = lctx.inp_embd;
         ggml_set_input(lctx.inp_embd);
     }
@@ -11351,11 +11341,6 @@ static void llama_graph_compute(
         llama_context & lctx,
           ggml_cgraph * gf,
                   int   n_threads) {
-#ifdef GGML_USE_MPI
-    const int64_t n_layer = lctx.model.hparams.n_layer;
-    ggml_mpi_graph_compute_pre(lctx.ctx_mpi, gf, n_layer);
-#endif
-
 #ifdef GGML_USE_METAL
     if (ggml_backend_is_metal(lctx.backend_metal)) {
         ggml_backend_metal_set_n_cb(lctx.backend_metal, n_threads);
@@ -11370,10 +11355,6 @@ static void llama_graph_compute(
     ggml_backend_sched_graph_compute_async(lctx.sched, gf);
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
-
-#ifdef GGML_USE_MPI
-    ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
-#endif
 }
 
 // decode a batch of tokens by evaluating the transformer
@@ -11410,12 +11391,6 @@ static int llama_decode_internal(
         lctx.t_compute_start_us = ggml_time_us();
     }
     lctx.n_queued_tokens += n_tokens_all;
-
-#ifdef GGML_USE_MPI
-    // TODO: needs fix after #3228
-    GGML_ASSERT(false && "not implemented");
-    //ggml_mpi_eval_init(lctx.ctx_mpi, &n_tokens, &n_past, &n_threads);
-#endif
 
     auto & kv_self = lctx.kv_self;
 
@@ -15546,10 +15521,6 @@ void llama_backend_init(void) {
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
     }
-
-#ifdef GGML_USE_MPI
-    ggml_mpi_backend_init();
-#endif
 }
 
 void llama_numa_init(enum ggml_numa_strategy numa) {
@@ -15559,9 +15530,6 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
 }
 
 void llama_backend_free(void) {
-#ifdef GGML_USE_MPI
-    ggml_mpi_backend_free();
-#endif
     ggml_quantize_free();
 }
 
@@ -15961,20 +15929,6 @@ struct llama_context * llama_new_context_with_model(
             LLAMA_LOG_INFO("%s: graph splits = %d\n", __func__, n_splits);
         }
     }
-
-#ifdef GGML_USE_MPI
-    ctx->ctx_mpi = ggml_mpi_init();
-
-    if (ggml_mpi_rank(ctx->ctx_mpi) > 0) {
-        // Enter a blocking eval loop with dummy input, letting rank=0 drive the process
-        // TODO: needs fix after #3228
-        GGML_ASSERT(false && "not implemented");
-        //const std::vector<llama_token> tmp(ctx->model.hparams.n_ctx, llama_token_bos(ctx));
-        //while (!llama_eval(ctx, tmp.data(), tmp.size(), 0, 0)) {};
-        llama_backend_free();
-        exit(1);
-    }
-#endif
 
     return ctx;
 }

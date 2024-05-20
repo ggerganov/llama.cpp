@@ -637,11 +637,6 @@ ggml-metal-embed.o: ggml-metal.metal ggml-common.h
 endif
 endif # LLAMA_METAL
 
-ifdef LLAMA_MPI
-ggml-mpi.o: ggml-mpi.c ggml-mpi.h
-	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_MPI
-
 ifndef LLAMA_NO_LLAMAFILE
 sgemm.o: sgemm.cpp sgemm.h ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@

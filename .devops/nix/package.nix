@@ -214,7 +214,6 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_CUDA" useCuda)
         (cmakeBool "LLAMA_HIPBLAS" useRocm)
         (cmakeBool "LLAMA_METAL" useMetalKit)
-        (cmakeBool "LLAMA_MPI" useMpi)
         (cmakeBool "LLAMA_VULKAN" useVulkan)
         (cmakeBool "LLAMA_STATIC" enableStatic)
       ]
