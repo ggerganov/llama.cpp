@@ -531,9 +531,10 @@ int main(int argc, char ** argv) {
     }
 
 #ifndef _MSC_VER
-    if (fcntl(CONTROL_TOKEN_FILENO, F_GETFL) == -1) {
-        // Control Token File Descriptor has nothing attached to it
-        // make control token file descriptor be an alias of stdout
+    const bool control_token_descriptor_is_attached = fcntl(CONTROL_TOKEN_FILENO, F_GETFL) != -1;
+    if (!control_token_descriptor_is_attached && !params.conversation && sparams.grammar.empty()) {
+        // Control Token File Descriptor has nothing attached to it so make control token file descriptor be an alias of stdout
+        // This is not done however if we are in conversation mode or grammar mode as that is typically discarded
         dup2(STDOUT_FILENO, CONTROL_TOKEN_FILENO);
     }
 #endif
