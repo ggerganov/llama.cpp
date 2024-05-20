@@ -1639,6 +1639,17 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         }
     ));
     add_opt(llama_arg(
+        {"--direct-io"},
+        "use direct I/O (potentially faster uncached loading, fewer pageouts, no page cache pollution)",
+        [](gpt_params & params) {
+            if (llama_supports_direct_io()) {
+                params.use_direct_io = true;
+            } else {
+                fprintf(stderr, "warning: direct I/O is not available, --direct-io option will be ignored\n");
+            }
+        }
+    ));
+    add_opt(llama_arg(
         {"--numa"}, "TYPE",
         "attempt optimizations that help on some NUMA systems\n"
         "- distribute: spread execution evenly over all nodes\n"
@@ -2742,6 +2753,7 @@ struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & 
     mparams.split_mode      = params.split_mode;
     mparams.tensor_split    = params.tensor_split;
     mparams.use_mmap        = params.use_mmap;
+    mparams.use_direct_io   = params.use_direct_io;
     mparams.use_mlock       = params.use_mlock;
     mparams.check_tensors   = params.check_tensors;
     if (params.kv_overrides.empty()) {
@@ -3780,6 +3792,7 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
     fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", sparams.n_probs);
     fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");
+    fprintf(stream, "direct-io: %s # default: false\n", params.use_direct_io ? "true" : "false");
     fprintf(stream, "penalize_nl: %s # default: false\n", sparams.penalize_nl ? "true" : "false");
     fprintf(stream, "ppl_output_type: %d # default: 0\n", params.ppl_output_type);
     fprintf(stream, "ppl_stride: %d # default: 0\n", params.ppl_stride);

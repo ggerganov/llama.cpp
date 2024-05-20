@@ -243,6 +243,7 @@ struct cmd_params {
     std::vector<bool> flash_attn;
     std::vector<std::vector<float>> tensor_split;
     std::vector<bool> use_mmap;
+    std::vector<bool> use_direct_io;
     std::vector<bool> embeddings;
     ggml_numa_strategy numa;
     int reps;
@@ -275,6 +276,7 @@ static const cmd_params cmd_params_defaults = {
     /* flash_attn           */ {false},
     /* tensor_split         */ {std::vector<float>(llama_max_devices(), 0.0f)},
     /* use_mmap             */ {true},
+    /* use_direct_io        */ {false},
     /* embeddings           */ {false},
     /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
     /* reps                 */ 5,
@@ -312,6 +314,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -nkvo, --no-kv-offload <0|1>              (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
     printf("  -fa, --flash-attn <0|1>                   (default: %s)\n", join(cmd_params_defaults.flash_attn, ",").c_str());
     printf("  -mmp, --mmap <0|1>                        (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
+    printf("  -dio, --direct-io <0|1>                   (default: %s)\n", join(cmd_params_defaults.use_direct_io, ",").c_str());
     printf("  --numa <distribute|isolate|numactl>       (default: disabled)\n");
     printf("  -embd, --embeddings <0|1>                 (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
     printf("  -ts, --tensor-split <ts0/ts1/..>          (default: 0)\n");
@@ -559,6 +562,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<bool>(argv[i], split_delim);
             params.use_mmap.insert(params.use_mmap.end(), p.begin(), p.end());
+        } else if (arg == "-dio" || arg == "--direct-io") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = string_split<bool>(argv[i], split_delim);
+            params.use_direct_io.insert(params.use_direct_io.end(), p.begin(), p.end());
         } else if (arg == "-embd" || arg == "--embeddings") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -650,6 +660,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.flash_attn.empty())   { params.flash_attn = cmd_params_defaults.flash_attn; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
     if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
+    if (params.use_direct_io.empty()){ params.use_direct_io = cmd_params_defaults.use_direct_io; }
     if (params.embeddings.empty())   { params.embeddings = cmd_params_defaults.embeddings; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
     if (params.cpu_mask.empty())     { params.cpu_mask  = cmd_params_defaults.cpu_mask;  }
@@ -679,6 +690,7 @@ struct cmd_params_instance {
     bool flash_attn;
     std::vector<float> tensor_split;
     bool use_mmap;
+    bool use_direct_io;
     bool embeddings;
 
     llama_model_params to_llama_mparams() const {
@@ -692,6 +704,7 @@ struct cmd_params_instance {
         mparams.main_gpu = main_gpu;
         mparams.tensor_split = tensor_split.data();
         mparams.use_mmap = use_mmap;
+        mparams.use_direct_io = use_direct_io;
 
         return mparams;
     }
@@ -703,6 +716,7 @@ struct cmd_params_instance {
                split_mode == other.split_mode &&
                main_gpu == other.main_gpu &&
                use_mmap == other.use_mmap &&
+               use_direct_io == other.use_direct_io &&
                tensor_split == other.tensor_split;
     }
 
@@ -733,6 +747,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & mg : params.main_gpu)
     for (const auto & ts : params.tensor_split)
     for (const auto & mmp : params.use_mmap)
+    for (const auto & dio : params.use_direct_io)
     for (const auto & embd : params.embeddings)
     for (const auto & nb : params.n_batch)
     for (const auto & nub : params.n_ubatch)
@@ -768,6 +783,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .flash_attn   = */ fa,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
+                /* .use_direct_io= */ dio,
                 /* .embeddings   = */ embd,
             };
             instances.push_back(instance);
@@ -797,6 +813,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .flash_attn   = */ fa,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
+                /* .use_direct_io= */ dio,
                 /* .embeddings   = */ embd,
             };
             instances.push_back(instance);
@@ -826,6 +843,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .flash_attn   = */ fa,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
+                /* .use_direct_io= */ dio,
                 /* .embeddings   = */ embd,
             };
             instances.push_back(instance);
@@ -867,6 +885,7 @@ struct test {
     bool flash_attn;
     std::vector<float> tensor_split;
     bool use_mmap;
+    bool use_direct_io;
     bool embeddings;
     int n_prompt;
     int n_gen;
@@ -896,6 +915,7 @@ struct test {
         flash_attn = inst.flash_attn;
         tensor_split = inst.tensor_split;
         use_mmap = inst.use_mmap;
+        use_direct_io = inst.use_direct_io;
         embeddings = inst.embeddings;
         n_prompt = inst.n_prompt;
         n_gen = inst.n_gen;
@@ -967,7 +987,7 @@ struct test {
             "type_k", "type_v",
             "n_gpu_layers", "split_mode",
             "main_gpu", "no_kv_offload", "flash_attn",
-            "tensor_split", "use_mmap", "embeddings",
+            "tensor_split", "use_mmap", "use_direct_io", "embeddings",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
             "avg_ts", "stddev_ts",
@@ -989,7 +1009,7 @@ struct test {
         if (field == "cuda" || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
             field == "cpu_strict" ||
-            field == "flash_attn" || field == "use_mmap" || field == "embeddings") {
+            field == "flash_attn" || field == "use_mmap" || field == "use_direct_io" || field == "embeddings") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -1025,7 +1045,7 @@ struct test {
             ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
             std::to_string(main_gpu), std::to_string(no_kv_offload), std::to_string(flash_attn),
-            tensor_split_str, std::to_string(use_mmap), std::to_string(embeddings),
+            tensor_split_str, std::to_string(use_mmap), std::to_string(use_direct_io), std::to_string(embeddings),
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
             std::to_string(avg_ts()), std::to_string(stdev_ts())
@@ -1241,6 +1261,9 @@ struct markdown_printer : public printer {
         if (field == "use_mmap") {
             return "mmap";
         }
+        if (field == "use_direct_io") {
+            return "direct_io";
+        }
         if (field == "embeddings") {
             return "embd";
         }
@@ -1301,6 +1324,9 @@ struct markdown_printer : public printer {
         }
         if (params.use_mmap.size() > 1 || params.use_mmap != cmd_params_defaults.use_mmap) {
             fields.emplace_back("use_mmap");
+        }
+        if (params.use_direct_io.size() > 1 || params.use_direct_io != cmd_params_defaults.use_direct_io) {
+            fields.emplace_back("use_direct_io");
         }
         if (params.embeddings.size() > 1 || params.embeddings != cmd_params_defaults.embeddings) {
             fields.emplace_back("embeddings");

@@ -274,6 +274,10 @@ These options help improve the performance and memory usage of the LLaMA models.
 
 -   `--no-mmap`: Do not memory-map the model. By default, models are mapped into memory, which allows the system to load only the necessary parts of the model as needed. However, if the model is larger than your total amount of RAM or if your system is low on available memory, using mmap might increase the risk of pageouts, negatively impacting performance. Disabling mmap results in slower load times but may reduce pageouts if you're not using `--mlock`. Note that if the model is larger than the total amount of RAM, turning off mmap would prevent the model from loading at all.
 
+### Direct I/O
+
+-   `--direct-io`: Use direct I/O. Potentially faster uncached loading, fewer pageouts, no page cache pollution. You may benefit from this option if you load a model for the first time (or after some time), load several different models consecutively, or simply want to keep the page cache clean. The faster your storage device is, the greater the gain you can expect. The effect may be greater on Linux due to Transparent HugePage support.
+
 ### NUMA support
 
 -   `--numa distribute`: Pin an equal proportion of the threads to the cores on each NUMA node. This will spread the load amongst all cores on the system, utilitizing all memory channels at the expense of potentially requiring memory to travel over the slow links between nodes.
