@@ -218,6 +218,29 @@ let gChatURL = {
 }
 const gbCompletionFreshChatAlways = true;
 
+class MultiChat {
+
+    constructor() {
+        /** @type {number} */
+        this.iChat = -1;
+        /** @type {SimpleChat[]} */
+        this.simpleChats = [];
+        /** @type {string[]} */
+        this.baseURLs = [];
+    }
+
+    /**
+     * Start a new chat
+     * @param {string} baseURL
+     */
+    new_chat(baseURL) {
+        this.simpleChats.push(new SimpleChat());
+        this.baseURLs.push(baseURL);
+        this.iChat = this.simpleChats.length - 1;
+    }
+
+}
+
 
 function startme() {
 
