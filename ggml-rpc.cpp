@@ -56,6 +56,7 @@ struct socket_t {
 };
 
 // ggml_tensor is serialized into rpc_tensor
+#pragma pack(push, 1)
 struct rpc_tensor {
     uint64_t id;
     uint32_t type;
@@ -71,6 +72,7 @@ struct rpc_tensor {
     uint64_t data;
     char name[GGML_MAX_NAME];
 };
+#pragma pack(pop)
 
 // RPC commands
 enum rpc_cmd {
