@@ -13,7 +13,7 @@ Feature: Results
 
   Scenario Outline: consistent results with same seed
     Given <n_slots> slots
-    And   0.0 temperature
+    And   1.0 temperature
     Then  the server is starting
     Then  the server is healthy
 
