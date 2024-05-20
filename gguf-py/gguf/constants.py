@@ -964,6 +964,9 @@ class LLaMaVocabType(IntEnum):
     WPM = auto()  # WordPiece BERT tokenizer
 
 
+#
+# LLaMa Model Types
+#
 class LLaMaModelType(IntEnum):
     UNK = auto()  # Unsupported file type
     PTH = auto()  # PyTorch file type
@@ -971,13 +974,14 @@ class LLaMaModelType(IntEnum):
 
 
 #
-# LLaMa Tokenizer Map
+# HuggingFace Model Map
 #
 # NOTE:
 #   - Repository paths are required
 #   - Allow the user to specify the tokenizer model type themselves
 #   - Use architecture types because they are explicitly defined
-#   - Possible tokenizer model types are: SentencePiece, WordPiece, or BytePair
+#   - Possible algorithms are WordLevel, BPE, WordPiece, or Unigram
+#   - Possible LLaMa tokenizer model types are: None, SPM, BPE, or WPM
 HF_MODEL_MAP = (
     {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.SPM, "repo": "meta-llama/Llama-2-7b-hf", },
     {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "meta-llama/Meta-Llama-3-8B", },
