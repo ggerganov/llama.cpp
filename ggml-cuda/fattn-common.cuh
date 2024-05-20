@@ -94,7 +94,6 @@ void launch_fattn(ggml_backend_cuda_context & ctx, ggml_tensor * dst, fattn_kern
     ggml_tensor * KQV = dst;
 
     GGML_ASSERT(Q->type == GGML_TYPE_F32);
-    GGML_ASSERT(V->type == GGML_TYPE_F16);
     GGML_ASSERT(KQV->type == GGML_TYPE_F32);
 
     GGML_ASSERT(!mask || mask->type == GGML_TYPE_F16);
