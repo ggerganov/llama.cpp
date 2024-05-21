@@ -383,7 +383,9 @@ extern "C" {
         GGML_TYPE_F64     = 28,
         GGML_TYPE_IQ1_M   = 29,
         GGML_TYPE_BF16    = 30,
-        GGML_TYPE_Q4_0_AARCH64 = 31,
+        GGML_TYPE_Q4_0_4_4 = 31,
+        GGML_TYPE_Q4_0_4_8 = 32,
+        GGML_TYPE_Q4_0_8_8 = 33,
         GGML_TYPE_COUNT,
     };
 
@@ -425,7 +427,9 @@ extern "C" {
         GGML_FTYPE_MOSTLY_IQ4_XS  = 22, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ1_M   = 23, // except 1d tensors
         GGML_FTYPE_MOSTLY_BF16    = 24, // except 1d tensors
-        GGML_FTYPE_MOSTLY_Q4_0_AARCH64 = 25, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_0_4_4 = 25, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_0_4_8 = 26, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q4_0_8_8 = 27, // except 1d tensors
     };
 
     // available tensor operations:
@@ -2409,7 +2413,7 @@ extern "C" {
     typedef void (*ggml_from_float_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
     typedef void (*ggml_vec_dot_t)   (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x, size_t bx,
                                       const void * GGML_RESTRICT y, size_t by, int nrc);
-    typedef void (*ggml_from_float_to_mat_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k, int n, int b);
+    typedef void (*ggml_from_float_to_mat_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
     typedef void (*ggml_gemv_t)      (int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
                                       int nr, int nc, int ith, int nth);
     typedef void (*ggml_gemm_t)      (int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
