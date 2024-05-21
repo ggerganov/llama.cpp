@@ -141,6 +141,17 @@ class SimpleChat {
         return false;
     }
 
+    /**
+     * Retrieve the latest system prompt.
+     */
+    get_system() {
+        let sysPrompt = this.xchat[this.iLastSys].content;
+        if (!sysPrompt) {
+            sysPrompt = "";
+        }
+        return sysPrompt;
+    }
+
 }
 
 
@@ -194,6 +205,7 @@ class MultiChatUI {
      * @param {boolean} [bSwitchSession=false]
      */
     setup_ui(defaultChatId, bSwitchSession=false) {
+
         this.curChatId = defaultChatId;
         if (bSwitchSession) {
             this.handle_session_switch(this.curChatId);
@@ -214,6 +226,17 @@ class MultiChatUI {
                 ev.preventDefault();
             }
         });
+
+        this.elInSystem.addEventListener("keyup", (ev)=> {
+            // allow user to insert enter into the system prompt using shift+enter.
+            // while just pressing enter key will lead to setting the system prompt.
+            if ((ev.key === "Enter") && (!ev.shiftKey)) {
+                let chat = this.simpleChats[this.curChatId];
+                chat.add_system_anytime(this.elInSystem.value, this.curChatId);
+                ev.preventDefault();
+            }
+        });
+
     }
 
     /**
@@ -330,6 +353,7 @@ class MultiChatUI {
             console.error(`ERRR:MCUI:Session:${chatId} missing...`);
             return;
         }
+        this.elInSystem.value = chat.get_system();
         this.elInUser.value = "";
         chat.show(this.elDivChat);
         this.elInUser.focus();
