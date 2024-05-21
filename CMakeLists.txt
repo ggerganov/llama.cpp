@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)  # for add_link_options and implicit target directories.
+cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories.
 project("llama.cpp" C CXX)
 include(CheckIncludeFileCXX)
 
@@ -77,6 +77,7 @@ option(LLAMA_AVX2                            "llama: enable AVX2"               
 option(LLAMA_AVX512                          "llama: enable AVX512"                             OFF)
 option(LLAMA_AVX512_VBMI                     "llama: enable AVX512-VBMI"                        OFF)
 option(LLAMA_AVX512_VNNI                     "llama: enable AVX512-VNNI"                        OFF)
+option(LLAMA_AVX512_BF16                     "llama: enable AVX512-BF16"                        OFF)
 option(LLAMA_FMA                             "llama: enable FMA"                                ${INS_ENB})
 # in MSVC F16C is implied with AVX2/AVX512
 if (NOT MSVC)
@@ -122,7 +123,6 @@ set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
                                              "llama: metal minimum macOS version")
 set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
-option(LLAMA_MPI                             "llama: use MPI"                                   OFF)
 option(LLAMA_RPC                             "llama: use RPC"                                   OFF)
 option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
@@ -134,6 +134,8 @@ set(LLAMA_SCHED_MAX_COPIES  "4" CACHE STRING "llama: max input copies for pipeli
 option(LLAMA_BUILD_TESTS                     "llama: build tests"    ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STANDALONE})
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
+option(LLAMA_LASX                            "llama: enable lasx"                               ON)
+option(LLAMA_LSX                             "llama: enable lsx"                                ON)
 
 # add perf arguments
 option(LLAMA_PERF                            "llama: enable perf"                               OFF)
@@ -463,35 +465,6 @@ if (LLAMA_CUDA)
 
     else()
         message(WARNING "CUDA not found")
-    endif()
-endif()
-
-if (LLAMA_MPI)
-    cmake_minimum_required(VERSION 3.10)
-    find_package(MPI)
-    if (MPI_C_FOUND)
-        message(STATUS "MPI found")
-
-        set(GGML_HEADERS_MPI ggml-mpi.h)
-        set(GGML_SOURCES_MPI ggml-mpi.c)
-
-        add_compile_definitions(GGML_USE_MPI)
-        add_compile_definitions(${MPI_C_COMPILE_DEFINITIONS})
-
-        if (NOT MSVC)
-            add_compile_options(-Wno-cast-qual)
-        endif()
-
-        set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${MPI_C_LIBRARIES})
-        set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${MPI_C_INCLUDE_DIRS})
-
-        # Even if you're only using the C header, C++ programs may bring in MPI
-        # C++ functions, so more linkage is needed
-        if (MPI_CXX_FOUND)
-            set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS}     ${MPI_CXX_LIBRARIES})
-        endif()
-    else()
-        message(WARNING "MPI not found")
     endif()
 endif()
 
@@ -1090,6 +1063,10 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
                 add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AVX512VNNI__>)
                 add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AVX512VNNI__>)
             endif()
+            if (LLAMA_AVX512_BF16)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:C>:__AVX512BF16__>)
+                add_compile_definitions($<$<COMPILE_LANGUAGE:CXX>:__AVX512BF16__>)
+            endif()
         elseif (LLAMA_AVX2)
             list(APPEND ARCH_FLAGS /arch:AVX2)
         elseif (LLAMA_AVX)
@@ -1121,6 +1098,9 @@ elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LW
         if (LLAMA_AVX512_VNNI)
             list(APPEND ARCH_FLAGS -mavx512vnni)
         endif()
+        if (LLAMA_AVX512_BF16)
+            list(APPEND ARCH_FLAGS -mavx512bf16)
+        endif()
     endif()
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
     message(STATUS "PowerPC detected")
@@ -1130,6 +1110,17 @@ elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
         list(APPEND ARCH_FLAGS -mcpu=native -mtune=native)
         #TODO: Add  targets for Power8/Power9 (Altivec/VSX) and Power10(MMA) and query for big endian systems (ppc64/le/be)
     endif()
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")
+    message(STATUS "loongarch64 detected")
+
+    list(APPEND ARCH_FLAGS -march=loongarch64)
+    if (LLAMA_LASX)
+        list(APPEND ARCH_FLAGS -mlasx)
+    endif()
+    if (LLAMA_LSX)
+        list(APPEND ARCH_FLAGS -mlsx)
+    endif()
+
 else()
     message(STATUS "Unknown architecture")
 endif()
@@ -1218,7 +1209,6 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_CUDA}      ${GGML_HEADERS_CUDA}
             ${GGML_SOURCES_OPENCL}    ${GGML_HEADERS_OPENCL}
             ${GGML_SOURCES_METAL}     ${GGML_HEADERS_METAL}
-            ${GGML_SOURCES_MPI}       ${GGML_HEADERS_MPI}
             ${GGML_SOURCES_RPC}       ${GGML_HEADERS_RPC}
             ${GGML_SOURCES_EXTRA}     ${GGML_HEADERS_EXTRA}
             ${GGML_SOURCES_SYCL}      ${GGML_HEADERS_SYCL}
@@ -1306,7 +1296,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/LlamaConfig.cmake
 
 set(GGML_PUBLIC_HEADERS "ggml.h" "ggml-alloc.h" "ggml-backend.h"
         "${GGML_HEADERS_CUDA}"  "${GGML_HEADERS_OPENCL}"
-        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_MPI}" "${GGML_HEADERS_EXTRA}")
+        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_EXTRA}")
 
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 install(TARGETS ggml PUBLIC_HEADER)

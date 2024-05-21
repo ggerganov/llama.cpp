@@ -446,6 +446,9 @@ class Model:
         if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
             # ref: https://huggingface.co/openai-community/gpt2
             res = "gpt-2"
+        if chkhsh == "32d85c31273f8019248f2559fed492d929ea28b17e51d81d3bb36fff23ca72b3":
+            # ref: https://huggingface.co/stabilityai/stablelm-2-1_6b
+            res = "stablelm2"
         if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
             # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
             res = "refact"
@@ -573,6 +576,10 @@ class Model:
 
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
 
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
         for token_id in range(tokenizer.vocab_size()):
             piece = tokenizer.IdToPiece(token_id)
             text = piece.encode("utf-8")
@@ -588,21 +595,23 @@ class Model:
             elif tokenizer.IsByte(token_id):
                 toktype = SentencePieceTokenTypes.BYTE
 
-            tokens.append(text)
-            scores.append(score)
-            toktypes.append(toktype)
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
             with open(added_tokens_file, "r", encoding="utf-8") as f:
                 added_tokens_json = json.load(f)
-
                 for key in added_tokens_json:
-                    key = key.encode("utf-8")
-                    if key not in tokens:
-                        tokens.append(key)
-                        scores.append(-1000.0)
-                        toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+                    token_id = added_tokens_json[key]
+                    if (token_id >= vocab_size):
+                        logger.warning(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        continue
+
+                    tokens[token_id] = key.encode("utf-8")
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
 
         if vocab_size > len(tokens):
             pad_count = vocab_size - len(tokens)
@@ -611,8 +620,6 @@ class Model:
                 tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
-
-        assert len(tokens) == vocab_size
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
@@ -1139,45 +1146,6 @@ class RefactModel(Model):
             tensors.append((self.map_tensor_name(name), data_torch))
 
         return tensors
-
-
-@Model.register("PersimmonForCausalLM")
-class PersimmonModel(Model):
-    model_arch = gguf.MODEL_ARCH.PERSIMMON
-
-    def set_gguf_parameters(self):
-        block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
-        head_count = self.hparams["num_attention_heads"]
-        head_count_kv = head_count
-        hidden_size = self.hparams["hidden_size"]
-
-        self.gguf_writer.add_name('persimmon-8b-chat')
-        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
-        self.gguf_writer.add_embedding_length(hidden_size)
-        self.gguf_writer.add_block_count(block_count)
-        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
-
-        # NOTE: not sure about this change - why does the model not have a rope dimension count when it is smaller
-        #       than the head size?
-        #       ref: https://github.com/ggerganov/llama.cpp/pull/4889
-        # self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
-        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count // 2)
-
-        self.gguf_writer.add_head_count(head_count)
-        self.gguf_writer.add_head_count_kv(head_count_kv)
-        self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
-        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
-
-    def set_vocab(self):
-        self._set_vocab_sentencepiece()
-        # self.gguf_writer.add_bos_token_id(71013)
-        # self.gguf_writer.add_eos_token_id(71013)
-
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
-        del name, new_name, bid, n_dims  # unused
-
-        # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
-        return True
 
 
 @Model.register("StableLmForCausalLM", "StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM")
@@ -1771,6 +1739,38 @@ class Phi3MiniModel(Model):
                     tokens[token_id] = key.encode("utf-8")
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+                added_tokens_decoder = tokenizer_config_json.get("added_tokens_decoder", {})
+                for token_id, foken_data in added_tokens_decoder.items():
+                    token_id = int(token_id)
+                    token = foken_data["content"].encode("utf-8")
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                        assert(tokens[token_id] == token)
+                    tokens[token_id] = token
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    if foken_data.get("special"):
+                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
+
+        tokenizer_file = self.dir_model / 'tokenizer.json'
+        if tokenizer_file.is_file():
+            with open(tokenizer_file, "r", encoding="utf-8") as f:
+                tokenizer_json = json.load(f)
+                added_tokens = tokenizer_json.get("added_tokens", [])
+                for foken_data in added_tokens:
+                    token_id = int(foken_data["id"])
+                    token = foken_data["content"].encode("utf-8")
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                        assert(tokens[token_id] == token)
+                    tokens[token_id] = token
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    if foken_data.get("special"):
+                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
