@@ -216,6 +216,18 @@ class MultiChatUI {
     }
 
     /**
+     * Reset user input ui.
+     * * clear user input
+     * * enable user input
+     * * set focus to user input
+     */
+    ui_reset_userinput() {
+        this.elInUser.value = "";
+        this.elInUser.disabled = false;
+        this.elInUser.focus();
+    }
+
+    /**
      * Setup the needed callbacks wrt UI, curChatId to defaultChatId and
      * optionally switch to specified defaultChatId.
      * @param {string} defaultChatId
@@ -232,7 +244,12 @@ class MultiChatUI {
             if (this.elInUser.disabled) {
                 return;
             }
-            this.handle_user_submit(this.curChatId, this.elSelectApiEP.value);
+            this.handle_user_submit(this.curChatId, this.elSelectApiEP.value).catch((/** @type{Error} */reason)=>{
+                let msg = `ERRR:MCUI:HandleUserSubmit\n${reason.name}:${reason.message}`;
+                console.debug(msg.replace("\n", ":"));
+                alert(msg);
+                this.ui_reset_userinput();
+            });
         });
 
         this.elInUser.addEventListener("keyup", (ev)=> {
@@ -327,9 +344,7 @@ class MultiChatUI {
         if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
             chat.xchat.length = 0;
         }
-        this.elInUser.value = "";
-        this.elInUser.disabled = false;
-        this.elInUser.focus();
+        this.ui_reset_userinput();
     }
 
     /**
