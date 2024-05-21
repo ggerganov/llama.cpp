@@ -322,7 +322,9 @@ enum llm_kv {
     LLM_KV_SSM_TIME_STEP_RANK,
 
     LLM_KV_TOKENIZER_MODEL,
+    LLM_KV_TOKENIZER_TYPE,
     LLM_KV_TOKENIZER_PRE,
+    LLM_KV_TOKENIZER_HASH,
     LLM_KV_TOKENIZER_LIST,
     LLM_KV_TOKENIZER_TOKEN_TYPE,
     LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,
@@ -399,7 +401,9 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_SSM_TIME_STEP_RANK,            "%s.ssm.time_step_rank" },
 
     { LLM_KV_TOKENIZER_MODEL,               "tokenizer.ggml.model"              },
+    { LLM_KV_TOKENIZER_TYPE,                "tokenizer.ggml.type"               },
     { LLM_KV_TOKENIZER_PRE,                 "tokenizer.ggml.pre"                },
+    { LLM_KV_TOKENIZER_HASH,                "tokenizer.ggml.hash"               },
     { LLM_KV_TOKENIZER_LIST,                "tokenizer.ggml.tokens"             },
     { LLM_KV_TOKENIZER_TOKEN_TYPE,          "tokenizer.ggml.token_type"         },
     { LLM_KV_TOKENIZER_TOKEN_TYPE_COUNT,    "tokenizer.ggml.token_type_count"   },
