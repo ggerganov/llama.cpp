@@ -40,16 +40,6 @@ logger = logging.getLogger("hf-to-gguf")
 
 
 ###### MODEL DEFINITIONS ######
-
-class SentencePieceTokenTypes(IntEnum):
-    NORMAL = 1
-    UNKNOWN = 2
-    CONTROL = 3
-    USER_DEFINED = 4
-    UNUSED = 5
-    BYTE = 6
-
-
 AnyModel = TypeVar("AnyModel", bound="type[Model]")
 
 
@@ -538,22 +528,22 @@ class Model:
 
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        toktypes: list[int] = [gguf.TokenType.UNKNOWN] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
             piece = tokenizer.IdToPiece(token_id)
             text = piece.encode("utf-8")
             score = tokenizer.GetScore(token_id)
 
-            toktype = SentencePieceTokenTypes.NORMAL
+            toktype = gguf.TokenType.NORMAL
             if tokenizer.IsUnknown(token_id):
-                toktype = SentencePieceTokenTypes.UNKNOWN
+                toktype = gguf.TokenType.UNKNOWN
             elif tokenizer.IsControl(token_id):
-                toktype = SentencePieceTokenTypes.CONTROL
+                toktype = gguf.TokenType.CONTROL
             elif tokenizer.IsUnused(token_id):
-                toktype = SentencePieceTokenTypes.UNUSED
+                toktype = gguf.TokenType.UNUSED
             elif tokenizer.IsByte(token_id):
-                toktype = SentencePieceTokenTypes.BYTE
+                toktype = gguf.TokenType.BYTE
 
             tokens[token_id] = text
             scores[token_id] = score
@@ -571,7 +561,7 @@ class Model:
 
                     tokens[token_id] = key.encode("utf-8")
                     scores[token_id] = -1000.0
-                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    toktypes[token_id] = gguf.TokenType.USER_DEFINED
 
         if vocab_size > len(tokens):
             pad_count = vocab_size - len(tokens)
@@ -579,7 +569,7 @@ class Model:
             for i in range(1, pad_count + 1):
                 tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
                 scores.append(-1000.0)
-                toktypes.append(SentencePieceTokenTypes.UNUSED)
+                toktypes.append(gguf.TokenType.UNUSED)
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
@@ -1663,7 +1653,7 @@ class Phi3MiniModel(Model):
 
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        toktypes: list[int] = [gguf.TokenType.UNKNOWN] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
 
@@ -1671,15 +1661,15 @@ class Phi3MiniModel(Model):
             text = piece.encode("utf-8")
             score = tokenizer.GetScore(token_id)
 
-            toktype = SentencePieceTokenTypes.NORMAL
+            toktype = gguf.TokenType.NORMAL
             if tokenizer.IsUnknown(token_id):
-                toktype = SentencePieceTokenTypes.UNKNOWN
+                toktype = gguf.TokenType.UNKNOWN
             elif tokenizer.IsControl(token_id):
-                toktype = SentencePieceTokenTypes.CONTROL
+                toktype = gguf.TokenType.CONTROL
             elif tokenizer.IsUnused(token_id):
-                toktype = SentencePieceTokenTypes.UNUSED
+                toktype = gguf.TokenType.UNUSED
             elif tokenizer.IsByte(token_id):
-                toktype = SentencePieceTokenTypes.BYTE
+                toktype = gguf.TokenType.BYTE
 
             tokens[token_id] = text
             scores[token_id] = score
@@ -1698,7 +1688,7 @@ class Phi3MiniModel(Model):
 
                     tokens[token_id] = key.encode("utf-8")
                     scores[token_id] = -1000.0
-                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    toktypes[token_id] = gguf.TokenType.USER_DEFINED
 
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
@@ -1708,13 +1698,13 @@ class Phi3MiniModel(Model):
                 for token_id, foken_data in added_tokens_decoder.items():
                     token_id = int(token_id)
                     token = foken_data["content"].encode("utf-8")
-                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                    if toktypes[token_id] != gguf.TokenType.UNKNOWN:
                         assert(tokens[token_id] == token)
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
-                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    toktypes[token_id] = gguf.TokenType.USER_DEFINED
                     if foken_data.get("special"):
-                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
+                        toktypes[token_id] = gguf.TokenType.CONTROL
 
         tokenizer_file = self.dir_model / 'tokenizer.json'
         if tokenizer_file.is_file():
@@ -1724,13 +1714,13 @@ class Phi3MiniModel(Model):
                 for foken_data in added_tokens:
                     token_id = int(foken_data["id"])
                     token = foken_data["content"].encode("utf-8")
-                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                    if toktypes[token_id] != gguf.TokenType.UNKNOWN:
                         assert(tokens[token_id] == token)
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
-                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    toktypes[token_id] = gguf.TokenType.USER_DEFINED
                     if foken_data.get("special"):
-                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
+                        toktypes[token_id] = gguf.TokenType.CONTROL
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
@@ -1889,15 +1879,15 @@ class InternLM2Model(Model):
                 logger.warning(f"InternLM2 convert token '{text}' to '🐉'!")
                 text = "🐉".encode("utf-8")
 
-            toktype = SentencePieceTokenTypes.NORMAL
+            toktype = gguf.TokenType.NORMAL
             if tokenizer.IsUnknown(token_id):
-                toktype = SentencePieceTokenTypes.UNKNOWN
+                toktype = gguf.TokenType.UNKNOWN
             elif tokenizer.IsControl(token_id):
-                toktype = SentencePieceTokenTypes.CONTROL
+                toktype = gguf.TokenType.CONTROL
             elif tokenizer.IsUnused(token_id):
-                toktype = SentencePieceTokenTypes.UNUSED
+                toktype = gguf.TokenType.UNUSED
             elif tokenizer.IsByte(token_id):
-                toktype = SentencePieceTokenTypes.BYTE
+                toktype = gguf.TokenType.BYTE
 
             tokens.append(text)
             scores.append(score)
@@ -1911,7 +1901,7 @@ class InternLM2Model(Model):
                 for key in added_tokens_json:
                     tokens.append(key.encode("utf-8"))
                     scores.append(-1000.0)
-                    toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+                    toktypes.append(gguf.TokenType.USER_DEFINED)
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
