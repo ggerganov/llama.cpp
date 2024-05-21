@@ -158,7 +158,6 @@ extern "C" {
 //   $ ln -sfn /Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/include/arm_neon.h ./src/
 //
 #include <arm_neon.h>
-#endif
 
 #ifdef _MSC_VER
 
