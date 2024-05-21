@@ -15697,12 +15697,6 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
             {
                 sycl::range<3> block_dims(1, 1, std::min((unsigned int)ne10, 768u));
                 sycl::range<3> grid_dims(1, n_ids, ids->ne[1]);
-                /*
-                DPCT1049:81: The work-group size passed to the SYCL kernel may
-                exceed the limit. To get the device limit, query
-                info::device::max_work_group_size. Adjust the work-group size if
-                needed.
-                */
                 stream->submit([&](sycl::handler &cgh) {
                     sycl::local_accessor<int, 0> src1_row_acc_ct1(cgh);
 
@@ -15726,17 +15720,6 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
                                 item_ct1, src1_row_acc_ct1);
                         });
                 });
-                /*
-                DPCT1010:196: SYCL uses exceptions to report errors and does not
-                use the error codes. The call was replaced with 0. You need to
-                rewrite this code.
-                */
-                /*
-                DPCT1009:197: SYCL uses exceptions to report errors and does not
-                use the error codes. The call was replaced by a placeholder
-                string. You need to rewrite this code.
-                */
-                SYCL_CHECK(0);
             }
 
             src0_row_extra.data_device[g_main_device] = src0_original + i02*nb02;
@@ -15759,12 +15742,6 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
             {
                 sycl::range<3> block_dims(1, 1, std::min((unsigned int)ne0, 768u));
                 sycl::range<3> grid_dims(1, 1, num_src1_rows);
-                /*
-                DPCT1049:82: The work-group size passed to the SYCL kernel may
-                exceed the limit. To get the device limit, query
-                info::device::max_work_group_size. Adjust the work-group size if
-                needed.
-                */
                 stream->submit([&](sycl::handler &cgh) {
                     const char *__restrict dst_contiguous_get_ct1 =
                         dst_contiguous.get();
@@ -15780,17 +15757,6 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
                                                        ne0, nb1, nb2, item_ct1);
                         });
                 });
-                /*
-                DPCT1010:198: SYCL uses exceptions to report errors and does not
-                use the error codes. The call was replaced with 0. You need to
-                rewrite this code.
-                */
-                /*
-                DPCT1009:199: SYCL uses exceptions to report errors and does not
-                use the error codes. The call was replaced by a placeholder
-                string. You need to rewrite this code.
-                */
-                SYCL_CHECK(0);
             }
         }
         if (dst->backend == GGML_BACKEND_TYPE_CPU) {
