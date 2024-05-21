@@ -383,28 +383,38 @@ class MultiChatUI {
         elDiv.replaceChildren();
         let chatIds = Object.keys(this.simpleChats);
         for(let cid of chatIds) {
-            let btn = el_create_button(cid, (ev)=>{
-                let target = /** @type{HTMLButtonElement} */(ev.target);
-                console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
-                if (this.elInUser.disabled) {
-                    console.error(`ERRR:MCUI:SessionClick:${target.id}:Current session [${this.curChatId}] awaiting response, ignoring switch...`);
-                    alert("ERRR:MCUI\nWait for response to pending query, before switching");
-                    return;
-                }
-                this.handle_session_switch(target.id);
-                el_children_config_class(elDiv, target.id, "session-selected", "");
-            });
+            let btn = this.create_session_btn(elDiv, cid);
             if (cid == this.curChatId) {
                 btn.className = "session-selected";
             }
-            elDiv.appendChild(btn);
         }
         let btnNew = el_create_button("NeW cHaT", (ev)=> {
-            let chatId = `Chat${chatIds.length}`;
-            let chatName = prompt("SimpleChat:MCUI:\nEnter id for new chat session", chatId);
-            this.new_chat_session(chatId, true);
+            let chatId = `Chat${Object.keys(this.simpleChats).length}`;
+            let chatIdGot = prompt("SimpleChat:MCUI:\nEnter id for new chat session", chatId);
+            if (!chatIdGot) {
+                chatIdGot = chatId;
+            }
+            this.new_chat_session(chatIdGot, true);
+            this.create_session_btn(elDiv, chatIdGot);
+            el_children_config_class(elDiv, chatIdGot, "session-selected", "");
         });
         elDiv.appendChild(btnNew);
+    }
+
+    create_session_btn(elDiv, cid) {
+        let btn = el_create_button(cid, (ev)=>{
+            let target = /** @type{HTMLButtonElement} */(ev.target);
+            console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
+            if (this.elInUser.disabled) {
+                console.error(`ERRR:MCUI:SessionClick:${target.id}:Current session [${this.curChatId}] awaiting response, ignoring switch...`);
+                alert("ERRR:MCUI\nWait for response to pending query, before switching");
+                return;
+            }
+            this.handle_session_switch(target.id);
+            el_children_config_class(elDiv, target.id, "session-selected", "");
+        });
+        elDiv.appendChild(btn);
+        return btn;
     }
 
     /**
