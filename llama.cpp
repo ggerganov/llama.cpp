@@ -1778,6 +1778,7 @@ enum e_model {
     MODEL_13B,
     MODEL_14B,
     MODEL_15B,
+    MODEL_16B,
     MODEL_20B,
     MODEL_30B,
     MODEL_34B,
@@ -1785,6 +1786,7 @@ enum e_model {
     MODEL_40B,
     MODEL_65B,
     MODEL_70B,
+    MODEL_236B,
     MODEL_314B,
     MODEL_SMALL,
     MODEL_MEDIUM,
@@ -3837,6 +3839,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_13B:    return "13B";
         case MODEL_14B:    return "14B";
         case MODEL_15B:    return "15B";
+        case MODEL_16B:    return "16B";
         case MODEL_20B:    return "20B";
         case MODEL_30B:    return "30B";
         case MODEL_34B:    return "34B";
@@ -3844,6 +3847,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_40B:    return "40B";
         case MODEL_65B:    return "65B";
         case MODEL_70B:    return "70B";
+        case MODEL_236B:   return "236B";
         case MODEL_314B:   return "314B";
         case MODEL_SMALL:  return "0.1B";
         case MODEL_MEDIUM: return "0.4B";
@@ -4347,7 +4351,11 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE, hparams.expert_weights_scale);
                 ml.get_key(LLM_KV_ROPE_SCALING_YARN_LOG_MUL, hparams.rope_yarn_log_mul);
 
-                model.type = e_model::MODEL_UNKNOWN;
+                switch (hparams.n_layer) {
+                    case 27: model.type = e_model::MODEL_16B; break;
+                    case 60: model.type = e_model::MODEL_236B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
             } break;
         default: (void)0;
     }
