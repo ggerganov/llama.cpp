@@ -946,7 +946,7 @@ class LLaMaVocabType(IntEnum):
 
 
 #
-# LLaMa Model Types
+# HuggingFace Model File Types
 #
 class HFModelFileType(IntEnum):
     UNK = auto()  # Unsupported file type
