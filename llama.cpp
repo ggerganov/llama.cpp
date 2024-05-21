@@ -17360,7 +17360,7 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
         j = ctx->n_outputs + i;
         if (j < 0) {
             return llama_get_embeddings_ith_fail(
-                i, format("negative index out of range [0, %d)", ctx->n_outputs));
+                i, format("negative index out of range [%d, 0)", -ctx->n_outputs));
         }
     } else if ((size_t) i >= ctx->output_ids.size()) {
         return llama_get_embeddings_ith_fail(
