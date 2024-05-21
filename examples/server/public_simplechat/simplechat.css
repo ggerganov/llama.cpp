@@ -11,6 +11,10 @@
     background-color: lightgray;
 }
 
+.session-selected {
+    background-color: lightblue;
+}
+
 .role-system {
     background-color: lightblue;
 }

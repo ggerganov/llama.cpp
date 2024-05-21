@@ -163,6 +163,23 @@ let gChatURL = {
 const gbCompletionFreshChatAlways = true;
 
 
+/**
+ * Set the class of the children, based on whether it is the idSelected or not.
+ * @param {HTMLDivElement} elBase
+ * @param {string} idSelected
+ * @param {string} classSelected
+ * @param {string} classUnSelected
+ */
+function el_children_config_class(elBase, idSelected, classSelected, classUnSelected="") {
+    for(let child of elBase.children) {
+        if (child.id == idSelected) {
+            child.className = classSelected;
+        } else {
+            child.className = classUnSelected;
+        }
+    }
+}
+
 class MultiChatUI {
 
     constructor() {
@@ -317,6 +334,7 @@ class MultiChatUI {
     /**
      * Show buttons for available chat sessions, in the passed elDiv.
      * If elDiv is undefined/null, then use this.elDivSessions.
+     * Take care of highlighting the selected chat-session's btn.
      * @param {HTMLDivElement | undefined} elDiv
      */
     show_sessions(elDiv=undefined) {
@@ -330,6 +348,9 @@ class MultiChatUI {
             btn.id = cid;
             btn.name = cid;
             btn.innerText = cid;
+            if (cid == this.curChatId) {
+                btn.className = "session-selected";
+            }
             btn.addEventListener("click", (ev)=>{
                 let target = /** @type{HTMLButtonElement} */(ev.target);
                 console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
@@ -338,6 +359,7 @@ class MultiChatUI {
                     return;
                 }
                 this.handle_session_switch(target.id);
+                el_children_config_class(elDiv, target.id, "session-selected", "");
             });
             elDiv.appendChild(btn);
         }
