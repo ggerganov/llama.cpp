@@ -106,6 +106,7 @@ set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_CUDA_NO_PEER_COPY               "llama: do not use peer to peer copies"            OFF)
 option(LLAMA_CUDA_NO_VMM                     "llama: do not try to use CUDA VMM"                OFF)
+option(LLAMA_CUDA_FA_ALL_QUANTS              "llama: compile all quants for FlashAttention"     OFF)
 
 option(LLAMA_CURL                            "llama: use libcurl to download model from an URL" OFF)
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
@@ -426,6 +427,9 @@ if (LLAMA_CUDA)
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
         if (LLAMA_CUDA_NO_PEER_COPY)
             add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+        endif()
+        if (LLAMA_CUDA_FA_ALL_QUANTS)
+            add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
         endif()
 
         if (LLAMA_STATIC)
