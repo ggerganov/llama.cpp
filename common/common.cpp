@@ -2543,10 +2543,6 @@ std::string get_cache_directory() {
         cache_directory += "llama.cpp";
         cache_directory += DIRECTORY_SEPARATOR;
     }
-    const bool success = create_directory_with_parents(cache_directory);
-    if (!success) {
-        throw std::runtime_error("failed to create cache directory: " + cache_directory);
-    }
     return cache_directory;
 }
 
