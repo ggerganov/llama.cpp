@@ -1197,13 +1197,13 @@ struct no_init {
 };
 
 struct llama_file {
-    char * name;
+    std::string name;
     // use FILE * so we don't have to re-open the file to mmap
     FILE * fp;
     size_t size;
 
     llama_file(const char * fname, const char * mode) {
-        name = strdup(fname);
+        name = fname;
         fp = ggml_fopen(fname, mode);
         if (fp == NULL) {
             throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
@@ -1267,24 +1267,24 @@ struct llama_file {
         write_raw(&val, sizeof(val));
     }
 
-    size_t read_direct(void * ptr, size_t len, size_t offset) const {
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__APPLE__)
+    size_t read_direct(void * ptr, size_t len, size_t offset) const {
         int page_size = sysconf(_SC_PAGESIZE);
         GGML_ASSERT((uintptr_t) ptr % page_size == 0);
         GGML_ASSERT(len % page_size == 0);
         GGML_ASSERT(offset % page_size == 0);
 #ifdef __APPLE__
-        int fd = open(name, O_RDONLY);
+        int fd = open(name.c_str(), O_RDONLY);
         if (fd == -1) {
-            throw std::runtime_error(format("failed to open %s: %s", name, strerror(errno)));
+            throw std::runtime_error(format("failed to open %s: %s", name.c_str(), strerror(errno)));
         }
         if (fcntl(fd, F_NOCACHE, 1) == -1) {
             throw std::runtime_error(format("failed to enable direct I/O: %s", strerror(errno)));
         }
 #else
-        int fd = open(name, O_RDONLY | O_DIRECT);
+        int fd = open(name.c_str(), O_RDONLY | O_DIRECT);
         if (fd == -1) {
-            throw std::runtime_error(format("failed to open %s for direct I/O: %s", name, strerror(errno)));
+            throw std::runtime_error(format("failed to open %s for direct I/O: %s", name.c_str(), strerror(errno)));
         }
 #endif
         size_t bytes_read = 0;
@@ -1309,6 +1309,7 @@ struct llama_file {
 
     static constexpr bool DIRECT_IO_SUPPORTED = true;
 #elif defined(_WIN32)
+    size_t read_direct(void * ptr, size_t len, size_t offset) const {
         SYSTEM_INFO siSysInfo;
         GetSystemInfo(&siSysInfo);
         DWORD dwPageSize = siSysInfo.dwPageSize;
@@ -1318,12 +1319,12 @@ struct llama_file {
 
         HANDLE hFile = ReOpenFile((HANDLE) _get_osfhandle(_fileno(fp)), GENERIC_READ, FILE_SHARE_READ, FILE_FLAG_NO_BUFFERING);
         if (hFile == INVALID_HANDLE_VALUE) {
-            throw std::runtime_error(format("failed to open %s: %s", name, llama_format_win_err(GetLastError()).c_str()));
+            throw std::runtime_error(format("failed to open %s: %s", name.c_str(), llama_format_win_err(GetLastError()).c_str()));
         }
 
         size_t bytes_read = 0;
         while (len > 0) {
-            OVERLAPPED oOverlap = {0};
+            OVERLAPPED oOverlap = {};
             oOverlap.OffsetHigh = offset >> 32;
             oOverlap.Offset = offset;
             DWORD nBytesToRead = std::min(len, (size_t) 0xFFFFFFFF & ~(dwPageSize - 1));
@@ -1351,6 +1352,7 @@ struct llama_file {
 
     static constexpr bool DIRECT_IO_SUPPORTED = true;
 #else
+    size_t read_direct(void * ptr, size_t len, size_t offset) const {
         GGML_UNUSED(ptr);
         GGML_UNUSED(len);
         GGML_UNUSED(offset);
@@ -1365,7 +1367,6 @@ struct llama_file {
         if (fp) {
             std::fclose(fp);
         }
-        free(name);
     }
 };
 using llama_files = std::vector<std::unique_ptr<llama_file>>;
@@ -1607,7 +1608,7 @@ struct llama_anonymous_mmap : llama_mmap {
         mapped_fragments.emplace_back(0, size);
     }
 
-    void populate(size_t first, size_t last) const {
+    void populate(size_t first, size_t last) const override {
         int page_size = sysconf(_SC_PAGESIZE);
 
         align_to_previous_page(&first, page_size);
@@ -1638,7 +1639,7 @@ struct llama_anonymous_mmap : llama_mmap {
         }
     }
 
-    void populate(size_t first, size_t last) const {
+    void populate(size_t first, size_t last) const override {
         SYSTEM_INFO siSysInfo;
         GetSystemInfo(&siSysInfo);
         DWORD dwPageSize = siSysInfo.dwPageSize;
@@ -1658,7 +1659,7 @@ struct llama_anonymous_mmap : llama_mmap {
         throw std::runtime_error("mmap not supported");
     }
 
-    void populate(size_t first, size_t last) const {
+    void populate(size_t first, size_t last) const override {
         GGML_UNUSED(first);
         GGML_UNUSED(last);
 
