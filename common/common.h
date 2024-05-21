@@ -281,6 +281,7 @@ bool llama_should_add_bos_token(const llama_model * model);
 //
 
 bool create_directory_with_parents(const std::string & path);
+std::string get_cache_directory();
 void dump_vector_float_yaml(FILE * stream, const char * prop_name, const std::vector<float> & data);
 void dump_vector_int_yaml(FILE * stream, const char * prop_name, const std::vector<int> & data);
 void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const char * data);
