@@ -530,9 +530,11 @@ int main(int argc, char ** argv) {
         exit(1);
     }
 
+    const bool control_token_allowed_on_standard_stream = !params.conversation && sparams.grammar.empty();
+
 #ifndef _MSC_VER
     const bool control_token_descriptor_is_attached = fcntl(CONTROL_TOKEN_FILENO, F_GETFL) != -1;
-    if (!control_token_descriptor_is_attached && !params.conversation && sparams.grammar.empty()) {
+    if (control_token_allowed_on_standard_stream && !control_token_descriptor_is_attached) {
         // Control Token File Descriptor has nothing attached to it so make control token file descriptor be an alias of stdout
         // This is not done however if we are in conversation mode or grammar mode as that is typically discarded
         dup2(STDOUT_FILENO, CONTROL_TOKEN_FILENO);
@@ -759,19 +761,19 @@ int main(int argc, char ** argv) {
                     fflush(stdout);
                     fprintf(stdout, "%s", token_str.c_str());
                 } else if (!params.ctrl_token_no_out) {
-                    if (!params.conversation && sparams.grammar.empty())
-                    {
-                        // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
-                        fflush(stdout);
-                        fprintf(stdout, "%s", token_str.c_str());
-                    }
 #ifndef _MSC_VER
-                    else {
+                    if (control_token_descriptor_is_attached) {
                         // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
                         ssize_t result = write(CONTROL_TOKEN_FILENO, token_str.c_str(), token_str.length());
                         (void) result;
-                    }
+                    } else
 #endif
+                    if (control_token_allowed_on_standard_stream)
+                    {
+                        // Stream Control Token To Standard Output Stream
+                        fflush(stdout);
+                        fprintf(stdout, "%s", token_str.c_str());
+                    }
                 }
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
