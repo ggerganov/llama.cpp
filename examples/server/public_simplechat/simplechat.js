@@ -157,6 +157,8 @@ class MultiChatUI {
     constructor() {
         /** @type {Object<string, SimpleChat>} */
         this.simpleChats = {};
+        /** @type {string} */
+        this.curChatId = "";
 
         // the ui elements
         this.elInSystem = /** @type{HTMLInputElement} */(document.getElementById("system-in"));
@@ -186,15 +188,22 @@ class MultiChatUI {
     }
 
     /**
-     * Setup the needed callbacks wrt UI
-     * @param {string} chatId
+     * Setup the needed callbacks wrt UI, curChatId to defaultChatId and
+     * optionally switch to specified defaultChatId.
+     * @param {string} defaultChatId
+     * @param {boolean} [bSwitchSession=false]
      */
-    setup_ui(chatId) {
+    setup_ui(defaultChatId, bSwitchSession=false) {
+        this.curChatId = defaultChatId;
+        if (bSwitchSession) {
+            this.handle_session_switch(this.curChatId);
+        }
+
         this.elBtnUser.addEventListener("click", (ev)=>{
             if (this.elInUser.disabled) {
                 return;
             }
-            this.handle_user_submit(chatId, this.elSelectApiEP.value);
+            this.handle_user_submit(this.curChatId, this.elSelectApiEP.value);
         });
 
         this.elInUser.addEventListener("keyup", (ev)=> {
@@ -208,11 +217,15 @@ class MultiChatUI {
     }
 
     /**
-     * Start a new chat session
+     * Setup a new chat session and optionally switch to it.
      * @param {string} chatId
+     * @param {boolean} [bSwitchSession=false]
      */
-    new_chat(chatId) {
+    new_chat_session(chatId, bSwitchSession=false) {
         this.simpleChats[chatId] = new SimpleChat();
+        if (bSwitchSession) {
+            this.handle_session_switch(chatId);
+        }
     }
 
     /**
@@ -298,7 +311,7 @@ class MultiChatUI {
                 let target = /** @type{HTMLButtonElement} */(ev.target);
                 console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
                 if (this.elInUser.disabled) {
-                    console.error(`ERRR:MCUI:SessionClick:${target.id}:Current session awaiting response, skipping switch...`);
+                    console.error(`ERRR:MCUI:SessionClick:${target.id}:Current session [${this.curChatId}] awaiting response, ignoring switch...`);
                     return;
                 }
                 this.handle_session_switch(target.id);
@@ -308,6 +321,7 @@ class MultiChatUI {
     }
 
     /**
+     * Switch ui to the specified chatId and set curChatId to same.
      * @param {string} chatId
      */
     async handle_session_switch(chatId) {
@@ -319,19 +333,22 @@ class MultiChatUI {
         this.elInUser.value = "";
         chat.show(this.elDivChat);
         this.elInUser.focus();
+        this.curChatId = chatId;
     }
 
 }
 
 
 let gMuitChat;
-const gChatId = "Default";
+const gChatIds = [ "Default", "Other" ];
 
 function startme() {
     console.log("INFO:StartMe:Starting...");
     gMuitChat = new MultiChatUI();
-    gMuitChat.new_chat(gChatId);
-    gMuitChat.setup_ui(gChatId);
+    for (let cid of gChatIds) {
+        gMuitChat.new_chat_session(cid);
+    }
+    gMuitChat.setup_ui(gChatIds[0]);
     gMuitChat.show_sessions();
 }
 
