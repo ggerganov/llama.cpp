@@ -1220,6 +1220,7 @@ template <bool need_check> static __global__ void
         load_tiles_q4_0<arch_config.y, arch_config.nwarps, need_check>, VDR_Q4_0_Q8_1_MMQ, vec_dot_q4_0_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q4_0_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1244,6 +1245,7 @@ template <bool need_check> static __global__ void
         load_tiles_q4_1<arch_config.y, arch_config.nwarps, need_check>, VDR_Q4_1_Q8_1_MMQ, vec_dot_q4_1_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q4_1_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1266,6 +1268,7 @@ template <bool need_check> static __global__ void
         load_tiles_q5_0<arch_config.y, arch_config.nwarps, need_check>, VDR_Q5_0_Q8_1_MMQ, vec_dot_q5_0_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q5_0_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1288,6 +1291,7 @@ mul_mat_q5_1(
         load_tiles_q5_1<arch_config.y, arch_config.nwarps, need_check>, VDR_Q5_1_Q8_1_MMQ, vec_dot_q5_1_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q5_1_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1310,6 +1314,7 @@ template <bool need_check> static __global__ void
         load_tiles_q8_0<arch_config.y, arch_config.nwarps, need_check>, VDR_Q8_0_Q8_1_MMQ, vec_dot_q8_0_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q8_0_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1332,6 +1337,7 @@ mul_mat_q2_K(
         load_tiles_q2_K<arch_config.y, arch_config.nwarps, need_check>, VDR_Q2_K_Q8_1_MMQ, vec_dot_q2_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q2_K_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1356,6 +1362,7 @@ template <bool need_check> static __global__ void
         load_tiles_q3_K<arch_config.y, arch_config.nwarps, need_check>, VDR_Q3_K_Q8_1_MMQ, vec_dot_q3_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q3_K_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1380,6 +1387,7 @@ template <bool need_check> static __global__ void
         load_tiles_q4_K<arch_config.y, arch_config.nwarps, need_check>, VDR_Q4_K_Q8_1_MMQ, vec_dot_q4_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q4_K_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1402,6 +1410,7 @@ mul_mat_q5_K(
         load_tiles_q5_K<arch_config.y, arch_config.nwarps, need_check>, VDR_Q5_K_Q8_1_MMQ, vec_dot_q5_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q5_K_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
@@ -1426,6 +1435,7 @@ template <bool need_check> static __global__ void
         load_tiles_q6_K<arch_config.y, arch_config.nwarps, need_check>, VDR_Q6_K_Q8_1_MMQ, vec_dot_q6_K_q8_1_mul_mat>
         (vx, vy, dst, ncols_x, nrows_x, ncols_y, nrows_y, nrows_dst);
 #else
+    GGML_UNUSED(get_arch_config_device);
     GGML_UNUSED(vec_dot_q6_K_q8_1_mul_mat);
     NO_DEVICE_CODE;
 #endif // __CUDA_ARCH__ >= MIN_CC_DP4A
