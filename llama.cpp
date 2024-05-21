@@ -17319,7 +17319,7 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
     if (i < 0) {
         j = ctx->n_outputs + i;
         if (j < 0) {
-            return llama_get_logits_ith_fail(i, format("negative index out of range [0, %d)", ctx->n_outputs));
+            return llama_get_logits_ith_fail(i, format("negative index out of range [%d, 0)", -ctx->n_outputs));
         }
     } else if ((size_t) i >= ctx->output_ids.size()) {
         return llama_get_logits_ith_fail(i, format("out of range [0, %lu)", ctx->output_ids.size()));
