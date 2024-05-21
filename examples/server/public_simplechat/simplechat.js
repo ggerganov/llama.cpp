@@ -180,6 +180,29 @@ function el_children_config_class(elBase, idSelected, classSelected, classUnSele
     }
 }
 
+/**
+ * Create button and set it up.
+ * @param {string} id
+ * @param {(this: HTMLButtonElement, ev: MouseEvent) => any} callback
+ * @param {string | undefined} name
+ * @param {string | undefined} innerText
+ */
+function el_create_button(id, callback, name=undefined, innerText=undefined) {
+    if (!name) {
+        name = id;
+    }
+    if (!innerText) {
+        innerText = id;
+    }
+    let btn = document.createElement("button");
+    btn.id = id;
+    btn.name = name;
+    btn.innerText = innerText;
+    btn.addEventListener("click", callback);
+    return btn;
+}
+
+
 class MultiChatUI {
 
     constructor() {
@@ -360,14 +383,7 @@ class MultiChatUI {
         elDiv.replaceChildren();
         let chatIds = Object.keys(this.simpleChats);
         for(let cid of chatIds) {
-            let btn = document.createElement("button");
-            btn.id = cid;
-            btn.name = cid;
-            btn.innerText = cid;
-            if (cid == this.curChatId) {
-                btn.className = "session-selected";
-            }
-            btn.addEventListener("click", (ev)=>{
+            let btn = el_create_button(cid, (ev)=>{
                 let target = /** @type{HTMLButtonElement} */(ev.target);
                 console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
                 if (this.elInUser.disabled) {
@@ -378,8 +394,17 @@ class MultiChatUI {
                 this.handle_session_switch(target.id);
                 el_children_config_class(elDiv, target.id, "session-selected", "");
             });
+            if (cid == this.curChatId) {
+                btn.className = "session-selected";
+            }
             elDiv.appendChild(btn);
         }
+        let btnNew = el_create_button("NeW cHaT", (ev)=> {
+            let chatId = `Chat${chatIds.length}`;
+            let chatName = prompt("SimpleChat:MCUI:\nEnter id for new chat session", chatId);
+            this.new_chat_session(chatId, true);
+        });
+        elDiv.appendChild(btnNew);
     }
 
     /**
