@@ -293,6 +293,9 @@ def main(argv: list[str] = None):
     model = LibLlamaModel(LibLlama(), args.vocab_file, mparams=dict(vocab_only=True), cparams=dict(n_ctx=4096))
     tokenizer = AutoTokenizer.from_pretrained(args.dir_tokenizer)
 
+    tokenizer.add_bos_token = getattr(tokenizer, "add_bos_token", True)
+    tokenizer.add_eos_token = getattr(tokenizer, "add_eos_token", False)
+
     def func_tokenize1(text: str):
         return model.tokenize(text, add_special=True, parse_special=True)
 
