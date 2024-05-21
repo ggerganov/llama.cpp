@@ -254,7 +254,7 @@ class MultiChatUI {
      * Setup the needed callbacks wrt UI, curChatId to defaultChatId and
      * optionally switch to specified defaultChatId.
      * @param {string} defaultChatId
-     * @param {boolean} [bSwitchSession=false]
+     * @param {boolean} bSwitchSession
      */
     setup_ui(defaultChatId, bSwitchSession=false) {
 
@@ -300,7 +300,7 @@ class MultiChatUI {
     /**
      * Setup a new chat session and optionally switch to it.
      * @param {string} chatId
-     * @param {boolean} [bSwitchSession=false]
+     * @param {boolean} bSwitchSession
      */
     new_chat_session(chatId, bSwitchSession=false) {
         this.simpleChats[chatId] = new SimpleChat();
@@ -371,7 +371,7 @@ class MultiChatUI {
     }
 
     /**
-     * Show buttons for available chat sessions, in the passed elDiv.
+     * Show buttons for NewChat and available chat sessions, in the passed elDiv.
      * If elDiv is undefined/null, then use this.elDivSessions.
      * Take care of highlighting the selected chat-session's btn.
      * @param {HTMLDivElement | undefined} elDiv
@@ -381,13 +381,7 @@ class MultiChatUI {
             elDiv = this.elDivSessions;
         }
         elDiv.replaceChildren();
-        let chatIds = Object.keys(this.simpleChats);
-        for(let cid of chatIds) {
-            let btn = this.create_session_btn(elDiv, cid);
-            if (cid == this.curChatId) {
-                btn.className = "session-selected";
-            }
-        }
+        // Btn for creating new chat session
         let btnNew = el_create_button("NeW cHaT", (ev)=> {
             let chatId = `Chat${Object.keys(this.simpleChats).length}`;
             let chatIdGot = prompt("SimpleChat:MCUI:\nEnter id for new chat session", chatId);
@@ -399,6 +393,14 @@ class MultiChatUI {
             el_children_config_class(elDiv, chatIdGot, "session-selected", "");
         });
         elDiv.appendChild(btnNew);
+        // Btns for existing chat sessions
+        let chatIds = Object.keys(this.simpleChats);
+        for(let cid of chatIds) {
+            let btn = this.create_session_btn(elDiv, cid);
+            if (cid == this.curChatId) {
+                btn.className = "session-selected";
+            }
+        }
     }
 
     create_session_btn(elDiv, cid) {
