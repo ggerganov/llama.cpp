@@ -906,7 +906,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "--no-special") {
-        params.ctrl_token_no_out = true;
+        params.no_special = true;
         return true;
     }
     if (arg == "--embedding") {

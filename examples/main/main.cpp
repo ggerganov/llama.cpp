@@ -760,7 +760,7 @@ int main(int argc, char ** argv) {
                 if (!llama_token_is_control_token(llama_get_model(ctx), id)) {
                     // Stream Output Token To Standard Output
                     fprintf(stdout, "%s", token_str.c_str());
-                } else if (!params.ctrl_token_no_out) {
+                } else if (!params.no_special) {
 #ifndef _MSC_VER
                     if (control_token_file_descriptor_is_attached) {
                         // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
