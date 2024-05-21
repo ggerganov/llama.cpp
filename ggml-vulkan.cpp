@@ -4238,6 +4238,10 @@ static void ggml_vk_soft_max(ggml_backend_vk_context * ctx, vk_context * subctx,
 }
 
 static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context * subctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
+#pragma message("TODO: implement phi3 frequency factors support")
+#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225")
+    GGML_ASSERT(dst->src[2] == nullptr && "phi3 frequency factors not implemented yet");
+
     const int n_dims        = ((int32_t *) dst->op_params)[1];
     const int mode          = ((int32_t *) dst->op_params)[2];
     // const int n_ctx         = ((int32_t *) dst->op_params)[3];
