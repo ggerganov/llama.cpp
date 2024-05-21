@@ -120,10 +120,10 @@ class SimpleChat {
         } else {
             if (sysPrompt.length > 0) {
                 if (this.xchat[0].role !== Roles.System) {
-                    console.error(`ERRR:SimpleChat:${msgTag}:You need to specify system prompt before any user query, ignoring...`);
+                    console.error(`ERRR:SimpleChat:SC:${msgTag}:You need to specify system prompt before any user query, ignoring...`);
                 } else {
                     if (this.xchat[0].content !== sysPrompt) {
-                        console.error(`ERRR:SimpleChat:${msgTag}:You cant change system prompt, mid way through, ignoring...`);
+                        console.error(`ERRR:SimpleChat:SC:${msgTag}:You cant change system prompt, mid way through, ignoring...`);
                     }
                 }
             }
@@ -234,6 +234,7 @@ class MultiChatUI {
         this.validate_element(this.elDivChat, "chat-div");
         this.validate_element(this.elInUser, "user-in");
         this.validate_element(this.elSelectApiEP, "api-ep");
+        this.validate_element(this.elDivChat, "sessions-div");
     }
 
     /**
@@ -243,9 +244,9 @@ class MultiChatUI {
      */
     validate_element(el, msgTag) {
         if (el == null) {
-            throw Error(`ERRR:MCUI:${msgTag} element missing in html...`);
+            throw Error(`ERRR:SimpleChat:MCUI:${msgTag} element missing in html...`);
         } else {
-            console.debug(`INFO:MCUI:${msgTag}:Id:${el.id}:Name:${el["name"]}`);
+            console.debug(`INFO:SimpleChat:MCUI:${msgTag} Id[${el.id}] Name[${el["name"]}]`);
         }
     }
 
@@ -279,7 +280,7 @@ class MultiChatUI {
                 return;
             }
             this.handle_user_submit(this.curChatId, this.elSelectApiEP.value).catch((/** @type{Error} */reason)=>{
-                let msg = `ERRR:MCUI:HandleUserSubmit\n${reason.name}:${reason.message}`;
+                let msg = `ERRR:SimpleChat\nMCUI:HandleUserSubmit:${this.curChatId}\n${reason.name}:${reason.message}`;
                 console.debug(msg.replace("\n", ":"));
                 alert(msg);
                 this.ui_reset_userinput();
@@ -333,7 +334,7 @@ class MultiChatUI {
 
         let content = this.elInUser.value;
         if (!chat.add(Roles.User, content)) {
-            console.debug(`WARN:MCUI:${chatId}:HandleUserSubmit:Ignoring empty user input...`);
+            console.debug(`WARN:SimpleChat:MCUI:${chatId}:HandleUserSubmit:Ignoring empty user input...`);
             return;
         }
         chat.show(this.elDivChat);
@@ -348,7 +349,7 @@ class MultiChatUI {
 
         this.elInUser.value = "working...";
         this.elInUser.disabled = true;
-        console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:${theUrl}:ReqBody:${theBody}`);
+        console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:${theUrl}:ReqBody:${theBody}`);
         let resp = await fetch(theUrl, {
             method: "POST",
             headers: {
@@ -358,7 +359,7 @@ class MultiChatUI {
         });
 
         let respBody = await resp.json();
-        console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
+        console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let assistantMsg;
         if (apiEP == ApiEP.Chat) {
             assistantMsg = respBody["choices"][0]["message"]["content"];
@@ -373,7 +374,7 @@ class MultiChatUI {
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
         } else {
-            console.debug(`DBUG:MCUI:HandleUserSubmit:ChatId has changed:[${chatId}] [${this.curChatId}]`);
+            console.debug(`DBUG:SimpleChat:MCUI:HandleUserSubmit:ChatId has changed:[${chatId}] [${this.curChatId}]`);
         }
         // Purposefully clear at end rather than begin of this function
         // so that one can switch from chat to completion mode and sequece
@@ -399,14 +400,14 @@ class MultiChatUI {
         // Btn for creating new chat session
         let btnNew = el_create_button("New CHAT", (ev)=> {
             if (this.elInUser.disabled) {
-                console.error(`ERRR:MCUI:NewChatClick:Current session [${this.curChatId}] awaiting response, ignoring request...`);
-                alert("ERRR:MCUI\nWait for response to pending query, before starting new chat session");
+                console.error(`ERRR:SimpleChat:MCUI:NewChat:Current session [${this.curChatId}] awaiting response, ignoring request...`);
+                alert("ERRR:SimpleChat\nMCUI:NewChat\nWait for response to pending query, before starting new chat session");
                 return;
             }
             let chatId = `Chat${Object.keys(this.simpleChats).length}`;
-            let chatIdGot = prompt("SimpleChat:MCUI:\nEnter id for new chat session", chatId);
+            let chatIdGot = prompt("INFO:SimpleChat\nMCUI:NewChat\nEnter id for new chat session", chatId);
             if (!chatIdGot) {
-                console.error("ERRR:MCUI:NewChat:Skipping based on user request...");
+                console.error("ERRR:SimpleChat:MCUI:NewChat:Skipping based on user request...");
                 return;
             }
             this.new_chat_session(chatIdGot, true);
@@ -427,10 +428,10 @@ class MultiChatUI {
     create_session_btn(elDiv, cid) {
         let btn = el_create_button(cid, (ev)=>{
             let target = /** @type{HTMLButtonElement} */(ev.target);
-            console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
+            console.debug(`DBUG:SimpleChat:MCUI:SessionClick:${target.id}`);
             if (this.elInUser.disabled) {
-                console.error(`ERRR:MCUI:SessionClick:${target.id}:Current session [${this.curChatId}] awaiting response, ignoring switch...`);
-                alert("ERRR:MCUI\nWait for response to pending query, before switching");
+                console.error(`ERRR:SimpleChat:MCUI:SessionClick:${target.id}:Current session [${this.curChatId}] awaiting response, ignoring switch...`);
+                alert("ERRR:SimpleChat\nMCUI:SessionClick\nWait for response to pending query, before switching");
                 return;
             }
             this.handle_session_switch(target.id);
@@ -447,7 +448,7 @@ class MultiChatUI {
     async handle_session_switch(chatId) {
         let chat = this.simpleChats[chatId];
         if (chat == undefined) {
-            console.error(`ERRR:MCUI:Session:${chatId} missing...`);
+            console.error(`ERRR:SimpleChat:MCUI:HandleSessionSwitch:${chatId} missing...`);
             return;
         }
         this.elInSystem.value = chat.get_system_latest();
@@ -455,6 +456,7 @@ class MultiChatUI {
         chat.show(this.elDivChat);
         this.elInUser.focus();
         this.curChatId = chatId;
+        console.log(`INFO:SimpleChat:MCUI:HandleSessionSwitch:${chatId} entered...`);
     }
 
 }
@@ -464,7 +466,7 @@ let gMuitChat;
 const gChatIds = [ "Default", "Other" ];
 
 function startme() {
-    console.log("INFO:StartMe:Starting...");
+    console.log("INFO:SimpleChat:StartMe:Starting...");
     gMuitChat = new MultiChatUI();
     for (let cid of gChatIds) {
         gMuitChat.new_chat_session(cid);
