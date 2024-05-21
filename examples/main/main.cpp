@@ -757,7 +757,7 @@ int main(int argc, char ** argv) {
                 const std::string token_str = llama_token_to_piece(ctx, id);
 
                 // Console/Stream Output
-                if (!llama_token_is_control_token(llama_get_model(ctx), id)) {
+                if (!llama_token_is_control(llama_get_model(ctx), id)) {
                     // Stream Output Token To Standard Output
                     fprintf(stdout, "%s", token_str.c_str());
                 } else if (!params.no_special) {
