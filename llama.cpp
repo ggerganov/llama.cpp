@@ -9120,8 +9120,6 @@ struct llm_build_context {
         // rope freq factors for 128k context
         struct ggml_tensor * rope_factors = build_rope_factors();
 
-        GGML_ASSERT(rope_factors != nullptr && "rope_factors is required for phi3"); // TMP: remove me
-
         for (int il = 0; il < n_layer; ++il) {
             auto residual = inpL;
 
