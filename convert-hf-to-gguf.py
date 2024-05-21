@@ -9,7 +9,6 @@ import logging
 import os
 import re
 import sys
-from enum import IntEnum
 from hashlib import sha256
 from pathlib import Path
 from typing import (
