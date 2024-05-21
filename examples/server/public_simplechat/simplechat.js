@@ -359,7 +359,11 @@ class MultiChatUI {
             }
         }
         chat.add(Roles.Assistant, assistantMsg);
-        chat.show(this.elDivChat);
+        if (chatId == this.curChatId) {
+            chat.show(this.elDivChat);
+        } else {
+            console.debug(`DBUG:MCUI:HandleUserSubmit:ChatId has changed:[${chatId}] [${this.curChatId}]`);
+        }
         // Purposefully clear at end rather than begin of this function
         // so that one can switch from chat to completion mode and sequece
         // in a completion mode with multiple user-assistant chat data
@@ -382,11 +386,17 @@ class MultiChatUI {
         }
         elDiv.replaceChildren();
         // Btn for creating new chat session
-        let btnNew = el_create_button("NeW cHaT", (ev)=> {
+        let btnNew = el_create_button("New CHAT", (ev)=> {
+            if (this.elInUser.disabled) {
+                console.error(`ERRR:MCUI:NewChatClick:Current session [${this.curChatId}] awaiting response, ignoring request...`);
+                alert("ERRR:MCUI\nWait for response to pending query, before starting new chat session");
+                return;
+            }
             let chatId = `Chat${Object.keys(this.simpleChats).length}`;
             let chatIdGot = prompt("SimpleChat:MCUI:\nEnter id for new chat session", chatId);
             if (!chatIdGot) {
-                chatIdGot = chatId;
+                console.error("ERRR:MCUI:NewChat:Skipping based on user request...");
+                return;
             }
             this.new_chat_session(chatIdGot, true);
             this.create_session_btn(elDiv, chatIdGot);
