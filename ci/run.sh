@@ -282,7 +282,7 @@ function gg_run_open_llama_3b_v2 {
     (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_QKK_64=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                                             ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert.py ${path_models}
+    python3 ../examples/convert-no-torch.py ${path_models}
 
     model_f16="${path_models}/ggml-model-f16.gguf"
     model_q8_0="${path_models}/ggml-model-q8_0.gguf"
@@ -417,7 +417,7 @@ function gg_run_open_llama_7b_v2 {
     (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUDA=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                                           ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert.py ${path_models}
+    python3 ../examples/convert-no-torch.py ${path_models}
 
     model_f16="${path_models}/ggml-model-f16.gguf"
     model_q8_0="${path_models}/ggml-model-q8_0.gguf"
