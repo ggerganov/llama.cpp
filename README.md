@@ -107,7 +107,6 @@ Typically finetunes of the base models below are supported as well.
 - [X] [Aquila 1 & 2](https://huggingface.co/models?search=BAAI/Aquila)
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
-- [X] [Persimmon 8B](https://github.com/ggerganov/llama.cpp/pull/3410)
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
 - [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
 - [x] [Yi models](https://huggingface.co/models?search=01-ai/Yi)
@@ -301,7 +300,7 @@ cd llama.cpp
 
 ### Build
 
-In order to build llama.cpp you have three different options.
+In order to build llama.cpp you have four different options.
 
 - Using `make`:
   - On Linux or MacOS:
@@ -381,45 +380,6 @@ To disable the Metal build at compile time use the `LLAMA_NO_METAL=1` flag or th
 
 When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers|-ngl 0` command-line
 argument.
-
-### MPI Build
-
-MPI lets you distribute the computation over a cluster of machines. Because of the serial nature of LLM prediction, this won't yield any end-to-end speed-ups, but it will let you run larger models than would otherwise fit into RAM on a single machine.
-
-First you will need MPI libraries installed on your system. The two most popular (only?) options are [MPICH](https://www.mpich.org) and [OpenMPI](https://www.open-mpi.org). Either can be installed with a package manager (`apt`, Homebrew, MacPorts, etc).
-
-Next you will need to build the project with `LLAMA_MPI` set to true on all machines; if you're building with `make`, you will also need to specify an MPI-capable compiler (when building with CMake, this is configured automatically):
-
-- Using `make`:
-
-  ```bash
-  make CC=mpicc CXX=mpicxx LLAMA_MPI=1
-  ```
-
-- Using `CMake`:
-
-  ```bash
-  cmake -S . -B build -DLLAMA_MPI=ON
-  ```
-
-Once the programs are built, download/convert the weights on all of the machines in your cluster. The paths to the weights and programs should be identical on all machines.
-
-Next, ensure password-less SSH access to each machine from the primary host, and create a `hostfile` with a list of the hostnames and their relative "weights" (slots). If you want to use localhost for computation, use its local subnet IP address rather than the loopback address or "localhost".
-
-Here is an example hostfile:
-
-```
-192.168.0.1:2
-malvolio.local:1
-```
-
-The above will distribute the computation across 2 processes on the first host and 1 process on the second host. Each process will use roughly an equal amount of RAM. Try to keep these numbers small, as inter-process (intra-host) communication is expensive.
-
-Finally, you're ready to run a computation using `mpirun`:
-
-```bash
-mpirun -hostfile hostfile -n 3 ./main -m ./models/7B/ggml-model-q4_0.gguf -n 128
-```
 
 ### BLAS Build
 

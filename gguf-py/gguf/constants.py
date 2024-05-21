@@ -115,7 +115,6 @@ class MODEL_ARCH(IntEnum):
     GPTNEOX    = auto()
     MPT        = auto()
     STARCODER  = auto()
-    PERSIMMON  = auto()
     REFACT     = auto()
     BERT       = auto()
     NOMIC_BERT = auto()
@@ -193,7 +192,6 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GPTNEOX:        "gptneox",
     MODEL_ARCH.MPT:            "mpt",
     MODEL_ARCH.STARCODER:      "starcoder",
-    MODEL_ARCH.PERSIMMON:      "persimmon",
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.NOMIC_BERT:     "nomic-bert",
@@ -425,20 +423,6 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
-    ],
-    MODEL_ARCH.PERSIMMON: [
-        MODEL_TENSOR.TOKEN_EMBD,
-        MODEL_TENSOR.OUTPUT,
-        MODEL_TENSOR.OUTPUT_NORM,
-        MODEL_TENSOR.ATTN_NORM,
-        MODEL_TENSOR.ATTN_QKV,
-        MODEL_TENSOR.ATTN_OUT,
-        MODEL_TENSOR.FFN_NORM,
-        MODEL_TENSOR.FFN_DOWN,
-        MODEL_TENSOR.FFN_UP,
-        MODEL_TENSOR.ATTN_Q_NORM,
-        MODEL_TENSOR.ATTN_K_NORM,
-        MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
     MODEL_ARCH.REFACT: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -755,9 +739,6 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.BAICHUAN: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
-    ],
-    MODEL_ARCH.PERSIMMON: [
-        MODEL_TENSOR.ROPE_FREQS,
     ],
     MODEL_ARCH.QWEN: [
         MODEL_TENSOR.ROPE_FREQS,
