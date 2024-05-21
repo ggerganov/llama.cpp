@@ -195,7 +195,7 @@ static const cmd_params cmd_params_defaults = {
     /* model         */ {"models/7B/ggml-model-q4_0.gguf"},
     /* n_prompt      */ {512},
     /* n_gen         */ {128},
-    /* n_pg          */ {{512, 128}},
+    /* n_pg          */ {},
     /* n_batch       */ {2048},
     /* n_ubatch      */ {512},
     /* type_k        */ {GGML_TYPE_F16},

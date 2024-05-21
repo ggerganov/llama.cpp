@@ -1940,6 +1940,10 @@ struct llama_layer {
     // mamba bias
     struct ggml_tensor * ssm_conv1d_b;
     struct ggml_tensor * ssm_dt_b;
+
+    // long rope factors
+    struct ggml_tensor * rope_long  = nullptr;
+    struct ggml_tensor * rope_short = nullptr;
 };
 
 struct llama_kv_cell {
@@ -2110,10 +2114,6 @@ struct llama_model {
     struct ggml_tensor * output_norm_b;
     struct ggml_tensor * output;
     struct ggml_tensor * output_b;
-
-    // long rope factors
-    struct ggml_tensor * rope_long  = nullptr;
-    struct ggml_tensor * rope_short = nullptr;
 
     std::vector<llama_layer> layers;
 
@@ -3425,11 +3425,15 @@ struct llama_model_loader {
         return get_tensor_meta(get_tensor_name(i));
     }
 
-    struct ggml_tensor * create_tensor_for(struct ggml_context * ctx, const struct ggml_tensor * cur) {
+    struct ggml_tensor * create_tensor_for(struct ggml_context * ctx, const struct ggml_tensor * cur, bool duplicated) {
         struct ggml_tensor * tensor = ggml_dup_tensor(ctx, cur);
         ggml_set_name(tensor, ggml_get_name(cur));
 
-        n_created++;
+        if (duplicated) {
+            size_data += ggml_nbytes(cur);
+        } else {
+            n_created++;
+        }
 
         return tensor;
     }
@@ -3464,14 +3468,14 @@ struct llama_model_loader {
         return cur;
     }
 
-    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, bool required = true) {
+    struct ggml_tensor * create_tensor(struct ggml_context * ctx, const std::string & name, const std::vector<int64_t> & ne, bool required = true, bool duplicated = false) {
         const struct ggml_tensor * cur = check_tensor_dims(name, ne, required);
 
         if (cur == NULL) {
             return NULL;
         }
 
-        return create_tensor_for(ctx, cur);
+        return create_tensor_for(ctx, cur, duplicated);
     }
 
     struct ggml_tensor * create_tensor_as_view(struct ggml_context * ctx, struct ggml_tensor * base, const std::string & name, const std::vector<int64_t> & ne, size_t offset, bool required = true) {
@@ -4136,6 +4140,7 @@ static void llm_load_hparams(
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1B; break;
                     case 32: model.type = e_model::MODEL_3B; break;
+                    case 40: model.type = e_model::MODEL_14B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
@@ -4965,9 +4970,7 @@ static bool llm_load_tensors(
                             model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
                             // if output is NULL, init from the input tok embed
                             if (model.output == NULL) {
-                                model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                                ml.n_created--; // artificial tensor
-                                ml.size_data += ggml_nbytes(model.output);
+                                model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                             }
                         }
                     }
@@ -5045,9 +5048,7 @@ static bool llm_load_tensors(
                         model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                         }
                     }
 
@@ -5174,9 +5175,7 @@ static bool llm_load_tensors(
 
                         model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
                         if (!model.output) {
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}); // needs to be on GPU
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true); // needs to be on GPU
                         }
                     }
 
@@ -5211,9 +5210,7 @@ static bool llm_load_tensors(
                         model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
                         if (!model.output) {
                             // needs to be on GPU
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                         }
 
                     }
@@ -5389,9 +5386,7 @@ static bool llm_load_tensors(
 
                         model.output        = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
                         if (!model.output) {
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}); // needs to be on GPU
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true); // needs to be on GPU
                         }
                     }
 
@@ -5511,9 +5506,7 @@ static bool llm_load_tensors(
                         model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab}, false);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                         }
                     }
 
@@ -5639,9 +5632,6 @@ static bool llm_load_tensors(
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), { n_embd, n_vocab });
 
-                    model.rope_long  = ml.create_tensor(ctx_input, tn(LLM_TENSOR_ROPE_FACTORS_LONG,  "weight"), { n_embd_head/2 }, false);
-                    model.rope_short = ml.create_tensor(ctx_input, tn(LLM_TENSOR_ROPE_FACTORS_SHORT, "weight"), { n_embd_head/2 }, false);
-
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), { n_embd });
@@ -5663,6 +5653,9 @@ static bool llm_load_tensors(
 
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), { n_ff, n_embd });
                         layer.ffn_up = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP, "weight", i), { n_embd, 2 * n_ff });
+
+                        layer.rope_long  = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_LONG,  "weight"), { n_embd_head/2 }, false, i != 0);
+                        layer.rope_short = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ROPE_FACTORS_SHORT, "weight"), { n_embd_head/2 }, false, i != 0);
                     }
                 } break;
             case LLM_ARCH_PLAMO:
@@ -5831,9 +5824,7 @@ static bool llm_load_tensors(
 
                     // output
                     model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                    model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}); // same as tok_embd, duplicated to allow offloading
-                    ml.n_created--; // artificial tensor
-                    ml.size_data += ggml_nbytes(model.output);
+                    model.output      = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab}, true); // same as tok_embd, duplicated to allow offloading
 
                     const int64_t n_ff          = hparams.n_ff;
                     const int64_t n_embd_head_k = hparams.n_embd_head_k;
@@ -5871,9 +5862,7 @@ static bool llm_load_tensors(
                         model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                         }
 
                     }
@@ -5927,9 +5916,7 @@ static bool llm_load_tensors(
                         model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
                         // if output is NULL, init from the input tok embed, duplicated to allow offloading
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                         }
                     }
 
@@ -5990,9 +5977,7 @@ static bool llm_load_tensors(
                     {
                         model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                         // init output from the input tok embed
-                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                        ml.n_created--; // artificial tensor
-                        ml.size_data += ggml_nbytes(model.output);
+                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                     }
 
                     for (int i = 0; i < n_layer; ++i) {
@@ -6027,9 +6012,7 @@ static bool llm_load_tensors(
                         model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
                         // if output is NULL, init from the input tok embed
                         if (model.output == NULL) {
-                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
-                            ml.n_created--; // artificial tensor
-                            ml.size_data += ggml_nbytes(model.output);
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, true);
                         }
                     }
 
@@ -6872,9 +6855,9 @@ struct llm_build_context {
         cb(lctx.inp_K_shift, "K_shift", -1);
         ggml_set_input(lctx.inp_K_shift);
 
-        struct ggml_tensor * rope_factors = build_rope_factors();
 
         for (int il = 0; il < n_layer; ++il) {
+            struct ggml_tensor * rope_factors = build_rope_factors(il);
             struct ggml_tensor * tmp =
                 // we rotate only the first n_rot dimensions
                 ggml_rope_ext_inplace(ctx0,
@@ -6988,15 +6971,15 @@ struct llm_build_context {
         return lctx.inp_pos;
     }
 
-    struct ggml_tensor * build_rope_factors() {
+    struct ggml_tensor * build_rope_factors(int il) {
         // choose long/short freq factors based on the context size
         const auto n_ctx_pre_seq = cparams.n_ctx / cparams.n_seq_max;
 
         if (n_ctx_pre_seq > hparams.n_yarn_orig_ctx) {
-            return model.rope_long;
+            return model.layers[il].rope_long;
         }
 
-        return model.rope_short;
+        return model.layers[il].rope_short;
     }
 
     struct ggml_tensor * build_inp_out_ids() {
@@ -9117,14 +9100,14 @@ struct llm_build_context {
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
 
-        // rope freq factors for 128k context
-        struct ggml_tensor * rope_factors = build_rope_factors();
-
         for (int il = 0; il < n_layer; ++il) {
             auto residual = inpL;
 
             // self-attention
             {
+                // rope freq factors for 128k context
+                struct ggml_tensor * rope_factors = build_rope_factors(il);
+
                 struct ggml_tensor* attn_norm_output = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm,
                     NULL,
