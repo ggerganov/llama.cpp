@@ -11080,7 +11080,7 @@ struct llm_build_context {
                 key_states = ggml_set_inplace(ctx0, key_states, k_pe, key_states->nb[1], key_states->nb[2], key_states->nb[3], ggml_element_size(key_states) * qk_nope_head_dim);
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
-                        model.layers[il].wo, model.layers[il].bo,
+                        model.layers[il].wo, NULL,
                         key_states, value_states, query_states, KQ_mask, n_tokens, kv_head, n_kv, kq_scale, cb, il);
             }
 
