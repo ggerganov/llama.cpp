@@ -144,11 +144,11 @@ class SimpleChat {
     /**
      * Retrieve the latest system prompt.
      */
-    get_system() {
-        let sysPrompt = this.xchat[this.iLastSys].content;
-        if (!sysPrompt) {
-            sysPrompt = "";
+    get_system_latest() {
+        if (this.iLastSys == -1) {
+            return "";
         }
+        let sysPrompt = this.xchat[this.iLastSys].content;
         return sysPrompt;
     }
 
@@ -353,7 +353,7 @@ class MultiChatUI {
             console.error(`ERRR:MCUI:Session:${chatId} missing...`);
             return;
         }
-        this.elInSystem.value = chat.get_system();
+        this.elInSystem.value = chat.get_system_latest();
         this.elInUser.value = "";
         chat.show(this.elDivChat);
         this.elInUser.focus();
