@@ -17301,7 +17301,7 @@ float * llama_get_logits(struct llama_context * ctx) {
     return ctx->logits;
 }
 
-static float * llama_get_logits_ith_fail(int i, std::string reason) {
+static float * llama_get_logits_ith_fail(int i, const std::string & reason) {
     LLAMA_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, reason.c_str());
 #ifndef NDEBUG
     GGML_ASSERT(false);
