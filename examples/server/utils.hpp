@@ -385,7 +385,7 @@ static json oaicompat_completion_params_parse(
 
     std::string extra_system_message;
     // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
+    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"), extra_system_message);
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
