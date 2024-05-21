@@ -178,6 +178,7 @@ struct cmd_params {
     std::vector<ggml_type> type_v;
     std::vector<int> n_threads;
     std::vector<int> n_gpu_layers;
+    std::vector<std::string> rpc_servers;
     std::vector<llama_split_mode> split_mode;
     std::vector<int> main_gpu;
     std::vector<bool> no_kv_offload;
@@ -202,6 +203,7 @@ static const cmd_params cmd_params_defaults = {
     /* type_v        */ {GGML_TYPE_F16},
     /* n_threads     */ {cpu_get_num_math()},
     /* n_gpu_layers  */ {99},
+    /* rpc_servers   */ {""},
     /* split_mode    */ {LLAMA_SPLIT_MODE_LAYER},
     /* main_gpu      */ {0},
     /* no_kv_offload */ {false},
@@ -230,6 +232,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -ctv, --cache-type-v <t>            (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_v, ggml_type_name), ",").c_str());
     printf("  -t, --threads <n>                   (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
     printf("  -ngl, --n-gpu-layers <n>            (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
+    printf("  -rpc, --rpc <rpc_servers>           (default: %s)\n", join(cmd_params_defaults.rpc_servers, ",").c_str());
     printf("  -sm, --split-mode <none|layer|row>  (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
@@ -384,6 +387,12 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<int>(argv[i], split_delim);
             params.n_gpu_layers.insert(params.n_gpu_layers.end(), p.begin(), p.end());
+        } else if (arg == "-rpc" || arg == "--rpc") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rpc_servers.push_back(argv[i]);
         } else if (arg == "-sm" || arg == "--split-mode") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -519,6 +528,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.type_k.empty())       { params.type_k = cmd_params_defaults.type_k; }
     if (params.type_v.empty())       { params.type_v = cmd_params_defaults.type_v; }
     if (params.n_gpu_layers.empty()) { params.n_gpu_layers = cmd_params_defaults.n_gpu_layers; }
+    if (params.rpc_servers.empty())  { params.rpc_servers = cmd_params_defaults.rpc_servers; }
     if (params.split_mode.empty())   { params.split_mode = cmd_params_defaults.split_mode; }
     if (params.main_gpu.empty())     { params.main_gpu = cmd_params_defaults.main_gpu; }
     if (params.no_kv_offload.empty()){ params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
@@ -541,6 +551,7 @@ struct cmd_params_instance {
     ggml_type type_v;
     int n_threads;
     int n_gpu_layers;
+    std::string rpc_servers;
     llama_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
@@ -553,6 +564,9 @@ struct cmd_params_instance {
         llama_model_params mparams = llama_model_default_params();
 
         mparams.n_gpu_layers = n_gpu_layers;
+        if (!rpc_servers.empty()) {
+            mparams.rpc_servers = rpc_servers.c_str();
+        }
         mparams.split_mode = split_mode;
         mparams.main_gpu = main_gpu;
         mparams.tensor_split = tensor_split.data();
@@ -564,6 +578,7 @@ struct cmd_params_instance {
     bool equal_mparams(const cmd_params_instance & other) const {
         return model == other.model &&
                n_gpu_layers == other.n_gpu_layers &&
+               rpc_servers == other.rpc_servers &&
                split_mode == other.split_mode &&
                main_gpu == other.main_gpu &&
                use_mmap == other.use_mmap &&
@@ -592,6 +607,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     // this ordering minimizes the number of times that each model needs to be reloaded
     for (const auto & m : params.model)
     for (const auto & nl : params.n_gpu_layers)
+    for (const auto & rpc : params.rpc_servers)
     for (const auto & sm : params.split_mode)
     for (const auto & mg : params.main_gpu)
     for (const auto & ts : params.tensor_split)
@@ -618,6 +634,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .type_v       = */ tv,
                 /* .n_threads    = */ nt,
                 /* .n_gpu_layers = */ nl,
+                /* .rpc_servers  = */ rpc,
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
@@ -643,6 +660,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .type_v       = */ tv,
                 /* .n_threads    = */ nt,
                 /* .n_gpu_layers = */ nl,
+                /* .rpc_servers  = */ rpc,
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
@@ -668,6 +686,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .type_v       = */ tv,
                 /* .n_threads    = */ nt,
                 /* .n_gpu_layers = */ nl,
+                /* .rpc_servers  = */ rpc,
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
@@ -692,6 +711,7 @@ struct test {
     static const bool kompute;
     static const bool metal;
     static const bool sycl;
+    static const bool rpc;
     static const bool gpu_blas;
     static const bool blas;
     static const std::string cpu_info;
@@ -790,6 +810,9 @@ struct test {
         if (sycl) {
             return GGML_SYCL_NAME;
         }
+        if (rpc) {
+            return "RPC";
+        }
         if (gpu_blas) {
             return "GPU BLAS";
         }
@@ -803,7 +826,7 @@ struct test {
     static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {
             "build_commit", "build_number",
-            "cuda", "opencl", "vulkan", "kompute", "metal", "sycl", "gpu_blas", "blas",
+            "cuda", "opencl", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas", "blas",
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_ubatch",
@@ -859,7 +882,7 @@ struct test {
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
             std::to_string(cuda), std::to_string(opencl), std::to_string(vulkan), std::to_string(vulkan),
-            std::to_string(metal), std::to_string(sycl), std::to_string(gpu_blas), std::to_string(blas),
+            std::to_string(metal), std::to_string(sycl), std::to_string(rpc), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_ubatch),
@@ -894,6 +917,7 @@ const bool        test::metal        = !!ggml_cpu_has_metal();
 const bool        test::gpu_blas     = !!ggml_cpu_has_gpublas();
 const bool        test::blas         = !!ggml_cpu_has_blas();
 const bool        test::sycl         = !!ggml_cpu_has_sycl();
+const bool        test::rpc          = !!ggml_cpu_has_rpc();
 const std::string test::cpu_info     = get_cpu_info();
 const std::string test::gpu_info     = get_gpu_info();
 
