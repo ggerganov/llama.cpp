@@ -960,6 +960,10 @@ class LLaMaModelType(IntEnum):
 # https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L40-L42
 LLAMA_TOKENIZER_DEFAULT_PRE = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+"
 
+# NOTE: It's easier to map out which files we need in advance.
+LLAMA_TOKENIZER_DEFAULT_BPE = ["config.json", "tokenizer_config.json", "tokenizer.json"]
+LLAMA_TOKENIZER_DEFAULT_SPM = LLAMA_TOKENIZER_DEFAULT_BPE + ["tokenizer.model"]
+
 #
 # HuggingFace Model Map
 #
@@ -977,7 +981,7 @@ HF_MODEL_MAP = (
         "model_type": LLaMaModelType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
         "vocab_pre": [],
-        "vocab_files": [],
+        "vocab_files": LLAMA_TOKENIZER_DEFAULT_SPM,
     },
     {
         "repo": "meta-llama/Meta-Llama-3-8B",
@@ -988,28 +992,112 @@ HF_MODEL_MAP = (
         "vocab_pre": [
             "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
         ],
-        "vocab_files": [],
+        "vocab_files": LLAMA_TOKENIZER_DEFAULT_BPE,
     },
-    {"model_arch": MODEL_ARCH.PHI3, "vocab_type": LLaMaVocabType.SPM, "repo": "microsoft/Phi-3-mini-4k-instruct", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "deepseek-ai/deepseek-llm-7b-base", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "deepseek-ai/deepseek-coder-6.7b-base", },
-    {"model_arch": MODEL_ARCH.FALCON, "vocab_type": LLaMaVocabType.BPE, "repo": "tiiuae/falcon-7b", },
-    {"model_arch": MODEL_ARCH.BERT, "vocab_type": LLaMaVocabType.WPM, "repo": "BAAI/bge-small-en-v1.5", },
-    {"model_arch": MODEL_ARCH.MPT, "vocab_type": LLaMaVocabType.BPE, "repo": "mosaicml/mpt-7b", },
-    {"model_arch": MODEL_ARCH.STARCODER2, "vocab_type": LLaMaVocabType.BPE, "repo": "bigcode/starcoder2-3b", },
-    {"model_arch": MODEL_ARCH.GPT2, "vocab_type": LLaMaVocabType.BPE, "repo": "openai-community/gpt2", },
-    {"model_arch": MODEL_ARCH.REFACT, "vocab_type": LLaMaVocabType.BPE, "repo": "smallcloudai/Refact-1_6-base", },
-    {"model_arch": MODEL_ARCH.COMMAND_R, "vocab_type": LLaMaVocabType.BPE, "repo": "CohereForAI/c4ai-command-r-v01", },
-    {"model_arch": MODEL_ARCH.QWEN2, "vocab_type": LLaMaVocabType.BPE, "repo": "Qwen/Qwen1.5-7B", },
-    {"model_arch": MODEL_ARCH.OLMO, "vocab_type": LLaMaVocabType.BPE, "repo": "allenai/OLMo-1.7-7B-hf", },
-    {"model_arch": MODEL_ARCH.DBRX, "vocab_type": LLaMaVocabType.BPE, "repo": "databricks/dbrx-base", },
-    {"model_arch": MODEL_ARCH.JINA_BERT_V2, "vocab_type": LLaMaVocabType.WPM, "repo": "jinaai/jina-embeddings-v2-base-en", },
-    {"model_arch": MODEL_ARCH.JINA_BERT_V2, "vocab_type": LLaMaVocabType.BPE, "repo": "jinaai/jina-embeddings-v2-base-es", },
-    {"model_arch": MODEL_ARCH.JINA_BERT_V2, "vocab_type": LLaMaVocabType.BPE, "repo": "jinaai/jina-embeddings-v2-base-de", },
-    {"model_arch": MODEL_ARCH.PHI2, "vocab_type": LLaMaVocabType.BPE, "repo": "microsoft/phi-1", },
-    {"model_arch": MODEL_ARCH.STABLELM, "vocab_type": LLaMaVocabType.BPE, "repo": "stabilityai/stablelm-2-zephyr-1_6b", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.SPM, "repo": "mistralai/Mistral-7B-Instruct-v0.2", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.SPM, "repo": "mistralai/Mixtral-8x7B-Instruct-v0.1", },
+    {
+        "model_repo": "microsoft/Phi-3-mini-4k-instruct",
+        "model_arch": MODEL_ARCH.PHI3,
+        "model_parts": 2,
+        "model_type": LLaMaModelType.SFT,
+        "vocab_type": LLaMaVocabType.SPM,
+        "vocab_pre": [],
+        "vocab_files": LLAMA_TOKENIZER_DEFAULT_SPM,
+    },
+    {
+        "model_arch": MODEL_ARCH.LLAMA,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "deepseek-ai/deepseek-llm-7b-base",
+    },
+    {
+        "model_arch": MODEL_ARCH.LLAMA,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "deepseek-ai/deepseek-coder-6.7b-base",
+    },
+    {
+        "model_arch": MODEL_ARCH.FALCON,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "tiiuae/falcon-7b",
+    },
+    {
+        "model_arch": MODEL_ARCH.BERT,
+        "vocab_type": LLaMaVocabType.WPM,
+        "repo": "BAAI/bge-small-en-v1.5",
+    },
+    {
+        "model_arch": MODEL_ARCH.MPT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "mosaicml/mpt-7b",
+    },
+    {
+        "model_arch": MODEL_ARCH.STARCODER2,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "bigcode/starcoder2-3b",
+    },
+    {
+        "model_arch": MODEL_ARCH.GPT2,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "openai-community/gpt2",
+    },
+    {
+        "model_arch": MODEL_ARCH.REFACT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "smallcloudai/Refact-1_6-base",
+    },
+    {
+        "model_arch": MODEL_ARCH.COMMAND_R,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "CohereForAI/c4ai-command-r-v01",
+    },
+    {
+        "model_arch": MODEL_ARCH.QWEN2,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "Qwen/Qwen1.5-7B",
+    },
+    {
+        "model_arch": MODEL_ARCH.OLMO,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "allenai/OLMo-1.7-7B-hf",
+    },
+    {
+        "model_arch": MODEL_ARCH.DBRX,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "databricks/dbrx-base",
+    },
+    {
+        "model_arch": MODEL_ARCH.JINA_BERT_V2,
+        "vocab_type": LLaMaVocabType.WPM,
+        "repo": "jinaai/jina-embeddings-v2-base-en",
+    },
+    {
+        "model_arch": MODEL_ARCH.JINA_BERT_V2,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "jinaai/jina-embeddings-v2-base-es",
+    },
+    {
+        "model_arch": MODEL_ARCH.JINA_BERT_V2,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "jinaai/jina-embeddings-v2-base-de",
+    },
+    {
+        "model_arch": MODEL_ARCH.PHI2,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "microsoft/phi-1",
+    },
+    {
+        "model_arch": MODEL_ARCH.STABLELM,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "stabilityai/stablelm-2-zephyr-1_6b",
+    },
+    {
+        "model_arch": MODEL_ARCH.LLAMA,
+        "vocab_type": LLaMaVocabType.SPM,
+        "repo": "mistralai/Mistral-7B-Instruct-v0.2",
+    },
+    {
+        "model_arch": MODEL_ARCH.LLAMA,
+        "vocab_type": LLaMaVocabType.SPM,
+        "repo": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    },
 )
 
 # Aliases for backward compatibility.
