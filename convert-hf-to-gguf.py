@@ -1749,7 +1749,7 @@ class Phi3MiniModel(Model):
                     token_id = int(token_id)
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
-                        assert(tokens[token_id] == token)
+                        assert tokens[token_id] == token
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -1765,7 +1765,7 @@ class Phi3MiniModel(Model):
                     token_id = int(foken_data["id"])
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
-                        assert(tokens[token_id] == token)
+                        assert tokens[token_id] == token
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED

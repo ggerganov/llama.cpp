@@ -26,7 +26,7 @@ Feature: llama.cpp server slot management
     # Since we have cache, this should only process the last tokens
     Given a user prompt "What is the capital of Germany?"
     And   a completion request with no api error
-    Then  24 tokens are predicted matching (Thank|special|Lily)
+    Then  24 tokens are predicted matching (Thank|special)
     And   7 prompt tokens are processed
     # Loading the original cache into slot 0,
     # we should only be processing 1 prompt token and get the same output
@@ -41,7 +41,7 @@ Feature: llama.cpp server slot management
     Given a user prompt "What is the capital of Germany?"
     And   using slot id 1
     And   a completion request with no api error
-    Then  24 tokens are predicted matching (Thank|special|Lily)
+    Then  24 tokens are predicted matching (Thank|special)
     And   1 prompt tokens are processed
 
   Scenario: Erase Slot
