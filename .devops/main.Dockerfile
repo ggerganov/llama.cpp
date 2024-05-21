@@ -9,7 +9,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN make -j
+RUN make -j$(nproc)
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
 
