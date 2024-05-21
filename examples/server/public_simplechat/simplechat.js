@@ -157,6 +157,53 @@ class MultiChatUI {
     constructor() {
         /** @type {Object<string, SimpleChat>} */
         this.simpleChats = {};
+
+        // the ui elements
+        this.elInSystem = /** @type{HTMLInputElement} */(document.getElementById("system-in"));
+        this.elDivChat = /** @type{HTMLDivElement} */(document.getElementById("chat-div"));
+        this.elBtnUser = /** @type{HTMLButtonElement} */(document.getElementById("user-btn"));
+        this.elInUser = /** @type{HTMLInputElement} */(document.getElementById("user-in"));
+        this.elSelectApiEP = /** @type{HTMLSelectElement} */(document.getElementById("api-ep"));
+
+        this.validate_element(this.elInSystem, "system-in");
+        this.validate_element(this.elDivChat, "chat-div");
+        this.validate_element(this.elInUser, "user-in");
+        this.validate_element(this.elSelectApiEP, "api-ep");
+    }
+
+    /**
+     * Check if the element got
+     * @param {HTMLElement | null} el
+     * @param {string} msgTag
+     */
+    validate_element(el, msgTag) {
+        if (el == null) {
+            throw Error(`ERRR:MCUI:${msgTag} element missing in html...`);
+        } else {
+            console.debug(`INFO:MCUI:${msgTag}:Id:${el.id}:Name:${el["name"]}`);
+        }
+    }
+
+    /**
+     * Setup the needed callbacks wrt UI
+     * @param {string} chatId
+     */
+    setup_ui(chatId) {
+        this.elBtnUser.addEventListener("click", (ev)=>{
+            if (this.elInUser.disabled) {
+                return;
+            }
+            this.handle_user_submit(chatId, this.elSelectApiEP.value);
+        });
+
+        this.elInUser.addEventListener("keyup", (ev)=> {
+            // allow user to insert enter into their message using shift+enter.
+            // while just pressing enter key will lead to submitting.
+            if ((ev.key === "Enter") && (!ev.shiftKey)) {
+                this.elBtnUser.click();
+                ev.preventDefault();
+            }
+        });
     }
 
     /**
@@ -170,23 +217,20 @@ class MultiChatUI {
     /**
      * Handle user query submit request, wrt specified chat session.
      * @param {string} chatId
-     * @param {HTMLInputElement} inputSystem
-     * @param {HTMLInputElement} inputUser
-     * @param {HTMLDivElement} divChat
      * @param {string} apiEP
      */
-    async handle_user_submit(chatId, inputSystem, inputUser, divChat, apiEP) {
+    async handle_user_submit(chatId, apiEP) {
 
         let chat = this.simpleChats[chatId];
 
-        chat.add_system_anytime(inputSystem.value, chatId);
+        chat.add_system_anytime(this.elInSystem.value, chatId);
 
-        let content = inputUser.value;
+        let content = this.elInUser.value;
         if (!chat.add(Roles.User, content)) {
             console.debug(`WARN:MCUI:${chatId}:HandleUserSubmit:Ignoring empty user input...`);
             return;
         }
-        chat.show(divChat);
+        chat.show(this.elDivChat);
 
         let theBody;
         let theUrl = gChatURL[apiEP]
@@ -196,8 +240,8 @@ class MultiChatUI {
             theBody = chat.request_prompt_jsonstr();
         }
 
-        inputUser.value = "working...";
-        inputUser.disabled = true;
+        this.elInUser.value = "working...";
+        this.elInUser.disabled = true;
         console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:${theUrl}:ReqBody:${theBody}`);
         let resp = await fetch(theUrl, {
             method: "POST",
@@ -207,8 +251,8 @@ class MultiChatUI {
             body: theBody,
         });
 
-        inputUser.value = "";
-        inputUser.disabled = false;
+        this.elInUser.value = "";
+        this.elInUser.disabled = false;
         let respBody = await resp.json();
         console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:RespBody:${respBody}`);
         let assistantMsg;
@@ -222,7 +266,7 @@ class MultiChatUI {
             }
         }
         chat.add(Roles.Assistant, assistantMsg);
-        chat.show(divChat);
+        chat.show(this.elDivChat);
         // Purposefully clear at end rather than begin of this function
         // so that one can switch from chat to completion mode and sequece
         // in a completion mode with multiple user-assistant chat data
@@ -230,48 +274,20 @@ class MultiChatUI {
         if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
             chat.xchat.length = 0;
         }
-        inputUser.focus();
+        this.elInUser.focus();
     }
 
 }
 
 
-let gMuitChat = new MultiChatUI();
+let gMuitChat;
 const gChatId = "Default";
 
-
 function startme() {
-
-    let inputSystem = /** @type{HTMLInputElement} */(document.getElementById("system"));
-    let divChat = /** @type{HTMLDivElement} */(document.getElementById("chat"));
-    let btnSubmit = document.getElementById("submit");
-    let inputUser = /** @type{HTMLInputElement} */(document.getElementById("user"));
-    let selectApiEP = /** @type{HTMLInputElement} */(document.getElementById("api-ep"));
-
-    if (divChat == null) {
-        throw Error("ERRR:StartMe:Chat element missing");
-    }
     console.log("INFO:StartMe:Starting...");
-
+    gMuitChat = new MultiChatUI();
     gMuitChat.new_chat(gChatId);
-
-    btnSubmit?.addEventListener("click", (ev)=>{
-        if (inputUser.disabled) {
-            return;
-        }
-        gMuitChat.handle_user_submit(gChatId, inputSystem, inputUser, divChat, selectApiEP.value);
-    });
-
-    inputUser?.addEventListener("keyup", (ev)=> {
-        // allow user to insert enter into their message using shift+enter.
-        // while just pressing enter key will lead to submitting.
-        if ((ev.key === "Enter") && (!ev.shiftKey)) {
-            btnSubmit?.click();
-            ev.preventDefault();
-        }
-    });
-
+    gMuitChat.setup_ui(gChatId);
 }
-
 
 document.addEventListener("DOMContentLoaded", startme);

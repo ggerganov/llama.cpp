@@ -25,7 +25,7 @@
     float: right;
 }
 
-#chat {
+#chat-div {
     overflow: scroll;
     flex-grow: 1;
     flex-shrink: 1;
