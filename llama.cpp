@@ -12498,14 +12498,15 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 // tokenizer.encode('', add_special_tokens=True)  returns [1]
                 // tokenizer.encode('', add_special_tokens=False) returns []
 
-                if (add_special && vocab.special_add_bos != 0) {
-                    GGML_ASSERT(vocab.special_bos_id != -1);
-                    output.push_back(vocab.special_bos_id);
-                }
-
                 static const bool rtrim = true;  //TODO: as param
                 bool is_prev_special = false;
                 bool special_token_rtrim = false;
+
+                if (add_special && vocab.special_add_bos != 0) {
+                    GGML_ASSERT(vocab.special_bos_id != -1);
+                    output.push_back(vocab.special_bos_id);
+                    is_prev_special = true;
+                }
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
