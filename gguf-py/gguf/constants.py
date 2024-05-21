@@ -973,16 +973,22 @@ HF_MODEL_MAP = (
     {
         "model_repo": "meta-llama/Llama-2-7b-hf",
         "model_arch": MODEL_ARCH.LLAMA,
+        "model_parts": 2,
+        "model_type": LLaMaModelType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
         "vocab_pre": [],
+        "vocab_files": [],
     },
     {
-        "model_arch": MODEL_ARCH.LLAMA,
-        "vocab_type": LLaMaVocabType.BPE,
         "repo": "meta-llama/Meta-Llama-3-8B",
+        "model_arch": MODEL_ARCH.LLAMA,
+        "model_parts": 4,
+        "model_type": LLaMaModelType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
         "vocab_pre": [
             "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
         ],
+        "vocab_files": [],
     },
     {"model_arch": MODEL_ARCH.PHI3, "vocab_type": LLaMaVocabType.SPM, "repo": "microsoft/Phi-3-mini-4k-instruct", },
     {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "deepseek-ai/deepseek-llm-7b-base", },
