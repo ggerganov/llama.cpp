@@ -447,7 +447,7 @@ class Model:
             # ref: https://huggingface.co/openai-community/gpt2
             res = "gpt-2"
         if chkhsh == "32d85c31273f8019248f2559fed492d929ea28b17e51d81d3bb36fff23ca72b3":
-            # ref: https://huggingface.co/stabilityai/stablelm-2-1_6b
+            # ref: https://huggingface.co/stabilityai/stablelm-2-zephyr-1_6b
             res = "stablelm2"
         if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
             # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
