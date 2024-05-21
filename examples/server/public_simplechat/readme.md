@@ -7,11 +7,9 @@ by Humans for All.
 ## overview
 
 This simple web frontend, allows triggering/testing the server's /completions or /chat/completions endpoints
-in a simple way with minimal code from a common code base. And also allows trying to maintain a basic back
-and forth chatting to an extent.
-
-User can set a system prompt, as well as try and chat with the model over a series of back and forth chat
-messages.
+in a simple way with minimal code from a common code base. Inturn additionally it tries to allow single or
+multiple independent back and forth chatting to an extent, with the ai llm model at a basic level, with their
+own system prompts.
 
 The UI follows a responsive web design so that the layout can adapt to available display space in a usable
 enough manner, in general.
@@ -50,10 +48,10 @@ Open this simple web front end from your local browser
 Once inside
 * Select between chat and completion mode. By default it is set to chat mode.
 * If you want to provide a system prompt, then ideally enter it first, before entering any user query.
-  * if handle_systemprompt_begin is used
+  * if chat.add_system_begin is used
     * you cant change the system prompt, after it is has been submitted once along with user query.
     * you cant set a system prompt, after you have submitted any user query
-  * if handle_systemprompt_anytime is used
+  * if chat.add_system_anytime is used
     * one can change the system prompt any time during chat, by changing the contents of system prompt.
     * inturn the updated/changed system prompt will be inserted into the chat session.
     * this allows for the subsequent user chatting to be driven by the new system prompt set above.
@@ -63,6 +61,8 @@ Once inside
   * the user is not allowed to enter any fresh query during this time.
   * the user input box will be disabled and a working message will be shown in it.
 * just refresh the page, to reset wrt the chat history and or system prompt and start afresh.
+* Using NewChat one can start independent chat sessions.
+  * two independent chat sessions are setup by default.
 
 
 ## Devel note
@@ -72,10 +72,10 @@ may not be visible. Also remember that just refreshing/reloading page in browser
 matter clearing site data, dont directly override site caching in all cases. Worst case you may
 have to change port. Or in dev tools of browser, you may be able to disable caching fully.
 
-Concept of multiple chat sessions with same or different system prompts, as well as saving and
-restoring of those across browser usage sessions, can be woven around the SimpleChat class and
+Concept of multiple chat sessions with different servers, as well as saving and restoring of
+those across browser usage sessions, can be woven around the SimpleChat/MultiChatUI class and
 its instances relatively easily, however given the current goal of keeping this simple, it has
 not been added, for now.
 
-By switching between handle_systemprompt_begin/anytime, one can control whether one can change
+By switching between chat.add_system_begin/anytime, one can control whether one can change
 the system prompt, anytime during the conversation or only at the beginning.

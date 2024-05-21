@@ -13,6 +13,13 @@ class ApiEP {
     static Completion = "completion";
 }
 
+let gUsageMsg = `
+    <p> Enter the system prompt above, before entering/submitting any user query.</p>
+    <p> Enter your text to the ai assistant below.</p>
+    <p> Use shift+enter for inserting enter.</p>
+    <p> Refresh the page to start over fresh.</p>
+`;
+
 class SimpleChat {
 
     constructor() {
@@ -59,6 +66,10 @@ class SimpleChat {
         }
         if (last !== undefined) {
             last.scrollIntoView(false);
+        } else {
+            if (bClear) {
+                div.innerHTML = gUsageMsg;
+            }
         }
     }
 
