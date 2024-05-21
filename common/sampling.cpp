@@ -195,9 +195,7 @@ static llama_token llama_sampling_sample_impl(
     llama_token id = 0;
     // Get a pointer to the logits
     float * logits = llama_get_logits_ith(ctx_main, idx);
-    if (!logits) {
-        throw std::runtime_error("llama_get_logits_ith failed");
-    }
+    GGML_ASSERT(logits); // already checked in llama_sampling_prepare 
 
     if (temp < 0.0) {
         // greedy sampling, with probs
