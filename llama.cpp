@@ -17342,7 +17342,7 @@ float * llama_get_embeddings(struct llama_context * ctx) {
     return ctx->embd;
 }
 
-static float * llama_get_embeddings_ith_fail(int i, std::string reason) {
+static float * llama_get_embeddings_ith_fail(int i, const std::string & reason) {
     LLAMA_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, reason.c_str());
 #ifndef NDEBUG
     GGML_ASSERT(false);
