@@ -948,8 +948,9 @@ class LLaMaVocabType(IntEnum):
 #
 # LLaMa Model Types
 #
-class LLaMaModelType(IntEnum):
+class HFModelFileType(IntEnum):
     UNK = auto()  # Unsupported file type
+    BIN = auto()  # PyTorch file type
     PTH = auto()  # PyTorch file type
     SFT = auto()  # SafeTensor file type
 
@@ -958,11 +959,11 @@ class LLaMaModelType(IntEnum):
 # The pattern uses perl, is grammatical, and splits are technically arbitrary.
 # https://github.com/openai/gpt-2/blob/master/src/encoder.py#L53
 # https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L40-L42
-LLAMA_TOKENIZER_DEFAULT_PRE = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+"
+HF_TOKENIZER_DEFAULT_PRE = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+"
 
 # NOTE: It's easier to map out which files we need in advance.
-LLAMA_TOKENIZER_DEFAULT_BPE = ["config.json", "tokenizer_config.json", "tokenizer.json"]
-LLAMA_TOKENIZER_DEFAULT_SPM = LLAMA_TOKENIZER_DEFAULT_BPE + ["tokenizer.model"]
+HF_TOKENIZER_DEFAULT_BPE = ("config.json", "tokenizer_config.json", "tokenizer.json",)
+HF_TOKENIZER_DEFAULT_SPM = (HF_TOKENIZER_DEFAULT_BPE + ("tokenizer.model",))
 
 #
 # HuggingFace Model Map
@@ -978,35 +979,39 @@ HF_MODEL_MAP = (
         "model_repo": "meta-llama/Llama-2-7b-hf",
         "model_arch": MODEL_ARCH.LLAMA,
         "model_parts": 2,
-        "model_type": LLaMaModelType.SFT,
+        "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
-        "vocab_pre": [],
-        "vocab_files": LLAMA_TOKENIZER_DEFAULT_SPM,
+        "vocab_pre": (),
+        "vocab_files": HF_TOKENIZER_DEFAULT_SPM,
     },
     {
         "model_repo": "meta-llama/Meta-Llama-3-8B",
         "model_arch": MODEL_ARCH.LLAMA,
         "model_parts": 4,
-        "model_type": LLaMaModelType.SFT,
+        "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.BPE,
-        "vocab_pre": [
-            "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
-        ],
-        "vocab_files": LLAMA_TOKENIZER_DEFAULT_BPE,
+        "vocab_pre": (
+            "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+        ),
+        "vocab_files": HF_TOKENIZER_DEFAULT_BPE,
     },
     {
         "model_repo": "microsoft/Phi-3-mini-4k-instruct",
         "model_arch": MODEL_ARCH.PHI3,
         "model_parts": 2,
-        "model_type": LLaMaModelType.SFT,
+        "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
-        "vocab_pre": [],
-        "vocab_files": LLAMA_TOKENIZER_DEFAULT_SPM,
+        "vocab_pre": (),
+        "vocab_files": HF_TOKENIZER_DEFAULT_SPM,
     },
     {
         "model_repo": "deepseek-ai/deepseek-llm-7b-base",
         "model_arch": MODEL_ARCH.LLAMA,
+        "model_parts": 2,
+        "model_type": HFModelFileType.BIN,
         "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": (),
+        "vocab_file": HF_TOKENIZER_DEFAULT_BPE,
     },
     {
         "model_repo": "deepseek-ai/deepseek-coder-6.7b-base",
