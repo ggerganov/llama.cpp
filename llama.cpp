@@ -2112,8 +2112,8 @@ struct llama_model {
     struct ggml_tensor * output_b;
 
     // long rope factors
-    struct ggml_tensor * rope_long;
-    struct ggml_tensor * rope_short;
+    struct ggml_tensor * rope_long  = nullptr;
+    struct ggml_tensor * rope_short = nullptr;
 
     std::vector<llama_layer> layers;
 
