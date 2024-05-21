@@ -265,8 +265,6 @@ class MultiChatUI {
             body: theBody,
         });
 
-        this.elInUser.value = "";
-        this.elInUser.disabled = false;
         let respBody = await resp.json();
         console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let assistantMsg;
@@ -288,6 +286,8 @@ class MultiChatUI {
         if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
             chat.xchat.length = 0;
         }
+        this.elInUser.value = "";
+        this.elInUser.disabled = false;
         this.elInUser.focus();
     }
 
