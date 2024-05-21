@@ -973,6 +973,12 @@ class LLaMaModelType(IntEnum):
     SFT = auto()  # SafeTensor file type
 
 
+# NOTE: Tokenizers defaults to OpenAI GPT-2 Byte Level Reg-Exp
+# The pattern uses perl, is grammatical, and splits are technically arbitrary.
+# https://github.com/openai/gpt-2/blob/master/src/encoder.py#L53
+# https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L40-L42
+LLAMA_TOKENIZER_DEFAULT_PRE = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+"
+
 #
 # HuggingFace Model Map
 #
@@ -983,8 +989,20 @@ class LLaMaModelType(IntEnum):
 #   - Possible algorithms are WordLevel, BPE, WordPiece, or Unigram
 #   - Possible LLaMa tokenizer model types are: None, SPM, BPE, or WPM
 HF_MODEL_MAP = (
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.SPM, "repo": "meta-llama/Llama-2-7b-hf", },
-    {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "meta-llama/Meta-Llama-3-8B", },
+    {
+        "model_repo": "meta-llama/Llama-2-7b-hf",
+        "model_arch": MODEL_ARCH.LLAMA,
+        "vocab_type": LLaMaVocabType.SPM,
+        "vocab_pre": [],
+    },
+    {
+        "model_arch": MODEL_ARCH.LLAMA,
+        "vocab_type": LLaMaVocabType.BPE,
+        "repo": "meta-llama/Meta-Llama-3-8B",
+        "vocab_pre": [
+            "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
+        ],
+    },
     {"model_arch": MODEL_ARCH.PHI3, "vocab_type": LLaMaVocabType.SPM, "repo": "microsoft/Phi-3-mini-4k-instruct", },
     {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "deepseek-ai/deepseek-llm-7b-base", },
     {"model_arch": MODEL_ARCH.LLAMA, "vocab_type": LLaMaVocabType.BPE, "repo": "deepseek-ai/deepseek-coder-6.7b-base", },
