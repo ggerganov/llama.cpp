@@ -250,6 +250,7 @@ class MultiChatUI {
             if ((ev.key === "Enter") && (!ev.shiftKey)) {
                 let chat = this.simpleChats[this.curChatId];
                 chat.add_system_anytime(this.elInSystem.value, this.curChatId);
+                chat.show(this.elDivChat);
                 ev.preventDefault();
             }
         });
@@ -356,6 +357,7 @@ class MultiChatUI {
                 console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
                 if (this.elInUser.disabled) {
                     console.error(`ERRR:MCUI:SessionClick:${target.id}:Current session [${this.curChatId}] awaiting response, ignoring switch...`);
+                    alert("ERRR:MCUI\nWait for response to pending query, before switching");
                     return;
                 }
                 this.handle_session_switch(target.id);
