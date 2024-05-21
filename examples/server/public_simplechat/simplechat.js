@@ -164,6 +164,7 @@ class MultiChatUI {
         this.elBtnUser = /** @type{HTMLButtonElement} */(document.getElementById("user-btn"));
         this.elInUser = /** @type{HTMLInputElement} */(document.getElementById("user-in"));
         this.elSelectApiEP = /** @type{HTMLSelectElement} */(document.getElementById("api-ep"));
+        this.elDivSessions = /** @type{HTMLDivElement} */(document.getElementById("sessions-div"));
 
         this.validate_element(this.elInSystem, "system-in");
         this.validate_element(this.elDivChat, "chat-div");
@@ -254,7 +255,7 @@ class MultiChatUI {
         this.elInUser.value = "";
         this.elInUser.disabled = false;
         let respBody = await resp.json();
-        console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:RespBody:${respBody}`);
+        console.debug(`DBUG:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let assistantMsg;
         if (apiEP == ApiEP.Chat) {
             assistantMsg = respBody["choices"][0]["message"]["content"];
@@ -277,6 +278,49 @@ class MultiChatUI {
         this.elInUser.focus();
     }
 
+    /**
+     * Show buttons for available chat sessions, in the passed elDiv.
+     * If elDiv is undefined/null, then use this.elDivSessions.
+     * @param {HTMLDivElement | undefined} elDiv
+     */
+    show_sessions(elDiv=undefined) {
+        if (!elDiv) {
+            elDiv = this.elDivSessions;
+        }
+        elDiv.replaceChildren();
+        let chatIds = Object.keys(this.simpleChats);
+        for(let cid of chatIds) {
+            let btn = document.createElement("button");
+            btn.id = cid;
+            btn.name = cid;
+            btn.innerText = cid;
+            btn.addEventListener("click", (ev)=>{
+                let target = /** @type{HTMLButtonElement} */(ev.target);
+                console.debug(`DBUG:MCUI:SessionClick:${target.id}`);
+                if (this.elInUser.disabled) {
+                    console.error(`ERRR:MCUI:SessionClick:${target.id}:Current session awaiting response, skipping switch...`);
+                    return;
+                }
+                this.handle_session_switch(target.id);
+            });
+            elDiv.appendChild(btn);
+        }
+    }
+
+    /**
+     * @param {string} chatId
+     */
+    async handle_session_switch(chatId) {
+        let chat = this.simpleChats[chatId];
+        if (chat == undefined) {
+            console.error(`ERRR:MCUI:Session:${chatId} missing...`);
+            return;
+        }
+        this.elInUser.value = "";
+        chat.show(this.elDivChat);
+        this.elInUser.focus();
+    }
+
 }
 
 
@@ -288,6 +332,7 @@ function startme() {
     gMuitChat = new MultiChatUI();
     gMuitChat.new_chat(gChatId);
     gMuitChat.setup_ui(gChatId);
+    gMuitChat.show_sessions();
 }
 
 document.addEventListener("DOMContentLoaded", startme);
