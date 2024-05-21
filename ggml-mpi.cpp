@@ -44,7 +44,7 @@ void ggml_mpi_backend_init(void) {
     have_init = true;
     const int buffer_size = 128*1024*1024*8;
     send_buffer = calloc(1, buffer_size); // 128MB buffer
-//    fprintf(stderr, "BUFFER ATTACH RETCODE=%d\n", MPI_Buffer_attach(send_buffer, buffer_size));
+    fprintf(stderr, "BUFFER ATTACH RETCODE=%d\n", MPI_Buffer_attach(send_buffer, buffer_size));
 }
 
 void ggml_mpi_sync_pipelined(
@@ -230,7 +230,6 @@ void ggml_mpi_eval_init(
     GGML_ASSERT(n_tokens != nullptr);
 
 
-    // FIXME Syncing n_seq_ids causes MPI to throw an invalid buffer error in Bsend
     ggml_mpi_sync_pipelined(ctx_mpi, *n_seq_ids, *n_tokens, MPI_INT32_T, GGML_MPI_N_SEQ_IDS);
 
     // We need to know the total number of sequence
@@ -308,7 +307,9 @@ static void ggml_mpi_tensor_send(const struct ggml_tensor * t, const void* data,
     MPI_Comm_rank(comm, &rank);
 //    fprintf(stderr, "Sending tensor %s (buffer %s) from %d to %d\n", t->name, ggml_backend_buffer_name(t->buffer), rank, mpi_rank_dst);
 
-    const int retval = MPI_Send(data, ggml_nelements(t), mpi_type, mpi_rank_dst, 0, comm);
+    GGML_ASSERT(rank != mpi_rank_dst);
+
+    const int retval = MPI_Bsend(data, ggml_nelements(t), mpi_type, mpi_rank_dst, 0, comm);
     GGML_ASSERT(retval == MPI_SUCCESS);
 
 }
@@ -330,6 +331,9 @@ static void ggml_mpi_tensor_recv(const struct ggml_tensor * t, void * data, int 
     int rank;
     MPI_Comm_rank(comm, &rank);
 //    fprintf(stderr, "Receiving tensor %s (buffer %s) from %d at %d\n", t->name, ggml_backend_buffer_name(t->buffer), mpi_rank_src, rank);
+
+    GGML_ASSERT(rank != mpi_rank_src);
+
     const int retval = MPI_Recv(data, ggml_nelements(t), mpi_type, mpi_rank_src, MPI_ANY_TAG, comm, &status);
     GGML_ASSERT(retval == MPI_SUCCESS);
 }
@@ -358,7 +362,7 @@ uint16_t** ggml_mpi_split_range(
     for (int i=0; i < ctx_mpi->size; i++) {
         ranges[i][0] = next_layer;
         ranges[i][1] = MIN(end, ranges[i][0] + (node_weights[i] * range_length) + start);
-        next_layer = ranges[i][1];
+        next_layer = ranges[i][1]+1;
     }
 
 //    ranges[0][0] = next_layer;
@@ -460,28 +464,44 @@ int ggml_backend_mpi_rank(ggml_backend_t backend) {
     return ctx->rank;
 }
 
-ggml_backend_buffer_t ggml_backend_mpi_buffer_unwrap(ggml_backend_buffer_t buffer) {
-    auto * ctx = (ggml_backend_mpi_buffer_context *) buffer->context;
-
-    ggml_backend_buffer_t wrapped_buffer = ctx->wrapped_buffer;
-    wrapped_buffer->usage = buffer->usage;
-    wrapped_buffer->size = buffer->size;
-    return wrapped_buffer;
-
-}
+GGML_CALL static const char * ggml_backend_mpi_buffer_name(ggml_backend_buffer_t buffer);
 
 ggml_backend_buffer_type_t ggml_backend_mpi_buffer_type_unwrap(ggml_backend_buffer_type_t buft) {
+    GGML_ASSERT(buft != nullptr);
     auto * ctx = (ggml_backend_mpi_buffer_type_context *) buft->context;
+
+    GGML_ASSERT(ctx != nullptr);
 
     ggml_backend_buffer_type_t wrapped_buffer_type = ctx->wrapped_buffer_type;
     return wrapped_buffer_type;
 
 }
 
+ggml_backend_buffer_t ggml_backend_mpi_buffer_unwrap(ggml_backend_buffer_t buffer) {
+    GGML_ASSERT(buffer != nullptr);
+//    fprintf(stderr, "Attempting unwrap of %s\n", ggml_backend_buffer_name(buffer));
+//    if(buffer->iface.get_name != ggml_backend_mpi_buffer_name) {
+//        return buffer;
+//    }
+    auto * ctx = (ggml_backend_mpi_buffer_context *) buffer->context;
+    GGML_ASSERT(ctx != nullptr);
+    ggml_backend_buffer_t wrapped_buffer = ctx->wrapped_buffer;
+    GGML_ASSERT(wrapped_buffer != nullptr);
+    wrapped_buffer->usage = buffer->usage;
+    wrapped_buffer->size = buffer->size;
+    if (wrapped_buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+        wrapped_buffer->buft = ggml_backend_mpi_buffer_type_unwrap(wrapped_buffer->buft);
+    }
+    return wrapped_buffer;
+
+}
+
+
+
 
 GGML_CALL static const char * ggml_backend_mpi_buffer_name(ggml_backend_buffer_t buffer) {
-
-
+    GGML_ASSERT(buffer != nullptr);
+    GGML_ASSERT(ggml_backend_mpi_buffer_unwrap(buffer) != nullptr && ggml_backend_mpi_buffer_unwrap(buffer)->iface.get_name != ggml_backend_mpi_buffer_name);
 
     return strdup(
             (
@@ -529,19 +549,36 @@ GGML_CALL void ggml_backend_mpi_buffer_copy_ctx_from_type(ggml_backend_buffer_ty
     }
 }
 
+ggml_backend_buffer_type_t ggml_backend_mpi_buffer_type_set_wrapped_buffer_type(ggml_backend_buffer_type_t orig, ggml_backend_buffer_type_t buft) {
+    if (orig->iface.get_name == ggml_backend_mpi_buffer_type_name) {
+        ((ggml_backend_mpi_buffer_type_context*)(orig->context))->wrapped_buffer_type = buft;
+    } else {
+        GGML_ASSERT(!"Original buffer type must be an MPI buffer type.");
+    }
+
+    return orig;
+
+}
+
+ggml_backend_buffer_t ggml_backend_mpi_set_wrapped_buffer(ggml_backend_buffer_t orig, ggml_backend_buffer_t buf) {
+    GGML_ASSERT(buf != nullptr);
+    GGML_ASSERT(buf->iface.get_name != ggml_backend_mpi_buffer_name);
+    if (orig->iface.get_name == ggml_backend_mpi_buffer_name) {
+        ((ggml_backend_mpi_buffer_context*)(orig->context))->wrapped_buffer = buf;
+        if (orig->buft != nullptr) {
+            ggml_backend_mpi_buffer_type_set_wrapped_buffer_type(orig->buft, buf->buft);
+        }
+    } else {
+        fprintf(stderr, "Original buffer name: %s\n", ggml_backend_buffer_name(orig));
+        GGML_ASSERT(!"Original buffer must be an MPI buffer.");
+
+    }
+    return orig;
+}
+
 GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
 
     struct ggml_mpi_context * ctx = (ggml_mpi_context *) backend->context;
-
-    std::vector<ggml_backend_buffer_type_t> backend_buft;
-    for (auto *curr_backend: ctx->backends) {
-        if (ggml_backend_is_cpu(curr_backend)) {
-            // use host buffers for the CPU backend compute buffer
-            backend_buft.push_back(ggml_backend_cpu_buffer_type());
-        } else {
-            backend_buft.push_back(ggml_backend_get_default_buffer_type(curr_backend));
-        }
-    }
 
 
     std::vector<std::pair<ggml_backend_buffer_t, std::vector<ggml_backend_buffer_t>>> old_buffs(
@@ -557,6 +594,7 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
             if (src == nullptr) {
                 break;
             }
+//            fprintf(stderr, "Previous source: %s\n", src->name);
             old_buffs[i].second.push_back(src->buffer);
 
         }
@@ -584,6 +622,8 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
             if (src->buffer->buft->iface.get_name == ggml_backend_mpi_buffer_type_name) {
                 n_srcs++;
                 src->buffer = ggml_backend_mpi_buffer_unwrap(src->buffer);
+//                fprintf(stderr, "After unwrapping source: %s\n", src->name);
+
             }
         }
 
@@ -611,19 +651,19 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
 
 
     if (!ctx->remote) {
-        ggml_backend_sched_t sched = ggml_backend_sched_new(ctx->backends.data(), backend_buft.data(),
+        ggml_backend_sched_t sched = ggml_backend_sched_new(ctx->backends.data(), nullptr,
                                                             (int) ctx->backends.size(), cgraph->n_nodes + cgraph->n_leafs + n_srcs, false);
 
-        ggml_backend_sched_reserve(sched, cgraph);
-        ggml_backend_sched_graph_compute_async(sched, cgraph);
+//        ggml_backend_sched_reserve(sched, cgraph);
+        ggml_backend_sched_graph_compute(sched, cgraph);
         ggml_backend_sched_free(sched);
 
     }
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        cgraph->nodes[i]->buffer = ggml_backend_mpi_wrap_buffer(cgraph->nodes[i]->buffer);
-
-        ggml_backend_mpi_buffer_set_rank(cgraph->nodes[i]->buffer, ggml_backend_mpi_buffer_rank(old_buffs[i].first));
+        if (cgraph->nodes[i]->buffer->iface.get_name != ggml_backend_mpi_buffer_name) {
+            cgraph->nodes[i]->buffer = ggml_backend_mpi_set_wrapped_buffer(old_buffs[i].first, cgraph->nodes[i]->buffer);
+        }
 
 
         for (int iter = 0; iter < GGML_MAX_SRC; iter++) {
@@ -632,20 +672,22 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
                 break;
             }
 
+//            fprintf(stderr, "After compute src: %s\n", src_node->name);
+
             if (src_node->buffer->iface.get_name == ggml_backend_mpi_buffer_name) {
                 continue;
             }
 
-            src_node->buffer = ggml_backend_mpi_wrap_buffer(src_node->buffer);
+            src_node->buffer = ggml_backend_mpi_set_wrapped_buffer(old_buffs[i].second[iter], src_node->buffer);
 
-            ggml_backend_mpi_buffer_set_rank(src_node->buffer, ggml_backend_mpi_buffer_rank(old_buffs[i].second[iter]));
+//            fprintf(stderr, "After setting wrapped buffer src: %s\n", src_node->name);
+
         }
         if(cgraph->nodes[i]->view_src != nullptr && cgraph->nodes[i]->view_src->buffer->buft != nullptr) {
 
             if (old_view_buffs[i] != nullptr) {
-                if (old_view_buffs[i]->iface.get_name == ggml_backend_mpi_buffer_name) {
-                    ggml_backend_mpi_buffer_set_rank(cgraph->nodes[i]->view_src->buffer,
-                                                     ggml_backend_mpi_buffer_rank(old_view_buffs[i]));
+                if (old_view_buffs[i]->iface.get_name == ggml_backend_mpi_buffer_name && cgraph->nodes[i]->view_src->buffer->iface.get_name != ggml_backend_mpi_buffer_name) {
+                    cgraph->nodes[i]->view_src->buffer = ggml_backend_mpi_set_wrapped_buffer(old_view_buffs[i], cgraph->nodes[i]->view_src->buffer);
                 }
             }
         }
@@ -655,6 +697,7 @@ GGML_CALL static enum ggml_status ggml_backend_mpi_graph_compute(ggml_backend_t 
 
     // FIXME check if this is correct or not (it's probably not)
     for (int i = 0; i < cgraph->n_leafs; i++) {
+        GGML_ASSERT(false);
         cgraph->leafs[i]->buffer = ggml_backend_mpi_wrap_buffer(cgraph->leafs[i]->buffer);
         ggml_backend_mpi_buffer_type_set_rank(cgraph->leafs[i]->buffer->buft, ctx->rank);
     }
@@ -681,28 +724,15 @@ static void ggml_backend_mpi_free(ggml_backend_t backend) {
 
 static ggml_backend_buffer_type_t ggml_backend_mpi_get_default_buffer_type(ggml_backend_t backend) {
     auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
-    if (ctx->backends.empty()) {
-        auto * buff = ggml_backend_mpi_wrap_buffer_type(ggml_backend_cpu_buffer_type());
-        ggml_backend_mpi_buffer_type_set_rank(buff, ctx->rank);
-        return buff;
-    }
 
-    auto * buff = ggml_backend_mpi_wrap_buffer_type(ctx->backends.back()->iface.get_default_buffer_type(ctx->backends.back()));
+
+    auto * buff = ggml_backend_mpi_wrap_buffer_type(ctx->backends.front()->iface.get_default_buffer_type(ctx->backends.front()));
     ggml_backend_mpi_buffer_type_set_rank(buff, ctx->rank);
     return buff;
 }
 
 GGML_CALL static bool ggml_backend_mpi_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
-    switch (op->op) {
-        case GGML_OP_CPY:
-            return op->type != GGML_TYPE_IQ2_XXS && op->type != GGML_TYPE_IQ2_XS; // missing type_traits.from_float
-        case GGML_OP_MUL_MAT:
-            return op->src[1]->type == GGML_TYPE_F32 || op->src[1]->type == ggml_internal_get_type_traits(op->src[0]->type).vec_dot_type;
-        default:
-            return true;
-    }
-
-    GGML_UNUSED(backend);
+    return ggml_backend_supports_op(((ggml_mpi_context *) backend->context)->backends.front(),op);
 }
 
 
@@ -760,11 +790,13 @@ GGML_CALL static size_t ggml_backend_mpi_buffer_type_get_max_size(ggml_backend_b
 
 GGML_CALL static size_t ggml_backend_mpi_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const struct ggml_tensor * tensor) {
     // Have to do this instead of calling ggml_backend_type_get_alloc_size because that signature doesn't have const on tensor
-    return ggml_backend_mpi_buffer_type_unwrap(buft)->iface.get_alloc_size(ggml_backend_mpi_buffer_type_unwrap(buft), tensor);
+    size_t ret = ggml_backend_mpi_buffer_type_unwrap(buft)->iface.get_alloc_size(ggml_backend_mpi_buffer_type_unwrap(buft), tensor);
+    return ret;
 }
 
 GGML_CALL static bool ggml_backend_mpi_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
-    return backend != nullptr && ggml_backend_is_mpi(backend) && ggml_backend_mpi_buffer_type_rank(buft) == ggml_backend_mpi_rank(backend);
+    return backend != nullptr && ggml_backend_is_mpi(backend) && ggml_backend_mpi_buffer_type_rank(buft) == ggml_backend_mpi_rank(backend)
+        && ggml_backend_buft_supports_backend(ggml_backend_mpi_buffer_type_unwrap(buft), ((ggml_mpi_context*)backend->context)->backends.front());
 }
 
 GGML_CALL static bool ggml_backend_mpi_buffer_type_is_host(ggml_backend_buffer_type_t buft) {
@@ -779,15 +811,12 @@ static std::map<ggml_backend_buffer_t, ggml_backend_buffer_t> cached_buffer_wrap
 
 static std::map<ggml_backend_t *, ggml_backend_t> cached_backends;
 
+
+
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer_type(ggml_backend_buffer_type_t buft) {
 
-//    if (cached_wrappers.find(buft) != cached_wrappers.end()) {
-//        fprintf(stderr, "Returning cached buffer type with name %s\n", cached_wrappers[buft]->iface.get_name(cached_wrappers[buft]));
-//
-//        auto * ret = new ggml_backend_buffer_type;
-//        *ret = *cached_wrappers[buft];
-//        return ret;
-//    }
+    GGML_ASSERT(buft->iface.get_name != ggml_backend_mpi_buffer_type_name);
+
 
     ggml_backend_buffer_type_i ggml_backend_mpi_buffer_type_interface = {
             /* .get_name         = */ ggml_backend_mpi_buffer_type_name,
@@ -813,9 +842,23 @@ GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer_type(ggml_back
     // Set rank to 0 as default
     ggml_backend_mpi_buffer_type_set_rank(ggml_backend_wrapped_buffer_type, 0);
 
-    cached_wrappers[buft] = ggml_backend_wrapped_buffer_type;
 
     return ggml_backend_wrapped_buffer_type;
+}
+
+GGML_CALL ggml_backend_buffer_type_t ggml_backend_mpi_wrap_buffer_type_cached(ggml_backend_buffer_type_t buft) {
+    if (cached_wrappers.find(buft) != cached_wrappers.end()) {
+//        fprintf(stderr, "Returning cached buffer type with name %s\n",
+//                cached_wrappers[buft]->iface.get_name(cached_wrappers[buft]));
+
+
+        return cached_wrappers[buft];
+    }
+
+    auto * ggml_backend_wrapped_buffer_type = ggml_backend_mpi_wrap_buffer_type(buft);
+    cached_wrappers[buft] = ggml_backend_wrapped_buffer_type;
+    return ggml_backend_wrapped_buffer_type;
+
 }
 
 
@@ -846,8 +889,12 @@ GGML_CALL static void ggml_backend_mpi_buffer_get_tensor(ggml_backend_buffer_t b
 
     int src_rank = ggml_backend_mpi_buffer_rank(tensor->buffer);
 
-    if (rank != src_rank) {
+//    if (ggml_backend_mpi_buffer_rank(buffer) != ggml_backend_mpi_buffer_local_rank(buffer)) {
+//        return;
+//    }
 
+    if (rank != src_rank) {
+//        fprintf(stderr, "Getting tensor: %s, buffer %s\n", tensor->name, ggml_backend_buffer_name(buffer));
         ggml_mpi_tensor_recv(tensor, data, ggml_backend_mpi_buffer_rank(tensor->buffer), ggml_backend_mpi_buffer_get_comm(tensor->buffer));
         return;
     }
@@ -856,7 +903,7 @@ GGML_CALL static void ggml_backend_mpi_buffer_get_tensor(ggml_backend_buffer_t b
 }
 
 GGML_CALL static bool ggml_backend_mpi_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const struct ggml_tensor * src, struct ggml_tensor * dst) {
-    if (ggml_backend_mpi_buffer_rank(src->buffer) == ggml_backend_mpi_buffer_rank(dst->buffer)) {
+    if (ggml_backend_mpi_buffer_rank(src->buffer) == ggml_backend_mpi_buffer_rank(dst->buffer) && ggml_backend_mpi_buffer_local_rank(buffer) == ggml_backend_mpi_buffer_rank(src->buffer)) {
         return ggml_backend_mpi_buffer_unwrap(buffer)->iface.cpy_tensor(ggml_backend_mpi_buffer_unwrap(buffer), src,
                                                                         dst);
     }
@@ -868,19 +915,65 @@ GGML_CALL static void ggml_backend_mpi_buffer_clear(ggml_backend_buffer_t buffer
     return ggml_backend_mpi_buffer_unwrap(buffer)->iface.clear(ggml_backend_mpi_buffer_unwrap(buffer), value);
 }
 
-static struct ggml_backend_buffer_i mpi_backend_buffer_i = {
-        /* .get_name        = */ ggml_backend_mpi_buffer_name,
-        /* .free_buffer     = */ ggml_backend_mpi_buffer_free_buffer,
-        /* .get_base        = */ ggml_backend_mpi_buffer_get_base,
-        /* .init_tensor     = */ NULL, // no initialization required
-        /* .set_tensor      = */ ggml_backend_mpi_buffer_set_tensor,
-        /* .get_tensor      = */ ggml_backend_mpi_buffer_get_tensor,
-        /* .cpy_tensor      = */ ggml_backend_mpi_buffer_cpy_tensor,
-        /* .clear           = */ ggml_backend_mpi_buffer_clear,
-        /* .reset           = */ NULL,
-};
+GGML_CALL static void ggml_backend_mpi_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor) {
+//    fprintf(stderr, "Init tensor with buffer %s, tensor %s, tensor buffer %s, tensor view src %s, tensor vs buff %s\n",
+//            ggml_backend_buffer_name(buffer), tensor->name, ggml_backend_buffer_name(tensor->buffer), tensor->view_src !=
+//                    nullptr ? tensor->view_src->name : "", tensor->view_src != nullptr ? ggml_backend_buffer_name(tensor->view_src->buffer) : "");
+    auto *orig_buffer = tensor->buffer;
+    tensor->buffer = ggml_backend_mpi_buffer_unwrap(tensor->buffer);
+
+    bool view_src_null = tensor->view_src == nullptr;
+    ggml_backend_buffer_t orig_view_src_buffer = nullptr;
+    if (!view_src_null) {
+         orig_view_src_buffer = tensor->view_src->buffer;
+        tensor->view_src->buffer = ggml_backend_mpi_buffer_unwrap(tensor->view_src->buffer);
+    }
+
+    std::vector<ggml_backend_buffer_t> orig_src_buffers(0);
+    for (auto & src : tensor->src) {
+        if (src == nullptr) {
+            break;
+        }
+
+
+        orig_src_buffers.push_back(src->buffer);
+
+        if (src->buffer != nullptr && src->buffer->iface.get_name == ggml_backend_mpi_buffer_name) {
+            src->buffer = ggml_backend_mpi_buffer_unwrap(src->buffer);
+        }
+    }
+
+
+    ggml_backend_buffer_init_tensor(ggml_backend_mpi_buffer_unwrap(buffer), tensor);
+    tensor->buffer = ggml_backend_mpi_set_wrapped_buffer(orig_buffer, tensor->buffer);
+    if (!view_src_null) {
+        tensor->view_src->buffer = ggml_backend_mpi_set_wrapped_buffer(orig_view_src_buffer, tensor->view_src->buffer);
+    }
+
+    for (size_t i = 0; i < orig_src_buffers.size(); i++) {
+        if (orig_src_buffers[i]->iface.get_name == ggml_backend_mpi_buffer_name) {
+            tensor->src[i]->buffer = ggml_backend_mpi_set_wrapped_buffer(orig_src_buffers[i], tensor->src[i]->buffer);
+        }
+    }
+}
+
+
+
+
 
 GGML_CALL ggml_backend_buffer_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer_t buf) {
+
+    struct ggml_backend_buffer_i mpi_backend_buffer_i = {
+            /* .get_name        = */ ggml_backend_mpi_buffer_name,
+            /* .free_buffer     = */ ggml_backend_mpi_buffer_free_buffer,
+            /* .get_base        = */ ggml_backend_mpi_buffer_get_base,
+            /* .init_tensor     = */ (buf->iface.init_tensor != nullptr) ? ggml_backend_mpi_buffer_init_tensor : nullptr,
+            /* .set_tensor      = */ ggml_backend_mpi_buffer_set_tensor,
+            /* .get_tensor      = */ ggml_backend_mpi_buffer_get_tensor,
+            /* .cpy_tensor      = */ ggml_backend_mpi_buffer_cpy_tensor,
+            /* .clear           = */ ggml_backend_mpi_buffer_clear,
+            /* .reset           = */ nullptr,
+    };
 
 //    if (cached_buffer_wrappers.find(buf) != cached_buffer_wrappers.end()) {
 //        fprintf(stderr, "Returning cached buffer with name %s\n", cached_buffer_wrappers[buf]->iface.get_name(cached_buffer_wrappers[buf]));
@@ -892,6 +985,15 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer
 //        return ret;
 //    }
 
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+//    fprintf(stderr, "Wrapping buffer %s at rank %d\n", ggml_backend_buffer_name(buf), rank);
+
+    if (buf->iface.get_name == ggml_backend_mpi_buffer_name) {
+        fprintf(stderr, "WRAPPING AN ALREADY WRAPPED BUFFER: %s\n", ggml_backend_buffer_name(buf));
+        GGML_ASSERT(false);
+    }
 
     ggml_backend_buffer_type_t t = ggml_backend_mpi_wrap_buffer_type(buf->buft);
 
@@ -914,28 +1016,48 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_mpi_wrap_buffer(ggml_backend_buffer
     return buffer;
 }
 
-bool ggml_backend_mpi_cpy_tensor_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, const struct ggml_tensor * src, struct ggml_tensor * dst) {
-//    int src_rank = ggml_backend_mpi_buffer_rank(src->buffer);
-//    int dst_rank = ggml_backend_mpi_buffer_rank(dst->buffer);
-//
-//    auto * ctx = static_cast<ggml_mpi_context *>(backend->context);
-//
-//    if (ctx->remote) {
-//        return true;
-//    }
-//
-//    if (src_rank == dst_rank) {
-////        src->buffer->iface.cpy_tensor(src->buffer, src, dst);
-//        return true;
-//    }
-//
-//    if (src_rank == ggml_backend_mpi_local_rank(backend)) {
-//        ggml_mpi_tensor_send(src, dst_rank, ctx->comm);
-//    } else if (dst_rank == ggml_backend_mpi_local_rank(backend)){
-//        ggml_mpi_tensor_recv(dst, src_rank, ctx->comm);
-//    }
+bool ggml_backend_mpi_cpy_tensor_async(ggml_backend_t backend_src, ggml_backend_t backend_dst, struct ggml_tensor * src, struct ggml_tensor * dst) {
+    int src_rank = ggml_backend_mpi_buffer_rank(src->buffer);
+    int dst_rank = ggml_backend_mpi_buffer_rank(dst->buffer);
+
+    auto * src_ctx = static_cast<ggml_mpi_context *>(backend_src->context);
+    auto * dst_ctx = static_cast<ggml_mpi_context *>(backend_dst->context);
+
+
+    if (src_ctx->remote && dst_ctx->remote) {
+        return true;
+    }
+
+    if (src_rank == dst_rank) {
+        src->buffer = ggml_backend_mpi_buffer_unwrap(src->buffer);
+        if (src->view_src) {
+            src->view_src->buffer = ggml_backend_mpi_buffer_unwrap(src->view_src->buffer);
+        }
+        dst->buffer = ggml_backend_mpi_buffer_unwrap(dst->buffer);
+        if (dst->view_src) {
+            dst->view_src->buffer = ggml_backend_mpi_buffer_unwrap(dst->view_src->buffer);
+        }
+        ggml_backend_tensor_copy_async(((ggml_mpi_context *) backend_src->context)->backends.front(),((ggml_mpi_context *) backend_dst->context)->backends.front(), src, dst);
+
+        src->buffer = ggml_backend_mpi_wrap_buffer(src->buffer);
+        if (src->view_src) {
+            src->view_src->buffer = ggml_backend_mpi_wrap_buffer(src->view_src->buffer);
+        }
+        dst->buffer = ggml_backend_mpi_wrap_buffer(dst->buffer);
+        if (dst->view_src) {
+            dst->view_src->buffer = ggml_backend_mpi_wrap_buffer(dst->view_src->buffer);
+        }
+//        src->buffer->iface.cpy_tensor(src->buffer, src, dst);
+        return true;
+    }
+
+    if (src_rank == ggml_backend_mpi_local_rank(backend_src)) {
+        ggml_mpi_tensor_send(src, dst_rank, dst_ctx->comm);
+    } else if (dst_rank == ggml_backend_mpi_local_rank(backend_dst)){
+        ggml_mpi_tensor_recv(dst, src_rank, src_ctx->comm);
+    }
 //    fprintf(stderr, "ATTEMPTING ASYNC COPY FOR SRC TENSOR %s TO DST TENSOR %s WITH SRC BACKEND %s AND DST BACKEND %s\n", src->name, dst->name, ggml_backend_name(backend_src), ggml_backend_name(backend_dst));
-    return false;
+    return true;
 
 }
 
@@ -947,11 +1069,31 @@ void ggml_backend_mpi_set_tensor_async(ggml_backend_t backend, struct ggml_tenso
 
     GGML_ASSERT(ctx->rank == dst_rank);
 
-    ggml_mpi_tensor_send(dst, data, ctx->rank, ctx->comm);
+    if (dst_rank == ggml_backend_mpi_buffer_local_rank(dst->buffer)) {
+        auto * old_buffer = dst->buffer;
+        dst->buffer = ggml_backend_mpi_buffer_unwrap(dst->buffer);
+        if (dst->view_src) {
+            dst->view_src->buffer = ggml_backend_mpi_buffer_unwrap(dst->view_src->buffer);
+        }
+        ggml_backend_tensor_set_async(((ggml_mpi_context *) backend->context)->backends.front(), dst, data, offset, size);
+        dst->buffer = ggml_backend_mpi_wrap_buffer(dst->buffer);
+        if (dst->view_src) {
+            dst->view_src->buffer = ggml_backend_mpi_wrap_buffer(dst->view_src->buffer);
+        }
+//        dst->buffer = old_buffer;
+    } else {
+
+        ggml_mpi_tensor_send(dst, data, ctx->rank, ctx->comm);
+    }
 
 
 }
 
+GGML_CALL static void ggml_backend_mpi_synchronize(ggml_backend_t backend) {
+    if (!((ggml_mpi_context*)backend->context)->remote) {
+        ggml_backend_synchronize(((ggml_mpi_context*)backend->context)->backends.front());
+    }
+}
 
 ggml_backend_t ggml_backend_mpi_init(ggml_backend_t * wrapped_backends, size_t num_backends, int rank) {
 
@@ -960,10 +1102,11 @@ ggml_backend_t ggml_backend_mpi_init(ggml_backend_t * wrapped_backends, size_t n
 
     ggml_mpi_context * ctx = ggml_mpi_init();
     std::vector<ggml_backend_t> wrapped_backends_v;
+    for (size_t i = 0; i < num_backends; i++) {
+        wrapped_backends_v.push_back(wrapped_backends[i]);
+    }
     if (ctx->rank == rank) {
-        for (size_t i = 0; i < num_backends; i++) {
-            wrapped_backends_v.push_back(wrapped_backends[i]);
-        }
+
     } else {
         ctx->remote = true;
     }
@@ -974,14 +1117,20 @@ ggml_backend_t ggml_backend_mpi_init(ggml_backend_t * wrapped_backends, size_t n
             /* .free                    = */ ggml_backend_mpi_free,
             /* .get_default_buffer_type = */ ggml_backend_mpi_get_default_buffer_type,
             /* .set_tensor_async        = */ ggml_backend_mpi_set_tensor_async,
-            /* .get_tensor_async        = */ NULL,
+            /* .get_tensor_async        = */ nullptr,
             /* .cpy_tensor_async        = */ ggml_backend_mpi_cpy_tensor_async,
-            /* .synchronize             = */ NULL,
-            /* .graph_plan_create       = */ NULL,
-            /* .graph_plan_free         = */ NULL,
-            /* .graph_plan_compute      = */ NULL,
+            /* .synchronize             = */ ggml_backend_mpi_synchronize,
+            /* .graph_plan_create       = */ nullptr,
+            /* .graph_plan_free         = */ nullptr,
+            /* .graph_plan_compute      = */ nullptr,
             /* .graph_compute           = */ ggml_backend_mpi_graph_compute,
             /* .supports_op             = */ ggml_backend_mpi_supports_op,
+            /* .offload_op              = */ nullptr,
+            /* .event_new               = */ nullptr,
+            /* .event_free              = */ nullptr,
+            /* .event_record            = */ nullptr,
+            /* .event_wait              = */ nullptr,
+            /* .event_synchronize       = */ nullptr,
     };
 
     auto *mpi_backend = new ggml_backend {

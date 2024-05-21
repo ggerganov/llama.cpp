@@ -41,6 +41,8 @@ GGML_CALL size_t ggml_backend_buft_get_alloc_size(ggml_backend_buffer_type_t buf
         assert(size >= ggml_nbytes(tensor));
         return size;
     }
+//    fprintf(stderr, "Getting alloc size of buft (%s)\n", ggml_backend_buft_name(buft));
+//    fprintf(stderr, "Getting alloc size of tensor (%s)\n", tensor->name);
     return ggml_nbytes(tensor);
 }
 
@@ -313,6 +315,8 @@ static bool ggml_are_same_layout(const struct ggml_tensor * a, const struct ggml
 void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst) {
     GGML_ASSERT(ggml_are_same_layout(src, dst) && "cannot copy tensors with different layouts");
 
+//    fprintf(stderr, "Attempting copy from %s to %s\n", src->name, dst->name);
+
     if (src == dst) {
         return;
     }
@@ -339,6 +343,9 @@ void ggml_backend_tensor_copy_async(ggml_backend_t backend_src, ggml_backend_t b
     if (src == dst) {
         return;
     }
+
+//    fprintf(stderr, "Attempting async copy from %s to %s with src backend %s and dst backend %s\n", src->name, dst->name, ggml_backend_name(backend_src), ggml_backend_name(backend_dst));
+
 
     if (backend_dst->iface.cpy_tensor_async != NULL) {
         if (backend_dst->iface.cpy_tensor_async(backend_src, backend_dst, src, dst)) {
@@ -1101,8 +1108,10 @@ static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, co
 
     // find highest prio backend that supports the buffer type
     for (int i = 0; i < sched->n_backends; i++) {
-        if (ggml_backend_buft_supports_backend(buffer->buft, sched->backends[i])) {
+        if (ggml_backend_buft_supports_backend(buffer->buft, sched->backends[i]) && ggml_backend_supports_op(sched->backends[i], tensor)) {
             return i;
+        } else {
+//            fprintf(stderr, "Buffer type %s does not support backend %s\n", ggml_backend_buft_name(buffer->buft), ggml_backend_name(sched->backends[i]));
         }
     }
 
@@ -1204,7 +1213,7 @@ static void ggml_backend_sched_print_assignments(ggml_backend_sched_t sched, str
             continue;
         }
         ggml_backend_t tensor_backend = ggml_backend_sched_get_tensor_backend(sched, node);
-        fprintf(stderr, "node #%3d (%10.10s): %20.20s (%5.5s) [%5.5s %8.8s]:", i, ggml_op_name(node->op), node->name,
+        fprintf(stderr, "node #%3d (%10.10s): %30.30s (%5.5s) [%30.30s %8.8s]:", i, ggml_op_name(node->op), node->name,
             fmt_size(ggml_nbytes(node)), tensor_backend ? ggml_backend_name(tensor_backend) : "NULL", GET_CAUSE(node));
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             struct ggml_tensor * src = node->src[j];
@@ -1212,7 +1221,7 @@ static void ggml_backend_sched_print_assignments(ggml_backend_sched_t sched, str
                 continue;
             }
             ggml_backend_t src_backend = ggml_backend_sched_get_tensor_backend(sched, src);
-            fprintf(stderr, " %20.20s (%5.5s) [%5.5s %8.8s]", src->name,
+            fprintf(stderr, " %40.40s (%5.5s) [%30.30s %8.8s]", src->name,
                 fmt_size(ggml_nbytes(src)), src_backend ? ggml_backend_name(src_backend) : "NULL", GET_CAUSE(src));
         }
         fprintf(stderr, "\n");
@@ -1552,11 +1561,16 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             const size_t input_id = hash_id(input);
             struct ggml_tensor * input_cpy = sched->tensor_copies[input_id][split->backend_id][sched->cur_copy];
 
+//            fprintf(stderr, "Creating input copy for input %s and copy %s\n", input->name, input_cpy->name);
+
             // add a dependency to the input source so that it is not freed before the copy is done
             struct ggml_tensor * input_dep = ggml_view_tensor(sched->ctx, input);
             input_dep->src[0] = input;
             sched->node_backend_ids[graph_copy->n_nodes] = sched->tensor_backend_id[input_id];
             graph_copy->nodes[graph_copy->n_nodes++] = input_dep;
+
+//            fprintf(stderr, "Input dep src: %s\n", input_dep->src[0]->name);
+
 
             // add a dependency to the input copy so that it is allocated at the start of the split
             sched->node_backend_ids[graph_copy->n_nodes] = split->backend_id;
@@ -1639,6 +1653,8 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
             ggml_backend_t input_backend = ggml_backend_sched_get_tensor_backend(sched, split->inputs[j]);
             struct ggml_tensor * input = split->inputs[j];
             struct ggml_tensor * input_cpy = sched->tensor_copies[hash_id(input)][split_backend_id][sched->cur_copy];
+
+//            fprintf(stderr, "Split input: %s, input copy: %s\n", input->name, input_cpy->name);
 
             if (input->flags & GGML_TENSOR_FLAG_INPUT) {
                 // inputs from the user must be copied immediately to prevent the user overwriting the data before the copy is done

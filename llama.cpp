@@ -1524,6 +1524,12 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(int gpu) {
     if (buft == nullptr) {
         buft = llama_default_buffer_type_cpu(true);
     }
+
+#ifdef GGML_USE_MPI
+    else {
+        buft = ggml_backend_mpi_wrap_buffer_type(buft);
+    }
+#endif
     return buft;
 
     GGML_UNUSED(gpu);
@@ -4154,14 +4160,14 @@ static bool llm_load_tensors(
         // assign the repeating layers
         for (int64_t i = i_gpu_start; i < n_layer; ++i) {
             model.buft_layer[i] = {
-                split_buft,
+                    llama_default_buffer_type_offload(main_gpu),
                 llama_default_buffer_type_offload(main_gpu)
             };
         }
         // assign the output layer
         if (n_gpu_layers > n_layer) {
             model.buft_output = {
-                split_buft,
+                    llama_default_buffer_type_offload(main_gpu),
                 llama_default_buffer_type_offload(main_gpu)
             };
         } else {
@@ -4170,13 +4176,20 @@ static bool llm_load_tensors(
     }
 
 #ifdef GGML_USE_MPI
-    uint16_t** ranges = ggml_mpi_split_range(model.ctx_mpi, 0, n_layer - 1, node_split);
+    model.buft_output = llama_default_buffer_type_cpu(true);
+
+    uint16_t** ranges = ggml_mpi_split_range(model.ctx_mpi, 0, n_layer-1, node_split);
 
 
     size_t size = ggml_mpi_size(model.ctx_mpi);
 
     for (size_t i = 0; i < size; i++) {
-        for (uint16_t j = ranges[i][0]; j < ranges[i][1]; j++) {
+        model.buft_layer[ranges[i][0]].buft = llama_default_buffer_type_cpu(true);
+        model.buft_layer[ranges[i][0]].buft_matrix = llama_default_buffer_type_cpu(true);
+
+        model.buft_layer[ranges[i][1]].buft = llama_default_buffer_type_cpu(true);
+        model.buft_layer[ranges[i][1]].buft_matrix = llama_default_buffer_type_cpu(true);
+        for (uint16_t j = ranges[i][0]; j <= ranges[i][1]; j++) {
             printf("Setting buffer rank for i %zu and j %d\n", i, j);
             ggml_backend_mpi_buffer_type_set_rank(model.buft_layer[j].buft, (int)i);
             ggml_backend_mpi_buffer_type_set_rank(model.buft_layer[j].buft_matrix, (int)i);
@@ -5094,6 +5107,9 @@ static bool llm_load_tensors(
                         ggml_backend_buffer_get_size(buf));
             }
 #endif
+#ifdef GGML_USE_MPI
+            buf = ggml_backend_mpi_wrap_buffer(buf);
+#endif
         }
 #ifdef GGML_USE_METAL
         else if (ml.use_mmap && buft == ggml_backend_metal_buffer_type()) {
@@ -5104,6 +5120,7 @@ static bool llm_load_tensors(
         }
 #endif
         else {
+            fprintf(stderr, "Allocating context tensors from buffer type %s\n", ggml_backend_buft_name(buft));
             buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
             if (buf != nullptr && use_mlock && ggml_backend_buffer_is_host(buf)) {
                 model.mlock_bufs.emplace_back(new llama_mlock);
@@ -5117,9 +5134,7 @@ static bool llm_load_tensors(
             throw std::runtime_error("failed to allocate buffer");
         }
       
-      #ifdef GGML_USE_MPI
-            buf = ggml_backend_mpi_wrap_buffer(buf);
-      #endif
+
         // indicate that this buffer contains weights
         // this is used by ggml_backend_sched to improve op scheduling -> ops that use a weight are preferably scheduled to the backend that contains the weight
         ggml_backend_buffer_set_usage(buf, GGML_BACKEND_BUFFER_USAGE_WEIGHTS);
@@ -13330,7 +13345,9 @@ struct llama_context * llama_new_context_with_model(
         std::vector<ggml_backend_t> new_backends;
 
         for (size_t i = 0; i < ggml_mpi_size(model->ctx_mpi); i++) {
-            new_backends.push_back(ggml_backend_mpi_init(ctx->backends.data(), ctx->backends.size(), (int) i));
+            for (auto & backend : ctx->backends) {
+                new_backends.push_back(ggml_backend_mpi_init(std::vector<ggml_backend_t>{backend, ctx->backend_cpu}.data(), 2, (int) i));
+            }
         }
 
         ctx->backends = new_backends;
@@ -14507,7 +14524,7 @@ int llama_process_mpi_transaction(
             llama_kv_cache_seq_div(ctx, 0, 0, 0, 0);
             break;
         default:
-            printf("Unknown operation, exiting\n");
+            printf("Unknown operation %d, exiting\n", tag);
             exit(1);
             break;
     }
@@ -14545,7 +14562,7 @@ int llama_process_mpi_worker(
 //            }
 //            break;
         default:
-            printf("Unknown operation, exiting\n");
+            printf("Unknown non-transaction operation %d, exiting\n", tag);
             exit(1);
             break;
     }
