@@ -260,7 +260,6 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
 
     const int64_t ne00 = src0->ne[0];
     const int64_t ne01 = src0->ne[1];
-    const int64_t ne2 = dst->ne[2];
     const int64_t nrows = ggml_nrows(src0);
 
     //const int n_past      = ((int32_t *) dst->op_params)[0];
