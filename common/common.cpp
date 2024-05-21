@@ -1354,7 +1354,12 @@ void gpt_params_handle_model_default(gpt_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = "models/" + string_split(params.hf_file, '/').back();
+            std::string cache_directory = get_cache_directory();
+            const bool success = create_directory_with_parents(cache_directory);
+            if (!success) {
+                throw std::runtime_error("failed to create cache directory: " + cache_directory);
+            }
+            params.model = cache_directory + string_split(params.hf_file, '/').back();
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
@@ -2514,6 +2519,31 @@ bool create_directory_with_parents(const std::string & path) {
 
     return true;
 #endif // _WIN32
+}
+
+std::string get_cache_directory() {
+    std::string cache_directory = "";
+    if (getenv("LLAMA_CACHE")) {
+        cache_directory = std::getenv("LLAMA_CACHE");
+        if (cache_directory.back() != DIRECTORY_SEPARATOR) {
+            cache_directory += DIRECTORY_SEPARATOR;
+        }
+    } else {
+#ifdef __linux__
+        if (std::getenv("XDG_CACHE_HOME")) {
+            cache_directory = std::getenv("XDG_CACHE_HOME");
+        } else {
+            cache_directory = std::getenv("HOME") + std::string("/.cache/");
+        }
+#elif defined(__APPLE__)
+        cache_directory = std::getenv("HOME") + std::string("/Library/Caches/");
+#elif defined(_WIN32)
+        cache_directory = std::getenv("APPDATA");
+#endif // __linux__
+        cache_directory += "llama.cpp";
+        cache_directory += DIRECTORY_SEPARATOR;
+    }
+    return cache_directory;
 }
 
 void dump_vector_float_yaml(FILE * stream, const char * prop_name, const std::vector<float> & data) {
