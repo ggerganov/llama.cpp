@@ -760,10 +760,10 @@ extern "C" {
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
     // Get the number of threads used for generation of a single token.
-    LLAMA_API uint32_t llama_get_n_threads(struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_threads(struct llama_context * ctx);
 
     // Get the number of threads used for prompt and batch processing (multiple token).
-    LLAMA_API uint32_t llama_get_n_threads_batch(struct llama_context * ctx);
+    LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
 
     // Set whether to use causal attention or not
     // If set to true, the model will only attend to the past tokens
