@@ -155,13 +155,37 @@ def main():
         "-v", "--verbose", action="store_true", help="Increase output verbosity."
     )
     parser.add_argument(
-        "-m", "--model-path", default=None, help="The models storage path. Default is 'models/'."
+        "-r", "--model-repo", default="meta-llama/Llama-2-7b-hf",
+        help="The models repository. Default is 'meta-llama/Llama-2-7b-hf'."
     )
     parser.add_argument(
-        "-t", "--gen-vocab-tests", action="store_true", help="Generate the tokenizer tests. Default is False."
+        "-m", "--model-path", default="models/",
+        help="The models storage path. Default is 'models/'."
     )
     parser.add_argument(
-        "-s", "--gen-vocab-script", action="store_true", help="Generate the gguf vocab files. Default is False."
+        "-a", "--model-arch", default="llama",
+        help="The supported model architecture. Default is 'llama'."
+    )
+    parser.add_argument(
+        "-p", "--model-parts", default=2,
+        help="The number of model shards encompassing the model. Default is 2."
+    )
+    parser.add_argument(
+        "-t", "--model-type", default="safetensors",
+        help="The models file type. Default is 'safetensors'"
+    )
+    parser.add_argument(
+        "-b", "--vocab-type",
+        default="SPM", const="SPM", nargs="?", choices=["SPM", "BPE", "WPM"],
+        help="The models tokenizer type. Default is 'SPM'."
+    )
+    parser.add_argument(
+        "-t", "--gen-vocab-tests", action="store_true",
+        help="Generate the tokenizer tests. Default is False."
+    )
+    parser.add_argument(
+        "-s", "--gen-vocab-script", action="store_true",
+        help="Generate the gguf vocab files. Default is False."
     )
     args = parser.parse_args()
 
