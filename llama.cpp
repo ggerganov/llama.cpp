@@ -17628,7 +17628,7 @@ static int32_t llama_chat_apply_template_internal(
             }
         }
         // llama2 templates seem to not care about "add_generation_prompt"
-    } else if (tmpl == "zephyr" || tmpl.find("<|user|>") != std::string::npos) {
+    } else if (tmpl == "zephyr" || (tmpl.find("<|user|>") != std::string::npos && tmpl.find("<|end|>") == std::string::npos)) {
         // zephyr template
         for (auto message : chat) {
             ss << "<|" << message->role << "|>" << "\n" << message->content << "<|endoftext|>\n";
