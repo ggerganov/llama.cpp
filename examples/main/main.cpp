@@ -706,6 +706,9 @@ int main(int argc, char ** argv) {
             }
 
             const llama_token id = llama_sampling_sample(ctx_sampling, ctx, ctx_guidance);
+            if (id == -1) {
+                return 1;
+            }
 
             llama_sampling_accept(ctx_sampling, ctx, id, /* apply_grammar= */ true);
 

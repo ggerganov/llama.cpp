@@ -229,6 +229,9 @@ int main(int argc, char ** argv) {
                     // stochastic verification
 
                     llama_token_data_array dist_tgt = llama_sampling_prepare(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft], true, NULL);
+                    if (dist_tgt.data == NULL) {
+                        return 1;
+                    }
                     llama_sample_softmax(ctx_tgt, &dist_tgt);
                     float p_tgt = 0, p_dft = 0;
 
@@ -337,6 +340,9 @@ int main(int argc, char ** argv) {
                     // sample from the target model
                     LOG("sampling target: s_keep = %3d, i_dft = %3d, i_batch_tgt = %3d\n", s_keep, i_dft, drafts[s_keep].i_batch_tgt[i_dft]);
                     token_id = llama_sampling_sample(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft]);
+                    if (token_id == -1) {
+                        return 1;
+                    }
 
                     llama_sampling_accept(ctx_sampling, ctx_tgt, token_id, true);
 
@@ -457,7 +463,9 @@ int main(int argc, char ** argv) {
                     continue;
                 }
 
-                llama_sampling_sample(drafts[s].ctx_sampling, ctx_dft, NULL, drafts[s].i_batch_dft);
+                if (llama_sampling_sample(drafts[s].ctx_sampling, ctx_dft, NULL, drafts[s].i_batch_dft) == -1) {
+                    return -1;
+                }
 
                 const auto & cur_p = drafts[s].ctx_sampling->cur;
 

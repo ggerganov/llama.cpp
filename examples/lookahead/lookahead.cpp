@@ -159,6 +159,9 @@ int main(int argc, char ** argv) {
     // sample first token
     {
         id = llama_sampling_sample(ctx_sampling, ctx, NULL, 0);
+        if (id == -1) {
+            return 1;
+        }
 
         llama_sampling_accept(ctx_sampling, ctx, id, true);
 
@@ -284,6 +287,9 @@ int main(int argc, char ** argv) {
 
             // sample the next token
             id = llama_sampling_sample(ctx_sampling, ctx, NULL, i_batch);
+            if (id == -1) {
+                return 1;
+            }
 
             llama_sampling_accept(ctx_sampling, ctx, id, true);
 
@@ -361,6 +367,9 @@ int main(int argc, char ** argv) {
                     // sample from the last level
                     for (int i = 0; i < W; i++) {
                         tokens_j[N - 2][i] = llama_sampling_sample(ctx_sampling, ctx, NULL, ngrams_cur.size()*(N-1) + W*(N - 2) + i);
+                        if (tokens_j[N - 2][i] == -1) {
+                            return 1;
+                        }
                     }
                 } else {
                     for (int i = 0; i < W; i++) {

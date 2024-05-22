@@ -2257,6 +2257,9 @@ struct server_context {
 
                 completion_token_output result;
                 const llama_token id = llama_sampling_sample(slot.ctx_sampling, ctx, NULL, slot.i_batch - i);
+                if (id == -1) {
+                    continue; // keep going, don't crash, already logged
+                }
 
                 llama_sampling_accept(slot.ctx_sampling, ctx, id, true);
 
