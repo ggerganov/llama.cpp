@@ -192,7 +192,7 @@ int main(int argc, char ** argv) {
         for (int j = 0; j < n_prompts; j++) {
             fprintf(stdout, "embedding %d: ", j);
             for (int i = 0; i < (n_prompts > 1 ? std::min(16, n_embd) : n_embd); i++) {
-                if (params.embd_normalize==0) 
+                if (params.embd_normalize==0)
                     fprintf(stdout, "%6.0f ", emb[j * n_embd + i]);
                 else
                     fprintf(stdout, "%9.6f ", emb[j * n_embd + i]);

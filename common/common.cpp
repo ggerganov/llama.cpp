@@ -2589,7 +2589,7 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
 
 void llama_embd_normalize(const float * inp, float * out, int n, int embd_norm) {
     double sum = 0.0;
-    
+
     switch (embd_norm) {
         case -1: // no normalisation
             sum = 1.0;

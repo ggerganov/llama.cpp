@@ -43,8 +43,8 @@ The above command will output space-separated float values.
 | $"string"$   | |
 |--------------|-|
 | "\n"         | (default)
-| "<#embSep#>" | for exemple 
-| "<#sep#>"    | other exemple 
+| "<#embSep#>" | for exemple
+| "<#sep#>"    | other exemple
 
 ## examples
 ### Unix-based systems (Linux, macOS, etc.):
