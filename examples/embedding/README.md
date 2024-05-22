@@ -35,7 +35,7 @@ The above command will output space-separated float values.
 |------------|------------------------------|--|
 | ''         | same as before               | (default)
 | 'array'    | single embeddings            | $[[x_1,...,x_n]]$
-|            | multiple embeddings          | $[_0[x_1,...,x_n],_1[x_1,...,x_n],...,_{n-1}[x_1,...,x_n]]$
+|            | multiple embeddings          | $[[x_1,...,x_n],[x_1,...,x_n],...,[x_1,...,x_n]]$
 | 'json'     | openai style                 |
 | 'json+'    | add cosine similarity matrix |
 
