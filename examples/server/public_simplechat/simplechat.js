@@ -35,6 +35,11 @@ class SimpleChat {
         this.iLastSys = -1;
     }
 
+    clear() {
+        this.xchat = [];
+        this.iLastSys = -1;
+    }
+
     /**
      * Add an entry into xchat
      * @param {string} role
@@ -397,7 +402,7 @@ class MultiChatUI {
         // in a completion mode with multiple user-assistant chat data
         // from before to be sent/occur once.
         if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
-            chat.xchat.length = 0;
+            chat.clear();
         }
         this.ui_reset_userinput();
     }
