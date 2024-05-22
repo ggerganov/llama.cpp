@@ -3771,14 +3771,17 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
 
 static const char * llama_model_type_name(e_model type) {
     switch (type) {
+        case MODEL_17M:    return "17M";
         case MODEL_22M:    return "22M";
         case MODEL_33M:    return "33M";
         case MODEL_109M:   return "109M";
         case MODEL_137M:   return "137M";
+        case MODEL_335M:   return "335M";
         case MODEL_0_5B:   return "0.5B";
         case MODEL_1B:     return "1B";
         case MODEL_2B:     return "2B";
         case MODEL_3B:     return "3B";
+        case MODEL_4B:     return "4B";
         case MODEL_7B:     return "7B";
         case MODEL_8B:     return "8B";
         case MODEL_12B:    return "12B";
