@@ -959,12 +959,82 @@ class HFModelFileType(IntEnum):
 HF_TOKENIZER_BPE_FILES = ("config.json", "tokenizer_config.json", "tokenizer.json",)
 HF_TOKENIZER_SPM_FILES = (HF_TOKENIZER_BPE_FILES + ("tokenizer.model",))
 
+#
+# BPE Pre-tokenization Regular Expressions
+#
+
 # NOTE: Tokenizers defaults to OpenAI GPT-2 Byte Level Reg-Exp
 # The pattern uses perl, is grammatical, and splits are technically arbitrary.
 # https://github.com/openai/gpt-2/blob/master/src/encoder.py#L53
 # https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L40-L42
+UNI_PRE_TOKENIZER_DEFAULT = "\\p{N}"
 BPE_PRE_TOKENIZER_DEFAULT = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)"
 GPT_PRE_TOKENIZER_DEFAULT = f"{BPE_PRE_TOKENIZER_DEFAULT}|\\s+"
+
+# Default pre-processing regex for BPE tokenization
+BPE_PRE_PROCESSOR_DEFAULT = (
+    "[\\p{P}\\$\\+<=>\\^~\\|]+", BPE_PRE_TOKENIZER_DEFAULT, "\\p{N}+", "[0-9][0-9][0-9]",
+)
+
+BPE_PRE_TOKENIZERS = {
+    "default": GPT_PRE_TOKENIZER_DEFAULT,
+    # NOTE: LLAMA and DBRX (MODEL_ARCH_NAMES[MODEL_ARCH.DBRX]) are the same
+    MODEL_ARCH_NAMES[MODEL_ARCH.LLAMA]: (
+        "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.FALCON]: (
+        "[\\p{P}\\$\\+<=>\\^~\\|]+", BPE_PRE_TOKENIZER_DEFAULT, "[0-9][0-9][0-9]",
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.BAICHUAN]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.GROK]: (),
+    # NOTE: GPT-2 is the standard default pre-tokenizer for all models
+    MODEL_ARCH_NAMES[MODEL_ARCH.GPT2]: (
+        GPT_PRE_TOKENIZER_DEFAULT,
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.GPTJ]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.GPTNEOX]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.MPT]: (
+        "\\s?\\p{L}+", "\\s?\\p{P}+", BPE_PRE_TOKENIZER_DEFAULT,
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.STARCODER]: (
+        "\\p{N}", BPE_PRE_TOKENIZER_DEFAULT,
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.REFACT]: (
+        "\\p{N}", BPE_PRE_TOKENIZER_DEFAULT,
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.BERT]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.NOMIC_BERT]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.JINA_BERT_V2]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.BLOOM]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.STABLELM]: (
+        "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.QWEN]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.QWEN2]: (
+        "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.QWEN2MOE]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.PHI2]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.PHI3]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.PLAMO]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.CODESHELL]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.ORION]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.INTERNLM2]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.MINICPM]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.GEMMA]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.STARCODER2]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.MAMBA]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.XVERSE]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.COMMAND_R]: (
+        "\\p{N}", BPE_PRE_TOKENIZER_DEFAULT,
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.DBRX]: (
+        "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    ),
+    MODEL_ARCH_NAMES[MODEL_ARCH.OLMO]: (
+        GPT_PRE_TOKENIZER_DEFAULT,
+    ),
+}
 
 #
 # HuggingFace Model Map
@@ -979,21 +1049,77 @@ GPT_PRE_TOKENIZER_DEFAULT = f"{BPE_PRE_TOKENIZER_DEFAULT}|\\s+"
 #   - `model_parts` (int): Number of parts required to join the model during conversion
 #   - `model_type` (FileFormatType): File format for the Hugging Face model files
 #   - `vocab_type` (VocabType): Vocabulary type used by the tokenizer
-#   - `vocab_pre` (Optional[Tuple[str]]): List of pre-tokenizer pattern strings for this model
-#   - `vocab_files` (Tuple[str]): List of file names required to extract vocabulary and other metadata
+#   - `vocab_pre` (Optional[Tuple[str]]): Tuple of pre-tokenizer pattern strings for this model
+#   - `vocab_files` (Tuple[str]): Tuple of file names required to extract vocabulary and other metadata
 #
 # NOTES
 #   - Possible algorithms are WordLevel, BPE, WordPiece, or Unigram
 #   - Possible LLaMa tokenizer model types are: None, SPM, BPE, or WPM
 HF_MODEL_MAP = (
+    # Sentence Piece Models
     {
         "model_repo": "meta-llama/Llama-2-7b-hf",
-        "model_arch": MODEL_ARCH.LLAMA,
+        "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.LLAMA],
         "model_parts": 2,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
         "vocab_pre": (),
         "vocab_files": HF_TOKENIZER_SPM_FILES,
+    },
+    {
+        "model_repo": "mistralai/Mistral-7B-Instruct-v0.2",
+        "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.LLAMA],
+        "model_parts": 3,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.SPM,
+        "vocab_pre": (),
+        "vocab_files": HF_TOKENIZER_SPM_FILES,
+    },
+    {
+        "model_repo": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+        "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.LLAMA],
+        "model_parts": 8,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.SPM,
+        "vocab_pre": (),
+        "vocab_files": HF_TOKENIZER_SPM_FILES,
+    },
+    {
+        "model_repo": "microsoft/Phi-3-mini-4k-instruct",
+        "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.PHI3],
+        "model_parts": 2,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.SPM,
+        "vocab_pre": (),
+        "vocab_files": HF_TOKENIZER_SPM_FILES,
+    },
+    # Word Piece Models
+    {
+        "model_repo": "BAAI/bge-small-en-v1.5",
+        "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.BERT],
+        "model_parts": 1,
+        "model_type": HFModelFileType.BIN,
+        "vocab_type": LLaMaVocabType.WPM,
+        "vocab_pre": (),
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {
+        "model_repo": "jinaai/jina-embeddings-v2-base-en",
+        "model_arch": MODEL_ARCH.JINA_BERT_V2,
+        "vocab_type": LLaMaVocabType.WPM,
+    },
+    # Byte Pair Encoding Models
+    {
+        "model_repo": "meta-llama/Meta-Llama-3-8B",
+        "model_arch": MODEL_ARCH.LLAMA,
+        "model_parts": 4,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        # PR#6920: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2080233989
+        "vocab_pre": (
+            "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+        ),
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
         "model_repo": "tiiuae/falcon-7b",
@@ -1003,25 +1129,6 @@ HF_MODEL_MAP = (
         "vocab_type": LLaMaVocabType.BPE,
         "vocab_pre": BPE_PRE_TOKENIZERS[MODEL_ARCH_NAMES[MODEL_ARCH.FALCON]],
         "vocab_files": HF_TOKENIZER_BPE_FILES,
-    },
-    {
-        "model_repo": "meta-llama/Meta-Llama-3-8B",
-        "model_arch": MODEL_ARCH.LLAMA,
-        "model_parts": 4,
-        "model_type": HFModelFileType.SFT,
-        "vocab_type": LLaMaVocabType.BPE,
-        # PR#6920: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2080233989
-        "vocab_pre": BPE_PRE_TOKENIZERS[MODEL_ARCH_NAMES[MODEL_ARCH.LLAMA]],
-        "vocab_files": HF_TOKENIZER_BPE_FILES,
-    },
-    {
-        "model_repo": "microsoft/Phi-3-mini-4k-instruct",
-        "model_arch": MODEL_ARCH.PHI3,
-        "model_parts": 2,
-        "model_type": HFModelFileType.SFT,
-        "vocab_type": LLaMaVocabType.SPM,
-        "vocab_pre": (),
-        "vocab_files": HF_TOKENIZER_SPM_FILES,
     },
     {
         "model_repo": "deepseek-ai/deepseek-llm-7b-base",
@@ -1052,15 +1159,6 @@ HF_MODEL_MAP = (
             "[一-龥ࠀ-一가-퟿]+",
             "\\p{N}",
         ),
-        "vocab_files": HF_TOKENIZER_BPE_FILES,
-    },
-    {
-        "model_repo": "BAAI/bge-small-en-v1.5",
-        "model_arch": MODEL_ARCH.BERT,
-        "model_parts": 1,
-        "model_type": HFModelFileType.BIN,
-        "vocab_type": LLaMaVocabType.WPM,
-        "vocab_pre": (),
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
@@ -1119,11 +1217,6 @@ HF_MODEL_MAP = (
         "vocab_type": LLaMaVocabType.BPE,
     },
     {
-        "model_repo": "jinaai/jina-embeddings-v2-base-en",
-        "model_arch": MODEL_ARCH.JINA_BERT_V2,
-        "vocab_type": LLaMaVocabType.WPM,
-    },
-    {
         "model_repo": "jinaai/jina-embeddings-v2-base-es",
         "model_arch": MODEL_ARCH.JINA_BERT_V2,
         "vocab_type": LLaMaVocabType.BPE,
@@ -1142,16 +1235,6 @@ HF_MODEL_MAP = (
         "model_repo": "stabilityai/stablelm-2-zephyr-1_6b",
         "model_arch": MODEL_ARCH.STABLELM,
         "vocab_type": LLaMaVocabType.BPE,
-    },
-    {
-        "model_repo": "mistralai/Mistral-7B-Instruct-v0.2",
-        "model_arch": MODEL_ARCH.LLAMA,
-        "vocab_type": LLaMaVocabType.SPM,
-    },
-    {
-        "model_repo": "mistralai/Mixtral-8x7B-Instruct-v0.1",
-        "model_arch": MODEL_ARCH.LLAMA,
-        "vocab_type": LLaMaVocabType.SPM,
     },
 )
 
