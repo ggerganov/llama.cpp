@@ -992,10 +992,14 @@ BPE_PRE_PROCESSOR_DEFAULT = (
 )
 
 # NOTE: GPT-2 is the standard default pre-tokenizer for all models
+# NOTE: BERT models inherit from the Byte Level Pre-tokenizer.
+# https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L117
+# https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/bert.rs#L13
 BPE_PRE_TOKENIZERS = {
     # gpt2, olmo, phi (1, 1_5, 2, 3, ...)
     "gpt2": (GPT_PRE_TOKENIZER_DEFAULT,),
     # dbrx
+    # NOTE: PR#6920: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2080233989
     "llama3": (
         "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
     ),
@@ -1033,7 +1037,7 @@ BPE_PRE_TOKENIZERS = {
     # This will get out of control if not properly managed.
     # This needs a proper solution. The short-term solution is to manually build a map here.
     # A proper long-term solution would be to build a dynamic registry.
-    # The issue is that this requires a mapping or a database.
+    # The issue is that this requires a dynamically persistent mapping or a database.
     # Possible solutions are to use JSON, HDF5, or SQLite.
     # Some of these mappings could be dynamically generated, but it's sketchy at best.
     # Model versions should be included along with the model name to mitigate name conflicts.
@@ -1060,14 +1064,14 @@ BPE_PRE_TOKENIZERS = {
 #   - Possible algorithms are WordLevel, BPE, WordPiece, or Unigram
 #   - Possible LLaMa tokenizer model types are: None, SPM, BPE, or WPM
 HF_MODEL_MAP = (
-    # Sentence Piece Models
+    # SPM (Sentence Piece Models): Default to Byte Level Pre-tokenization.
     {
         "model_repo": "meta-llama/Llama-2-7b-hf",
         "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.LLAMA],
         "model_parts": 2,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
-        "vocab_pre": (),
+        "vocab_pre": GPT_PRE_TOKENIZER_DEFAULT,
         "vocab_files": HF_TOKENIZER_SPM_FILES,
     },
     {
@@ -1076,7 +1080,7 @@ HF_MODEL_MAP = (
         "model_parts": 3,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
-        "vocab_pre": (),
+        "vocab_pre": GPT_PRE_TOKENIZER_DEFAULT,
         "vocab_files": HF_TOKENIZER_SPM_FILES,
     },
     {
@@ -1085,7 +1089,7 @@ HF_MODEL_MAP = (
         "model_parts": 8,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
-        "vocab_pre": (),
+        "vocab_pre": GPT_PRE_TOKENIZER_DEFAULT,
         "vocab_files": HF_TOKENIZER_SPM_FILES,
     },
     {
@@ -1094,35 +1098,37 @@ HF_MODEL_MAP = (
         "model_parts": 2,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.SPM,
-        "vocab_pre": (),
+        "vocab_pre": GPT_PRE_TOKENIZER_DEFAULT,
         "vocab_files": HF_TOKENIZER_SPM_FILES,
     },
-    # Word Piece Models
+    # WPM (Word Piece Models): Default to Byte Level Pre-tokenization.
+    # NOTE: BERT Normalization and Pre-tokenization rules differ from Byte Level Pre-tokenization.
     {
         "model_repo": "BAAI/bge-small-en-v1.5",
         "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.BERT],
         "model_parts": 1,
         "model_type": HFModelFileType.BIN,
         "vocab_type": LLaMaVocabType.WPM,
-        "vocab_pre": (),
+        "vocab_pre": GPT_PRE_TOKENIZER_DEFAULT,
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
         "model_repo": "jinaai/jina-embeddings-v2-base-en",
-        "model_arch": MODEL_ARCH.JINA_BERT_V2,
+        "model_arch": MODEL_ARCH_NAMES[MODEL_ARCH.JINA_BERT_V2],
+        "model_parts": 1,
+        "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.WPM,
+        "vocab_pre": GPT_PRE_TOKENIZER_DEFAULT,
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
-    # Byte Pair Encoding Models
+    # BPE (Byte Pair Encoding Models): Default is Byte Level Pre-tokenization
     {
         "model_repo": "meta-llama/Meta-Llama-3-8B",
         "model_arch": MODEL_ARCH.LLAMA,
         "model_parts": 4,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.BPE,
-        # PR#6920: https://github.com/ggerganov/llama.cpp/pull/6920#issuecomment-2080233989
-        "vocab_pre": (
-            "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
-        ),
+        "vocab_pre": BPE_PRE_TOKENIZERS["llama3"],
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
@@ -1131,7 +1137,7 @@ HF_MODEL_MAP = (
         "model_parts": 2,
         "model_type": HFModelFileType.BIN,
         "vocab_type": LLaMaVocabType.BPE,
-        "vocab_pre": BPE_PRE_TOKENIZERS[MODEL_ARCH_NAMES[MODEL_ARCH.FALCON]],
+        "vocab_pre": BPE_PRE_TOKENIZERS["falcon"],
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
@@ -1140,14 +1146,7 @@ HF_MODEL_MAP = (
         "model_parts": 2,
         "model_type": HFModelFileType.BIN,
         "vocab_type": LLaMaVocabType.BPE,
-        "vocab_pre": (
-            "[\r\n]",
-            "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
-            "\\s?[!-/:-~！-／：-～‘-‟　-。]+",
-            "\\s+$",
-            "[一-龥ࠀ-一가-퟿]+",
-            "\\p{N}+",
-        ),
+        "vocab_pre": BPE_PRE_TOKENIZERS["deepseek"],
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
@@ -1156,13 +1155,7 @@ HF_MODEL_MAP = (
         "model_parts": 2,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.BPE,
-        "vocab_pre": (
-            "[\r\n]",
-            "\\s?\\p{L}+",
-            "\\s?\\p{P}+",
-            "[一-龥ࠀ-一가-퟿]+",
-            "\\p{N}",
-        ),
+        "vocab_pre": BPE_PRE_TOKENIZERS["deepseek-coder"],
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
@@ -1171,74 +1164,134 @@ HF_MODEL_MAP = (
         "model_parts": 2,
         "model_type": HFModelFileType.BIN,
         "vocab_type": LLaMaVocabType.BPE,
-        "vocab_pre": (
-            "\\s?\\p{L}+",
-            "\\s?\\p{P}+",
-            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-        ),
+        "vocab_pre": BPE_PRE_TOKENIZERS["mpt"],
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
+    #
+    # BPE: STARCODER
+    #
     {
         "model_repo": "bigcode/starcoder2-3b",
         "model_arch": MODEL_ARCH.STARCODER2,
         "model_parts": 1,
         "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.BPE,
-        "vocab_pre": (
-            "\\p{N}",
-            "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-        ),
+        "vocab_pre": BPE_PRE_TOKENIZERS["starcoder"],
         "vocab_files": HF_TOKENIZER_BPE_FILES,
-    },
-    {
-        "model_repo": "openai-community/gpt2",
-        "model_arch": MODEL_ARCH.GPT2,
-        "vocab_type": LLaMaVocabType.BPE,
     },
     {
         "model_repo": "smallcloudai/Refact-1_6-base",
         "model_arch": MODEL_ARCH.REFACT,
+        "model_parts": 1,
+        "model_type": HFModelFileType.BIN,
         "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["starcoder"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
         "model_repo": "CohereForAI/c4ai-command-r-v01",
         "model_arch": MODEL_ARCH.COMMAND_R,
+        "model_parts": 15,
+        "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["starcoder"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
+    #
+    # BPE: QWEN
+    #
     {
         "model_repo": "Qwen/Qwen1.5-7B",
         "model_arch": MODEL_ARCH.QWEN2,
+        "model_parts": 4,
+        "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.BPE,
-    },
-    {
-        "model_repo": "allenai/OLMo-1.7-7B-hf",
-        "model_arch": MODEL_ARCH.OLMO,
-        "vocab_type": LLaMaVocabType.BPE,
-    },
-    {
-        "model_repo": "databricks/dbrx-base",
-        "model_arch": MODEL_ARCH.DBRX,
-        "vocab_type": LLaMaVocabType.BPE,
-    },
-    {
-        "model_repo": "jinaai/jina-embeddings-v2-base-es",
-        "model_arch": MODEL_ARCH.JINA_BERT_V2,
-        "vocab_type": LLaMaVocabType.BPE,
-    },
-    {
-        "model_repo": "jinaai/jina-embeddings-v2-base-de",
-        "model_arch": MODEL_ARCH.JINA_BERT_V2,
-        "vocab_type": LLaMaVocabType.BPE,
-    },
-    {
-        "model_repo": "microsoft/phi-1",
-        "model_arch": MODEL_ARCH.PHI2,
-        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["qwen"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
     {
         "model_repo": "stabilityai/stablelm-2-zephyr-1_6b",
         "model_arch": MODEL_ARCH.STABLELM,
+        "model_parts": 1,
+        "model_type": HFModelFileType.SFT,
         "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["qwen"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    #
+    # BPE: GPT-2
+    #
+    {
+        "model_repo": "openai-community/gpt2",
+        "model_arch": MODEL_ARCH.GPT2,
+        "model_parts": 1,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {
+        "model_repo": "allenai/OLMo-1.7-7B-hf",
+        "model_arch": MODEL_ARCH.OLMO,
+        "model_parts": 6,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {  # NOTE: I don't have access to this model
+        "model_repo": "databricks/dbrx-base",
+        "model_arch": MODEL_ARCH.DBRX,
+        "model_parts": 0,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {  # NOTE: RoBERTa post processor
+        "model_repo": "jinaai/jina-embeddings-v2-base-es",
+        "model_arch": MODEL_ARCH.JINA_BERT_V2,
+        "model_parts": 1,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {  # NOTE: RoBERTa post processor
+        "model_repo": "jinaai/jina-embeddings-v2-base-de",
+        "model_arch": MODEL_ARCH.JINA_BERT_V2,
+        "model_parts": 1,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {  # NOTE: Phi-1 is compatible with GPT-2 arch and vocab
+        "model_repo": "microsoft/phi-1",
+        "model_arch": MODEL_ARCH.PHI2,
+        "model_parts": 1,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {
+        "model_repo": "microsoft/phi-1_5",
+        "model_arch": MODEL_ARCH.PHI2,
+        "model_parts": 1,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
+    },
+    {
+        "model_repo": "microsoft/phi-2",
+        "model_arch": MODEL_ARCH.PHI2,
+        "model_parts": 2,
+        "model_type": HFModelFileType.SFT,
+        "vocab_type": LLaMaVocabType.BPE,
+        "vocab_pre": BPE_PRE_TOKENIZERS["gpt2"],
+        "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
 )
 
