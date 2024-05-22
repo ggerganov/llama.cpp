@@ -46,37 +46,21 @@ int main(int argc, char ** argv) {
     params.cb_split_done = split_done_cb;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
-    const int n_len = 128;
-    std::vector<llama_token> tokens_list;
-    tokens_list = ::llama_tokenize(ctx, params.prompt, true);
-
-    const int n_ctx    = llama_n_ctx(ctx);
-    const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size());
-
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, n_kv_req);
-
-    // make sure the KV cache is big enough to hold all the prompt and generated tokens
-    if (n_kv_req > n_ctx) {
-        LOG_TEE("%s: error: n_kv_req > n_ctx, the required KV cache size is not big enough\n", __func__);
-        LOG_TEE("%s:        either reduce n_len or increase n_ctx\n", __func__);
-        return 1;
-    }
+    llama_tokens input = llama_tokenize(ctx, params.prompt, true);
+    const size_t n_input = input.size();
 
     // print the prompt token-by-token
-    for (auto id : tokens_list) {
-        fprintf(stderr, "%s", llama_token_to_piece(ctx, id).c_str());
+    for (auto id : input) {
+        fprintf(stdout, "%s", llama_token_to_piece(ctx, id).c_str());
     }
-
-    fflush(stderr);
+    fflush(stdout);
 
     llama_batch batch = llama_batch_init(512, 0, 1);
 
     // evaluate the initial prompt
-    for (size_t i = 0; i < tokens_list.size(); i++) {
-        llama_batch_add(batch, tokens_list[i], i, { 0 }, false);
+    for (size_t i = 0; i < input.size(); i++) {
+        llama_batch_add(batch, input[i], i, { 0 }, false);
     }
-
-    // llama_decode will output logits only for the last token of the prompt
 
     batch.logits[batch.n_tokens - 1] = true;
 
@@ -84,7 +68,6 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: llama_decode() failed\n", __func__);
         return 1;
     }
-    // main loop
 
     int n_cur    = batch.n_tokens;
     int n_decode = 0;
@@ -94,7 +77,7 @@ int main(int argc, char ** argv) {
     // we'll use logits from this position to determine next token
     int logit_idx = batch.n_tokens - 1;
 
-    while (n_cur <= n_len) {
+    while (n_decode <= params.n_predict) {
         // sample the next token
         {
             auto   n_vocab = llama_n_vocab(model);
@@ -113,13 +96,11 @@ int main(int argc, char ** argv) {
             const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
             // is it an end of generation?
-            if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
-                LOG_TEE("\n");
-
+            if (llama_token_is_eog(model, new_token_id) || n_decode >= params.n_predict) {
                 break;
             }
 
-            LOG_TEE("%s", llama_token_to_piece(ctx, new_token_id).c_str());
+            fprintf(stdout, "%s", llama_token_to_piece(ctx, new_token_id).c_str());
             fflush(stdout);
 
             // prepare the next batch
