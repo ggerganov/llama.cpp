@@ -101,11 +101,16 @@ class SimpleChat {
      */
     request_prompt_jsonstr(bInsertStandardRolePrefix) {
         let prompt = "";
+        let iCnt = 0;
         for(const chat of this.xchat) {
+            iCnt += 1;
+            if (iCnt > 1) {
+                prompt += "\n";
+            }
             if (bInsertStandardRolePrefix) {
                 prompt += `${chat.role}: `;
             }
-            prompt += `${chat.content}\n`;
+            prompt += `${chat.content}`;
         }
         let req = {
             prompt: prompt,
@@ -178,7 +183,7 @@ let gChatURL = {
     'completion': `${gBaseURL}/completions`,
 }
 const gbCompletionFreshChatAlways = true;
-let gbCompletionInsertStandardRolePrefix = true;
+let gbCompletionInsertStandardRolePrefix = false;
 
 
 /**
