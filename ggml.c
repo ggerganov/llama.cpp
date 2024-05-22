@@ -20013,19 +20013,21 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             }
         }
 
-        if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
-            task_phase = GGML_TASK_TYPE_COMPUTE;
-            atomic_store(&state->shared->n_active,  n_threads);
-            atomic_store(&state->shared->node_task, task_phase);
-        }
-        else {
-            // TODO: this sched_yield can have significant impact on the performance - either positive or negative
-            //       depending on the workload and the operating system.
-            //       since it is not clear what is the best approach, it should potentially become user-configurable
-            //       ref: https://github.com/ggerganov/ggml/issues/291
-            // UPD:  adding the do_yield flag seems to resolve the issue universally
-            const bool do_yield = node_n < 0 || cgraph->nodes[node_n]->op == GGML_OP_MUL_MAT;
-            ggml_graph_compute_thread_sync_task(&task_phase, state, do_yield);
+        if (GGML_OP_HAS_INIT[node->op]) {
+            if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
+                task_phase = GGML_TASK_TYPE_COMPUTE;
+                atomic_store(&state->shared->n_active,  n_threads);
+                atomic_store(&state->shared->node_task, task_phase);
+            }
+            else {
+                // TODO: this sched_yield can have significant impact on the performance - either positive or negative
+                //       depending on the workload and the operating system.
+                //       since it is not clear what is the best approach, it should potentially become user-configurable
+                //       ref: https://github.com/ggerganov/ggml/issues/291
+                // UPD:  adding the do_yield flag seems to resolve the issue universally
+                const bool do_yield = node_n < 0 || cgraph->nodes[node_n]->op == GGML_OP_MUL_MAT;
+                ggml_graph_compute_thread_sync_task(&task_phase, state, do_yield);
+            }
         }
 
         if (state->ith < n_tasks) {
