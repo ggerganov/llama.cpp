@@ -19453,9 +19453,6 @@ void ggml_graph_clear(struct ggml_cgraph * cgraph) {
 //
 // thread data
 //
-// synchronization is done via busy loops
-// I tried using spin locks, but not sure how to use them correctly - the things I tried were slower than busy loops
-//
 
 #ifdef __APPLE__
 
@@ -19874,31 +19871,27 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
     return n_tasks;
 }
 
-static void ggml_graph_compute_thread_sync_node(int * node_n, struct ggml_compute_state * state, const bool do_yield) {
+static void ggml_graph_compute_thread_sync_node(int * node_n, struct ggml_compute_state * state) {
     // wait for other threads to finish
     const int last_node_n = * node_n;
+    int backoff = 0;
 
     while (true) {
-        if (do_yield) {
-            sched_yield();
-        }
-
-        * node_n = atomic_load(&state->shared->node_n);
+        * node_n = atomic_load_explicit(&state->shared->node_n, memory_order_acquire);
         if (* node_n != last_node_n) break;
+        backoff = ggml_delay(backoff);
     }
 }
 
-static void ggml_graph_compute_thread_sync_task(int * task_phase, struct ggml_compute_state * state, const bool do_yield) {
+static void ggml_graph_compute_thread_sync_task(int * task_phase, struct ggml_compute_state * state) {
     // wait for other threads to finish
     const int last_task_phase = * task_phase;
+    int backoff = 0;
 
     while (true) {
-        if (do_yield) {
-            sched_yield();
-        }
-
-        * task_phase = atomic_load(&state->shared->node_task);
+        * task_phase = atomic_load_explicit(&state->shared->node_task, memory_order_acquire);
         if (* task_phase != last_task_phase) break;
+        backoff = ggml_delay(backoff);
     }
 }
 
@@ -19983,12 +19976,12 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             }
 
             task_phase = GGML_TASK_TYPE_INIT;
-            atomic_store(&state->shared->n_active,  n_threads);
-            atomic_store(&state->shared->node_n,    node_n);
-            atomic_store(&state->shared->node_task, task_phase);
+            atomic_store_explicit(&state->shared->n_active,  n_threads,  memory_order_release);
+            atomic_store_explicit(&state->shared->node_n,    node_n,     memory_order_release);
+            atomic_store_explicit(&state->shared->node_task, task_phase, memory_order_release);
         } else {
-            ggml_graph_compute_thread_sync_node(&node_n,     state, false);
-            ggml_graph_compute_thread_sync_task(&task_phase, state, false);
+            ggml_graph_compute_thread_sync_node(&node_n,     state);
+            ggml_graph_compute_thread_sync_task(&task_phase, state);
         }
 
         // check if we should stop
@@ -20016,17 +20009,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         if (GGML_OP_HAS_INIT[node->op]) {
             if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
                 task_phase = GGML_TASK_TYPE_COMPUTE;
-                atomic_store(&state->shared->n_active,  n_threads);
-                atomic_store(&state->shared->node_task, task_phase);
+                atomic_store_explicit(&state->shared->n_active,  n_threads,  memory_order_release);
+                atomic_store_explicit(&state->shared->node_task, task_phase, memory_order_release);
             }
             else {
-                // TODO: this sched_yield can have significant impact on the performance - either positive or negative
-                //       depending on the workload and the operating system.
-                //       since it is not clear what is the best approach, it should potentially become user-configurable
-                //       ref: https://github.com/ggerganov/ggml/issues/291
-                // UPD:  adding the do_yield flag seems to resolve the issue universally
-                const bool do_yield = node_n < 0 || cgraph->nodes[node_n]->op == GGML_OP_MUL_MAT;
-                ggml_graph_compute_thread_sync_task(&task_phase, state, do_yield);
+                ggml_graph_compute_thread_sync_task(&task_phase, state);
             }
         }
 
@@ -20037,11 +20024,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
         if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
             task_phase = GGML_TASK_TYPE_FINALIZE;
-            atomic_store(&state->shared->n_active,  n_threads);
-            atomic_store(&state->shared->node_task, task_phase);
+            atomic_store_explicit(&state->shared->n_active,  n_threads,  memory_order_release);
+            atomic_store_explicit(&state->shared->node_task, task_phase, memory_order_release);
         }
         else {
-            ggml_graph_compute_thread_sync_task(&task_phase, state, false);
+            ggml_graph_compute_thread_sync_task(&task_phase, state);
         }
     }
 
