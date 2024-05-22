@@ -1733,7 +1733,7 @@ struct ggml_barrier {
 };
 
 void ggml_once(struct ggml_once * once, void init(void)) {
-    uint32_t old = atomic_load_explicit(&once->state, memory_order_acquire);
+    int old = atomic_load_explicit(&once->state, memory_order_acquire);
     if (!old && atomic_compare_exchange_strong_explicit(&once->state, &old, 1,
                                                         memory_order_acquire,
                                                         memory_order_relaxed)) {
