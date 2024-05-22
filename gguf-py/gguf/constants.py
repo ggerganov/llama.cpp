@@ -957,10 +957,10 @@ LLaMaVocabTypeNames: dict[LLaMaVocabType, str] = {
 #
 class HFModelFileType(IntEnum):
     UNK = auto()  # Unsupported file type
-    PT  = auto()  # PyTorch file type
+    SFT = auto()  # SafeTensor file type
     PTH = auto()  # PyTorch file type
     BIN = auto()  # Pickled file type
-    SFT = auto()  # SafeTensor file type
+    PT  = auto()  # PyTorch file type
 
 
 LLaMaVocabTypeNames: dict[LLaMaVocabType, str] = {
@@ -991,64 +991,53 @@ BPE_PRE_PROCESSOR_DEFAULT = (
     "[\\p{P}\\$\\+<=>\\^~\\|]+", BPE_PRE_TOKENIZER_DEFAULT, "\\p{N}+", "[0-9][0-9][0-9]",
 )
 
+# NOTE: GPT-2 is the standard default pre-tokenizer for all models
 BPE_PRE_TOKENIZERS = {
-    "default": GPT_PRE_TOKENIZER_DEFAULT,
-    # NOTE: LLAMA and DBRX (MODEL_ARCH_NAMES[MODEL_ARCH.DBRX]) are the same
-    MODEL_ARCH_NAMES[MODEL_ARCH.LLAMA]: (
+    # gpt2, olmo, phi (1, 1_5, 2, 3, ...)
+    "gpt2": (GPT_PRE_TOKENIZER_DEFAULT,),
+    # dbrx
+    "llama3": (
         "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
     ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.FALCON]: (
+    "falcon": (
         "[\\p{P}\\$\\+<=>\\^~\\|]+", BPE_PRE_TOKENIZER_DEFAULT, "[0-9][0-9][0-9]",
     ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.BAICHUAN]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.GROK]: (),
-    # NOTE: GPT-2 is the standard default pre-tokenizer for all models
-    MODEL_ARCH_NAMES[MODEL_ARCH.GPT2]: (
-        GPT_PRE_TOKENIZER_DEFAULT,
-    ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.GPTJ]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.GPTNEOX]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.MPT]: (
+    "mpt": (
         "\\s?\\p{L}+", "\\s?\\p{P}+", BPE_PRE_TOKENIZER_DEFAULT,
     ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.STARCODER]: (
+    # starcoder, refact, command-r
+    "starcoder": (
         "\\p{N}", BPE_PRE_TOKENIZER_DEFAULT,
     ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.REFACT]: (
-        "\\p{N}", BPE_PRE_TOKENIZER_DEFAULT,
-    ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.BERT]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.NOMIC_BERT]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.JINA_BERT_V2]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.BLOOM]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.STABLELM]: (
+    # qwen, qwen2, stablelm
+    "qwen": (
         "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
     ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.QWEN]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.QWEN2]: (
-        "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    # NOTE: deepseek uses the 'llama' arch, but diverges with the pre-tok.
+    "deepseek": (
+        "[\r\n]",
+        "\\s?[A-Za-zµÀ-ÖØ-öø-ƺƼ-ƿǄ-ʓʕ-ʯͰ-ͳͶͷͻ-ͽͿΆΈ-ΊΌΎ-ΡΣ-ϵϷ-ҁҊ-ԯԱ-ՖႠ-ჅᎠ-Ᏽᏸ-ᏽᲐ-ᲺᲽ-Ჿᴀ-ᴫᵫ-ᵷᵹ-ᶚḀ-ἕἘ-Ἕἠ-ὅὈ-Ὅὐ-ὗὙὛὝὟ-ώᾀ-ᾴᾶ-ᾼιῂ-ῄῆ-ῌῐ-ΐῖ-Ίῠ-Ῥῲ-ῴῶ-ῼℂℇℊ-ℓℕℙ-ℝℤΩℨK-ℭℯ-ℴℹℼ-ℿⅅ-ⅉⅎↃↄⰀ-ⱻⱾ-ⳤⳫ-ⳮⳲⳳꙀ-ꙭꚀ-ꚛꜢ-ꝯꝱ-ꞇꞋ-ꞎꭰ-ꮿﬀ-ﬆﬓ-ﬗＡ-Ｚａ-ｚ𐐀-𐑏𐒰-𐓓𐓘-𐓻𐲀-𐲲𐳀-𐳲𑢠-𑣟𞤀-𞥃]+",
+        "\\s?[!-/:-~！-／：-～‘-‟　-。]+",
+        "\\s+$",
+        "[一-龥ࠀ-一가-퟿]+",
+        "\\p{N}+",
     ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.QWEN2MOE]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.PHI2]: (GPT_PRE_TOKENIZER_DEFAULT,),
-    MODEL_ARCH_NAMES[MODEL_ARCH.PHI3]: (GPT_PRE_TOKENIZER_DEFAULT,),
-    MODEL_ARCH_NAMES[MODEL_ARCH.PLAMO]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.CODESHELL]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.ORION]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.INTERNLM2]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.MINICPM]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.GEMMA]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.STARCODER2]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.MAMBA]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.XVERSE]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.COMMAND_R]: (
-        "\\p{N}", BPE_PRE_TOKENIZER_DEFAULT,
+    "deepseek-coder": (
+        "[\r\n]",
+        "\\s?\\p{L}+",
+        "\\s?\\p{P}+",
+        "[一-龥ࠀ-一가-퟿]+",
+        "\\p{N}",
     ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.DBRX]: (
-        "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
-    ),
-    MODEL_ARCH_NAMES[MODEL_ARCH.OLMO]: (
-        GPT_PRE_TOKENIZER_DEFAULT,
-    ),
+    # NOTE: ONLY ADD MODELS ON A AS NEEDED BASIS.
+    # This will get out of control if not properly managed.
+    # This needs a proper solution. The short-term solution is to manually build a map here.
+    # A proper long-term solution would be to build a dynamic registry.
+    # The issue is that this requires a mapping or a database.
+    # Possible solutions are to use JSON, HDF5, or SQLite.
+    # Some of these mappings could be dynamically generated, but it's sketchy at best.
+    # Model versions should be included along with the model name to mitigate name conflicts.
+    # This entire setup is extremely fragile and will result in breaking changes in the future.
 }
 
 #
