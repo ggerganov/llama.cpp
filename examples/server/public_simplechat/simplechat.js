@@ -97,11 +97,15 @@ class SimpleChat {
 
     /**
      * Return a string form of json object suitable for /completions
+     * @param {boolean} bInsertStandardRolePrefix Insert "<THE_ROLE>: " as prefix wrt each role's message
      */
-    request_prompt_jsonstr() {
+    request_prompt_jsonstr(bInsertStandardRolePrefix) {
         let prompt = "";
         for(const chat of this.xchat) {
-            prompt += `${chat.role}: ${chat.content}\n`;
+            if (bInsertStandardRolePrefix) {
+                prompt += `${chat.role}: `;
+            }
+            prompt += `${chat.content}\n`;
         }
         let req = {
             prompt: prompt,
@@ -174,6 +178,7 @@ let gChatURL = {
     'completion': `${gBaseURL}/completions`,
 }
 const gbCompletionFreshChatAlways = true;
+let gbCompletionInsertStandardRolePrefix = true;
 
 
 /**
@@ -346,7 +351,7 @@ class MultiChatUI {
         if (apiEP == ApiEP.Chat) {
             theBody = chat.request_messages_jsonstr();
         } else {
-            theBody = chat.request_prompt_jsonstr();
+            theBody = chat.request_prompt_jsonstr(gbCompletionInsertStandardRolePrefix);
         }
 
         this.elInUser.value = "working...";
