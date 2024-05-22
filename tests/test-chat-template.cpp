@@ -7,6 +7,7 @@
 #include <cassert>
 
 #include "llama.h"
+#include "common.h"
 
 int main(void) {
     llama_chat_message conversation[] = {
@@ -104,8 +105,19 @@ int main(void) {
         );
         formatted_chat.resize(res);
         std::string output(formatted_chat.data(), formatted_chat.size());
-        std::cout << output << "\n-------------------------\n";
+        std::cout << output << "\n-----\n";
         assert(output == expected);
+
+        std::vector<chat_message> v_messages;
+        for (size_t i = 0; i < message_count; ++i) {
+            v_messages.push_back({
+                conversation[i].role,
+                conversation[i].content,
+            });
+        }
+        std::cout << "chat_get_added_part(): " << chat_get_added_part(v_messages, custom_template);
+        std::cout << "\n-------------------------\n";
+        // TODO: chat_get_added_part is currently printed for debugging. Should we add tests for it in the future?
     }
     return 0;
 }

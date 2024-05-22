@@ -336,3 +336,13 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
 static const char * const LLM_KV_SPLIT_NO            = "split.no";
 static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
 static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
+
+//
+// Chat templates utils
+//
+typedef struct chat_message {
+    std::string role;
+    std::string content;
+} chat_message;
+
+std::string chat_get_added_part(const std::vector<chat_message> & messages, const std::string & tmpl);
