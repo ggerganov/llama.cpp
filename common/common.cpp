@@ -190,6 +190,80 @@ int32_t cpu_get_num_math() {
 // CLI argument parsing
 //
 
+void gpt_params_handle_model_default(gpt_params & params) {
+    if (!params.hf_repo.empty()) {
+        // short-hand to avoid specifying --hf-file -> default it to --model
+        if (params.hf_file.empty()) {
+            if (params.model.empty()) {
+                throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
+            }
+            params.hf_file = params.model;
+        } else if (params.model.empty()) {
+            std::string cache_directory = fs_get_cache_directory();
+            const bool success = fs_create_directory_with_parents(cache_directory);
+            if (!success) {
+                throw std::runtime_error("failed to create cache directory: " + cache_directory);
+            }
+            params.model = cache_directory + string_split(params.hf_file, '/').back();
+        }
+    } else if (!params.model_url.empty()) {
+        if (params.model.empty()) {
+            auto f = string_split(params.model_url, '#').front();
+            f = string_split(f, '?').front();
+            f = string_split(f, '/').back();
+            params.model =  "models/" + f;
+        }
+    } else if (params.model.empty()) {
+        params.model = DEFAULT_MODEL_PATH;
+    }
+}
+
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
+    bool invalid_param = false;
+    std::string arg;
+    const std::string arg_prefix = "--";
+    llama_sampling_params & sparams = params.sparams;
+
+    for (int i = 1; i < argc; i++) {
+        arg = argv[i];
+        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+            std::replace(arg.begin(), arg.end(), '_', '-');
+        }
+        if (!gpt_params_find_arg(argc, argv, arg, params, i, invalid_param)) {
+            throw std::invalid_argument("error: unknown argument: " + arg);
+        }
+        if (invalid_param) {
+            throw std::invalid_argument("error: invalid parameter for argument: " + arg);
+        }
+    }
+
+    if (params.prompt_cache_all &&
+            (params.interactive || params.interactive_first ||
+             params.instruct)) {
+
+        throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
+    }
+
+    gpt_params_handle_model_default(params);
+
+    if (params.escape) {
+        string_process_escapes(params.prompt);
+        string_process_escapes(params.input_prefix);
+        string_process_escapes(params.input_suffix);
+        string_process_escapes(sparams.cfg_negative_prompt);
+        for (auto & antiprompt : params.antiprompt) {
+            string_process_escapes(antiprompt);
+        }
+    }
+
+    if (!params.kv_overrides.empty()) {
+        params.kv_overrides.emplace_back();
+        params.kv_overrides.back().key[0] = 0;
+    }
+
+    return true;
+}
+
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool result = true;
     try {
@@ -1270,80 +1344,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     return false;
 }
 
-void gpt_params_handle_model_default(gpt_params & params) {
-    if (!params.hf_repo.empty()) {
-        // short-hand to avoid specifying --hf-file -> default it to --model
-        if (params.hf_file.empty()) {
-            if (params.model.empty()) {
-                throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
-            }
-            params.hf_file = params.model;
-        } else if (params.model.empty()) {
-            std::string cache_directory = fs_get_cache_directory();
-            const bool success = fs_create_directory_with_parents(cache_directory);
-            if (!success) {
-                throw std::runtime_error("failed to create cache directory: " + cache_directory);
-            }
-            params.model = cache_directory + string_split(params.hf_file, '/').back();
-        }
-    } else if (!params.model_url.empty()) {
-        if (params.model.empty()) {
-            auto f = string_split(params.model_url, '#').front();
-            f = string_split(f, '?').front();
-            f = string_split(f, '/').back();
-            params.model =  "models/" + f;
-        }
-    } else if (params.model.empty()) {
-        params.model = DEFAULT_MODEL_PATH;
-    }
-}
-
-bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
-    bool invalid_param = false;
-    std::string arg;
-    const std::string arg_prefix = "--";
-    llama_sampling_params & sparams = params.sparams;
-
-    for (int i = 1; i < argc; i++) {
-        arg = argv[i];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
-            std::replace(arg.begin(), arg.end(), '_', '-');
-        }
-        if (!gpt_params_find_arg(argc, argv, arg, params, i, invalid_param)) {
-            throw std::invalid_argument("error: unknown argument: " + arg);
-        }
-        if (invalid_param) {
-            throw std::invalid_argument("error: invalid parameter for argument: " + arg);
-        }
-    }
-
-    if (params.prompt_cache_all &&
-            (params.interactive || params.interactive_first ||
-             params.instruct)) {
-
-        throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
-    }
-
-    gpt_params_handle_model_default(params);
-
-    if (params.escape) {
-        string_process_escapes(params.prompt);
-        string_process_escapes(params.input_prefix);
-        string_process_escapes(params.input_suffix);
-        string_process_escapes(sparams.cfg_negative_prompt);
-        for (auto & antiprompt : params.antiprompt) {
-            string_process_escapes(antiprompt);
-        }
-    }
-
-    if (!params.kv_overrides.empty()) {
-        params.kv_overrides.emplace_back();
-        params.kv_overrides.back().key[0] = 0;
-    }
-
-    return true;
-}
-
 void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const llama_sampling_params & sparams = params.sparams;
 
@@ -1883,6 +1883,92 @@ std::string fs_get_cache_directory() {
 // Model utils
 //
 
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
+    auto mparams = llama_model_params_from_gpt_params(params);
+
+    llama_model * model = nullptr;
+
+    if (!params.hf_repo.empty() && !params.hf_file.empty()) {
+        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), mparams);
+    } else if (!params.model_url.empty()) {
+        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), mparams);
+    } else {
+        model = llama_load_model_from_file(params.model.c_str(), mparams);
+    }
+
+    if (model == NULL) {
+        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+        return std::make_tuple(nullptr, nullptr);
+    }
+
+    auto cparams = llama_context_params_from_gpt_params(params);
+
+    llama_context * lctx = llama_new_context_with_model(model, cparams);
+    if (lctx == NULL) {
+        fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
+        llama_free_model(model);
+        return std::make_tuple(nullptr, nullptr);
+    }
+
+    if (!params.control_vectors.empty()) {
+        if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
+        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
+
+        const auto cvec = llama_control_vector_load(params.control_vectors);
+        if (cvec.n_embd == -1) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+
+        int err = llama_control_vector_apply(lctx,
+                                             cvec.data.data(),
+                                             cvec.data.size(),
+                                             cvec.n_embd,
+                                             params.control_vector_layer_start,
+                                             params.control_vector_layer_end);
+        if (err) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+    }
+
+    for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
+        const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
+        float lora_scale = std::get<1>(params.lora_adapter[i]);
+        int err = llama_model_apply_lora_from_file(model,
+                                             lora_adapter.c_str(),
+                                             lora_scale,
+                                             ((i > 0) || params.lora_base.empty())
+                                                ? NULL
+                                                : params.lora_base.c_str(),
+                                             params.n_threads);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+    }
+
+    if (params.ignore_eos) {
+        params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
+    }
+
+    if (params.warmup) {
+        LOG("warming up the model with an empty run\n");
+
+        std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
+        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
+        llama_kv_cache_clear(lctx);
+        llama_synchronize(lctx);
+        llama_reset_timings(lctx);
+    }
+
+    return std::make_tuple(model, lctx);
+}
+
 struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & params) {
     auto mparams = llama_model_default_params();
 
@@ -1966,27 +2052,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.type_v = kv_cache_type_from_str(params.cache_type_v);
 
     return cparams;
-}
-
-void llama_batch_clear(struct llama_batch & batch) {
-    batch.n_tokens = 0;
-}
-
-void llama_batch_add(
-                 struct llama_batch & batch,
-                        llama_token   id,
-                          llama_pos   pos,
-    const std::vector<llama_seq_id> & seq_ids,
-                               bool   logits) {
-    batch.token   [batch.n_tokens] = id;
-    batch.pos     [batch.n_tokens] = pos;
-    batch.n_seq_id[batch.n_tokens] = seq_ids.size();
-    for (size_t i = 0; i < seq_ids.size(); ++i) {
-        batch.seq_id[batch.n_tokens][i] = seq_ids[i];
-    }
-    batch.logits  [batch.n_tokens] = logits;
-
-    batch.n_tokens++;
 }
 
 #ifdef LLAMA_USE_CURL
@@ -2319,90 +2384,29 @@ struct llama_model * llama_load_model_from_hf(
 
 #endif // LLAMA_USE_CURL
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
-    auto mparams = llama_model_params_from_gpt_params(params);
+//
+// Batch utils
+//
 
-    llama_model * model = nullptr;
+void llama_batch_clear(struct llama_batch & batch) {
+    batch.n_tokens = 0;
+}
 
-    if (!params.hf_repo.empty() && !params.hf_file.empty()) {
-        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), mparams);
-    } else if (!params.model_url.empty()) {
-        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), mparams);
-    } else {
-        model = llama_load_model_from_file(params.model.c_str(), mparams);
+void llama_batch_add(
+                 struct llama_batch & batch,
+                        llama_token   id,
+                          llama_pos   pos,
+    const std::vector<llama_seq_id> & seq_ids,
+                               bool   logits) {
+    batch.token   [batch.n_tokens] = id;
+    batch.pos     [batch.n_tokens] = pos;
+    batch.n_seq_id[batch.n_tokens] = seq_ids.size();
+    for (size_t i = 0; i < seq_ids.size(); ++i) {
+        batch.seq_id[batch.n_tokens][i] = seq_ids[i];
     }
+    batch.logits  [batch.n_tokens] = logits;
 
-    if (model == NULL) {
-        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
-        return std::make_tuple(nullptr, nullptr);
-    }
-
-    auto cparams = llama_context_params_from_gpt_params(params);
-
-    llama_context * lctx = llama_new_context_with_model(model, cparams);
-    if (lctx == NULL) {
-        fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
-        llama_free_model(model);
-        return std::make_tuple(nullptr, nullptr);
-    }
-
-    if (!params.control_vectors.empty()) {
-        if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
-        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
-
-        const auto cvec = llama_control_vector_load(params.control_vectors);
-        if (cvec.n_embd == -1) {
-            llama_free(lctx);
-            llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
-        }
-
-        int err = llama_control_vector_apply(lctx,
-                                             cvec.data.data(),
-                                             cvec.data.size(),
-                                             cvec.n_embd,
-                                             params.control_vector_layer_start,
-                                             params.control_vector_layer_end);
-        if (err) {
-            llama_free(lctx);
-            llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
-        }
-    }
-
-    for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
-        const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
-        float lora_scale = std::get<1>(params.lora_adapter[i]);
-        int err = llama_model_apply_lora_from_file(model,
-                                             lora_adapter.c_str(),
-                                             lora_scale,
-                                             ((i > 0) || params.lora_base.empty())
-                                                ? NULL
-                                                : params.lora_base.c_str(),
-                                             params.n_threads);
-        if (err != 0) {
-            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
-            llama_free(lctx);
-            llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
-        }
-    }
-
-    if (params.ignore_eos) {
-        params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
-    }
-
-    if (params.warmup) {
-        LOG("warming up the model with an empty run\n");
-
-        std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
-        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
-        llama_kv_cache_clear(lctx);
-        llama_synchronize(lctx);
-        llama_reset_timings(lctx);
-    }
-
-    return std::make_tuple(model, lctx);
+    batch.n_tokens++;
 }
 
 //
@@ -2564,6 +2568,10 @@ void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_siz
 
     printf("\n=== Done dumping\n");
 }
+
+//
+// Embedding utils
+//
 
 void llama_embd_normalize(const float * inp, float * out, int n) {
     double sum = 0.0;
@@ -2971,4 +2979,3 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
     fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
 }
-
