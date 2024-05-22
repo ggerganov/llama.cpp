@@ -1640,6 +1640,7 @@ static void rope_yarn_corr_dims(
 typedef void (rope_t)(
         device const    void * src0,
         device const int32_t * src1,
+        device const   float * src2,
         device         float * dst,
         constant     int64_t & ne00,
         constant     int64_t & ne01,
@@ -1675,6 +1676,7 @@ template<typename T>
 kernel void kernel_rope(
         device const    void * src0,
         device const int32_t * src1,
+        device const   float * src2,
         device         float * dst,
         constant     int64_t & ne00,
         constant     int64_t & ne01,
@@ -1744,8 +1746,10 @@ kernel void kernel_rope(
 
                 // simplified from `(ib * n_dims + ic) * inv_ndims`
                 const float cur_rot = inv_ndims*ic - ib;
+                const float freq_factor = src2 != src0 ? src2[ic/2] : 1.0f;
 
-                const float theta = theta_0 * pow(freq_base, cur_rot);
+                const float theta = theta_0 * pow(freq_base, cur_rot) / freq_factor;
+
                 float cos_theta, sin_theta;
                 rope_yarn(theta, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
@@ -1852,7 +1856,10 @@ kernel void kernel_upscale_f32(
     constant  uint64_t & nb1,
     constant  uint64_t & nb2,
     constant  uint64_t & nb3,
-    constant   int32_t & sf,
+    constant     float & sf0,
+    constant     float & sf1,
+    constant     float & sf2,
+    constant     float & sf3,
     uint3 tgpig[[threadgroup_position_in_grid]],
     uint3 tpitg[[thread_position_in_threadgroup]],
     uint3   ntg[[threads_per_threadgroup]]) {
@@ -1861,15 +1868,17 @@ kernel void kernel_upscale_f32(
     const int64_t i2 = tgpig.y;
     const int64_t i1 = tgpig.x;
 
-    const int64_t i03 = i3;
-    const int64_t i02 = i2;
-    const int64_t i01 = i1/sf;
-
-    device const float * src0_ptr = (device const float *) (src0 + i03*nb03 + i02*nb02 + i01*nb01);
-    device       float * dst_ptr  = (device       float *) (dst  +  i3*nb3  +  i2*nb2  +  i1*nb1);
+    const int64_t i03 = i3/sf3;
+    const int64_t i02 = i2/sf2;
+    const int64_t i01 = i1/sf1;
 
     for (int i0 = tpitg.x; i0 < ne0; i0 += ntg.x) {
-        dst_ptr[i0] = src0_ptr[i0/sf];
+        const int64_t i00 = i0/sf0;
+
+        device const float * src0_ptr = (device const float *) (src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
+        device       float * dst_ptr  = (device       float *) (dst  +  i3*nb3  +  i2*nb2  +  i1*nb1  +  i0*nb0);
+
+        dst_ptr[0] = src0_ptr[0];
     }
 }
 
@@ -2049,27 +2058,24 @@ typedef void (flash_attn_ext_f16_t)(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2090,27 +2096,24 @@ kernel void kernel_flash_attn_ext_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2180,10 +2183,6 @@ kernel void kernel_flash_attn_ext_f16(
         const short ne22 = ne12;
         const short ne23 = ne13;
 
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
-
         // broadcast
         const short rk2 = ne02/ne12;
         const short rk3 = ne03/ne13;
@@ -2209,11 +2208,7 @@ kernel void kernel_flash_attn_ext_f16(
         // pointer to the mask
         device const half * mp = (device const half *) (mask + iq1*nb31);
 
-        // prepare diagonal scale matrix
-        simdgroup_float8x8 mscale(scale);
-
-        // prepare diagonal slope matrix
-        simdgroup_float8x8 mslope(1.0f);
+        float slope = 1.0f;
 
         // ALiBi
         if (max_bias > 0.0f) {
@@ -2222,7 +2217,7 @@ kernel void kernel_flash_attn_ext_f16(
             const float base = h < n_head_log2 ? m0 : m1;
             const int   exph = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
 
-            mslope = simdgroup_float8x8(pow(base, exph));
+            slope = pow(base, exph);
         }
 
         // loop over the KV cache
@@ -2247,13 +2242,20 @@ kernel void kernel_flash_attn_ext_f16(
                         simdgroup_multiply_accumulate(mqk, mq[i], mk, mqk);
                     }
 
-                    // mqk = mqk*scale + mask*slope
-                    simdgroup_half8x8 mm;
-                    simdgroup_load(mm, mp + ic + 8*cc, nb31/sizeof(half), 0, false);
-                    simdgroup_multiply(mm, mslope, mm);
-                    simdgroup_multiply_accumulate(mqk, mqk, mscale, mm);
-
                     simdgroup_store(mqk, ss + 8*cc, TF, 0, false);
+
+                    const short tx = tiisg%4;
+                    const short ty = tiisg/4;
+
+                    if (mask != q) {
+                        // mqk = mqk*scale + mask*slope
+                        ss[8*cc + ty*TF + 2*tx + 0] = scale*ss[8*cc + ty*TF + 2*tx + 0] + slope*mp[ic + 8*cc + ty*nb31/sizeof(half) + 2*tx + 0];
+                        ss[8*cc + ty*TF + 2*tx + 1] = scale*ss[8*cc + ty*TF + 2*tx + 1] + slope*mp[ic + 8*cc + ty*nb31/sizeof(half) + 2*tx + 1];
+                    } else {
+                        // mqk = mqk*scale
+                        ss[8*cc + ty*TF + 2*tx + 0] *= scale;
+                        ss[8*cc + ty*TF + 2*tx + 1] *= scale;
+                    }
                 }
             }
 
@@ -2425,27 +2427,24 @@ kernel void kernel_flash_attn_ext_vec_f16(
         device const  char * v,
         device const  char * mask,
         device       float * dst,
-        constant   int64_t & ne00,
         constant   int64_t & ne01,
         constant   int64_t & ne02,
         constant   int64_t & ne03,
-        constant  uint64_t & nb00,
         constant  uint64_t & nb01,
         constant  uint64_t & nb02,
         constant  uint64_t & nb03,
-        constant   int64_t & ne10,
         constant   int64_t & ne11,
         constant   int64_t & ne12,
         constant   int64_t & ne13,
-        constant  uint64_t & nb10,
         constant  uint64_t & nb11,
         constant  uint64_t & nb12,
         constant  uint64_t & nb13,
+        constant  uint64_t & nb21,
+        constant  uint64_t & nb22,
+        constant  uint64_t & nb23,
         constant  uint64_t & nb31,
-        constant   int64_t & ne0,
         constant   int64_t & ne1,
         constant   int64_t & ne2,
-        constant   int64_t & ne3,
         constant     float & scale,
         constant     float & max_bias,
         constant     float & m0,
@@ -2521,10 +2520,6 @@ kernel void kernel_flash_attn_ext_vec_f16(
         const short ne22 = ne12;
         const short ne23 = ne13;
 
-        const uint nb21 = nb11;
-        const uint nb22 = nb12;
-        const uint nb23 = nb13;
-
         // broadcast
         const short rk2 = ne02/ne12;
         const short rk3 = ne03/ne13;
@@ -2589,8 +2584,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
 
                     // mqk = mqk*scale + mask*slope
                     if (tiisg == 0) {
-                        float4 mm = (float4) mp4[ic/4 + cc];
-                        mqk = mqk*scale + mm*slope;
+                        mqk = mqk*scale + ((mask != q) ? ((float4) mp4[ic/4 + cc])*slope : (float4) 0.0f);
 
                         ss4[cc] = mqk;
                     }
@@ -2824,8 +2818,7 @@ kernel void kernel_cpy_f32_f16(
     for (int64_t i00 = tpitg.x; i00 < ne00; i00 += ntg.x) {
         device const float * src = (device float *)((device char *) src0 + i03*nb03 + i02*nb02 + i01*nb01 + i00*nb00);
 
-        // TODO: is there a better way to handle -INFINITY?
-        dst_data[i00] = src[0] == -INFINITY ? -MAXHALF : src[0];
+        dst_data[i00] = src[0];
     }
 }
 

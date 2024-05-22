@@ -379,6 +379,11 @@ ifneq ($(filter ppc64le%,$(UNAME_M)),)
 	CUDA_POWER_ARCH = 1
 endif
 
+ifneq ($(filter loongarch64%,$(UNAME_M)),)
+	MK_CFLAGS   += -mlasx
+	MK_CXXFLAGS += -mlasx
+endif
+
 else
 	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
@@ -398,13 +403,6 @@ ifndef LLAMA_NO_ACCELERATE
 		MK_LDFLAGS  += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
-
-ifdef LLAMA_MPI
-	MK_CPPFLAGS += -DGGML_USE_MPI
-	MK_CFLAGS   += -Wno-cast-qual
-	MK_CXXFLAGS += -Wno-cast-qual
-	OBJS        += ggml-mpi.o
-endif # LLAMA_MPI
 
 ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
@@ -560,10 +558,10 @@ endif # LLAMA_VULKAN
 ifdef LLAMA_HIPBLAS
 	ifeq ($(wildcard /opt/rocm),)
 		ROCM_PATH	?= /usr
-		GPU_TARGETS ?= $(shell $(shell which amdgpu-arch))
+		AMDGPU_TARGETS ?= $(shell $(shell which amdgpu-arch))
 	else
 		ROCM_PATH	?= /opt/rocm
-		GPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
+		AMDGPU_TARGETS ?= $(shell $(ROCM_PATH)/llvm/bin/amdgpu-arch)
 	endif
 	HIPCC                   ?= $(CCACHE) $(ROCM_PATH)/bin/hipcc
 	LLAMA_CUDA_DMMV_X       ?= 32
@@ -575,7 +573,7 @@ ifdef LLAMA_HIP_UMA
 endif # LLAMA_HIP_UMA
 	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
 	MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
-	HIPFLAGS    += $(addprefix --offload-arch=,$(GPU_TARGETS))
+	HIPFLAGS    += $(addprefix --offload-arch=,$(AMDGPU_TARGETS))
 	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 	HIPFLAGS    += -DGGML_CUDA_MMV_Y=$(LLAMA_CUDA_MMV_Y)
 	HIPFLAGS    += -DK_QUANTS_PER_ITERATION=$(LLAMA_CUDA_KQUANTS_ITER)
@@ -628,11 +626,6 @@ ggml-metal-embed.o: ggml-metal.metal ggml-common.h
 	@rm -f ${TEMP_ASSEMBLY}
 endif
 endif # LLAMA_METAL
-
-ifdef LLAMA_MPI
-ggml-mpi.o: ggml-mpi.c ggml-mpi.h
-	$(CC) $(CFLAGS) -c $< -o $@
-endif # LLAMA_MPI
 
 ifndef LLAMA_NO_LLAMAFILE
 sgemm.o: sgemm.cpp sgemm.h ggml.h

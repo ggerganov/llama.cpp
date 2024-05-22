@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>SimpleChat (LlamaCPP, ...) </title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="message" content="Save Nature Save Earth" />
+        <meta name="description" content="SimpleChat: trigger LLM web service endpoints /chat/completions and /completions, single/multi chat sessions" />
+        <meta name="author" content="by Humans for All" />
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <script src="simplechat.js" defer></script>
+        <link rel="stylesheet" href="simplechat.css" />
+    </head>
+    <body>
+        <div class="samecolumn" id="fullbody">
+
+            <div class="sameline">
+                <p class="heading flex-grow" > <b> SimpleChat </b> </p>
+                <div class="sameline">
+                    <label for="api-ep">Mode:</label>
+                    <select name="api-ep" id="api-ep">
+                    <option value="chat" selected>Chat</option>
+                    <option value="completion">Completion</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="sessions-div" class="sameline"></div>
+
+            <hr>
+            <div class="sameline">
+                <label for="system-in">System</label>
+                <input type="text" name="system" id="system-in" class="flex-grow"/>
+            </div>
+
+            <hr>
+            <div id="chat-div">
+                <p> Enter the system prompt above, before entering/submitting any user query.</p>
+                <p> Enter your text to the ai assistant below.</p>
+                <p> Use shift+enter for inserting enter.</p>
+                <p> Refresh the page to start over fresh.</p>
+            </div>
+
+            <hr>
+            <div class="sameline">
+                <textarea id="user-in" class="flex-grow" rows="3"></textarea>
+                <button id="user-btn">submit</button>
+            </div>
+
+        </div>
+    </body>
+</html>
