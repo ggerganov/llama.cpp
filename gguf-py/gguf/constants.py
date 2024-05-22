@@ -905,9 +905,8 @@ class GGUFValueType(IntEnum):
             raise ValueError(f"Unknown type: {type(val)}")
 
 
-# Note: Does not support GGML_QKK_64
-QK_K = 256
 # Items here are (block size, type size)
+QK_K = 256
 GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),

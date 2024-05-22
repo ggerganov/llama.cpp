@@ -1,4 +1,4 @@
-﻿#include "ggml.h"
+#include "ggml.h"
 #include "ggml-opencl.h"
 #include "ggml-backend-impl.h"
 
@@ -926,7 +926,7 @@ static cl_program build_program_from_source(cl_context ctx, cl_device_id dev, co
 
     std::string compile_opts = "-cl-mad-enable -cl-unsafe-math-optimizations -cl-finite-math-only -cl-fast-relaxed-math "
                                "-DQK4_0=32 -DQR4_0=2 -DQK4_1=32 -DQR4_1=2 -DQK5_0=32 -DQR5_0=2 -DQK5_1=32 -DQR5_1=2 -DQK8_0=32 -DQR8_0=1 "
-                               "-DQK_K=256 -DK_QUANTS_PER_ITERATION=" + std::to_string(K_QUANTS_PER_ITERATION);
+                               "-DK_QUANTS_PER_ITERATION=" + std::to_string(K_QUANTS_PER_ITERATION);
 
     err = clBuildProgram(p, 0, NULL, compile_opts.c_str(), NULL, NULL);
     if(err < 0) {

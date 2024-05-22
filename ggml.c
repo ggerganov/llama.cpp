@@ -871,22 +871,14 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
     },
     [GGML_TYPE_IQ4_XS] = {
         .type_name                = "iq4_xs",
-#if QK_K == 64
-        .blck_size                = QK4_NL,
-#else
         .blck_size                = QK_K,
-#endif
         .type_size                = sizeof(block_iq4_xs),
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_iq4_xs,
         .from_float               = quantize_row_iq4_xs,
         .from_float_reference     = (ggml_from_float_t)quantize_row_iq4_xs_reference,
         .vec_dot                  = ggml_vec_dot_iq4_xs_q8_K,
-#if QK_K == 64
-        .vec_dot_type             = GGML_TYPE_Q8_0,
-#else
         .vec_dot_type             = GGML_TYPE_Q8_K,
-#endif
         .nrows                    = 1,
     },
     [GGML_TYPE_Q8_K] = {
@@ -22117,11 +22109,7 @@ size_t ggml_quantize_chunk(
         case GGML_TYPE_IQ1_S:   result = quantize_iq1_s  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_IQ1_M:   result = quantize_iq1_m  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_IQ4_NL:  result = quantize_iq4_nl (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
-#if QK_K == 64
-        case GGML_TYPE_IQ4_XS:  result = quantize_iq4_nl (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
-#else
         case GGML_TYPE_IQ4_XS:  result = quantize_iq4_xs (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
-#endif
         case GGML_TYPE_F16:
             {
                 size_t elemsize = sizeof(ggml_fp16_t);

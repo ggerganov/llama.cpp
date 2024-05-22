@@ -26,13 +26,9 @@
 #ifdef GGML_USE_METAL
 #  include "ggml-metal.h"
 #endif
-#ifndef QK_K
-#  ifdef GGML_QKK_64
-#    define QK_K 64
-#  else
-#    define QK_K 256
-#  endif
-#endif
+
+// TODO: replace with ggml API call
+#define QK_K 256
 
 #ifdef __has_include
     #if __has_include(<unistd.h>)
@@ -14308,8 +14304,6 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
                 use_more_bits(qs.i_attention_wv, qs.n_attention_wv)) new_type = GGML_TYPE_Q6_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && qs.i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
-        else if (QK_K == 64 && (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S) &&
-                (qs.i_attention_wv < qs.n_attention_wv/8 || qs.i_attention_wv >= 7*qs.n_attention_wv/8)) new_type = GGML_TYPE_Q6_K;
         if (qs.model.type == MODEL_70B) {
             // In the 70B model we have 8 heads sharing the same attn_v weights. As a result, the attn_v.weight tensor is
             // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
