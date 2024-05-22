@@ -43,20 +43,30 @@ next run this web front end in examples/server/public_simplechat
 ### using the front end
 
 Open this simple web front end from your local browser
+
 * http://127.0.0.1:PORT/index.html
 
 Once inside
+
 * Select between chat and completion mode. By default it is set to chat mode.
-  * in completion mode
-    * the logic by default doesnt insert "THE_ROLE: " prefix wrt each role's message.
-      If the model requires any prefix wrt user role messages, then the end user has to
-      explicitly add the needed prefix, when they enter their chat message.
-      This keeps the logic simple, while still giving flexibility to the end user to
-      manage any templating/tagging requirement wrt their messages to the model.
-    * the logic doesnt insert newline at the begining and end wrt the prompt message generated.
-      However if the chat being sent to completion end point has more than one role's message,
-      then insert newline when moving from one role's message to the next role's message, so
-      that it can be clearly identified.
+
+* In completion mode
+  * logic by default doesnt insert any role specific "ROLE: " prefix wrt each role's message.
+    If the model requires any prefix wrt user role messages, then the end user has to
+    explicitly add the needed prefix, when they enter their chat message.
+    Similarly if the model requires any prefix to trigger assistant/ai-model response,
+    then the end user needs to enter the same.
+    This keeps the logic simple, while still giving flexibility to the end user to
+    manage any templating/tagging requirement wrt their messages to the model.
+  * the logic doesnt insert newline at the begining and end wrt the prompt message generated.
+    However if the chat being sent to /completions end point has more than one role's message,
+    then insert newline when moving from one role's message to the next role's message, so
+    that it can be clearly identified/distinguished.
+  * given that /completions endpoint normally doesnt add additional chat-templating of its
+    own, the above ensures that end user can create a custom single/multi message combo with
+    any tags/special-tokens related chat templating to test out model handshake. Or enduser
+    can use it just for normal completion related/based query.
+
 * If you want to provide a system prompt, then ideally enter it first, before entering any user query.
   * if chat.add_system_begin is used
     * you cant change the system prompt, after it is has been submitted once along with user query.
@@ -65,12 +75,16 @@ Once inside
     * one can change the system prompt any time during chat, by changing the contents of system prompt.
     * inturn the updated/changed system prompt will be inserted into the chat session.
     * this allows for the subsequent user chatting to be driven by the new system prompt set above.
+
 * Enter your query and either press enter or click on the submit button.
   If you want to insert enter (\n) as part of your chat/query to ai model, use shift+enter.
+
 * Wait for the logic to communicate with the server and get the response.
   * the user is not allowed to enter any fresh query during this time.
   * the user input box will be disabled and a working message will be shown in it.
+
 * just refresh the page, to reset wrt the chat history and or system prompt and start afresh.
+
 * Using NewChat one can start independent chat sessions.
   * two independent chat sessions are setup by default.
 

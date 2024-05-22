@@ -18,7 +18,7 @@ let gUsageMsg = `
     <li> Set system prompt above, to try control ai response charactersitic, if model supports same.</li>
     <li> + Completion mode normally wont have a system prompt.</li>
     <li> Enter your query to ai assistant below.</li>
-    <li> + Completion mode doesnt insert user: prefix implicitly.</li>
+    <li> + Completion mode doesnt insert user/role: prefix implicitly.</li>
     <li> + Use shift+enter for inserting enter/newline.</li>
     <li> Refresh the page to start over fresh.</li>
     </ul>
