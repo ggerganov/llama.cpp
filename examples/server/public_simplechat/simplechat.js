@@ -351,6 +351,14 @@ class MultiChatUI {
 
         let chat = this.simpleChats[chatId];
 
+        // In completion mode, if configured, clear any previous chat history.
+        // So if user wants to simulate a multi-chat based completion query,
+        // they will have to enter the full thing, as a suitable multiline
+        // user input/query.
+        if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
+            chat.clear();
+        }
+
         chat.add_system_anytime(this.elInSystem.value, chatId);
 
         let content = this.elInUser.value;
@@ -396,13 +404,6 @@ class MultiChatUI {
             chat.show(this.elDivChat);
         } else {
             console.debug(`DBUG:SimpleChat:MCUI:HandleUserSubmit:ChatId has changed:[${chatId}] [${this.curChatId}]`);
-        }
-        // Purposefully clear at end rather than begin of this function
-        // so that one can switch from chat to completion mode and sequece
-        // in a completion mode with multiple user-assistant chat data
-        // from before to be sent/occur once.
-        if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
-            chat.clear();
         }
         this.ui_reset_userinput();
     }
