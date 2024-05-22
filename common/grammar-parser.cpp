@@ -26,7 +26,7 @@ namespace grammar_parser {
 
     static uint32_t get_symbol_id(parse_state & state, const char * src, size_t len) {
         uint32_t next_id = static_cast<uint32_t>(state.symbol_ids.size());
-        auto result = state.symbol_ids.insert(std::make_pair(std::string(src, len), next_id));
+        auto result = state.symbol_ids.emplace(std::string(src, len), next_id);
         return result.first->second;
     }
 

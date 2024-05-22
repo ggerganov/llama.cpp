@@ -102,7 +102,6 @@ struct slot_params {
     bool stream       = true;
     bool cache_prompt = false; // remember the prompt to avoid reprocessing all prompt
 
-    uint32_t seed      = -1; // RNG seed
     int32_t  n_keep    =  0; // number of tokens to keep from initial prompt
     int32_t  n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
     int32_t  n_predict = -1; // new tokens to predict
@@ -1264,7 +1263,7 @@ struct server_context {
             {"n_ctx",                     slot.n_ctx},
             {"n_predict",                 slot.n_predict},
             {"model",                     params.model_alias},
-            {"seed",                      slot.params.seed},
+            {"seed",                      slot.sparams.seed},
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
@@ -1982,8 +1981,7 @@ struct server_context {
                                 slot.state = SLOT_STATE_PROCESSING;
                                 slot.command = SLOT_COMMAND_NONE;
                                 slot.release();
-                                slot.print_timings();
-                                send_final_response(slot);
+                                send_error(slot, "input is too large to process. increase the physical batch size", ERROR_TYPE_SERVER);
                                 continue;
                             }
                         } else {
@@ -2387,6 +2385,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --lora-base FNAME         optional model to use as a base for the layers modified by the LoRA adapter\n");
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
+    printf("  --rpc SERVERS             comma separated list of RPC servers\n");
     printf("  --path PUBLIC_PATH        path from which to serve static files (default: disabled)\n");
     printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
@@ -2439,6 +2438,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             sparams.port = std::stoi(argv[i]);
+        } else if (arg == "--rpc") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rpc_servers = argv[i];
         } else if (arg == "--host") {
             if (++i >= argc) {
                 invalid_param = true;

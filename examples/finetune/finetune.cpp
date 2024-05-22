@@ -563,8 +563,8 @@ static struct ggml_tensor * llama_build_lora_finetune_graphs(
         // not capturing these, to silcence warnings
         const int rope_mode = 0;
 
-        return ggml_rope_custom(ctx,
-            t, KQ_pos, n_rot, rope_mode, n_ctx, 0,
+        return ggml_rope_ext(ctx,
+            t, KQ_pos, nullptr, n_rot, rope_mode, n_ctx, 0,
             rope_freq_base, rope_freq_scale, 0.0f, 1.0f, 0.0f, 0.0f
         );
     };
