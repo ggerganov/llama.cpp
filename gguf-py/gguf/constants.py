@@ -945,14 +945,30 @@ class LLaMaVocabType(IntEnum):
     WPM = auto()  # WordPiece BERT tokenizer
 
 
+LLaMaVocabTypeNames: dict[LLaMaVocabType, str] = {
+    LLaMaVocabType.SPM: "SPM",
+    LLaMaVocabType.BPE: "BPE",
+    LLaMaVocabType.WPM: "WPM",
+}
+
+
 #
 # HuggingFace Model File Types
 #
 class HFModelFileType(IntEnum):
     UNK = auto()  # Unsupported file type
-    BIN = auto()  # PyTorch file type
+    PT  = auto()  # PyTorch file type
     PTH = auto()  # PyTorch file type
+    BIN = auto()  # Pickled file type
     SFT = auto()  # SafeTensor file type
+
+
+LLaMaVocabTypeNames: dict[LLaMaVocabType, str] = {
+    HFModelFileType.PT:  "pt",
+    HFModelFileType.PTH: "pth",
+    HFModelFileType.BIN: "bin",
+    HFModelFileType.SFT: "safetensors",
+}
 
 
 # NOTE: It's easier to map out which files we need in advance.
@@ -967,7 +983,6 @@ HF_TOKENIZER_SPM_FILES = (HF_TOKENIZER_BPE_FILES + ("tokenizer.model",))
 # The pattern uses perl, is grammatical, and splits are technically arbitrary.
 # https://github.com/openai/gpt-2/blob/master/src/encoder.py#L53
 # https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L40-L42
-UNI_PRE_TOKENIZER_DEFAULT = "\\p{N}"
 BPE_PRE_TOKENIZER_DEFAULT = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)"
 GPT_PRE_TOKENIZER_DEFAULT = f"{BPE_PRE_TOKENIZER_DEFAULT}|\\s+"
 
@@ -1014,8 +1029,8 @@ BPE_PRE_TOKENIZERS = {
         "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
     ),
     MODEL_ARCH_NAMES[MODEL_ARCH.QWEN2MOE]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.PHI2]: (),
-    MODEL_ARCH_NAMES[MODEL_ARCH.PHI3]: (),
+    MODEL_ARCH_NAMES[MODEL_ARCH.PHI2]: (GPT_PRE_TOKENIZER_DEFAULT,),
+    MODEL_ARCH_NAMES[MODEL_ARCH.PHI3]: (GPT_PRE_TOKENIZER_DEFAULT,),
     MODEL_ARCH_NAMES[MODEL_ARCH.PLAMO]: (),
     MODEL_ARCH_NAMES[MODEL_ARCH.CODESHELL]: (),
     MODEL_ARCH_NAMES[MODEL_ARCH.ORION]: (),
