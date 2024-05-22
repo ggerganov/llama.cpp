@@ -21,8 +21,8 @@ class Message(BaseModel):
 
 class ToolFunction(BaseModel):
     name: str
-    description: str
     parameters: dict[str, Any]
+    description: Optional[str] = None
 
 class Tool(BaseModel):
     type: str
@@ -58,6 +58,7 @@ class LlamaCppParams(BaseModel):
 class ChatCompletionRequest(LlamaCppParams):
     model: str
     tools: Optional[List[Tool]] = None
+    tool_choice: Optional[str] = None
     messages: Optional[List[Message]] = None
     prompt: Optional[str] = None
     response_format: Optional[ResponseFormat] = None
@@ -87,5 +88,5 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: List[Choice]
     usage: Usage
-    system_fingerprint: str
+    system_fingerprint: Optional[str] = None
     error: Optional[CompletionError] = None

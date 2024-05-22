@@ -698,7 +698,7 @@ def _tools_typescript_signatures(tools: list[Tool]) -> str:
     #     _ts_converter.resolve_refs(tool.function.parameters, tool.function.name)
 
     return 'namespace functions {\n' + '\n'.join(
-        '// ' + tool.function.description.replace('\n', '\n// ') + '\n' + ''
+        '// ' + (tool.function.description or '').replace('\n', '\n// ') + '\n' + ''
         'type ' + tool.function.name + ' = (_: ' + _ts_converter.visit(tool.function.parameters) + ") => any;\n"
         for tool in tools
     ) + '} // namespace functions'

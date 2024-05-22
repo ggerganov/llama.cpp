@@ -30,6 +30,7 @@ def completion_with_tool_usage(
         messages: List[Message],
         auth: Optional[str],
         verbose: bool,
+        assume_llama_cpp_server: bool = False,
         **kwargs):
     '''
     Creates a chat completion using an OpenAI-compatible endpoint w/ JSON schema support
@@ -75,7 +76,7 @@ def completion_with_tool_usage(
         request = ChatCompletionRequest(
             messages=messages,
             response_format=response_format,
-            tools=tools_schemas,
+            tools=tools_schemas if tools_schemas else None,
             cache_prompt=True,
             **kwargs,
         )
@@ -86,10 +87,65 @@ def completion_with_tool_usage(
         }
         if auth:
             headers["Authorization"] = auth
+
+        def drop_nones(o):
+            if isinstance(o, BaseModel):
+                return drop_nones(o.model_dump())
+            if isinstance(o, list):
+                return [drop_nones(i) for i in o if i is not None]
+            if isinstance(o, dict):
+                return {
+                    k: drop_nones(v)
+                    for k, v in o.items()
+                    if v is not None
+                }
+            return o
+        
+        if assume_llama_cpp_server:
+            body = request.model_dump()
+        else:
+            # request_dict = request.model_dump()
+            # body = drop_nones(request)
+            tools_arg = None
+            tool_choice = request.tool_choice
+            response_format = None
+            if request.tools:
+                tools_arg = drop_nones(request.tools)
+            if request.response_format:
+                response_format = {
+                    'type': request.response_format.type,
+                }
+                if request.response_format.schema:
+                    assert tools_arg is None
+                    assert tool_choice is None
+                    tools_arg = [{
+                        "type": "function",
+                        "function": {
+                            "name": "output",
+                            "description": "A JSON object",
+                            "parameters": request.response_format.schema,
+                        }
+                    }]
+                    tool_choice = "output"
+
+            body = drop_nones(dict(
+                messages=drop_nones(request.messages),
+                model=request.model,
+                tools=tools_arg,
+                tool_choice=tool_choice,
+                temperature=request.temperature,
+                response_format=response_format,
+            ))
+
+        if verbose:
+            sys.stderr.write(f'# POSTing to {endpoint}/v1/chat/completions\n')
+            sys.stderr.write(f'# HEADERS: {headers}\n')
+            sys.stderr.write(f'# BODY: {json.dumps(body, indent=2)}\n')
+
         response = requests.post(
             f'{endpoint}/v1/chat/completions',
             headers=headers,
-            json=request.model_dump(),
+            json=body,
         )
         response.raise_for_status()
         response_json = response.json()
@@ -143,6 +199,7 @@ def main(
     parallel_calls: Optional[bool] = False,
     verbose: bool = False,
     style: Optional[ToolsPromptStyle] = None,
+    assume_llama_cpp_server: Optional[bool] = None,
 
     model: Optional[Annotated[str, typer.Option("--model", "-m")]] = None,# = "models/7B/ggml-model-f16.gguf",
     model_url: Optional[Annotated[str, typer.Option("--model-url", "-mu")]] = None,
@@ -184,6 +241,7 @@ def main(
     if not endpoint:
         server_port = 8080
         server_host = 'localhost'
+        assume_llama_cpp_server = True
         endpoint = f'http://{server_host}:{server_port}'
         if verbose:
             sys.stderr.write(f"# Starting C++ server with model {model} on {endpoint}\n")
@@ -231,13 +289,14 @@ def main(
 
 
     result = completion_with_tool_usage(
-        model="...",
+        model="gpt-4o",
         endpoint=endpoint,
         response_model=response_model,
         max_iterations=max_iterations,
         tools=tool_functions,
         auth=auth,
         verbose=verbose,
+        assume_llama_cpp_server=assume_llama_cpp_server or False,
 
         n_predict=n_predict,
         top_k=top_k,
