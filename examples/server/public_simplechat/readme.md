@@ -47,6 +47,16 @@ Open this simple web front end from your local browser
 
 Once inside
 * Select between chat and completion mode. By default it is set to chat mode.
+  * in completion mode
+    * the logic by default doesnt insert "THE_ROLE: " prefix wrt each role's message.
+      If the model requires any prefix wrt user role messages, then the end user has to
+      explicitly add the needed prefix, when they enter their chat message.
+      This keeps the logic simple, while still giving flexibility to the end user to
+      manage any templating/tagging requirement wrt their messages to the model.
+    * the logic doesnt insert newline at the begining and end wrt the prompt message generated.
+      However if the chat being sent to completion end point has more than one role's message,
+      then insert newline when moving from one role's message to the next role's message, so
+      that it can be clearly identified.
 * If you want to provide a system prompt, then ideally enter it first, before entering any user query.
   * if chat.add_system_begin is used
     * you cant change the system prompt, after it is has been submitted once along with user query.

@@ -16,8 +16,10 @@ class ApiEP {
 let gUsageMsg = `
     <ul>
     <li> Set system prompt above, to try control ai response charactersitic, if model supports same.</li>
+    <li> + Completion mode normally wont have a system prompt.</li>
     <li> Enter your query to ai assistant below.</li>
-    <li> Use shift+enter for inserting enter.</li>
+    <li> + Completion mode doesnt insert user: prefix implicitly.</li>
+    <li> + Use shift+enter for inserting enter/newline.</li>
     <li> Refresh the page to start over fresh.</li>
     </ul>
 `;
@@ -303,6 +305,8 @@ class MultiChatUI {
             // allow user to insert enter into their message using shift+enter.
             // while just pressing enter key will lead to submitting.
             if ((ev.key === "Enter") && (!ev.shiftKey)) {
+                let value = this.elInUser.value;
+                this.elInUser.value = value.substring(0,value.length-1);
                 this.elBtnUser.click();
                 ev.preventDefault();
             }
