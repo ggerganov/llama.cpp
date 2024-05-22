@@ -73,9 +73,25 @@ static std::vector<chunk> chunk_file(const std::string & filename, int chunk_siz
     return chunks;
 }
 
-static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, int seq_id) {
+static bool needs_logit(enum llama_pooling_type pooling_type, int pos, int n_tokens) {
+    switch (pooling_type) {
+        case LLAMA_POOLING_TYPE_MEAN:
+        case LLAMA_POOLING_TYPE_NONE:
+            return true;
+        case LLAMA_POOLING_TYPE_CLS:
+            return pos == 0;
+        case LLAMA_POOLING_TYPE_LAST:
+            return pos == n_tokens - 1;
+        default:
+            GGML_ASSERT(false && "unsupported pooling type");
+    }
+}
+
+static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, int seq_id, enum llama_pooling_type pooling_type) {
+    int n_tokens = tokens.size();
     for (size_t i = 0; i < tokens.size(); i++) {
-        llama_batch_add(batch, tokens[i], i, { seq_id }, i == tokens.size() - 1);
+        bool logit = needs_logit(pooling_type, i, n_tokens);
+        llama_batch_add(batch, tokens[i], i, { seq_id }, logit);
     }
 }
 
@@ -159,6 +175,7 @@ int main(int argc, char ** argv) {
 
     const int n_ctx_train = llama_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
+    const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
 
     if (n_ctx > n_ctx_train) {
         fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
@@ -230,7 +247,7 @@ int main(int argc, char ** argv) {
         }
 
         // add to batch
-        batch_add_seq(batch, inp, s);
+        batch_add_seq(batch, inp, s, pooling_type);
         s += 1;
     }
 
@@ -253,7 +270,7 @@ int main(int argc, char ** argv) {
         std::vector<int32_t> query_tokens = llama_tokenize(ctx, query, true);
 
         struct llama_batch query_batch = llama_batch_init(n_batch, 0, 1);
-        batch_add_seq(query_batch, query_tokens, 0);
+        batch_add_seq(query_batch, query_tokens, 0, pooling_type);
 
         std::vector<float> query_emb(n_embd, 0);
         batch_decode(ctx, query_batch, query_emb.data(), 1, n_embd);

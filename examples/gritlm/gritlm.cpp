@@ -44,7 +44,6 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
 
         // clear previous kv_cache values (irrelevant for embeddings)
         llama_kv_cache_clear(ctx);
-        llama_set_causal_attn(ctx, false);
 
         // run model
         llama_decode(ctx, batch);
@@ -98,7 +97,6 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
     llama_token eos_token = llama_token_eos(mdl);
 
     llama_kv_cache_clear(ctx);
-    llama_set_causal_attn(ctx, true);
     llama_batch bat = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
     std::vector<llama_token> inputs = llama_tokenize(mdl, prompt, false, true);
@@ -166,9 +164,14 @@ int main(int argc, char * argv[]) {
 
     llama_model * mdl = llama_load_model_from_file(params.model.c_str(), mparams);
 
-    // create new context - set to embedding mode
+    // create generation context
+    llama_context * ctx_gen = llama_new_context_with_model(mdl, cparams);
+
+    // create embedding context
     cparams.embeddings = true;
-    llama_context * ctx = llama_new_context_with_model(mdl, cparams);
+    cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
+    cparams.attention_type = LLAMA_ATTENTION_TYPE_NONCAUSAL;
+    llama_context * ctx_emb = llama_new_context_with_model(mdl, cparams);
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic
@@ -186,8 +189,8 @@ int main(int argc, char * argv[]) {
         };
 
         // No need to add instruction for retrieval documents
-        const std::vector<std::vector<float>> d_rep = encode(ctx, documents, gritlm_instruction(""));
-        const std::vector<std::vector<float>> q_rep = encode(ctx, queries,   gritlm_instruction(instruction));
+        const std::vector<std::vector<float>> d_rep = encode(ctx_emb, documents, gritlm_instruction(""));
+        const std::vector<std::vector<float>> q_rep = encode(ctx_emb, queries,   gritlm_instruction(instruction));
 
         const int n_embd = llama_n_embd(mdl);
 
@@ -206,10 +209,11 @@ int main(int argc, char * argv[]) {
     // GritLM models are not finetuned with system prompts, as you can just include system-like instructions together with your user instruction
     {
         const std::string prompt = "<|user|>\nPlease write me a poem about my recent hike of Mt. Fuji at midnight in the style of Shakespeare.\n<|assistant|>\n";
-        std::string response = generate(ctx, prompt, true);
+        std::string response = generate(ctx_gen, prompt, true);
     }
 
-    llama_free(ctx);
+    llama_free(ctx_gen);
+    llama_free(ctx_emb);
     llama_free_model(mdl);
     llama_backend_free();
 
