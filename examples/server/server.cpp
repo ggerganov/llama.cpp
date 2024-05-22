@@ -3535,7 +3535,7 @@ int main(int argc, char ** argv) {
             if (!result.error && result.stop) {
                 json result_oai = format_final_response_oaicompat(data, result.data, completion_id);
 
-                res.set_content(result_oai.dump(-1, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
+                res.set_content(result_oai.dump(2, ' ', false, json::error_handler_t::replace), "application/json; charset=utf-8");
             } else {
                 res_error(res, result.data);
             }
