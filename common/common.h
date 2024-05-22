@@ -148,6 +148,9 @@ struct gpt_params {
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
     bool embedding         = false; // get only sentence embedding
+    int32_t embd_normalize = 2;     // normalisation for embendings (-1=none, 0=max absolute, 1=taxicab, 2=euclidean, >2=p-norm)
+    std::string embd_out   = "";    // empty = default, "array" = [] or [[],[]...], "json" = openai style, "json+" = same "json" + cosine similarity matrix
+    std::string embd_sep   = "\n";  // separator of embendings
     bool escape            = false; // escape "\n", "\r", "\t", "\'", "\"", and "\\"
     bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
@@ -305,7 +308,7 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40
 // Embedding utils
 //
 
-void llama_embd_normalize(const float * inp, float * out, int n);
+void llama_embd_normalize(const float * inp, float * out, int n, int embd_norm  = 2);
 
 float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n);
 
