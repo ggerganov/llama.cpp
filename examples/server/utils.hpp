@@ -12,6 +12,7 @@
 #include <vector>
 #include <sstream>
 #include <random>
+#include <regex>
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
@@ -410,19 +411,40 @@ static json oaicompat_completion_params_parse(
         }
     } else if (body.contains("tools") && body["tools"].is_array()) {
         const auto & tools = body["tools"];
-        llama_params["grammar"] = tool_call_grammar(tools);
-
+        bool built_grammar = false;
+        bool allow_parallel_calls = false;
+        bool allow_content = true;
+        if (body.contains("tool_choice") && body["tool_choice"].is_string() && body["tool_choice"] != "auto") {
+            std::string tool_choice = body["tool_choice"];
+            if (tool_choice == "required") {
+                allow_content = false;
+            } else {
+                for (const auto & tool : tools) {
+                    if (tool["name"] == tool_choice) {
+                        llama_params["grammar"] = tool_call_grammar(json::array({ tool }), allow_parallel_calls, /* allow_content= */ false);
+                        built_grammar = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!built_grammar) {
+            llama_params["grammar"] = tool_call_grammar(tools, allow_parallel_calls, allow_content);
+        }
+        // TODO: pass a template file.
         extra_system_message = (std::stringstream()
             << "You are a function calling AI model. You are provided with function signatures within <tools></tools> XML tags. "
             << "You may call one or more functions to assist with the user query. "
-            << "Don't make assumptions about what values to plug into functions. "
+            // << "Don't make assumptions about what values to plug into functions. "
             << "Here are the available tools: <tools>"
-            << tools.dump().c_str()
+            << tools.dump(2).c_str()
             << "</tools>\n"
+            // << "To call a tool give a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:"
             << "For each function call return a json object with function name and arguments within <tool_call></tool_call> XML tags as follows:"
             << "<tool_call>"
-            << "{\"arguments\": <args-dict>, \"name\": <function-name>}"
+            << "{\"name\": <function-name>, \"arguments\": <args-dict>}"
             << "</tool_call>"
+            << "Don't explain which tools you're going to call, just call them."
         ).str();
     }
 
@@ -451,7 +473,7 @@ static json oaicompat_completion_params_parse(
     }
 
     // Params supported by OAI but unsupported by llama.cpp
-    static const std::vector<std::string> unsupported_params { "tool_choice" };
+    static const std::vector<std::string> unsupported_params;// { "tool_choice" };
     for (auto & param : unsupported_params) {
         if (body.contains(param)) {
             throw std::runtime_error("Unsupported param: " + param);
@@ -478,9 +500,35 @@ static json format_final_response_oaicompat(const json & request, json result, c
     int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
     std::string content      = json_value(result, "content", std::string(""));
 
+
     std::string finish_reason = "length";
     if (stopped_word || stopped_eos) {
         finish_reason = "stop";
+    }
+    json tool_calls;
+    json message_content;
+    if (request.contains("tools")) {
+        std::regex pattern("<tool_call>(.*?)</tool_call>");
+        std::sregex_iterator iter(content.begin(), content.end(), pattern);
+        std::sregex_iterator end;
+        while (iter != end) {
+            std::smatch match = *iter;
+            auto call = json::parse(match[1].str());
+            if (tool_calls.is_null()) {
+                tool_calls = json::array();
+            }
+            tool_calls.push_back({
+                {"function", {
+                    {"name", call["name"]},
+                    {"arguments", call["arguments"].dump()},
+                }},
+            });
+            finish_reason = "tool_calls";
+            ++iter;
+        }
+    }
+    if (tool_calls.is_null()) {
+        message_content = content;
     }
 
     json choices =
@@ -489,7 +537,8 @@ static json format_final_response_oaicompat(const json & request, json result, c
                                         {"delta", json::object()}}})
                   : json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
-                                        {"message", json{{"content", content},
+                                        {"message", json{{"content", message_content},
+                                                         {"tool_calls", tool_calls},
                                                          {"role", "assistant"}}}}});
 
     std::time_t t = std::time(0);
