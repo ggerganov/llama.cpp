@@ -14,10 +14,12 @@ class ApiEP {
 }
 
 let gUsageMsg = `
-    <p> Enter the system prompt above, before entering/submitting any user query.</p>
-    <p> Enter your text to the ai assistant below.</p>
-    <p> Use shift+enter for inserting enter.</p>
-    <p> Refresh the page to start over fresh.</p>
+    <ul>
+    <li> Set system prompt above, to try control ai response charactersitic, if model supports same.</li>
+    <li> Enter your query to ai assistant below.</li>
+    <li> Use shift+enter for inserting enter.</li>
+    <li> Refresh the page to start over fresh.</li>
+    </ul>
 `;
 
 class SimpleChat {
@@ -471,7 +473,7 @@ function startme() {
     for (let cid of gChatIds) {
         gMuitChat.new_chat_session(cid);
     }
-    gMuitChat.setup_ui(gChatIds[0]);
+    gMuitChat.setup_ui(gChatIds[0], true);
     gMuitChat.show_sessions();
 }
 
