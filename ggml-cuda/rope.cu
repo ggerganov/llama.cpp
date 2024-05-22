@@ -283,9 +283,9 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const bool is_neox = mode & 2;
     const bool is_glm  = mode & 4;
 
-    if (is_neox) {
-        pos = (const int32_t *) src1_d;
+    pos = (const int32_t *) src1_d;
 
+    if (is_neox) {
         if (src2 != nullptr) {
             freq_factors = (const float *) src2->data;
         }
