@@ -328,8 +328,10 @@ if __name__ == "__main__":
     # import os
     # tokenizers = os.listdir(path_tokenizers)
     tokenizers = [
-        "llama-spm",   # SPM
-        "phi-3",       # SPM
+        # "llama-spm",   # SPM
+        # "phi-3",       # SPM
+        "jina-v2-en",  # WPM
+        "bert-bge",    # WPM
     ]
 
     for tokenizer in tokenizers:
