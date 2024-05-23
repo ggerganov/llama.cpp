@@ -34,7 +34,8 @@ let gUsageMsg = `
 
 // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
 let gChatRequestOptions = {
-    "temperature": 0.7
+    "temperature": 0.7,
+    "max_tokens": 2048
 };
 
 class SimpleChat {
