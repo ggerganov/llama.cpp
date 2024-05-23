@@ -313,11 +313,10 @@ class Model:
                         data = data.astype(np.float32)
                     data_qtype = gguf.GGMLQuantizationType.F32
 
-                block_size, type_size = gguf.GGML_QUANT_SIZES[data_qtype]
+                shape = gguf.quant_shape_from_byte_shape(data.shape, data_qtype) if data.dtype == np.uint8 else data.shape
+
                 # reverse shape to make it similar to the internal ggml dimension order
-                shape_str = f"""{{{', '.join(str(n) for n in reversed(
-                    (*data.shape[:-1], data.shape[-1] * data.dtype.itemsize // type_size * block_size))
-                )}}}"""
+                shape_str = f"{{{', '.join(str(n) for n in reversed(shape))}}}"
 
                 # n_dims is implicit in the shape
                 logger.info(f"{f'%-{max_name_len}s' % f'{new_name},'} {old_dtype} --> {data_qtype.name}, shape = {shape_str}")
