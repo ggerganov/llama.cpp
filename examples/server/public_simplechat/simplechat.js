@@ -343,6 +343,29 @@ class MultiChatUI {
     }
 
     /**
+     * Try read json response early, if available.
+     * @param {Response} resp
+     */
+    async read_json_early(resp) {
+        if (!resp.body) {
+            throw Error("ERRR:SimpleChat:MCUI:ReadJsonEarly:No body...");
+        }
+        let tdUtf8 = new TextDecoder("utf-8");
+        let rr = resp.body.getReader();
+        let gotBody = "";
+        while(true) {
+            let { value: cur,  done: done} = await rr.read();
+            let curBody = tdUtf8.decode(cur);
+            console.debug("DBUG:SC:PART:", curBody);
+            gotBody += curBody;
+            if (done) {
+                break;
+            }
+        }
+        return JSON.parse(gotBody);
+    }
+
+    /**
      * Handle user query submit request, wrt specified chat session.
      * @param {string} chatId
      * @param {string} apiEP
@@ -388,6 +411,7 @@ class MultiChatUI {
         });
 
         let respBody = await resp.json();
+        //let respBody = await this.read_json_early(resp);
         console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let assistantMsg;
         if (apiEP == ApiEP.Chat) {
