@@ -4368,6 +4368,7 @@ void ggml_vec_dot_q4_0_b16_q8_0_b16(int n, float * restrict s, size_t bs, const 
         __m128bh xd = m128bh(_mm_cvtepu16_epi32(_mm_set_epi64x(0, x_delta)));
         __m128bh yd = m128bh(_mm_cvtepu16_epi32(_mm_set_epi64x(0, y_delta)));
 
+        // Computes product of delta values from four corresponding blocks
         __m256 d =  _mm256_castps128_ps256(_mm_dpbf16_ps(zerovec, xd, yd));
         d = _mm256_permute2f128_ps(d ,d, 0);
 
@@ -5902,6 +5903,7 @@ void ggml_vec_dot_q8_0_b16_q8_0_b16(int n, float * restrict s, size_t bs, const 
         __m128bh xd = m128bh(_mm_cvtepu16_epi32(_mm_set_epi64x(0, x_delta)));
         __m128bh yd = m128bh(_mm_cvtepu16_epi32(_mm_set_epi64x(0, y_delta)));
 
+        // Computes product of delta values from four corresponding blocks
         __m256 d =  _mm256_castps128_ps256(_mm_dpbf16_ps(zerovec, xd, yd));
         d = _mm256_permute2f128_ps(d ,d, 0);
 
