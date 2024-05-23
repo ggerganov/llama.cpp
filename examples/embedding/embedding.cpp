@@ -205,10 +205,15 @@ int main(int argc, char ** argv) {
             fprintf(stdout, "\n");
             printf("cosine similarity matrix:\n\n");
             for (int i = 0; i < n_prompts; i++) {
+                fprintf(stdout, "%6.6s ", prompts[i].c_str());
+            }
+            fprintf(stdout, "\n");
+            for (int i = 0; i < n_prompts; i++) {
                 for (int j = 0; j < n_prompts; j++) {
                     float sim = llama_embd_similarity_cos(emb + i * n_embd, emb + j * n_embd, n_embd);
                     fprintf(stdout, "%6.2f ", sim);
                 }
+                fprintf(stdout, "%1.10s",prompts[i].c_str());
                 fprintf(stdout, "\n");
             }
         }
@@ -217,9 +222,9 @@ int main(int argc, char ** argv) {
     if (params.embd_out=="json" || params.embd_out=="json+" || params.embd_out=="array") {
         const bool notArray = params.embd_out!="array";
 
-        fprintf(stdout, notArray?"{\n  'object': 'list',\n  'data': [\n":"[");
+        fprintf(stdout, notArray?"{\n  \"object\": \"list\",\n  \"data\": [\n":"[");
         for (int j = 0;;) { // at least one iteration (one prompt)
-            if (notArray) fprintf(stdout, "    {\n      'object': 'embedding',\n      'index': %d,\n      'embedding': ",j);
+            if (notArray) fprintf(stdout, "    {\n      \"object\": \"embedding\",\n      \"index\": %d,\n      \"embedding\": ",j);
             fprintf(stdout, "[");
             for (int i = 0;;) { // at least one iteration (n_embd > 0)
                 fprintf(stdout, params.embd_normalize==0?"%1.0f":"%1.7f", emb[j * n_embd + i]);
@@ -233,7 +238,7 @@ int main(int argc, char ** argv) {
         fprintf(stdout, notArray?"\n  ]":"]\n");
 
         if (params.embd_out=="json+" && n_prompts > 1) {
-            fprintf(stdout, ",\n  cosineSimilarity: [\n");
+            fprintf(stdout, ",\n  \"cosineSimilarity\": [\n");
             for (int i = 0;;) { // at least two iteration (n_prompts > 1)
                 fprintf(stdout, "    [");
                 for (int j = 0;;) { // at least two iteration (n_prompts > 1)
