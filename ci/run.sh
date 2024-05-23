@@ -202,12 +202,15 @@ function gg_sum_test_scripts_release {
 }
 
 function gg_get_model {
-    local gguf_3b="$MNT/models/open-llama/3B-v2/ggml-model-f16.gguf"
-    local gguf_7b="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
-    if [[ -s $gguf_3b ]]; then
-        echo -n "$gguf_3b"
-    elif [[ -s $gguf_7b ]]; then
-        echo -n "$gguf_7b"
+    local gguf_0="$MNT/models/pythia/1.4B/ggml-model-f16.gguf"
+    local gguf_1="$MNT/models/pythia/2.8B/ggml-model-f16.gguf"
+    local gguf_2="$MNT/models/open-llama/7B-v2/ggml-model-f16.gguf"
+    if [[ -s $gguf_0 ]]; then
+        echo -n "$gguf_0"
+    elif [[ -s $gguf_1 ]]; then
+        echo -n "$gguf_1"
+    elif [[ -s $gguf_2 ]]; then
+        echo -n "$gguf_2"
     else
         echo >&2 "No model found. Can't run gg_run_ctest_with_model."
         exit 1
