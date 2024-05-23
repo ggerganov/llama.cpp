@@ -50,9 +50,9 @@ int main(void) {
         // Llama-3
         "{% set loop_messages = messages %}{% for message in loop_messages %}{% set content = '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n'+ message['content'] | trim + '<|eot_id|>' %}{% if loop.index0 == 0 %}{% set content = bos_token + content %}{% endif %}{{ content }}{% endfor %}{{ '<|start_header_id|>assistant<|end_header_id|>\n\n' }}",
         // Phi-3
-        "{{ bos_token }}{% for message in messages %}{{'<|' + message['role'] + '|>' + ' ' + message['content'] + '<|end|> ' }}{% endfor %}{% if add_generation_prompt %}{{ '<|assistant|> ' }}{% else %}{{ eos_token }}{% endif %}"
+        "{{ bos_token }}{% for message in messages %}{{'<|' + message['role'] + '|>' + '\n' + message['content'] + '<|end|> ' }}{% endfor %}{% if add_generation_prompt %}{{ '<|assistant|> ' }}{% else %}{{ eos_token }}{% endif %}"
         // Phi-3 New
-        "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'user') %}{{'<|user|>' + ' ' + message['content'] + '<|end|>' + ' ' + '<|assistant|>' + ' '}}{% elif (message['role'] == 'assistant') %}{{message['content'] + '<|end|>' + ' '}}{% endif %}{% endfor %}"
+        "{{ bos_token }}{% for message in messages %}{% if (message['role'] == 'user') %}{{'<|user|>' + '\n' + message['content'] + '<|end|>' + '\n' + '<|assistant|>' + '\n'}}{% elif (message['role'] == 'assistant') %}{{message['content'] + '<|end|>' + '\n'}}{% endif %}{% endfor %}",
     };
     std::vector<std::string> expected_output = {
         // teknium/OpenHermes-2.5-Mistral-7B
