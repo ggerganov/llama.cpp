@@ -10743,9 +10743,12 @@ struct llm_build_context {
                 inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
             }
 
-            // FF
+            // ffn
             if (hparams.use_par_res) {
-                struct ggml_tensor * ffn_inp = cur;
+                // attention and ffn are computed in parallel
+                // x = x + attn(ln1(x)) + ffn(ln2(x))
+
+                struct ggml_tensor * attn_out = cur;
 
                 cur = llm_build_norm(ctx0, inpL, hparams,
                         model.layers[il].ffn_norm,
@@ -10764,10 +10767,13 @@ struct llm_build_context {
                 cur = ggml_add(ctx0, cur, inpL);
                 cb(cur, "ffn_out", il);
 
-                inpL = ggml_add(ctx0, cur, ffn_inp);
+                inpL = ggml_add(ctx0, cur, attn_out);
                 cb(inpL, "l_out", il);
             } else {
-                // Add the input
+                // attention and ffn are computed sequentially
+                // x = x + attn(ln1(x))
+                // x = x + ffn(ln2(x))
+
                 struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpL);
                 cb(ffn_inp, "ffn_inp", il);
 
