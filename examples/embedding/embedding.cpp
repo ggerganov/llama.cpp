@@ -31,8 +31,8 @@ static bool needs_logit(enum llama_pooling_type pooling_type, int pos, int n_tok
     }
 }
 
-static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, int seq_id, enum llama_pooling_type pooling_type) {
-    int n_tokens = tokens.size();
+static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, llama_seq_id seq_id, enum llama_pooling_type pooling_type) {
+    size_t n_tokens = tokens.size();
     for (size_t i = 0; i < n_tokens; i++) {
         bool logit = needs_logit(pooling_type, i, n_tokens);
         llama_batch_add(batch, tokens[i], i, { seq_id }, logit);

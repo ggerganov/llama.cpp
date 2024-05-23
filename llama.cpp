@@ -7436,11 +7436,17 @@ struct llm_build_context {
     }
 
     struct ggml_cgraph * append_pooling(struct ggml_cgraph * gf) {
-        struct ggml_tensor * inp = gf->nodes[gf->n_nodes - 1];
-        if (strcmp(inp->name, "result_embd") != 0) {
-            inp = gf->nodes[gf->n_nodes - 2];
-            GGML_ASSERT(strcmp(inp->name, "result_norm") == 0 && "embeddings tensor not found");
+        // find result_norm tensor for input
+        struct ggml_tensor * inp = nullptr;
+        for (int i = gf->n_nodes - 1; i >= 0; --i) {
+            inp = gf->nodes[i];
+            if (strcmp(inp->name, "result_norm") == 0 || strcmp(inp->name, "result_embd") == 0) {
+                break;
+            } else {
+                inp = nullptr;
+            }
         }
+        GGML_ASSERT(inp != nullptr && "missing result_norm/result_embd tensor");
 
         struct ggml_tensor * cur;
 
@@ -12029,8 +12035,8 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
     const auto n_embd  = hparams.n_embd;
 
     // TODO: use a per-batch flag for logits presence instead
-    const bool has_logits = cparams.causal_attn;
-    const bool has_embd   = cparams.embeddings && (hparams.causal_attn || cparams.pooling_type == LLAMA_POOLING_TYPE_NONE);
+    const bool has_logits = !cparams.embeddings;
+    const bool has_embd   =  cparams.embeddings;
 
     const size_t logits_size = has_logits ? n_vocab*n_outputs_max : 0;
     const size_t embd_size   = has_embd   ?  n_embd*n_outputs_max : 0;
