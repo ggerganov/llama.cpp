@@ -6108,6 +6108,26 @@ static bool llm_load_tensors(
             }
         }
 #endif
+
+#ifdef GGML_USE_CUDA
+        else if (ml.use_mmap && use_mmap_buffer && buft == ggml_backend_cuda_buffer_type(0)) {
+            for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
+                void * addr = nullptr;
+                size_t first, last;
+                ml.get_mapping_range(&first, &last, &addr, idx, ctx);
+                if (first >= last) {
+                    continue;
+                }
+                ggml_backend_buffer_t buf = ggml_backend_cuda_buffer_from_ptr(0, (char *) addr + first, last - first);
+                if (buf == nullptr) {
+                    throw std::runtime_error("unable to allocate backend CUDA buffer");
+                }
+                model.bufs.push_back(buf);
+                bufs.emplace(idx, buf);
+            }
+        }
+#endif
+
         else {
             ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
             if (buf == nullptr) {
