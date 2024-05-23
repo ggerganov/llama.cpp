@@ -1068,6 +1068,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.rpc_servers = argv[i];
         return true;
     }
+    if (arg == "--rpcd") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.rpc_servers_draft = argv[i];
+        return true;
+    }
     if (arg == "--no-mmap") {
         params.use_mmap = false;
         return true;
