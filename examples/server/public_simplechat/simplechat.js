@@ -14,6 +14,7 @@ class ApiEP {
 }
 
 let gUsageMsg = `
+    <p class="role-system">Usage</p>
     <ul class="ul1">
     <li> Set system prompt above, to try control ai response charactersitic, if model supports same.</li>
         <ul class="ul2">
@@ -32,11 +33,6 @@ let gUsageMsg = `
     </ul>
 `;
 
-// Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
-let gChatRequestOptions = {
-    "temperature": 0.7,
-    "max_tokens": 512
-};
 
 class SimpleChat {
 
@@ -92,6 +88,7 @@ class SimpleChat {
         } else {
             if (bClear) {
                 div.innerHTML = gUsageMsg;
+                gMe.show_info(div);
             }
         }
     }
@@ -103,8 +100,8 @@ class SimpleChat {
      * @param {Object} obj
      */
     request_jsonstr(obj) {
-        for(let k in gChatRequestOptions) {
-            obj[k] = gChatRequestOptions[k];
+        for(let k in gMe.chatRequestOptions) {
+            obj[k] = gMe.chatRequestOptions[k];
         }
         return JSON.stringify(obj);
     }
@@ -206,8 +203,6 @@ let gChatURL = {
     'chat': `${gBaseURL}/chat/completions`,
     'completion': `${gBaseURL}/completions`,
 }
-const gbCompletionFreshChatAlways = true;
-let gbCompletionInsertStandardRolePrefix = false;
 
 
 /**
@@ -395,7 +390,7 @@ class MultiChatUI {
         // So if user wants to simulate a multi-chat based completion query,
         // they will have to enter the full thing, as a suitable multiline
         // user input/query.
-        if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
+        if ((apiEP == ApiEP.Completion) && (gMe.bCompletionFreshChatAlways)) {
             chat.clear();
         }
 
@@ -413,7 +408,7 @@ class MultiChatUI {
         if (apiEP == ApiEP.Chat) {
             theBody = chat.request_messages_jsonstr();
         } else {
-            theBody = chat.request_prompt_jsonstr(gbCompletionInsertStandardRolePrefix);
+            theBody = chat.request_prompt_jsonstr(gMe.bCompletionInsertStandardRolePrefix);
         }
 
         this.elInUser.value = "working...";
@@ -525,17 +520,58 @@ class MultiChatUI {
 }
 
 
-let gMultiChat;
-const gChatIds = [ "Default", "Other" ];
+class Me {
+
+    constructor() {
+        this.defaultChatIds = [ "Default", "Other" ];
+        this.multiChat = new MultiChatUI();
+        this.bCompletionFreshChatAlways = true;
+        this.bCompletionInsertStandardRolePrefix = false;
+        // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
+        this.chatRequestOptions = {
+            "temperature": 0.7,
+            "max_tokens": 512
+        };
+    }
+
+    /**
+     * @param {HTMLDivElement} elDiv
+     */
+    show_info(elDiv) {
+
+        var p = document.createElement("p");
+        p.innerText = "Settings (gMe)";
+        p.className = "role-system";
+        elDiv.appendChild(p);
+
+        var p = document.createElement("p");
+        p.innerText = `bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`;
+        elDiv.appendChild(p);
+
+        p = document.createElement("p");
+        p.innerText = `bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`;
+        elDiv.appendChild(p);
+
+        p = document.createElement("p");
+        p.innerText = `chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`;
+        elDiv.appendChild(p);
+
+    }
+
+}
+
+
+/** @type {Me} */
+let gMe;
 
 function startme() {
     console.log("INFO:SimpleChat:StartMe:Starting...");
-    gMultiChat = new MultiChatUI();
-    for (let cid of gChatIds) {
-        gMultiChat.new_chat_session(cid);
+    gMe = new Me();
+    for (let cid of gMe.defaultChatIds) {
+        gMe.multiChat.new_chat_session(cid);
     }
-    gMultiChat.setup_ui(gChatIds[0], true);
-    gMultiChat.show_sessions();
+    gMe.multiChat.setup_ui(gMe.defaultChatIds[0], true);
+    gMe.multiChat.show_sessions();
 }
 
 document.addEventListener("DOMContentLoaded", startme);

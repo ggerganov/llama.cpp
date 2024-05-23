@@ -93,12 +93,21 @@ Once inside
 
 ## Devel note
 
-gChatRequestOptions maintains the list of options/fields to send along with chat request,
-irrespective of whether /chat/completions or /completions endpoint.
+Me/gMe consolidates the settings which control the behaviour into one object.
+One can see the current settings, as well as change/update them using browsers devel-tool/console.
 
-  If you want to add additional options/fields to send to the server/ai-model, and or
-  modify the existing options value, for now you can update this global var using
-  browser's development-tools/console.
+  bCompletionFreshChatAlways - whether Completion mode collates completion history when communicating
+  with the server.
+
+  bCompletionInsertStandardRolePrefix - whether Completion mode inserts role related prefix wrt the
+  messages that get inserted into prompt field wrt /Completion endpoint.
+
+  chatRequestOptions - maintains the list of options/fields to send along with chat request,
+  irrespective of whether /chat/completions or /completions endpoint.
+
+    If you want to add additional options/fields to send to the server/ai-model, and or
+    modify the existing options value, for now you can update this global var using
+    browser's development-tools/console.
 
 Sometimes the browser may be stuborn with caching of the file, so your updates to html/css/js
 may not be visible. Also remember that just refreshing/reloading page in browser or for that
