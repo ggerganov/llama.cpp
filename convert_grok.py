@@ -244,9 +244,9 @@ def dump_state_dict(f, ggml_type, input_dir, config):
         tensor_info.append((name, list(tensor.shape), tensor_ggml_type.name))
 
     try:
-        print(
+        print(  # noqa: NP100
             tabulate(tensor_info, headers=["name", "shape", "dtype"], tablefmt="psql")
-        )  # noqa: NP100
+        )
     except NameError:
         pass
 
