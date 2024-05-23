@@ -17632,7 +17632,7 @@ static int32_t llama_chat_apply_template_internal(
         // Phi 3
         for (auto message : chat) {
             std::string role(message->role);
-            ss << "<|" << role << "|>\n" << trim(message->content) << "<|end|>\n";
+            ss << "<|" << role << "|>\n" << message->content << "<|end|>\n";
         }
         if (add_ass) {
             ss << "<|assistant|>\n";
