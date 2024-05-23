@@ -1874,7 +1874,7 @@ std::string fs_get_cache_directory() {
 #elif defined(__APPLE__)
         cache_directory = std::getenv("HOME") + std::string("/Library/Caches/");
 #elif defined(_WIN32)
-        cache_directory = std::getenv("APPDATA");
+        cache_directory = std::getenv("LOCALAPPDATA");
 #endif // __linux__
         cache_directory = ensure_trailing_slash(cache_directory);
         cache_directory += "llama.cpp";
