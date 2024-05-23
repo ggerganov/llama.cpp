@@ -35,9 +35,9 @@ if "NO_LOCAL_GGUF" not in os.environ:
 
 import gguf
 
-GGML_QK8_0 = 32
-GGML_QK4_0 = 32
-GGML_QK4_1 = 32
+QK8_0 = gguf.GGML_QUANT_SIZES[gguf.GGMLQuantizationType.Q8_0][0]
+QK4_0 = gguf.GGML_QUANT_SIZES[gguf.GGMLQuantizationType.Q4_0][0]
+QK4_1 = gguf.GGML_QUANT_SIZES[gguf.GGMLQuantizationType.Q4_1][0]
 
 
 # Heuristic to avoid having to fully parse pickle files.
@@ -125,8 +125,8 @@ def get_weights(fn):
 
 def quantize_q8_0(tensor: torch.Tensor) -> torch.CharTensor:
     # equivalent to ggml_quantize_q8_0 in ggml.c (modulo rounding away from zero)
-    assert tensor.shape[1] % GGML_QK8_0 == 0
-    tensor = tensor.reshape(-1, GGML_QK8_0)
+    assert tensor.shape[1] % QK8_0 == 0
+    tensor = tensor.reshape(-1, QK8_0)
     scale = tensor.abs().max(dim=-1, keepdim=True).values / ((1 << 7) - 1)
     tensor = (tensor / scale).round().clamp(min=-128, max=127).char()
     # add scale into each block
@@ -136,8 +136,8 @@ def quantize_q8_0(tensor: torch.Tensor) -> torch.CharTensor:
 
 def quantize_q4_0(tensor: torch.Tensor) -> torch.CharTensor:
     # equivalent to ggml_quantize_q4_0 in ggml.c (modulo rounding away from zero)
-    assert tensor.shape[1] % GGML_QK4_0 == 0
-    tensor = tensor.reshape(-1, GGML_QK4_0)
+    assert tensor.shape[1] % QK4_0 == 0
+    tensor = tensor.reshape(-1, QK4_0)
     abs_max_indices = tensor.abs().max(dim=-1, keepdim=True).indices
     max_values = torch.take_along_dim(tensor, abs_max_indices, dim=-1)
     scale = max_values / -8
@@ -151,8 +151,8 @@ def quantize_q4_0(tensor: torch.Tensor) -> torch.CharTensor:
 
 def quantize_q4_1(tensor: torch.Tensor) -> torch.CharTensor:
     # equivalent to ggml_quantize_q4_1 in ggml.c (modulo rounding away from zero)
-    assert tensor.shape[1] % GGML_QK4_1 == 0
-    tensor = tensor.reshape(-1, GGML_QK4_1)
+    assert tensor.shape[1] % QK4_1 == 0
+    tensor = tensor.reshape(-1, QK4_1)
     abs_max_indices = tensor.max(dim=-1, keepdim=True).indices
     max_values = torch.take_along_dim(tensor, abs_max_indices, dim=-1)
     abs_min_indices = tensor.min(dim=-1, keepdim=True).indices
@@ -188,7 +188,7 @@ def maybe_quantize_tensor(tensor, ggml_type):
 
 def get_dtype_and_ggml_type(name, tensor, ggml_type):
     if tensor.ndim in (2, 3) and "ffn_gate_inp" not in name:
-        if tensor.shape[1] % GGML_QK8_0 == 0:
+        if tensor.shape[1] % QK8_0 == 0:
             return np.int8, ggml_type
         else:
             return np.float16, gguf.GGMLQuantizationType.F16
