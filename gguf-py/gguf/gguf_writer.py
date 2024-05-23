@@ -301,6 +301,7 @@ class GGUFWriter:
                     tensor.tofile(self.fout)
                     bar.update(tensor.nbytes)
                     self.write_padding(self.fout, tensor.nbytes)
+                    del tensor
                 return
             while True:
                 try:

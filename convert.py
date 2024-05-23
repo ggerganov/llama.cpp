@@ -24,17 +24,14 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, IO, Iterable, Literal, Protocol, TypeVar, runtime_checkable
-# TEMPORARY IMPORT - TODO REMOVE
-import importlib
-gguf = importlib.import_module("gguf-py.gguf")
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, IO, Iterable, Literal, Protocol, TypeVar, runtime_checkable, Optional
 
 import numpy as np
 from sentencepiece import SentencePieceProcessor
 
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
-# import gguf
+import gguf
 
 if TYPE_CHECKING:
     from typing_extensions import Self, TypeAlias
@@ -1103,8 +1100,8 @@ def check_vocab_size(params: Params, vocab: BaseVocab, pad_vocab: bool = False) 
 
 
 class OutputFile:
-    def __init__(self, fname_out: Path, split_arguments: gguf.SplitArguments, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
-        self.gguf = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], split_arguments, endianess=endianess)
+    def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
+        self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
     def add_meta_model(self, params: Params, metadata: Metadata) -> None:
         # Metadata About The Model And Its Provenence
@@ -1204,15 +1201,21 @@ class OutputFile:
     def add_meta_special_vocab(self, svocab: gguf.SpecialVocab) -> None:
         svocab.add_to_gguf(self.gguf)
 
+    def add_tensor_info(self, name: str, tensor: LazyTensor) -> None:
+        n_elements = int(np.prod(tensor.shape))
+        raw_dtype = getattr(tensor.data_type, 'ggml_type', None)
+        data_type = getattr(tensor.data_type, 'quantized_type', None) or tensor.data_type.dtype
+        data_nbytes = tensor.data_type.elements_to_bytes(n_elements)
+        self.gguf.add_tensor_info(name, tensor.shape, data_type, data_nbytes, raw_dtype=raw_dtype)
+
     def write_meta(self) -> None:
-        self.gguf.write_to_file(meta_only=True)
+        self.gguf.write_header_to_file()
+        self.gguf.write_kv_data_to_file()
 
-    def write_tensors(self, ftype: GGMLFileType, concurrency: int) -> None:
-        self.gguf.write_to_file(ftype=ftype, concurrency=concurrency, write_tensor_data=OutputFile.write_tensor_data)
+    def write_tensor_info(self) -> None:
+        self.gguf.write_ti_data_to_file()
 
-    # really awkward with how this is managed with gguf_manager.py: maybe refactor at some point?
-    @staticmethod
-    def write_tensor_data(ftype: GGMLFileType, model: LazyModel, concurrency: int, writer: gguf.GGUFWriter) -> None:
+    def write_tensor_data(self, ftype: GGMLFileType, model: LazyModel, concurrency: int) -> None:
         ndarrays_inner = bounded_parallel_map(OutputFile.do_item, model.items(), concurrency=concurrency)
         if ftype == GGMLFileType.MostlyQ8_0:
             ndarrays = bounded_parallel_map(
@@ -1230,7 +1233,7 @@ class OutputFile:
             logger.info(
                 f"[{i + 1:{padi}d}/{len(model)}] Writing tensor {name:38s} | size {size:16} | type {lazy_tensor.data_type.name:4} | T+{int(elapsed):4}"
             )
-            writer.write_tensor_data(ndarray)
+            self.gguf.write_tensor_data(ndarray)
 
     def close(self) -> None:
         self.gguf.close()
@@ -1242,7 +1245,7 @@ class OutputFile:
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
-        of = OutputFile(fname_out, gguf.SplitArguments(), endianess=endianess)
+        of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
         of.add_meta_model(params, metadata)
@@ -1270,11 +1273,13 @@ class OutputFile:
     @staticmethod
     def write_all(
         fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: BaseVocab, svocab: gguf.SpecialVocab,
-        split_arguments: gguf.SplitArguments, concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
-        pad_vocab: bool = False, metadata: Metadata = None,
+        concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
+        pad_vocab: bool = False,
+        metadata: Metadata = None,
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
-        of = OutputFile(fname_out, split_arguments, endianess=endianess)
+
+        of = OutputFile(fname_out, endianess=endianess)
 
         # meta data
         of.add_meta_model(params, metadata)
@@ -1287,9 +1292,13 @@ class OutputFile:
 
         # tensor info
         for name, lazy_tensor in model.items():
-            of.gguf.add_tensor_info(name, lazy_tensor)
+            of.add_tensor_info(name, lazy_tensor)
 
-        of.write_tensors(ftype, concurrency)
+        of.write_meta()
+        of.write_tensor_info()
+
+        # tensor data
+        of.write_tensor_data(ftype, model, concurrency)
 
         of.close()
 
@@ -1364,7 +1373,7 @@ def convert_model_names(model: LazyModel, params: Params, skip_unknown: bool) ->
                         experts.append(model[f"model.layers.{i_l}.block_sparse_moe.experts.{e}.w{w}.weight"])
                         del tmp[f"model.layers.{i_l}.block_sparse_moe.experts.{e}.w{w}.weight"]
                     else:
-                        raise ValueError(f"Expert tensor not found: layers.{i_l}.feed_forward.experts.{e}.w{w}.model_classweight")
+                        raise ValueError(f"Expert tensor not found: layers.{i_l}.feed_forward.experts.{e}.w{w}.weight")
                 tmp[f"layers.{i_l}.feed_forward.experts.w{w}.weight"] = pack_experts_lazy(experts)
 
     # HF models permut or pack some of the tensors, so we need to undo that
@@ -1584,11 +1593,6 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--big-endian",   action="store_true",    help="model is executed on big endian machine")
     parser.add_argument("--pad-vocab",    action="store_true",    help="add pad tokens when model vocab expects more than tokenizer metadata provides")
     parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
-    parser.add_argument("--split", action="store_true", help="split the converted model into multiple files")
-    parser.add_argument("--split-max-tensors", type=int, help="max tensors in each split")
-    parser.add_argument("--split-max-size", type=str, help="max size per split N(M|G)")
-    parser.add_argument("--dry-run", action="store_true", help="only print out a split plan and exit, without writing any new files")
-    parser.add_argument("--large-first-shard", action="store_true", help="include tensors in the first shard when splitting (default: metadata only)")
     parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
     parser.add_argument("--metadata",     type=Path,              help="Specify the path for a metadata file")
     parser.add_argument("--get-outfile",  action="store_true",    help="get calculated default outfile name")
@@ -1621,14 +1625,6 @@ def main(args_in: list[str] | None = None) -> None:
         model_plus = lazy_load_file(args.model)
         do_dump_model(model_plus)
         return
-
-    if args.split and not (args.split_max_tensors or args.split_max_size):
-        raise ValueError("Need to specify one of --split-max-tensors or --split-max-size when splitting")
-
-    if args.split_max_tensors and args.split_max_size:
-        raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
-
-    split_arguments = gguf.SplitArguments(args) if args.split else gguf.SplitArguments()
 
     if not args.vocab_only:
         model_plus = load_some_model(args.model)
@@ -1707,13 +1703,11 @@ def main(args_in: list[str] | None = None) -> None:
     outfile = args.outfile or default_outfile(model_plus.paths, ftype, params, model_params_count, metadata)
 
     params.ftype = ftype
-
     logger.info(f"Writing {outfile}, format {ftype}")
 
-    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab, split_arguments,
+    OutputFile.write_all(outfile, ftype, params, model, vocab, special_vocab,
                          concurrency=args.concurrency, endianess=endianess, pad_vocab=args.pad_vocab, metadata=metadata)
-    if not args.dry_run:
-        logger.info(f"Wrote {outfile}")
+    logger.info(f"Wrote {outfile}")
 
 
 if __name__ == '__main__':

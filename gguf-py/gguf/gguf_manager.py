@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Sequence, Mapping
 from string import ascii_letters, digits
 from argparse import Namespace
 from math import ceil
+from collections import deque
 
 import numpy as np
 
@@ -34,7 +35,7 @@ LLM_KV_SPLIT_NO = "split.no"
 LLM_KV_SPLIT_COUNT = "split.count"
 LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count"
 
-SplitTensorsPerFile: TypeAlias = list[tuple[os.PathLike[str], list[tuple[str, Any]], GGUFWriter]] # [(outfile name, [(tensor name, tensor data)] for each tensor in file, filewriter)]
+SplitTensorsPerFile: TypeAlias = deque[tuple[os.PathLike[str], deque[tuple[str, Any]], GGUFWriter]] # [(outfile name, [(tensor name, tensor data)] for each tensor in file, filewriter)]
 KVTempData: TypeAlias = dict[str, tuple[Any, GGUFValueType]] # {key: (value, type)}
 TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any]] # (tensor name, tensor data), aka LazyModel
 
@@ -53,23 +54,23 @@ class SplitArguments:
     split_max_size: int
     split_style: SplitStyle
 
-    def __init__(self) -> None:
-        self.split = False
-        self.dry_run = False
-        self.small_first_shard = False
-        self.split_max_tensors = 0
-        self.split_max_size = 0
-        self.split_style = SplitStyle.NONE
-
-    def __init__(self, args: Namespace) -> None:
-        self.split = args.split
-        self.split_max_tensors = args.split_max_tensors
-        self.split_max_size = SplitStrategy.split_str_to_n_bytes(args.split_max_size) if args.split_max_size else None
-        self.dry_run = args.dry_run
-        self.small_first_shard = not args.large_first_shard
-        self.split_style = SplitStyle.NONE if not self.split \
-            else SplitStyle.TENSORS if self.split_max_tensors \
-            else SplitStyle.SIZE
+    def __init__(self, args: Namespace = None) -> None:
+        if args is None:
+            self.split = False
+            self.dry_run = False
+            self.small_first_shard = False
+            self.split_max_tensors = 0
+            self.split_max_size = 0
+            self.split_style = SplitStyle.NONE
+        else:
+            self.split = args.split
+            self.split_max_tensors = args.split_max_tensors
+            self.split_max_size = SplitStrategy.split_str_to_n_bytes(args.split_max_size) if args.split_max_size else None
+            self.dry_run = args.dry_run
+            self.small_first_shard = not args.large_first_shard
+            self.split_style = SplitStyle.NONE if not self.split \
+                else SplitStyle.TENSORS if self.split_max_tensors \
+                else SplitStyle.SIZE
 
 
 class SplitStrategy:
@@ -78,7 +79,7 @@ class SplitStrategy:
     def __init__(self, fname_out: os.PathLike[str], model: list[TensorTempData], arch: str,
                  split_arguments: SplitArguments, use_temp_file: bool = True, endianess: GGUFEndian = GGUFEndian.LITTLE,
     ):
-        self.data = []
+        self.data = deque()
 
         if split_arguments.split_style == SplitStyle.NONE:
             self.append((fname_out, model, GGUFWriter(fname_out, arch, use_temp_file=use_temp_file, endianess=endianess)))
@@ -96,7 +97,7 @@ class SplitStrategy:
                 self.append((shard, model[start:stop], GGUFWriter(shard, arch, use_temp_file=use_temp_file, endianess=endianess)))
 
         elif split_arguments.split_style == SplitStyle.SIZE:
-            shards = []
+            shards = deque()
 
             # we have to determine the shards first to determine how many shards there will be in total - two passes
             for i, shard in enumerate(model):
@@ -118,13 +119,7 @@ class SplitStrategy:
 
             for i, shard in enumerate(shards):
                 outname = fname_out.with_name(SHARD_NAME_FORMAT.format(fname_out.stem, i + shard_offset, total_shards))
-                self.append((outname, shard, GGUFWriter(outname, arch, use_temp_file=use_temp_file, endianess=endianess)))
-
-    def __getitem__(self, index):
-        return self.data[index]
-    
-    def __setitem__(self, index, value):
-        self.data[index] = value
+                self.append((outname, deque(shard), GGUFWriter(outname, arch, use_temp_file=use_temp_file, endianess=endianess)))
 
     def __len__(self):
         return len(self.data)
@@ -176,7 +171,7 @@ class SplitStrategy:
 # ideally this has most of the same signatures as GGUFWriter so it's nearly a drop-in replacement
 class GGUFManager:
     kv_data: KVTempData
-    tensors: list[TensorTempData]
+    tensors: deque[TensorTempData]
     split_arguments: SplitArguments
     split_strategy: SplitStrategy
 
@@ -188,7 +183,7 @@ class GGUFManager:
         self.endianess = endianess
         self.offset_tensor = 0
         self.kv_data = {}
-        self.tensors = []
+        self.tensors = deque()
         self.split_strategy = None
         self.total_shards = None
         self.total_tensors = None
@@ -200,9 +195,7 @@ class GGUFManager:
     # have to consolidate because we need to know kv data count and tensor count before we can write the header
     # and we need to write tensor info before we can write metadata
     # these all kinda show up around the same places anyway so it's not a huge deal?
-    def write_to_file(self, meta_only: bool = False, ftype: int = 0, concurrency: int = 8,
-                      write_tensor_data: function = None
-    ) -> None:
+    def write_to_file(self, meta_only: bool = False) -> None:
 
         # here is the first place you can assume you have all tensors written and you can establish the size of the file - so logic goes here
         self.total_tensors = len(self.tensors)
@@ -218,22 +211,23 @@ class GGUFManager:
 
         self.split_strategy = SplitStrategy(self.path, self.tensors, self.arch, self.split_arguments,
                                             use_temp_file=self.use_temp_file, endianess=self.endianess)
+        del self.tensors
         self.total_shards = len(self.split_strategy)
 
         # only the first shard needs all the KV data
         for key, (value, etype) in self.kv_data.items():
-            self.split_strategy[0][2].add_key(key)
-            self.split_strategy[0][2].add_val(value, etype)
+            self.split_strategy.data[0][2].add_key(key)
+            self.split_strategy.data[0][2].add_val(value, etype)
 
         if self.split_arguments.split_style != SplitStyle.NONE:
-            for i, (_, _, writer) in enumerate(self.split_strategy):
+            for i, (_, _, writer) in enumerate(self.split_strategy.data):
                 writer.add_uint16(LLM_KV_SPLIT_NO, i)
                 writer.add_uint16(LLM_KV_SPLIT_COUNT, self.total_shards)
                 writer.add_int32(LLM_KV_SPLIT_TENSORS_COUNT, self.total_tensors)
 
         # metadata/vocab only can write and return here
         if meta_only:
-            for i, (_, _, writer) in enumerate(self.split_strategy):
+            for i, (_, _, writer) in enumerate(self.split_strategy.data):
                 writer.write_header_to_file()
                 writer.write_kv_data_to_file()
             return
@@ -241,57 +235,44 @@ class GGUFManager:
         # tensor writing code starts here
 
         print("\nWriting the following files:")
-        for (shard_path, shard_tensors, _) in self.split_strategy:
+        for (shard_path, shard_tensors, _) in self.split_strategy.data:
             size = SplitStrategy.format_n_bytes_to_str(sum(SplitStrategy.get_tensor_size(t[1]) for t in shard_tensors)) if shard_tensors else "negligible - metadata only"
             print(f"  {shard_path}: n_tensors = {len(shard_tensors) if shard_tensors else 0}, total_size = {size}")
 
         if self.split_arguments.dry_run:
             print("\nDry run, not writing files")
             # instantiating GGUFWriters creates files
-            for name, _, _ in self.split_strategy:
+            for name, _, _ in self.split_strategy.data:
                 os.remove(name)
             return
 
         # run add_tensor_info, write data, then write_tensor_data - taken from convert.py
         running_total = self.total_tensors
-        start = time.time()
-        for i, (_, tensors, writer) in enumerate(self.split_strategy):
+        ct = 0
+        while True:
+            try:
+                (_, tensors, writer) = self.split_strategy.data.popleft()
+            except IndexError:
+                break
 
+            shard_num_tensors = len(tensors) if tensors else 0
+            
             if tensors:
-                print(f"\nWriting to shard {i + 1}/{self.total_shards} with {len(tensors)}/{running_total} remaining tensors (of {self.total_tensors} total)")
-                for j, (name, tensor) in enumerate(tensors):
-                    n_elements = int(np.prod(tensor.shape))
-                    # logic from convert.py
-                    if getattr(tensor, 'data_type', None):
-                        raw_dtype = getattr(tensor.data_type, 'ggml_type', None)
-                        data_type = getattr(tensor.data_type, 'quantized_type', None) or tensor.data_type.dtype
-                        data_nbytes = tensor.data_type.elements_to_bytes(n_elements)
-                        writer.add_tensor_info(name, tensor.shape, data_type, data_nbytes, raw_dtype=raw_dtype)
-                    # logic from convert-hf-to-gguf.py
-                    else:
-                        # stolen from write_tensor_data because that doesn't get called with this logic
-                        elapsed = time.time() - start
-                        size = ' x '.join(f"{dim:6d}" for dim in tensor.shape)
-                        padi = len(str(self.total_tensors))
-                        dtype = str(tensor.dtype)
-                        print(
-                            f"[{j + 1:{padi}d}/{len(tensors)}] Writing tensor {name:38s} | size {size:16} | type {dtype:8} | T+{int(elapsed):4}"
-                        )
-                        writer.add_tensor(name, tensor)
-                print(f"Writing to shard {i + 1}/{self.total_shards} with {len(tensors)}/{running_total} remaining tensors (of {self.total_tensors} total)")
+                while True:
+                    try:
+                        (name, tensor) = tensors.popleft()
+                    except IndexError:
+                        break
+                    writer.add_tensor(name, tensor)
 
+                print(f"Writing to shard {ct + 1}/{self.total_shards} with {shard_num_tensors}/{running_total} remaining tensors (of {self.total_tensors} total)")
+                running_total -= shard_num_tensors
 
             writer.write_header_to_file()
             writer.write_kv_data_to_file()
-            writer.write_tensors_to_file()
-
-            if tensors:
-                # TODO this shows up AFTER writing which we don't really want - move it
-                running_total -= len(tensors)
-
-                if write_tensor_data:
-                    # convert.py's write_tensor_data is dependent on so many objects in convert.py itself that it's easier to pass the function as a parameter and call it here
-                    write_tensor_data(ftype, dict(tensors), concurrency, writer)
+            writer.write_tensors_to_file(progress=True)
+            ct = ct + 1
+            del tensors
 
     def add_uint8(self, key: str, val: int) -> None:
         self.kv_data[key] = (val, GGUFValueType.UINT8)
@@ -336,11 +317,6 @@ class GGUFManager:
             raise ValueError(f'Expected a sequence for {key}, got {type(val)}')
         self.kv_data[key] = (val, GGUFValueType.ARRAY)
 
-    # this method is exclusive to convert.py - we don't have LazyTensor so Any type is used
-    def add_tensor_info(self, name: str, tensor: Any) -> None:
-        self.tensors.append((name, tensor))
-
-    # these methods are everywhere but convert.py (and convert-lora-to-ggml.py since that doesn't use the class)
     def add_tensor(
         self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None,
         raw_dtype: GGMLQuantizationType | None = None,
@@ -354,7 +330,7 @@ class GGUFManager:
         #    fp.seek(0)
         #    self.temp_file = fp
 
-        self.add_tensor_info(name, tensor)
+        self.tensors.append((name, tensor))
 
         #if self.temp_file is None:
         #    self.tensors.append(tensor)
@@ -363,12 +339,8 @@ class GGUFManager:
         #tensor.tofile(self.temp_file)
         #self.write_padding(self.temp_file, tensor.nbytes)
 
-    def write_tensors_to_file(self) -> None:
-        # TODO WRITE
-        pass
-
     def close(self) -> None:
-        for _, _, writer in self.split_strategy:
+        for _, _, writer in self.split_strategy.data:
             writer.close()
 
     def add_architecture(self) -> None:

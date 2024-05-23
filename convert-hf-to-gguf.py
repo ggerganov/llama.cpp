@@ -2570,7 +2570,7 @@ def main() -> None:
     if args.split_max_tensors and args.split_max_size:
         raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
 
-    split_arguments = gguf.SplitArguments(args) if args.split else gguf.SplitArguments()
+    split_arguments = gguf.SplitArguments(args=args) if args.split else gguf.SplitArguments()
 
     ftype_map = {
         "f32": gguf.LlamaFileType.ALL_F32,
