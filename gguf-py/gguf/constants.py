@@ -868,6 +868,14 @@ class LlamaFileType(IntEnum):
     GUESSED              = 1024  # not specified in the model file
 
 
+LLAMA_FILE_TYPE_NAMES: dict[LlamaFileType, str] = {
+    LlamaFileType.ALL_F32     : "F32",
+    LlamaFileType.MOSTLY_F16  : "F16",
+    LlamaFileType.MOSTLY_BF16 : "BF16",
+    LlamaFileType.MOSTLY_Q8_0 : "Q8_0",
+}
+
+
 class GGUFEndian(IntEnum):
     LITTLE = 0
     BIG = 1
@@ -943,24 +951,24 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
 #
 # Tokenizer Types
 #
-class VOCAB_TYPE(IntEnum):
+class VocabType(IntEnum):
     NON = auto()  # For models without vocab
     SPM = auto()  # SentencePiece LLaMa tokenizer
     BPE = auto()  # BytePair GPT-2 tokenizer
     WPM = auto()  # WordPiece BERT tokenizer
 
 
-VOCAB_TYPE_NAMES: dict[VOCAB_TYPE, str] = {
-    VOCAB_TYPE.SPM: "SPM",
-    VOCAB_TYPE.BPE: "BPE",
-    VOCAB_TYPE.WPM: "WPM",
+VOCAB_TYPE_NAMES: dict[VocabType, str] = {
+    VocabType.SPM: "SPM",
+    VocabType.BPE: "BPE",
+    VocabType.WPM: "WPM",
 }
 
 
 #
 # Model File Types
 #
-class MODEL_FILE_TYPE(IntEnum):
+class ModelFileType(IntEnum):
     UNK = auto()  # Unsupported file type
     SFT = auto()  # SafeTensor file type
     PTH = auto()  # PyTorch file type
@@ -968,11 +976,11 @@ class MODEL_FILE_TYPE(IntEnum):
     PT  = auto()  # PyTorch file type
 
 
-MODEL_FILE_TYPE_NAMES: dict[MODEL_FILE_TYPE, str] = {
-    MODEL_FILE_TYPE.PT:  "pt",
-    MODEL_FILE_TYPE.PTH: "pth",
-    MODEL_FILE_TYPE.BIN: "bin",
-    MODEL_FILE_TYPE.SFT: "safetensors",
+MODEL_FILE_TYPE_NAMES: dict[ModelFileType, str] = {
+    ModelFileType.PT:  "pt",
+    ModelFileType.PTH: "pth",
+    ModelFileType.BIN: "bin",
+    ModelFileType.SFT: "safetensors",
 }
 
 #
