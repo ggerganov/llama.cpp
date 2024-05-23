@@ -1855,11 +1855,15 @@ bool fs_create_directory_with_parents(const std::string & path) {
 
 std::string fs_get_cache_directory() {
     std::string cache_directory = "";
-    if (getenv("LLAMA_CACHE")) {
-        cache_directory = std::getenv("LLAMA_CACHE");
-        if (cache_directory.back() != DIRECTORY_SEPARATOR) {
-            cache_directory += DIRECTORY_SEPARATOR;
+    auto ensure_trailing_slash = [](std::string p) {
+        // Make sure to add trailing slash
+        if (p.back() != DIRECTORY_SEPARATOR) {
+            p += DIRECTORY_SEPARATOR;
         }
+        return p;
+    };
+    if (getenv("LLAMA_CACHE")) {
+        cache_directory = ensure_trailing_slash(std::getenv("LLAMA_CACHE"));
     } else {
 #ifdef __linux__
         if (std::getenv("XDG_CACHE_HOME")) {
@@ -1872,6 +1876,7 @@ std::string fs_get_cache_directory() {
 #elif defined(_WIN32)
         cache_directory = std::getenv("APPDATA");
 #endif // __linux__
+        cache_directory = ensure_trailing_slash(cache_directory);
         cache_directory += "llama.cpp";
         cache_directory += DIRECTORY_SEPARATOR;
     }
