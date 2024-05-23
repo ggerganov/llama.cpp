@@ -62,6 +62,8 @@ server:
 ggml:
     - changed-files:
         - any-glob-to-any-file:
+            - ggml.c
+            - ggml.h
             - ggml-*.c
             - ggml-*.h
             - ggml-cuda/**
@@ -71,3 +73,6 @@ nix:
             - "**/*.nix"
             - .github/workflows/nix-*.yml
             - .devops/nix/nixpkgs-instances.nix
+embedding:
+    - changed-files:
+        - any-glob-to-any-file: examples/embedding/
