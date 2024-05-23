@@ -14,11 +14,15 @@ own system prompts.
 The UI follows a responsive web design so that the layout can adapt to available display space in a usable
 enough manner, in general.
 
-NOTE: Given that the idea is for basic minimal testing, it doesnt bother with any model context length and
-culling of old messages from the chat.
+Allows developer/end-user to control some of the behaviour by updating gMe members from browser's devel-tool
+console.
 
-NOTE: It doesnt set any parameters other than temperature for now. However if someone wants they can update
-the js file as needed.
+NOTE: Given that the idea is for basic minimal testing, it doesnt bother with any model context length and
+culling of old messages from the chat by default. However by enabling the sliding window chat logic, a crude
+form of old messages culling can be achieved.
+
+NOTE: It doesnt set any parameters other than temperature and max_tokens for now. However if someone wants
+they can update the js file or equivalent member in gMe as needed.
 
 
 ## usage
@@ -96,8 +100,8 @@ Once inside
 Me/gMe consolidates the settings which control the behaviour into one object.
 One can see the current settings, as well as change/update them using browsers devel-tool/console.
 
-  bCompletionFreshChatAlways - whether Completion mode collates completion history when communicating
-  with the server.
+  bCompletionFreshChatAlways - whether Completion mode collates complete/sliding-window history when
+  communicating with the server or only sends the latest user query/message.
 
   bCompletionInsertStandardRolePrefix - whether Completion mode inserts role related prefix wrt the
   messages that get inserted into prompt field wrt /Completion endpoint.
@@ -106,21 +110,41 @@ One can see the current settings, as well as change/update them using browsers d
   irrespective of whether /chat/completions or /completions endpoint.
 
     If you want to add additional options/fields to send to the server/ai-model, and or
-    modify the existing options value, for now you can update this global var using
-    browser's development-tools/console.
+    modify the existing options value or remove them, for now you can update this global var
+    using browser's development-tools/console.
+
+  iRecentUserMsgCnt - a simple minded SlidingWindow to limit context window load at Ai Model end.
+  This is disabled by default. However if enabled, then in addition to latest system message, only
+  the last/latest iRecentUserMsgCnt user messages after the latest system prompt and its responses
+  from the ai model will be sent to the ai-model, when querying for a new response. IE if enabled,
+  only user messages after the latest system message/prompt will be considered.
+
+    This specified sliding window user message count also includes the latest user query.
+    <0 : Send entire chat history to server
+     0 : Send only the system message if any to the server
+    >0 : Send the latest chat history from the latest system prompt, limited to specified cnt.
+
+
+By using gMe's iRecentUserMsgCnt and chatRequestOptions.max_tokens one can try to control the
+implications of loading of the ai-model's context window by chat history, wrt chat response to
+some extent in a simple crude way.
+
 
 Sometimes the browser may be stuborn with caching of the file, so your updates to html/css/js
 may not be visible. Also remember that just refreshing/reloading page in browser or for that
 matter clearing site data, dont directly override site caching in all cases. Worst case you may
 have to change port. Or in dev tools of browser, you may be able to disable caching fully.
 
+
 Concept of multiple chat sessions with different servers, as well as saving and restoring of
 those across browser usage sessions, can be woven around the SimpleChat/MultiChatUI class and
 its instances relatively easily, however given the current goal of keeping this simple, it has
 not been added, for now.
 
+
 By switching between chat.add_system_begin/anytime, one can control whether one can change
 the system prompt, anytime during the conversation or only at the beginning.
+
 
 read_json_early, is to experiment with reading json response data early on, if available,
 so that user can be shown generated data, as and when it is being generated, rather than
@@ -132,3 +156,8 @@ at the end when full data is available.
   if able to read json data early on in future, as and when ai model is generating data, then
   this helper needs to indirectly update the chat div with the recieved data, without waiting
   for the overall data to be available.
+
+
+## At the end
+
+Also a thank you to all open source and open model developers, who strive for the common good.

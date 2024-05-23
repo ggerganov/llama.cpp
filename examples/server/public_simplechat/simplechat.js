@@ -25,21 +25,23 @@ let gUsageMsg = `
         <li> Completion mode doesnt insert user/role: prefix implicitly.</li>
         <li> Use shift+enter for inserting enter/newline.</li>
         </ul>
-    <li> Refresh the page to start over fresh.</li>
+    <li> If strange responses, Refresh page to start over fresh.</li>
         <ul class="ul2">
-        <li> old chat is not culled when sending to server/ai-model.</li>
-        <li> either use New CHAT, or refresh if chat getting long.</li>
+        <li> [default] old msgs from chat not culled, when sending to server.</li>
+        <li> either use New CHAT, or refresh if chat getting long, or</li>
+        <li> experiment iRecentUserMsgCnt, max_tokens, model ctxt window.</li>
         </ul>
     </ul>
 `;
 
+/** @typedef {{role: string, content: string}[]} ChatMessages */
 
 class SimpleChat {
 
     constructor() {
         /**
          * Maintain in a form suitable for common LLM web service chat/completions' messages entry
-         * @type {{role: string, content: string}[]}
+         * @type {ChatMessages}
          */
         this.xchat = [];
         this.iLastSys = -1;
@@ -48,6 +50,50 @@ class SimpleChat {
     clear() {
         this.xchat = [];
         this.iLastSys = -1;
+    }
+
+    /**
+     * Recent chat messages.
+     * If iRecentUserMsgCnt < 0
+     *   Then return the full chat history
+     * Else
+     *   Return chat messages from latest going back till the last/latest system prompt.
+     *   While keeping track that the number of user queries/messages doesnt exceed iRecentUserMsgCnt.
+     * @param {number} iRecentUserMsgCnt
+     */
+    recent_chat(iRecentUserMsgCnt) {
+        if (iRecentUserMsgCnt < 0) {
+            return this.xchat;
+        }
+        if (iRecentUserMsgCnt == 0) {
+            console.warn("WARN:SimpleChat:SC:RecentChat:iRecentUsermsgCnt of 0 means no user message/query sent");
+        }
+        /** @type{ChatMessages} */
+        let rchat = [];
+        let sysMsg = this.get_system_latest();
+        if (sysMsg.length != 0) {
+            rchat.push({role: Roles.System, content: sysMsg});
+        }
+        let iUserCnt = 0;
+        let iStart = this.xchat.length;
+        for(let i=this.xchat.length-1; i > this.iLastSys; i--) {
+            if (iUserCnt >= iRecentUserMsgCnt) {
+                break;
+            }
+            let msg = this.xchat[i];
+            if (msg.role == Roles.User) {
+                iStart = i;
+                iUserCnt += 1;
+            }
+        }
+        for(let i = iStart; i < this.xchat.length; i++) {
+            let msg = this.xchat[i];
+            if (msg.role == Roles.System) {
+                continue;
+            }
+            rchat.push({role: msg.role, content: msg.content});
+        }
+        return rchat;
     }
 
     /**
@@ -76,7 +122,7 @@ class SimpleChat {
             div.replaceChildren();
         }
         let last = undefined;
-        for(const x of this.xchat) {
+        for(const x of this.recent_chat(gMe.iRecentUserMsgCnt)) {
             let entry = document.createElement("p");
             entry.className = `role-${x.role}`;
             entry.innerText = `${x.role}: ${x.content}`;
@@ -111,7 +157,7 @@ class SimpleChat {
      */
     request_messages_jsonstr() {
         let req = {
-            messages: this.xchat,
+            messages: this.recent_chat(gMe.iRecentUserMsgCnt),
         }
         return this.request_jsonstr(req);
     }
@@ -123,7 +169,7 @@ class SimpleChat {
     request_prompt_jsonstr(bInsertStandardRolePrefix) {
         let prompt = "";
         let iCnt = 0;
-        for(const chat of this.xchat) {
+        for(const chat of this.recent_chat(gMe.iRecentUserMsgCnt)) {
             iCnt += 1;
             if (iCnt > 1) {
                 prompt += "\n";
@@ -527,6 +573,7 @@ class Me {
         this.multiChat = new MultiChatUI();
         this.bCompletionFreshChatAlways = true;
         this.bCompletionInsertStandardRolePrefix = false;
+        this.iRecentUserMsgCnt = -1;
         // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
         this.chatRequestOptions = {
             "temperature": 0.7,
@@ -540,7 +587,7 @@ class Me {
     show_info(elDiv) {
 
         var p = document.createElement("p");
-        p.innerText = "Settings (gMe)";
+        p.innerText = "Settings (devel-tools-console gMe)";
         p.className = "role-system";
         elDiv.appendChild(p);
 
@@ -550,6 +597,10 @@ class Me {
 
         p = document.createElement("p");
         p.innerText = `bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`;
+        elDiv.appendChild(p);
+
+        p = document.createElement("p");
+        p.innerText = `iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`;
         elDiv.appendChild(p);
 
         p = document.createElement("p");
