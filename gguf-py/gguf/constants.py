@@ -940,6 +940,60 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
 }
 
 
+#
+# Tokenizer Types
+#
+class VOCAB_TYPE(IntEnum):
+    NON = auto()  # For models without vocab
+    SPM = auto()  # SentencePiece LLaMa tokenizer
+    BPE = auto()  # BytePair GPT-2 tokenizer
+    WPM = auto()  # WordPiece BERT tokenizer
+
+
+VOCAB_TYPE_NAMES: dict[VOCAB_TYPE, str] = {
+    VOCAB_TYPE.SPM: "SPM",
+    VOCAB_TYPE.BPE: "BPE",
+    VOCAB_TYPE.WPM: "WPM",
+}
+
+
+#
+# Model File Types
+#
+class MODEL_FILE_TYPE(IntEnum):
+    UNK = auto()  # Unsupported file type
+    SFT = auto()  # SafeTensor file type
+    PTH = auto()  # PyTorch file type
+    BIN = auto()  # Pickled file type
+    PT  = auto()  # PyTorch file type
+
+
+MODEL_FILE_TYPE_NAMES: dict[MODEL_FILE_TYPE, str] = {
+    MODEL_FILE_TYPE.PT:  "pt",
+    MODEL_FILE_TYPE.PTH: "pth",
+    MODEL_FILE_TYPE.BIN: "bin",
+    MODEL_FILE_TYPE.SFT: "safetensors",
+}
+
+#
+# HF Vocab Files
+#
+HF_TOKENIZER_BPE_FILES = ("config.json", "tokenizer_config.json", "tokenizer.json",)
+HF_TOKENIZER_SPM_FILES = (HF_TOKENIZER_BPE_FILES + ("tokenizer.model",))
+
+#
+# Pre-tokenization Regular Expressions
+#
+
+# NOTE: `tokenizers` defaults to OpenAI GPT-2 `ByteLevel` RegEx.
+# The pattern uses perl regex and formatting is arbitrary.
+# https://github.com/openai/gpt-2/blob/master/src/encoder.py#L53
+# https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L40-L42
+
+# These are fallback values if the pre-tokenizer cannot be dynamically discovered at runtime.
+BPE_PRE_TOKENIZER_DEFAULT = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)"
+GPT_PRE_TOKENIZER_DEFAULT = f"{BPE_PRE_TOKENIZER_DEFAULT}|\\s+"
+
 # Aliases for backward compatibility.
 
 # general
