@@ -24,6 +24,11 @@ let gUsageMsg = `
     </ul>
 `;
 
+// Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
+let gChatRequestOptions = {
+    "temperature": 0.7
+};
+
 class SimpleChat {
 
     constructor() {
@@ -83,12 +88,15 @@ class SimpleChat {
     }
 
     /**
-     * Add needed fields wrt json object to be sent wrt LLM web services completions endpoint
+     * Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
+     * The needed fields/options are picked from a global object.
      * Convert the json into string.
      * @param {Object} obj
      */
     request_jsonstr(obj) {
-        obj["temperature"] = 0.7;
+        for(let k in gChatRequestOptions) {
+            obj[k] = gChatRequestOptions[k];
+        }
         return JSON.stringify(obj);
     }
 
