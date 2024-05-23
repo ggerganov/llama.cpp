@@ -508,17 +508,17 @@ class MultiChatUI {
 }
 
 
-let gMuitChat;
+let gMultiChat;
 const gChatIds = [ "Default", "Other" ];
 
 function startme() {
     console.log("INFO:SimpleChat:StartMe:Starting...");
-    gMuitChat = new MultiChatUI();
+    gMultiChat = new MultiChatUI();
     for (let cid of gChatIds) {
-        gMuitChat.new_chat_session(cid);
+        gMultiChat.new_chat_session(cid);
     }
-    gMuitChat.setup_ui(gChatIds[0], true);
-    gMuitChat.show_sessions();
+    gMultiChat.setup_ui(gChatIds[0], true);
+    gMultiChat.show_sessions();
 }
 
 document.addEventListener("DOMContentLoaded", startme);
