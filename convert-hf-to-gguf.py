@@ -1367,6 +1367,39 @@ class LlamaModel(Model):
                 return tensors
             else:
                 return []
+        
+        if name.find("feed_forward.experts") != -1 and name.find("feed_forward.experts.w") == -1:
+            n_experts = self.hparams["num_local_experts"]
+
+            assert bid is not None
+
+            if self._experts is None:
+                self._experts = [{} for _ in range(self.block_count)]
+
+            self._experts[bid][name] = data_torch
+
+            if len(self._experts[bid]) >= n_experts * 3:
+                tensors: list[tuple[str, Tensor]] = []
+
+                # merge the experts into a single 3d tensor
+                for wid in ["w1", "w2", "w3"]:
+                    datas: list[Tensor] = []
+
+                    for xid in range(n_experts):
+                        ename = f"layers.{bid}.feed_forward.experts.{xid}.{wid}.weight"
+                        datas.append(self._experts[bid][ename])
+                        del self._experts[bid][ename]
+
+                    data_torch = torch.stack(datas, dim=0)
+
+                    merged_name = f"layers.{bid}.feed_forward.experts.{wid}.weight"
+
+                    new_name = self.map_tensor_name(merged_name)
+
+                    tensors.append((new_name, data_torch))
+                return tensors
+            else:
+                return []
 
         return [(self.map_tensor_name(name), data_torch)]
 
