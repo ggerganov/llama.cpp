@@ -166,6 +166,25 @@ extern "C" {
         LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
     };
 
+    enum llama_chat_template {
+        LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED  = 0,
+        LLAMA_CHAT_TEMPLATE_CHATML         = 1, // Example: teknium/OpenHermes-2.5-Mistral-7B
+        LLAMA_CHAT_TEMPLATE_LLAMA2         = 2, // Original llama2 template (no <<SYS>> support)
+        LLAMA_CHAT_TEMPLATE_LLAMA2_SYS     = 3, // <<SYS>> support (example: bofenghuang/vigogne-2-70b-chat)
+        LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS = 4, // <<SYS>> support with BOS inside history (example: TomGrc/FusionNet_34Bx2_MoE)
+        LLAMA_CHAT_TEMPLATE_ZEPHYR         = 5, // Example: HuggingFaceH4/zephyr-orpo-141b-A35b-v0.1
+        LLAMA_CHAT_TEMPLATE_MONARCH        = 6, // Example: mlabonne/AlphaMonarch-7B
+        LLAMA_CHAT_TEMPLATE_GEMMA          = 7, // Example: google/gemma-7b-it
+        LLAMA_CHAT_TEMPLATE_ORION          = 8, // Example: OrionStarAI/Orion-14B-Chat
+        LLAMA_CHAT_TEMPLATE_OPENCHAT       = 9, // Example: openchat/openchat-3.5-0106
+        LLAMA_CHAT_TEMPLATE_VICUNA         = 10, // Example: NousResearch/Nous-Capybara-34B
+        LLAMA_CHAT_TEMPLATE_VICUNA_ORCA    = 11, // Variant of vicuna that supports system role
+        LLAMA_CHAT_TEMPLATE_DEEPSEEK       = 12, // Example: deepseek-ai/deepseek-coder-33b-instruct
+        LLAMA_CHAT_TEMPLATE_COMMAND_R      = 13, // Example: CohereForAI/c4ai-command-r-plus
+        LLAMA_CHAT_TEMPLATE_LLAMA3         = 14, // Example: meta-llama/Meta-Llama-3-8B-Instruct
+        LLAMA_CHAT_TEMPLATE_PHI3           = 15, // Example: microsoft/Phi-3-mini-128k-instruct
+    };
+
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
@@ -867,6 +886,10 @@ extern "C" {
                                int32_t   length,
                                   bool   special);
 
+    //
+    // Chat template
+    //
+
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
     /// NOTE: This function does not use a jinja parser. It only support a pre-defined list of template. See more: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
@@ -876,7 +899,7 @@ extern "C" {
     /// @param add_ass Whether to end the prompt with the token(s) that indicate the start of an assistant message.
     /// @param buf A buffer to hold the output formatted prompt. The recommended alloc size is 2 * (total number of characters of all messages)
     /// @param length The size of the allocated buffer
-    /// @return The total number of bytes of the formatted prompt. If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
+    /// @return The total number of bytes of the formatted prompt (null terminator included). If is it larger than the size of buffer, you may need to re-alloc it and then re-apply the template.
     LLAMA_API int32_t llama_chat_apply_template(
               const struct llama_model * model,
                             const char * tmpl,
@@ -885,6 +908,54 @@ extern "C" {
                                   bool   add_ass,
                                   char * buf,
                                int32_t   length);
+
+    /// Get the Jinja model saved inside given model
+    /// @param model The pointer to llama_model
+    /// @param name Template name (can be a nullptr for default template). See: https://github.com/ggerganov/llama.cpp/pull/6588
+    /// @param buf The output buffer
+    /// @param length The size of the allocated buffer
+    /// @return The total number of bytes of the template (null terminator included). If a named template cannot be found, it will use default template. If no template can be found, it returns -1
+    LLAMA_API int32_t llama_chat_get_model_template(
+                const struct llama_model * model,
+                              const char * name,
+                                    char * buf,
+                                 int32_t   length);
+
+    /// Get the value of enum llama_chat_template based on given Jinja template
+    /// @param tmpl Jinja template (a string)
+    /// @return The correct value of enum llama_chat_template
+    LLAMA_API enum llama_chat_template llama_chat_get_typed_template(const char * tmpl);
+
+    /// Get the format prefix for a given message (based on role)
+    /// @param tmpl Use enum llama_chat_template
+    /// @param role The role of the current message
+    /// @param prev_role The role of the previous message, can be nullptr
+    /// @param buf The output buffer
+    /// @param length The size of the allocated buffer
+    /// @return The total number of bytes of the output string (null terminator included)
+    LLAMA_API int32_t llama_chat_get_prefix(
+                const enum llama_chat_template   tmpl,
+                                    const char * role,
+                                    const char * prev_role,
+                                          char * buf,
+                                       int32_t   length);
+
+    /// Get the format postfix for a given message (based on role)
+    /// @param tmpl Use enum llama_chat_template
+    /// @param role The role of the current message
+    /// @param prev_role The role of the previous message, can be nullptr
+    /// @param buf The output buffer
+    /// @param length The size of the allocated buffer
+    /// @return The total number of bytes of the output string (null terminator included)
+    LLAMA_API int32_t llama_chat_get_postfix(
+                const enum llama_chat_template   tmpl,
+                                    const char * role,
+                                    const char * prev_role,
+                                          char * buf,
+                                       int32_t   length);
+
+    /// Check if a given template support system message or not
+    LLAMA_API bool llama_chat_support_system_message(const enum llama_chat_template tmpl);
 
     //
     // Grammar

@@ -17559,204 +17559,306 @@ static std::string trim(const std::string & str) {
     return str.substr(start, end - start);
 }
 
-// Simple version of "llama_apply_chat_template" that only works with strings
-// This function uses heuristic checks to determine commonly used template. It is not a jinja parser.
-static int32_t llama_chat_apply_template_internal(
-    const std::string & tmpl,
-    const std::vector<const llama_chat_message *> & chat,
-    std::string & dest, bool add_ass) {
-    // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
-    std::stringstream ss;
-    if (tmpl == "chatml" || tmpl.find("<|im_start|>") != std::string::npos) {
-        // chatml template
-        for (auto message : chat) {
-            ss << "<|im_start|>" << message->role << "\n" << message->content << "<|im_end|>\n";
+LLAMA_API int32_t llama_chat_get_model_template(
+        const struct llama_model * model,
+        const char * name,
+        char * buf,
+        int32_t length) {
+    GGML_ASSERT(model != nullptr);
+    auto get_meta = [&model](std::string template_key) {
+        // load template from model
+        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        if (res < 0) {
+            return std::string(); // not found
+        } else {
+            return std::string(model_template.data(), model_template.size());
         }
-        if (add_ass) {
-            ss << "<|im_start|>assistant\n";
-        }
-    } else if (tmpl == "llama2" || tmpl.find("[INST]") != std::string::npos) {
-        // llama2 template and its variants
-        // [variant] support system message
-        bool support_system_message = tmpl.find("<<SYS>>") != std::string::npos;
-        // [variant] space before + after response
-        bool space_around_response = tmpl.find("' ' + eos_token") != std::string::npos;
-        // [variant] add BOS inside history
-        bool add_bos_inside_history = tmpl.find("bos_token + '[INST]") != std::string::npos;
-        // [variant] trim spaces from the input message
-        bool strip_message = tmpl.find("content.strip()") != std::string::npos;
-        // construct the prompt
-        bool is_inside_turn = true; // skip BOS at the beginning
-        ss << "[INST] ";
-        for (auto message : chat) {
-            std::string content = strip_message ? trim(message->content) : message->content;
-            std::string role(message->role);
-            if (!is_inside_turn) {
-                is_inside_turn = true;
-                ss << (add_bos_inside_history ? "<s>[INST] " : "[INST] ");
-            }
-            if (role == "system") {
-                if (support_system_message) {
-                    ss << "<<SYS>>\n" << content << "\n<</SYS>>\n\n";
-                } else {
-                    // if the model does not support system message, we still include it in the first message, but without <<SYS>>
-                    ss << content << "\n";
-                }
-            } else if (role == "user") {
-                ss << content << " [/INST]";
-            } else {
-                ss << (space_around_response ? " " : "") << content << (space_around_response ? " " : "") << "</s>";
-                is_inside_turn = false;
-            }
-        }
-        // llama2 templates seem to not care about "add_generation_prompt"
-    } else if (tmpl == "zephyr" || tmpl.find("<|user|>") != std::string::npos) {
-        // zephyr template
-        for (auto message : chat) {
-            ss << "<|" << message->role << "|>" << "\n" << message->content << "<|endoftext|>\n";
-        }
-        if (add_ass) {
-            ss << "<|assistant|>\n";
-        }
-    } else if (tmpl == "monarch" || tmpl.find("bos_token + message['role']") != std::string::npos) {
-        // mlabonne/AlphaMonarch-7B template (the <s> is included inside history)
-        for (auto message : chat) {
-            std::string bos = (message == chat.front()) ? "" : "<s>"; // skip BOS for first message
-            ss << bos << message->role << "\n" << message->content << "</s>\n";
-        }
-        if (add_ass) {
-            ss << "<s>assistant\n";
-        }
-    } else if (tmpl == "gemma" || tmpl.find("<start_of_turn>") != std::string::npos) {
-        // google/gemma-7b-it
-        std::string system_prompt = "";
-        for (auto message : chat) {
-            std::string role(message->role);
-            if (role == "system") {
-                // there is no system message for gemma, but we will merge it with user prompt, so nothing is broken
-                system_prompt = trim(message->content);
-                continue;
-            }
-            // in gemma, "assistant" is "model"
-            role = role == "assistant" ? "model" : message->role;
-            ss << "<start_of_turn>" << role << "\n";
-            if (!system_prompt.empty() && role != "model") {
-                ss << system_prompt << "\n\n";
-                system_prompt = "";
-            }
-            ss << trim(message->content) << "<end_of_turn>\n";
-        }
-        if (add_ass) {
-            ss << "<start_of_turn>model\n";
-        }
-    } else if (tmpl == "orion" || tmpl.find("'\\n\\nAssistant: ' + eos_token") != std::string::npos) {
-        // OrionStarAI/Orion-14B-Chat
-        std::string system_prompt = "";
-        for (auto message : chat) {
-            std::string role(message->role);
-            if (role == "system") {
-                // there is no system message support, we will merge it with user prompt
-                system_prompt = message->content;
-                continue;
-            } else if (role == "user") {
-                ss << "Human: ";
-                if (!system_prompt.empty()) {
-                    ss << system_prompt << "\n\n";
-                    system_prompt = "";
-                }
-                ss << message->content << "\n\nAssistant: </s>";
-            } else {
-                ss << message->content << "</s>";
-            }
-        }
-    } else if (tmpl == "openchat" || tmpl.find("GPT4 Correct ") != std::string::npos) {
-        // openchat/openchat-3.5-0106,
-        for (auto message : chat) {
-            std::string role(message->role);
-            if (role == "system") {
-                ss << message->content << "<|end_of_turn|>";
-            } else {
-                role[0] = toupper(role[0]);
-                ss << "GPT4 Correct " << role << ": " << message->content << "<|end_of_turn|>";
-            }
-        }
-        if (add_ass) {
-            ss << "GPT4 Correct Assistant:";
-        }
-    } else if (tmpl == "vicuna" || tmpl == "vicuna-orca" || (tmpl.find("USER: ") != std::string::npos && tmpl.find("ASSISTANT: ") != std::string::npos)) {
-        // eachadea/vicuna-13b-1.1 (and Orca variant)
-        for (auto message : chat) {
-            std::string role(message->role);
-            if (role == "system") {
-                // Orca-Vicuna variant uses a system prefix
-                if (tmpl == "vicuna-orca" || tmpl.find("SYSTEM: ") != std::string::npos) {
-                    ss << "SYSTEM: " << message->content << "\n";
-                } else {
-                    ss << message->content << "\n\n";
-                }
-            } else if (role == "user") {
-                ss << "USER: " << message->content << "\n";
-            } else if (role == "assistant") {
-                ss << "ASSISTANT: " << message->content << "</s>\n";
-            }
-        }
-        if (add_ass) {
-            ss << "ASSISTANT:";
-        }
-    } else if (tmpl == "deepseek" || (tmpl.find("### Instruction:") != std::string::npos && tmpl.find("<|EOT|>") != std::string::npos)) {
-        // deepseek-ai/deepseek-coder-33b-instruct
-        for (auto message : chat) {
-            std::string role(message->role);
-            if (role == "system") {
-                ss << message->content;
-            } else if (role == "user") {
-                ss << "### Instruction:\n" << message->content << "\n";
-            } else if (role == "assistant") {
-                ss << "### Response:\n" << message->content << "\n<|EOT|>\n";
-            }
-        }
-        if (add_ass) {
-            ss << "### Response:\n";
-        }
-    } else if (tmpl == "command-r" || (tmpl.find("<|START_OF_TURN_TOKEN|>") != std::string::npos && tmpl.find("<|USER_TOKEN|>") != std::string::npos)) {
-        // CohereForAI/c4ai-command-r-plus
-        for (auto message : chat) {
-            std::string role(message->role);
-            if (role == "system") {
-                ss << "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
-            } else if (role == "user") {
-                ss << "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
-            } else if (role == "assistant") {
-                ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
-            }
-        }
-        if (add_ass) {
-            ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>";
-        }
-    } else if (tmpl == "llama3" || (tmpl.find("<|start_header_id|>") != std::string::npos && tmpl.find("<|end_header_id|>") != std::string::npos)) {
-        // Llama 3
-        for (auto message : chat) {
-            std::string role(message->role);
-            ss << "<|start_header_id|>" << role << "<|end_header_id|>\n\n" << trim(message->content) << "<|eot_id|>";
-        }
-        if (add_ass) {
-            ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
-        }
-    } else if (tmpl == "phi3" || (tmpl.find("<|assistant|>") != std::string::npos && tmpl.find("<|end|>") != std::string::npos )) {
-        // Phi 3
-        for (auto message : chat) {
-            std::string role(message->role);
-            ss << "<|" << role << "|>\n" << trim(message->content) << "<|end|>\n";
-        }
-        if (add_ass) {
-            ss << "<|assistant|>\n";
+    };
+    std::string default_meta = "tokenizer.chat_template";
+    std::string model_template;
+    if (name != nullptr) {
+        // support for named template: https://github.com/ggerganov/llama.cpp/pull/6588
+        model_template = get_meta(std::string("tokenizer.chat_template.") + name);
+        if (model_template.empty()) {
+            model_template = get_meta(default_meta);
         }
     } else {
-        // template not supported
-        return -1;
+        // default template
+        model_template = get_meta(default_meta);
     }
-    dest = ss.str();
-    return dest.size();
+    if (model_template.empty()) {
+        return -1;
+    } else {
+        snprintf(buf, length, "%s", model_template.c_str());
+        return model_template.size() + 1;
+    }
+}
+
+LLAMA_API enum llama_chat_template llama_chat_get_typed_template(const char * tmpl) {
+    if (tmpl == nullptr) {
+        return LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED;
+    }
+    std::string stmpl(tmpl);
+    auto tmpl_contains = [&stmpl](std::string needle) {
+        return stmpl.find(needle) != std::string::npos;
+    };
+    if (stmpl == "chatml" || tmpl_contains("<|im_start|>")) {
+        return LLAMA_CHAT_TEMPLATE_CHATML;
+    } else if (stmpl == "llama2" || tmpl_contains("[INST]")) {
+        // [variant] support system message
+        bool support_system_message = tmpl_contains("<<SYS>>");
+        // [variant] add BOS inside history
+        bool add_bos_inside_history = tmpl_contains("bos_token + '[INST]");
+        if (support_system_message && add_bos_inside_history) {
+            return LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS;
+        } else if (support_system_message) {
+            return LLAMA_CHAT_TEMPLATE_LLAMA2_SYS;
+        } else {
+            return LLAMA_CHAT_TEMPLATE_LLAMA2;
+        }
+    } else if (stmpl == "zephyr" || tmpl_contains("<|user|>")) {
+        return LLAMA_CHAT_TEMPLATE_ZEPHYR;
+    } else if (stmpl == "monarch" || tmpl_contains("bos_token + message['role']")) {
+        return LLAMA_CHAT_TEMPLATE_MONARCH;
+    } else if (stmpl == "gemma" || tmpl_contains("<start_of_turn>")) {
+        return LLAMA_CHAT_TEMPLATE_GEMMA;
+    } else if (stmpl == "orion" || tmpl_contains("'\\n\\nAssistant: ' + eos_token")) {
+        return LLAMA_CHAT_TEMPLATE_ORION;
+    } else if (stmpl == "openchat" || tmpl_contains("GPT4 Correct ")) {
+        return LLAMA_CHAT_TEMPLATE_OPENCHAT;
+    } else if (stmpl == "vicuna" || stmpl == "vicuna-orca" || (tmpl_contains("USER: ") && tmpl_contains("ASSISTANT: "))) {
+        // [variant] support system message
+        if (stmpl == "vicuna-orca" || tmpl_contains("SYSTEM: ")) {
+            return LLAMA_CHAT_TEMPLATE_VICUNA_ORCA;
+        } else {
+            return LLAMA_CHAT_TEMPLATE_VICUNA;
+        }
+    } else if (stmpl == "deepseek" || (tmpl_contains("### Instruction:") && tmpl_contains("<|EOT|>"))) {
+        return LLAMA_CHAT_TEMPLATE_DEEPSEEK;
+    } else if (stmpl == "command-r" || (tmpl_contains("<|START_OF_TURN_TOKEN|>") && tmpl_contains("<|USER_TOKEN|>"))) {
+        return LLAMA_CHAT_TEMPLATE_COMMAND_R;
+    } else if (stmpl == "llama3" || (tmpl_contains("<|start_header_id|>") && tmpl_contains("<|end_header_id|>"))) {
+        return LLAMA_CHAT_TEMPLATE_LLAMA3;
+    } else if (stmpl == "phi3" || (tmpl_contains("<|assistant|>") && tmpl_contains("<|end|>"))) {
+        return LLAMA_CHAT_TEMPLATE_PHI3;
+    } else {
+        // template not supported
+        return LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED;
+    }
+}
+
+LLAMA_API int32_t llama_chat_get_prefix(
+        const enum llama_chat_template ttmpl,
+        const char * role,
+        const char * prev_role,
+        char * buf,
+        int32_t length) {
+    std::stringstream ss;
+    std::string srole(role);
+    std::string sprev_role(prev_role == nullptr ? "" : prev_role);
+    // str_toupper converts a string to all upper case, example: "abc" ==> "ABC"
+    auto str_toupper = [](std::string & str) {
+        std::string output(str);
+        for (size_t i = 0; i < output.size(); i++) {
+            output[i] = toupper(output[i]);
+        }
+        return output;
+    };
+    // str_tofirstcap transforms first letter to uppercase, example: "abc" ==> "Abc"
+    auto str_tofirstcap = [](std::string & str) {
+        std::string output(str);
+        output[0] = toupper(output[0]);
+        return output;
+    };
+    // ttmpl means "typed template"
+    // before adding a new template, please see the guide here: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template#how-to-add-a-new-template
+    switch (ttmpl) {
+        case LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED:
+            return -1;
+        case LLAMA_CHAT_TEMPLATE_CHATML:
+            ss << "<|im_start|>" << srole << "\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_LLAMA2:
+            if (srole == "user") {
+                ss << "[INST] ";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS:
+            if (srole == "system") {
+                ss << "[INST] <<SYS>>\n";
+            } else if (srole == "user" && sprev_role != "system") {
+                if (!sprev_role.empty()) {
+                    ss << "<s>";
+                }
+                ss << "[INST] ";
+            } else if (srole == "assistant") {
+                ss << " ";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS:
+            if (srole == "system") {
+                ss << "[INST] <<SYS>>\n";
+            } else if (srole == "user" && sprev_role != "system") {
+                ss << "[INST] ";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_ZEPHYR:
+            ss << "<|" << srole << "|>" << "\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_MONARCH:
+            {
+                std::string bos = sprev_role.empty() ? "" : "<s>"; // skip BOS for first message
+                ss << bos << srole << "\n";
+            } break;
+        case LLAMA_CHAT_TEMPLATE_GEMMA:
+            // for gemma, "assistant" is "model"
+            srole = srole == "assistant" ? "model" : srole;
+            ss << "<start_of_turn>" << srole << "\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_ORION:
+            // for orion, "user" is "human"
+            srole = srole == "user" ? "human" : srole;
+            ss << str_tofirstcap(srole) << ": ";
+            if (srole == "assistant") {
+                ss << "</s>";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_OPENCHAT:
+            if (srole == "system") {
+                ss << "";
+            } else {
+                ss << "GPT4 Correct " << str_tofirstcap(srole) << ": ";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_VICUNA:
+        case LLAMA_CHAT_TEMPLATE_VICUNA_ORCA:
+            // TODO: original vicuna template does not support system message
+            ss << str_toupper(srole) << ": ";
+            break;
+        case LLAMA_CHAT_TEMPLATE_DEEPSEEK:
+            if (srole == "user") {
+                ss << "### Instruction:\n";
+            } else {
+                ss << "### Response:\n";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_COMMAND_R:
+            // for command-r, "assistant" is "chatbot"
+            srole = srole == "assistant" ? "chatbot" : srole;
+            ss << "<|START_OF_TURN_TOKEN|><|" << str_toupper(srole) << "_TOKEN|>";
+            break;
+        case LLAMA_CHAT_TEMPLATE_LLAMA3:
+            ss << "<|start_header_id|>" << srole << "<|end_header_id|>\n\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_PHI3:
+            ss << "<|" << srole << "|>\n";
+            break;
+    }
+    std::string output = ss.str();
+    snprintf(buf, length, "%s", output.c_str());
+    return output.size() + 1;
+}
+
+LLAMA_API int32_t llama_chat_get_postfix(
+        const enum llama_chat_template ttmpl,
+        const char * role,
+        const char * prev_role,
+        char * buf,
+        int32_t length) {
+    std::stringstream ss;
+    std::string srole(role);
+    std::string sprev_role(prev_role == nullptr ? "" : prev_role);
+    switch (ttmpl) {
+        case LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED:
+            return -1;
+        case LLAMA_CHAT_TEMPLATE_CHATML:
+            ss << "<|im_end|>\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_LLAMA2:
+            if (srole == "user") {
+                ss << " [/INST]";
+            } else if (srole == "assistant") {
+                ss << "</s>";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS:
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS:
+            if (srole == "system") {
+                ss << "\n<</SYS>>\n\n";
+            } else if (srole == "user") {
+                ss << " [/INST]";
+            } else if (srole == "assistant") {
+                ss << " </s>";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_ZEPHYR:
+            ss << "<|endoftext|>" << "\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_MONARCH:
+            ss << "</s>\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_GEMMA:
+            ss << "<end_of_turn>\n";
+            break;
+        case LLAMA_CHAT_TEMPLATE_ORION:
+            if (srole == "assistant") {
+                ss << "</s>";
+            } else {
+                ss << "\n\n";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_OPENCHAT:
+            srole[0] = toupper(srole[0]);
+            ss << "<|end_of_turn|>";
+            break;
+        case LLAMA_CHAT_TEMPLATE_VICUNA:
+        case LLAMA_CHAT_TEMPLATE_VICUNA_ORCA:
+            if (srole == "assistant") {
+                ss << "</s>\n";
+            } else {
+                ss << "\n";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_DEEPSEEK:
+            if (srole == "user") {
+                ss << "\n";
+            } else {
+                ss << "\n<|EOT|>\n";
+            }
+            break;
+        case LLAMA_CHAT_TEMPLATE_COMMAND_R:
+            ss << "<|END_OF_TURN_TOKEN|>";
+            break;
+        case LLAMA_CHAT_TEMPLATE_LLAMA3:
+            ss << "<|eot_id|>";
+            break;
+        case LLAMA_CHAT_TEMPLATE_PHI3:
+            ss << "<|end|>\n";
+            break;
+    }
+    std::string output = ss.str();
+    snprintf(buf, length, "%s", output.c_str());
+    return output.size() + 1;
+}
+
+LLAMA_API bool llama_chat_support_system_message(const enum llama_chat_template ttmpl) {
+    switch (ttmpl) {
+        case LLAMA_CHAT_TEMPLATE_CHATML:
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS_BOS:
+        case LLAMA_CHAT_TEMPLATE_LLAMA2_SYS:
+        case LLAMA_CHAT_TEMPLATE_ZEPHYR:
+        case LLAMA_CHAT_TEMPLATE_MONARCH:
+        case LLAMA_CHAT_TEMPLATE_ORION:
+        case LLAMA_CHAT_TEMPLATE_OPENCHAT:
+        case LLAMA_CHAT_TEMPLATE_VICUNA_ORCA:
+        case LLAMA_CHAT_TEMPLATE_COMMAND_R:
+        case LLAMA_CHAT_TEMPLATE_LLAMA3:
+        case LLAMA_CHAT_TEMPLATE_PHI3:
+            return true;
+        default:
+            return false;
+    }
 }
 
 LLAMA_API int32_t llama_chat_apply_template(
@@ -17767,37 +17869,67 @@ LLAMA_API int32_t llama_chat_apply_template(
                                     bool   add_ass,
                                     char * buf,
                                  int32_t   length) {
+    // either model or tmpl must be given
+    GGML_ASSERT(model != nullptr || tmpl != nullptr);
     std::string curr_tmpl(tmpl == nullptr ? "" : tmpl);
     if (tmpl == nullptr) {
-        GGML_ASSERT(model != nullptr);
-        // load template from model
         std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
-        std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        int32_t res = llama_chat_get_model_template(model, nullptr, model_template.data(), model_template.size());
         if (res < 0) {
             // worst case: there is no information about template, we will use chatml by default
-            curr_tmpl = "chatml"; // see llama_chat_apply_template_internal
+            curr_tmpl = "chatml";
         } else {
             curr_tmpl = std::string(model_template.data(), model_template.size());
         }
     }
 
-    // format the chat to string
-    std::vector<const llama_chat_message *> chat_vec;
-    chat_vec.resize(n_msg);
-    for (size_t i = 0; i < n_msg; i++) {
-        chat_vec[i] = &chat[i];
+    // detect template type
+    enum llama_chat_template ttmpl = llama_chat_get_typed_template(curr_tmpl.c_str());
+    bool support_system_message = llama_chat_support_system_message(ttmpl);
+    if (ttmpl == LLAMA_CHAT_TEMPLATE_NOT_SUPPORTED) {
+        return -1;
     }
 
-    std::string formatted_chat;
-    int32_t res = llama_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass);
-    if (res < 0) {
-        return res;
+    // format the chat to string
+    std::stringstream ss;
+    std::string prev_role;
+    bool merge_system_message = false;
+    for (size_t i = 0; i < n_msg; i++) {
+        std::string role(chat[i].role);
+        std::string content(chat[i].content);
+        // if the template does not support system message, we merge it with the next message
+        if (role == "system" && !support_system_message) {
+            merge_system_message = true;
+            continue;
+        }
+        if (merge_system_message && i > 0) {
+            content = std::string(chat[i - 1].content) + "\n\n" + content;
+            merge_system_message = false;
+        }
+        std::vector<char> prefix(1024, 0);
+        std::vector<char> postfix(1024, 0);
+        llama_chat_get_prefix(ttmpl, role.c_str(), prev_role.c_str(), prefix.data(), prefix.size());
+        llama_chat_get_postfix(ttmpl, role.c_str(), prev_role.c_str(), postfix.data(), postfix.size());
+        ss << std::string(prefix.data()) << trim(content) << std::string(postfix.data());
+        prev_role = role;
     }
+
+    if (add_ass) {
+        std::vector<char> prefix(1024, 0);
+        llama_chat_get_prefix(ttmpl, "assistant", prev_role.c_str(), prefix.data(), prefix.size());
+        std::string assistant_prompt(prefix.data());
+        if (assistant_prompt.back() == ' ') {
+            // Some templates need trailing space to be tokenized with the next word. We should make sure there is no trailing in the output text
+            assistant_prompt.pop_back();
+        }
+        ss << assistant_prompt;
+    }
+
+    std::string output = ss.str();
     if (buf && length > 0) {
-        strncpy(buf, formatted_chat.c_str(), length);
+        snprintf(buf, length, "%s", output.c_str());
     }
-    return res;
+    return output.size() + 1;
 }
 
 LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {
