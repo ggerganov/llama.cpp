@@ -17,3 +17,16 @@ python ./convert.py ../MiniCPM-V-2_5/model  --outtype f16 --vocab-type bpe
 # or run in interactive mode
 ./minicpmv-cli -m ../MiniCPM-V-2_5/model/ggml-model-Q4_K_M.gguf --mmproj ../MiniCPM-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg -i
 ```
+
+# 在 Android 上运行
+# Run on android
+
+```bash
+mkdir build-android
+cd build-android
+export NDK=/your_ndk_path
+cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 -DCMAKE_C_FLAGS=-march=armv8.4a+dotprod ..
+make
+cd bin
+# then llava-cli is the file you need to put on the phone.
+```
