@@ -14,13 +14,21 @@ class ApiEP {
 }
 
 let gUsageMsg = `
-    <ul>
+    <ul class="ul1">
     <li> Set system prompt above, to try control ai response charactersitic, if model supports same.</li>
-    <li> + Completion mode normally wont have a system prompt.</li>
+        <ul class="ul2">
+        <li> Completion mode normally wont have a system prompt.</li>
+        </ul>
     <li> Enter your query to ai assistant below.</li>
-    <li> + Completion mode doesnt insert user/role: prefix implicitly.</li>
-    <li> + Use shift+enter for inserting enter/newline.</li>
+        <ul class="ul2">
+        <li> Completion mode doesnt insert user/role: prefix implicitly.</li>
+        <li> Use shift+enter for inserting enter/newline.</li>
+        </ul>
     <li> Refresh the page to start over fresh.</li>
+        <ul class="ul2">
+        <li> old chat is not culled when sending to server/ai-model.</li>
+        <li> either use New CHAT, or refresh if chat getting long.</li>
+        </ul>
     </ul>
 `;
 

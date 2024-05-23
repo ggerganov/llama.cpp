@@ -68,6 +68,8 @@ Once inside
     can use it just for normal completion related/based query.
 
 * If you want to provide a system prompt, then ideally enter it first, before entering any user query.
+  Normally Completion mode doesnt need system prompt, while Chat mode can generate better/interesting
+  responses with a suitable system prompt.
   * if chat.add_system_begin is used
     * you cant change the system prompt, after it is has been submitted once along with user query.
     * you cant set a system prompt, after you have submitted any user query
@@ -91,6 +93,13 @@ Once inside
 
 ## Devel note
 
+gChatRequestOptions maintains the list of options/fields to send along with chat request,
+irrespective of whether /chat/completions or /completions endpoint.
+
+  If you want to add additional options/fields to send to the server/ai-model, and or
+  modify the existing options value, for now you can update this global var using
+  browser's development-tools/console.
+
 Sometimes the browser may be stuborn with caching of the file, so your updates to html/css/js
 may not be visible. Also remember that just refreshing/reloading page in browser or for that
 matter clearing site data, dont directly override site caching in all cases. Worst case you may
@@ -103,3 +112,14 @@ not been added, for now.
 
 By switching between chat.add_system_begin/anytime, one can control whether one can change
 the system prompt, anytime during the conversation or only at the beginning.
+
+read_json_early, is to experiment with reading json response data early on, if available,
+so that user can be shown generated data, as and when it is being generated, rather than
+at the end when full data is available.
+
+  the server flow doesnt seem to be sending back data early, atleast for request (inc options)
+  that is currently sent.
+
+  if able to read json data early on in future, as and when ai model is generating data, then
+  this helper needs to indirectly update the chat div with the recieved data, without waiting
+  for the overall data to be available.
