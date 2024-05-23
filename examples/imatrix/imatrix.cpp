@@ -19,10 +19,12 @@
 
 struct Stats {
     std::vector<float> values;
+    std::vector<int> counts;
     int ncall = 0;
 };
 
 struct StatParams {
+    std::string dataset;
     std::string ofile = "imatrix.dat";
     int         n_output_frequency = 10;
     int         verbosity = 1;
@@ -46,7 +48,7 @@ private:
     std::vector<float>                     m_src1_data;
     std::vector<char>                      m_ids; // the expert ids from ggml_mul_mat_id
                                                   //
-    void save_imatrix(const char * file_name) const;
+    void save_imatrix(const char * file_name, const char * dataset) const;
     void keep_imatrix(int ncall) const;
 };
 
@@ -120,12 +122,10 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         auto & e = m_stats[wname];
 
         ++e.ncall;
-        // NOTE: since we select top-k experts, the number of calls for the expert tensors will be k times larger
-        //       using the following line, we can correct for that if needed by replacing the line above with:
-        //if (idx == t->src[0]->ne[0] - 1) ++e.ncall;
 
         if (e.values.empty()) {
             e.values.resize(src1->ne[0]*n_as, 0);
+            e.counts.resize(src1->ne[0]*n_as, 0);
         }
         else if (e.values.size() != (size_t)src1->ne[0]*n_as) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
@@ -152,6 +152,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
                     for (int j = 0; j < (int)src1->ne[0]; ++j) {
                         e.values[e_start + j] += x[j]*x[j];
+                        e.counts[e_start + j]++;
                     }
                 }
             }
@@ -169,6 +170,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         auto& e = m_stats[wname];
         if (e.values.empty()) {
             e.values.resize(src1->ne[0], 0);
+            e.counts.resize(src1->ne[0], 0);
         }
         else if (e.values.size() != (size_t)src1->ne[0]) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]);
@@ -182,6 +184,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             const float * x = data + row * src1->ne[0];
             for (int j = 0; j < (int)src1->ne[0]; ++j) {
                 e.values[j] += x[j]*x[j];
+                e.counts[j]++;
             }
         }
         if (e.ncall > m_last_call) {
@@ -199,7 +202,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 }
 
 void IMatrixCollector::save_imatrix() const {
-    save_imatrix(m_params.ofile.empty() ? "imatrix.dat" : m_params.ofile.c_str());
+    save_imatrix(m_params.ofile.empty() ? "imatrix.dat" : m_params.ofile.c_str(), m_params.dataset.c_str());
 }
 
 void IMatrixCollector::keep_imatrix(int ncall) const {
@@ -207,24 +210,39 @@ void IMatrixCollector::keep_imatrix(int ncall) const {
     if (file_name.empty()) file_name = "imatrix.dat";
     file_name += ".at_";
     file_name += std::to_string(ncall);
-    save_imatrix(file_name.c_str());
+    save_imatrix(file_name.c_str(), m_params.dataset.c_str());
 }
 
-void IMatrixCollector::save_imatrix(const char * fname) const {
+void IMatrixCollector::save_imatrix(const char * fname, const char * dataset) const {
     std::ofstream out(fname, std::ios::binary);
     int n_entries = m_stats.size();
-    out.write((const char*)&n_entries, sizeof(n_entries));
-    for (auto& p : m_stats) {
+    out.write((const char *) &n_entries, sizeof(n_entries));
+    for (const auto & p : m_stats) {
         int len = p.first.size();
-        out.write((const char*)&len, sizeof(len));
+        out.write((const char *) &len, sizeof(len));
         out.write(p.first.c_str(), len);
-        out.write((const char*)&p.second.ncall, sizeof(p.second.ncall));
+        out.write((const char *) &p.second.ncall, sizeof(p.second.ncall));
         int nval = p.second.values.size();
-        out.write((const char*)&nval, sizeof(nval));
-        if (nval > 0) out.write((const char*)p.second.values.data(), nval*sizeof(float));
+        out.write((const char *) &nval, sizeof(nval));
+        if (nval > 0) {
+            std::vector<float> tmp(nval);
+            for (int i = 0; i < nval; i++) {
+                tmp[i] = (p.second.values[i] / static_cast<float>(p.second.counts[i])) * static_cast<float>(p.second.ncall);
+            }
+            out.write((const char*)tmp.data(), nval*sizeof(float));
+        }
     }
+
+    // Write the number of call the matrix was computed with
+    out.write((const char *) &m_last_call, sizeof(m_last_call));
+
+    // Write the dataset name at the end of the file to later on specify it in quantize
+    int n_dataset = strlen(dataset);
+    out.write((const char *) &n_dataset, sizeof(n_dataset));
+    out.write(dataset, n_dataset);
+
     if (m_params.verbosity > 0) {
-        fprintf(stderr, "\n%s: stored collected data after %d chunks in %s\n",__func__,m_last_call,fname);
+        fprintf(stderr, "\n%s: stored collected data after %d chunks in %s\n", __func__, m_last_call, fname);
     }
 }
 
@@ -260,14 +278,28 @@ bool IMatrixCollector::load_imatrix(const char * imatrix_file, std::unordered_ma
             imatrix_data = {};
             return false;
         }
-        e.values.resize(nval);
-        in.read((char*)e.values.data(), nval*sizeof(float));
+
+        // When re-called from load_imatrix() with add set, this will already be created.
+        if (e.values.empty()) {
+            e.values.resize(nval, 0);
+            e.counts.resize(nval, 0);
+        }
+
+        std::vector<float> tmp(nval);
+        in.read((char*)tmp.data(), nval*sizeof(float));
         if (in.fail()) {
             printf("%s: failed reading data for entry %d\n",__func__,i);
             imatrix_data = {};
             return false;
         }
-        e.ncall = ncall;
+
+        // Recreate the state as expected by save_imatrix(), and corerct for weighted sum.
+        for (int i = 0; i < nval; i++) {
+            e.values[i] += tmp[i];
+            e.counts[i] += ncall;
+        }
+        e.ncall += ncall;
+
     }
     return true;
 }
@@ -547,6 +579,29 @@ int main(int argc, char ** argv) {
         }
     }
 
+    gpt_params params;
+    params.n_batch = 512;
+    if (!gpt_params_parse(args.size(), args.data(), params)) {
+        return 1;
+    }
+
+    params.logits_all = true;
+    params.n_batch = std::min(params.n_batch, params.n_ctx);
+
+    print_build_info();
+
+    if (params.seed == LLAMA_DEFAULT_SEED) {
+        params.seed = time(NULL);
+    }
+
+    fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
+
+    std::mt19937 rng(params.seed);
+    if (params.random_prompt) {
+        params.prompt = string_random_prompt(rng);
+    }
+
+    sparams.dataset = params.prompt_file;
     g_collector.set_parameters(std::move(sparams));
 
     if (!combine_files.empty()) {
@@ -585,28 +640,6 @@ int main(int argc, char ** argv) {
         }
     }
 
-    gpt_params params;
-    params.n_batch = 512;
-    if (!gpt_params_parse(args.size(), args.data(), params)) {
-        return 1;
-    }
-
-    params.logits_all = true;
-    params.n_batch = std::min(params.n_batch, params.n_ctx);
-
-    print_build_info();
-
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-    }
-
-    fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
-
-    std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
-    }
-
     llama_backend_init();
     llama_numa_init(params.numa);
 
@@ -634,7 +667,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     bool OK = compute_imatrix(ctx, params, compute_ppl, from_chunk);

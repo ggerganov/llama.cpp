@@ -1,0 +1,78 @@
+# https://github.com/actions/labeler
+
+SYCL:
+    - changed-files:
+        - any-glob-to-any-file:
+            - ggml-sycl.h
+            - ggml-sycl.cpp
+            - README-sycl.md
+Nvidia GPU:
+    - changed-files:
+        - any-glob-to-any-file:
+            - ggml-cuda/**
+Vulkan:
+    - changed-files:
+        - any-glob-to-any-file:
+            - ggml_vk_generate_shaders.py
+            - ggml-vulkan*
+documentation:
+    - changed-files:
+        - any-glob-to-any-file:
+            - docs/**
+            - media/**
+testing:
+    - changed-files:
+        - any-glob-to-any-file:
+            - tests/**
+build:
+    - changed-files:
+        - any-glob-to-any-file:
+            - cmake/**
+            - CMakeLists.txt
+            - CMakePresets.json
+            - codecov.yml
+examples:
+    - changed-files:
+        - any-glob-to-any-file: examples/**
+devops:
+    - changed-files:
+        - any-glob-to-any-file:
+            - .devops/**
+            - .github/**
+            - ci/**
+python:
+    - changed-files:
+        - any-glob-to-any-file:
+            - "**/*.py"
+            - requirements/**
+            - gguf-py/**
+            - .flake8
+script:
+    - changed-files:
+        - any-glob-to-any-file:
+            - scripts/**
+android:
+    - changed-files:
+        - any-glob-to-any-file:
+            - examples/llama.android/**
+server:
+    - changed-files:
+        - any-glob-to-any-file:
+            - examples/server/**
+ggml:
+    - changed-files:
+        - any-glob-to-any-file:
+            - ggml.c
+            - ggml.h
+            - ggml-*.c
+            - ggml-*.h
+            - ggml-cuda/**
+nix:
+    - changed-files:
+        - any-glob-to-any-file:
+            - "**/*.nix"
+            - .github/workflows/nix-*.yml
+            - .devops/nix/nixpkgs-instances.nix
+embedding:
+    - changed-files:
+        - any-glob-to-any-file: examples/embedding/

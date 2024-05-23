@@ -18,10 +18,8 @@ RUN apt-get update && \
 # Build it
 WORKDIR /app
 COPY . .
-RUN mkdir build && \
-    cd build && \
-    cmake .. -DLLAMA_VULKAN=1 -DLLAMA_CURL=1 && \
-    cmake --build . --config Release --target server
+RUN cmake -B build -DLLAMA_VULKAN=1 -DLLAMA_CURL=1 && \
+    cmake --build build --config Release --target server
 
 # Clean up
 WORKDIR /

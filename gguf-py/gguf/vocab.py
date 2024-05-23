@@ -1,23 +1,25 @@
 from __future__ import annotations
 
+import logging
 import json
 import os
-import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence, Mapping, Iterable
 
 from .gguf_writer import GGUFWriter
+
+logger = logging.getLogger(__name__)
 
 
 class SpecialVocab:
     merges: list[str]
     add_special_token: dict[str, bool]
     special_token_ids: dict[str, int]
-    chat_template: str | None
+    chat_template: str | Sequence[Mapping[str, str]] | None
 
     def __init__(
         self, path: str | os.PathLike[str], load_merges: bool = False,
-        special_token_types: tuple[str, ...] | None = None,
+        special_token_types: Iterable[str] | None = None,
         n_vocab: int | None = None,
     ):
         self.special_token_ids = {}
@@ -40,38 +42,29 @@ class SpecialVocab:
     def add_to_gguf(self, gw: GGUFWriter, quiet: bool = False) -> None:
         if self.merges:
             if not quiet:
-                print(f'gguf: Adding {len(self.merges)} merge(s).')
+                logger.info(f'Adding {len(self.merges)} merge(s).')
             gw.add_token_merges(self.merges)
         elif self.load_merges:
-            print(
-                'gguf: WARNING: Adding merges requested but no merges found, output may be non-functional.',
-                file = sys.stderr,
-            )
+            logger.warning('Adding merges requested but no merges found, output may be non-functional.')
         for typ, tokid in self.special_token_ids.items():
             id_handler: Callable[[int], None] | None = getattr(gw, f'add_{typ}_token_id', None)
             if id_handler is None:
-                print(
-                    f'gguf: WARNING: No handler for special token type {typ} with id {tokid} - skipping',
-                    file = sys.stderr,
-                )
+                logger.warning(f'No handler for special token type {typ} with id {tokid} - skipping')
                 continue
             if not quiet:
-                print(f'gguf: Setting special token type {typ} to {tokid}')
+                logger.info(f'Setting special token type {typ} to {tokid}')
             id_handler(tokid)
         for typ, value in self.add_special_token.items():
             add_handler: Callable[[bool], None] | None = getattr(gw, f'add_add_{typ}_token', None)
             if add_handler is None:
-                print(
-                    f'gguf: WARNING: No handler for add_{typ}_token with value {value} - skipping',
-                    file = sys.stderr,
-                )
+                logger.warning(f'No handler for add_{typ}_token with value {value} - skipping')
                 continue
             if not quiet:
-                print(f'gguf: Setting add_{typ}_token to {value}')
+                logger.info(f'Setting add_{typ}_token to {value}')
             add_handler(value)
         if self.chat_template is not None:
             if not quiet:
-                print(f'gguf: Setting chat_template to {self.chat_template}')
+                logger.info(f'Setting chat_template to {self.chat_template}')
             gw.add_chat_template(self.chat_template)
 
     def _load(self, path: Path) -> None:
@@ -99,10 +92,7 @@ class SpecialVocab:
                     continue
                 parts = line.split(None, 3)
                 if len(parts) != 2:
-                    print(
-                        f'gguf: WARNING: {merges_file.name}: Line {line_num}: Entry malformed, ignoring',
-                        file = sys.stderr,
-                    )
+                    logger.warning(f'{merges_file.name}: Line {line_num}: Entry malformed, ignoring')
                     continue
                 merges.append(f'{parts[0]} {parts[1]}')
         self.merges = merges
@@ -118,10 +108,7 @@ class SpecialVocab:
                 return
             self.special_token_ids[typ] = tid
             return
-        print(
-            f'gguf: WARNING: Special token type {typ}, id {tid} out of range, must be under {self.n_vocab} - skipping',
-            file = sys.stderr,
-        )
+        logger.warning(f'Special token type {typ}, id {tid} out of range, must be under {self.n_vocab} - skipping')
 
     def _try_load_from_tokenizer_json(self, path: Path) -> bool:
         tokenizer_file = path / 'tokenizer.json'
@@ -144,10 +131,7 @@ class SpecialVocab:
         if chat_template is None or isinstance(chat_template, (str, list)):
             self.chat_template = chat_template
         else:
-            print(
-                f'gguf: WARNING: Bad type for chat_template field in {tokenizer_config_file!r} - ignoring',
-                file = sys.stderr
-            )
+            logger.warning(f'Bad type for chat_template field in {tokenizer_config_file!r} - ignoring')
         for typ in self.special_token_types:
             add_entry = tokenizer_config.get(f'add_{typ}_token')
             if isinstance(add_entry, bool):
