@@ -27,20 +27,26 @@
 #define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
 
 #define print_build_info() do {                                                                     \
-    fprintf(stderr, "%s: build = %d (%s)\n", __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);           \
+    fprintf(stderr, "%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);      \
     fprintf(stderr, "%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);    \
 } while(0)
 
+#define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
-extern char const *LLAMA_COMMIT;
-extern char const *LLAMA_COMPILER;
-extern char const *LLAMA_BUILD_TARGET;
+extern char const * LLAMA_COMMIT;
+extern char const * LLAMA_COMPILER;
+extern char const * LLAMA_BUILD_TARGET;
 
 struct llama_control_vector_load_info;
 
-int get_math_cpu_count();
-int32_t get_num_physical_cores();
+//
+// CPU utils
+//
+
+int32_t cpu_get_num_physical_cores();
+int32_t cpu_get_num_math();
 
 //
 // CLI argument parsing
@@ -49,7 +55,7 @@ int32_t get_num_physical_cores();
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
-    int32_t n_threads             = get_math_cpu_count();
+    int32_t n_threads             = cpu_get_num_math();
     int32_t n_threads_draft       = -1;
     int32_t n_threads_batch       = -1;    // number of threads to use for batch processing (-1 = use n_threads)
     int32_t n_threads_batch_draft = -1;
@@ -80,6 +86,7 @@ struct gpt_params {
     float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
     int32_t yarn_orig_ctx         = 0;     // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
+    std::string rpc_servers       = "";    // comma separated list of RPC servers
 
     ggml_backend_sched_eval_callback cb_eval = nullptr;
     void * cb_eval_user_data                 = nullptr;
@@ -92,7 +99,7 @@ struct gpt_params {
     // // sampling parameters
     struct llama_sampling_params sparams;
 
-    std::string model                = "models/7B/ggml-model-f16.gguf"; // model path
+    std::string model                = "";  // model path
     std::string model_draft          = "";  // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = "";  // model url to download
@@ -133,11 +140,13 @@ struct gpt_params {
     bool   multiple_choice = false; // compute TruthfulQA score over random tasks from datafile supplied in prompt
     size_t multiple_choice_tasks = 0;     // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
 
-    bool   kl_divergence   = false; // compute KL-divergence
+    bool   kl_divergence   = false; // compute KL divergence
 
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
+    bool interactive_specials = false; // whether to allow special tokens from user, during interactive mode
+    bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
     bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
@@ -148,6 +157,7 @@ struct gpt_params {
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
     bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
+    bool flash_attn        = false; // flash attention
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
@@ -167,36 +177,40 @@ struct gpt_params {
     std::string cache_type_v = "f16"; // KV cache data type for the V
 
     // multimodal models (see examples/llava)
-    std::string mmproj = ""; // path to multimodal projector
-    std::string image  = ""; // path to an image file
+    std::string mmproj = "";        // path to multimodal projector
+    std::vector<std::string> image; // path to image file(s)
 };
 
-bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
+void gpt_params_handle_model_default(gpt_params & params);
 
-bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params);
+bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
+bool gpt_params_parse      (int argc, char ** argv, gpt_params & params);
+bool gpt_params_find_arg   (int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
+void gpt_params_print_usage(int argc, char ** argv, const gpt_params & params);
 
-bool gpt_params_parse(int argc, char ** argv, gpt_params & params);
-
-void gpt_print_usage(int argc, char ** argv, const gpt_params & params);
-
-bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
-
-std::string get_system_info(const gpt_params & params);
-
-std::string gpt_random_prompt(std::mt19937 & rng);
-
-void process_escapes(std::string& input);
-
-bool validate_file_name(const std::string & filename);
+std::string gpt_params_get_system_info(const gpt_params & params);
 
 //
 // String utils
 //
 
-std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
-std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string);
 std::vector<std::string> string_split(std::string input, char separator);
-std::string sampler_type_to_name_string(llama_sampler_type sampler_type);
+
+std::string string_strip(const std::string & str);
+std::string string_get_sortable_timestamp();
+std::string string_random_prompt(std::mt19937 & rng);
+
+bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
+void string_process_escapes(std::string & input);
+
+//
+// Filesystem utils
+//
+
+bool fs_validate_filename(const std::string & filename);
+bool fs_create_directory_with_parents(const std::string & path);
+
+std::string fs_get_cache_directory();
 
 //
 // Model utils
@@ -268,28 +282,14 @@ std::string llama_detokenize_bpe(
 bool llama_should_add_bos_token(const llama_model * model);
 
 //
-// YAML utils
-//
-
-bool create_directory_with_parents(const std::string & path);
-void dump_vector_float_yaml(FILE * stream, const char * prop_name, const std::vector<float> & data);
-void dump_vector_int_yaml(FILE * stream, const char * prop_name, const std::vector<int> & data);
-void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const char * data);
-std::string get_sortable_timestamp();
-
-void dump_non_result_info_yaml(
-    FILE * stream, const gpt_params & params, const llama_context * lctx,
-    const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
-
-//
 // KV cache utils
 //
 
 // Dump the KV cache view with the number of sequences per cell.
-void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size = 80);
+void llama_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size = 80);
 
 // Dump the KV cache view showing individual sequences in each cell (long output).
-void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size = 40);
+void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size = 40);
 
 //
 // Embedding utils
@@ -323,6 +323,20 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
 //
 // Split utils
 //
+
 static const char * const LLM_KV_SPLIT_NO            = "split.no";
 static const char * const LLM_KV_SPLIT_COUNT         = "split.count";
 static const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
+
+//
+// YAML utils
+//
+
+void yaml_dump_vector_float    (FILE * stream, const char * prop_name, const std::vector<float> & data);
+void yaml_dump_vector_int      (FILE * stream, const char * prop_name, const std::vector<int> & data);
+void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const char * data);
+
+void yaml_dump_non_result_info(
+    FILE * stream, const gpt_params & params, const llama_context * lctx,
+    const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
+

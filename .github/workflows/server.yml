@@ -32,10 +32,8 @@ jobs:
 
     strategy:
       matrix:
-        # TODO: temporary disabled due to linux kernel issues
-        #sanitizer: [ADDRESS, THREAD, UNDEFINED]
-        sanitizer: [UNDEFINED]
-        build_type: [Debug]
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [RelWithDebInfo]
         include:
           - build_type: Release
             sanitizer: ""
@@ -94,20 +92,16 @@ jobs:
       - name: Build
         id: cmake_build
         run: |
-          mkdir build
-          cd build
-          cmake .. \
+          cmake -B build \
               -DLLAMA_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
               -DLLAMA_CURL=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
-          cmake --build . --config ${{ matrix.build_type }} -j $(nproc) --target server
-
+          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target server
 
       - name: Tests
         id: server_integration_tests
-        if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh
@@ -143,10 +137,8 @@ jobs:
       - name: Build
         id: cmake_build
         run: |
-          mkdir build
-          cd build
-          cmake .. -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
-          cmake --build . --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
+          cmake -B build -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
+          cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
 
       - name: Python setup
         id: setup_python

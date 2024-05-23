@@ -46,7 +46,8 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M, " 4.45G, +0.0122 ppl @ LLaMA-v1-7B", },
     { "Q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K,   " 5.15G, +0.0008 ppl @ LLaMA-v1-7B", },
     { "Q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0,   " 6.70G, +0.0004 ppl @ LLaMA-v1-7B", },
-    { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "13.00G              @ 7B", },
+    { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "14.00G, -0.0020 ppl @ Mistral-7B", },
+    { "BF16",   LLAMA_FTYPE_MOSTLY_BF16,   "14.00G, -0.0050 ppl @ Mistral-7B", },
     { "F32",    LLAMA_FTYPE_ALL_F32,       "26.00G              @ 7B", },
     // Note: Ensure COPY comes after F32 to avoid ftype 0 from matching.
     { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing", },
@@ -258,7 +259,7 @@ int main(int argc, char ** argv) {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--override-kv") == 0) {
-            if (arg_idx == argc-1 || !parse_kv_override(argv[++arg_idx], kv_overrides)) {
+            if (arg_idx == argc-1 || !string_parse_kv_override(argv[++arg_idx], kv_overrides)) {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
@@ -283,7 +284,7 @@ int main(int argc, char ** argv) {
             } else {
                 usage(argv[0]);
             }
-        } else if (strcmp(argv[arg_idx], "--keep-split")) {
+        } else if (strcmp(argv[arg_idx], "--keep-split") == 0) {
             params.keep_split = true;
         } else {
             usage(argv[0]);
