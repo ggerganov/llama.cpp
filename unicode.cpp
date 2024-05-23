@@ -1,4 +1,4 @@
-﻿#include "unicode.h"
+#include "unicode.h"
 #include "unicode-data.h"
 
 #include <cassert>
@@ -109,57 +109,49 @@ static uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset)
 //    return result;
 //}
 
-static std::unordered_map<uint32_t, int> unicode_cpt_type_map() {
-    std::unordered_map<uint32_t, int> cpt_types;
-    for (auto p : unicode_ranges_number) {
-        for (auto i = p.first; i <= p.second; ++i) {
-            cpt_types[i] = CODEPOINT_TYPE_NUMBER;
+static std::vector<codepoint_flags> unicode_cpt_flags_array() {
+    std::vector<codepoint_flags> cpt_flags(MAX_CODEPOINTS, codepoint_flags::UNDEFINED);
+
+    assert (unicode_ranges_flags.front().first == 0);
+    assert (unicode_ranges_flags.back().first == MAX_CODEPOINTS);
+    for (size_t i = 1; i < unicode_ranges_flags.size(); ++i) {
+        const auto range_ini = unicode_ranges_flags[i-1];  // codepoint_ini, flags
+        const auto range_end = unicode_ranges_flags[i];    // codepoint_end, flags
+        for (uint32_t cpt = range_ini.first; cpt < range_end.first; ++cpt) {
+            cpt_flags[cpt] = range_ini.second;
         }
     }
-    for (auto p : unicode_ranges_letter) {
-        for (auto i = p.first; i <= p.second; ++i) {
-            cpt_types[i] = CODEPOINT_TYPE_LETTER;
-        }
+
+    for (auto cpt : unicode_set_whitespace) {
+        cpt_flags[cpt].is_whitespace = true;
     }
-    for (auto p : unicode_ranges_separator) {
-        for (auto i = p.first; i <= p.second; ++i) {
-            cpt_types[i] = CODEPOINT_TYPE_SEPARATOR;
-        }
+
+    for (auto p : unicode_map_lowercase) {
+        cpt_flags[p.second].is_lowercase = true;
     }
-    for (auto p : unicode_ranges_accent_mark) {
-        for (auto i = p.first; i <= p.second; ++i) {
-            cpt_types[i] = CODEPOINT_TYPE_ACCENT_MARK;
-        }
+
+    for (auto p : unicode_map_uppercase) {
+        cpt_flags[p.second].is_uppercase = true;
     }
-    for (auto p : unicode_ranges_punctuation) {
-        for (auto i = p.first; i <= p.second; ++i) {
-            cpt_types[i] = CODEPOINT_TYPE_PUNCTUATION;
-        }
+
+    for (auto &range : unicode_ranges_nfd) {  // start, last, nfd
+        cpt_flags[range.nfd].is_nfd = true;
     }
-    for  (auto p : unicode_ranges_symbol) {
-        for (auto i = p.first; i <= p.second; ++i) {
-            cpt_types[i] = CODEPOINT_TYPE_SYMBOL;
-        }
-    }
-    for (auto p : unicode_ranges_control) {
-        for (auto i = p.first; i <= p.second; ++i) {
-            cpt_types[i] = CODEPOINT_TYPE_CONTROL;
-        }
-    }
-    return cpt_types;
+
+    return cpt_flags;
 }
 
 static std::unordered_map<uint8_t, std::string> unicode_byte_to_utf8_map() {
     std::unordered_map<uint8_t, std::string> map;
-    for (int ch = u'!'; ch <= u'~'; ++ch) {
+    for (int ch = 0x21; ch <= 0x7E; ++ch) {  // u'!' to u'~'
         assert(0 <= ch && ch < 256);
         map[ch] = unicode_cpt_to_utf8(ch);
     }
-    for (int ch = u'¡'; ch <= u'¬'; ++ch) {
+    for (int ch = 0xA1; ch <= 0xAC; ++ch) {  // u'¡' to u'¬'
         assert(0 <= ch && ch < 256);
         map[ch] = unicode_cpt_to_utf8(ch);
     }
-    for (int ch = u'®'; ch <= u'ÿ'; ++ch) {
+    for (int ch = 0xAE; ch <= 0xFF; ++ch) {  // u'®' to u'ÿ'
         assert(0 <= ch && ch < 256);
         map[ch] = unicode_cpt_to_utf8(ch);
     }
@@ -175,15 +167,15 @@ static std::unordered_map<uint8_t, std::string> unicode_byte_to_utf8_map() {
 
 static std::unordered_map<std::string, uint8_t> unicode_utf8_to_byte_map() {
     std::unordered_map<std::string, uint8_t> map;
-    for (int ch = u'!'; ch <= u'~'; ++ch) {
+    for (int ch = 0x21; ch <= 0x7E; ++ch) {  // u'!' to u'~'
         assert(0 <= ch && ch < 256);
         map[unicode_cpt_to_utf8(ch)] = ch;
     }
-    for (int ch = u'¡'; ch <= u'¬'; ++ch) {
+    for (int ch = 0xA1; ch <= 0xAC; ++ch) {  // u'¡' to u'¬'
         assert(0 <= ch && ch < 256);
         map[unicode_cpt_to_utf8(ch)] = ch;
     }
-    for (int ch = u'®'; ch <= u'ÿ'; ++ch) {
+    for (int ch = 0xAE; ch <= 0xFF; ++ch) {  // u'®' to u'ÿ'
         assert(0 <= ch && ch < 256);
         map[unicode_cpt_to_utf8(ch)] = ch;
     }
@@ -238,8 +230,9 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
         };
 
-        auto _get_cpt_type = [&] (const size_t pos) -> int {
-            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_type(cpts[pos]) : CODEPOINT_TYPE_UNIDENTIFIED;
+        auto _get_flags = [&] (const size_t pos) -> codepoint_flags {
+            static const codepoint_flags undef(codepoint_flags::UNDEFINED);
+            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_flags(cpts[pos]) : undef;
         };
 
         size_t _prev_end = offset_ini;
@@ -261,7 +254,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
 
         for (size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
             const char32_t cpt = _get_cpt(pos);
-            const int cpt_type = _get_cpt_type(pos);
+            const auto flags = _get_flags(pos);
 
             // regex: 's|'t|'re|'ve|'m|'ll|'d
             if (cpt == '\'' && pos+1 < offset_end) {
@@ -281,39 +274,37 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
                 }
             }
 
-            char32_t cpt2 = (cpt == ' ' ? _get_cpt(pos+1) : cpt);
-            int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
+            auto flags2 = (cpt == ' ' ? _get_flags(pos+1) : flags);
             // regex: <space>?\p{L}+
-            if (cpt2_type == CODEPOINT_TYPE_LETTER) {
+            if (flags2.is_letter) {
                 pos += (cpt == ' ');
-                while (cpt2_type == CODEPOINT_TYPE_LETTER) {
-                    cpt2_type = _get_cpt_type(++pos);
+                while (flags2.is_letter) {
+                    flags2 = _get_flags(++pos);
                 }
                 _add_token(pos);
                 continue;
             }
             // regex: <space>?\p{N}+
-            if (cpt2_type == CODEPOINT_TYPE_NUMBER) {
+            if (flags2.is_number) {
                 pos += (cpt == ' ');
-                while (cpt2_type == CODEPOINT_TYPE_NUMBER) {
-                    cpt2_type = _get_cpt_type(++pos);
+                while (flags2.is_number) {
+                    flags2 = _get_flags(++pos);
                 }
                 _add_token(pos);
                 continue;
             }
             // regex: <space>?[^\s\p{L}\p{N}]+
-            if (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+            if (!(flags2.is_whitespace || flags2.is_letter || flags2.is_number || flags2.is_undefined)) {
                 pos += (cpt == ' ');
-                while (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
-                    cpt2_type = _get_cpt_type(++pos);
-                    cpt2 = _get_cpt(pos);
+                while (!(flags2.is_whitespace || flags2.is_letter || flags2.is_number || flags2.is_undefined)) {
+                    flags2 = _get_flags(++pos);
                 }
                 _add_token(pos);
                 continue;
             }
 
             size_t num_whitespaces = 0;
-            while (unicode_cpt_is_whitespace(_get_cpt(pos+num_whitespaces))) {
+            while (_get_flags(pos+num_whitespaces).is_whitespace) {
                 num_whitespaces++;
             }
 
@@ -357,8 +348,9 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
         };
 
-        auto _get_cpt_type = [&] (const size_t pos) -> int {
-            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_type(cpts[pos]) : CODEPOINT_TYPE_UNIDENTIFIED;
+        auto _get_flags = [&] (const size_t pos) -> codepoint_flags {
+            static const codepoint_flags undef(codepoint_flags::UNDEFINED);
+            return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_flags(cpts[pos]) : undef;
         };
 
         size_t _prev_end = offset_ini;
@@ -380,7 +372,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
         for (size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
             const char32_t cpt = _get_cpt(pos);
-            const int cpt_type = _get_cpt_type(pos);
+            const auto flags = _get_flags(pos);
 
             // regex: (?i:'s|'t|'re|'ve|'m|'ll|'d) // case insensitive
             if (cpt == '\'' && pos+1 < offset_end) {
@@ -401,10 +393,10 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             }
 
             // regex: [^\r\n\p{L}\p{N}]?\p{L}+  //####FIXME: the first \p{L} is correct?
-            if (cpt != '\r' && cpt != '\n' && /*cpt_type != CODEPOINT_TYPE_LETTER &&*/ cpt_type != CODEPOINT_TYPE_NUMBER) {
-                if (cpt_type == CODEPOINT_TYPE_LETTER || _get_cpt_type(pos+1) == CODEPOINT_TYPE_LETTER) {  // one or more letters
+            if (!(cpt == '\r' || cpt == '\n' || /*flags.is_letter |*/ flags.is_number)) {
+                if (flags.is_letter || _get_flags(pos+1).is_letter) {  // one or more letters
                     pos++;
-                    while (_get_cpt_type(pos) == CODEPOINT_TYPE_LETTER) {
+                    while (_get_flags(pos).is_letter) {
                         pos++;
                     }
                     _add_token(pos);
@@ -413,9 +405,9 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             }
 
             // regex: \p{N}{1,3}
-            if (cpt_type == CODEPOINT_TYPE_NUMBER) {
+            if (flags.is_number) {
                 size_t ini = pos;
-                while (_get_cpt_type(pos) == CODEPOINT_TYPE_NUMBER) {
+                while (_get_flags(pos).is_number) {
                     if (++pos - ini >= 3 ) {
                         _add_token(pos);
                         ini = pos;
@@ -426,14 +418,13 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             }
 
             // regex: <space>?[^\s\p{L}\p{N}]+[\r\n]*
-            char32_t cpt2 = (cpt == ' ' ? _get_cpt(pos+1) : cpt);
-            int cpt2_type = (cpt == ' ' ? _get_cpt_type(pos+1) : cpt_type);
-            if (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
+            auto flags2 = (cpt == ' ' ? _get_flags(pos+1) : flags);
+            if (!(flags2.is_whitespace || flags2.is_letter || flags2.is_number || flags2.is_undefined)) {
                 pos += (cpt == ' ');
-                while (!unicode_cpt_is_whitespace(cpt2) && cpt2_type != CODEPOINT_TYPE_LETTER && cpt2_type != CODEPOINT_TYPE_NUMBER && cpt2_type != CODEPOINT_TYPE_UNIDENTIFIED) {
-                    cpt2_type = _get_cpt_type(++pos);
-                    cpt2 = _get_cpt(pos);
+                while (!(flags2.is_whitespace || flags2.is_letter || flags2.is_number || flags2.is_undefined)) {
+                    flags2 = _get_flags(++pos);
                 }
+                char32_t cpt2 = _get_cpt(pos);
                 while (cpt2 == '\r' || cpt2 == '\n') {
                     cpt2 = _get_cpt(++pos);
                 }
@@ -443,7 +434,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
 
             size_t num_whitespaces = 0;
             size_t last_end_r_or_n = 0;
-            while (unicode_cpt_is_whitespace(_get_cpt(pos+num_whitespaces))) {
+            while (_get_flags(pos+num_whitespaces).is_whitespace) {
                 char32_t cpt2 = _get_cpt(pos+num_whitespaces);
                 if (cpt2 == '\r' || cpt2 == '\n') {
                     last_end_r_or_n = pos + num_whitespaces + 1;
@@ -589,15 +580,14 @@ std::string unicode_cpt_to_utf8(uint32_t cp) {
 }
 
 std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts) {
-    std::vector<uint32_t> result;
-    result.reserve(cpts.size());
+    auto comp = [] (const uint32_t cpt, const range_nfd & range) {
+        return cpt < range.first;
+    };
+    std::vector<uint32_t> result(cpts.size());
     for (size_t i = 0; i < cpts.size(); ++i) {
-        auto it = unicode_map_nfd.find(cpts[i]);
-        if (it == unicode_map_nfd.end()) {
-            result.push_back(cpts[i]);
-        } else {
-            result.push_back(it->second);
-        }
+        const uint32_t cpt = cpts[i];
+        auto it = std::upper_bound(unicode_ranges_nfd.cbegin(), unicode_ranges_nfd.cend(), cpt, comp) - 1;
+        result[i] = (it->first <= cpt && cpt <= it->last) ? it->nfd : cpt;
     }
     return result;
 }
@@ -611,31 +601,19 @@ std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
     return result;
 }
 
-int unicode_cpt_type(uint32_t cp) {
-    static std::unordered_map<uint32_t, int> cpt_types = unicode_cpt_type_map();
-    const auto it = cpt_types.find(cp);
-    return it == cpt_types.end() ? CODEPOINT_TYPE_UNIDENTIFIED : it->second;
+codepoint_flags unicode_cpt_flags(const uint32_t cp) {
+    static const codepoint_flags undef(codepoint_flags::UNDEFINED);
+    static const auto cpt_flags = unicode_cpt_flags_array();
+    return cp < cpt_flags.size() ? cpt_flags[cp] : undef;
 }
 
-int unicode_cpt_type(const std::string & utf8) {
-    if (utf8.length() == 0) {
-        return CODEPOINT_TYPE_UNIDENTIFIED;
+codepoint_flags unicode_cpt_flags(const std::string & utf8) {
+    static const codepoint_flags undef(codepoint_flags::UNDEFINED);
+    if (utf8.empty()) {
+        return undef;  // undefined
     }
     size_t offset = 0;
-    return unicode_cpt_type(unicode_cpt_from_utf8(utf8, offset));
-}
-
-bool unicode_cpt_is_whitespace(uint32_t cp) {
-    static const std::unordered_set<uint32_t> is_whitespace = [] {
-        std::unordered_set<uint32_t> is_whitespace;
-        for (auto p : unicode_ranges_whitespace) {
-            for (auto i = p.first; i <= p.second; ++i) {
-                is_whitespace.insert(i);
-            }
-        }
-        return is_whitespace;
-    }();
-    return (bool)is_whitespace.count(cp);
+    return unicode_cpt_flags(unicode_cpt_from_utf8(utf8, offset));
 }
 
 std::string unicode_byte_to_utf8(uint8_t byte) {
@@ -656,21 +634,21 @@ char32_t unicode_tolower(char32_t cp) {
 std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::string> & regex_exprs) {
     // unicode categories
     static const std::map<std::string, int> k_ucat_enum = {
-        { "\\p{N}", CODEPOINT_TYPE_NUMBER },
-        { "\\p{L}", CODEPOINT_TYPE_LETTER },
-        { "\\p{P}", CODEPOINT_TYPE_PUNCTUATION },
+        { "\\p{N}", codepoint_flags::NUMBER },
+        { "\\p{L}", codepoint_flags::LETTER },
+        { "\\p{P}", codepoint_flags::PUNCTUATION },
     };
 
     static const std::map<int, int> k_ucat_cpt = {
-        { CODEPOINT_TYPE_NUMBER,        0xD1 },
-        { CODEPOINT_TYPE_LETTER,        0xD2 },
-        { CODEPOINT_TYPE_PUNCTUATION,   0xD3 },
+        { codepoint_flags::NUMBER,        0xD1 },
+        { codepoint_flags::LETTER,        0xD2 },
+        { codepoint_flags::PUNCTUATION,   0xD3 },
     };
 
     static const std::map<int, std::string> k_ucat_map = {
-        { CODEPOINT_TYPE_NUMBER,        "\x30-\x39" }, // 0-9
-        { CODEPOINT_TYPE_LETTER,        "\x41-\x5A\x61-\x7A" }, // A-Za-z
-        { CODEPOINT_TYPE_PUNCTUATION,   "\x21-\x23\x25-\x2A\x2C-\x2F\x3A-\x3B\x3F-\x40\\\x5B-\\\x5D\x5F\\\x7B\\\x7D" }, // !-#%-*,-/:-;?-@\[-\]_\{\}
+        { codepoint_flags::NUMBER,        "\x30-\x39" }, // 0-9
+        { codepoint_flags::LETTER,        "\x41-\x5A\x61-\x7A" }, // A-Za-z
+        { codepoint_flags::PUNCTUATION,   "\x21-\x23\x25-\x2A\x2C-\x2F\x3A-\x3B\x3F-\x40\\\x5B-\\\x5D\x5F\\\x7B\\\x7D" }, // !-#%-*,-/:-;?-@\[-\]_\{\}
     };
 
     // compute collapsed codepoints only if needed by at least one regex
@@ -701,10 +679,10 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                 continue;
             }
 
-            const int cpt_type = unicode_cpt_type(cpts[i]);
+            const int cpt_flag = unicode_cpt_flags(cpts[i]).category_flag();
 
-            if (k_ucat_cpt.find(cpt_type) != k_ucat_cpt.end()) {
-                text_collapsed[i] = k_ucat_cpt.at(cpt_type);
+            if (k_ucat_cpt.find(cpt_flag) != k_ucat_cpt.end()) {
+                text_collapsed[i] = k_ucat_cpt.at(cpt_flag);
             } else {
                 text_collapsed[i] = (char) 0xD0; // fallback
             }

@@ -104,6 +104,7 @@ static std::string format(const char * fmt, ...) {
 #define TN_POS_EMBD        "%s.position_embd.weight"
 #define TN_CLASS_EMBD      "v.class_embd"
 #define TN_PATCH_EMBD      "v.patch_embd.weight"
+#define TN_PATCH_BIAS      "v.patch_embd.bias"
 #define TN_ATTN_K          "%s.blk.%d.attn_k.%s"
 #define TN_ATTN_Q          "%s.blk.%d.attn_q.%s"
 #define TN_ATTN_V          "%s.blk.%d.attn_v.%s"
@@ -425,6 +426,7 @@ struct clip_vision_model {
     // embeddings
     struct ggml_tensor * class_embedding;
     struct ggml_tensor * patch_embeddings;
+    struct ggml_tensor * patch_bias;
     struct ggml_tensor * position_embeddings;
 
     struct ggml_tensor * pre_ln_w;
@@ -501,6 +503,11 @@ struct clip_ctx {
     bool use_gelu = false;
     int32_t ftype = 1;
 
+    bool has_class_embedding = true;
+    bool has_pre_norm = true;
+    bool has_post_norm = false;
+    bool has_patch_bias = false;
+
     struct gguf_context * ctx_gguf;
     struct ggml_context * ctx_data;
 
@@ -526,7 +533,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     const int patch_size           = hparams.patch_size;
     const int num_patches          = ((image_size / patch_size) * (image_size / patch_size));
     const int num_patches_per_side = image_size / patch_size; GGML_UNUSED(num_patches_per_side);
-    const int num_positions        = num_patches + 1;
+    const int num_positions        = num_patches + (ctx->has_class_embedding ? 1 : 0);
     const int hidden_size          = hparams.hidden_size;
     const int n_head               = hparams.n_head;
     const int d_head               = hidden_size / n_head;
@@ -557,16 +564,23 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
     inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));
 
+    if (ctx->has_patch_bias) {
+        // inp = ggml_add(ctx0, inp, ggml_repeat(ctx0, model.patch_bias, inp));
+        inp = ggml_add(ctx0, inp, model.patch_bias);
+    }
+
     // concat class_embeddings and patch_embeddings
-    struct ggml_tensor * embeddings = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size);
-    ggml_set_name(embeddings, "embeddings");
-    ggml_set_input(embeddings);
+    struct ggml_tensor * embeddings = inp;
+    if (ctx->has_class_embedding) {
+        embeddings = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size);
+        ggml_set_name(embeddings, "embeddings");
+        ggml_set_input(embeddings);
+        embeddings = ggml_acc(ctx0, embeddings, model.class_embedding,
+                embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], 0);
+        embeddings = ggml_acc(ctx0, embeddings, inp,
+                embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], model.class_embedding->nb[1]);
+    }
 
-    embeddings = ggml_acc(ctx0, embeddings, model.class_embedding,
-            embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], 0);
-
-    embeddings = ggml_acc(ctx0, embeddings, inp,
-            embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], model.class_embedding->nb[1]);
 
     struct ggml_tensor * positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_positions);
     ggml_set_name(positions, "positions");
@@ -576,7 +590,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         ggml_add(ctx0, embeddings, ggml_get_rows(ctx0, model.position_embeddings, positions));
 
     // pre-layernorm
-    {
+    if (ctx->has_pre_norm) {
         embeddings = ggml_norm(ctx0, embeddings, eps);
         ggml_set_name(embeddings, "pre_ln");
 
@@ -662,6 +676,14 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         cur = ggml_add(ctx0, embeddings, cur);
 
         embeddings = cur;
+    }
+
+    // post-layernorm
+    if (ctx->has_post_norm) {
+        embeddings = ggml_norm(ctx0, embeddings, eps);
+        ggml_set_name(embeddings, "post_ln");
+
+        embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.post_ln_w), model.post_ln_b);
     }
 
     // llava projector
@@ -1149,11 +1171,38 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
 
         try {
+            vision_model.class_embedding  = get_tensor(new_clip->ctx_data, TN_CLASS_EMBD);
+            new_clip->has_class_embedding = true;
+        } catch (const std::exception& e) {
+            new_clip->has_class_embedding = false;
+        }
+
+        try {
+            vision_model.pre_ln_w  = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "weight"));
+            vision_model.pre_ln_b  = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "bias"));
+            new_clip->has_pre_norm = true;
+        } catch (std::exception & e) {
+            new_clip->has_pre_norm = false;
+        }
+
+        try {
+            vision_model.post_ln_w  = get_tensor(new_clip->ctx_data, format(TN_LN_POST, "v", "weight"));
+            vision_model.post_ln_b  = get_tensor(new_clip->ctx_data, format(TN_LN_POST, "v", "bias"));
+            new_clip->has_post_norm = true;
+        } catch (std::exception & e) {
+            new_clip->has_post_norm = false;
+        }
+
+        try {
+            vision_model.patch_bias = get_tensor(new_clip->ctx_data, TN_PATCH_BIAS);
+            new_clip->has_patch_bias = true;
+        } catch (std::exception & e) {
+            new_clip->has_patch_bias = false;
+        }
+
+        try {
             vision_model.patch_embeddings    = get_tensor(new_clip->ctx_data, TN_PATCH_EMBD);
-            vision_model.class_embedding     = get_tensor(new_clip->ctx_data, TN_CLASS_EMBD);
             vision_model.position_embeddings = get_tensor(new_clip->ctx_data, format(TN_POS_EMBD, "v"));
-            vision_model.pre_ln_w            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "weight"));
-            vision_model.pre_ln_b            = get_tensor(new_clip->ctx_data, format(TN_LN_PRE, "v", "bias"));
         } catch(const std::exception& e) {
             LOG_TEE("%s: failed to load vision model tensors\n", __func__);
         }
@@ -1797,7 +1846,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     const int image_size    = hparams.image_size;
     const int patch_size    = hparams.patch_size;
     const int num_patches   = ((image_size / patch_size) * (image_size / patch_size));
-    const int num_positions = num_patches + 1;
+    const int num_positions = num_patches + (ctx->has_class_embedding ? 1 : 0);
 
     {
         struct ggml_tensor * inp_raw = ggml_graph_get_tensor(gf, "inp_raw");
@@ -1825,12 +1874,14 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     }
 
     {
-        struct ggml_tensor * embeddings = ggml_graph_get_tensor(gf, "embeddings");
+        if (ctx->has_class_embedding) {
+            struct ggml_tensor * embeddings = ggml_graph_get_tensor(gf, "embeddings");
 
-        void* zero_mem = malloc(ggml_nbytes(embeddings));
-        memset(zero_mem, 0, ggml_nbytes(embeddings));
-        ggml_backend_tensor_set(embeddings, zero_mem, 0, ggml_nbytes(embeddings));
-        free(zero_mem);
+            void* zero_mem = malloc(ggml_nbytes(embeddings));
+            memset(zero_mem, 0, ggml_nbytes(embeddings));
+            ggml_backend_tensor_set(embeddings, zero_mem, 0, ggml_nbytes(embeddings));
+            free(zero_mem);
+        }
     }
 
     {

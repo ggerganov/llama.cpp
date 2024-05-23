@@ -11,7 +11,7 @@ struct retrieval_params {
 };
 
 static void retrieval_params_print_usage(int argc, char ** argv, gpt_params & gpt_params, retrieval_params & params) {
-    gpt_print_usage(argc, argv, gpt_params);
+    gpt_params_print_usage(argc, argv, gpt_params);
     printf("retrieval options:\n");
     printf("  --context-file FNAME  file containing context to embed.\n");
     printf("                        specify multiple files by providing --context-file option multiple times.\n");
@@ -226,7 +226,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     // max batch size
