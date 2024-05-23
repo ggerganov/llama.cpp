@@ -1863,7 +1863,7 @@ std::string fs_get_cache_directory() {
         return p;
     };
     if (getenv("LLAMA_CACHE")) {
-        cache_directory = ensure_trailing_slash(std::getenv("LLAMA_CACHE"));
+        cache_directory = std::getenv("LLAMA_CACHE");
     } else {
 #ifdef __linux__
         if (std::getenv("XDG_CACHE_HOME")) {
@@ -1878,9 +1878,8 @@ std::string fs_get_cache_directory() {
 #endif // __linux__
         cache_directory = ensure_trailing_slash(cache_directory);
         cache_directory += "llama.cpp";
-        cache_directory += DIRECTORY_SEPARATOR;
     }
-    return cache_directory;
+    return ensure_trailing_slash(cache_directory);
 }
 
 
