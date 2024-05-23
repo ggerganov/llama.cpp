@@ -10809,8 +10809,6 @@ struct llm_build_context {
 
         return gf;
     }
-
-
 };
 
 static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const std::vector<uint32_t> & ids) {
