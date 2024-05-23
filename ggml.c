@@ -12353,7 +12353,6 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     const bool src1_cont = ggml_is_contiguous(src1);
 
     ggml_vec_dot_t    const vec_dot = type_traits[type].vec_dot;
-    ggml_to_float_t   const to_float = type_traits[type].to_float;
     enum ggml_type    const vec_dot_type = type_traits[type].vec_dot_type;
 
     // broadcast factors
@@ -12416,6 +12415,8 @@ static void ggml_compute_forward_mul_mat_one_chunk(
                 // broadcast src0 into src1
                 const int64_t ii03 = ii13 / r3;
                 const int64_t ii02 = ii12 / r2;
+
+                ggml_to_float_t const to_float = type_traits[type].to_float;
 
                 const char    * src0_row = (const char*)src0->data + (0 + ii02 * nb02 + ii03 * nb03);
                 const uint8_t * src1_col = (const uint8_t *)src1->data + ii11 * nb11 + ii12 * nb12 + ii13 * nb13;
