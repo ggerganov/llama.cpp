@@ -23,6 +23,7 @@ from prometheus_client import parser
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
+    context.n_threads = None
     context.n_gpu_layer = None
     if 'PORT' in os.environ:
         context.server_port = int(os.environ['PORT'])
@@ -65,6 +66,7 @@ def step_server_config(context, server_fqdn, server_port):
     context.server_seed = None
     context.user_api_key = None
     context.response_format = None
+    context.temperature = None
 
     context.tasks_result = []
     context.concurrent_tasks = []
@@ -106,6 +108,11 @@ def step_n_gpu_layer(context, ngl):
             print(f"-ngl upgraded from {ngl} to {new_ngl}")
         ngl = new_ngl
     context.n_gpu_layer = ngl
+
+
+@step('{n_threads:d} threads')
+def step_n_threads(context, n_threads):
+    context.n_thread = n_threads
 
 
 @step('{draft:d} as draft')
@@ -192,7 +199,7 @@ async def step_wait_for_the_server_to_be_started(context, expecting_status):
 
         case 'ready' | 'idle':
             await wait_for_health_status(context, context.base_url, 200, 'ok',
-                                         timeout=10,
+                                         timeout=30,
                                          params={'fail_on_no_slot': 0, 'include_slots': 0},
                                          slots_idle=context.n_slots,
                                          slots_processing=0,
@@ -232,15 +239,17 @@ async def step_all_slots_status(context, expected_slot_status_string):
 @async_run_until_complete
 async def step_request_completion(context, api_error):
     expect_api_error = api_error == 'raised'
+    seeds = await completions_seed(context, num_seeds=1)
     completion = await request_completion(context.prompts.pop(),
+                                          seeds[0] if seeds is not None else seeds,
                                           context.base_url,
                                           debug=context.debug,
                                           n_predict=context.n_predict,
                                           cache_prompt=context.cache_prompt,
                                           id_slot=context.id_slot,
-                                          seed=await completions_seed(context),
                                           expect_api_error=expect_api_error,
-                                          user_api_key=context.user_api_key)
+                                          user_api_key=context.user_api_key,
+                                          temperature=context.temperature)
     context.tasks_result.append(completion)
     if context.debug:
         print(f"Completion response: {completion}")
@@ -266,6 +275,24 @@ async def step_predictions_equal(context):
     n_completions = await gather_tasks_results(context)
     assert n_completions >= 2, "need at least 2 completions"
     assert_all_predictions_equal(context.tasks_result)
+    context.tasks_result = []
+
+
+@step('all predictions are different')
+@async_run_until_complete
+async def step_predictions_different(context):
+    n_completions = await gather_tasks_results(context)
+    assert n_completions >= 2, "need at least 2 completions"
+    assert_all_predictions_different(context.tasks_result)
+    context.tasks_result = []
+
+
+@step('all token probabilities are equal')
+@async_run_until_complete
+async def step_token_probabilities_equal(context):
+    n_completions = await gather_tasks_results(context)
+    assert n_completions >= 2, "need at least 2 completions"
+    assert_all_token_probabilities_equal(context.tasks_result)
     context.tasks_result = []
 
 
@@ -311,6 +338,11 @@ def step_response_format(context, response_format):
     context.response_format = json.loads(response_format)
 
 
+@step('{temperature:f} temperature')
+def step_temperature(context, temperature):
+    context.temperature = temperature
+
+
 @step('streaming is {enable_streaming}')
 def step_streaming(context, enable_streaming):
     context.enable_streaming = enable_streaming == 'enabled'
@@ -353,7 +385,15 @@ def step_n_ubatch(context, n_ubatch):
 
 @step('{seed:d} as seed')
 def step_seed(context, seed):
-    context.seed = seed
+    if context.seed is None:
+        context.seed = [seed]
+    else:
+        context.seed.append(seed)
+
+
+@step('BOS token is {bos:d}')
+def step_bos_token(context, bos):
+    context.bos = bos
 
 
 @step('a prefix prompt')
@@ -413,7 +453,9 @@ async def step_oai_chat_completions(context, api_error):
     if context.debug:
         print(f"Submitting OAI compatible completions request...")
     expect_api_error = api_error == 'raised'
+    seeds = await completions_seed(context, num_seeds=1),
     completion = await oai_chat_completions(context.prompts.pop(),
+                                            seeds[0] if seeds is not None else seeds,
                                             context.system_prompt,
                                             context.base_url,
                                             '/v1/chat',
@@ -428,8 +470,6 @@ async def step_oai_chat_completions(context, api_error):
 
                                             response_format=context.response_format
                                             if hasattr(context, 'response_format') else None,
-
-                                            seed=await completions_seed(context),
 
                                             user_api_key=context.user_api_key
                                             if hasattr(context, 'user_api_key') else None,
@@ -457,20 +497,31 @@ def step_a_prompt_prompt(context, prompt):
     context.n_prompts = len(context.prompts)
 
 
+@step('{num_prompts:d} prompts {prompt} with seed {seed:d}')
+def step_many_prompts(context, num_prompts, prompt, seed):
+    if context.seed is None:
+        context.seed = []
+    for _ in range(num_prompts):
+        context.seed.append(seed)
+        context.prompts.append(prompt)
+    context.n_prompts = len(context.prompts)
+
+
 @step('concurrent completion requests')
 @async_run_until_complete()
 async def step_concurrent_completion_requests(context):
-    await concurrent_requests(context,
-                              request_completion,
-                              # prompt is inserted automatically
-                              context.base_url,
-                              debug=context.debug,
-                              prompt_prefix=context.prompt_prefix,
-                              prompt_suffix=context.prompt_suffix,
-                              n_predict=context.n_predict if hasattr(context, 'n_predict') else None,
-                              seed=await completions_seed(context),
-                              user_api_key=context.user_api_key if hasattr(context,
-                                                                           'user_api_key') else None)
+    await concurrent_requests(
+        context,
+        request_completion,
+        # prompt is inserted automatically
+        context.base_url,
+        debug=context.debug,
+        prompt_prefix=context.prompt_prefix,
+        prompt_suffix=context.prompt_suffix,
+        n_predict=context.n_predict if hasattr(context, 'n_predict') else None,
+        user_api_key=context.user_api_key if hasattr(context, 'user_api_key') else None,
+        temperature=context.temperature,
+    )
 
 
 @step('concurrent OAI completions requests')
@@ -490,7 +541,6 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'enable_streaming') else None,
                               response_format=context.response_format
                               if hasattr(context, 'response_format') else None,
-                              seed=await completions_seed(context),
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
 
@@ -512,10 +562,6 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'enable_streaming') else None,
                               response_format=context.response_format
                               if hasattr(context, 'response_format') else None,
-                              seed=context.seed
-                              if hasattr(context, 'seed') else
-                              context.server_seed
-                              if hasattr(context, 'server_seed') else None,
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
 
@@ -544,7 +590,7 @@ async def all_prompts_are_predicted(context, expected_predicted_n=None):
 @async_run_until_complete
 async def step_compute_embedding(context):
     context.n_prompts = 1
-    context.embeddings = await request_embedding(context_text(context), base_url=context.base_url)
+    context.embeddings = await request_embedding(context_text(context), None, base_url=context.base_url)
 
 
 @step('all embeddings are the same')
@@ -585,7 +631,7 @@ def step_assert_embeddings(context):
 @async_run_until_complete
 async def step_oai_compute_embeddings(context):
     context.n_prompts = 1
-    context.embeddings = await request_oai_embeddings(context_text(context),
+    context.embeddings = await request_oai_embeddings(context_text(context), None,
                                                       base_url=context.base_url,
                                                       user_api_key=context.user_api_key,
                                                       model=context.model)
@@ -594,7 +640,7 @@ async def step_oai_compute_embeddings(context):
 @step('an OAI compatible embeddings computation request for multiple inputs')
 @async_run_until_complete
 async def step_oai_compute_embeddings_multiple_inputs(context):
-    context.embeddings = await request_oai_embeddings(context.prompts,
+    context.embeddings = await request_oai_embeddings(context.prompts, None,
                                                       base_url=context.base_url,
                                                       user_api_key=context.user_api_key,
                                                       model=context.model)
@@ -630,21 +676,29 @@ async def all_embeddings_are_generated(context):
         assert_embeddings(context.tasks_result.pop().pop())
 
 
+@step('adding special tokens')
+def step_tokenize_set_add_special(context):
+    context.tokenize_add_special = True
+
+
 @step('tokenizing')
 @async_run_until_complete
 async def step_tokenize(context):
     context.tokenized_text = context_text(context)
     async with aiohttp.ClientSession() as session:
+        tokenize_args = {
+            "content": context.tokenized_text,
+        }
+        if getattr(context, 'tokenize_add_special', None) is not None:
+            tokenize_args['add_special'] = context.tokenize_add_special
         async with session.post(f'{context.base_url}/tokenize',
-                                json={
-                                    "content": context.tokenized_text,
-                                }) as response:
+                                json=tokenize_args) as response:
             assert response.status == 200
             tokenize_json = await response.json()
             context.tokens = tokenize_json['tokens']
 
 
-@step('tokens can be detokenize')
+@step('tokens can be detokenized')
 @async_run_until_complete
 async def step_detokenize(context):
     assert len(context.tokens) > 0
@@ -657,6 +711,21 @@ async def step_detokenize(context):
             detokenize_json = await response.json()
             # SPM tokenizer adds a whitespace prefix: https://github.com/google/sentencepiece/issues/15
             assert context.tokenized_text == detokenize_json['content'].strip()
+
+
+@step('tokens begin with BOS')
+def step_strings_for_tokenization(context):
+    assert context.tokens[0] == context.bos
+
+
+@step('tokens do not begin with BOS')
+def step_strings_for_tokenization(context):
+    assert context.tokens[0] != context.bos
+
+
+@step('first token is removed')
+def step_strings_for_tokenization(context):
+    context.tokens = context.tokens[1:]
 
 
 @step('an OPTIONS request is sent from {origin}')
@@ -740,8 +809,9 @@ async def concurrent_requests(context, f_completion, *args, **kwargs):
     if context.debug:
         print(f"starting {context.n_prompts} concurrent completion requests...")
     assert context.n_prompts > 0
+    seeds = await completions_seed(context)
     for prompt_no in range(context.n_prompts):
-        shifted_args = [context.prompts.pop(), *args]
+        shifted_args = [context.prompts.pop(), seeds[prompt_no], *args]
         context.concurrent_tasks.append(asyncio.create_task(f_completion(*shifted_args, **kwargs)))
     await asyncio.sleep(0.1)
 
@@ -781,6 +851,7 @@ def step_server_responds_with_status_code(context, status_code):
 
 
 async def request_completion(prompt,
+                             seed,
                              base_url,
                              debug=False,
                              prompt_prefix=None,
@@ -788,9 +859,9 @@ async def request_completion(prompt,
                              n_predict=None,
                              cache_prompt=False,
                              id_slot=None,
-                             seed=None,
                              expect_api_error=None,
-                             user_api_key=None):
+                             user_api_key=None,
+                             temperature=None):
     if debug:
         print(f"Sending completion request: {prompt}")
     origin = "my.super.domain"
@@ -811,7 +882,9 @@ async def request_completion(prompt,
                                     "n_predict": n_predict if n_predict is not None else -1,
                                     "cache_prompt": cache_prompt,
                                     "id_slot": id_slot,
-                                    "seed": seed if seed is not None else 42
+                                    "seed": seed if seed is not None else 42,
+                                    "temperature": temperature if temperature is not None else 0.8,
+                                    "n_probs": 2,
                                 },
                                 headers=headers,
                                 timeout=3600) as response:
@@ -824,16 +897,17 @@ async def request_completion(prompt,
 
 
 async def oai_chat_completions(user_prompt,
+                               seed,
                                system_prompt,
                                base_url,
                                base_path,
                                async_client,
                                debug=False,
+                               temperature=None,
                                model=None,
                                n_predict=None,
                                enable_streaming=None,
                                response_format=None,
-                               seed=None,
                                user_api_key=None,
                                expect_api_error=None):
     if debug:
@@ -856,7 +930,8 @@ async def oai_chat_completions(user_prompt,
         "model": model,
         "max_tokens": n_predict,
         "stream": enable_streaming,
-        "seed": seed
+        "temperature": temperature if temperature is not None else 0.0,
+        "seed": seed,
     }
     if response_format is not None:
         payload['response_format'] = response_format
@@ -882,7 +957,7 @@ async def oai_chat_completions(user_prompt,
                     while event_received:
                         event_received = False
                         async for line_in_bytes in response.content:
-                            line = line_in_bytes.decode('utf8')
+                            line = line_in_bytes.decode('utf-8')
                             line = line.rstrip('\n').rstrip('\r')
                             if line == '':
                                 continue
@@ -921,7 +996,8 @@ async def oai_chat_completions(user_prompt,
                 max_tokens=n_predict,
                 stream=enable_streaming,
                 response_format=payload.get('response_format'),
-                seed=seed
+                seed=seed,
+                temperature=payload['temperature']
             )
         except openai.error.AuthenticationError as e:
             if expect_api_error is not None and expect_api_error:
@@ -952,7 +1028,7 @@ async def oai_chat_completions(user_prompt,
     return completion_response
 
 
-async def request_embedding(content, base_url=None):
+async def request_embedding(content, seed, base_url=None):
     async with aiohttp.ClientSession() as session:
         async with session.post(f'{base_url}/embedding',
                                 json={
@@ -963,7 +1039,7 @@ async def request_embedding(content, base_url=None):
             return [response_json['embedding']]
 
 
-async def request_oai_embeddings(input,
+async def request_oai_embeddings(input, seed,
                                  base_url=None, user_api_key=None,
                                  model=None, async_client=False):
     # openai client always expects an api_key
@@ -1036,21 +1112,48 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
                                                      f' {n_predicted} <> {expected_predicted_n}')
 
 def assert_all_predictions_equal(completion_responses):
-    content_0 = completion_responses[0]['content']
-
     if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
-        print(f"content 0: {content_0}")
+        for i, response_i in enumerate(completion_responses):
+            content_i = response_i['content']
+            print(f"content {i}: {content_i}")
+    for i, response_i in enumerate(completion_responses):
+        content_i = response_i['content']
+        for j, response_j in enumerate(completion_responses):
+            if i == j:
+                continue
+            content_j = response_j['content']
+        assert content_i == content_j, "contents not equal"
 
-    i = 1
-    for response in completion_responses[1:]:
-        content = response['content']
 
-        if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
-            print(f"content {i}: {content}")
+def assert_all_predictions_different(completion_responses):
+    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+        for i, response_i in enumerate(completion_responses):
+            content_i = response_i['content']
+            print(f"content {i}: {content_i}")
+    for i, response_i in enumerate(completion_responses):
+        content_i = response_i['content']
+        for j, response_j in enumerate(completion_responses):
+            if i == j:
+                continue
+            content_j = response_j['content']
+        assert content_i != content_j, "contents not different"
 
-        assert content == content_0, "contents not equal"
 
-        i += 1
+def assert_all_token_probabilities_equal(completion_responses):
+    n_predict = len(completion_responses[0]['completion_probabilities'])
+    if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
+        for pos in range(n_predict):
+            for i, response_i in enumerate(completion_responses):
+                probs_i = response_i['completion_probabilities'][pos]['probs']
+                print(f"pos {pos}, probs {i}: {probs_i}")
+    for pos in range(n_predict):
+        for i, response_i in enumerate(completion_responses):
+            probs_i = response_i['completion_probabilities'][pos]['probs']
+            for j, response_j in enumerate(completion_responses):
+                if i == j:
+                    continue
+                probs_j = response_j['completion_probabilities'][pos]['probs']
+            assert probs_i == probs_j, "contents not equal"
 
 
 async def gather_tasks_results(context):
@@ -1145,9 +1248,22 @@ def assert_slots_status(slots, expected_slots):
                                                 f" = {expected[key]} != {slot[key]}")
 
 
-async def completions_seed(context):
-    return context.seed if hasattr(context, 'seed') and context.seed is not None \
-        else context.server_seed if hasattr(context, 'server_seed') else None
+async def completions_seed(context, num_seeds=None):
+    if hasattr(context, "seed") and context.seed is not None:
+        assert len(context.seed) == context.n_prompts
+        if num_seeds is None:
+            num_seeds = context.n_prompts
+        assert num_seeds <= context.n_prompts
+        seeds = context.seed[:num_seeds]
+        context.seed = context.seed[num_seeds:] if num_seeds < context.n_prompts else None
+        return seeds
+
+    if hasattr(context, "server_seed") and context.server_seed is not None:
+        if num_seeds is None:
+            return [context.server_seed] * context.n_prompts
+        else:
+            return [context.server_seed] * num_seeds
+    return None
 
 
 def context_text(context):
@@ -1178,6 +1294,8 @@ def start_server_background(context):
         server_args.extend(['--batch-size', context.n_batch])
     if context.n_ubatch:
         server_args.extend(['--ubatch-size', context.n_ubatch])
+    if context.n_threads:
+        server_args.extend(['--threads', context.threads])
     if context.n_gpu_layer:
         server_args.extend(['--n-gpu-layers', context.n_gpu_layer])
     if context.draft is not None:

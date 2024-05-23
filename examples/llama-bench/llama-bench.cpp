@@ -161,10 +161,17 @@ static const char * split_mode_str(llama_split_mode mode) {
     }
 }
 
+static std::string pair_str(const std::pair<int, int> & p) {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%d,%d", p.first, p.second);
+    return buf;
+}
+
 struct cmd_params {
     std::vector<std::string> model;
     std::vector<int> n_prompt;
     std::vector<int> n_gen;
+    std::vector<std::pair<int, int>> n_pg;
     std::vector<int> n_batch;
     std::vector<int> n_ubatch;
     std::vector<ggml_type> type_k;
@@ -174,9 +181,11 @@ struct cmd_params {
     std::vector<llama_split_mode> split_mode;
     std::vector<int> main_gpu;
     std::vector<bool> no_kv_offload;
+    std::vector<bool> flash_attn;
     std::vector<std::vector<float>> tensor_split;
     std::vector<bool> use_mmap;
     std::vector<bool> embeddings;
+    ggml_numa_strategy numa;
     int reps;
     bool verbose;
     output_formats output_format;
@@ -186,18 +195,21 @@ static const cmd_params cmd_params_defaults = {
     /* model         */ {"models/7B/ggml-model-q4_0.gguf"},
     /* n_prompt      */ {512},
     /* n_gen         */ {128},
+    /* n_pg          */ {},
     /* n_batch       */ {2048},
     /* n_ubatch      */ {512},
     /* type_k        */ {GGML_TYPE_F16},
     /* type_v        */ {GGML_TYPE_F16},
-    /* n_threads     */ {get_math_cpu_count()},
+    /* n_threads     */ {cpu_get_num_math()},
     /* n_gpu_layers  */ {99},
     /* split_mode    */ {LLAMA_SPLIT_MODE_LAYER},
     /* main_gpu      */ {0},
     /* no_kv_offload */ {false},
+    /* flash_attn    */ {false},
     /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
     /* use_mmap      */ {true},
     /* embeddings    */ {false},
+    /* numa          */ GGML_NUMA_STRATEGY_DISABLED,
     /* reps          */ 5,
     /* verbose       */ false,
     /* output_format */ MARKDOWN
@@ -211,16 +223,19 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -m, --model <filename>              (default: %s)\n", join(cmd_params_defaults.model, ",").c_str());
     printf("  -p, --n-prompt <n>                  (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
     printf("  -n, --n-gen <n>                     (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
+    printf("  -pg <pp,tg>                         (default: %s)\n", join(transform_to_str(cmd_params_defaults.n_pg, pair_str), ",").c_str());
     printf("  -b, --batch-size <n>                (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
-    printf("  -ub N, --ubatch-size <n>            (default: %s)\n", join(cmd_params_defaults.n_ubatch, ",").c_str());
-    printf("  -ctk <t>, --cache-type-k <t>        (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_k, ggml_type_name), ",").c_str());
-    printf("  -ctv <t>, --cache-type-v <t>        (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_v, ggml_type_name), ",").c_str());
+    printf("  -ub, --ubatch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_ubatch, ",").c_str());
+    printf("  -ctk, --cache-type-k <t>            (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_k, ggml_type_name), ",").c_str());
+    printf("  -ctv, --cache-type-v <t>            (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_v, ggml_type_name), ",").c_str());
     printf("  -t, --threads <n>                   (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
     printf("  -ngl, --n-gpu-layers <n>            (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
     printf("  -sm, --split-mode <none|layer|row>  (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
+    printf("  -fa, --flash-attn <0|1>             (default: %s)\n", join(cmd_params_defaults.flash_attn, ",").c_str());
     printf("  -mmp, --mmap <0|1>                  (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
+    printf("  --numa <distribute|isolate|numactl> (default: disabled)\n");
     printf("  -embd, --embeddings <0|1>           (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
     printf("  -ts, --tensor-split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
@@ -298,6 +313,17 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<int>(argv[i], split_delim);
             params.n_gen.insert(params.n_gen.end(), p.begin(), p.end());
+        } else if (arg == "-pg") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = split<std::string>(argv[i], ',');
+            if (p.size() != 2) {
+                invalid_param = true;
+                break;
+            }
+            params.n_pg.push_back({std::stoi(p[0]), std::stoi(p[1])});
         } else if (arg == "-b" || arg == "--batch-size") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -393,6 +419,24 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = split<bool>(argv[i], split_delim);
             params.no_kv_offload.insert(params.no_kv_offload.end(), p.begin(), p.end());
+        } else if (arg == "--numa") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            } else {
+                std::string value(argv[i]);
+                /**/ if (value == "distribute" || value == "" ) { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
+                else if (value == "isolate")                    { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
+                else if (value == "numactl")                    { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
+                else { invalid_param = true; break; }
+            }
+        } else if (arg == "-fa" || arg == "--flash-attn") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = split<bool>(argv[i], split_delim);
+            params.flash_attn.insert(params.flash_attn.end(), p.begin(), p.end());
         } else if (arg == "-mmp" || arg == "--mmap") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -469,6 +513,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.model.empty())        { params.model = cmd_params_defaults.model; }
     if (params.n_prompt.empty())     { params.n_prompt = cmd_params_defaults.n_prompt; }
     if (params.n_gen.empty())        { params.n_gen = cmd_params_defaults.n_gen; }
+    if (params.n_pg.empty())         { params.n_pg = cmd_params_defaults.n_pg; }
     if (params.n_batch.empty())      { params.n_batch = cmd_params_defaults.n_batch; }
     if (params.n_ubatch.empty())     { params.n_ubatch = cmd_params_defaults.n_ubatch; }
     if (params.type_k.empty())       { params.type_k = cmd_params_defaults.type_k; }
@@ -477,6 +522,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.split_mode.empty())   { params.split_mode = cmd_params_defaults.split_mode; }
     if (params.main_gpu.empty())     { params.main_gpu = cmd_params_defaults.main_gpu; }
     if (params.no_kv_offload.empty()){ params.no_kv_offload = cmd_params_defaults.no_kv_offload; }
+    if (params.flash_attn.empty())   { params.flash_attn = cmd_params_defaults.flash_attn; }
     if (params.tensor_split.empty()) { params.tensor_split = cmd_params_defaults.tensor_split; }
     if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
     if (params.embeddings.empty())   { params.embeddings = cmd_params_defaults.embeddings; }
@@ -498,6 +544,7 @@ struct cmd_params_instance {
     llama_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
+    bool flash_attn;
     std::vector<float> tensor_split;
     bool use_mmap;
     bool embeddings;
@@ -532,6 +579,7 @@ struct cmd_params_instance {
         cparams.type_k = type_k;
         cparams.type_v = type_v;
         cparams.offload_kqv = !no_kv_offload;
+        cparams.flash_attn = flash_attn;
         cparams.embeddings = embeddings;
 
         return cparams;
@@ -554,6 +602,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & tk : params.type_k)
     for (const auto & tv : params.type_v)
     for (const auto & nkvo : params.no_kv_offload)
+    for (const auto & fa : params.flash_attn)
     for (const auto & nt : params.n_threads) {
         for (const auto & n_prompt : params.n_prompt) {
             if (n_prompt == 0) {
@@ -572,6 +621,7 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
+                /* .flash_attn   = */ fa,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
                 /* .embeddings   = */ embd,
@@ -596,6 +646,32 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .split_mode   = */ sm,
                 /* .main_gpu     = */ mg,
                 /* .no_kv_offload= */ nkvo,
+                /* .flash_attn   = */ fa,
+                /* .tensor_split = */ ts,
+                /* .use_mmap     = */ mmp,
+                /* .embeddings   = */ embd,
+            };
+            instances.push_back(instance);
+        }
+
+        for (const auto & n_pg : params.n_pg) {
+            if (n_pg.first == 0 && n_pg.second == 0) {
+                continue;
+            }
+            cmd_params_instance instance = {
+                /* .model        = */ m,
+                /* .n_prompt     = */ n_pg.first,
+                /* .n_gen        = */ n_pg.second,
+                /* .n_batch      = */ nb,
+                /* .n_ubatch     = */ nub,
+                /* .type_k       = */ tk,
+                /* .type_v       = */ tv,
+                /* .n_threads    = */ nt,
+                /* .n_gpu_layers = */ nl,
+                /* .split_mode   = */ sm,
+                /* .main_gpu     = */ mg,
+                /* .no_kv_offload= */ nkvo,
+                /* .flash_attn   = */ fa,
                 /* .tensor_split = */ ts,
                 /* .use_mmap     = */ mmp,
                 /* .embeddings   = */ embd,
@@ -633,6 +709,7 @@ struct test {
     llama_split_mode split_mode;
     int main_gpu;
     bool no_kv_offload;
+    bool flash_attn;
     std::vector<float> tensor_split;
     bool use_mmap;
     bool embeddings;
@@ -657,6 +734,7 @@ struct test {
         split_mode = inst.split_mode;
         main_gpu = inst.main_gpu;
         no_kv_offload = inst.no_kv_offload;
+        flash_attn = inst.flash_attn;
         tensor_split = inst.tensor_split;
         use_mmap = inst.use_mmap;
         embeddings = inst.embeddings;
@@ -731,7 +809,7 @@ struct test {
             "n_batch", "n_ubatch",
             "n_threads", "type_k", "type_v",
             "n_gpu_layers", "split_mode",
-            "main_gpu", "no_kv_offload",
+            "main_gpu", "no_kv_offload", "flash_attn",
             "tensor_split", "use_mmap", "embeddings",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
@@ -753,7 +831,7 @@ struct test {
         }
         if (field == "cuda" || field == "opencl"  || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
-            field == "use_mmap" || field == "embeddings") {
+            field == "flash_attn" || field == "use_mmap" || field == "embeddings") {
             return BOOL;
         }
         if (field == "avg_ts" || field == "stddev_ts") {
@@ -787,7 +865,7 @@ struct test {
             std::to_string(n_batch), std::to_string(n_ubatch),
             std::to_string(n_threads), ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
-            std::to_string(main_gpu), std::to_string(no_kv_offload),
+            std::to_string(main_gpu), std::to_string(no_kv_offload), std::to_string(flash_attn),
             tensor_split_str, std::to_string(use_mmap), std::to_string(embeddings),
             std::to_string(n_prompt), std::to_string(n_gen), test_time,
             std::to_string(avg_ns()), std::to_string(stdev_ns()),
@@ -933,6 +1011,9 @@ struct markdown_printer : public printer {
         if (field == "n_gpu_layers") {
             return 3;
         }
+        if (field == "test") {
+            return 13;
+        }
 
         int width = std::max((int)field.length(), 10);
 
@@ -954,6 +1035,9 @@ struct markdown_printer : public printer {
         }
         if (field == "no_kv_offload") {
             return "nkvo";
+        }
+        if (field == "flash_attn") {
+            return "fa";
         }
         if (field == "use_mmap") {
             return "mmap";
@@ -1000,6 +1084,9 @@ struct markdown_printer : public printer {
         }
         if (params.no_kv_offload.size() > 1 || params.no_kv_offload != cmd_params_defaults.no_kv_offload) {
             fields.emplace_back("no_kv_offload");
+        }
+        if (params.flash_attn.size() > 1 || params.flash_attn != cmd_params_defaults.flash_attn) {
+            fields.emplace_back("flash_attn");
         }
         if (params.tensor_split.size() > 1 || params.tensor_split != cmd_params_defaults.tensor_split) {
             fields.emplace_back("tensor_split");
@@ -1053,12 +1140,11 @@ struct markdown_printer : public printer {
                 value = test::get_backend();
             } else if (field == "test") {
                 if (t.n_prompt > 0 && t.n_gen == 0) {
-                    snprintf(buf, sizeof(buf), "pp %d", t.n_prompt);
+                    snprintf(buf, sizeof(buf), "pp%d", t.n_prompt);
                 } else if (t.n_gen > 0 && t.n_prompt == 0) {
-                    snprintf(buf, sizeof(buf), "tg %d", t.n_gen);
+                    snprintf(buf, sizeof(buf), "tg%d", t.n_gen);
                 } else {
-                    assert(false);
-                    exit(1);
+                    snprintf(buf, sizeof(buf), "pp%d+tg%d", t.n_prompt, t.n_gen);
                 }
                 value = buf;
             } else if (field == "t/s") {
@@ -1191,6 +1277,7 @@ int main(int argc, char ** argv) {
         llama_log_set(llama_null_log_callback, NULL);
     }
     llama_backend_init();
+    llama_numa_init(params.numa);
 
     // initialize printer
     std::unique_ptr<printer> p;
@@ -1258,6 +1345,7 @@ int main(int argc, char ** argv) {
             llama_kv_cache_clear(ctx);
 
             uint64_t t_start = get_time_ns();
+
             if (t.n_prompt > 0) {
                 test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
             }

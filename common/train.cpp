@@ -1380,7 +1380,7 @@ bool consume_common_train_arg(
 
 void finish_processing_train_args(struct train_params_common * params) {
     if (params->escape) {
-        process_escapes(params->sample_start);
+        string_process_escapes(params->sample_start);
     }
 }
 

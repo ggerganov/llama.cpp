@@ -23,7 +23,7 @@
 #endif
 
 struct quantize_stats_params {
-    std::string model = "models/7B/ggml-model-f16.gguf";
+    std::string model = DEFAULT_MODEL_PATH;
     bool verbose = false;
     bool per_layer_stats = false;
     bool print_histogram = false;
