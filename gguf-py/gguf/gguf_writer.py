@@ -13,7 +13,6 @@ from string import ascii_letters, digits
 import numpy as np
 
 from .constants import (
-    GGML_QUANT_SIZES,
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
     GGUF_VERSION,
