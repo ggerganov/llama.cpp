@@ -12144,7 +12144,7 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
                     printf("\n");
                     GGML_ASSERT(false);
                 }
-                q2[2*ib+0] |= (grid_index << 8*k);
+                q2[2*ib+0] |= ((uint32_t) grid_index << 8*k);
                 q2[2*ib+1] |= (block_signs[k] << 7*k);
             }
             GGML_ASSERT(scale >= 0);
