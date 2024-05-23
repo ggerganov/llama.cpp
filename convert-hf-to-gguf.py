@@ -1367,7 +1367,7 @@ class LlamaModel(Model):
                 return tensors
             else:
                 return []
-        
+
         if name.find("feed_forward.experts") != -1 and name.find("feed_forward.experts.w") == -1:
             n_experts = self.hparams["num_local_experts"]
 
