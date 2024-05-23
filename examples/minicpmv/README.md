@@ -6,14 +6,14 @@ make
 make minicpmv-cli
 
 python ./examples/minicpmv/minicpmv-surgery.py -m ../MiniCPM-V-2_5
-python ./examples/minicpmv/minicpmv-convert-image-encoder-to-gguf.py -m ../MiniCPM-V-2_5 --llava-projector ../MiniCPM-V-2_5/llava.projector --output-dir ../MiniCPM-V-2_5/ --image-mean 0.5 0.5 0.5 --image-std 0.5 0.5 0.5
+python ./examples/minicpmv/minicpmv-convert-image-encoder-to-gguf.py -m ../MiniCPM-V-2_5 --minicpmv-projector ../MiniCPM-V-2_5/minicpmv.projector --output-dir ../MiniCPM-V-2_5/ --image-mean 0.5 0.5 0.5 --image-std 0.5 0.5 0.5
 python ./convert.py ../MiniCPM-V-2_5/model  --outtype f16 --vocab-type bpe
-./minicpmv-cli -m ../MiniCPM-V-2_5/model/ggml-model-f16.gguf --mmproj ../MiniCPM-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg -p "What is in the image?"
+./minicpmv-cli -m ../MiniCPM-V-2_5/model/model-8B-F16.gguf --mmproj ../MiniCPM-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg -p "What is in the image?"
 
 # or run quantize int4 version
-./quantize ../MiniCPM-V-2_5/model/ggml-model-f16.gguf ../MiniCPM-V-2_5/model/ggml-model-Q4_K_M.gguf Q4_K_M
-./minicpmv-cli -m ../MiniCPM-V-2_5/model/ggml-model-Q4_K_M.gguf --mmproj ../MiniCPM-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.6 --top-p 0.8 --top-k 100 --repeat-penalty 1.0 --image xx.jpg  -p "What is in the image?"
+./quantize ../MiniCPM-V-2_5/model/model-8B-F16.gguf ../MiniCPM-V-2_5/model/ggml-model-Q4_K_M.gguf Q4_K_M
+./minicpmv-cli -m ../MiniCPM-V-2_5/model/ggml-model-Q4_K_M.gguf --mmproj ../MiniCPM-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg  -p "What is in the image?"
 
 # or run in interactive mode
-./minicpmv-cli -m ../MiniCPM-V-2_5/model/ggml-model-Q4_K_M.gguf --mmproj ../MiniCPM-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.6 --top-p 0.8 --top-k 100 --repeat-penalty 1.0 --image xx.jpg -i
+./minicpmv-cli -m ../MiniCPM-V-2_5/model/ggml-model-Q4_K_M.gguf --mmproj ../MiniCPM-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg -i
 ```

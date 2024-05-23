@@ -75,7 +75,7 @@ static std::string format(const char * fmt, ...) {
 #define KEY_DESCRIPTION    "general.description"
 #define KEY_HAS_TEXT_ENC   "clip.has_text_encoder"
 #define KEY_HAS_VIS_ENC    "clip.has_vision_encoder"
-#define KEY_HAS_LLAVA_PROJ "clip.has_llava_projector"
+#define KEY_HAS_LLAVA_PROJ "clip.has_minicpmv_projector"
 #define KEY_USE_GELU       "clip.use_gelu"
 #define KEY_N_EMBD         "clip.%s.embedding_length"
 #define KEY_N_FF           "clip.%s.feed_forward_length"
@@ -526,7 +526,7 @@ struct clip_vision_model {
 struct clip_ctx {
     bool has_text_encoder    = false;
     bool has_vision_encoder  = false;
-    bool has_llava_projector = false;
+    bool has_minicpmv_projector = false;
 
     struct clip_vision_model vision_model;
     projector_type proj_type = PROJECTOR_TYPE_MLP;
@@ -606,7 +606,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
     const int batch_size = imgs->size;
 
-    if (ctx->has_llava_projector) {
+    if (ctx->has_minicpmv_projector) {
         GGML_ASSERT(batch_size == 1);
     }
 
@@ -1124,10 +1124,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1, s
 
         idx = gguf_find_key(ctx, KEY_HAS_LLAVA_PROJ);
         if (idx != -1) {
-            new_clip->has_llava_projector = gguf_get_val_bool(ctx, idx);
+            new_clip->has_minicpmv_projector = gguf_get_val_bool(ctx, idx);
         }
 
-        GGML_ASSERT(new_clip->has_llava_projector); // see monatis/clip.cpp for image and/or text encoding for semantic search
+        GGML_ASSERT(new_clip->has_minicpmv_projector); // see monatis/clip.cpp for image and/or text encoding for semantic search
         GGML_ASSERT(new_clip->has_vision_encoder);
         GGML_ASSERT(!new_clip->has_text_encoder);
 
@@ -1137,7 +1137,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1, s
         if (verbosity >= 1) {
             LOG_TEE("%s: text_encoder:   %d\n", __func__, new_clip->has_text_encoder);
             LOG_TEE("%s: vision_encoder: %d\n", __func__, new_clip->has_vision_encoder);
-            LOG_TEE("%s: llava_projector:  %d\n", __func__, new_clip->has_llava_projector);
+            LOG_TEE("%s: llava_projector:  %d\n", __func__, new_clip->has_minicpmv_projector);
             LOG_TEE("%s: model size:     %.2f MB\n", __func__, model_size / 1024.0 / 1024.0);
             LOG_TEE("%s: metadata size:  %.2f MB\n", __func__, ggml_get_mem_size(meta) / 1024.0 / 1024.0);
         }
@@ -1939,7 +1939,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     }
 
     int batch_size = imgs->size;
-    if (ctx->has_llava_projector) {
+    if (ctx->has_minicpmv_projector) {
         GGML_ASSERT(batch_size == 1); // TODO: support multiple images
     }
 
