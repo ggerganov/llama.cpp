@@ -1,13 +1,16 @@
-## Instructions
-Download model files from huggingface to "MiniCPM-Llama3-V-2_5" folder.
+## MiniCPM-Llama3-V 2.5
 
-Clone code
+### Usage
+
+Download [MiniCPM-Llama3-V-2_5](https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5) PyTorch model from huggingface to "MiniCPM-Llama3-V-2_5" folder.
+
+Clone llama.cpp and checkout to branch `minicpm-v2.5`:
 ```bash
 git clone -b minicpm-v2.5 https://github.com/OpenBMB/llama.cpp.git
 cd llama.cpp
 ```
 
-Prepare the model
+Convert PyTorch model to gguf files (You can also download the converted [gguf](https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5-gguf) by us)
 
 ```bash
 python ./examples/minicpmv/minicpmv-surgery.py -m ../MiniCPM-Llama3-V-2_5
@@ -17,15 +20,20 @@ python ./convert.py ../MiniCPM-Llama3-V-2_5/model  --outtype f16 --vocab-type bp
 # quantize int4 version
 ./quantize ../MiniCPM-Llama3-V-2_5/model/model-8B-F16.gguf ../MiniCPM-Llama3-V-2_5/model/ggml-model-Q4_K_M.gguf Q4_K_M
 ```
-Try to inference
+
+Build for Linux or Mac
+
 ```bash
 make
 make minicpmv-cli
+```
 
-# run quantize f16 version
+Inference on Linux or Mac
+```
+# run f16 version
 ./minicpmv-cli -m ../MiniCPM-Llama3-V-2_5/model/model-8B-F16.gguf --mmproj ../MiniCPM-Llama3-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg -p "What is in the image?"
 
-# run quantize int4 version
+# run quantized int4 version
 ./minicpmv-cli -m ../MiniCPM-Llama3-V-2_5/model/ggml-model-Q4_K_M.gguf --mmproj ../MiniCPM-Llama3-V-2_5/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg  -p "What is in the image?"
 
 # or run in interactive mode
@@ -34,8 +42,12 @@ make minicpmv-cli
 
 ### Android
 
-#### Build for Android using Termux
-[Termux](https://github.com/termux/termux-app#installation) is a method to execute `llama.cpp` on an Android device (no root required).
+#### Build on Android device using Termux
+We found that build on Android device would bring better runtime performance, so we recommend to build on device.
+
+[Termux](https://github.com/termux/termux-app#installation) is a terminal app on Android device (no root required).
+
+Install tools in Termux:
 ```
 apt update && apt upgrade -y
 apt install git make cmake
