@@ -19586,8 +19586,6 @@ struct ggml_compute_threadpool * ggml_create_threadpool(struct ggml_threadpool_p
         }
     }
 
-    // Set the main-thread's affinity last
-    __thread_affinity(workers[0].cpumask);
     // Ensure all threads entered the compute loop before returning.
     while (atomic_load(&threadpool->n_ready) != threadpool->n_threads_max) { ; }
 
@@ -20118,6 +20116,9 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     for (int j = 0; j < n_threads; ++j) {
         threadpool->workers[j].ith = j;
     }
+
+    // Update main thread affinity to match the current threadpool
+    __thread_affinity(threadpool->workers[0].cpumask);
 
     // Set up work
     threadpool->cgraph        = cgraph;
