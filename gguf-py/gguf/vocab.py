@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 ADDED_TOKENS_FILE = 'added_tokens.json'
 FAST_TOKENIZER_FILE = 'tokenizer.json'
 
+
 class SpecialVocab:
     merges: list[str]
     add_special_token: dict[str, bool]
