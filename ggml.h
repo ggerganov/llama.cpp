@@ -481,9 +481,7 @@ extern "C" {
         GGML_OP_ARGSORT,
         GGML_OP_LEAKY_RELU,
 
-        GGML_OP_FLASH_ATTN,
         GGML_OP_FLASH_ATTN_EXT,
-        GGML_OP_FLASH_FF,
         GGML_OP_FLASH_ATTN_BACK,
         GGML_OP_SSM_CONV,
         GGML_OP_SSM_SCAN,
@@ -1460,11 +1458,12 @@ extern "C" {
             struct ggml_tensor  * b);
 
     // rotary position embedding
-    // if mode & 1 == 1, skip n_past elements (DEPRECATED)
+    // if mode & 1 == 1, skip n_past elements (NOT SUPPORTED)
     // if mode & 2 == 1, GPT-NeoX style
     // if mode & 4 == 1, ChatGLM style
     //
     // b is an int32 vector with size a->ne[2], it contains the positions
+    // c is freq factors (e.g. phi3-128k), (optional)
     GGML_API struct ggml_tensor * ggml_rope(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -1483,10 +1482,11 @@ extern "C" {
             int                   n_ctx);
 
     // custom RoPE
-    GGML_API struct ggml_tensor * ggml_rope_custom(
+    GGML_API struct ggml_tensor * ggml_rope_ext(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
+            struct ggml_tensor  * c,
             int                   n_dims,
             int                   mode,
             int                   n_ctx,
@@ -1499,7 +1499,23 @@ extern "C" {
             float                 beta_slow);
 
     // in-place, returns view(a)
-    GGML_API struct ggml_tensor * ggml_rope_custom_inplace(
+    GGML_API struct ggml_tensor * ggml_rope_ext_inplace(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            struct ggml_tensor  * c,
+            int                   n_dims,
+            int                   mode,
+            int                   n_ctx,
+            int                   n_orig_ctx,
+            float                 freq_base,
+            float                 freq_scale,
+            float                 ext_factor,
+            float                 attn_factor,
+            float                 beta_fast,
+            float                 beta_slow);
+
+    GGML_DEPRECATED(GGML_API struct ggml_tensor * ggml_rope_custom(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
@@ -1512,20 +1528,28 @@ extern "C" {
             float                 ext_factor,
             float                 attn_factor,
             float                 beta_fast,
-            float                 beta_slow);
+            float                 beta_slow),
+        "use ggml_rope_ext instead");
 
-    // compute correction dims for YaRN RoPE scaling
-    GGML_CALL void ggml_rope_yarn_corr_dims(
-        int n_dims, int n_orig_ctx, float freq_base, float beta_fast, float beta_slow, float dims[2]);
-
-    // xPos RoPE, in-place, returns view(a)
-    GGML_API struct ggml_tensor * ggml_rope_xpos_inplace(
+    GGML_DEPRECATED(GGML_API struct ggml_tensor * ggml_rope_custom_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
             int                   n_dims,
-            float                 base,
-            bool                  down);
+            int                   mode,
+            int                   n_ctx,
+            int                   n_orig_ctx,
+            float                 freq_base,
+            float                 freq_scale,
+            float                 ext_factor,
+            float                 attn_factor,
+            float                 beta_fast,
+            float                 beta_slow),
+        "use ggml_rope_ext_inplace instead");
+
+    // compute correction dims for YaRN RoPE scaling
+    GGML_CALL void ggml_rope_yarn_corr_dims(
+        int n_dims, int n_orig_ctx, float freq_base, float beta_fast, float beta_slow, float dims[2]);
 
     // rotary position embedding backward, i.e compute dx from dy
     // a - dy
@@ -1533,6 +1557,7 @@ extern "C" {
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
             struct ggml_tensor  * b,
+            struct ggml_tensor  * c,
             int                   n_dims,
             int                   mode,
             int                   n_ctx,
@@ -1734,13 +1759,6 @@ extern "C" {
             struct ggml_tensor  * a,
             int                   k);
 
-    GGML_API struct ggml_tensor * ggml_flash_attn(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * q,
-            struct ggml_tensor  * k,
-            struct ggml_tensor  * v,
-            bool                  masked);
-
 #define GGML_KQ_MASK_PAD 32
 
     // q:    [n_embd, n_batch,     n_head,    1]
@@ -1761,6 +1779,7 @@ extern "C" {
             struct ggml_tensor * a,
             enum ggml_prec       prec);
 
+    // TODO: needs to be adapted to ggml_flash_attn_ext
     GGML_API struct ggml_tensor * ggml_flash_attn_back(
            struct ggml_context * ctx,
            struct ggml_tensor  * q,
@@ -1768,14 +1787,6 @@ extern "C" {
            struct ggml_tensor  * v,
            struct ggml_tensor  * d,
            bool                  masked);
-
-    GGML_API struct ggml_tensor * ggml_flash_ff(
-            struct ggml_context * ctx,
-            struct ggml_tensor  * a,
-            struct ggml_tensor  * b0,
-            struct ggml_tensor  * b1,
-            struct ggml_tensor  * c0,
-            struct ggml_tensor  * c1);
 
     GGML_API struct ggml_tensor * ggml_ssm_conv(
             struct ggml_context * ctx,
@@ -2390,6 +2401,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_avx512     (void);
     GGML_API int ggml_cpu_has_avx512_vbmi(void);
     GGML_API int ggml_cpu_has_avx512_vnni(void);
+    GGML_API int ggml_cpu_has_avx512_bf16(void);
     GGML_API int ggml_cpu_has_fma        (void);
     GGML_API int ggml_cpu_has_neon       (void);
     GGML_API int ggml_cpu_has_arm_fma    (void);

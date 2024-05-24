@@ -81,9 +81,10 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
         LLAMA_VOCAB_PRE_TYPE_REFACT         = 8,
         LLAMA_VOCAB_PRE_TYPE_COMMAND_R      = 9,
-        LLAMA_VOCAB_PRE_TYPE_QWEN2          = 10,
-        LLAMA_VOCAB_PRE_TYPE_OLMO           = 11,
-        LLAMA_VOCAB_PRE_TYPE_DBRX           = 12,
+        LLAMA_VOCAB_PRE_TYPE_STABLELM2      = 10,
+        LLAMA_VOCAB_PRE_TYPE_QWEN2          = 11,
+        LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
+        LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -757,6 +758,12 @@ extern "C" {
     // n_threads is the number of threads used for generation (single token)
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
+
+    // Get the number of threads used for generation of a single token.
+    LLAMA_API uint32_t llama_n_threads(struct llama_context * ctx);
+
+    // Get the number of threads used for prompt and batch processing (multiple token).
+    LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
 
     // Set whether to use causal attention or not
     // If set to true, the model will only attend to the past tokens

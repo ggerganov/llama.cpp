@@ -315,6 +315,20 @@ static __device__ __forceinline__ int __dp4a(const int a, const int b, int c) {
 #endif
     return c;
 }
+
+#if defined(__HIP_PLATFORM_AMD__) && HIP_VERSION < 50600000
+// __shfl_xor() for half2 was added in ROCm 5.6
+static __device__ __forceinline__ half2 __shfl_xor(half2 var, int laneMask, int width) {
+    typedef union half2_b32 {
+        half2 val;
+        int   b32;
+    } half2_b32_t;
+    half2_b32_t tmp;
+    tmp.val = var;
+    tmp.b32 = __shfl_xor(tmp.b32, laneMask, width);
+    return tmp.val;
+}
+#endif // defined(__HIP_PLATFORM_AMD__) && HIP_VERSION < 50600000
 #endif // defined(GGML_USE_HIPBLAS)
 
 #define FP16_AVAILABLE (defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)) || __CUDA_ARCH__ >= CC_PASCAL
@@ -463,6 +477,17 @@ static const __device__ int8_t kvalues_iq4nl[16] = {-127, -104, -83, -65, -49, -
 
 typedef void (*dequantize_kernel_t)(const void * vx, const int64_t ib, const int iqs, dfloat2 & v);
 
+static __device__ __forceinline__ float get_alibi_slope(
+    const float max_bias, const uint32_t h, const uint32_t n_head_log2, const float m0, const float m1
+) {
+    if (max_bias <= 0.0f) {
+        return 1.0f;
+    }
+    const float base = h < n_head_log2 ? m0 : m1;
+    const int   exph = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
+
+    return powf(base, exph);
+}
 
 //////////////////////
 

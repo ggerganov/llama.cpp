@@ -14,6 +14,7 @@ from pathlib import Path
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Sequence, TypeVar, cast
 
+import math
 import numpy as np
 import torch
 
@@ -446,6 +447,9 @@ class Model:
         if chkhsh == "3ce83efda5659b07b1ad37ca97ca5797ea4285d9b9ab0dc679e4a720c9da7454":
             # ref: https://huggingface.co/openai-community/gpt2
             res = "gpt-2"
+        if chkhsh == "32d85c31273f8019248f2559fed492d929ea28b17e51d81d3bb36fff23ca72b3":
+            # ref: https://huggingface.co/stabilityai/stablelm-2-zephyr-1_6b
+            res = "stablelm2"
         if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
             # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
             res = "refact"
@@ -573,6 +577,10 @@ class Model:
 
         vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
 
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
         for token_id in range(tokenizer.vocab_size()):
             piece = tokenizer.IdToPiece(token_id)
             text = piece.encode("utf-8")
@@ -588,21 +596,23 @@ class Model:
             elif tokenizer.IsByte(token_id):
                 toktype = SentencePieceTokenTypes.BYTE
 
-            tokens.append(text)
-            scores.append(score)
-            toktypes.append(toktype)
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
 
         added_tokens_file = self.dir_model / 'added_tokens.json'
         if added_tokens_file.is_file():
             with open(added_tokens_file, "r", encoding="utf-8") as f:
                 added_tokens_json = json.load(f)
-
                 for key in added_tokens_json:
-                    key = key.encode("utf-8")
-                    if key not in tokens:
-                        tokens.append(key)
-                        scores.append(-1000.0)
-                        toktypes.append(SentencePieceTokenTypes.USER_DEFINED)
+                    token_id = added_tokens_json[key]
+                    if (token_id >= vocab_size):
+                        logger.warning(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        continue
+
+                    tokens[token_id] = key.encode("utf-8")
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
 
         if vocab_size > len(tokens):
             pad_count = vocab_size - len(tokens)
@@ -611,8 +621,6 @@ class Model:
                 tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
-
-        assert len(tokens) == vocab_size
 
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
@@ -664,6 +672,44 @@ class GPTNeoXModel(Model):
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
         self.gguf_writer.add_parallel_residual(self.hparams.get("use_parallel_residual", True))
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
+        n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
+
+        tensors: list[tuple[str, Tensor]] = []
+
+        if re.match(r"gpt_neox\.layers\.\d+\.attention\.query_key_value\.weight", name):
+            # Map bloom-style qkv_linear to gpt-style qkv_linear
+            # bloom: https://github.com/huggingface/transformers/blob/main/src/transformers/models/bloom/modeling_bloom.py#L238-L252  # noqa
+            # gpt-2: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py#L312  # noqa
+            qkv_weights = data_torch.reshape((n_head, 3, n_embed // n_head, n_embed))
+            data_torch = torch.cat(
+                (
+                    qkv_weights[:, 0, :, :].reshape((-1, n_embed)),
+                    qkv_weights[:, 1, :, :].reshape((-1, n_embed)),
+                    qkv_weights[:, 2, :, :].reshape((-1, n_embed)),
+                ),
+                dim=0,
+            )
+            logger.info("re-format attention.linear_qkv.weight")
+        elif re.match(r"gpt_neox\.layers\.\d+\.attention\.query_key_value\.bias", name):
+            qkv_bias = data_torch.reshape((n_head, 3, n_embed // n_head))
+            data_torch = torch.cat(
+                (
+                    qkv_bias[:, 0, :].reshape((n_embed,)),
+                    qkv_bias[:, 1, :].reshape((n_embed,)),
+                    qkv_bias[:, 2, :].reshape((n_embed,)),
+                ),
+                dim=0,
+            )
+            logger.info("re-format attention.linear_qkv.bias")
+
+        tensors.append((self.map_tensor_name(name), data_torch))
+
+        return tensors
 
 
 @Model.register("BloomForCausalLM")
@@ -1139,45 +1185,6 @@ class RefactModel(Model):
             tensors.append((self.map_tensor_name(name), data_torch))
 
         return tensors
-
-
-@Model.register("PersimmonForCausalLM")
-class PersimmonModel(Model):
-    model_arch = gguf.MODEL_ARCH.PERSIMMON
-
-    def set_gguf_parameters(self):
-        block_count = self.hparams.get("num_layers", self.hparams.get("num_hidden_layers"))
-        head_count = self.hparams["num_attention_heads"]
-        head_count_kv = head_count
-        hidden_size = self.hparams["hidden_size"]
-
-        self.gguf_writer.add_name('persimmon-8b-chat')
-        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
-        self.gguf_writer.add_embedding_length(hidden_size)
-        self.gguf_writer.add_block_count(block_count)
-        self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
-
-        # NOTE: not sure about this change - why does the model not have a rope dimension count when it is smaller
-        #       than the head size?
-        #       ref: https://github.com/ggerganov/llama.cpp/pull/4889
-        # self.gguf_writer.add_rope_dimension_count(hidden_size // head_count)
-        self.gguf_writer.add_rope_dimension_count(hidden_size // head_count // 2)
-
-        self.gguf_writer.add_head_count(head_count)
-        self.gguf_writer.add_head_count_kv(head_count_kv)
-        self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
-        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
-
-    def set_vocab(self):
-        self._set_vocab_sentencepiece()
-        # self.gguf_writer.add_bos_token_id(71013)
-        # self.gguf_writer.add_eos_token_id(71013)
-
-    def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
-        del name, new_name, bid, n_dims  # unused
-
-        # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
-        return True
 
 
 @Model.register("StableLmForCausalLM", "StableLMEpochForCausalLM", "LlavaStableLMEpochForCausalLM")
@@ -1772,6 +1779,38 @@ class Phi3MiniModel(Model):
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
 
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+                added_tokens_decoder = tokenizer_config_json.get("added_tokens_decoder", {})
+                for token_id, foken_data in added_tokens_decoder.items():
+                    token_id = int(token_id)
+                    token = foken_data["content"].encode("utf-8")
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                        assert tokens[token_id] == token
+                    tokens[token_id] = token
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    if foken_data.get("special"):
+                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
+
+        tokenizer_file = self.dir_model / 'tokenizer.json'
+        if tokenizer_file.is_file():
+            with open(tokenizer_file, "r", encoding="utf-8") as f:
+                tokenizer_json = json.load(f)
+                added_tokens = tokenizer_json.get("added_tokens", [])
+                for foken_data in added_tokens:
+                    token_id = int(foken_data["id"])
+                    token = foken_data["content"].encode("utf-8")
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                        assert tokens[token_id] == token
+                    tokens[token_id] = token
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+                    if foken_data.get("special"):
+                        toktypes[token_id] = SentencePieceTokenTypes.CONTROL
+
         self.gguf_writer.add_tokenizer_model("llama")
         self.gguf_writer.add_tokenizer_pre("default")
         self.gguf_writer.add_token_list(tokens)
@@ -1784,22 +1823,58 @@ class Phi3MiniModel(Model):
     def set_gguf_parameters(self):
         block_count = self.find_hparam(["num_hidden_layers", "n_layer"])
 
-        rot_pct = 1.0
         n_embd = self.find_hparam(["hidden_size", "n_embd"])
         n_head = self.find_hparam(["num_attention_heads", "n_head"])
+        n_head_kv = self.find_hparam(["num_key_value_heads", "n_head_kv"])
         rms_eps = self.find_hparam(["rms_norm_eps"])
+        max_pos_embds = self.find_hparam(["n_positions", "max_position_embeddings"])
+        orig_max_pos_embds = self.find_hparam(["original_max_position_embeddings"])
+        rope_dims = n_embd // n_head
 
         self.gguf_writer.add_name("Phi3")
-        self.gguf_writer.add_context_length(self.find_hparam(["n_positions", "max_position_embeddings"]))
-
+        self.gguf_writer.add_context_length(max_pos_embds)
+        self.gguf_writer.add_rope_scaling_orig_ctx_len(orig_max_pos_embds)
         self.gguf_writer.add_embedding_length(n_embd)
-        self.gguf_writer.add_feed_forward_length(8192)
+        self.gguf_writer.add_feed_forward_length(self.find_hparam(["intermediate_size"]))
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_head_count(n_head)
-        self.gguf_writer.add_head_count_kv(n_head)
+        self.gguf_writer.add_head_count_kv(n_head_kv)
         self.gguf_writer.add_layer_norm_rms_eps(rms_eps)
-        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
+        self.gguf_writer.add_rope_dimension_count(rope_dims)
+        self.gguf_writer.add_rope_freq_base(self.find_hparam(["rope_theta"]))
         self.gguf_writer.add_file_type(self.ftype)
+
+        # write rope scaling for long context (128k) model
+        rope_scaling = self.find_hparam(['rope_scaling'], True)
+        if (rope_scaling is None):
+            return
+
+        scale = max_pos_embds / orig_max_pos_embds
+
+        rope_scaling_type = rope_scaling.get('type', '').lower()
+        if len(rope_scaling_type) == 0:
+            raise KeyError('Missing the required key rope_scaling.type')
+
+        if rope_scaling_type == 'su':
+            attn_factor = math.sqrt(1 + math.log(scale) / math.log(orig_max_pos_embds)) if scale > 1.0 else 1.0
+        elif rope_scaling_type == 'yarn':
+            attn_factor = 0.1 * math.log(scale) + 1.0 if scale > 1.0 else 1.0
+        else:
+            raise NotImplementedError(f'The rope scaling type {rope_scaling_type} is not supported yet')
+
+        self.gguf_writer.add_rope_scaling_attn_factors(attn_factor)
+
+        long_factors = rope_scaling.get('long_factor', None)
+        short_factors = rope_scaling.get('short_factor', None)
+
+        if long_factors is None or short_factors is None:
+            raise KeyError('Missing the required key rope_scaling.long_factor or rope_scaling_short_factor')
+
+        if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
+            raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
+
+        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_LONG]  + ".weight", np.array(long_factors, dtype=np.float32))
+        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT] + ".weight", np.array(short_factors, dtype=np.float32))
 
 
 @Model.register("PlamoForCausalLM")
@@ -2389,6 +2464,157 @@ class JinaBertV2Model(BertModel):
             raise NotImplementedError(f'Tokenizer {tokenizer_class} is not supported for JinaBertModel')
         self.gguf_writer.add_add_bos_token(True)
         self.gguf_writer.add_add_eos_token(True)
+
+
+@Model.register("ArcticForCausalLM")
+class ArcticModel(Model):
+    model_arch = gguf.MODEL_ARCH.ARCTIC
+
+    def set_vocab(self):
+        # The reason for using a custom implementation here is that the
+        # snowflake-arctic-instruct model redefined tokens 31998 and 31999 from
+        # tokenizer.model and used them as BOS and EOS instead of adding new tokens.
+        from sentencepiece import SentencePieceProcessor
+
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+
+        if not tokenizer_path.is_file():
+            logger.error(f'Error: Missing {tokenizer_path}')
+            sys.exit(1)
+
+        # Read the whole vocabulary from the tokenizer.model file
+        tokenizer = SentencePieceProcessor()
+        tokenizer.LoadFromFile(str(tokenizer_path))
+
+        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
+
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
+        for token_id in range(tokenizer.vocab_size()):
+
+            piece = tokenizer.IdToPiece(token_id)
+            text = piece.encode("utf-8")
+            score = tokenizer.GetScore(token_id)
+
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.IsUnknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.IsControl(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.IsUnused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.IsByte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
+
+        # Use the added_tokens_decoder field from tokeniser_config.json as the source
+        # of information about added/redefined tokens and modify them accordingly.
+        tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
+        if tokenizer_config_file.is_file():
+            with open(tokenizer_config_file, "r", encoding="utf-8") as f:
+                tokenizer_config_json = json.load(f)
+
+                if "added_tokens_decoder" in tokenizer_config_json:
+                    added_tokens_decoder = tokenizer_config_json["added_tokens_decoder"]
+                    for token_id, token_json in added_tokens_decoder.items():
+                        token_id = int(token_id)
+                        if (token_id >= vocab_size):
+                            logger.debug(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                            continue
+
+                        token_content = token_json["content"]
+                        token_type = SentencePieceTokenTypes.USER_DEFINED
+                        token_score = -10000.0
+
+                        # Map unk_token to UNKNOWN, other special tokens to CONTROL
+                        # Set the score to 0.0 as in the original tokenizer.model
+                        if ("special" in token_json) and token_json["special"]:
+                            if token_content == tokenizer_config_json["unk_token"]:
+                                token_type = SentencePieceTokenTypes.UNKNOWN
+                            else:
+                                token_type = SentencePieceTokenTypes.CONTROL
+                            token_score = 0.0
+
+                        logger.info(f"Setting added token {token_id} to '{token_content}' (type: {token_type}, score: {token_score:.2f})")
+                        tokens[token_id] = token_content.encode("utf-8")
+                        toktypes[token_id] = token_type
+                        scores[token_id] = token_score
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        hparams = self.hparams
+        self.gguf_writer.add_vocab_size(hparams["vocab_size"])
+        self.gguf_writer.add_rope_dimension_count(hparams["hidden_size"] // hparams["num_attention_heads"])
+
+    _experts: list[dict[str, Tensor]] | None = None
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        n_head = self.hparams["num_attention_heads"]
+        n_kv_head = self.hparams.get("num_key_value_heads")
+
+        if name.endswith("q_proj.weight"):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+        if name.endswith("k_proj.weight"):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+
+        # process the experts separately
+        if name.find("block_sparse_moe.experts") != -1:
+            n_experts = self.hparams["num_local_experts"]
+
+            assert bid is not None
+
+            if self._experts is None:
+                self._experts = [{} for _ in range(self.block_count)]
+
+            self._experts[bid][name] = data_torch
+
+            if len(self._experts[bid]) >= n_experts * 3:
+                tensors: list[tuple[str, Tensor]] = []
+
+                # merge the experts into a single 3d tensor
+                for wid in ["w1", "w2", "w3"]:
+                    datas: list[Tensor] = []
+
+                    for xid in range(n_experts):
+                        ename = f"model.layers.{bid}.block_sparse_moe.experts.{xid}.{wid}.weight"
+                        datas.append(self._experts[bid][ename])
+                        del self._experts[bid][ename]
+
+                    data_torch = torch.stack(datas, dim=0)
+
+                    merged_name = f"layers.{bid}.feed_forward.experts.{wid}.weight"
+
+                    new_name = self.map_tensor_name(merged_name)
+
+                    tensors.append((new_name, data_torch))
+                return tensors
+            else:
+                return []
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+    def write_tensors(self):
+        super().write_tensors()
+
+        if self._experts is not None:
+            # flatten `list[dict[str, Tensor]]` into `list[str]`
+            experts = [k for d in self._experts for k in d.keys()]
+            if len(experts) > 0:
+                raise ValueError(f"Unprocessed experts: {experts}")
 
 
 @Model.register("DeepseekV2ForCausalLM")

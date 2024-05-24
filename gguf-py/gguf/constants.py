@@ -63,13 +63,13 @@ class Keys:
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
 
     class Rope:
-        DIMENSION_COUNT      = "{arch}.rope.dimension_count"
-        FREQ_BASE            = "{arch}.rope.freq_base"
-        SCALING_TYPE         = "{arch}.rope.scaling.type"
-        SCALING_FACTOR       = "{arch}.rope.scaling.factor"
-        SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
-        SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
-        SCALING_YARN_LOG_MUL = "{arch}.rope.scaling.yarn_log_multiplier"
+        DIMENSION_COUNT         = "{arch}.rope.dimension_count"
+        FREQ_BASE               = "{arch}.rope.freq_base"
+        SCALING_TYPE            = "{arch}.rope.scaling.type"
+        SCALING_FACTOR          = "{arch}.rope.scaling.factor"
+        SCALING_ATTN_FACTOR     = "{arch}.rope.scaling.attn_factor"
+        SCALING_ORIG_CTX_LEN    = "{arch}.rope.scaling.original_context_length"
+        SCALING_FINETUNED       = "{arch}.rope.scaling.finetuned"
 
     class SSM:
         CONV_KERNEL    = "{arch}.ssm.conv_kernel"
@@ -122,7 +122,6 @@ class MODEL_ARCH(IntEnum):
     GPTNEOX    = auto()
     MPT        = auto()
     STARCODER  = auto()
-    PERSIMMON  = auto()
     REFACT     = auto()
     BERT       = auto()
     NOMIC_BERT = auto()
@@ -146,6 +145,7 @@ class MODEL_ARCH(IntEnum):
     COMMAND_R  = auto()
     DBRX       = auto()
     OLMO       = auto()
+    ARCTIC     = auto()
     DEEPSEEK2  = auto()
 
 
@@ -157,6 +157,8 @@ class MODEL_TENSOR(IntEnum):
     OUTPUT             = auto()
     OUTPUT_NORM        = auto()
     ROPE_FREQS         = auto()
+    ROPE_FACTORS_LONG  = auto()
+    ROPE_FACTORS_SHORT = auto()
     ATTN_Q             = auto()
     ATTN_K             = auto()
     ATTN_V             = auto()
@@ -173,6 +175,7 @@ class MODEL_TENSOR(IntEnum):
     FFN_DOWN           = auto()
     FFN_UP             = auto()
     FFN_ACT            = auto()
+    FFN_NORM_EXP       = auto()
     FFN_GATE_EXP       = auto()
     FFN_DOWN_EXP       = auto()
     FFN_UP_EXP         = auto()
@@ -207,7 +210,6 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GPTNEOX:        "gptneox",
     MODEL_ARCH.MPT:            "mpt",
     MODEL_ARCH.STARCODER:      "starcoder",
-    MODEL_ARCH.PERSIMMON:      "persimmon",
     MODEL_ARCH.REFACT:         "refact",
     MODEL_ARCH.BERT:           "bert",
     MODEL_ARCH.NOMIC_BERT:     "nomic-bert",
@@ -231,6 +233,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
+    MODEL_ARCH.ARCTIC:         "arctic",
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
 }
 
@@ -242,6 +245,8 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.OUTPUT_NORM:        "output_norm",
     MODEL_TENSOR.OUTPUT:             "output",
     MODEL_TENSOR.ROPE_FREQS:         "rope_freqs",
+    MODEL_TENSOR.ROPE_FACTORS_LONG:  "rope_factors_long",
+    MODEL_TENSOR.ROPE_FACTORS_SHORT: "rope_factors_short",
     MODEL_TENSOR.ATTN_NORM:          "blk.{bid}.attn_norm",
     MODEL_TENSOR.ATTN_NORM_2:        "blk.{bid}.attn_norm_2",
     MODEL_TENSOR.ATTN_QKV:           "blk.{bid}.attn_qkv",
@@ -263,6 +268,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_DOWN_SHEXP:     "blk.{bid}.ffn_down_shexp",
     MODEL_TENSOR.FFN_UP_SHEXP:       "blk.{bid}.ffn_up_shexp",
     MODEL_TENSOR.FFN_ACT:            "blk.{bid}.ffn",
+    MODEL_TENSOR.FFN_NORM_EXP:       "blk.{bid}.ffn_norm_exps",
     MODEL_TENSOR.FFN_GATE_EXP:       "blk.{bid}.ffn_gate_exps",
     MODEL_TENSOR.FFN_DOWN_EXP:       "blk.{bid}.ffn_down_exps",
     MODEL_TENSOR.FFN_UP_EXP:         "blk.{bid}.ffn_up_exps",
@@ -446,20 +452,6 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
-    ],
-    MODEL_ARCH.PERSIMMON: [
-        MODEL_TENSOR.TOKEN_EMBD,
-        MODEL_TENSOR.OUTPUT,
-        MODEL_TENSOR.OUTPUT_NORM,
-        MODEL_TENSOR.ATTN_NORM,
-        MODEL_TENSOR.ATTN_QKV,
-        MODEL_TENSOR.ATTN_OUT,
-        MODEL_TENSOR.FFN_NORM,
-        MODEL_TENSOR.FFN_DOWN,
-        MODEL_TENSOR.FFN_UP,
-        MODEL_TENSOR.ATTN_Q_NORM,
-        MODEL_TENSOR.ATTN_K_NORM,
-        MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
     MODEL_ARCH.REFACT: [
         MODEL_TENSOR.TOKEN_EMBD,
@@ -764,6 +756,27 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.ARCTIC: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_NORM_EXP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+    ],
     MODEL_ARCH.DEEPSEEK2: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -803,9 +816,6 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.BAICHUAN: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
-    ],
-    MODEL_ARCH.PERSIMMON: [
-        MODEL_TENSOR.ROPE_FREQS,
     ],
     MODEL_ARCH.QWEN: [
         MODEL_TENSOR.ROPE_FREQS,
@@ -971,9 +981,8 @@ class GGUFValueType(IntEnum):
             raise ValueError(f"Unknown type: {type(val)}")
 
 
-# Note: Does not support GGML_QKK_64
-QK_K = 256
 # Items here are (block size, type size)
+QK_K = 256
 GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),
