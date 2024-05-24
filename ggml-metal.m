@@ -1588,13 +1588,13 @@ static enum ggml_status ggml_metal_graph_compute(
                                         nth1 = 1;
                                         if (src1t == GGML_TYPE_F32) {
                                             if (ne11 * ne12 < 4) {
+                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_1ROW].pipeline;
+                                            } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
                                                 if (ne01 > 128) {
                                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_L4_LARGE].pipeline;
                                                 } else {
                                                     pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_L4].pipeline;
                                                 }
-                                            } else if (ne00 >= 128 && ne01 >= 8 && ne00%4 == 0) {
-                                                pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32_L4].pipeline;
                                                 nrows = ne11;
                                             } else {
                                                 pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32].pipeline;
