@@ -530,6 +530,9 @@ int main(int argc, char ** argv) {
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
 
             const llama_token id = llama_sampling_sample(ctx_sampling, ctx, ctx_guidance);
+            if (id == -1) {
+                return 1;
+            }
 
             llama_sampling_accept(ctx_sampling, ctx, id, true);
 

@@ -2257,6 +2257,14 @@ struct server_context {
 
                 completion_token_output result;
                 const llama_token id = llama_sampling_sample(slot.ctx_sampling, ctx, NULL, slot.i_batch - i);
+                if (id == -1) {
+                    send_error(slot, "can't get completions out of an embeddings model");
+                    slot.cache_tokens.clear();
+                    slot.reset();
+                    slot.release();
+                    slot.i_batch = -1;
+                    continue; // continue loop of slots
+                }
 
                 llama_sampling_accept(slot.ctx_sampling, ctx, id, true);
 

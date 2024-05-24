@@ -341,6 +341,7 @@ int main(int argc, char ** argv) {
                 //        client.id, client.seq_id, client.sampled, client.n_decoded, client.i_batch);
 
                 const llama_token id = llama_sampling_sample(client.ctx_sampling, ctx, NULL, client.i_batch - i);
+                GGML_ASSERT(id != -1);
 
                 llama_sampling_accept(client.ctx_sampling, ctx, id, true);
 

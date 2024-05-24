@@ -270,12 +270,16 @@ static llama_token llama_sampling_sample_impl(
 
     std::vector<float> original_logits;
     auto cur_p = llama_sampling_prepare(ctx_sampling, ctx_main, ctx_cfg, idx, /* apply_grammar= */ is_resampling, &original_logits);
+    if (cur_p.data == NULL) {
+        return -1;
+    }
     if (ctx_sampling->grammar != NULL && !is_resampling) {
         GGML_ASSERT(!original_logits.empty());
     }
     llama_token id = 0;
     // Get a pointer to the logits
     float * logits = llama_get_logits_ith(ctx_main, idx);
+    GGML_ASSERT(logits); // already checked in llama_sampling_prepare
 
     if (temp < 0.0) {
         // greedy sampling, with probs
@@ -365,6 +369,9 @@ static llama_token_data_array llama_sampling_prepare_impl(
 
     // Get a pointer to the logits
     float * logits = llama_get_logits_ith(ctx_main, idx);
+    if (!logits) {
+        return {NULL, 0, false};
+    }
 
     if (ctx_sampling->grammar != NULL && !apply_grammar) {
         GGML_ASSERT(original_logits != NULL);
@@ -379,6 +386,9 @@ static llama_token_data_array llama_sampling_prepare_impl(
 
     if (ctx_cfg) {
         float * logits_guidance = llama_get_logits_ith(ctx_cfg, idx);
+        if (!logits_guidance) {
+            return {NULL, 0, false};
+        }
         llama_sample_apply_guidance(ctx_main, logits, logits_guidance, params.cfg_scale);
     }
 

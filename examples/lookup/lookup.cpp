@@ -131,6 +131,7 @@ int main(int argc, char ** argv){
         while (true) {
             // sample from the target model
             llama_token id = llama_sampling_sample(ctx_sampling, ctx, NULL, i_dft);
+            GGML_ASSERT(id != -1);
 
             llama_sampling_accept(ctx_sampling, ctx, id, true);
 

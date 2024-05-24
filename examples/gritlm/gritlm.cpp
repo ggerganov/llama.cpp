@@ -58,6 +58,9 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         // sum up all token embeddings
         for (int32_t k = n_inst; k < n_toks; k++) {
             float * emb = llama_get_embeddings_ith(ctx, k);
+            if (!emb) {
+                throw std::runtime_error("llama_get_embeddings_ith failed");
+            }
             for (uint64_t j = 0; j < n_embd; j++) {
                 emb_unorm[j] += emb[j];
             }
@@ -114,6 +117,9 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
 
         llama_decode(ctx, bat);
         auto logits = llama_get_logits_ith(ctx, bat.n_tokens - 1);
+        if (!logits) {
+            throw std::runtime_error("llama_get_logits_ith failed");
+        }
 
         auto candidates = std::vector<llama_token_data>(llama_n_vocab(mdl));
         auto n_candidates = (int32_t)candidates.size();

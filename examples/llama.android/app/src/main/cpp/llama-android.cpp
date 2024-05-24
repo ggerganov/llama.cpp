@@ -394,6 +394,9 @@ Java_com_example_llama_Llm_completion_1loop(
 
     auto n_vocab = llama_n_vocab(model);
     auto logits = llama_get_logits_ith(context, batch->n_tokens - 1);
+    if (!logits) {
+        throw std::runtime_error("llama_get_logits_ith failed");
+    }
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
