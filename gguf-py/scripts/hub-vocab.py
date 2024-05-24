@@ -40,9 +40,8 @@ def main():
     args = parser.parse_args()
 
     vocab_request = HFVocabRequest(args.auth_token, args.model_path, logger)
-    vocab_list = vocab_request.get_vocab_filenames(args.vocab_type)
-    for vocab_file in vocab_list:
-        vocab_request.get_vocab_file(args.model_repo, vocab_file, args.model_path)
+    vocab_type = vocab_request.get_vocab_enum(args.vocab_type)
+    vocab_request.get_all_vocab_files(args.model_repo, vocab_type)
 
 
 if __name__ == '__main__':
