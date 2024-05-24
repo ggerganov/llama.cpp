@@ -392,13 +392,13 @@ std::pair<int, int> get_refine_size(std::pair<int, int> original_size, std::pair
     int grid_width = refine_width / grid_x;
     int grid_height = refine_height / grid_y;
 
-    auto best_grid_size = find_best_resize(std::make_tuple(grid_width, grid_height), scale_resolution, patch_size, allow_upscale);
-
+   // auto best_grid_size = find_best_resize(std::make_tuple(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); (old line)
+    auto best_grid_size = find_best_resize(std::make_pair(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); // (new line) => fixes conversion for make_tuple to make_pair
     int best_grid_width, best_grid_height;
     std::tie(best_grid_width, best_grid_height) = best_grid_size;
 
-    std::pair<int, int> refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y);
-
+  //  std::pair<int, int> refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y); (old line)
+    std::pair<int, int> refine_size = std::make_pair(best_grid_width * grid_x, best_grid_height * grid_y); // (new line)
     return refine_size;
 }
 
