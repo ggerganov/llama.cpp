@@ -156,6 +156,7 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         '<s>a',       # Phi-3 fail
         '<unk><|endoftext|><s>',  # Phi-3 fail
         'a\na',       # TODO: Bert fail
+        'a\xa0\xa0\x00b',  # jina-v2-es
     ]
 
 
@@ -328,8 +329,15 @@ if __name__ == "__main__":
     # import os
     # tokenizers = os.listdir(path_tokenizers)
     tokenizers = [
-        "llama-spm",   # SPM
-        "phi-3",       # SPM
+        # "llama-spm",   # SPM
+        # "phi-3",       # SPM
+        # "bert-bge",    # WPM
+        # "jina-v2-en",  # WPM
+        "gpt-2",       # BPE
+        "llama-bpe",   # BPE
+        "jina-v2-es",  # BPE
+        "jina-v2-de",  # BPE
+        "phi-2",       # BPE
     ]
 
     for tokenizer in tokenizers:
