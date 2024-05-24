@@ -5,8 +5,8 @@ import pathlib
 from hashlib import sha256
 
 import requests
+from huggingface_hub import login, model_info
 from sentencepiece import SentencePieceProcessor
-from transformers import AutoTokenizer
 
 from .constants import (
     GPT_PRE_TOKENIZER_DEFAULT,
@@ -69,7 +69,7 @@ class HFHubRequest:
         return response
 
 
-class HFHubBase:
+class HFHub:
     def __init__(
         self,
         model_path: None | str | pathlib.Path,
@@ -104,7 +104,7 @@ class HFHubBase:
         self._model_path = value
 
 
-class HFTokenizer(HFHubBase):
+class HFTokenizer(HFHub):
     def __init__(self, model_path: str, auth_token: str, logger: logging.Logger):
         super().__init__(model_path, auth_token, logger)
         self._model_path = model_path
@@ -133,6 +133,12 @@ class HFTokenizer(HFHubBase):
         with path.read_text(encoding='utf-8') as file:
             return json.loads(file)
 
+    def tokenizer_model(self, model_repo: str) -> SentencePieceProcessor:
+        path = self.model_path / model_repo / "tokenizer.model"
+        processor = SentencePieceProcessor()
+        processor.LoadFromFile(path.read_bytes())
+        return processor
+
     def tokenizer_config(self, model_repo: str) -> dict[str, object]:
         path = self.model_path / model_repo / "tokenizer_config.json"
         with path.read_text(encoding='utf-8') as file:
@@ -143,11 +149,21 @@ class HFTokenizer(HFHubBase):
         with path.read_text(encoding='utf-8') as file:
             return json.loads(file)
 
-    def tokenizer_model(self, model_repo: str) -> SentencePieceProcessor:
-        path = self.model_path / model_repo / "tokenizer.model"
-        processor = SentencePieceProcessor()
-        processor.LoadFromFile(path.read_bytes())
-        return processor
+    def get_normalizer(self, model_repo: str) -> None | dict[str, object]:
+        normalizer = self.tokenizer_json(model_repo).get("normalizer", dict())
+        if normalizer:
+            self.logger.info(f"JSON:Normalizer: {json.dumps(normalizer, indent=2)}")
+        else:
+            self.logger.warn(f"WARN:Normalizer: {normalizer}")
+        return normalizer
+
+    def get_pre_tokenizer(self, model_repo: str) -> None | dict[str, object]:
+        pre_tokenizer = self.tokenizer_json(model_repo).get("pre_tokenizer", dict())
+        if pre_tokenizer:
+            self.logger.info(f"JSON:PreTokenizer: {json.dumps(pre_tokenizer, indent=2)}")
+        else:
+            self.logger.warn(f"WARN:PreTokenizer: {pre_tokenizer}")
+        return pre_tokenizer
 
     def get_tokenizer_json_hash(self, model_repo: str) -> str:
         tokenizer = self.tokenizer_json(model_repo)
@@ -169,7 +185,7 @@ class HFTokenizer(HFHubBase):
             self.logger.info(f"JSON:PreTokenizer: {k}: {json.dumps(v, indent=2)}")
 
 
-class HFVocabRequest(HFHubBase):
+class HFModel(HFHub):
     def __init__(
         self,
         auth_token: str,
@@ -178,6 +194,16 @@ class HFVocabRequest(HFHubBase):
     ):
         super().__init__(model_path, auth_token, logger)
         self._tokenizer = HFTokenizer(model_path, auth_token, logger)
+        login(auth_token)  # NOTE: Required for using model_info
+
+    @property
+    def model_type(self) -> ModelFileType:
+        return ModelFileType
+
+    @staticmethod
+    def get_model_info(repo_id: str) -> list[str]:
+        # NOTE: Get repository metadata to extract remote filenames
+        return [x.rfilename for x in model_info(repo_id).siblings]
 
     @property
     def tokenizer(self) -> HFTokenizer:
@@ -194,40 +220,9 @@ class HFVocabRequest(HFHubBase):
         self.logger.info(f"Downloaded tokenizer {file_name} from {model_repo}")
 
     def get_all_vocab_files(self, model_repo: str, vocab_type: VocabType) -> None:
-        vocab_list = HFTokenizer.get_vocab_filenames(vocab_type)
+        vocab_list = self.tokenizer.get_vocab_filenames(vocab_type)
         for vocab_file in vocab_list:
             dir_path = self.model_path / model_repo
             file_path = dir_path / vocab_file
             os.makedirs(dir_path, exist_ok=True)
             self.get_vocab_file(model_repo, vocab_file, file_path)
-
-    def get_normalizer(self, model_repo: str) -> None | dict[str, object]:
-        normalizer = self.tokenizer.tokenizer_json(model_repo).get("normalizer", dict())
-        if normalizer:
-            self.logger.info(f"JSON:Normalizer: {json.dumps(normalizer, indent=2)}")
-        else:
-            self.logger.warn(f"WARN:Normalizer: {normalizer}")
-        return normalizer
-
-    def get_pre_tokenizer(self, model_repo: str) -> None | dict[str, object]:
-        pre_tokenizer = self.tokenizer.tokenizer_json(model_repo).get("pre_tokenizer", dict())
-        if pre_tokenizer:
-            self.logger.info(f"JSON:PreTokenizer: {json.dumps(pre_tokenizer, indent=2)}")
-        else:
-            self.logger.warn(f"WARN:PreTokenizer: {pre_tokenizer}")
-        return pre_tokenizer
-
-
-# TODO:
-class HFModelRequest(HFHubBase):
-    def __init__(
-        self,
-        model_path: None | str | pathlib.Path,
-        auth_token: str,
-        logger: None | logging.Logger
-    ):
-        super().__init__(model_path, auth_token, logger)
-
-    @property
-    def model_type(self) -> ModelFileType:
-        return ModelFileType
