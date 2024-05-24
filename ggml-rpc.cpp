@@ -521,6 +521,7 @@ static ggml_backend_buffer_type_i ggml_backend_rpc_buffer_type_interface = {
     /* .is_host          = */ NULL,
 };
 
+static std::unordered_map<std::string, ggml_backend_t> instances;
 
 GGML_CALL static const char * ggml_backend_rpc_name(ggml_backend_t backend) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
@@ -531,6 +532,7 @@ GGML_CALL static const char * ggml_backend_rpc_name(ggml_backend_t backend) {
 GGML_CALL static void ggml_backend_rpc_free(ggml_backend_t backend) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
     ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)rpc_ctx->buft->context;
+    instances.erase(rpc_ctx->endpoint);
     delete buft_ctx;
     delete rpc_ctx->buft;
     delete rpc_ctx;
@@ -623,8 +625,6 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .event_wait              = */ NULL,
     /* .event_synchronize       = */ NULL,
 };
-
-static std::unordered_map<std::string, ggml_backend_t> instances;
 
 GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const char * endpoint) {
     ggml_backend_t backend = ggml_backend_rpc_init(endpoint);
