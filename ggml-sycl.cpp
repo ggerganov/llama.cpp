@@ -15575,11 +15575,11 @@ __dpct_inline__ static void k_copy_dst_from_contiguous(
 static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
                                  const ggml_tensor *src1,
                                  ggml_tensor *dst) try {
-    GGML_ASSERT(src0->backend != GGML_BACKEND_TYPE_GPU_SPLIT &&
-                "mul_mat_id does not support split buffers");
+    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src0->buffer) && "mul_mat_id does not support split buffers");
+
     const ggml_tensor *ids = dst->src[2];
     GGML_TENSOR_BINARY_OP_LOCALS
-    GGML_ASSERT(!ggml_backend_buffer_is_sycl_split(src0->buffer) && "mul_mat_id does not support split buffers");
+
     const dpct::queue_ptr stream = g_syclStreams[g_main_device][0];
 
     const int64_t n_as = ne02;
@@ -15698,13 +15698,13 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
                 sycl::range<3> block_dims(1, 1, std::min((unsigned int)ne10, 768u));
                 sycl::range<3> grid_dims(1, n_ids, ids->ne[1]);
                 stream->submit([&](sycl::handler &cgh) {
-                    sycl::local_accessor<int, 0> src1_row_acc_ct1(cgh);
+                    sycl::local_accessor<int, 0> src1_row_acc(cgh);
 
-                    char *__restrict src1_contiguous_get_ct1 =
+                    char *__restrict src1_contiguous_get =
                         src1_contiguous.get();
-                    int *__restrict dev_cur_src1_row_get_ct2 =
+                    int *__restrict dev_cur_src1_row_get =
                         dev_cur_src1_row.get();
-                    mmid_row_mapping *__restrict dev_row_mapping_get_ct3 =
+                    mmid_row_mapping *__restrict dev_row_mapping_get =
                         dev_row_mapping.get();
                     size_t ids_nb_ct6 = ids->nb[1];
                     size_t ids_nb_ct7 = ids->nb[0];
@@ -15713,11 +15713,11 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
                         sycl::nd_range<3>(grid_dims * block_dims, block_dims),
                         [=](sycl::nd_item<3> item_ct1) {
                             k_copy_src1_to_contiguous(
-                                src1_original, src1_contiguous_get_ct1,
-                                dev_cur_src1_row_get_ct2,
-                                dev_row_mapping_get_ct3, ids_dev, i02,
+                                src1_original, src1_contiguous_get,
+                                dev_cur_src1_row_get,
+                                dev_row_mapping_get, ids_dev, i02,
                                 ids_nb_ct6, ids_nb_ct7, ne11, ne10, nb11, nb12,
-                                item_ct1, src1_row_acc_ct1);
+                                item_ct1, src1_row_acc);
                         });
                 });
             }
@@ -15743,24 +15743,21 @@ static void ggml_sycl_mul_mat_id(const ggml_tensor *src0,
                 sycl::range<3> block_dims(1, 1, std::min((unsigned int)ne0, 768u));
                 sycl::range<3> grid_dims(1, 1, num_src1_rows);
                 stream->submit([&](sycl::handler &cgh) {
-                    const char *__restrict dst_contiguous_get_ct1 =
+                    const char *__restrict dst_contiguous_get =
                         dst_contiguous.get();
-                    const mmid_row_mapping *__restrict dev_row_mapping_get_ct2 =
+                    const mmid_row_mapping *__restrict dev_row_mapping_get =
                         dev_row_mapping.get();
 
                     cgh.parallel_for(
                         sycl::nd_range<3>(grid_dims * block_dims, block_dims),
                         [=](sycl::nd_item<3> item_ct1) {
                             k_copy_dst_from_contiguous(dst_original,
-                                                       dst_contiguous_get_ct1,
-                                                       dev_row_mapping_get_ct2,
+                                                       dst_contiguous_get,
+                                                       dev_row_mapping_get,
                                                        ne0, nb1, nb2, item_ct1);
                         });
                 });
             }
-        }
-        if (dst->backend == GGML_BACKEND_TYPE_CPU) {
-            SYCL_CHECK(CHECK_TRY_ERROR(stream->wait()));
         }
     }
 }
