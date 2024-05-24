@@ -52,13 +52,18 @@ int32_t cpu_get_num_math();
 // CLI argument parsing
 //
 
+struct cpu_params {
+    int32_t  n_threads                 = -1;
+    bool     cpumask[GGML_N_CORES_MAX] = {false}; // CPU affinity mask.
+    bool     mask_valid                = false;   // Default: any CPU
+    int32_t  priority                  =  0;      // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
+    bool     strict_cpu                = false;   // Use strict CPU placement
+    bool     poll                      = false;   // Use polling (busywait) to wait for work
+};
+
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
-    int32_t n_threads             = cpu_get_num_math();
-    int32_t n_threads_draft       = -1;
-    int32_t n_threads_batch       = -1;    // number of threads to use for batch processing (-1 = use n_threads)
-    int32_t n_threads_batch_draft = -1;
     int32_t n_predict             = -1;    // new tokens to predict
     int32_t n_ctx                 = 512;   // context size
     int32_t n_batch               = 2048;  // logical batch size for prompt processing (must be >=32 to use BLAS)
@@ -90,6 +95,11 @@ struct gpt_params {
 
     ggml_backend_sched_eval_callback cb_eval = nullptr;
     void * cb_eval_user_data                 = nullptr;
+
+    struct cpu_params cpuparams;
+    struct cpu_params cpuparams_batch;
+    struct cpu_params draft_cpuparams;
+    struct cpu_params draft_cpuparams_batch;
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
@@ -219,8 +229,9 @@ std::string fs_get_cache_directory();
 // TODO: avoid tuplue, use struct
 std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
 
-struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
-struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
+struct llama_model_params     llama_model_params_from_gpt_params    (const gpt_params & params);
+struct llama_context_params   llama_context_params_from_gpt_params  (const gpt_params & params);
+struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params);
 
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const struct llama_model_params & params);
 struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const struct llama_model_params & params);

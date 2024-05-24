@@ -1818,7 +1818,7 @@ int main(int argc, char ** argv) {
     opt_cb_data.millis_per_iter        = 0.0;
 
     // measure required memory for work buffer
-    size_t max_work_size = ggml_graph_plan(gb, params.common.n_threads).work_size + GGML_OBJECT_SIZE;
+    size_t max_work_size = ggml_graph_plan(gb, params.common.n_threads, nullptr).work_size + GGML_OBJECT_SIZE;
     printf("%s: work_size = %zu bytes (%.1f MB)\n", __func__, max_work_size, (float) max_work_size / (1024.0f*1024.0f));
 
     // context for work buffer

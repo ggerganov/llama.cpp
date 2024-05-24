@@ -67,12 +67,24 @@ extern "C" {
 
     GGML_API void ggml_backend_synchronize(ggml_backend_t backend);
 
-    GGML_API ggml_backend_graph_plan_t ggml_backend_graph_plan_create(ggml_backend_t backend, struct ggml_cgraph * cgraph);
-    GGML_API void                      ggml_backend_graph_plan_free  (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+    GGML_API ggml_backend_graph_plan_t ggml_backend_graph_plan_create(
+                   ggml_backend_t   backend,
+         const struct ggml_cgraph * cgraph,
+        ggml_compute_threadpool_t   threadpool);
 
-    GGML_API enum ggml_status ggml_backend_graph_plan_compute (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
-    GGML_API enum ggml_status ggml_backend_graph_compute      (ggml_backend_t backend, struct ggml_cgraph * cgraph);
-    GGML_API enum ggml_status ggml_backend_graph_compute_async(ggml_backend_t backend, struct ggml_cgraph * cgraph);
+    GGML_API void ggml_backend_graph_plan_free  (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+
+    GGML_API enum ggml_status ggml_backend_graph_plan_compute (
+                   ggml_backend_t backend,
+        ggml_backend_graph_plan_t plan);
+    GGML_API enum ggml_status ggml_backend_graph_compute(
+                   ggml_backend_t   backend,
+               struct ggml_cgraph * cgraph,
+        ggml_compute_threadpool_t   threadpool);
+    GGML_API enum ggml_status ggml_backend_graph_compute_async(
+                   ggml_backend_t   backend,
+               struct ggml_cgraph * cgraph,
+        ggml_compute_threadpool_t   threadpool);
     GGML_API bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor * op);
     GGML_API bool ggml_backend_offload_op(ggml_backend_t backend, const struct ggml_tensor * op);
 
@@ -193,8 +205,8 @@ extern "C" {
 
     // Allocate and compute graph on the backend scheduler
     GGML_API bool                 ggml_backend_sched_alloc_graph(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
-    GGML_API enum ggml_status     ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
-    GGML_API enum ggml_status     ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sched, struct ggml_cgraph * graph);
+    GGML_API enum ggml_status     ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph, ggml_compute_threadpool_t threadpool);
+    GGML_API enum ggml_status     ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sched, struct ggml_cgraph * graph, ggml_compute_threadpool_t threadpool);
     GGML_API void                 ggml_backend_sched_synchronize(ggml_backend_sched_t sched);
 
     // Reset all assignments and allocators - must be called before changing the node backends

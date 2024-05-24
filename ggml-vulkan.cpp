@@ -6225,7 +6225,12 @@ static bool ggml_vk_is_empty(ggml_tensor * node) {
     return ggml_is_empty(node) || node->op == GGML_OP_NONE || node->op == GGML_OP_RESHAPE || node->op == GGML_OP_TRANSPOSE || node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE;
 }
 
-GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
+GGML_CALL static ggml_status ggml_backend_vk_graph_compute(
+                   ggml_backend_t   backend,
+                      ggml_cgraph * cgraph,
+        ggml_compute_threadpool_t   threadpool) {
+
+    GGML_UNUSED(threadpool);
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << "ggml_backend_vk_graph_compute(" << cgraph->n_nodes << " nodes)" << std::endl;
 #endif

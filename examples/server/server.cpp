@@ -2329,7 +2329,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("options:\n");
     printf("  -h, --help                show this help message and exit\n");
     printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
-    printf("  -t N, --threads N         number of threads to use during computation (default: %d)\n", params.n_threads);
+    printf("  -t N, --threads N         number of threads to use during computation (default: %d)\n", params.cpuparams.n_threads);
     printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
     printf("  --threads-http N          number of threads in the http server pool to process requests (default: max(hardware concurrency - 1, --parallel N + 2))\n");
     printf("  -c N, --ctx-size N        size of the prompt context (default: %d)\n", params.n_ctx);
@@ -2612,7 +2612,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            params.n_threads = std::stoi(argv[i]);
+            params.cpuparams.n_threads = std::stoi(argv[i]);
         } else if (arg == "--grp-attn-n" || arg == "-gan") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2632,7 +2632,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            params.n_threads_batch = std::stoi(argv[i]);
+            params.cpuparams_batch.n_threads = std::stoi(argv[i]);
         } else if (arg == "--threads-http") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2943,8 +2943,8 @@ int main(int argc, char ** argv) {
     });
 
     LOG_INFO("system info", {
-        {"n_threads",       params.n_threads},
-        {"n_threads_batch", params.n_threads_batch},
+        {"n_threads",       params.cpuparams.n_threads},
+        {"n_threads_batch", params.cpuparams_batch.n_threads},
         {"total_threads",   std::thread::hardware_concurrency()},
         {"system_info",     llama_print_system_info()},
     });

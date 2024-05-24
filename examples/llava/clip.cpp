@@ -1915,7 +1915,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     }
 #endif
 
-    ggml_backend_graph_compute(ctx->backend, gf);
+    ggml_backend_graph_compute(ctx->backend, gf, NULL);
 
     // the last node is the embedding tensor
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 1];

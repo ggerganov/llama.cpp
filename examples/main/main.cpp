@@ -202,9 +202,36 @@ int main(int argc, char ** argv) {
         ctx_guidance = llama_new_context_with_model(model, lparams);
     }
 
+    LOG("%s: llama threadpool init = n_threads = %d\n",
+        __func__,
+        (int32_t) params.cpuparams.n_threads
+    );
+    struct ggml_threadpool_params tpp_batch =
+            ggml_threadpool_params_from_cpu_params(params.cpuparams_batch);
+    struct ggml_threadpool_params tpp =
+            ggml_threadpool_params_from_cpu_params(params.cpuparams);
+
+    struct ggml_compute_threadpool * threadpool_batch = ggml_create_threadpool(&tpp_batch);
+    if (!threadpool_batch) {
+        LOG_TEE("%s: batch threadpool create failed : n_threads %d\n", __func__, tpp_batch.n_threads);
+        exit(1);
+    }
+    struct ggml_compute_threadpool * threadpool = ggml_create_threadpool(&tpp);
+    if (!threadpool) {
+        LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
+        exit(1);
+    }
+
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
         return 1;
+    }
+
+    llama_attach_batch_threadpool(ctx, threadpool_batch);
+    llama_attach_threadpool(ctx, threadpool);
+    if (ctx_guidance) {
+        llama_attach_batch_threadpool(ctx_guidance, threadpool_batch);
+        llama_attach_threadpool(ctx_guidance, threadpool);
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
@@ -954,6 +981,8 @@ int main(int argc, char ** argv) {
 
     llama_sampling_free(ctx_sampling);
     llama_backend_free();
+
+    ggml_release_threadpool(threadpool);
 
 #ifndef LOG_DISABLE_LOGS
     LOG_TEE("Log end\n");

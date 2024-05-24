@@ -2495,9 +2495,13 @@ static bool ggml_graph_node_has_matching_properties(ggml_tensor * node, ggml_gra
     return true;
 }
 
-GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
-    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
+GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(
+                   ggml_backend_t   backend,
+                      ggml_cgraph * cgraph,
+        ggml_compute_threadpool_t   threadpool) {
 
+    GGML_UNUSED(threadpool);
+    ggml_backend_cuda_context * cuda_ctx = (ggml_backend_cuda_context *)backend->context;
     ggml_cuda_set_device(cuda_ctx->device);
 
 #ifdef USE_CUDA_GRAPH

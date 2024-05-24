@@ -24,6 +24,14 @@ struct seq_draft {
     struct llama_sampling_context * ctx_sampling;
 };
 
+static void switch_active_threadpool(
+    ggml_compute_threadpool_t cur,
+    ggml_compute_threadpool_t nxt
+) {
+    ggml_pause_threadpool(cur);
+    ggml_resume_threadpool(nxt);
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
 
@@ -67,13 +75,19 @@ int main(int argc, char ** argv) {
     // load the target model
     std::tie(model_tgt, ctx_tgt) = llama_init_from_gpt_params(params);
 
+    ggml_threadpool_params tpp_tgt = ggml_threadpool_params_from_cpu_params(params.cpuparams);
+    ggml_compute_threadpool * threadpool_tgt = ggml_create_threadpool(&tpp_tgt);
+    if (!threadpool_tgt) {
+        LOG_TEE("%s: target threadpool create failed : n_threads %d\n", __func__, tpp_tgt.n_threads);
+        exit(1);
+    }
+
     // load the draft model
     params.model = params.model_draft;
     params.n_gpu_layers = params.n_gpu_layers_draft;
-    if (params.n_threads_draft > 0) {
-        params.n_threads = params.n_threads_draft;
+    if (params.draft_cpuparams.n_threads > 0) {
+        params.cpuparams = params.draft_cpuparams;
     }
-    params.n_threads_batch = params.n_threads_batch_draft;
     std::tie(model_dft, ctx_dft) = llama_init_from_gpt_params(params);
 
     const bool vocab_type_tgt = llama_vocab_type(model_tgt);
@@ -97,6 +111,17 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: error: draft model special tokens must match target model to use speculation\n", __func__);
         return 1;
     }
+
+    ggml_threadpool_params tpp_dft = ggml_threadpool_params_from_cpu_params(params.draft_cpuparams);
+    ggml_compute_threadpool * threadpool_dft = ggml_create_threadpool(&tpp_dft);
+    if (!threadpool_dft) {
+        LOG_TEE("%s: draft threadpool create failed : n_threads %d\n", __func__, tpp_dft.n_threads);
+        exit(1);
+    }
+
+    llama_attach_threadpool(ctx_tgt, threadpool_tgt);
+    llama_attach_threadpool(ctx_dft, threadpool_dft);
+    ggml_pause_threadpool(threadpool_dft);
 
     {
         const int n_vocab_tgt = llama_n_vocab(model_tgt);
@@ -153,6 +178,7 @@ int main(int argc, char ** argv) {
     // eval the prompt with both models
     llama_decode(ctx_tgt, llama_batch_get_one( inp.data(), n_input - 1, 0,           0));
     llama_decode(ctx_tgt, llama_batch_get_one(&inp.back(),           1, n_input - 1, 0));
+    switch_active_threadpool(threadpool_tgt, threadpool_dft);
     llama_decode(ctx_dft, llama_batch_get_one( inp.data(), n_input,     0,           0));
 
     const auto t_enc_end = ggml_time_us();
@@ -542,6 +568,7 @@ int main(int argc, char ** argv) {
 
             // evaluate the drafted tokens on the draft model
             llama_decode(ctx_dft, batch_dft);
+
             ++n_past_cur;
             ++n_drafted;
 
@@ -549,6 +576,7 @@ int main(int argc, char ** argv) {
                 break;
             }
         }
+        switch_active_threadpool(threadpool_dft, threadpool_tgt);
 
         // evaluate the target model on the drafted tokens
         {
@@ -559,6 +587,8 @@ int main(int argc, char ** argv) {
 
             // LOG("target batch: %s\n", LOG_BATCH_TOSTR_PRETTY(ctx_tgt, batch_tgt).c_str());
             llama_decode(ctx_tgt, batch_tgt);
+            switch_active_threadpool(threadpool_tgt, threadpool_dft);
+
             ++n_past_tgt;
         }
 
@@ -607,6 +637,9 @@ int main(int argc, char ** argv) {
     llama_free_model(model_dft);
 
     llama_backend_free();
+
+    ggml_release_threadpool(threadpool_tgt);
+    ggml_release_threadpool(threadpool_dft);
 
     fprintf(stderr, "\n\n");
 

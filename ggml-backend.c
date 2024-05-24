@@ -254,10 +254,14 @@ void ggml_backend_synchronize(ggml_backend_t backend) {
     backend->iface.synchronize(backend);
 }
 
-ggml_backend_graph_plan_t ggml_backend_graph_plan_create(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+ggml_backend_graph_plan_t ggml_backend_graph_plan_create(
+               ggml_backend_t   backend,
+     const struct ggml_cgraph * cgraph,
+    ggml_compute_threadpool_t   threadpool
+) {
     GGML_ASSERT(backend->iface.graph_plan_create != NULL);
 
-    return backend->iface.graph_plan_create(backend, cgraph);
+    return backend->iface.graph_plan_create(backend, cgraph, threadpool);
 }
 
 void ggml_backend_graph_plan_free(ggml_backend_t backend, ggml_backend_graph_plan_t plan) {
@@ -266,20 +270,31 @@ void ggml_backend_graph_plan_free(ggml_backend_t backend, ggml_backend_graph_pla
     backend->iface.graph_plan_free(backend, plan);
 }
 
-enum ggml_status ggml_backend_graph_plan_compute(ggml_backend_t backend, ggml_backend_graph_plan_t plan) {
+enum ggml_status ggml_backend_graph_plan_compute(
+               ggml_backend_t backend,
+    ggml_backend_graph_plan_t plan
+) {
     GGML_ASSERT(backend->iface.graph_plan_compute != NULL);
 
     return backend->iface.graph_plan_compute(backend, plan);
 }
 
-enum ggml_status ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    enum ggml_status err = ggml_backend_graph_compute_async(backend, cgraph);
+enum ggml_status ggml_backend_graph_compute(
+               ggml_backend_t   backend,
+           struct ggml_cgraph * cgraph,
+    ggml_compute_threadpool_t   threadpool
+) {
+    enum ggml_status err = ggml_backend_graph_compute_async(backend, cgraph, threadpool);
     ggml_backend_synchronize(backend);
     return err;
 }
 
-enum ggml_status ggml_backend_graph_compute_async(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    return backend->iface.graph_compute(backend, cgraph);
+enum ggml_status ggml_backend_graph_compute_async(
+               ggml_backend_t   backend,
+           struct ggml_cgraph * cgraph,
+    ggml_compute_threadpool_t   threadpool
+) {
+    return backend->iface.graph_compute(backend, cgraph, threadpool);
 }
 
 bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
@@ -758,12 +773,16 @@ struct ggml_backend_plan_cpu {
     struct ggml_cgraph cgraph;
 };
 
-GGML_CALL static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(ggml_backend_t backend, const struct ggml_cgraph * cgraph) {
+GGML_CALL static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(
+               ggml_backend_t   backend,
+     const struct ggml_cgraph * cgraph,
+    ggml_compute_threadpool_t   threadpool
+) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
     struct ggml_backend_plan_cpu * cpu_plan = malloc(sizeof(struct ggml_backend_plan_cpu));
 
-    cpu_plan->cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
+    cpu_plan->cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads, threadpool);
     cpu_plan->cgraph = *cgraph; // FIXME: deep copy
 
     if (cpu_plan->cplan.work_size > 0) {
@@ -797,10 +816,14 @@ GGML_CALL static enum ggml_status ggml_backend_cpu_graph_plan_compute(ggml_backe
     GGML_UNUSED(backend);
 }
 
-GGML_CALL static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+GGML_CALL static enum ggml_status ggml_backend_cpu_graph_compute(
+               ggml_backend_t   backend,
+           struct ggml_cgraph * cgraph,
+    ggml_compute_threadpool_t   threadpool
+) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
-    struct ggml_cplan cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads);
+    struct ggml_cplan cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads, threadpool);
 
     if (cpu_ctx->work_size < cplan.work_size) {
         free(cpu_ctx->work_data);
@@ -1630,7 +1653,10 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
     return true;
 }
 
-static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t sched) {
+static enum ggml_status ggml_backend_sched_compute_splits(
+         ggml_backend_sched_t sched,
+    ggml_compute_threadpool_t threadpool
+) {
     struct ggml_backend_sched_split * splits = sched->splits;
 
     for (int i = 0; i < sched->n_splits; i++) {
@@ -1664,7 +1690,7 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
         }
 
         if (!sched->callback_eval) {
-            enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &split->graph);
+            enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &split->graph, threadpool);
             if (ec != GGML_STATUS_SUCCESS) {
                 return ec;
             }
@@ -1686,7 +1712,7 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
 
                 struct ggml_cgraph gv = ggml_graph_view(&split->graph, j0, j1 + 1);
 
-                enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &gv);
+                enum ggml_status ec = ggml_backend_graph_compute_async(split_backend, &gv, threadpool);
                 if (ec != GGML_STATUS_SUCCESS) {
                     return ec;
                 }
@@ -1825,13 +1851,21 @@ bool ggml_backend_sched_alloc_graph(ggml_backend_sched_t sched, struct ggml_cgra
     return true;
 }
 
-enum ggml_status ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
-    enum ggml_status err = ggml_backend_sched_graph_compute_async(sched, graph);
+enum ggml_status ggml_backend_sched_graph_compute(
+         ggml_backend_sched_t   sched,
+           struct ggml_cgraph * graph,
+    ggml_compute_threadpool_t   threadpool
+) {
+    enum ggml_status err = ggml_backend_sched_graph_compute_async(sched, graph, threadpool);
     ggml_backend_sched_synchronize(sched);
     return err;
 }
 
-enum ggml_status ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
+enum ggml_status ggml_backend_sched_graph_compute_async(
+         ggml_backend_sched_t   sched,
+           struct ggml_cgraph * graph,
+    ggml_compute_threadpool_t   threadpool
+) {
     if (!sched->is_reset && !sched->is_alloc) {
         ggml_backend_sched_reset(sched);
     }
@@ -1842,7 +1876,7 @@ enum ggml_status ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sch
         }
     }
 
-    return ggml_backend_sched_compute_splits(sched);
+    return ggml_backend_sched_compute_splits(sched, threadpool);
 }
 
 void ggml_backend_sched_synchronize(ggml_backend_sched_t sched) {
@@ -2081,8 +2115,8 @@ bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t 
         struct ggml_cgraph g1v = ggml_graph_view(g1, i, i + 1);
         struct ggml_cgraph g2v = ggml_graph_view(g2, i, i + 1);
 
-        ggml_backend_graph_compute(backend1, &g1v);
-        ggml_backend_graph_compute(backend2, &g2v);
+        ggml_backend_graph_compute(backend1, &g1v, NULL);
+        ggml_backend_graph_compute(backend2, &g2v, NULL);
 
         if (ggml_is_view_op(t1->op)) {
             continue;

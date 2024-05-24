@@ -119,8 +119,9 @@ int main(int argc, char ** argv) {
     ctx_params.n_ubatch   = n_ubatch;
     ctx_params.flash_attn = flash_attn;
 
-    ctx_params.n_threads       = params.n_threads;
-    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.n_threads       = params.cpuparams.n_threads;
+    ctx_params.n_threads_batch = params.cpuparams_batch.n_threads == -1 ?
+                                 params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
 
     // ensure enough sequences are available
     ctx_params.n_seq_max = *std::max_element(n_pl.begin(), n_pl.end());

@@ -92,13 +92,14 @@ extern "C" {
         void (*GGML_CALL synchronize)(ggml_backend_t backend);
 
         // compute graph with a plan (not used currently)
-        ggml_backend_graph_plan_t (*GGML_CALL graph_plan_create) (ggml_backend_t backend, const struct ggml_cgraph * cgraph);
+        ggml_backend_graph_plan_t (*GGML_CALL graph_plan_create) (ggml_backend_t backend, const struct ggml_cgraph * cgraph, ggml_compute_threadpool_t  threadpool);
         void                      (*GGML_CALL graph_plan_free)   (ggml_backend_t backend, ggml_backend_graph_plan_t plan);
 
         // compute graph with a plan
         enum ggml_status (*GGML_CALL graph_plan_compute)(ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+
         // compute graph without a plan (async)
-        enum ggml_status (*GGML_CALL graph_compute)     (ggml_backend_t backend, struct ggml_cgraph * cgraph);
+        enum ggml_status (*GGML_CALL graph_compute)     (ggml_backend_t backend, struct ggml_cgraph * cgraph, ggml_compute_threadpool_t threadpool);
 
         // check if the backend supports an operation
         bool (*GGML_CALL supports_op)(ggml_backend_t backend, const struct ggml_tensor * op);

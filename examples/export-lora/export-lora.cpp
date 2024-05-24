@@ -344,7 +344,7 @@ static bool apply_lora(struct ggml_tensor * tensor, struct lora_data * lora, int
 
     ggml_gallocr_alloc_graph(alloc, gf);
 
-    struct ggml_cplan cplan = ggml_graph_plan(gf, n_threads);
+    struct ggml_cplan cplan = ggml_graph_plan(gf, n_threads, nullptr);
     static std::vector<uint8_t> data_work;
     data_work.resize(cplan.work_size);
     cplan.work_data = data_work.data();
