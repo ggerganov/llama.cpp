@@ -116,6 +116,10 @@ class HFVocabRequest(HFHubBase):
     def tokenizer_type(self) -> VocabType:
         return VocabType
 
+    @property
+    def tokenizer_path(self) -> pathlib.Path:
+        return self.model_path / "tokenizer.json"
+
     def get_vocab_name(self, vocab_type: VocabType) -> str:
         return VOCAB_TYPE_NAMES.get(vocab_type)
 
@@ -147,13 +151,17 @@ class HFVocabRequest(HFHubBase):
         for vocab_file in vocab_list:
             self.get_vocab_file(model_repo, vocab_file, self.model_path)
 
-    def extract_normalizer(self) -> dict[str, object]:
-        pass
+    def get_normalizer(self) -> None | dict[str, object]:
+        with open(self.tokenizer_path, mode="r") as file:
+            tokenizer_json = json.load(file)
+        return tokenizer_json.get("normalizer")
 
-    def extract_pre_tokenizers(self) -> dict[str, object]:
-        pass
+    def get_pre_tokenizer(self) -> None | dict[str, object]:
+        with open(self.tokenizer_path, mode="r") as file:
+            tokenizer_json = json.load(file)
+        return tokenizer_json.get("pre_tokenizer")
 
-    def generate_checksums(self) -> None:
+    def generate_checksum(self) -> None:
         checksums = []
         for model in self.models:
             mapping = {}
