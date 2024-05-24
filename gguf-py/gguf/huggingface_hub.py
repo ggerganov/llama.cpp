@@ -53,10 +53,10 @@ class HFHubRequest:
     def base_url(self) -> str:
         return self._base_url
 
-    def write_file(self, content: bytes, filepath: pathlib.Path) -> None:
-        with open(filepath, 'wb') as f:
+    def write_file(self, content: bytes, file_path: pathlib.Path) -> None:
+        with open(file_path, 'wb') as f:
             f.write(content)
-        self.logger.info(f"Wrote {len(content)} bytes to {filepath} successfully")
+        self.logger.info(f"Wrote {len(content)} bytes to {file_path} successfully")
 
     def resolve_url(self, repo: str, filename: str) -> str:
         return f"{self._base_url}/{repo}/resolve/main/{filename}"
@@ -149,7 +149,10 @@ class HFVocabRequest(HFHubBase):
     def get_all_vocab_files(self, model_repo: str, vocab_type: VocabType) -> None:
         vocab_list = self.get_vocab_filenames(vocab_type)
         for vocab_file in vocab_list:
-            self.get_vocab_file(model_repo, vocab_file, self.model_path)
+            dir_path = self.model_path / model_repo
+            file_path = dir_path / vocab_file
+            os.makedirs(dir_path, exist_ok=True)
+            self.get_vocab_file(model_repo, vocab_file, file_path)
 
     def get_normalizer(self) -> None | dict[str, object]:
         with open(self.tokenizer_path, mode="r") as file:
@@ -165,10 +168,10 @@ class HFVocabRequest(HFHubBase):
         checksums = []
         for model in self.models:
             mapping = {}
-            filepath = f"{self.model_path}/{model['repo']}"
+            file_path = f"{self.model_path}/{model['repo']}"
 
             try:
-                tokenizer = AutoTokenizer.from_pretrained(filepath, trust_remote=True)
+                tokenizer = AutoTokenizer.from_pretrained(file_path, trust_remote=True)
             except OSError as e:
                 self.logger.error(f"Failed to hash tokenizer {model['repo']}: {e}")
                 continue
