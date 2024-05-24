@@ -389,10 +389,6 @@ else
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
 endif
 
-ifdef LLAMA_QKK_64
-	MK_CPPFLAGS += -DGGML_QKK_64
-endif
-
 ifndef LLAMA_NO_ACCELERATE
 	# Mac OS - include Accelerate framework.
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
