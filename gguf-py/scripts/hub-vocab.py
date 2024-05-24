@@ -20,13 +20,11 @@ logger = logging.getLogger("gguf-gen-pre")
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("hf_auth_token", help="A huggingface read auth token")
+    parser.add_argument("auth_token", help="A huggingface read auth token")
+    parser.add_argument("model_repo", help="A huggingface model repository, e.g. org/model")
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Increase output verbosity."
-    )
-    parser.add_argument(
-        "-r", "--model-repo", default="meta-llama/Llama-2-7b-hf",
-        help="The models repository. Default is 'meta-llama/Llama-2-7b-hf'."
+        "-v", "--verbose", action="store_true",
+        help="Increase output verbosity."
     )
     parser.add_argument(
         "-m", "--model-path", default="models/",
@@ -34,7 +32,7 @@ def main():
     )
     parser.add_argument(
         "--vocab-type",
-        const="BPE", nargs="?", choices=["BPE", "SPM"],
+        const="BPE", nargs="?", choices=["SPM", "BPE", "WPM"],
         help="The type of vocab. Default is 'BPE'."
     )
     args = parser.parse_args()
