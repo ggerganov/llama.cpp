@@ -174,6 +174,10 @@ Set max_tokens to 1024, so that a relatively large previous reponse doesnt eat u
 available wrt next query-response. However dont forget that the server when started should
 also be started with a model context size of 1k or more, to be on safe side.
 
+  The /completions endpoint of examples/server doesnt take max_tokens, instead it takes the
+  internal n_predict, for now add the same here on the client side, maybe later add max_tokens
+  to /completions endpoint handling code on server side.
+
 Frequency and presence penalty fields are set to 1.2 in the set of fields sent to server
 along with the user query. So that the model is partly set to try avoid repeating text in
 its response.
