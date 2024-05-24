@@ -18,7 +18,7 @@ if (
 from gguf.constants import MODEL_ARCH, MODEL_ARCH_NAMES
 from gguf.huggingface_hub import HFVocabRequest
 
-logger = logging.getLogger("gguf-gen-pre")
+logger = logging.getLogger(Path(__file__).stem)
 
 
 def main():
@@ -44,6 +44,11 @@ def main():
         help="The type of vocab. Default is 'BPE'.",
     )
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     vocab_request = HFVocabRequest(args.auth_token, args.model_path, logger)
     vocab_type = vocab_request.get_vocab_enum(args.vocab_type)
