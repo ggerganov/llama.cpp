@@ -29,7 +29,9 @@ from typing import TYPE_CHECKING, Any, Callable, IO, Iterable, Literal, TypeVar,
 import numpy as np
 
 if 'NO_LOCAL_GGUF' not in os.environ:
-    sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
+    # use .parent.parent since we are in "examples" directory
+    sys.path.insert(1, str(Path(__file__).parent.parent / 'gguf-py'))
+
 import gguf
 from gguf import BaseVocab, Vocab, NoVocab, BpeVocab, SentencePieceVocab, LlamaHfVocab
 
