@@ -95,3 +95,10 @@ Now, you can start chatting:
 $cd /data/data/com.termux/files/home/bin
 $./minicpmv-cli -m ../model/ggml-model-Q4_K_M.gguf --mmproj ../model/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 --image xx.jpg  -p "What is in the image?"
 ```
+
+### result
+We use this command on Xiaomi 14 Pro, and the measured results.
+```
+$./minicpmv-cli -m ../model/ggml-model-Q4_K_M.gguf --mmproj ../model/mmproj-model-f16.gguf -c 4096 --temp 0.7 --top-p 0.8 --top-k 100 --repeat-penalty 1.05 -t 6 --image xx.jpg  -p "What is in the image?"
+```
+![alt text](assets/xiaomi14pro_test.jpeg)
