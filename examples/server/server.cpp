@@ -1019,7 +1019,7 @@ struct server_context {
                         sampler_names.emplace_back(sampler_name);
                     }
                 }
-                slot.sparams.samplers_sequence = sampler_types_from_names(sampler_names, false);
+                slot.sparams.samplers_sequence = llama_sampling_types_from_names(sampler_names, false);
             } else {
                 slot.sparams.samplers_sequence = default_sparams.samplers_sequence;
             }
@@ -1256,7 +1256,7 @@ struct server_context {
         std::vector<std::string> samplers_sequence;
         samplers_sequence.reserve(slot.sparams.samplers_sequence.size());
         for (const auto & sampler_type : slot.sparams.samplers_sequence) {
-            samplers_sequence.emplace_back(sampler_type_to_name_string(sampler_type));
+            samplers_sequence.emplace_back(llama_sampling_type_to_str(sampler_type));
         }
 
         return json {
@@ -2852,7 +2852,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            if (!parse_kv_override(argv[i], params.kv_overrides)) {
+            if (!string_parse_kv_override(argv[i], params.kv_overrides)) {
                 fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
                 invalid_param = true;
                 break;
@@ -3310,7 +3310,7 @@ int main(int argc, char ** argv) {
     const auto handle_slots_save = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
-        if (!validate_file_name(filename)) {
+        if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
@@ -3340,7 +3340,7 @@ int main(int argc, char ** argv) {
     const auto handle_slots_restore = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
-        if (!validate_file_name(filename)) {
+        if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }

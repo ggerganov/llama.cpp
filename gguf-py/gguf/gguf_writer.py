@@ -433,6 +433,9 @@ class GGUFWriter:
     def add_rope_scaling_factor(self, value: float) -> None:
         self.add_float32(Keys.Rope.SCALING_FACTOR.format(arch=self.arch), value)
 
+    def add_rope_scaling_attn_factors(self, value: Sequence[float]) -> None:
+        self.add_float32(Keys.Rope.SCALING_ATTN_FACTOR.format(arch=self.arch), value)
+
     def add_rope_scaling_orig_ctx_len(self, value: int) -> None:
         self.add_uint32(Keys.Rope.SCALING_ORIG_CTX_LEN.format(arch=self.arch), value)
 

@@ -57,12 +57,13 @@ class Keys:
         CAUSAL            = "{arch}.attention.causal"
 
     class Rope:
-        DIMENSION_COUNT      = "{arch}.rope.dimension_count"
-        FREQ_BASE            = "{arch}.rope.freq_base"
-        SCALING_TYPE         = "{arch}.rope.scaling.type"
-        SCALING_FACTOR       = "{arch}.rope.scaling.factor"
-        SCALING_ORIG_CTX_LEN = "{arch}.rope.scaling.original_context_length"
-        SCALING_FINETUNED    = "{arch}.rope.scaling.finetuned"
+        DIMENSION_COUNT         = "{arch}.rope.dimension_count"
+        FREQ_BASE               = "{arch}.rope.freq_base"
+        SCALING_TYPE            = "{arch}.rope.scaling.type"
+        SCALING_FACTOR          = "{arch}.rope.scaling.factor"
+        SCALING_ATTN_FACTOR     = "{arch}.rope.scaling.attn_factor"
+        SCALING_ORIG_CTX_LEN    = "{arch}.rope.scaling.original_context_length"
+        SCALING_FINETUNED       = "{arch}.rope.scaling.finetuned"
 
     class SSM:
         CONV_KERNEL    = "{arch}.ssm.conv_kernel"
@@ -148,6 +149,8 @@ class MODEL_TENSOR(IntEnum):
     OUTPUT             = auto()
     OUTPUT_NORM        = auto()
     ROPE_FREQS         = auto()
+    ROPE_FACTORS_LONG  = auto()
+    ROPE_FACTORS_SHORT = auto()
     ATTN_Q             = auto()
     ATTN_K             = auto()
     ATTN_V             = auto()
@@ -225,6 +228,8 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.OUTPUT_NORM:        "output_norm",
     MODEL_TENSOR.OUTPUT:             "output",
     MODEL_TENSOR.ROPE_FREQS:         "rope_freqs",
+    MODEL_TENSOR.ROPE_FACTORS_LONG:  "rope_factors_long",
+    MODEL_TENSOR.ROPE_FACTORS_SHORT: "rope_factors_short",
     MODEL_TENSOR.ATTN_NORM:          "blk.{bid}.attn_norm",
     MODEL_TENSOR.ATTN_NORM_2:        "blk.{bid}.attn_norm_2",
     MODEL_TENSOR.ATTN_QKV:           "blk.{bid}.attn_qkv",
@@ -900,9 +905,8 @@ class GGUFValueType(IntEnum):
             raise ValueError(f"Unknown type: {type(val)}")
 
 
-# Note: Does not support GGML_QKK_64
-QK_K = 256
 # Items here are (block size, type size)
+QK_K = 256
 GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),

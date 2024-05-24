@@ -44,9 +44,9 @@ static void write_logfile(
         return;
     }
 
-    const std::string timestamp = get_sortable_timestamp();
+    const std::string timestamp = string_get_sortable_timestamp();
 
-    const bool success = create_directory_with_parents(params.logdir);
+    const bool success = fs_create_directory_with_parents(params.logdir);
     if (!success) {
         fprintf(stderr, "%s: warning: failed to create logdir %s, cannot write logfile\n",
                 __func__, params.logdir.c_str());
@@ -64,7 +64,7 @@ static void write_logfile(
     fprintf(logfile, "binary: main\n");
     char model_desc[128];
     llama_model_desc(model, model_desc, sizeof(model_desc));
-    dump_non_result_info_yaml(logfile, params, ctx, timestamp, results.tokens, model_desc);
+    yaml_dump_non_result_info(logfile, params, ctx, timestamp, results.tokens, model_desc);
 
     fprintf(logfile, "\n");
     fprintf(logfile, "######################\n");
@@ -72,9 +72,9 @@ static void write_logfile(
     fprintf(logfile, "######################\n");
     fprintf(logfile, "\n");
 
-    dump_vector_float_yaml(logfile, "logits", results.logits);
+    yaml_dump_vector_float(logfile, "logits", results.logits);
     fprintf(logfile, "ppl_value: %f\n", results.ppl_value);
-    dump_vector_float_yaml(logfile, "probs", results.probs);
+    yaml_dump_vector_float(logfile, "probs", results.probs);
 
     llama_dump_timing_info_yaml(logfile, ctx);
     fclose(logfile);
@@ -2007,7 +2007,7 @@ int main(int argc, char ** argv) {
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
+        params.prompt = string_random_prompt(rng);
     }
 
     llama_backend_init();
@@ -2035,7 +2035,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     struct results_perplexity results;
