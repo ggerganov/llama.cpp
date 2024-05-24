@@ -25,11 +25,9 @@ let gUsageMsg = `
         <li> Completion mode doesnt insert user/role: prefix implicitly.</li>
         <li> Use shift+enter for inserting enter/newline.</li>
         </ul>
-    <li> If strange responses, Refresh page to start over fresh.</li>
+    <li> Default ContextWindow = [System, Last Query+Resp, Cur Query].</li>
         <ul class="ul2">
-        <li> [default] old msgs from chat not culled, when sending to server.</li>
-        <li> either use New CHAT, or refresh if chat getting long, or</li>
-        <li> experiment iRecentUserMsgCnt, max_tokens, model ctxt window.</li>
+        <li> experiment iRecentUserMsgCnt, max_tokens, model ctxt window to expand</li>
         </ul>
     </ul>
 `;
@@ -573,11 +571,13 @@ class Me {
         this.multiChat = new MultiChatUI();
         this.bCompletionFreshChatAlways = true;
         this.bCompletionInsertStandardRolePrefix = false;
-        this.iRecentUserMsgCnt = -1;
+        this.iRecentUserMsgCnt = 2;
         // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
         this.chatRequestOptions = {
             "temperature": 0.7,
-            "max_tokens": 512
+            "max_tokens": 1024,
+            "frequency_penalty": 1.2,
+            "presence_penalty": 1.2,
         };
     }
 

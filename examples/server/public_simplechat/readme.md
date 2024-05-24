@@ -97,6 +97,8 @@ Once inside
 
 ## Devel note
 
+### General
+
 Me/gMe consolidates the settings which control the behaviour into one object.
 One can see the current settings, as well as change/update them using browsers devel-tool/console.
 
@@ -156,6 +158,27 @@ at the end when full data is available.
   if able to read json data early on in future, as and when ai model is generating data, then
   this helper needs to indirectly update the chat div with the recieved data, without waiting
   for the overall data to be available.
+
+
+### Default setup
+
+By default things are setup to try and make the user experience a bit better, if possible.
+However a developer when testing the server of ai-model may want to change these value.
+
+Using iRecentUserMsgCnt reduce chat history context sent to the server/ai-model to be
+just the system-prompt, prev-user-request-and-ai-response and cur-user-request, instead of
+full chat history. This way if there is any response with garbage/repeatation, it doesnt
+mess with things beyond the next question/request/query, in some ways.
+
+Set max_tokens to 1024, so that a relatively large previous reponse doesnt eat up the space
+available wrt next query-response. However dont forget that the server when started should
+also be started with a model context size of 1k or more, to be on safe side.
+
+Frequency and presence penalty fields are set to 1.2 in the set of fields sent to server
+along with the user query. So that the model is partly set to try avoid repeating text in
+its response.
+
+A end-user can change these behaviour by editing gMe from browser's devel-tool/console.
 
 
 ## At the end
