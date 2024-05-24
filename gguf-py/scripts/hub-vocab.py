@@ -9,7 +9,10 @@ import sys
 from pathlib import Path
 
 # Necessary to load the local gguf package
-if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
+if (
+    "NO_LOCAL_GGUF" not in os.environ
+    and (Path(__file__).parent.parent.parent / "gguf-py").exists()
+):
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from gguf.constants import MODEL_ARCH, MODEL_ARCH_NAMES
@@ -21,19 +24,24 @@ logger = logging.getLogger("gguf-gen-pre")
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("auth_token", help="A huggingface read auth token")
-    parser.add_argument("model_repo", help="A huggingface model repository, e.g. org/model")
     parser.add_argument(
-        "-v", "--verbose", action="store_true",
-        help="Increase output verbosity."
+        "model_repo", help="A huggingface model repository, e.g. org/model"
     )
     parser.add_argument(
-        "-m", "--model-path", default="models/",
-        help="The models storage path. Default is 'models/'."
+        "-v", "--verbose", action="store_true", help="Increase output verbosity."
+    )
+    parser.add_argument(
+        "-m",
+        "--model-path",
+        default="models/",
+        help="The models storage path. Default is 'models/'.",
     )
     parser.add_argument(
         "--vocab-type",
-        const="BPE", nargs="?", choices=["SPM", "BPE", "WPM"],
-        help="The type of vocab. Default is 'BPE'."
+        const="BPE",
+        nargs="?",
+        choices=["SPM", "BPE", "WPM"],
+        help="The type of vocab. Default is 'BPE'.",
     )
     args = parser.parse_args()
 
@@ -42,5 +50,5 @@ def main():
     vocab_request.get_all_vocab_files(args.model_repo, vocab_type)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
