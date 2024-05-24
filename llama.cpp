@@ -221,6 +221,7 @@ enum llm_arch {
     LLM_ARCH_GEMMA,
     LLM_ARCH_STARCODER2,
     LLM_ARCH_MAMBA,
+    LLM_ARCH_JAMBA,
     LLM_ARCH_XVERSE,
     LLM_ARCH_COMMAND_R,
     LLM_ARCH_DBRX,
@@ -257,6 +258,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_GEMMA,           "gemma"        },
     { LLM_ARCH_STARCODER2,      "starcoder2"   },
     { LLM_ARCH_MAMBA,           "mamba"        },
+    { LLM_ARCH_JAMBA,           "jamba"        },
     { LLM_ARCH_XVERSE,          "xverse"       },
     { LLM_ARCH_COMMAND_R,       "command-r"    },
     { LLM_ARCH_DBRX,            "dbrx"         },
@@ -472,7 +474,10 @@ enum llm_tensor {
     LLM_TENSOR_SSM_CONV1D,
     LLM_TENSOR_SSM_X,
     LLM_TENSOR_SSM_DT,
+    LLM_TENSOR_SSM_DT_NORM,
     LLM_TENSOR_SSM_A,
+    LLM_TENSOR_SSM_B_NORM,
+    LLM_TENSOR_SSM_C_NORM,
     LLM_TENSOR_SSM_D,
     LLM_TENSOR_SSM_OUT,
 };
@@ -968,6 +973,37 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_SSM_A,           "blk.%d.ssm_a" },
             { LLM_TENSOR_SSM_D,           "blk.%d.ssm_d" },
             { LLM_TENSOR_SSM_OUT,         "blk.%d.ssm_out" },
+        },
+    },
+    {
+        LLM_ARCH_JAMBA,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
+            { LLM_TENSOR_OUTPUT,          "output" },
+            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
+            { LLM_TENSOR_SSM_IN,          "blk.%d.ssm_in" },
+            { LLM_TENSOR_SSM_CONV1D,      "blk.%d.ssm_conv1d" },
+            { LLM_TENSOR_SSM_X,           "blk.%d.ssm_x" },
+            { LLM_TENSOR_SSM_DT,          "blk.%d.ssm_dt" },
+            { LLM_TENSOR_SSM_DT_NORM,     "blk.%d.ssm_dt_norm" },
+            { LLM_TENSOR_SSM_A,           "blk.%d.ssm_a" },
+            { LLM_TENSOR_SSM_B_NORM,      "blk.%d.ssm_b_norm" },
+            { LLM_TENSOR_SSM_C_NORM,      "blk.%d.ssm_c_norm" },
+            { LLM_TENSOR_SSM_D,           "blk.%d.ssm_d" },
+            { LLM_TENSOR_SSM_OUT,         "blk.%d.ssm_out" },
+            { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_GATE_INP,    "blk.%d.ffn_gate_inp" },
+            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
+            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_GATE_EXPS,   "blk.%d.ffn_gate_exps" },
+            { LLM_TENSOR_FFN_DOWN_EXPS,   "blk.%d.ffn_down_exps" },
+            { LLM_TENSOR_FFN_UP_EXPS,     "blk.%d.ffn_up_exps" },
         },
     },
     {
@@ -1905,6 +1941,9 @@ struct llama_layer {
     struct ggml_tensor * attn_k_norm_b;
     struct ggml_tensor * attn_out_norm;
     struct ggml_tensor * attn_out_norm_b;
+    struct ggml_tensor * ssm_dt_norm;
+    struct ggml_tensor * ssm_b_norm;
+    struct ggml_tensor * ssm_c_norm;
 
     // attention
     struct ggml_tensor * wq;
@@ -5150,6 +5189,22 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_JAMBA:
+            {
+                ml.get_key(LLM_KV_SSM_CONV_KERNEL,    hparams.ssm_d_conv);
+                ml.get_key(LLM_KV_SSM_INNER_SIZE,     hparams.ssm_d_inner);
+                ml.get_key(LLM_KV_SSM_STATE_SIZE,     hparams.ssm_d_state);
+                ml.get_key(LLM_KV_SSM_TIME_STEP_RANK, hparams.ssm_dt_rank);
+
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+
+                switch (hparams.n_layer) {
+                    // TODO: Jamba layers are a bit heterogenous, so naming this is hard.
+                    case 12: // 900M  8x???M
+                    case 32: // 51B  16x?B
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
+            } break;
         case LLM_ARCH_XVERSE:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
@@ -6854,6 +6909,118 @@ static bool llm_load_tensors(
                         layer.ssm_out = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_OUT, "weight", i), {d_inner, n_embd});
                     }
                 } break;
+            case LLM_ARCH_JAMBA:
+                {
+                    const int64_t d_conv  = hparams.ssm_d_conv;
+                    const int64_t d_inner = hparams.ssm_d_inner;
+                    const int64_t d_state = hparams.ssm_d_state;
+                    const int64_t dt_rank = hparams.ssm_dt_rank;
+
+                    // only an expansion factor of 2 is supported for now
+                    GGML_ASSERT(2 * n_embd == d_inner);
+                    GGML_ASSERT((int64_t) hparams.n_head_kv_vec.size() == n_layer);
+
+                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+
+                    // output
+                    {
+                        model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        // if output is NULL, init from the input tok embed, duplicated to allow offloading
+                        if (model.output == NULL) {
+                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                        }
+                    }
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        const int64_t n_head_kv = hparams.n_head_kv_vec[i];
+                        const int64_t n_embd_gqa = hparams.n_embd_v_gqa(i);
+
+                        ggml_context * ctx_layer = ctx_for_layer(i);
+                        ggml_context * ctx_split = ctx_for_layer_split(i);
+
+                        auto & layer = model.layers[i];
+
+                        // norm
+                        layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
+
+                        if (n_head_kv == 0) {
+                            // Mamba layer
+                            layer.ssm_in = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_IN, "weight", i), {n_embd, 2*d_inner});
+
+                            layer.ssm_conv1d = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_CONV1D, "weight", i), {d_conv, d_inner});
+                            layer.ssm_conv1d_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_CONV1D, "bias", i), {d_inner});
+
+                            layer.ssm_x = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_X, "weight", i), {d_inner, dt_rank + 2*d_state});
+
+                            layer.ssm_dt_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_DT_NORM, "weight", i), {dt_rank});
+
+                            layer.ssm_dt = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_DT, "weight", i), {dt_rank, d_inner});
+                            layer.ssm_dt_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_DT, "bias", i), {d_inner});
+
+                            layer.ssm_b_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_B_NORM, "weight", i), {d_state});
+                            layer.ssm_c_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_C_NORM, "weight", i), {d_state});
+
+                            // no "weight" suffix for these
+                            layer.ssm_a = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_A, i), {d_state, d_inner});
+                            layer.ssm_d = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_SSM_D, i), {d_inner});
+
+                            // out_proj
+                            layer.ssm_out = ml.create_tensor(ctx_split, tn(LLM_TENSOR_SSM_OUT, "weight", i), {d_inner, n_embd});
+
+                            layer.wq = nullptr;
+                            layer.wk = nullptr;
+                            layer.wv = nullptr;
+                            layer.wo = nullptr;
+
+                        } else {
+                            // Attention layers
+
+                            layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
+                            layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
+                            layer.wv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa});
+                            layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
+
+                            layer.ssm_in       = nullptr;
+                            layer.ssm_conv1d   = nullptr;
+                            layer.ssm_conv1d_b = nullptr;
+                            layer.ssm_x        = nullptr;
+                            layer.ssm_dt_norm  = nullptr;
+                            layer.ssm_dt       = nullptr;
+                            layer.ssm_dt_b     = nullptr;
+                            layer.ssm_b_norm   = nullptr;
+                            layer.ssm_c_norm   = nullptr;
+                            layer.ssm_a        = nullptr;
+                            layer.ssm_d        = nullptr;
+                            layer.ssm_out      = nullptr;
+                        }
+
+                        layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
+
+                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert}, llama_model_loader::TENSOR_NOT_REQUIRED);
+
+                        if (layer.ffn_gate_inp) {
+                            // MoE
+                            layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd, n_ff, n_expert});
+                            layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {n_ff, n_embd, n_expert});
+                            layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd, n_ff, n_expert});
+
+                            layer.ffn_gate = nullptr;
+                            layer.ffn_down = nullptr;
+                            layer.ffn_up   = nullptr;
+                        } else {
+                            // FFN (no MoE)
+                            layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff});
+                            layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
+                            layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
+
+                            layer.ffn_gate_exps = nullptr;
+                            layer.ffn_down_exps = nullptr;
+                            layer.ffn_up_exps   = nullptr;
+                        }
+                    }
+                } break;
             case LLM_ARCH_XVERSE:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
@@ -7628,6 +7795,132 @@ static struct ggml_tensor * llm_build_kv(
     cur  = llm_build_kqv(ctx, model, hparams, cparams, kv, graph, wo, wo_b,
             q_cur, kq_mask, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
+
+    return cur;
+}
+
+// TODO: split
+static struct ggml_tensor * llm_build_mamba(
+        struct ggml_context * ctx,
+          const llama_model & model,
+        const llama_hparams & hparams,
+       const llama_rs_cache & rs,
+         struct ggml_cgraph * graph,
+         struct ggml_tensor * cur,
+         struct ggml_tensor * state_copy,
+         struct ggml_tensor * state_mask,
+         struct ggml_tensor * state_seq,
+         struct ggml_tensor * w_dt_norm,
+         struct ggml_tensor * w_b_norm,
+         struct ggml_tensor * w_c_norm,
+                    int32_t   n_tokens,
+                    int32_t   rs_head,
+                    int32_t   n_rs,
+         const llm_build_cb & cb,
+                    int       il) {
+    const int64_t d_conv  = hparams.ssm_d_conv;
+    const int64_t d_inner = hparams.ssm_d_inner;
+    const int64_t d_state = hparams.ssm_d_state;
+    const int64_t dt_rank = hparams.ssm_dt_rank;
+
+    struct ggml_tensor * conv_states = ggml_reshape_2d(ctx, rs.r_l[il], hparams.n_embd_r(il), rs.size);
+    struct ggml_tensor * ssm_states  = ggml_reshape_2d(ctx, rs.s_l[il], hparams.n_embd_s(il), rs.size);
+
+    // copy states
+    {
+        // TODO: use some sort of read-only head and n to pass smaller tensors to ggml_get_rows
+        // NOTE: assuming the copy destinations are ALL contained in the current batch
+        // this shrinks the tensors's ne[1] to n_rs
+        conv_states = ggml_get_rows(ctx, conv_states, state_copy);
+        ssm_states  = ggml_get_rows(ctx,  ssm_states, state_copy);
+    }
+
+    // clear states of sequences which are starting at the beginning of this batch
+    {
+        conv_states = ggml_mul(ctx, conv_states, state_mask);
+        ssm_states  = ggml_mul(ctx,  ssm_states, state_mask);
+    }
+
+    conv_states = ggml_reshape_3d(ctx, conv_states, d_conv - 1, d_inner, n_rs);
+    ssm_states  = ggml_reshape_3d(ctx,  ssm_states,    d_state, d_inner, n_rs);
+
+    // {n_embd, 2*d_inner} * {n_embd, n_tokens} => {2*d_inner, n_tokens}
+    struct ggml_tensor * xz = ggml_mul_mat(ctx, model.layers[il].ssm_in, cur);
+    // split the above in two
+    // => {d_inner, n_tokens}
+    struct ggml_tensor * x = ggml_view_2d(ctx, xz, d_inner, xz->ne[1], xz->nb[1], 0);
+    struct ggml_tensor * z = ggml_view_2d(ctx, xz, d_inner, xz->ne[1], xz->nb[1], ggml_element_size(xz)*d_inner);
+
+    // conv
+    {
+        // Custom operator which is needed only to ease simultaneous sequence processing.
+        // For a single sequence, the equivalent is to concatenate the columns of conv_states and x,
+        // then make a self-overlapping view of that over d_conv columns at each stride in the 3rd dimension,
+        // then element-wise multiply that with the conv1d weigth,
+        // then sum the elements of each row,
+        // (the last two steps are a dot product over rows (also doable with mul_mat))
+        // then permute away the ne[0] dimension,
+        // and then you're left with the resulting x tensor.
+        // The new conv_states is the last (d_conv - 1) columns
+        // of the last 3rd dimensional "layer" of the self-overlapping view.
+        // For simultaneous sequences, it's more complicated.
+        struct ggml_tensor * x_conv = ggml_ssm_conv(ctx, conv_states, x, model.layers[il].ssm_conv1d, state_seq);
+
+        // store last (d_conv - 1) columns of the conv_state part of x_conv back into the KV cache
+        ggml_build_forward_expand(graph,
+            ggml_cpy(ctx,
+                ggml_view_2d(ctx, x_conv, d_conv - 1, d_inner*n_rs, d_conv*ggml_element_size(x_conv), (1+d_inner*n_tokens)*ggml_element_size(x_conv)),
+                ggml_view_1d(ctx, rs.r_l[il], (d_conv - 1)*(d_inner)*(n_rs), rs_head*(d_conv - 1)*(d_inner)*ggml_element_size(x_conv))));
+
+        // extract x from x_conv
+        x = ggml_view_2d(ctx, x_conv, d_inner, n_tokens, d_inner*ggml_element_size(x_conv), 0);
+
+        // bias
+        x = ggml_add(ctx, x, model.layers[il].ssm_conv1d_b);
+
+        x = ggml_silu(ctx, x);
+    }
+
+    // ssm
+    {
+        // {d_inner, dt_rank + 2*d_state} * {d_inner, n_tokens} => {dt_rank + 2*d_state, n_tokens}
+        struct ggml_tensor * x_db = ggml_mul_mat(ctx, model.layers[il].ssm_x, x);
+        // split
+        struct ggml_tensor * dt = ggml_view_2d(ctx, x_db, dt_rank, n_tokens, x_db->nb[1], 0);
+        struct ggml_tensor * B  = ggml_view_2d(ctx, x_db, d_state, n_tokens, x_db->nb[1], ggml_element_size(x_db)*dt_rank);
+        struct ggml_tensor * C  = ggml_view_2d(ctx, x_db, d_state, n_tokens, x_db->nb[1], ggml_element_size(x_db)*(dt_rank+d_state));
+
+        if (w_dt_norm) { dt = llm_build_norm(ctx, dt, hparams, w_dt_norm, NULL, LLM_NORM_RMS, cb, il); }
+        if (w_b_norm)  { B  = llm_build_norm(ctx, B,  hparams, w_b_norm,  NULL, LLM_NORM_RMS, cb, il); }
+        if (w_c_norm)  { C  = llm_build_norm(ctx, C,  hparams, w_b_norm,  NULL, LLM_NORM_RMS, cb, il); }
+
+        // {dt_rank, d_inner} * {dt_rank, n_tokens} => {d_inner, n_tokens}
+        dt = ggml_mul_mat(ctx, model.layers[il].ssm_dt, dt);
+        dt = ggml_add(ctx, dt, model.layers[il].ssm_dt_b);
+
+        // Custom operator to optimize the parallel associative scan
+        // as described in the Annex D of the Mamba paper.
+        // => {d_inner, n_tokens} and {d_state, d_inner, n_rs} combined,
+        // because only a single tensor can be returned.
+        struct ggml_tensor * y_ssm_states = ggml_ssm_scan(ctx, ssm_states, x, dt, model.layers[il].ssm_a, B, C, state_seq);
+
+        // store last states (the second part of y_ssm_states)
+        ggml_build_forward_expand(graph,
+            ggml_cpy(ctx,
+                ggml_view_1d(ctx, y_ssm_states, d_state*d_inner*n_rs, d_inner*n_tokens*ggml_element_size(y_ssm_states)),
+                ggml_view_1d(ctx, rs.s_l[il], d_state*d_inner*n_rs, rs_head*d_state*d_inner*ggml_element_size(ssm_states))));
+
+        struct ggml_tensor * y = ggml_view_2d(ctx, y_ssm_states, d_inner, n_tokens, d_inner*ggml_element_size(y_ssm_states), 0);
+
+        // TODO: skip computing output for unused tokens
+
+        // {d_inner, n_tokens} * {d_inner} => {d_inner, n_tokens}
+        y = ggml_add(ctx, y, ggml_mul(ctx, x, model.layers[il].ssm_d));
+        y = ggml_mul(ctx, y, ggml_silu(ctx, z));
+
+        // {d_inner, n_embd} * {d_inner, n_tokens} => {n_embd, n_tokens}
+        cur = ggml_mul_mat(ctx, model.layers[il].ssm_out, y);
+    }
 
     return cur;
 }
@@ -11024,13 +11317,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_mamba() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
-        const int64_t d_model = n_embd;
-        const int64_t d_conv  = hparams.ssm_d_conv;
-        const int64_t d_inner = hparams.ssm_d_inner;
-        GGML_ASSERT(2 * d_model == d_inner);
-        const int64_t d_state = hparams.ssm_d_state;
-        const int64_t dt_rank = hparams.ssm_dt_rank;
-
         struct ggml_tensor * cur;
         struct ggml_tensor * inpL;
 
@@ -11042,116 +11328,144 @@ struct llm_build_context {
         struct ggml_tensor * state_seq  = build_inp_s_seq();
 
         for (int il = 0; il < n_layer; ++il) {
-            struct ggml_tensor * conv_states = ggml_reshape_2d(ctx0, rs_self.r_l[il], hparams.n_embd_r(il), rs_self.size);
-            struct ggml_tensor * ssm_states  = ggml_reshape_2d(ctx0, rs_self.s_l[il], hparams.n_embd_s(il), rs_self.size);
-
-            // copy states
-            {
-                // TODO: use some sort of read-only head and n to pass smaller tensors to ggml_get_rows
-                // NOTE: assuming the copy destinations are ALL contained in the current batch
-                // this shrinks the tensors's ne[1] to n_rs
-                conv_states = ggml_get_rows(ctx0, conv_states, state_copy);
-                ssm_states  = ggml_get_rows(ctx0,  ssm_states, state_copy);
-            }
-
-            // clear states of sequences which are starting at the beginning of this batch
-            {
-                conv_states = ggml_mul(ctx0, conv_states, state_mask);
-                ssm_states  = ggml_mul(ctx0,  ssm_states, state_mask);
-            }
-
-            conv_states = ggml_reshape_3d(ctx0, conv_states, d_conv - 1, d_inner, n_rs);
-            ssm_states  = ggml_reshape_3d(ctx0,  ssm_states,    d_state, d_inner, n_rs);
-
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
             cb(cur, "attn_norm", il);
 
-            // {n_embd, 2*d_inner} * {n_embd, n_tokens} => {2*d_inner, n_tokens}
-            struct ggml_tensor * xz = ggml_mul_mat(ctx0, model.layers[il].ssm_in, cur);
-            // split the above in two
-            // => {d_inner, n_tokens}
-            struct ggml_tensor * x = ggml_view_2d(ctx0, xz, d_inner, xz->ne[1], xz->nb[1], 0);
-            struct ggml_tensor * z = ggml_view_2d(ctx0, xz, d_inner, xz->ne[1], xz->nb[1], ggml_element_size(xz)*d_inner);
+            cur = llm_build_mamba(ctx0, model, hparams, rs_self, gf, cur,
+                    state_copy, state_mask, state_seq, NULL, NULL, NULL,
+                    n_tokens, rs_head, n_rs, cb, il);
 
-            // conv
-            {
-                // Custom operator which is needed only to ease simultaneous sequence processing.
-                // For a single sequence, the equivalent is to concatenate the columns of conv_states and x,
-                // then make a self-overlapping view of that over d_conv columns at each stride in the 3rd dimension,
-                // then element-wise multiply that with the conv1d weigth,
-                // then sum the elements of each row,
-                // (the last two steps are a dot product over rows (also doable with mul_mat))
-                // then permute away the ne[0] dimension,
-                // and then you're left with the resulting x tensor.
-                // The new conv_states is the last (d_conv - 1) columns
-                // of the last 3rd dimensional "layer" of the self-overlapping view.
-                // For simultaneous sequences, it's more complicated.
-                struct ggml_tensor * x_conv = ggml_ssm_conv(ctx0, conv_states, x, model.layers[il].ssm_conv1d, state_seq);
-
-                // store last (d_conv - 1) columns of the conv_state part of x_conv back into the KV cache
-                ggml_build_forward_expand(gf,
-                    ggml_cpy(ctx0,
-                        ggml_view_2d(ctx0, x_conv, d_conv - 1, d_inner*n_rs, d_conv*ggml_element_size(x_conv), (1+d_inner*n_tokens)*ggml_element_size(x_conv)),
-                        ggml_view_1d(ctx0, rs_self.r_l[il], (d_conv - 1)*(d_inner)*(n_rs), rs_head*(d_conv - 1)*(d_inner)*ggml_element_size(x_conv))));
-
-                // extract x from x_conv
-                x = ggml_view_2d(ctx0, x_conv, d_inner, n_tokens, d_inner*ggml_element_size(x_conv), 0);
-
-                // bias
-                x = ggml_add(ctx0, x, model.layers[il].ssm_conv1d_b);
-
-                x = ggml_silu(ctx0, x);
-            }
-
-            // ssm
-            {
-                // {d_inner, dt_rank + 2*d_state} * {d_inner, n_tokens} => {dt_rank + 2*d_state, n_tokens}
-                struct ggml_tensor * x_db = ggml_mul_mat(ctx0, model.layers[il].ssm_x, x);
-                // split
-                struct ggml_tensor * dt = ggml_view_2d(ctx0, x_db, dt_rank, n_tokens, x_db->nb[1], 0);
-                struct ggml_tensor * B  = ggml_view_2d(ctx0, x_db, d_state, n_tokens, x_db->nb[1], ggml_element_size(x_db)*dt_rank);
-                struct ggml_tensor * C  = ggml_view_2d(ctx0, x_db, d_state, n_tokens, x_db->nb[1], ggml_element_size(x_db)*(dt_rank+d_state));
-
-                // {dt_rank, d_inner} * {dt_rank, n_tokens} => {d_inner, n_tokens}
-                dt = ggml_mul_mat(ctx0, model.layers[il].ssm_dt, dt);
-                dt = ggml_add(ctx0, dt, model.layers[il].ssm_dt_b);
-
-                // Custom operator to optimize the parallel associative scan
-                // as described in the Annex D of the Mamba paper.
-                // => {d_inner, n_tokens} and {d_state, d_inner, n_rs} combined,
-                // because only a single tensor can be returned.
-                struct ggml_tensor * y_ssm_states = ggml_ssm_scan(ctx0, ssm_states, x, dt, model.layers[il].ssm_a, B, C, state_seq);
-
-                // store last states (the second part of y_ssm_states)
-                ggml_build_forward_expand(gf,
-                    ggml_cpy(ctx0,
-                        ggml_view_1d(ctx0, y_ssm_states, d_state*d_inner*n_rs, d_inner*n_tokens*ggml_element_size(y_ssm_states)),
-                        ggml_view_1d(ctx0, rs_self.s_l[il], d_state*d_inner*n_rs, rs_head*d_state*d_inner*ggml_element_size(ssm_states))));
-
-                struct ggml_tensor * y = ggml_view_2d(ctx0, y_ssm_states, d_inner, n_tokens, d_inner*ggml_element_size(y_ssm_states), 0);
-
-                if (il == n_layer - 1) {
-                    // skip computing output for unused tokens
-                    struct ggml_tensor * inp_out_ids = build_inp_out_ids();
-                    x    = ggml_get_rows(ctx0,    x, inp_out_ids);
-                    y    = ggml_get_rows(ctx0,    y, inp_out_ids);
-                    z    = ggml_get_rows(ctx0,    z, inp_out_ids);
-                    inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
-                }
-
-                // {d_inner, n_tokens} * {d_inner} => {d_inner, n_tokens}
-                y = ggml_add(ctx0, y, ggml_mul(ctx0, x, model.layers[il].ssm_d));
-                y = ggml_mul(ctx0, y, ggml_silu(ctx0, z));
-
-                // {d_inner, n_embd} * {d_inner, n_tokens} => {n_embd, n_tokens}
-                cur = ggml_mul_mat(ctx0, model.layers[il].ssm_out, y);
+            if (il == n_layer - 1) {
+                // skip computing output for unused tokens
+                struct ggml_tensor * inp_out_ids = build_inp_out_ids();
+                cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
+                inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
             }
 
             // residual
             cur = ggml_add(ctx0, cur, inpL);
+            cb(cur, "l_out", il);
+
+            // input for next layer
+            inpL = cur;
+        }
+
+        // final rmsnorm
+        cur = llm_build_norm(ctx0, inpL, hparams,
+                model.output_norm, NULL,
+                LLM_NORM_RMS, cb, -1);
+        cb(cur, "result_norm", -1);
+
+        // lm_head
+        cur = ggml_mul_mat(ctx0, model.output, cur);
+        cb(cur, "result_output", -1);
+
+        ggml_build_forward_expand(gf, cur);
+
+        return gf;
+    }
+
+    struct ggml_cgraph * build_jamba() {
+
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
+
+        const int64_t n_embd_head = hparams.n_embd_head_v;
+
+        struct ggml_tensor * cur;
+        struct ggml_tensor * inpL;
+
+        // {n_embd, n_tokens}
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+
+        struct ggml_tensor * state_copy = build_inp_s_copy();
+        struct ggml_tensor * state_mask = build_inp_s_mask();
+        struct ggml_tensor * state_seq  = build_inp_s_seq();
+
+        // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
+        struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
+
+        for (int il = 0; il < n_layer; ++il) {
+            const int64_t n_head_kv = hparams.n_head_kv_l(il);
+
+            cur = llm_build_norm(ctx0, inpL, hparams,
+                    model.layers[il].attn_norm, NULL,
+                    LLM_NORM_RMS, cb, il);
+            cb(cur, "attn_norm", il);
+
+            if (n_head_kv == 0) {
+                // Mamba
+                cur = llm_build_mamba(ctx0, model, hparams, rs_self, gf, cur,
+                        state_copy, state_mask, state_seq,
+                        model.layers[il].ssm_dt_norm, model.layers[il].ssm_b_norm, model.layers[il].ssm_c_norm,
+                        n_tokens, rs_head, n_rs, cb, il);
+            } else {
+                // Attention
+
+                struct ggml_tensor * Qcur = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+                struct ggml_tensor * Kcur = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
+                struct ggml_tensor * Vcur = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
+
+                cb(Qcur, "Qcur", il);
+                cb(Kcur, "Kcur", il);
+                cb(Vcur, "Vcur", il);
+
+                Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
+                Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
+
+                cb(Qcur, "Qcur", il);
+                cb(Kcur, "Kcur", il);
+
+                // No RoPE :)
+
+                cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
+                        model.layers[il].wo, NULL,
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+            }
+
+            if (il == n_layer - 1) {
+                // skip computing output for unused tokens
+                struct ggml_tensor * inp_out_ids = build_inp_out_ids();
+                cur  = ggml_get_rows(ctx0,  cur, inp_out_ids);
+                inpL = ggml_get_rows(ctx0, inpL, inp_out_ids);
+            }
+
+            // residual
+            struct ggml_tensor * ffn_inp = ggml_add(ctx0, inpL, cur);
+            cb(cur, "ffn_inp", il);
+
+            cur = llm_build_norm(ctx0, ffn_inp, hparams,
+                    model.layers[il].ffn_norm, NULL,
+                    LLM_NORM_RMS, cb, il);
+            cb(cur, "ffn_norm", il);
+
+            // feed-forward network
+            if (model.layers[il].ffn_gate_inp == nullptr) {
+                // FFN
+                cur = llm_build_ffn(ctx0, cur,
+                        model.layers[il].ffn_up,   NULL,
+                        model.layers[il].ffn_gate, NULL,
+                        model.layers[il].ffn_down, NULL,
+                        NULL,
+                        LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
+                cb(cur, "ffn_out", il);
+            } else {
+                // MoE branch
+                cur = llm_build_moe_ffn(ctx0, cur,
+                        model.layers[il].ffn_gate_inp,
+                        model.layers[il].ffn_up_exps,
+                        model.layers[il].ffn_gate_exps,
+                        model.layers[il].ffn_down_exps,
+                        n_expert, n_expert_used,
+                        LLM_FFN_SILU, false,
+                        cb, il);
+                cb(cur, "ffn_moe_out", il);
+            }
+
+            // residual
+            cur = ggml_add(ctx0, ffn_inp, cur);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -11629,6 +11943,10 @@ static struct ggml_cgraph * llama_build_graph(
         case LLM_ARCH_MAMBA:
             {
                 result = llm.build_mamba();
+            } break;
+        case LLM_ARCH_JAMBA:
+            {
+                result = llm.build_jamba();
             } break;
         case LLM_ARCH_XVERSE:
             {
@@ -16644,6 +16962,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_REFACT:
         case LLM_ARCH_BLOOM:
         case LLM_ARCH_MAMBA:
+        case LLM_ARCH_JAMBA:
         case LLM_ARCH_JINA_BERT_V2:
             return LLAMA_ROPE_TYPE_NONE;
 
