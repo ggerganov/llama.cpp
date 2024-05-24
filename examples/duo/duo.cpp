@@ -59,7 +59,7 @@ static void split_done_cb(int split)
     if (split == 1 || split == 2)
     {
         std::lock_guard<std::mutex> guard(spec_ctx.mtx);
-        spec_ctx.active_id = 2 - split;
+        spec_ctx.active_id = split - 1;
     }
 }
 
