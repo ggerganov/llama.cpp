@@ -5983,7 +5983,6 @@ void ggml_vec_dot_q8_0_b16_q8_0_b16(int n, float * restrict s, size_t bs, const 
 }
 
 
-#if QK_K == 256
 void ggml_vec_dot_q2_K_q8_K(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
