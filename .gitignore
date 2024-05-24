@@ -86,6 +86,7 @@ models-mnt
 /train-text-from-scratch
 /tokenize
 /vdot
+/control-vector-generator
 /common/build-info.cpp
 arm_neon.h
 compile_commands.json
