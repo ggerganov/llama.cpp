@@ -2741,8 +2741,6 @@ class ChatGLMModel(Model):
         vocab_size = hparams.get("padded_vocab_size", len(tokenizer.get_vocab()))
         assert max(tokenizer.get_vocab().values()) < vocab_size
 
-        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
-
         for token_id in range(vocab_size):
             piece = tokenizer._convert_id_to_token(token_id)
             if token_id == 0:
