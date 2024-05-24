@@ -70,6 +70,7 @@ class Keys:
         SCALING_ATTN_FACTOR     = "{arch}.rope.scaling.attn_factor"
         SCALING_ORIG_CTX_LEN    = "{arch}.rope.scaling.original_context_length"
         SCALING_FINETUNED       = "{arch}.rope.scaling.finetuned"
+        SCALING_YARN_LOG_MUL    = "{arch}.rope.scaling.yarn_log_multiplier"
 
     class SSM:
         CONV_KERNEL    = "{arch}.ssm.conv_kernel"
