@@ -4486,7 +4486,7 @@ void ggml_vec_dot_q4_0_b16_q8_0_b16(int n, float * restrict s, size_t bs, const 
         _mm_prefetch(&y[0] + sizeof(block_q8_0), _MM_HINT_T0);
 
         // Compute combined scale for the block 0 and 1
-        const __m128 d_0_1 = _mm_set1_ps( GGML_BF16_TO_FP32(ggml_make_bf16(x[i].d)) * GGML_BF16_TO_FP32(ggml_make_bf16(y[i].d)));
+        const __m128 d_0_1 = _mm_set1_ps( GGML_BF16_TO_FP32(ggml_make_bf16(x[0].d)) * GGML_BF16_TO_FP32(ggml_make_bf16(y[0].d)));
 
         const __m128i tmp_0_1 = _mm_loadu_si128((const __m128i *)x[0].qs);
 
