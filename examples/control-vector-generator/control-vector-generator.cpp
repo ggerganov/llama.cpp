@@ -13,9 +13,10 @@ struct callback_data {
     int n_tokens = 0;
     int n_embd = 0;
     bool is_eval_pos = true;
-    std::vector<float *> v_pos;
-    std::vector<float *> v_neg;
-    std::vector<float *> v_diff;
+    // each element of the vector correspond to one layer
+    std::vector<float *> v_pos;  // vector of matrices of size [n_embd, n_tokens]
+    std::vector<float *> v_neg;  // vector of matrices of size [n_embd, n_tokens]
+    std::vector<float *> v_diff; // vector of matrices of size [n_embd, n_tokens]
 };
 
 static std::string ggml_ne_string(const ggml_tensor * t) {
