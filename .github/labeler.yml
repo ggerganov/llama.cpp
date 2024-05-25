@@ -1,5 +1,10 @@
 # https://github.com/actions/labeler
-
+Kompute:
+    - changed-files:
+        - any-glob-to-any-file:
+            - ggml-kompute.h
+            - ggml-kompute.cpp
+            - README-kompute.md
 Apple Metal:
     - changed-files:
         - any-glob-to-any-file:
