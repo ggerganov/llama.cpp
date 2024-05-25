@@ -3105,6 +3105,10 @@ static bool llama_cache_init(
         ggml_context * ctx = it.second;
         ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
         if (!buf) {
+            if (!has_kv && !has_rs) {
+                // no buffer was needed, so this is fine
+                return true;
+            }
             LLAMA_LOG_ERROR("%s: failed to allocate buffer for kv cache\n", __func__);
             return false;
         }
