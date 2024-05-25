@@ -1834,6 +1834,7 @@ struct ggml_compute_threadpool {
 struct ggml_compute_state {
     ggml_thread_t thrd;
     bool cpumask[GGML_N_CORES_MAX];
+    bool mask_specified;
     int ith;
     struct ggml_compute_threadpool * threadpool;
     enum ggml_status ec;
@@ -19472,13 +19473,6 @@ static bool __thread_priority(int32_t prio) {
 
 #endif
 
-static void __init_stack(size_t size) {
-    void* ptr = alloca(size);
-    if (ptr) {
-        memset(ptr, 0, size);
-    }
-}
-
 #ifdef __aarch64__
 
 static inline void __cpu_relax(void) {
@@ -19553,8 +19547,6 @@ struct ggml_compute_threadpool * ggml_create_threadpool(struct ggml_threadpool_p
 
     threadpool->workers = workers;
 
-    __init_stack(2ULL * 1024 * 1024);
-
     int cpumask_iter = 0;
 
     __process_priority(tpp->prio);
@@ -19566,12 +19558,12 @@ struct ggml_compute_threadpool * ggml_create_threadpool(struct ggml_threadpool_p
             .ith        = j,
             .threadpool = threadpool,
             .ec         = GGML_STATUS_SUCCESS,
+            .mask_specified = false
         };
 
         if (tpp->mask_specified) {
             __cpumask_next(tpp->cpumask, workers[j].cpumask, tpp->strict_cpu, &cpumask_iter);
-        } else {
-            workers[j].cpumask[j] = true;
+            workers[j].mask_specified = true;
         }
 
         // Spin threads for all secondary workers
@@ -19841,12 +19833,9 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
     struct ggml_compute_threadpool * threadpool = state->threadpool;
 
-#ifndef __aarch64__
-    __init_stack(2ULL * 1024 * 1024);
-#endif
-
     __thread_priority(threadpool->prio);
-    __thread_affinity(state->cpumask);
+    if (state->mask_specified)
+        __thread_affinity(state->cpumask);
 
     // Indicate that we're ready to go
     atomic_fetch_add(&threadpool->n_ready, 1);
@@ -20096,7 +20085,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     bool disposable_threadpool = false;
 
     if (threadpool == NULL) {
-        //GGML_PRINT("NOTE: Threadpool is not specified. Will create a disposable threadpool\n");
+        // GGML_PRINT("NOTE: Threadpool is not specified. Will create a disposable threadpool\n");
         struct ggml_threadpool_params tpp = {
             .mask_specified = false,
             .n_threads      = n_threads,
@@ -20118,7 +20107,8 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     }
 
     // Update main thread affinity to match the current threadpool
-    __thread_affinity(threadpool->workers[0].cpumask);
+    if (threadpool->workers[0].mask_specified)
+        __thread_affinity(threadpool->workers[0].cpumask);
 
     // Set up work
     threadpool->cgraph        = cgraph;
