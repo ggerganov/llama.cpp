@@ -31,10 +31,11 @@ export function trim_repeat_garbage_at_end(sIn, maxSubL=10, maxMatchLenThreshold
             rCnt[subL] += 1;
         }
     }
-    console.log("DBUG:DU:TrimRepeatGarbage:", rCnt);
+    console.debug("DBUG:DU:TrimRepeatGarbage:", rCnt);
     if ((iMML == -1) || (maxMatchLen < maxMatchLenThreshold)) {
         return {trimmed: false, data: sIn};
     }
+    console.debug("DBUG:TrimRepeatGarbage:TrimmedCharLen:", maxMatchLen);
     let iEnd = sIn.length - maxMatchLen;
     return { trimmed: true, data: sIn.substring(0, iEnd) };
 }
@@ -114,7 +115,7 @@ export function trim_hist_garbage_at_end(sIn, maxType, maxUniq, maxMatchLenThres
             hist[c] = 1;
         }
     }
-    console.log("DBUG:TrimHistGarbage:", hist);
+    console.debug("DBUG:TrimHistGarbage:", hist);
     if ((iAlp > maxType) || (iNum > maxType) || (iOth > maxType)) {
         return { trimmed: false, data: sIn };
     }
@@ -125,9 +126,11 @@ export function trim_hist_garbage_at_end(sIn, maxType, maxUniq, maxMatchLenThres
             if (i < maxMatchLenThreshold) {
                 return { trimmed: false, data: sIn };
             }
+            console.debug("DBUG:TrimHistGarbage:TrimmedCharLen:", i);
             return { trimmed: true, data: sIn.substring(0, sIn.length-i+1) };
         }
     }
+    console.debug("DBUG:TrimHistGarbage:Trimmed fully");
     return { trimmed: true, data: "" };
 }
 
