@@ -31,8 +31,7 @@ if (
 ):
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from gguf.constants import MODEL_ARCH, MODEL_ARCH_NAMES
-from gguf.huggingface_hub import HFHub, HFTokenizer
+from gguf.huggingface_hub import HFHubModel, HFHubTokenizer
 
 logger = logging.getLogger(Path(__file__).stem)
 
@@ -47,17 +46,16 @@ def main():
         "-v", "--verbose", action="store_true", help="Increase output verbosity."
     )
     parser.add_argument(
-        "-m",
         "--model-path",
         default="models",
         help="The models storage path. Default is 'models/'.",
     )
     parser.add_argument(
-        "--vocab-type",
+        "--vocab-name",
         const="BPE",
         nargs="?",
         choices=["SPM", "BPE", "WPM"],
-        help="The type of vocab. Default is 'BPE'.",
+        help="The name of the vocab type. Default is 'BPE'.",
     )
     args = parser.parse_args()
 
@@ -66,11 +64,25 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    vocab_request = HFModel(args.auth_token, args.model_path, logger)
-    vocab_type = HFTokenizer.get_vocab_enum(args.vocab_type)
-    tokenizer = vocab_request.tokenizer
-    vocab_request.get_all_vocab_files(args.model_repo, vocab_type)
-    tokenizer.log_tokenizer_json_info(args.model_repo)
+    hub_model = HFHubModel(
+        auth_token=args.auth_token,
+        model_path=args.model_path,
+        logger=logger,
+    )
+
+    hub_tokenizer = HFHubTokenizer(
+        model_path=args.model_path,
+        logger=logger,
+    )
+
+    vocab_type = HFHubTokenizer.get_vocab_type(args.vocab_name)
+    hub_model.download_all_vocab_files(
+        model_repo=args.model_repo,
+        vocab_type=vocab_type,
+    )
+
+    hub_model.download_all_vocab_files(args.model_repo, vocab_type)
+    hub_tokenizer.log_tokenizer_json_info(args.model_repo)
 
 
 if __name__ == "__main__":
