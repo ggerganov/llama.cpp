@@ -869,11 +869,11 @@ class BaichuanModel(Model):
         if bid is not None and name == f"model.layers.{bid}.self_attn.W_pack.weight":
             logger.info(f"Unpacking and permuting layer {bid}")
             yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid),
-                    self._reverse_hf_permute_part(data_torch, 0, head_count, head_count))
+                   self._reverse_hf_permute_part(data_torch, 0, head_count, head_count))
             yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid),
-                    self._reverse_hf_permute_part(data_torch, 1, head_count, head_count_kv))
+                   self._reverse_hf_permute_part(data_torch, 1, head_count, head_count_kv))
             yield (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid),
-                    self._reverse_hf_part(data_torch, 2))
+                   self._reverse_hf_part(data_torch, 2))
         else:
             yield (self.map_tensor_name(name), data_torch)
 
