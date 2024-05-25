@@ -983,6 +983,7 @@ int main(int argc, char ** argv) {
     llama_backend_free();
 
     ggml_release_threadpool(threadpool);
+    ggml_release_threadpool(threadpool_batch);
 
 #ifndef LOG_DISABLE_LOGS
     LOG_TEE("Log end\n");
