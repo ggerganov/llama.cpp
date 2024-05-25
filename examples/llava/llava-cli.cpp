@@ -290,7 +290,7 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
-        gpt_print_usage(argc, argv, params);
+        gpt_params_print_usage(argc, argv, params);
         show_additional_info(argc, argv);
         return 1;
     }
