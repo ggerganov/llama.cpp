@@ -969,14 +969,14 @@ VOCAB_TYPE_NAMES: dict[VocabType, str] = {
 # Model File Types
 #
 class ModelFileType(IntEnum):
-    UNK         = auto()
-    PT          = auto()
-    PTH         = auto()
-    BIN         = auto()
-    SAFETENSORS = auto()
-    JSON        = auto()
-    MODEL       = auto()
-    GGUF        = auto()
+    NON         = auto()  # undefined
+    PT          = auto()  # torch
+    PTH         = auto()  # torch
+    BIN         = auto()  # torch
+    SAFETENSORS = auto()  # safetensors
+    JSON        = auto()  # transformers/tokenizers
+    MODEL       = auto()  # sentencepiece
+    GGUF        = auto()  # ggml/llama.cpp
 
 
 MODEL_FILE_TYPE_NAMES: dict[ModelFileType, str] = {
