@@ -22,4 +22,8 @@ bash ./ci/run.sh ./tmp/results ./tmp/mnt
 
 # with CUDA support
 GG_BUILD_CUDA=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
+
+# with SYCL support
+source /opt/intel/oneapi/setvars.sh
+GG_BUILD_SYCL=1 bash ./ci/run.sh ./tmp/results ./tmp/mnt
 ```

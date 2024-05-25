@@ -1,4 +1,5 @@
 {
+  "Exclude": ["^\\.gitmodules$"],
   "Disable": {
     "IndentSize": true
   }

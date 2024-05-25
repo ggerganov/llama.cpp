@@ -16,7 +16,7 @@
 
 constexpr int kVecSize = 1 << 18;
 
-float drawFromGaussianPdf(std::mt19937& rndm) {
+static float drawFromGaussianPdf(std::mt19937& rndm) {
     constexpr double kScale = 1./(1. + std::mt19937::max());
     constexpr double kTwoPiTimesScale = 6.28318530717958647692*kScale;
     static float lastX;
@@ -28,7 +28,8 @@ float drawFromGaussianPdf(std::mt19937& rndm) {
     haveX = true;
     return r*cos(phi);
 }
-void fillRandomGaussianFloats(std::vector<float>& values, std::mt19937& rndm, float mean = 0) {
+
+static void fillRandomGaussianFloats(std::vector<float>& values, std::mt19937& rndm, float mean = 0) {
     for (auto& v : values) v = mean + drawFromGaussianPdf(rndm);
 }
 
@@ -242,7 +243,6 @@ int main(int argc, char** argv) {
     if (useQ4_1) q41.resize(n4);
     else q40.resize(n4);
     std::vector<block_q8_0> q8(n8);
-    std::vector<int64_t> H(16, 0);
     double sumt = 0, sumt2 = 0, maxt = 0;
     double sumqt = 0, sumqt2 = 0, maxqt = 0;
     double sum = 0, sumq = 0, exactSum = 0;
@@ -284,8 +284,8 @@ int main(int argc, char** argv) {
         else {
             auto vdot = ggml_internal_get_type_traits(funcs.vec_dot_type);
             vdot.from_float(y1.data(), q8.data(), kVecSize);
-            if (useQ4_1) funcs.vec_dot(kVecSize, &result, q41.data(), q8.data());
-            else funcs.vec_dot(kVecSize, &result, q40.data(), q8.data());
+            if (useQ4_1) funcs.vec_dot(kVecSize, &result, 0, q41.data(), 0, q8.data(), 0, 1);
+            else funcs.vec_dot(kVecSize, &result, 0, q40.data(), 0, q8.data(), 0, 1);
         }
         sumq += result;
         t2 = std::chrono::high_resolution_clock::now();

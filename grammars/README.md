@@ -51,11 +51,11 @@ single-line ::= [^\n]+ "\n"`
 
 ## Sequences and Alternatives
 
-The order of symbols in a sequence matter. For example, in `"1. " move " " move "\n"`, the `"1. "` must come before the first `move`, etc.
+The order of symbols in a sequence matters. For example, in `"1. " move " " move "\n"`, the `"1. "` must come before the first `move`, etc.
 
 Alternatives, denoted by `|`, give different sequences that are acceptable. For example, in `move ::= pawn | nonpawn | castle`, `move` can be a `pawn` move, a `nonpawn` move, or a `castle`.
 
-Parentheses `()` can be used to group sequences, which allows for embedding alternatives in a larger rule or applying repetition and optptional symbols (below) to a sequence.
+Parentheses `()` can be used to group sequences, which allows for embedding alternatives in a larger rule or applying repetition and optional symbols (below) to a sequence.
 
 ## Repetition and Optional Symbols
 
@@ -67,7 +67,7 @@ Parentheses `()` can be used to group sequences, which allows for embedding alte
 
 Comments can be specified with `#`:
 ```
-# defines optional whitspace
+# defines optional whitespace
 ws ::= [ \t\n]+
 ```
 
@@ -89,3 +89,13 @@ This guide provides a brief overview. Check out the GBNF files in this directory
 ```
 ./main -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
 ```
+
+## Troubleshooting
+
+Grammars currently have performance gotchas (see https://github.com/ggerganov/llama.cpp/issues/4218).
+
+### Efficient optional repetitions
+
+A common pattern is to allow repetitions of a pattern `x` up to N times.
+
+While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) will result in extremely slow inference. Instead, you can write `(x (x (x ... (x)?...)?)?)?` (w/ N-deep nesting)

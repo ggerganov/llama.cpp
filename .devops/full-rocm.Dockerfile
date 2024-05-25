@@ -23,7 +23,8 @@ ARG ROCM_DOCKER_ARCH=\
     gfx1101 \
     gfx1102
 
-COPY requirements.txt requirements.txt
+COPY requirements.txt   requirements.txt
+COPY requirements       requirements
 
 RUN pip install --upgrade pip setuptools wheel \
     && pip install -r requirements.txt
@@ -38,6 +39,11 @@ ENV GPU_TARGETS=${ROCM_DOCKER_ARCH}
 ENV LLAMA_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
+
+# Enable cURL
+ENV LLAMA_CURL=1
+RUN apt-get update && \
+    apt-get install -y libcurl4-openssl-dev
 
 RUN make
 

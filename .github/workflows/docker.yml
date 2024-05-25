@@ -15,6 +15,10 @@ on:
     branches:
       - master
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
@@ -26,11 +30,24 @@ jobs:
     strategy:
       matrix:
         config:
-          - { tag: "light", dockerfile: ".devops/main.Dockerfile" }
-          - { tag: "full", dockerfile: ".devops/full.Dockerfile" }
+          - { tag: "light", dockerfile: ".devops/main.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "full", dockerfile: ".devops/full.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "server", dockerfile: ".devops/server.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          # NOTE(canardletter): The CUDA builds on arm64 are very slow, so I
+          #                     have disabled them for now until the reason why
+          #                     is understood.
+          - { tag: "light-cuda", dockerfile: ".devops/main-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "full-cuda", dockerfile: ".devops/full-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "server-cuda", dockerfile: ".devops/server-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "light-rocm", dockerfile: ".devops/main-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "full-rocm", dockerfile: ".devops/full-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "server-rocm", dockerfile: ".devops/server-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          # TODO: Disabled due to build issues https://github.com/ggerganov/llama.cpp/issues/7507
+          #- { tag: "light-intel", dockerfile: ".devops/main-intel.Dockerfile", platforms: "linux/amd64" }
+          #- { tag: "server-intel", dockerfile: ".devops/server-intel.Dockerfile", platforms: "linux/amd64" }
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -45,14 +62,50 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # https://github.com/jlumbroso/free-disk-space/tree/54081f138730dfa15788a46383842cd2f914a1be#example
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # if set to "true" but frees about 6 GB
+          tool-cache: false
+
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Determine tag name
+        id: tag
+        shell: bash
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          SHORT_HASH="$(git rev-parse --short=7 HEAD)"
+          if [[ "${{ env.BRANCH_NAME }}" == "master" ]]; then
+            echo "name=b${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          else
+            SAFE_NAME=$(echo "${{ env.BRANCH_NAME }}" | tr '/' '-')
+            echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Downcase github.repository_owner
+        run: |
+          echo "repository_owner_lowercase=${GITHUB_REPOSITORY_OWNER@L}" >> $GITHUB_ENV
+        env:
+          GITHUB_REPOSITORY_OWNER: '${{ github.repository_owner }}'
+
       - name: Build and push Docker image (versioned)
         if: github.event_name == 'push'
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          platforms: linux/amd64,linux/arm64
-          tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
+          platforms: ${{ matrix.config.platforms }}
+          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
           file: ${{ matrix.config.dockerfile }}
 
       - name: Build and push Docker image (tagged)
@@ -60,6 +113,6 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name == 'push' }}
-          platforms: linux/amd64,linux/arm64
-          tags: "ghcr.io/ggerganov/llama.cpp:${{ matrix.config.tag }}"
+          platforms: ${{ matrix.config.platforms }}
+          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }},ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
           file: ${{ matrix.config.dockerfile }}
