@@ -6,12 +6,12 @@
 
 /**
  * Simple minded logic to help remove repeating garbage at end of the string.
- * TODO: Initial skeleton
  * @param {string} sIn
+ * @param {number} maxSubL
+ * @param {number} maxMatchLenThreshold
  */
-export function trim_repeat_garbage_at_end(sIn, maxSubL=10) {
+export function trim_repeat_garbage_at_end(sIn, maxSubL=10, maxMatchLenThreshold=40) {
     let rCnt = [0];
-    const MaxMatchLenThreshold = maxSubL*4;
     let maxMatchLen = maxSubL;
     let iMML = -1;
     for(let subL=1; subL < maxSubL; subL++) {
@@ -32,9 +32,27 @@ export function trim_repeat_garbage_at_end(sIn, maxSubL=10) {
         }
     }
     console.log("DBUG:DU:TrimRepeatGarbage:", rCnt);
-    if ((iMML == -1) || (maxMatchLen < MaxMatchLenThreshold)) {
-        return sIn;
+    if ((iMML == -1) || (maxMatchLen < maxMatchLenThreshold)) {
+        return {trimmed: false, data: sIn};
     }
-    let iEnd = sIn.length - maxMatchLen + iMML;
-    return sIn.substring(0,iEnd)
+    let iEnd = sIn.length - maxMatchLen;
+    return { trimmed: true, data: sIn.substring(0, iEnd) };
+}
+
+
+/**
+ * Simple minded logic to help remove repeating garbage at end of the string, till it cant.
+ * @param {string} sIn
+ * @param {number} maxSubL
+ * @param {number | undefined} [maxMatchLenThreshold]
+ */
+export function trim_repeat_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThreshold) {
+    let sCur = sIn;
+    while(true) {
+        let got = trim_repeat_garbage_at_end(sCur, maxSubL, maxMatchLenThreshold);
+        if (got.trimmed != true) {
+            return got.data;
+        }
+        sCur = got.data;
+    }
 }
