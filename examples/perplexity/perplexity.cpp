@@ -44,9 +44,9 @@ static void write_logfile(
         return;
     }
 
-    const std::string timestamp = get_sortable_timestamp();
+    const std::string timestamp = string_get_sortable_timestamp();
 
-    const bool success = create_directory_with_parents(params.logdir);
+    const bool success = fs_create_directory_with_parents(params.logdir);
     if (!success) {
         fprintf(stderr, "%s: warning: failed to create logdir %s, cannot write logfile\n",
                 __func__, params.logdir.c_str());
@@ -64,7 +64,7 @@ static void write_logfile(
     fprintf(logfile, "binary: main\n");
     char model_desc[128];
     llama_model_desc(model, model_desc, sizeof(model_desc));
-    dump_non_result_info_yaml(logfile, params, ctx, timestamp, results.tokens, model_desc);
+    yaml_dump_non_result_info(logfile, params, ctx, timestamp, results.tokens, model_desc);
 
     fprintf(logfile, "\n");
     fprintf(logfile, "######################\n");
@@ -72,9 +72,9 @@ static void write_logfile(
     fprintf(logfile, "######################\n");
     fprintf(logfile, "\n");
 
-    dump_vector_float_yaml(logfile, "logits", results.logits);
+    yaml_dump_vector_float(logfile, "logits", results.logits);
     fprintf(logfile, "ppl_value: %f\n", results.ppl_value);
-    dump_vector_float_yaml(logfile, "probs", results.probs);
+    yaml_dump_vector_float(logfile, "probs", results.probs);
 
     llama_dump_timing_info_yaml(logfile, ctx);
     fclose(logfile);
@@ -216,17 +216,22 @@ static void process_logits(std::ostream& out, int n_vocab, const float * logits,
 }
 
 struct kl_divergence_result {
-    double sum_nll  = 0;
-    double sum_nll2 = 0;
-    double sum_kld  = 0;
-    double sum_kld2 = 0;
-    double sum_nll_diff  = 0;
-    double sum_nll_diff2 = 0;
-    size_t n_same_top = 0;
-    size_t count = 0;
+    double sum_nll          = 0.0;
+    double sum_nll2         = 0.0;
+    double sum_nll_base     = 0.0;
+    double sum_nll_base2    = 0.0;
+    double sum_nll_nll_base = 0.0;
+    double sum_kld          = 0.0;
+    double sum_kld2         = 0.0;
+    double sum_p_diff       = 0.0;
+    double sum_p_diff2      = 0.0;
+    double sum_p_diff4      = 0.0;
+    float  max_p_diff       = 0.0f;
+    size_t n_same_top       = 0.0;
+    size_t count            = 0.0;
 };
 
-static double log_softmax(int n_vocab, const float * logits, const uint16_t * base_log_prob, int tok, kl_divergence_result & kld) {
+static std::pair<double, float> log_softmax(int n_vocab, const float * logits, const uint16_t * base_log_prob, int tok, kl_divergence_result & kld) {
     float max_logit = logits[0];
     int imax = 0;
     for (int i = 1; i < n_vocab; ++i) {
@@ -244,12 +249,17 @@ static double log_softmax(int n_vocab, const float * logits, const uint16_t * ba
     const float scale = d[0];
     const float min_log_prob = d[1];
     base_log_prob += 4;
-    float nll = max_logit + log_sum_exp - logits[tok];
+
+    const float nll = max_logit + log_sum_exp - logits[tok];
     kld.sum_nll  += nll;
     kld.sum_nll2 += nll*nll;
-    nll += (scale*base_log_prob[tok] + min_log_prob);
-    kld.sum_nll_diff  += nll;
-    kld.sum_nll_diff2 += nll*nll;
+
+    const float nll_base = -(scale*base_log_prob[tok] + min_log_prob);
+    kld.sum_nll_base  += nll_base;
+    kld.sum_nll_base2 += nll_base*nll_base;
+
+    kld.sum_nll_nll_base += nll*nll_base;
+
     max_logit += log_sum_exp;
     double sum = 0;
     int imax_base = -1;
@@ -269,34 +279,50 @@ static double log_softmax(int n_vocab, const float * logits, const uint16_t * ba
     kld.sum_kld2 += sum*sum;
     ++kld.count;
     if (imax == imax_base) ++kld.n_same_top;
-    return sum;
+
+    const float p_base = expf(-nll_base);
+    const float p = expf(-nll);
+    const float p_diff = p - p_base;
+    kld.sum_p_diff  += p_diff;
+    const double p_diff2 = p_diff*p_diff;
+    kld.sum_p_diff2 += p_diff2;
+    kld.sum_p_diff4 += p_diff2*p_diff2;
+    kld.max_p_diff = std::max(kld.max_p_diff, std::fabs(p_diff));
+
+    return std::make_pair(sum, p_diff);
 }
 
 static void process_logits(int n_vocab, const float * logits, const int * tokens, int n_token,
         std::vector<std::thread> & workers, const std::vector<uint16_t> & base_log_probs, kl_divergence_result & kld,
-        float * kld_values) {
+        float * kld_values, float * p_diff_values) {
     std::mutex mutex;
     const int nv = 2*((n_vocab + 1)/2) + 4;
     int counter = 0;
-    auto compute = [&mutex, &counter, &base_log_probs, &kld, n_vocab, logits, tokens, n_token, nv, kld_values] () {
+    auto compute = [&mutex, &counter, &base_log_probs, &kld, n_vocab, logits, tokens, n_token, nv, kld_values, p_diff_values] () {
         kl_divergence_result local_kld;
         while (true) {
             std::unique_lock<std::mutex> lock(mutex);
             int i = counter++;
             if (i >= n_token) {
-                kld.sum_nll  += local_kld.sum_nll;
-                kld.sum_nll2 += local_kld.sum_nll2;
-                kld.sum_kld  += local_kld.sum_kld;
-                kld.sum_kld2 += local_kld.sum_kld2;
-                kld.sum_nll_diff  += local_kld.sum_nll_diff;
-                kld.sum_nll_diff2 += local_kld.sum_nll_diff2;
-                kld.n_same_top += local_kld.n_same_top;
-                kld.count += local_kld.count;
+                kld.sum_nll          += local_kld.sum_nll;
+                kld.sum_nll2         += local_kld.sum_nll2;
+                kld.sum_nll_base     += local_kld.sum_nll_base;
+                kld.sum_nll_base2    += local_kld.sum_nll_base2;
+                kld.sum_nll_nll_base += local_kld.sum_nll_nll_base;
+                kld.sum_kld          += local_kld.sum_kld;
+                kld.sum_kld2         += local_kld.sum_kld2;
+                kld.sum_p_diff       += local_kld.sum_p_diff;
+                kld.sum_p_diff2      += local_kld.sum_p_diff2;
+                kld.sum_p_diff4      += local_kld.sum_p_diff4;
+                kld.n_same_top       += local_kld.n_same_top;
+                kld.max_p_diff        = std::max(kld.max_p_diff, local_kld.max_p_diff);
+                kld.count            += local_kld.count;
                 break;
             }
             lock.unlock();
-            double v = log_softmax(n_vocab, logits + i*n_vocab, base_log_probs.data() + i*nv, tokens[i+1], local_kld);
-            kld_values[i] = (float)v;
+            std::pair<double, float> v = log_softmax(n_vocab, logits + i*n_vocab, base_log_probs.data() + i*nv, tokens[i+1], local_kld);
+            kld_values[i]    = (float)v.first;
+            p_diff_values[i] = v.second;
         }
     };
     for (auto & w : workers) {
@@ -1399,7 +1425,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
         // Use all tasks
         tasks.resize(n_task);
         printf("%s: reading tasks", __func__);
-        int n_dot = n_task/100;
+        int n_dot = std::max((int) n_task/100, 1);
         int i = 0;
         for (auto& task : tasks) {
             ++i;
@@ -1649,7 +1675,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
 
     llama_batch_free(batch);
 
-    if (n_done < 100) return;
+    if (n_done < 100 && (params.multiple_choice_tasks != 0 && params.multiple_choice_tasks < (size_t)n_task)) return;
 
     float p = 1.f*n_correct/n_done;
     float sigma = sqrt(p*(1-p)/(n_done-1));
@@ -1711,7 +1737,8 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
     GGML_ASSERT(llama_add_eos_token(llama_get_model(ctx)) != 1);
 
     std::vector<uint16_t> log_probs_uint16(size_t(n_ctx - 1 - n_ctx/2) * nv);
-    std::vector<float> kld_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
+    std::vector<float>    kld_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
+    std::vector<float> p_diff_values(size_t(n_ctx - 1 - n_ctx/2)*n_chunk);
     std::vector<float> logits;
     if (num_batches > 1) {
         logits.reserve(n_ctx * n_vocab);
@@ -1728,9 +1755,18 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
         df = df > 0 && count > 10 ? sqrt(df/(count-1)) : 0.;
         return std::make_pair(f, df);
     };
+    auto covariance = [] (double suma, double sumb, double sumab, size_t count) {
+        if (count < 10) {
+            return 0.0;
+        }
+        double var = sumab/count - (suma/count)*(sumb/count);
+        var /= count - 1;
+        return var;
+    };
 
     kl_divergence_result kld;
-    auto kld_ptr = kld_values.data();
+    auto    kld_ptr =    kld_values.data();
+    auto p_diff_ptr = p_diff_values.data();
 
     for (int i = 0; i < n_chunk; ++i) {
         const int start =     i * n_ctx;
@@ -1785,24 +1821,42 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
             }
             fprintf(stderr, "%.2f minutes\n", total_seconds / 60.0);
 
-            printf("\nchunk        PPL          ln(PPL(Q)/PPL(base))          KL-Divergence           Same top\n");
+            printf("\nchunk             PPL               ln(PPL(Q)/PPL(base))          KL Divergence              Δp RMS            Same top p\n");
         }
 
         const int first = n_ctx/2;
         const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits(ctx);
         process_logits(n_vocab, all_logits + first*n_vocab, tokens.data() + start + first, n_ctx - 1 - first,
-                workers, log_probs_uint16, kld, kld_ptr);
-        kld_ptr += n_ctx - 1 - first;
+                workers, log_probs_uint16, kld, kld_ptr, p_diff_ptr);
+        p_diff_ptr += n_ctx - 1 - first;
+        kld_ptr    += n_ctx - 1 - first;
 
-        auto ppl           = mean_and_uncertainty(kld.sum_nll, kld.sum_nll2, kld.count);
-        auto log_ppl_ratio = mean_and_uncertainty(kld.sum_nll_diff, kld.sum_nll_diff2, kld.count);
-        auto kl_div        = mean_and_uncertainty(kld.sum_kld, kld.sum_kld2, kld.count);
-        auto p_top = 1.*kld.n_same_top/kld.count;
-        auto d_p_top = sqrt(p_top*(1 - p_top)/(kld.count - 1));
+        printf("%4d", i+1);
 
-        printf("%4d    %10.4lf    %10.5lf ± %10.5f    %10.5f ± %10.5lf    %.5f ± %.5f\n", i+1, exp(ppl.first),
-                log_ppl_ratio.first, log_ppl_ratio.second, kl_div.first, kl_div.second,
-                p_top, d_p_top);
+        auto log_ppl = mean_and_uncertainty(kld.sum_nll, kld.sum_nll2, kld.count);
+        const double ppl_val = exp(log_ppl.first);
+        const double ppl_unc = ppl_val * log_ppl.second; // ppl_unc = sqrt( (dexp(x) / dx) ** 2 * log_ppl.second ** 2 )
+        printf("    %9.4lf ± %9.4lf", ppl_val, ppl_unc);
+
+        auto log_ppl_base = mean_and_uncertainty(kld.sum_nll_base, kld.sum_nll_base2, kld.count);
+        const double log_ppl_cov = covariance(kld.sum_nll, kld.sum_nll_base, kld.sum_nll_nll_base, kld.count);
+        const double log_ppl_ratio_val = log_ppl.first - log_ppl_base.first;
+        const double log_ppl_ratio_unc = sqrt(log_ppl.second*log_ppl.second + log_ppl_base.second*log_ppl_base.second - 2.0*log_ppl_cov);
+        printf("    %10.5lf ± %10.5lf", log_ppl_ratio_val, log_ppl_ratio_unc);
+
+        auto kl_div = mean_and_uncertainty(kld.sum_kld, kld.sum_kld2, kld.count);
+        printf("    %10.5lf ± %10.5lf", kl_div.first, kl_div.second);
+
+        auto p_diff_mse   = mean_and_uncertainty(kld.sum_p_diff2, kld.sum_p_diff4, kld.count);
+        const double p_diff_rms_val = sqrt(p_diff_mse.first);
+        const double p_diff_rms_unc = 0.5/p_diff_rms_val * p_diff_mse.second;
+        printf("    %6.3lf ± %6.3lf %%", 100.0*p_diff_rms_val, 100.0*p_diff_rms_unc);
+
+        double p_top_val = 1.*kld.n_same_top/kld.count;
+        double p_top_unc = sqrt(p_top_val*(1 - p_top_val)/(kld.count - 1));
+        printf("    %6.3lf ± %6.3lf %%", 100.0*p_top_val, 100.0*p_top_unc);
+
+        printf("\n");
 
         fflush(stdout);
 
@@ -1813,31 +1867,97 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
     if (kld.count < 100) return; // we do not wish to do statistics on so few values
 
     std::sort(kld_values.begin(), kld_values.end());
+    std::sort(p_diff_values.begin(), p_diff_values.end());
 
-    printf("===== KL-divergence statistics\n");
+    printf("====== Perplexity statistics ======\n");
+
+    auto log_ppl = mean_and_uncertainty(kld.sum_nll, kld.sum_nll2, kld.count);
+    const double ppl_val = exp(log_ppl.first);
+    const double ppl_unc = ppl_val * log_ppl.second; // ppl_unc = sqrt( (dexp(x) / dx) ** 2 * log_ppl.second ** 2 )
+    printf("Mean PPL(Q)                   : %10.6lf ± %10.6lf\n", ppl_val, ppl_unc);
+
+    auto log_ppl_base = mean_and_uncertainty(kld.sum_nll_base, kld.sum_nll_base2, kld.count);
+    const double ppl_base_val = exp(log_ppl_base.first);
+    const double ppl_base_unc = ppl_base_val * log_ppl_base.second; // ppl_base_unc = sqrt( (dexp(x) / dx) ** 2 * log_ppl_base.second ** 2 )
+    printf("Mean PPL(base)                : %10.6lf ± %10.6lf\n", ppl_base_val, ppl_base_unc);
+
+    const double log_ppl_cov = covariance(kld.sum_nll, kld.sum_nll_base, kld.sum_nll_nll_base, kld.count);
+    // printf("Cov(ln(PPL(Q)), ln(PPL(base))): %10.6lf\n", log_ppl_cov);
+    const double log_ppl_cor = log_ppl_cov / (log_ppl.second*log_ppl_base.second);
+    printf("Cor(ln(PPL(Q)), ln(PPL(base))): %6.2lf%%\n", 100.0*log_ppl_cor);
+
+    const double log_ppl_ratio_val = log_ppl.first - log_ppl_base.first;
+    const double log_ppl_ratio_unc = sqrt(log_ppl.second*log_ppl.second + log_ppl_base.second*log_ppl_base.second - 2.0*log_ppl_cov);
+    printf("Mean ln(PPL(Q)/PPL(base))     : %10.6lf ± %10.6lf\n", log_ppl_ratio_val, log_ppl_ratio_unc);
+
+    const double ppl_ratio_val = exp(log_ppl_ratio_val);
+    const double ppl_ratio_unc = ppl_ratio_val * log_ppl_ratio_unc; // ppl_ratio_unc = sqrt( (dexp(x) / dx) ** 2 * log_ppl_ratio.second ** 2 )
+    printf("Mean PPL(Q)/PPL(base)         : %10.6lf ± %10.6lf\n", ppl_ratio_val, ppl_ratio_unc);
+
+    const double ppl_cov = ppl_val * ppl_base_val * log_ppl_cov;
+    const double ppl_diff_val = ppl_val - ppl_base_val;
+    const double ppl_diff_unc = sqrt(ppl_unc*ppl_unc + ppl_base_unc*ppl_base_unc - 2.0*ppl_cov);
+    printf("Mean PPL(Q)-PPL(base)         : %10.6lf ± %10.6lf\n", ppl_diff_val, ppl_diff_unc);
+
+    printf("\n");
+
+    printf("====== KL divergence statistics ======\n");
     auto kl_div = mean_and_uncertainty(kld.sum_kld, kld.sum_kld2, kld.count);
-    printf("Average: %10.6f ±%10.6lf\n", kl_div.first, kl_div.second);
+    printf("Mean    KLD: %10.6lf ± %10.6lf\n", kl_div.first, kl_div.second);
     auto kld_median = kld_values.size()%2 == 0 ? 0.5f*(kld_values[kld_values.size()/2] + kld_values[kld_values.size()/2-1])
                                                : kld_values[kld_values.size()/2];
-    printf("Median : %10.6f\n", kld_median);
 
-    auto percentile = [&kld_values] (float fraction) {
-        if (fraction <= 0) return kld_values.front();
-        if (fraction >= 1) return kld_values.back();
-        float p = fraction*(kld_values.size() - 1);
+    auto percentile = [] (std::vector<float> values, float fraction) {
+        if (fraction <= 0) return values.front();
+        if (fraction >= 1) return values.back();
+        float p = fraction*(values.size() - 1);
         size_t ip = size_t(p); p -= ip;
-        return (1 - p)*kld_values[ip] + p*kld_values[std::min(ip+1, kld_values.size()-1)];
+        return (1 - p)*values[ip] + p*values[std::min(ip+1, values.size()-1)];
     };
 
-    printf("Maximum: %10.6f\n", kld_values.back());
-    printf("KLD_99 : %10.6f\n", percentile(0.99f));
-    printf("KLD_95 : %10.6f\n", percentile(0.95f));
-    printf("KLD_90 : %10.6f\n", percentile(0.90f));
+    printf("Maximum KLD: %10.6f\n", kld_values.back());
+    printf("99.9%%   KLD: %10.6f\n", percentile(kld_values, 0.999f));
+    printf("99.0%%   KLD: %10.6f\n", percentile(kld_values, 0.990f));
+    printf("99.0%%   KLD: %10.6f\n", percentile(kld_values, 0.990f));
+    printf("Median  KLD: %10.6f\n", kld_median);
+    printf("10.0%%   KLD: %10.6f\n", percentile(kld_values, 0.100f));
+    printf(" 5.0%%   KLD: %10.6f\n", percentile(kld_values, 0.050f));
+    printf(" 1.0%%   KLD: %10.6f\n", percentile(kld_values, 0.010f));
+    printf("Minimum KLD: %10.6f\n", kld_values.front());
 
-    printf("Minimum: %10.6f\n", kld_values.front());
-    printf("KLD_01 : %10.6f\n", percentile(0.01f));
-    printf("KLD_05 : %10.6f\n", percentile(0.05f));
-    printf("KLD_10 : %10.6f\n", percentile(0.10f));
+    printf("\n");
+
+    printf("====== Token probability statistics ======\n");
+
+    auto p_diff = mean_and_uncertainty(kld.sum_p_diff, kld.sum_p_diff2, kld.count);
+    printf("Mean    Δp: %6.3lf ± %5.3lf %%\n",  100.0*p_diff.first, 100.0*p_diff.second);
+
+    auto p_diff_median = p_diff_values.size()%2 == 0 ? 0.5f*(p_diff_values[p_diff_values.size()/2] + p_diff_values[p_diff_values.size()/2-1])
+                                               : p_diff_values[p_diff_values.size()/2];
+
+    printf("Maximum Δp: %6.3lf%%\n",  100.0*p_diff_values.back());
+    printf("99.9%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.999f));
+    printf("99.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.990f));
+    printf("95.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.950f));
+    printf("90.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.900f));
+    printf("75.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.750f));
+    printf("Median  Δp: %6.3lf%%\n",  100.0*p_diff_median);
+    printf("25.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.250f));
+    printf("10.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.100f));
+    printf(" 5.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.050f));
+    printf(" 1.0%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.010f));
+    printf(" 0.1%%   Δp: %6.3lf%%\n", 100.0*percentile(p_diff_values, 0.001f));
+    printf("Minimum Δp: %6.3lf%%\n",  100.0*p_diff_values.front());
+
+    auto p_diff_mse = mean_and_uncertainty(kld.sum_p_diff2, kld.sum_p_diff4, kld.count);
+    // printf("MSE Δp    : %10.6lf ± %10.6lf\n", p_diff_mse.first, p_diff_mse.second);
+
+    const double p_diff_rms_val = sqrt(p_diff_mse.first);
+    const double p_diff_rms_unc = 0.5/p_diff_rms_val * p_diff_mse.second;
+    printf("RMS Δp    : %6.3lf ± %5.3lf %%\n", 100.0*p_diff_rms_val, 100.0*p_diff_rms_unc);
+
+    const double same_top_p = 1.0*kld.n_same_top/kld.count;
+    printf("Same top p: %6.3lf ± %5.3lf %%\n", 100.0*same_top_p, 100.0*sqrt(same_top_p*(1.0 - same_top_p)/(kld.count - 1)));
 
 }
 
@@ -1887,7 +2007,7 @@ int main(int argc, char ** argv) {
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
+        params.prompt = string_random_prompt(rng);
     }
 
     llama_backend_init();
@@ -1915,7 +2035,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     struct results_perplexity results;

@@ -32,6 +32,7 @@ struct split_params {
     int n_split_tensors = 128;
     std::string input;
     std::string output;
+    bool no_tensor_first_split = false;
     bool dry_run = false;
 };
 
@@ -49,6 +50,7 @@ static void split_print_usage(const char * executable) {
     printf("  --merge                 merge multiple GGUF to a single GGUF\n");
     printf("  --split-max-tensors     max tensors in each split (default: %d)\n", default_params.n_split_tensors);
     printf("  --split-max-size N(M|G) max size per split\n");
+    printf("  --no-tensor-first-split do not add tensors to the first split (disabled by default)\n");
     printf("  --dry-run               only print out a split plan and exit, without writing any new files\n");
     printf("\n");
 }
@@ -99,6 +101,10 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
         if (arg == "--dry-run") {
             arg_found = true;
             params.dry_run = true;
+        }
+        if (arg == "--no-tensor-first-split") {
+            arg_found = true;
+            params.no_tensor_first_split = true;
         }
 
         if (is_op_set) {
@@ -200,10 +206,10 @@ struct split_strategy {
         // because we need to know list of tensors for each file in advance, we will build all the ctx_out for all output splits
         int i_split = -1;
         struct gguf_context * ctx_out = NULL;
-        auto new_ctx_out = [&]() {
+        auto new_ctx_out = [&](bool allow_no_tensors) {
             i_split++;
             if (ctx_out != NULL) {
-                if (gguf_get_n_tensors(ctx_out) == 0) {
+                if (gguf_get_n_tensors(ctx_out) == 0 && !allow_no_tensors) {
                     fprintf(stderr, "error: one of splits have 0 tensors. Maybe size or tensors limit is too small\n");
                     exit(EXIT_FAILURE);
                 }
@@ -220,7 +226,12 @@ struct split_strategy {
         };
 
         // initialize ctx_out for the first split
-        new_ctx_out();
+        new_ctx_out(false);
+
+        // skip first split if no_tensor_first_split is set
+        if (params.no_tensor_first_split) {
+            new_ctx_out(true);
+        }
 
         // process tensors one by one
         size_t curr_tensors_size = 0; // current size by counting only tensors size (without metadata)
@@ -230,7 +241,7 @@ struct split_strategy {
             size_t n_bytes = GGML_PAD(ggml_nbytes(t), GGUF_DEFAULT_ALIGNMENT);
             size_t next_tensors_size = curr_tensors_size + n_bytes;
             if (should_split(i, next_tensors_size)) {
-                new_ctx_out();
+                new_ctx_out(false);
                 curr_tensors_size = n_bytes;
             } else {
                 curr_tensors_size = next_tensors_size;

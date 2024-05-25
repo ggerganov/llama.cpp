@@ -17,8 +17,9 @@ The project is under active development, and we are [looking for feedback and co
 
 **Command line options:**
 
-- `--threads N`, `-t N`: Set the number of threads to use during generation. Not used if model layers are offloaded to GPU. The server is using batching. This parameter is used only if one token is to be processed on CPU backend.
-- `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation. Not used if model layers are offloaded to GPU.
+- `-v`, `--verbose`: Enable verbose server output. When using the `/completion` endpoint, this includes the tokenized prompt, the full request and the full response.
+- `-t N`, `--threads N`: Set the number of threads to use by CPU layers during generation. Not used by model layers that are offloaded to GPU. This option has no effect when using the maximum number of GPU layers. Default: `std::thread::hardware_concurrency()` (number of CPU cores).
+- `-tb N, --threads-batch N`: Set the number of threads to use by CPU layers during batch and prompt processing (>= 32 tokens). This option has no effect if a GPU is available. Default: `--threads`.
 - `--threads-http N`: Number of threads in the http server pool to process requests. Default: `max(std::thread::hardware_concurrency() - 1, --parallel N + 2)`
 - `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 - `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file. Default: unused
@@ -36,9 +37,7 @@ The project is under active development, and we are [looking for feedback and co
 - `--numa STRATEGY`: Attempt one of the below optimization strategies that may help on some NUMA systems
 - `--numa distribute`: Spread execution evenly over all nodes
 - `--numa isolate`: Only spawn threads on CPUs on the node that execution started on
-- `--numa numactl`: Use the CPU map provided by numactl. If run without this previously, it is recommended to drop the system
-page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/1437
-
+- `--numa numactl`: Use the CPU map provided by numactl. If run without this previously, it is recommended to drop the system page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/1437
 - `--numa`: Attempt optimizations that may help on some NUMA systems.
 - `--lora FNAME`: Apply a LoRA (Low-Rank Adaptation) adapter to the model (implies --no-mmap). This allows you to adapt the pretrained model to specific tasks or domains.
 - `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
@@ -48,8 +47,8 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - `--path`: Path from which to serve static files. Default: disabled
 - `--api-key`: Set an api key for request authorization. By default, the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
 - `--api-key-file`: Path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`s.
-- `--embedding`: Enable embedding extraction. Default: disabled
-- `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`
+- `--embeddings`: Enable embedding vector output and the OAI compatible endpoint /v1/embeddings. Physical batch size (`--ubatch-size`) must be carefully defined. Default: disabled
+- `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`. Values > 1 will allow for higher throughput with multiple parallel requests but the results will **not** be deterministic due to differences in rounding error.
 - `-cb`, `--cont-batching`: Enable continuous batching (a.k.a dynamic batching).  Default: disabled
 - `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots). This is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
@@ -62,6 +61,18 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - `--chat-template JINJA_TEMPLATE`: Set custom jinja chat template. This parameter accepts a string, not a file name.  Default: template taken from model's metadata. We only support [some pre-defined templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
 - `--log-disable`: Output logs to stdout only, not to `llama.log`. Default: enabled
 - `--log-format FORMAT`: Define the log output to FORMAT: json or text Default: `json`
+- `--rope-scaling` : RoPE scaling method. Defaults to linear unless otherwise specified by the model. Options are `none`, `linear`, `yarn`
+- `--rope-freq-base N` : RoPE frequency base (default: loaded from model)
+- `--rope-freq-scale N`: RoPE frequency scaling factor, expands context by a factor of 1/N (e.g. 0.25)
+- `--yarn-ext-factor N` : YaRN: extrapolation mix factor (Default: 1.0, 0.0 = full interpolation)
+- `--yarn-attn-factor N` : YaRN: scale sqrt(t) or attention magnitude (default: 1.0)
+- `--yarn-beta-slow N`: YaRN: High correction dim or alpha (default: 1.0)
+- `--yarn-beta-fast N`: YaRN: low correction dim or beta (default: 32.0)
+- `--pooling` : Pooling type for embeddings, use model default if unspecified. Options are `none`, `mean`, `cls`
+- `-dt N`, `--defrag-thold N`: KV cache defragmentation threshold (default: -1.0, < 0 = disabled)
+- `-fa`, `--flash-attn` : enable flash attention (default: disabled).
+- `-ctk TYPE`, `--cache-type-k TYPE` : KV cache data type for K (default: `f16`, options `f32`, `f16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, or `q5_1`)
+- `-ctv TYPE`, `--cache-type-v TYPE` : KV cache type for V (default `f16`, see `-ctk` for options)
 
 **If compiled with `LLAMA_SERVER_SSL=ON`**
 - `--ssl-key-file FNAME`: path to file a PEM-encoded SSL private key
@@ -74,14 +85,17 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - Using `make`:
 
   ```bash
-  make
+  make server
   ```
 
 - Using `CMake`:
 
   ```bash
-  cmake --build . --config Release
+  cmake -B build
+  cmake --build build --config Release -t server
   ```
+
+  Binary is at `./build/bin/server`
 
 ## Build with SSL
 
@@ -99,10 +113,8 @@ page cache before using this. See https://github.com/ggerganov/llama.cpp/issues/
 - Using `CMake`:
 
   ```bash
-  mkdir build
-  cd build
-  cmake .. -DLLAMA_SERVER_SSL=ON
-  make server
+  cmake -B build -DLLAMA_SERVER_SSL=ON
+  cmake --build build --config Release -t server
   ```
 
 ## Quick Start
@@ -259,7 +271,7 @@ node index.js
 
     `logit_bias`: Modify the likelihood of a token appearing in the generated text completion. For example, use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias": [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]` ensures that the token `Hello` is never produced. The tokens can also be represented as strings, e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that represent the string `Hello, World!`, just like the `presence_penalty` does. Default: `[]`
 
-    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token. Default: `0`
+    `n_probs`: If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. Note that for temperature < 0 the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Default: `0`
 
     `min_keep`: If greater than 0, force samplers to return N possible tokens at minimum. Default: `0`
 
@@ -318,7 +330,7 @@ Notice that each `probs` is an array of length `n_probs`.
 
     `content`: Set the text to tokenize.
 
-    Note that a special `BOS` token is never inserted.
+    `add_special`: Boolean indicating if special tokens, i.e. `BOS`, should be inserted.  Default: `false`
 
 - **POST** `/detokenize`: Convert tokens to text.
 
