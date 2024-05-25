@@ -904,6 +904,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.interactive_specials = true;
         return true;
     }
+    if (arg == "--no-special") {
+        params.no_special = true;
+        return true;
+    }
     if (arg == "--embedding") {
         params.embedding = true;
         return true;
@@ -1364,6 +1368,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --interactive-specials allow special tokens in user text, in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
+    printf("  --no-special          control tokens output disabled\n");
     printf("  -cnv, --conversation  run in conversation mode (does not print special tokens and suffix/prefix)\n");
     printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
     printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");

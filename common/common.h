@@ -146,6 +146,7 @@ struct gpt_params {
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode
     bool interactive_specials = false; // whether to allow special tokens from user, during interactive mode
+    bool no_special        = false; // disable control token output
     bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
     bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache

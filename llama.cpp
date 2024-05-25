@@ -17861,6 +17861,10 @@ bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
     );
 }
 
+bool llama_token_is_control(const struct llama_model * model, llama_token token) {
+    return llama_is_control_token(model->vocab, token);
+}
+
 llama_token llama_token_bos(const struct llama_model * model) {
     return model->vocab.special_bos_id;
 }

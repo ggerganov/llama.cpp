@@ -740,18 +740,32 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo && display) {
             for (auto id : embd) {
-                const std::string token_str = llama_token_to_piece(ctx, id, !params.conversation);
-                printf("%s", token_str.c_str());
+                const std::string token_str = llama_token_to_piece(ctx, id);
 
+                // Console/Stream Output
+                if (!llama_token_is_control(llama_get_model(ctx), id)) {
+                    // Stream Output Token To Standard Output
+                    fprintf(stdout, "%s", token_str.c_str());
+                } else if (!params.no_special && !params.conversation) {
+                    // Stream Control Token To Standard Output Stream
+                    fprintf(stdout, "%s", token_str.c_str());
+                }
+
+                // Record Displayed Tokens To Log
+                // Note: Generated tokens are created one by one hence this check
                 if (embd.size() > 1) {
+                    // Incoming Requested Tokens
                     input_tokens.push_back(id);
                 } else {
+                    // Outgoing Generated Tokens
                     output_tokens.push_back(id);
                     output_ss << token_str;
                 }
+
+                fflush(stdout);
             }
-            fflush(stdout);
         }
+
         // reset color to default if there is no pending user input
         if (input_echo && (int) embd_inp.size() == n_consumed) {
             console::set_display(console::reset);
