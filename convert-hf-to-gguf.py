@@ -2553,7 +2553,6 @@ class ArcticModel(Model):
             self._experts[bid][name] = data_torch
 
             if len(self._experts[bid]) >= n_experts * 3:
-                tensors: list[tuple[str, Tensor]] = []
 
                 # merge the experts into a single 3d tensor
                 for wid in ["w1", "w2", "w3"]:
@@ -2570,12 +2569,10 @@ class ArcticModel(Model):
 
                     new_name = self.map_tensor_name(merged_name)
 
-                    tensors.append((new_name, data_torch))
-                return tensors
-            else:
-                return []
+                    yield new_name, data_torch
+            return
 
-        return [(self.map_tensor_name(name), data_torch)]
+        yield self.map_tensor_name(name), data_torch
 
     def write_tensors(self):
         super().write_tensors()
