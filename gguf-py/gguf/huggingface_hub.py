@@ -219,6 +219,22 @@ class HFHubModel(HFHubBase):
         self._request = HFHubRequest(auth_token, model_path, logger)
         self._tokenizer = HFHubTokenizer(model_path, logger)
 
+    @staticmethod
+    def get_model_type_name(model_type: ModelFileType) -> str:
+        return MODEL_FILE_TYPE_NAMES.get(model_type, "")
+
+    @staticmethod
+    def get_model_type(model_name: str) -> ModelFileType:
+        return {
+            ".pt": ModelFileType.PT,
+            ".pth": ModelFileType.PTH,
+            ".bin": ModelFileType.BIN,
+            ".safetensors": ModelFileType.SAFETENSORS,
+            ".json": ModelFileType.JSON,
+            ".model": ModelFileType.MODEL,
+            ".gguf": ModelFileType.GGUF,
+        }.get(model_name, ModelFileType.NON)
+
     @property
     def request(self) -> HFHubRequest:
         return self._request
