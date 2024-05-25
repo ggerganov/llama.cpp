@@ -207,6 +207,7 @@ class TensorNameMap:
             "model.layers.{bid}.ffn_norm",                                   # internlm2
             "transformer.decoder_layer.{bid}.rms_norm_2",                    # Grok
             "model.layers.{bid}.pre_ff_layernorm",                           # jamba
+            "model.layers.{bid}.pre_moe_layernorm",                          # mini-jamba
         ),
 
         MODEL_TENSOR.FFN_GATE_INP: (
@@ -390,10 +391,12 @@ class TensorNameMap:
 
         MODEL_TENSOR.SSM_B_NORM: (
             "model.layers.{bid}.mamba.b_layernorm",  # jamba
+            "model.layers.{bid}.mamba.B_layernorm",  # mini-jamba
         ),
 
         MODEL_TENSOR.SSM_C_NORM: (
             "model.layers.{bid}.mamba.c_layernorm",  # jamba
+            "model.layers.{bid}.mamba.C_layernorm",  # mini-jamba
         ),
 
         MODEL_TENSOR.SSM_D: (

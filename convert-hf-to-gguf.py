@@ -2393,6 +2393,16 @@ class JambaModel(Model):
 
         return "gpt-2"
 
+    def set_vocab(self):
+        if (self.dir_model / "tokenizer.model").is_file():
+            # Using Jamba's tokenizer.json causes errors on model load
+            # (something about "byte not found in vocab"),
+            # but there's a working tokenizer.model
+            self._set_vocab_sentencepiece()
+        else:
+            # Some Jamba models only have a tokenizer.json, which works.
+            self._set_vocab_gpt2()
+
     def set_gguf_parameters(self):
         d_model = self.find_hparam(["hidden_size", "mamba_d_model"])
         d_conv  = self.find_hparam(["mamba_d_conv"],  optional=True) or 4
@@ -2412,7 +2422,7 @@ class JambaModel(Model):
 
         self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_block_count(self.block_count)
-        self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
+        self.gguf_writer.add_context_length(self.find_hparam(["max_position_embeddings", "n_ctx"]))
         self.gguf_writer.add_embedding_length(d_model)
         self.gguf_writer.add_feed_forward_length(self.hparams["intermediate_size"])
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
@@ -2429,6 +2439,15 @@ class JambaModel(Model):
     _experts: list[dict[str, Tensor]] | None = None
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+
+        # Mini-Jamba
+        name = name.replace(".moe.", ".feed_forward.")
+        if bid is not None:
+            moe_offset = self.hparams["expert_layer_offset"]
+            moe_period = self.hparams["expert_layer_period"]
+
+            if not (bid >= moe_offset and (bid - moe_offset) % moe_period == 0):
+                name = name.replace(".experts.0.", ".")
 
         # process the experts separately
         if ".feed_forward.experts." in name:
