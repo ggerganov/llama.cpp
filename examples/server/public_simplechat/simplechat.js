@@ -481,7 +481,7 @@ class MultiChatUI {
                 assistantMsg = respBody["content"];
             }
         }
-        assistantMsg = du.trim_repeat_garbage_at_end_loop(assistantMsg, 32, 72);
+        assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 12, 72);
         chat.add(Roles.Assistant, assistantMsg);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
@@ -623,6 +623,7 @@ function startme() {
     console.log("INFO:SimpleChat:StartMe:Starting...");
     gMe = new Me();
     document["gMe"] = gMe;
+    document["du"] = du;
     for (let cid of gMe.defaultChatIds) {
         gMe.multiChat.new_chat_session(cid);
     }

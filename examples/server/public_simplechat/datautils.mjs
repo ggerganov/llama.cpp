@@ -68,3 +68,55 @@ export function trim_repeat_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThresho
         sCur = got.data;
     }
 }
+
+
+/**
+ * A simple minded try trim garbage at end using histogram characteristics
+ * @param {string} sIn
+ * @param {number} maxSubL
+ * @param {number} maxMatchLenThreshold
+ */
+export function trim_hist_garbage_at_end(sIn, maxSubL, maxMatchLenThreshold) {
+    if (sIn.length < maxMatchLenThreshold) {
+        return { trimmed: false, data: sIn };
+    }
+    // Learn
+    let hist = {};
+    for(let i=0; i<maxSubL; i++) {
+        let c = sIn[sIn.length-1-i];
+        if (c in hist) {
+            hist[c] += 1;
+        } else {
+            hist[c] = 1;
+        }
+    }
+    console.log("DBUG:TrimHistGarbage:", hist);
+    // Catch and Trim
+    for(let i=0; i < sIn.length; i++) {
+        let c = sIn[sIn.length-1-i];
+        if (!(c in hist)) {
+            if (i < maxMatchLenThreshold) {
+                return { trimmed: false, data: sIn };
+            }
+            return { trimmed: true, data: sIn.substring(0, sIn.length-i+1) };
+        }
+    }
+    return { trimmed: true, data: "" };
+}
+
+/**
+ * Keep trimming repeatedly using hist_garbage logic, till you no longer can
+ * @param {any} sIn
+ * @param {number} maxSubL
+ * @param {number} maxMatchLenThreshold
+ */
+export function trim_hist_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThreshold) {
+    let sCur = sIn;
+    while (true) {
+        let got = trim_hist_garbage_at_end(sCur, maxSubL, maxMatchLenThreshold);
+        if (!got.trimmed) {
+            return got.data;
+        }
+        sCur = got.data;
+    }
+}
