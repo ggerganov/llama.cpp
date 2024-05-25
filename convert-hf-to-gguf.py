@@ -2470,6 +2470,15 @@ class JambaModel(Model):
 
         yield new_name, data_torch
 
+    def write_tensors(self):
+        super().write_tensors()
+
+        if self._experts is not None:
+            # flatten `list[dict[str, Tensor]]` into `list[str]`
+            experts = [k for d in self._experts for k in d.keys()]
+            if len(experts) > 0:
+                raise ValueError(f"Unprocessed experts: {experts}")
+
     # same as Mamba
     def extra_f32_tensors(self, name: str, new_name: str, bid: int | None, n_dims: int) -> bool:
         del n_dims  # unused
