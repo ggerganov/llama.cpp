@@ -156,7 +156,10 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         '<s>a',       # Phi-3 fail
         '<unk><|endoftext|><s>',  # Phi-3 fail
         'a\na',       # TODO: Bert fail
+        '"`',         # falcon
+        ' República'  # deepseek-coder, not inserted in vocab.special_tokens_cache because len==1
         'a\xa0\xa0\x00b',  # jina-v2-es
+        'one <mask>',  # jina-v2-es  <mask> lstrip=true
     ]
 
 
@@ -340,11 +343,16 @@ if __name__ == "__main__":
         # "phi-3",       # SPM
         # "bert-bge",    # WPM
         # "jina-v2-en",  # WPM
-        "gpt-2",       # BPE
-        "llama-bpe",   # BPE
-        "jina-v2-es",  # BPE
-        "jina-v2-de",  # BPE
-        "phi-2",       # BPE
+        "gpt-2",          # BPE
+        "llama-bpe",      # BPE
+        "falcon",         # BPE
+        "deepseek-coder", # BPE
+        "deepseek-llm",   # BPE
+        "starcoder",      # BPE
+        "jina-v2-es",     # BPE
+        "jina-v2-de",     # BPE
+        "smaug-bpe"       # BPE
+        "phi-2",          # BPE
     ]
 
     for tokenizer in tokenizers:
