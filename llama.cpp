@@ -2072,16 +2072,18 @@ struct llama_vocab {
     id special_cls_id  = -1;
     id special_mask_id = -1;
 
-    int special_add_bos = -1; // -1 unknown, 1 add, 0 don't add.
-    int special_add_eos = -1; // -1 unknown, 1 add, 0 don't add.
-
     id linefeed_id       = 13;
     id special_prefix_id = -1;
     id special_suffix_id = -1;
     id special_middle_id = -1;
     id special_eot_id    = -1; // TODO: move above after "eos_id", and here add "file separator" token
 
-    bool add_space_prefix = true;
+    // tokenizer flags
+    bool tokenizer_add_space_prefix = true;
+    bool tokenizer_special_add_bos  = false;
+    bool tokenizer_special_add_eos  = false;
+    bool tokenizer_ignore_merges    = false;
+    bool tokenizer_mask_lstrip      = false;
 
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const {
         GGML_ASSERT(token_left.find(' ') == std::string::npos);
@@ -4435,7 +4437,7 @@ static void llm_load_vocab(
 
             const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
             if (add_space_prefix_keyidx != -1) {
-                vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
+                vocab.tokenizer_add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
             } // The default value of add_space_prefix is true.
         } else if (tokenizer_model == "bert") {
             vocab.type = LLAMA_VOCAB_TYPE_WPM;
@@ -4448,7 +4450,6 @@ static void llm_load_vocab(
             vocab.special_pad_id  = 0;
             vocab.special_cls_id  = 101;
             vocab.special_mask_id = 103;
-            vocab.add_space_prefix = false;
         } else {
             if (tokenizer_model == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
@@ -4512,6 +4513,8 @@ static void llm_load_vocab(
                     tokenizer_pre == "llama-v3" ||
                     tokenizer_pre == "llama-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_LLAMA3;
+                vocab.tokenizer_ignore_merges = true;
+                vocab.tokenizer_special_add_bos = true;
             } else if (
                     tokenizer_pre == "deepseek-llm") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM;
@@ -4534,6 +4537,7 @@ static void llm_load_vocab(
                     tokenizer_pre == "jina-v2-es" ||
                     tokenizer_pre == "jina-v2-de") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
+                vocab.tokenizer_mask_lstrip = tokenizer_pre.find("jina-v2") < std::string::npos;
             } else if (
                     tokenizer_pre == "refact") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_REFACT;
@@ -4647,10 +4651,10 @@ static void llm_load_vocab(
             bool temp = true;
 
             if (ml.get_key(LLM_KV_TOKENIZER_ADD_BOS, temp, false)) {
-                vocab.special_add_bos = int(temp);
+                vocab.tokenizer_special_add_bos = temp;
             }
             if (ml.get_key(LLM_KV_TOKENIZER_ADD_EOS, temp, false)) {
-                vocab.special_add_eos = int(temp);
+                vocab.tokenizer_special_add_eos = temp;
             }
         }
 
@@ -12274,12 +12278,8 @@ struct llm_bigram_bpe {
 struct llm_tokenizer_bpe {
     llm_tokenizer_bpe(const llama_vocab & vocab): vocab(vocab) {
         GGML_ASSERT(vocab.type == LLAMA_VOCAB_TYPE_BPE);
-        special_add_bos = vocab.special_add_bos == 1;
-        special_add_eos = vocab.special_add_eos == 1;
         switch (vocab.type_pre) {
             case LLAMA_VOCAB_PRE_TYPE_LLAMA3:
-                special_add_bos = true;
-                ignore_merges = true;
                 regex_exprs = {
                     // original regex from tokenizer.json
                     //"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
@@ -12370,7 +12370,7 @@ struct llm_tokenizer_bpe {
     }
 
     bool append_bos(std::vector<llama_vocab::id> & output) const {
-        if (special_add_bos) {
+        if (vocab.tokenizer_special_add_bos) {
             GGML_ASSERT(vocab.special_bos_id != -1);
             output.push_back(vocab.special_bos_id);
             return true;
@@ -12379,7 +12379,7 @@ struct llm_tokenizer_bpe {
     }
 
     bool append_eos(std::vector<llama_vocab::id> & output) const {
-        if (special_add_eos) {
+        if (vocab.tokenizer_special_add_eos) {
             GGML_ASSERT(vocab.special_eos_id != -1);
             output.push_back(vocab.special_eos_id);
             return true;
@@ -12388,13 +12388,13 @@ struct llm_tokenizer_bpe {
     }
 
     void check_double_bos_eos(const std::vector<llama_vocab::id> & output) const {
-        if (special_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
+        if (vocab.tokenizer_special_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
             LLAMA_LOG_WARN(
                 "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                 "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                 "Are you sure this is what you want?\n", __FUNCTION__);
         }
-        if (special_add_eos && output.size() >= 2 && *(output.end()-2) == vocab.special_eos_id) {
+        if (vocab.tokenizer_special_add_eos && output.size() >= 2 && *(output.end()-2) == vocab.special_eos_id) {
             LLAMA_LOG_WARN(
                 "%s: Added a EOS token to the prompt as specified by the model but the prompt "
                 "also ends with a EOS token. So now the final prompt ends with 2 EOS tokens. "
@@ -12416,7 +12416,7 @@ struct llm_tokenizer_bpe {
             int index = 0;
             size_t offset = 0;
 
-            if (ignore_merges && vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
+            if (vocab.tokenizer_ignore_merges && vocab.token_to_id.find(word) != vocab.token_to_id.end()) {
                 symbols.emplace_back(llm_symbol{-1, -1, word.c_str(), word.size()});
                 offset = word.size();
             }
@@ -12540,9 +12540,6 @@ private:
     const llama_vocab & vocab;
 
     std::vector<std::string> regex_exprs;
-    bool special_add_bos = false;
-    bool special_add_eos = false;
-    bool ignore_merges = false;
 
     std::vector<llm_symbol> symbols;
     std::vector<llm_symbol> symbols_final;
@@ -12827,7 +12824,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 bool is_prev_special = false;
                 bool special_token_rtrim = false;
 
-                if (add_special && vocab.special_add_bos != 0) {
+                if (add_special && vocab.tokenizer_special_add_bos) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
                     output.push_back(vocab.special_bos_id);
                     is_prev_special = true;
@@ -12854,7 +12851,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                             raw_text = raw_text.substr(num_whitespaces);
                         }
 
-                        if (vocab.add_space_prefix) {
+                        if (vocab.tokenizer_add_space_prefix) {
                             if (!output.size() || is_prev_special) {  // prefix with space if first token
                                 raw_text = " " + raw_text;
                             }
@@ -12877,14 +12874,14 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     }
                 }
 
-                if (add_special && vocab.special_add_bos != 0 && output.size() >= 2 && output[1] == vocab.special_bos_id) {
+                if (add_special && vocab.tokenizer_special_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
                     LLAMA_LOG_WARN(
                         "%s: Added a BOS token to the prompt as specified by the model but the prompt "
                         "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                         "Are you sure this is what you want?\n", __FUNCTION__);
                 }
 
-                if (add_special && vocab.special_add_eos == 1) {
+                if (add_special && vocab.tokenizer_special_add_eos) {
                     GGML_ASSERT(vocab.special_eos_id != -1);
                     output.push_back(vocab.special_eos_id);
                 }
@@ -17694,11 +17691,11 @@ llama_token llama_token_nl(const struct llama_model * model) {
 }
 
 int32_t llama_add_bos_token(const struct llama_model * model) {
-    return model->vocab.special_add_bos;
+    return model->vocab.tokenizer_special_add_bos;
 }
 
 int32_t llama_add_eos_token(const struct llama_model * model) {
-    return model->vocab.special_add_eos;
+    return model->vocab.tokenizer_special_add_eos;
 }
 
 llama_token llama_token_prefix(const struct llama_model * model) {
