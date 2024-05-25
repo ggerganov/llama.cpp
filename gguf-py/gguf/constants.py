@@ -969,18 +969,24 @@ VOCAB_TYPE_NAMES: dict[VocabType, str] = {
 # Model File Types
 #
 class ModelFileType(IntEnum):
-    UNK = auto()  # Unsupported file type
-    SFT = auto()  # SafeTensor file type
-    PTH = auto()  # PyTorch file type
-    BIN = auto()  # Pickled file type
-    PT  = auto()  # PyTorch file type
+    UNK         = auto()
+    PT          = auto()
+    PTH         = auto()
+    BIN         = auto()
+    SAFETENSORS = auto()
+    JSON        = auto()
+    MODEL       = auto()
+    GGUF        = auto()
 
 
 MODEL_FILE_TYPE_NAMES: dict[ModelFileType, str] = {
-    ModelFileType.PT:  "pt",
-    ModelFileType.PTH: "pth",
-    ModelFileType.BIN: "bin",
-    ModelFileType.SFT: "safetensors",
+    ModelFileType.PT:          ".pt",
+    ModelFileType.PTH:         ".pth",
+    ModelFileType.BIN:         ".bin",
+    ModelFileType.SAFETENSORS: ".safetensors",
+    ModelFileType.JSON:        ".json",
+    ModelFileType.MODEL:       ".model",
+    ModelFileType.GGUF:        ".gguf",
 }
 
 #
