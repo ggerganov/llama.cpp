@@ -4494,6 +4494,11 @@ static void llm_load_vocab(
         } else {
             if (tokenizer_model == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
+
+                const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
+                if (add_space_prefix_keyidx != -1) {
+                    vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
+                }
             } else {
                 LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_model.c_str());
                 LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
