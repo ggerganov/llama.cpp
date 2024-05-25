@@ -8,28 +8,13 @@
 #include <string>
 #include <vector>
 
-static void dbg_color(const std::string & s, const std::string & fg)
+static void dbg_color(const std::string & s, const std::string & fg = "")
 {
     static const std::string kReset = "\033[0m";
     static const std::string kBold[] = { "", "\033[1m" };
     static size_t index = 0;
     std::cout << kBold[index] << fg << s << kReset << std::flush;
     index = 1 - index;
-}
-
-static void dbg_accepted(const std::string & accepted)
-{
-    dbg_color(accepted, /* green */ "\033[32m");
-}
-
-static void dbg_default(const std::string & accepted)
-{
-    dbg_color(accepted, "");
-}
-
-static void dbg_rejected(const std::string & rejected)
-{
-    dbg_color(rejected, /* red */ "\033[31m");
 }
 
 template<typename iter_t>
@@ -190,8 +175,7 @@ static int target(
     const llama_tokens& input,
     size_t n_predict)
 {
-    dbg_default(to_string(ctx, input.begin(), input.end()));
-
+    dbg_color(to_string(ctx, input.begin(), input.end()));
 
     llama_batch batch = llama_batch_init(512, 0, 1);
     decode(ctx, input.begin(), input.end(), 0, false, batch);
@@ -269,11 +253,11 @@ static int target(
                 }
             }
 
-            dbg_accepted(to_string(ctx, spec.begin() + next_tokens_pos, spec.begin() + next_tokens_pos + n_match));
+            dbg_color(to_string(ctx, spec.begin() + next_tokens_pos, spec.begin() + next_tokens_pos + n_match), /* green */ "\033[32m");
             if (n_match != next_tokens.size())
             {
-                dbg_rejected(to_string(ctx, spec.begin() + next_tokens_pos + n_match, spec.end()));
-                dbg_default(to_string(ctx, next_tokens.begin() + n_match, next_tokens.end()));
+                dbg_color(to_string(ctx, spec.begin() + next_tokens_pos + n_match, spec.end()), /* red */ "\033[31m");
+                dbg_color(to_string(ctx, next_tokens.begin() + n_match, next_tokens.end()));
                 spec.erase(spec.begin() + next_tokens_pos, spec.end());
                 for (const auto tok: next_tokens)
                 {
