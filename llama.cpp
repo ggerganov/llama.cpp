@@ -4567,7 +4567,7 @@ static void llm_load_vocab(
         } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_special_add_bos = true;
-            vocab.tokenizer_special_add_eos = true;
+            vocab.tokenizer_special_add_eos = false;
         } else {
             throw std::runtime_error(format("unknown vocab type: '%d'", (int) vocab.type));
         }
