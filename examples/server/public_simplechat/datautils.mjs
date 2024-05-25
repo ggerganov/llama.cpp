@@ -73,20 +73,25 @@ export function trim_repeat_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThresho
 /**
  * A simple minded try trim garbage at end using histogram characteristics
  * @param {string} sIn
- * @param {number} maxSubL
+ * @param {number} maxUniq
  * @param {number} maxMatchLenThreshold
  */
-export function trim_hist_garbage_at_end(sIn, maxSubL, maxMatchLenThreshold) {
+export function trim_hist_garbage_at_end(sIn, maxUniq, maxMatchLenThreshold) {
     if (sIn.length < maxMatchLenThreshold) {
         return { trimmed: false, data: sIn };
     }
     // Learn
     let hist = {};
-    for(let i=0; i<maxSubL; i++) {
+    let iUniq = 0;
+    for(let i=0; i<maxMatchLenThreshold; i++) {
         let c = sIn[sIn.length-1-i];
         if (c in hist) {
             hist[c] += 1;
         } else {
+            iUniq += 1;
+            if (iUniq >= maxUniq) {
+                break;
+            }
             hist[c] = 1;
         }
     }
