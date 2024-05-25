@@ -7404,6 +7404,9 @@ void ggml_vec_dot_q4_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     *s = vec_extract(vsumf0, 0);
 
 #elif defined __loongarch_asx
+    GGML_UNUSED(kmask1);
+    GGML_UNUSED(kmask2);
+    GGML_UNUSED(kmask3);
 
     const __m256i m4 = __lasx_xvreplgr2vr_b(0xF);
 
@@ -8002,6 +8005,9 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
     *s = vec_extract(vsumf0, 0);
 
 #elif defined __loongarch_asx
+    GGML_UNUSED(kmask1);
+    GGML_UNUSED(kmask2);
+    GGML_UNUSED(kmask3);
 
     const __m256i m4 = __lasx_xvreplgr2vr_b(0xF);
     const __m128i mzero = __lsx_vldi(0);
