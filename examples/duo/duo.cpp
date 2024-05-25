@@ -136,7 +136,7 @@ static int speculation(
         }
         if (wait)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds{10});
+            std::this_thread::sleep_for(std::chrono::milliseconds{5});
             continue;
         }
 
@@ -158,7 +158,6 @@ static int speculation(
             auto& shared = spec_ctx->candidate;
             bool match = true;
             match_len = local.size() - 1;
-            fprintf(stderr, "spec #%d: %zu | %zu\n", active, shared.size(), local.size());
             for (size_t i = 0; i < std::min(shared.size(), local.size()); i++)
             {
                 if (shared[i] != local[i])
@@ -167,7 +166,7 @@ static int speculation(
                     match_len = i;
                     // here we need to clear both contexts
                     llama_kv_cache_seq_rm(ctx[0], 0, i, -1);
-                    llama_kv_cache_seq_rm(ctx[1], 0, i, -1);
+                    //llama_kv_cache_seq_rm(ctx[1], 0, i, -1);
                     break;
                 }
             }
@@ -318,17 +317,20 @@ static int target(
             break;
         }
 
-        fprintf(stderr, "tgt: input_seq.size() = %zu\n", input_seq.size());
+        fprintf(stderr, "\ntgt: input_seq.size() = %zu\n", input_seq.size());
 
         llama_batch_clear(batch);
         for (size_t i = 0; i < input_seq.size(); i++)
         {
             llama_batch_add(batch, input_seq[i], n_cur - 1 + i, { 0 }, true);
         }
+        auto s_us = ggml_time_us();
         if (llama_decode(ctx, batch)) {
             fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
         }
+        auto eval_us = ggml_time_us() - s_us;
+        fprintf(stderr, "eval_time: %lld", eval_us);
         logits_from = 0;
         logits_to   = input_seq.size();
     }
