@@ -81,9 +81,10 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
         LLAMA_VOCAB_PRE_TYPE_REFACT         = 8,
         LLAMA_VOCAB_PRE_TYPE_COMMAND_R      = 9,
-        LLAMA_VOCAB_PRE_TYPE_QWEN2          = 10,
-        LLAMA_VOCAB_PRE_TYPE_OLMO           = 11,
-        LLAMA_VOCAB_PRE_TYPE_DBRX           = 12,
+        LLAMA_VOCAB_PRE_TYPE_STABLELM2      = 10,
+        LLAMA_VOCAB_PRE_TYPE_QWEN2          = 11,
+        LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
+        LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -241,6 +242,9 @@ extern "C" {
 
         // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
         const float * tensor_split;
+
+        // comma separated list of RPC servers to use for offloading
+        const char * rpc_servers;
 
         // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
         // If the provided progress_callback returns true, model loading continues.
@@ -755,6 +759,12 @@ extern "C" {
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
+    // Get the number of threads used for generation of a single token.
+    LLAMA_API uint32_t llama_n_threads(struct llama_context * ctx);
+
+    // Get the number of threads used for prompt and batch processing (multiple token).
+    LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
+
     // Set whether to use causal attention or not
     // If set to true, the model will only attend to the past tokens
     LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
@@ -812,6 +822,9 @@ extern "C" {
 
     // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
     LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+
+    // Identify if Token Id is a control token or a render-able token
+    LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence

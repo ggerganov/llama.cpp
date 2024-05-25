@@ -25,6 +25,8 @@ from .constants import (
     TokenType,
 )
 
+from .quants import quant_shape_from_byte_shape
+
 logger = logging.getLogger(__name__)
 
 
@@ -195,7 +197,7 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def add_tensor_info(
-        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype[np.float16] | np.dtype[np.float32],
+        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype,
         tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None,
     ) -> None:
         if self.state is not WriterState.EMPTY:
@@ -208,10 +210,6 @@ class GGUFWriter:
         encoded_name = name.encode("utf-8")
         self.ti_data += self._pack("Q", len(encoded_name))
         self.ti_data += encoded_name
-        n_dims = len(tensor_shape)
-        self.ti_data += self._pack("I", n_dims)
-        for i in range(n_dims):
-            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             if tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
@@ -231,6 +229,12 @@ class GGUFWriter:
                 raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
             dtype = raw_dtype
+            if tensor_dtype == np.uint8:
+                tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
+        n_dims = len(tensor_shape)
+        self.ti_data += self._pack("I", n_dims)
+        for i in range(n_dims):
+            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         self.ti_data += self._pack("I", dtype)
         self.ti_data += self._pack("Q", self.offset_tensor)
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
@@ -426,6 +430,9 @@ class GGUFWriter:
 
     def add_rope_scaling_factor(self, value: float) -> None:
         self.add_float32(Keys.Rope.SCALING_FACTOR.format(arch=self.arch), value)
+
+    def add_rope_scaling_attn_factors(self, value: Sequence[float]) -> None:
+        self.add_float32(Keys.Rope.SCALING_ATTN_FACTOR.format(arch=self.arch), value)
 
     def add_rope_scaling_orig_ctx_len(self, value: int) -> None:
         self.add_uint32(Keys.Rope.SCALING_ORIG_CTX_LEN.format(arch=self.arch), value)

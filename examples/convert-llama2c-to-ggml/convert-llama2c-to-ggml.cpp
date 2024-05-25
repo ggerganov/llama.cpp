@@ -774,7 +774,7 @@ static struct train_params get_default_train_params() {
 
     params.samples_start_after_nl = false;
     params.use_adam               = true;
-    params.use_flash              = true;
+    params.use_flash              = false;
     params.use_scratch            = true;
 
     // only adam

@@ -214,7 +214,6 @@ effectiveStdenv.mkDerivation (
         (cmakeBool "LLAMA_CUDA" useCuda)
         (cmakeBool "LLAMA_HIPBLAS" useRocm)
         (cmakeBool "LLAMA_METAL" useMetalKit)
-        (cmakeBool "LLAMA_MPI" useMpi)
         (cmakeBool "LLAMA_VULKAN" useVulkan)
         (cmakeBool "LLAMA_STATIC" enableStatic)
       ]
@@ -227,19 +226,19 @@ effectiveStdenv.mkDerivation (
         )
       ]
       ++ optionals useRocm [
-        (cmakeFeature "CMAKE_C_COMPILER" "hipcc")
-        (cmakeFeature "CMAKE_CXX_COMPILER" "hipcc")
-
-        # Build all targets supported by rocBLAS. When updating search for TARGET_LIST_ROCM
-        # in https://github.com/ROCmSoftwarePlatform/rocBLAS/blob/develop/CMakeLists.txt
-        # and select the line that matches the current nixpkgs version of rocBLAS.
-        # Should likely use `rocmPackages.clr.gpuTargets`.
-        "-DAMDGPU_TARGETS=gfx803;gfx900;gfx906:xnack-;gfx908:xnack-;gfx90a:xnack+;gfx90a:xnack-;gfx940;gfx941;gfx942;gfx1010;gfx1012;gfx1030;gfx1100;gfx1101;gfx1102"
+        (cmakeFeature "CMAKE_HIP_COMPILER" "${rocmPackages.llvm.clang}/bin/clang")
+        (cmakeFeature "CMAKE_HIP_ARCHITECTURES" (builtins.concatStringsSep ";" rocmPackages.clr.gpuTargets))
       ]
       ++ optionals useMetalKit [
         (lib.cmakeFeature "CMAKE_C_FLAGS" "-D__ARM_FEATURE_DOTPROD=1")
         (cmakeBool "LLAMA_METAL_EMBED_LIBRARY" (!precompileMetalShaders))
       ];
+
+    # Environment variables needed for ROCm
+    env = optionals useRocm {
+      ROCM_PATH = "${rocmPackages.clr}";
+      HIP_DEVICE_LIB_PATH = "${rocmPackages.rocm-device-libs}/amdgcn/bitcode";
+    };
 
     # TODO(SomeoneSerge): It's better to add proper install targets at the CMake level,
     # if they haven't been added yet.
