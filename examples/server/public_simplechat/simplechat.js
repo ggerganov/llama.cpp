@@ -2,6 +2,8 @@
 // A simple completions and chat/completions test related web front end logic
 // by Humans for All
 
+import * as du from "./datautils.mjs";
+
 class Roles {
     static System = "system";
     static User = "user";
@@ -479,6 +481,7 @@ class MultiChatUI {
                 assistantMsg = respBody["content"];
             }
         }
+        assistantMsg = du.trim_repeat_garbage_at_end(assistantMsg, 32);
         chat.add(Roles.Assistant, assistantMsg);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
@@ -619,6 +622,7 @@ let gMe;
 function startme() {
     console.log("INFO:SimpleChat:StartMe:Starting...");
     gMe = new Me();
+    document["gMe"] = gMe;
     for (let cid of gMe.defaultChatIds) {
         gMe.multiChat.new_chat_session(cid);
     }

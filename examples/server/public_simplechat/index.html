@@ -8,7 +8,14 @@
         <meta name="description" content="SimpleChat: trigger LLM web service endpoints /chat/completions and /completions, single/multi chat sessions" />
         <meta name="author" content="by Humans for All" />
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-        <script src="simplechat.js" defer></script>
+        <script type="importmap">
+            {
+                "imports": {
+                    "datautils": "./datautils.mjs"
+                }
+            }
+        </script>
+        <script src="simplechat.js" type="module" defer></script>
         <link rel="stylesheet" href="simplechat.css" />
     </head>
     <body>
