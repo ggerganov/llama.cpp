@@ -97,6 +97,17 @@ Once inside
 
 ## Devel note
 
+### Reason behind this
+
+The idea is to be easy enough to use for basic purposes, while also being simple and easily discernable
+by developers who may not be from web frontend background (so inturn may not be familiar with template /
+end-use-specific-language-extensions driven flows) so that they can use it to explore/experiment things.
+
+And given that the idea is also to help explore/experiment for developers, some flexibility is provided
+to change behaviour easily using the devel-tools/console, for now. And skeletal logic has been implemented
+to explore some of the end points and ideas/implications around them.
+
+
 ### General
 
 Me/gMe consolidates the settings which control the behaviour into one object.
