@@ -42,7 +42,7 @@ from gguf.huggingface_hub import HFHubModel, HFHubTokenizer
 logger = logging.getLogger(Path(__file__).stem)
 
 
-def main():
+def get_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("auth_token", help="A huggingface read auth token")
     parser.add_argument(
@@ -63,7 +63,11 @@ def main():
         choices=["SPM", "BPE", "WPM"],
         help="The name of the vocab type. Default is 'BPE'.",
     )
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = get_arguments()
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
