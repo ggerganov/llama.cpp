@@ -4450,6 +4450,7 @@ static void llm_load_vocab(
             vocab.special_pad_id  = 0;
             vocab.special_cls_id  = 101;
             vocab.special_mask_id = 103;
+            vocab.tokenizer_add_space_prefix = false;
         } else {
             if (tokenizer_model == "gpt2") {
                 vocab.type = LLAMA_VOCAB_TYPE_BPE;
@@ -4559,8 +4560,16 @@ static void llm_load_vocab(
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
-        } else {
+        } else if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            vocab.tokenizer_special_add_bos = true;
+            vocab.tokenizer_special_add_eos = false;
+        } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            vocab.tokenizer_special_add_bos = true;
+            vocab.tokenizer_special_add_eos = true;
+        } else {
+            throw std::runtime_error(format("unknown vocab type: '%d'", (int) vocab.type));
         }
     }
 
