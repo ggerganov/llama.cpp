@@ -13,7 +13,6 @@ from string import ascii_letters, digits
 import numpy as np
 
 from .constants import (
-    GGML_QUANT_SIZES,
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
     GGUF_VERSION,
@@ -25,6 +24,8 @@ from .constants import (
     PoolingType,
     TokenType,
 )
+
+from .quants import quant_shape_from_byte_shape
 
 logger = logging.getLogger(__name__)
 
@@ -229,10 +230,7 @@ class GGUFWriter:
         else:
             dtype = raw_dtype
             if tensor_dtype == np.uint8:
-                block_size, type_size = GGML_QUANT_SIZES[raw_dtype]
-                if tensor_shape[-1] % type_size != 0:
-                    raise ValueError(f"Quantized tensor row size ({tensor_shape[-1]}) is not a multiple of {dtype.name} type size ({type_size})")
-                tensor_shape = tuple(tensor_shape[:-1]) + (tensor_shape[-1] // type_size * block_size,)
+                tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
         n_dims = len(tensor_shape)
         self.ti_data += self._pack("I", n_dims)
         for i in range(n_dims):
