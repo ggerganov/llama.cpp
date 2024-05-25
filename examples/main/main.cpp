@@ -18,8 +18,6 @@
 #if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
 #include <signal.h>
 #include <unistd.h>
-#include <fcntl.h>
-#define SPECIAL_FILENO 3
 #elif defined (_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
@@ -120,16 +118,6 @@ static void llama_log_callback_logTee(ggml_log_level level, const char * text, v
 }
 
 int main(int argc, char ** argv) {
-#ifndef _MSC_VER
-    // Check if we have an external attachment to a file descriptor for out of band control tokens (e.g. bash `3>/dev/null` )
-    // Placed here to avoid file descriptor being polluted by gpt_params_parse() opening files
-    const bool control_token_file_descriptor_is_attached = fcntl(SPECIAL_FILENO, F_GETFL) != -1;
-    if (!control_token_file_descriptor_is_attached) {
-        // Duplicate stdout file descriptor to control token file descriptor to merge the two streams
-        dup2(STDOUT_FILENO, SPECIAL_FILENO);
-    }
-#endif
-
     gpt_params params;
     g_params = &params;
 
@@ -137,8 +125,6 @@ int main(int argc, char ** argv) {
         return 1;
     }
     llama_sampling_params & sparams = params.sparams;
-
-    const bool control_token_allowed_on_standard_stream = !params.conversation && sparams.grammar.empty();
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("main", "log"));
@@ -760,19 +746,11 @@ int main(int argc, char ** argv) {
                 if (!llama_token_is_control(llama_get_model(ctx), id)) {
                     // Stream Output Token To Standard Output
                     fprintf(stdout, "%s", token_str.c_str());
-                } else if (!params.no_special) {
-#ifndef _MSC_VER
-                    if (control_token_file_descriptor_is_attached) {
-                        // Stream Control Token To Special Token Output. Useful for debugging control token behaviour
-                        (void)! write(SPECIAL_FILENO, token_str.c_str(), token_str.length());
-                    } else
-#endif
-                    if (control_token_allowed_on_standard_stream)
-                    {
-                        // Stream Control Token To Standard Output Stream
-                        fprintf(stdout, "%s", token_str.c_str());
-                    }
+                } else if (!params.no_special && !params.conversation) {
+                    // Stream Control Token To Standard Output Stream
+                    fprintf(stdout, "%s", token_str.c_str());
                 }
+
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
                 if (embd.size() > 1) {
@@ -783,6 +761,7 @@ int main(int argc, char ** argv) {
                     output_tokens.push_back(id);
                     output_ss << token_str;
                 }
+
                 fflush(stdout);
             }
         }
