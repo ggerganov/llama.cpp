@@ -3,18 +3,24 @@
 Tokenizers Vocabulary Notes:
 
 Normalizers:
-TODO
+Normalizers are a set of operations applied to raw string input data to make it less random or “cleaner”. Common normalization operations include stripping whitespace, removing accented characters or lowercasing all text. The Hugging Face `tokenizers` library provides various Normalizer classes that can be combined using a normalizers.Sequence to apply multiple normalization operations in sequence on the input data before tokenization takes place.
 
-Pre-tokenizers:
+Pre-Tokenization:
+Pre-Tokenization encompasses identifying characters and their types, including letters, numbers, whitespace, etc., prior to applying actual tokenization or feeding the data into machine learning models. The Hugging Face `tokenizers` library provides several Pre-tokenizer classes that can be used for different purposes such as Byte Level pre-tokenization (using openai/gpt-2 RegEx by default) and BERT pre-tokenization, which inherits from Byte Level tokenization but has some differences in its behavior.
 
-Byte Level Pre-tokenization uses openai/gpt-2 RegEx from `encoder.py` by default.
-There are other Pre-tokenization types, e.g. BERT, which inherits from Byte Level
-The defaults for each RegEx are identical in either case.
+Pre-Tokenization Types:
 
-Pre-Tokenization encompasses identify characters and their types
-- A pattern may match a type of "Sequence"
-- Letters and Numbers: Alphabetic or Alphanumeric
-- Whitespace:
+1. Byte Level Pre-tokenization:
+   - Default regular expression used for pattern matching is taken from openai/gpt-2 `encoder.py`.
+
+2. BERT pre-tokenization (inherits from Byte Level):
+   - Differences in behavior compared to the default Byte Level tokenizer, but defaults for each RegEx are identical in either case.
+
+Pre-Tokenization Character Types:
+
+1. Sequence: Matches a sequence of characters that should be treated as a single unit during preprocessing or tokenization.
+2. Letters and Numbers (Alphabetic/Alphanumeric): Characters belonging to the alphabet or mixed combinations of letters and numbers, respectively.
+3. Whitespace: Spaces, tabs, newlines, etc., that separate words or other units in the text data.
 """
 from __future__ import annotations
 
