@@ -19337,7 +19337,7 @@ static bool __thread_affinity(bool * mask) {
         }
     }
 
-    DWORD_PTR m = (DWORD_PTR)mask;
+    DWORD_PTR m = (DWORD_PTR)bitmask;
 
     m = SetThreadAffinityMask(h, m);
 
