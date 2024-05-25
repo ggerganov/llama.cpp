@@ -48,6 +48,7 @@ models-mnt
 /beam-search
 /benchmark-matmult
 /convert-llama2c-to-ggml
+/duo
 /embd-input-test
 /embedding
 /eval-callback

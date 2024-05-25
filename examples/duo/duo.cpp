@@ -48,7 +48,7 @@ using llama_tokens = std::vector<llama_token>;
 struct speculation_context
 {
     llama_tokens candidate;
-    int32_t      active_id;
+    int32_t      vacant_id; // not running main model
     std::mutex   mtx;
     bool         done;
 };
@@ -60,8 +60,7 @@ static void split_done_cb(int split)
     if (split == 1 || split == 2)
     {
         std::lock_guard<std::mutex> guard(spec_ctx.mtx);
-        fprintf(stderr, "split_done = %d\n", split);
-        spec_ctx.active_id = split - 1;
+        spec_ctx.vacant_id = split - 1;
     }
 }
 
@@ -97,12 +96,10 @@ static std::vector<llama_token> greedy_tokens(
 }
 
 static int speculation(
-    std::vector<llama_model *> model,
+    llama_model * model,
     speculation_context * spec_ctx,
-    std::vector<llama_context *> ctx,
+    llama_context * ctx,
     llama_tokens input /* copy here */) {
-
-    int32_t active = 1;
 
     llama_batch batch = llama_batch_init(512, 0, 1);
 
@@ -113,7 +110,7 @@ static int speculation(
 
     batch.logits[batch.n_tokens - 1] = true;
 
-    if (llama_decode(ctx[active], batch) != 0) {
+    if (llama_decode(ctx, batch) != 0) {
         LOG_TEE("%s: llama_decode() failed\n", __func__);
         return 1;
     }
@@ -129,7 +126,11 @@ static int speculation(
         bool wait = false;
         {
             std::lock_guard<std::mutex> g(spec_ctx->mtx);
-            if (spec_ctx->active_id != 0)
+            if (spec_ctx->done)
+            {
+                break;
+            }
+            if (spec_ctx->vacant_id != 0)
             {
                 wait = true;
             }
@@ -141,7 +142,7 @@ static int speculation(
         }
 
 
-        auto next_tokens = greedy_tokens(model[active], ctx[active], logit_idx, logit_idx + 1);
+        auto next_tokens = greedy_tokens(model, ctx, logit_idx, logit_idx + 1);
         if (next_tokens.size() != 1) {
             fprintf(stderr, "invalid next tokens\n");
             return 1;
@@ -151,10 +152,6 @@ static int speculation(
 
         {
             std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
-            if (spec_ctx->done)
-            {
-                break;
-            }
             auto& shared = spec_ctx->candidate;
             bool match = true;
             match_len = local.size() - 1;
@@ -164,9 +161,7 @@ static int speculation(
                 {
                     match = false;
                     match_len = i;
-                    // here we need to clear both contexts
-                    llama_kv_cache_seq_rm(ctx[0], 0, i, -1);
-                    //llama_kv_cache_seq_rm(ctx[1], 0, i, -1);
+                    llama_kv_cache_seq_rm(ctx, 0, i, -1);
                     break;
                 }
             }
@@ -177,11 +172,6 @@ static int speculation(
             else 
             {
                 local = shared;
-            }
-            if (active != spec_ctx->active_id)
-            {
-                active = spec_ctx->active_id;
-                fprintf(stderr, "updating active_id = %d\n", active);
             }
         }
 
@@ -194,7 +184,7 @@ static int speculation(
 
         logit_idx = batch.n_tokens - 1;
 
-        if (llama_decode(ctx[active], batch) != 0)
+        if (llama_decode(ctx, batch) != 0)
         {
             fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
@@ -317,20 +307,15 @@ static int target(
             break;
         }
 
-        fprintf(stderr, "\ntgt: input_seq.size() = %zu\n", input_seq.size());
-
         llama_batch_clear(batch);
         for (size_t i = 0; i < input_seq.size(); i++)
         {
             llama_batch_add(batch, input_seq[i], n_cur - 1 + i, { 0 }, true);
         }
-        auto s_us = ggml_time_us();
         if (llama_decode(ctx, batch)) {
             fprintf(stderr, "%s : failed to eval, return code %d\n", __func__, 1);
             return 1;
         }
-        auto eval_us = ggml_time_us() - s_us;
-        fprintf(stderr, "eval_time: %lld", eval_us);
         logits_from = 0;
         logits_to   = input_seq.size();
     }
@@ -362,14 +347,6 @@ int main(int argc, char ** argv) {
         params.seed = time(NULL);
     }
 
-    std::string draft_rpcs = params.rpc_servers_draft;
-    size_t i = draft_rpcs.find(',');
-    if (i == std::string::npos || draft_rpcs.find(',', i + 1) != std::string::npos)
-    {
-        fprintf(stderr, "drpc must contain exactly two servers\n");
-        return 1;
-    }
-
     llama_backend_init();
     llama_numa_init(params.numa);
 
@@ -383,8 +360,8 @@ int main(int argc, char ** argv) {
     spec_ctx.candidate = input;
 
     // prepare draft model and contexts. No need for two model instances?
-    std::vector<llama_model *> draft_models = {nullptr, nullptr};
-    std::vector<llama_context *> draft_ctx  = {nullptr, nullptr};
+    llama_model * draft_model = nullptr;
+    llama_context * draft_ctx = nullptr;
 
     params.model = params.model_draft;
     params.n_gpu_layers = params.n_gpu_layers_draft;
@@ -395,23 +372,19 @@ int main(int argc, char ** argv) {
     params.n_threads_batch = params.n_threads_batch_draft;
 
     params.cb_split_done = nullptr;
-    params.rpc_servers = draft_rpcs.substr(0, i);
-    std::tie(draft_models[0], draft_ctx[0]) = llama_init_from_gpt_params(params);
-    params.rpc_servers = draft_rpcs.substr(i + 1);
-    std::tie(draft_models[1], draft_ctx[1]) = llama_init_from_gpt_params(params);
-    std::thread spec_thread = std::thread(speculation, draft_models, &spec_ctx, draft_ctx, input);
+    params.rpc_servers = params.rpc_servers_draft;
+    std::tie(draft_model, draft_ctx) = llama_init_from_gpt_params(params);
+    std::thread spec_thread = std::thread(speculation, draft_model, &spec_ctx, draft_ctx, input);
 
     target(model, ctx, input, params.n_predict);
 
     spec_thread.join();
     
     llama_free(ctx);
-    llama_free(draft_ctx[0]);
-    llama_free(draft_ctx[1]);
+    llama_free(draft_ctx);
 
     llama_free_model(model);
-    llama_free_model(draft_models[0]);
-    llama_free_model(draft_models[1]);
+    llama_free_model(draft_model);
 
     llama_backend_free();
 
