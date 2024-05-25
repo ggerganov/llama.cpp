@@ -72,14 +72,26 @@ export function trim_repeat_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThresho
 
 /**
  * A simple minded try trim garbage at end using histogram characteristics
+ *
+ * Allow the garbage to contain upto maxUniq chars, but at the same time ensure that
+ * a given type of char ie numerals or alphabets or other types dont cross the specified
+ * maxType limit. This allows intermixed text garbage to be identified and trimmed.
+ *
+ * ALERT: This is not perfect and only provides a rough garbage identification logic.
+ * Also it currently only differentiates between character classes wrt english.
+ *
  * @param {string} sIn
+ * @param {number} maxType
  * @param {number} maxUniq
  * @param {number} maxMatchLenThreshold
  */
-export function trim_hist_garbage_at_end(sIn, maxUniq, maxMatchLenThreshold) {
+export function trim_hist_garbage_at_end(sIn, maxType, maxUniq, maxMatchLenThreshold) {
     if (sIn.length < maxMatchLenThreshold) {
         return { trimmed: false, data: sIn };
     }
+    let iAlp = 0;
+    let iNum = 0;
+    let iOth = 0;
     // Learn
     let hist = {};
     let iUniq = 0;
@@ -88,6 +100,13 @@ export function trim_hist_garbage_at_end(sIn, maxUniq, maxMatchLenThreshold) {
         if (c in hist) {
             hist[c] += 1;
         } else {
+            if(c.match(/[0-9]/) != null) {
+                iNum += 1;
+            } else if(c.match(/[A-Za-z]/) != null) {
+                iAlp += 1;
+            } else {
+                iOth += 1;
+            }
             iUniq += 1;
             if (iUniq >= maxUniq) {
                 break;
@@ -96,6 +115,9 @@ export function trim_hist_garbage_at_end(sIn, maxUniq, maxMatchLenThreshold) {
         }
     }
     console.log("DBUG:TrimHistGarbage:", hist);
+    if ((iAlp > maxType) || (iNum > maxType) || (iOth > maxType)) {
+        return { trimmed: false, data: sIn };
+    }
     // Catch and Trim
     for(let i=0; i < sIn.length; i++) {
         let c = sIn[sIn.length-1-i];
@@ -112,13 +134,14 @@ export function trim_hist_garbage_at_end(sIn, maxUniq, maxMatchLenThreshold) {
 /**
  * Keep trimming repeatedly using hist_garbage logic, till you no longer can
  * @param {any} sIn
- * @param {number} maxSubL
+ * @param {number} maxType
+ * @param {number} maxUniq
  * @param {number} maxMatchLenThreshold
  */
-export function trim_hist_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThreshold) {
+export function trim_hist_garbage_at_end_loop(sIn, maxType, maxUniq, maxMatchLenThreshold) {
     let sCur = sIn;
     while (true) {
-        let got = trim_hist_garbage_at_end(sCur, maxSubL, maxMatchLenThreshold);
+        let got = trim_hist_garbage_at_end(sCur, maxType, maxUniq, maxMatchLenThreshold);
         if (!got.trimmed) {
             return got.data;
         }

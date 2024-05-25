@@ -481,7 +481,7 @@ class MultiChatUI {
                 assistantMsg = respBody["content"];
             }
         }
-        assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 12, 72);
+        assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 8, 16, 72);
         chat.add(Roles.Assistant, assistantMsg);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
