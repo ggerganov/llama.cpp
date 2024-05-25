@@ -42,16 +42,28 @@ export function trim_repeat_garbage_at_end(sIn, maxSubL=10, maxMatchLenThreshold
 
 /**
  * Simple minded logic to help remove repeating garbage at end of the string, till it cant.
+ * If its not able to trim, then it will try to skip a char at end and then trim, a few times.
  * @param {string} sIn
  * @param {number} maxSubL
  * @param {number | undefined} [maxMatchLenThreshold]
  */
-export function trim_repeat_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThreshold) {
+export function trim_repeat_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThreshold, skipMax=16) {
     let sCur = sIn;
+    let sSaved = "";
+    let iTry = 0;
     while(true) {
         let got = trim_repeat_garbage_at_end(sCur, maxSubL, maxMatchLenThreshold);
         if (got.trimmed != true) {
-            return got.data;
+            if (iTry == 0) {
+                sSaved = got.data;
+            }
+            iTry += 1;
+            if (iTry >= skipMax) {
+                return sSaved;
+            }
+            got.data = got.data.substring(0,got.data.length-1);
+        } else {
+            iTry = 0;
         }
         sCur = got.data;
     }
