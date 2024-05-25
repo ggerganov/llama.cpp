@@ -12365,7 +12365,11 @@ struct llm_tokenizer_bpe {
         }
     }
 
-    bool add_special_bos(std::vector<llama_vocab::id> & output) const {
+    void append(const llama_vocab::id token_id, std::vector<llama_vocab::id> & output) const {
+        output.push_back(token_id);
+    }
+
+    bool append_bos(std::vector<llama_vocab::id> & output) const {
         if (special_add_bos) {
             GGML_ASSERT(vocab.special_bos_id != -1);
             output.push_back(vocab.special_bos_id);
@@ -12374,7 +12378,7 @@ struct llm_tokenizer_bpe {
         return false;
     }
 
-    bool add_special_eos(std::vector<llama_vocab::id> & output) const {
+    bool append_eos(std::vector<llama_vocab::id> & output) const {
         if (special_add_eos) {
             GGML_ASSERT(vocab.special_eos_id != -1);
             output.push_back(vocab.special_eos_id);
@@ -12383,7 +12387,7 @@ struct llm_tokenizer_bpe {
         return false;
     }
 
-    void check_add_special(const std::vector<llama_vocab::id> & output) const {
+    void check_double_bos_eos(const std::vector<llama_vocab::id> & output) const {
         if (special_add_bos && output.size() >= 2 && output[1] == vocab.special_bos_id) {
             LLAMA_LOG_WARN(
                 "%s: Added a BOS token to the prompt as specified by the model but the prompt "
@@ -12890,7 +12894,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 llm_tokenizer_bpe tokenizer(vocab);
 
                 if (add_special) {
-                    tokenizer.add_special_bos(output);
+                    tokenizer.append_bos(output);
                 }
 
                 for (const auto & fragment : fragment_buffer) {
@@ -12902,13 +12906,13 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 #endif
                         tokenizer.tokenize(raw_text, output);
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
-                        output.push_back(fragment.token);
+                        tokenizer.append(fragment.token, output);
                     }
                 }
 
                 if (add_special) {
-                    tokenizer.add_special_eos(output);
-                    tokenizer.check_add_special(output);
+                    tokenizer.append_eos(output);
+                    tokenizer.check_double_bos_eos(output);
                 }
             } break;
         case LLAMA_VOCAB_TYPE_WPM:
