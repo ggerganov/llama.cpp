@@ -12722,7 +12722,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
 
             // if a fragment is text ( not yet processed )
             if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                auto * raw_text = &(fragment.raw_text);
+                auto & raw_text = fragment.raw_text;
 
                 auto raw_text_base_offset = fragment.offset;
                 auto raw_text_base_length = fragment.length;
@@ -12732,7 +12732,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     // find the first occurrence of a given special token in this fragment
                     //  passing offset argument only limit the "search area" but match coordinates
                     //  are still relative to the source full raw_text
-                    auto match = raw_text->find(special_token, raw_text_base_offset);
+                    auto match = raw_text.find(special_token, raw_text_base_offset);
 
                     // no occurrences found, stop processing this fragment for a given special token
                     if (match == std::string::npos) break;
@@ -12750,13 +12750,22 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     if (match > raw_text_base_offset) {
                         // left
                         const int64_t left_reminder_offset = raw_text_base_offset + 0;
-                        const int64_t left_reminder_length = match - raw_text_base_offset;
-                        buffer.emplace_after(it, (*raw_text), left_reminder_offset, left_reminder_length);
+                        int64_t left_reminder_length = match - raw_text_base_offset;
+
+                        if (vocab.tokenizer_mask_lstrip && special_id == vocab.special_mask_id) {  //TODO: generalize, this only checks special_mask_id
+                            while (left_reminder_length > 0 && isspace(raw_text[left_reminder_offset + left_reminder_length - 1])) {
+                                left_reminder_length--;
+                            }
+                        }
+
+                        if (left_reminder_length > 0) {
+                            buffer.emplace_after(it, raw_text, left_reminder_offset, left_reminder_length);
+                            it++;
+                        }
 
 #ifdef PRETOKENIZERDEBUG
                         LLAMA_LOG_WARN("FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
 #endif
-                        it++;
                     }
 
                     // special token
@@ -12767,7 +12776,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     if (match + special_token.length() < raw_text_base_offset + raw_text_base_length) {
                         const int64_t right_reminder_offset = match + special_token.length();
                         const int64_t right_reminder_length = raw_text_base_length - ((match - raw_text_base_offset) + special_token.length());
-                        buffer.emplace_after(it, (*raw_text), right_reminder_offset, right_reminder_length);
+                        buffer.emplace_after(it, raw_text, right_reminder_offset, right_reminder_length);
 
 #ifdef PRETOKENIZERDEBUG
                         LLAMA_LOG_WARN("FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
