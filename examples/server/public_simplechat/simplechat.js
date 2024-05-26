@@ -586,7 +586,7 @@ class Me {
         });
         elDiv.appendChild(bb);
 
-        let sel = ui.el_create_select("SetChatHistoryInCtxt", Object.keys(this.sRecentUserMsgCnt), "Last0", (val)=>{
+        let sel = ui.el_create_select("SetChatHistoryInCtxt", this.sRecentUserMsgCnt, this.iRecentUserMsgCnt, (val)=>{
             this.iRecentUserMsgCnt = this.sRecentUserMsgCnt[val];
         });
         elDiv.appendChild(sel);

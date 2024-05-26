@@ -86,19 +86,19 @@ export function el_create_boolbutton(id, texts, defaultValue, cb) {
 
 /**
  * @param {string} id
- * @param {string[]} options
- * @param {string} defaultOption
+ * @param {Object<string,*>} options
+ * @param {*} defaultOption
  * @param {function(string):void} cb
  */
 export function el_create_select(id, options, defaultOption, cb) {
     let el = document.createElement("select");
     el["xselected"] = defaultOption;
     el["xoptions"] = structuredClone(options);
-    for(let cur of options) {
+    for(let cur of Object.keys(options)) {
         let op = document.createElement("option");
         op.value = cur;
         op.innerText = cur;
-        if (cur == defaultOption) {
+        if (options[cur] == defaultOption) {
             op.selected = true;
         }
         el.appendChild(op);
@@ -107,7 +107,7 @@ export function el_create_select(id, options, defaultOption, cb) {
         el.id = id;
         el.name = id;
     }
-    el.addEventListener('click', (ev)=>{
+    el.addEventListener('change', (ev)=>{
         let target = /** @type{HTMLSelectElement} */(ev.target);
         console.log("DBUG:UI:Select:", id, ":", target.value);
         cb(target.value);
