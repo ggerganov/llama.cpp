@@ -60,3 +60,26 @@ export function el_create_append_p(text, elParent=undefined, id=undefined) {
     }
     return para;
 }
+
+/**
+ * Create a para and set it up. Optionaly append it to a passed parent.
+ * @param {string} id
+ * @param {{true: string, false: string}} texts
+ * @param {boolean} defaultValue
+ * @param {function(boolean):void} cb
+ */
+export function el_create_boolbutton(id, texts, defaultValue, cb) {
+    let el = document.createElement("button");
+    el["xbool"] = defaultValue;
+    el["xtexts"] = structuredClone(texts);
+    el.innerText = el["xtexts"][String(defaultValue)];
+    if (id) {
+        el.id = id;
+    }
+    el.addEventListener('click', (ev)=>{
+        el["xbool"] = !el["xbool"];
+        el.innerText = el["xtexts"][String(el["xbool"])];
+        cb(el["xbool"]);
+    })
+    return el;
+}

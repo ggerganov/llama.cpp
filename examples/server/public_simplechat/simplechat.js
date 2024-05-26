@@ -134,6 +134,7 @@ class SimpleChat {
             if (bClear) {
                 div.innerHTML = gUsageMsg;
                 gMe.show_info(div);
+                gMe.show_settings(div);
             }
         }
     }
@@ -560,6 +561,24 @@ class Me {
         ui.el_create_append_p(`iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`, elDiv);
 
         ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`, elDiv);
+
+    }
+
+    /**
+     * Show settings ui for configurable parameters, in the passed Div element.
+     * @param {HTMLDivElement} elDiv
+     */
+    show_settings(elDiv) {
+
+        let bb = ui.el_create_boolbutton("SetCompletionFreshChatAlways", {true: "[+] CompletionFreshChatAlways", false: "[-] CompletionFreshChatAlways"}, this.bCompletionFreshChatAlways, (val)=>{
+            this.bCompletionFreshChatAlways = val;
+        });
+        elDiv.appendChild(bb);
+
+        bb = ui.el_create_boolbutton("SetCompletionInsertStandardRolePrefix", {true: "[+] CompletionInsertStandardRolePrefix", false: "[-] CompletionInsertStandardRolePrefix"}, this.bCompletionInsertStandardRolePrefix, (val)=>{
+            this.bCompletionInsertStandardRolePrefix = val;
+        });
+        elDiv.appendChild(bb);
 
     }
 
