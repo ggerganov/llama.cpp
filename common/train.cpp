@@ -1052,7 +1052,7 @@ struct train_params_common get_default_train_params_common() {
 
     params.custom_n_ctx = false;
 
-    params.use_flash              = true;
+    params.use_flash              = false;
     params.use_checkpointing      = true;
 
     params.sample_start           = "";

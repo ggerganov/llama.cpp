@@ -85,6 +85,7 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_QWEN2          = 11,
         LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
         LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
+        LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -822,6 +823,9 @@ extern "C" {
 
     // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
     LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+
+    // Identify if Token Id is a control token or a render-able token
+    LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence

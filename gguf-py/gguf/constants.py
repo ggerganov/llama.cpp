@@ -139,6 +139,7 @@ class MODEL_ARCH(IntEnum):
     COMMAND_R  = auto()
     DBRX       = auto()
     OLMO       = auto()
+    ARCTIC     = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -167,6 +168,7 @@ class MODEL_TENSOR(IntEnum):
     FFN_DOWN           = auto()
     FFN_UP             = auto()
     FFN_ACT            = auto()
+    FFN_NORM_EXP       = auto()
     FFN_GATE_EXP       = auto()
     FFN_DOWN_EXP       = auto()
     FFN_UP_EXP         = auto()
@@ -218,6 +220,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
+    MODEL_ARCH.ARCTIC:         "arctic",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -251,6 +254,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_DOWN_SHEXP:     "blk.{bid}.ffn_down_shexp",
     MODEL_TENSOR.FFN_UP_SHEXP:       "blk.{bid}.ffn_up_shexp",
     MODEL_TENSOR.FFN_ACT:            "blk.{bid}.ffn",
+    MODEL_TENSOR.FFN_NORM_EXP:       "blk.{bid}.ffn_norm_exps",
     MODEL_TENSOR.FFN_GATE_EXP:       "blk.{bid}.ffn_gate_exps",
     MODEL_TENSOR.FFN_DOWN_EXP:       "blk.{bid}.ffn_down_exps",
     MODEL_TENSOR.FFN_UP_EXP:         "blk.{bid}.ffn_up_exps",
@@ -731,6 +735,27 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.ARCTIC: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_NORM_EXP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
     ],
     # TODO
 }

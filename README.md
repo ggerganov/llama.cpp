@@ -203,6 +203,10 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
+**Tools:**
+
+- [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
+
 ---
 
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
