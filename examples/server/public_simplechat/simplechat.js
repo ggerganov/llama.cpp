@@ -540,9 +540,9 @@ class Me {
         this.chatRequestOptions = {
             "temperature": 0.7,
             "max_tokens": 1024,
-            "frequency_penalty": 1.2,
-            "presence_penalty": 1.2,
-            "n_predict": 1024
+            "n_predict": 1024,
+            //"frequency_penalty": 1.2,
+            //"presence_penalty": 1.2,
         };
     }
 
