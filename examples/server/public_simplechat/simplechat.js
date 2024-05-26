@@ -134,7 +134,6 @@ class SimpleChat {
             if (bClear) {
                 div.innerHTML = gUsageMsg;
                 gMe.show_info(div);
-                gMe.show_settings(div);
             }
         }
     }
@@ -266,12 +265,14 @@ class MultiChatUI {
         this.elInUser = /** @type{HTMLInputElement} */(document.getElementById("user-in"));
         this.elSelectApiEP = /** @type{HTMLSelectElement} */(document.getElementById("api-ep"));
         this.elDivSessions = /** @type{HTMLDivElement} */(document.getElementById("sessions-div"));
+        this.elBtnSettings = /** @type{HTMLButtonElement} */(document.getElementById("settings"));
 
         this.validate_element(this.elInSystem, "system-in");
         this.validate_element(this.elDivChat, "chat-div");
         this.validate_element(this.elInUser, "user-in");
         this.validate_element(this.elSelectApiEP, "api-ep");
         this.validate_element(this.elDivChat, "sessions-div");
+        this.validate_element(this.elBtnSettings, "settings");
     }
 
     /**
@@ -311,6 +312,11 @@ class MultiChatUI {
         if (bSwitchSession) {
             this.handle_session_switch(this.curChatId);
         }
+
+        this.elBtnSettings.addEventListener("click", (ev)=>{
+            this.elDivChat.replaceChildren();
+            gMe.show_settings(this.elDivChat);
+        });
 
         this.elBtnUser.addEventListener("click", (ev)=>{
             if (this.elInUser.disabled) {
