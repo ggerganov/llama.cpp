@@ -11142,7 +11142,7 @@ struct llm_build_context {
                     model.layers[il].ffn_down_exps,
                     n_expert, n_expert_used,
                     LLM_FFN_SILU, true,
-                    true, hparams.expert_weights_scale,
+                    false, 0.0,
                     cb, il);
             cb(cur, "ffn_moe_out", il);
 
