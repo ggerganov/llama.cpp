@@ -582,12 +582,12 @@ class Me {
      */
     show_settings(elDiv) {
 
-        let bb = ui.el_creatediv_boolbutton("SetCompletionFreshChatAlways", "CompletionFreshChatAlways", {true: "[+] CompletionFreshChatAlways", false: "[-] CompletionFreshChatAlways"}, this.bCompletionFreshChatAlways, (val)=>{
+        let bb = ui.el_creatediv_boolbutton("SetCompletionFreshChatAlways", "CompletionFreshChatAlways", {true: "[+] yes fresh", false: "[-] no, with history"}, this.bCompletionFreshChatAlways, (val)=>{
             this.bCompletionFreshChatAlways = val;
         });
         elDiv.appendChild(bb);
 
-        bb = ui.el_creatediv_boolbutton("SetCompletionInsertStandardRolePrefix", "CompletionInsertStandardRolePrefix", {true: "[+] CompletionInsertStandardRolePrefix", false: "[-] CompletionInsertStandardRolePrefix"}, this.bCompletionInsertStandardRolePrefix, (val)=>{
+        bb = ui.el_creatediv_boolbutton("SetCompletionInsertStandardRolePrefix", "CompletionInsertStandardRolePrefix", {true: "[+] yes insert", false: "[-] dont insert"}, this.bCompletionInsertStandardRolePrefix, (val)=>{
             this.bCompletionInsertStandardRolePrefix = val;
         });
         elDiv.appendChild(bb);
