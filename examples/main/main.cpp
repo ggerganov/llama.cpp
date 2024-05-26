@@ -740,16 +740,10 @@ int main(int argc, char ** argv) {
         // display text
         if (input_echo && display) {
             for (auto id : embd) {
-                const std::string token_str = llama_token_to_piece(ctx, id);
+                const std::string token_str = llama_token_to_piece(ctx, id, params.special);
 
                 // Console/Stream Output
-                if (!llama_token_is_control(llama_get_model(ctx), id)) {
-                    // Stream Output Token To Standard Output
-                    fprintf(stdout, "%s", token_str.c_str());
-                } else if (!params.no_special && !params.conversation) {
-                    // Stream Control Token To Standard Output Stream
-                    fprintf(stdout, "%s", token_str.c_str());
-                }
+                fprintf(stdout, "%s", token_str.c_str());
 
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
