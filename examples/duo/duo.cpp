@@ -38,15 +38,13 @@ struct speculation_context
     bool         done;
 };
 
-speculation_context spec_ctx;
-
-// pass void * spec_ctx
-static void split_done_cb(int split)
+static void split_done_cb(int split, void * p_spec_ctx)
 {
     if (split == 1 || split == 2)
     {
-        std::lock_guard<std::mutex> guard(spec_ctx.mtx);
-        spec_ctx.vacant_id = split - 1;
+        auto * spec_ctx = static_cast<speculation_context*>(p_spec_ctx);
+        std::lock_guard<std::mutex> guard(spec_ctx->mtx);
+        spec_ctx->vacant_id = split - 1;
     }
 }
 
@@ -170,7 +168,8 @@ static int speculation(
 }
 
 static int target(
-    llama_model * model, 
+    llama_model * model,
+    speculation_context * spec_ctx,
     llama_context * ctx,
     const llama_tokens& input,
     size_t n_predict)
@@ -238,8 +237,8 @@ static int target(
         }
 
         {
-            std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
-            auto & spec = spec_ctx.candidate;
+            std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
+            auto & spec = spec_ctx->candidate;
             size_t n_match = 0;
             for (size_t i = 0; i < next_tokens.size() && i + next_tokens_pos < spec.size(); i++)
             {
@@ -285,8 +284,8 @@ static int target(
     llama_print_timings(ctx);
     fprintf(stderr, "\n");
     {
-        std::lock_guard<std::mutex> _lock(spec_ctx.mtx);
-        spec_ctx.done = true;
+        std::lock_guard<std::mutex> _lock(spec_ctx->mtx);
+        spec_ctx->done = true;
     }
 
     llama_batch_free(batch);
@@ -306,11 +305,13 @@ int main(int argc, char ** argv) {
 
     llama_backend_init();
     llama_numa_init(params.numa);
+    speculation_context spec_ctx;
 
     // main model and context
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
     params.cb_split_done = split_done_cb;
+    params.cb_split_done_user_data = &spec_ctx;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
     llama_tokens input = llama_tokenize(ctx, params.prompt, true);
@@ -333,7 +334,7 @@ int main(int argc, char ** argv) {
     std::tie(draft_model, draft_ctx) = llama_init_from_gpt_params(params);
     std::thread spec_thread = std::thread(speculation, draft_model, &spec_ctx, draft_ctx, input);
 
-    target(model, ctx, input, params.n_predict);
+    target(model, &spec_ctx, ctx, input, params.n_predict);
 
     spec_thread.join();
     

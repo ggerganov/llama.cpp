@@ -177,7 +177,7 @@ extern "C" {
 
     // if set will be called when a split is completed computation
     // is useful for distributed task orchestraction
-    typedef void (*ggml_backend_sched_split_done_callback)(int split);
+    typedef void (*ggml_backend_sched_split_done_callback)(int split, void * user_data);
 
     // Initialize a backend scheduler
     GGML_API ggml_backend_sched_t ggml_backend_sched_new(ggml_backend_t * backends, ggml_backend_buffer_type_t * bufts, int n_backends, size_t graph_size, bool parallel);
@@ -208,7 +208,7 @@ extern "C" {
     GGML_API void                 ggml_backend_sched_set_eval_callback(ggml_backend_sched_t sched, ggml_backend_sched_eval_callback callback, void * user_data);
 
     // Set a callback to be called for each resulting node during graph compute
-    GGML_API void                 ggml_backend_sched_set_split_done_callback(ggml_backend_sched_t sched, ggml_backend_sched_split_done_callback callback);
+    GGML_API void                 ggml_backend_sched_set_split_done_callback(ggml_backend_sched_t sched, ggml_backend_sched_split_done_callback callback, void * user_data);
 
     //
     // Utils

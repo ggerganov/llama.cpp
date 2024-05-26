@@ -1923,6 +1923,7 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.cb_eval           = params.cb_eval;
     cparams.cb_eval_user_data = params.cb_eval_user_data;
     cparams.cb_split_done     = params.cb_split_done;
+    cparams.cb_split_done_user_data = params.cb_split_done_user_data;
     cparams.offload_kqv       = !params.no_kv_offload;
     cparams.flash_attn        = params.flash_attn;
 

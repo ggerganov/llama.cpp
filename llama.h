@@ -290,6 +290,7 @@ extern "C" {
         ggml_backend_sched_eval_callback cb_eval;
         void * cb_eval_user_data;
         ggml_backend_sched_split_done_callback cb_split_done;
+        void * cb_split_done_user_data;
         
         enum ggml_type type_k; // data type for K cache
         enum ggml_type type_v; // data type for V cache
