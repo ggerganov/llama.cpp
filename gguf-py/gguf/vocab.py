@@ -15,9 +15,6 @@ from .gguf_writer import GGUFWriter
 
 logger = logging.getLogger(__name__)
 
-ADDED_TOKENS_FILE = 'added_tokens.json'
-FAST_TOKENIZER_FILE = 'tokenizer.json'
-
 
 class SpecialVocab:
     merges: list[str]
@@ -212,13 +209,13 @@ class BpeVocab(Vocab):
 
             try:
                 # FIXME: Verify that added tokens here _cannot_ overlap with the main vocab.
-                with open(base_path / ADDED_TOKENS_FILE, encoding="utf-8") as f:
+                with open(base_path / 'added_tokens.json', encoding="utf-8") as f:
                     added_tokens = json.load(f)
             except FileNotFoundError:
                 pass
         else:
             # "fast" tokenizer
-            fname_tokenizer = base_path / FAST_TOKENIZER_FILE
+            fname_tokenizer = base_path / 'tokenizer.json'
 
             # if this fails, FileNotFoundError propagates to caller
             with open(fname_tokenizer, encoding="utf-8") as f:
@@ -282,7 +279,7 @@ class SentencePieceVocab(Vocab):
         if (fname_tokenizer := base_path / 'tokenizer.model').exists():
             # normal location
             try:
-                with open(base_path / ADDED_TOKENS_FILE, encoding="utf-8") as f:
+                with open(base_path / 'added_tokens.json', encoding="utf-8") as f:
                     added_tokens = json.load(f)
             except FileNotFoundError:
                 pass
@@ -350,7 +347,7 @@ class LlamaHfVocab(Vocab):
     name = "hfft"
 
     def __init__(self, base_path: Path):
-        fname_tokenizer = base_path / FAST_TOKENIZER_FILE
+        fname_tokenizer = base_path / 'tokenizer.json'
         # if this fails, FileNotFoundError propagates to caller
         with open(fname_tokenizer, encoding='utf-8') as f:
             tokenizer_json = json.load(f)
