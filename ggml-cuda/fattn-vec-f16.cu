@@ -92,6 +92,10 @@ static __global__ void flash_attn_vec_ext_f16(
         for (int j0 = 0; j0 < ncols; j0 += nwarps) {
             const int j = j0 + threadIdx.y;
 
+            if (j0 + nwarps > ncols && j >= ncols) {
+                break;
+            }
+
             // Reuse KQ as temporary storage for converting Q to q8_1:
             int   * tmp_q_i32 = (int   *) &KQ[j*D];
             half2 * tmp_q_ds  = (half2 *) (tmp_q_i32 + D/sizeof(int));
