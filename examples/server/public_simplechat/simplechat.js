@@ -3,6 +3,7 @@
 // by Humans for All
 
 import * as du from "./datautils.mjs";
+import * as ui from "./ui.mjs"
 
 class Roles {
     static System = "system";
@@ -251,46 +252,6 @@ let gChatURL = {
 }
 
 
-/**
- * Set the class of the children, based on whether it is the idSelected or not.
- * @param {HTMLDivElement} elBase
- * @param {string} idSelected
- * @param {string} classSelected
- * @param {string} classUnSelected
- */
-function el_children_config_class(elBase, idSelected, classSelected, classUnSelected="") {
-    for(let child of elBase.children) {
-        if (child.id == idSelected) {
-            child.className = classSelected;
-        } else {
-            child.className = classUnSelected;
-        }
-    }
-}
-
-/**
- * Create button and set it up.
- * @param {string} id
- * @param {(this: HTMLButtonElement, ev: MouseEvent) => any} callback
- * @param {string | undefined} name
- * @param {string | undefined} innerText
- */
-function el_create_button(id, callback, name=undefined, innerText=undefined) {
-    if (!name) {
-        name = id;
-    }
-    if (!innerText) {
-        innerText = id;
-    }
-    let btn = document.createElement("button");
-    btn.id = id;
-    btn.name = name;
-    btn.innerText = innerText;
-    btn.addEventListener("click", callback);
-    return btn;
-}
-
-
 class MultiChatUI {
 
     constructor() {
@@ -503,7 +464,7 @@ class MultiChatUI {
         }
         elDiv.replaceChildren();
         // Btn for creating new chat session
-        let btnNew = el_create_button("New CHAT", (ev)=> {
+        let btnNew = ui.el_create_button("New CHAT", (ev)=> {
             if (this.elInUser.disabled) {
                 console.error(`ERRR:SimpleChat:MCUI:NewChat:Current session [${this.curChatId}] awaiting response, ignoring request...`);
                 alert("ERRR:SimpleChat\nMCUI:NewChat\nWait for response to pending query, before starting new chat session");
@@ -517,7 +478,7 @@ class MultiChatUI {
             }
             this.new_chat_session(chatIdGot, true);
             this.create_session_btn(elDiv, chatIdGot);
-            el_children_config_class(elDiv, chatIdGot, "session-selected", "");
+            ui.el_children_config_class(elDiv, chatIdGot, "session-selected", "");
         });
         elDiv.appendChild(btnNew);
         // Btns for existing chat sessions
@@ -531,7 +492,7 @@ class MultiChatUI {
     }
 
     create_session_btn(elDiv, cid) {
-        let btn = el_create_button(cid, (ev)=>{
+        let btn = ui.el_create_button(cid, (ev)=>{
             let target = /** @type{HTMLButtonElement} */(ev.target);
             console.debug(`DBUG:SimpleChat:MCUI:SessionClick:${target.id}`);
             if (this.elInUser.disabled) {
@@ -540,7 +501,7 @@ class MultiChatUI {
                 return;
             }
             this.handle_session_switch(target.id);
-            el_children_config_class(elDiv, target.id, "session-selected", "");
+            ui.el_children_config_class(elDiv, target.id, "session-selected", "");
         });
         elDiv.appendChild(btn);
         return btn;
