@@ -6,6 +6,7 @@ import argparse
 import contextlib
 import json
 import logging
+import math
 import os
 import re
 import sys
@@ -620,6 +621,44 @@ class GPTNeoXModel(Model):
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
         self.gguf_writer.add_parallel_residual(self.hparams.get("use_parallel_residual", True))
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_eps"])
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
+        n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
+
+        tensors: list[tuple[str, Tensor]] = []
+
+        if re.match(r"gpt_neox\.layers\.\d+\.attention\.query_key_value\.weight", name):
+            # Map bloom-style qkv_linear to gpt-style qkv_linear
+            # bloom: https://github.com/huggingface/transformers/blob/main/src/transformers/models/bloom/modeling_bloom.py#L238-L252  # noqa
+            # gpt-2: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py#L312  # noqa
+            qkv_weights = data_torch.reshape((n_head, 3, n_embed // n_head, n_embed))
+            data_torch = torch.cat(
+                (
+                    qkv_weights[:, 0, :, :].reshape((-1, n_embed)),
+                    qkv_weights[:, 1, :, :].reshape((-1, n_embed)),
+                    qkv_weights[:, 2, :, :].reshape((-1, n_embed)),
+                ),
+                dim=0,
+            )
+            logger.info("re-format attention.linear_qkv.weight")
+        elif re.match(r"gpt_neox\.layers\.\d+\.attention\.query_key_value\.bias", name):
+            qkv_bias = data_torch.reshape((n_head, 3, n_embed // n_head))
+            data_torch = torch.cat(
+                (
+                    qkv_bias[:, 0, :].reshape((n_embed,)),
+                    qkv_bias[:, 1, :].reshape((n_embed,)),
+                    qkv_bias[:, 2, :].reshape((n_embed,)),
+                ),
+                dim=0,
+            )
+            logger.info("re-format attention.linear_qkv.bias")
+
+        tensors.append((self.map_tensor_name(name), data_torch))
+
+        return tensors
 
 
 @Model.register("BloomForCausalLM")
@@ -1698,7 +1737,7 @@ class Phi3MiniModel(Model):
                     token_id = int(token_id)
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != gguf.TokenType.UNKNOWN:
-                        assert(tokens[token_id] == token)
+                        assert tokens[token_id] == token
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = gguf.TokenType.USER_DEFINED
@@ -1714,7 +1753,7 @@ class Phi3MiniModel(Model):
                     token_id = int(foken_data["id"])
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != gguf.TokenType.UNKNOWN:
-                        assert(tokens[token_id] == token)
+                        assert tokens[token_id] == token
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = gguf.TokenType.USER_DEFINED
@@ -1733,22 +1772,58 @@ class Phi3MiniModel(Model):
     def set_gguf_parameters(self):
         block_count = self.find_hparam(["num_hidden_layers", "n_layer"])
 
-        rot_pct = 1.0
         n_embd = self.find_hparam(["hidden_size", "n_embd"])
         n_head = self.find_hparam(["num_attention_heads", "n_head"])
+        n_head_kv = self.find_hparam(["num_key_value_heads", "n_head_kv"])
         rms_eps = self.find_hparam(["rms_norm_eps"])
+        max_pos_embds = self.find_hparam(["n_positions", "max_position_embeddings"])
+        orig_max_pos_embds = self.find_hparam(["original_max_position_embeddings"])
+        rope_dims = n_embd // n_head
 
         self.gguf_writer.add_name("Phi3")
-        self.gguf_writer.add_context_length(self.find_hparam(["n_positions", "max_position_embeddings"]))
-
+        self.gguf_writer.add_context_length(max_pos_embds)
+        self.gguf_writer.add_rope_scaling_orig_ctx_len(orig_max_pos_embds)
         self.gguf_writer.add_embedding_length(n_embd)
-        self.gguf_writer.add_feed_forward_length(8192)
+        self.gguf_writer.add_feed_forward_length(self.find_hparam(["intermediate_size"]))
         self.gguf_writer.add_block_count(block_count)
         self.gguf_writer.add_head_count(n_head)
-        self.gguf_writer.add_head_count_kv(n_head)
+        self.gguf_writer.add_head_count_kv(n_head_kv)
         self.gguf_writer.add_layer_norm_rms_eps(rms_eps)
-        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
+        self.gguf_writer.add_rope_dimension_count(rope_dims)
+        self.gguf_writer.add_rope_freq_base(self.find_hparam(["rope_theta"]))
         self.gguf_writer.add_file_type(self.ftype)
+
+        # write rope scaling for long context (128k) model
+        rope_scaling = self.find_hparam(['rope_scaling'], True)
+        if (rope_scaling is None):
+            return
+
+        scale = max_pos_embds / orig_max_pos_embds
+
+        rope_scaling_type = rope_scaling.get('type', '').lower()
+        if len(rope_scaling_type) == 0:
+            raise KeyError('Missing the required key rope_scaling.type')
+
+        if rope_scaling_type == 'su':
+            attn_factor = math.sqrt(1 + math.log(scale) / math.log(orig_max_pos_embds)) if scale > 1.0 else 1.0
+        elif rope_scaling_type == 'yarn':
+            attn_factor = 0.1 * math.log(scale) + 1.0 if scale > 1.0 else 1.0
+        else:
+            raise NotImplementedError(f'The rope scaling type {rope_scaling_type} is not supported yet')
+
+        self.gguf_writer.add_rope_scaling_attn_factors(attn_factor)
+
+        long_factors = rope_scaling.get('long_factor', None)
+        short_factors = rope_scaling.get('short_factor', None)
+
+        if long_factors is None or short_factors is None:
+            raise KeyError('Missing the required key rope_scaling.long_factor or rope_scaling_short_factor')
+
+        if len(long_factors) != len(short_factors) or len(long_factors) != rope_dims / 2:
+            raise ValueError(f'The length of rope long and short factors must be {rope_dims / 2}')
+
+        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_LONG]  + ".weight", np.array(long_factors, dtype=np.float32))
+        self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FACTORS_SHORT] + ".weight", np.array(short_factors, dtype=np.float32))
 
 
 @Model.register("PlamoForCausalLM")

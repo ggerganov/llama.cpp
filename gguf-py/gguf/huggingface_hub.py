@@ -5,23 +5,64 @@ import pathlib
 from hashlib import sha256
 
 import requests
-from transformers import AutoTokenizer
+from huggingface_hub import login, model_info
+from sentencepiece import SentencePieceProcessor
 
-from .constants import HF_MODEL_MAP, LLaMaModelType, LLaMaVocabType
+from .constants import (
+    GPT_PRE_TOKENIZER_DEFAULT,
+    HF_TOKENIZER_BPE_FILES,
+    HF_TOKENIZER_SPM_FILES,
+    MODEL_FILE_TYPE_NAMES,
+    VOCAB_TYPE_NAMES,
+    ModelFileType,
+    VocabType,
+)
 
 
-class HFHubRequest:
-    def __init__(self, auth_token: None | str, logger: None | logging.Logger):
-        # Set headers if authentication is available
-        if auth_token is None:
-            self._headers = None
-        else:
-            self._headers = {"Authorization": f"Bearer {auth_token}"}
+class HFHubBase:
+    def __init__(
+        self,
+        model_path: None | str | pathlib.Path,
+        logger: None | logging.Logger
+    ):
+        # Set the model path
+        if model_path is None:
+            model_path = "models"
+        self._model_path = model_path
 
         # Set the logger
         if logger is None:
             logger = logging.getLogger(__name__)
         self.logger = logger
+
+    @property
+    def model_path(self) -> pathlib.Path:
+        return pathlib.Path(self._model_path)
+
+    @model_path.setter
+    def model_path(self, value: pathlib.Path):
+        self._model_path = value
+
+    def write_file(self, content: bytes, file_path: pathlib.Path) -> None:
+        with open(file_path, 'wb') as file:
+            file.write(content)
+        self.logger.info(f"Wrote {len(content)} bytes to {file_path} successfully")
+
+
+class HFHubRequest(HFHubBase):
+    def __init__(
+        self,
+        auth_token: None | str,
+        model_path: None | str | pathlib.Path,
+        logger: None | logging.Logger
+    ):
+        super().__init__(model_path, logger)
+
+        # Set headers if authentication is available
+        if auth_token is None:
+            self._headers = None
+        else:
+            self._headers = {"Authorization": f"Bearer {auth_token}"}
 
         # Persist across requests
         self._session = requests.Session()
@@ -29,13 +70,12 @@ class HFHubRequest:
         # This is read-only
         self._base_url = "https://huggingface.co"
 
+        # NOTE: Required for getting model_info
+        login(auth_token, add_to_git_credential=True)
+
     @property
     def headers(self) -> str:
         return self._headers
-
-    @property
-    def save_path(self) -> pathlib.Path:
-        return self._save_path
 
     @property
     def session(self) -> requests.Session:
@@ -45,151 +85,194 @@ class HFHubRequest:
     def base_url(self) -> str:
         return self._base_url
 
-    def write_file(self, content: bytes, filepath: pathlib.Path) -> None:
-        with open(filepath, 'wb') as f:
-            f.write(content)
-        self.logger.info(f"Wrote {len(content)} bytes to {filepath} successfully")
+    @staticmethod
+    def list_remote_files(model_repo: str) -> list[str]:
+        # NOTE: Request repository metadata to extract remote filenames
+        return [x.rfilename for x in model_info(model_repo).siblings]
+
+    def list_filtered_remote_files(
+        self, model_repo: str, file_type: ModelFileType
+    ) -> list[str]:
+        model_files = []
+        self.logger.info(f"Repo:{model_repo}")
+        self.logger.debug(f"Match:{MODEL_FILE_TYPE_NAMES[file_type]}:{file_type}")
+        for filename in HFHubRequest.list_remote_files(model_repo):
+            suffix = pathlib.Path(filename).suffix
+            self.logger.debug(f"Suffix: {suffix}")
+            if suffix == MODEL_FILE_TYPE_NAMES[file_type]:
+                self.logger.info(f"File: {filename}")
+                model_files.append(filename)
+        return model_files
 
     def resolve_url(self, repo: str, filename: str) -> str:
         return f"{self._base_url}/{repo}/resolve/main/{filename}"
 
-    def download_file(self, url: str) -> requests.Response:
+    def get_response(self, url: str) -> requests.Response:
         response = self._session.get(url, headers=self.headers)
         self.logger.info(f"Response status was {response.status_code}")
         response.raise_for_status()
         return response
 
 
-class HFHubBase:
+class HFHubTokenizer(HFHubBase):
     def __init__(
         self,
         model_path: None | str | pathlib.Path,
-        auth_token: str,
         logger: None | logging.Logger
     ):
-        if model_path is None:
-            self._model_path = pathlib.Path("models")
-        elif isinstance(model_path, str):
-            self._model_path = pathlib.Path(model_path)
+        super().__init__(model_path, logger)
+
+    @staticmethod
+    def list_vocab_files(vocab_type: VocabType) -> tuple[str]:
+        if vocab_type == VocabType.SPM:
+            return HF_TOKENIZER_SPM_FILES
+        # NOTE: WPM and BPE are equivalent
+        return HF_TOKENIZER_BPE_FILES
+
+    @staticmethod
+    def get_vocab_name(vocab_type: VocabType) -> str:
+        return VOCAB_TYPE_NAMES.get(vocab_type)
+
+    @staticmethod
+    def get_vocab_type(vocab_name: str) -> VocabType:
+        return {
+            "SPM": VocabType.SPM,
+            "BPE": VocabType.BPE,
+            "WPM": VocabType.WPM,
+        }.get(vocab_name, VocabType.NON)
+
+    @property
+    def default_pre_tokenizer(self) -> str:
+        return GPT_PRE_TOKENIZER_DEFAULT
+
+    def config(self, model_repo: str) -> dict[str, object]:
+        path = self.model_path / model_repo / "config.json"
+        return json.loads(path.read_text(encoding='utf-8'))
+
+    def tokenizer_model(self, model_repo: str) -> SentencePieceProcessor:
+        path = self.model_path / model_repo / "tokenizer.model"
+        processor = SentencePieceProcessor()
+        processor.LoadFromFile(path.read_bytes())
+        return processor
+
+    def tokenizer_config(self, model_repo: str) -> dict[str, object]:
+        path = self.model_path / model_repo / "tokenizer_config.json"
+        return json.loads(path.read_text(encoding='utf-8'))
+
+    def tokenizer_json(self, model_repo: str) -> dict[str, object]:
+        path = self.model_path / model_repo / "tokenizer.json"
+        return json.loads(path.read_text(encoding='utf-8'))
+
+    def get_normalizer(self, model_repo: str) -> None | dict[str, object]:
+        normalizer = self.tokenizer_json(model_repo).get("normalizer", dict())
+        if normalizer:
+            self.logger.info(f"JSON:Normalizer: {json.dumps(normalizer, indent=2)}")
         else:
-            self._model_path = model_path
+            self.logger.warn(f"WARN:Normalizer: {normalizer}")
+        return normalizer
 
-        # Set the logger
-        if logger is None:
-            logging.basicConfig(level=logging.DEBUG)
-            logger = logging.getLogger(__name__)
-        self.logger = logger
+    def get_pre_tokenizer(self, model_repo: str) -> None | dict[str, object]:
+        pre_tokenizer = self.tokenizer_json(model_repo).get("pre_tokenizer")
+        if pre_tokenizer:
+            self.logger.info(f"JSON:PreTokenizer: {json.dumps(pre_tokenizer, indent=2)}")
+            return pre_tokenizer
+        else:
+            self.logger.warn(f"WARN:PreTokenizer: {pre_tokenizer}")
+        return pre_tokenizer
 
-        self._hub = HFHubRequest(auth_token, logger)
-        self._models = list(HF_MODEL_MAP)
+    def get_added_tokens(self, model_repo: str) -> None | list[dict[str, object]]:
+        added_tokens = self.tokenizer_json(model_repo).get("pre_tokenizer", list())
+        if added_tokens:
+            self.logger.info(f"JSON:AddedTokens: {json.dumps(added_tokens, indent=2)}")
+        else:
+            self.logger.warn(f"WARN:PreTokenizer: {added_tokens}")
+        return added_tokens
 
-    @property
-    def hub(self) -> HFHubRequest:
-        return self._hub
+    def get_tokenizer_json_hash(self, model_repo: str) -> str:
+        tokenizer = self.tokenizer_json(model_repo)
+        tokenizer_path = self.model_path / model_repo / "tokenizer.json"
+        sha256sum = sha256(str(tokenizer).encode()).hexdigest()
+        self.logger.info(f"Hashed '{tokenizer_path}' as {sha256sum}")
+        return sha256sum
 
-    @property
-    def models(self) -> list[dict[str, object]]:
-        return self._models
+    def log_tokenizer_json_info(self, model_repo: str) -> None:
+        self.logger.info(f"{model_repo}")
+        tokenizer = self.tokenizer_json(model_repo)
+        for k, v in tokenizer.items():
+            if k not in ["added_tokens", "model"]:
+                self.logger.info(f"{k}:{json.dumps(v, indent=2)}")
+            if k == "model":
+                for x, y in v.items():
+                    if x not in ["vocab", "merges"]:
+                        self.logger.info(f"{k}:{x}:{json.dumps(y, indent=2)}")
 
-    @property
-    def model_path(self) -> pathlib.Path:
-        return self._model_path
 
-    @model_path.setter
-    def model_path(self, value: pathlib.Path):
-        self._model_path = value
-
-
-class HFVocabRequest(HFHubBase):
+class HFHubModel(HFHubBase):
     def __init__(
         self,
+        auth_token: None | str,
         model_path: None | str | pathlib.Path,
-        auth_token: str,
         logger: None | logging.Logger
     ):
-        super().__init__(model_path, auth_token, logger)
+        super().__init__(model_path, logger)
+
+        self._request = HFHubRequest(auth_token, model_path, logger)
+        self._tokenizer = HFHubTokenizer(model_path, logger)
+
+    @staticmethod
+    def get_model_type_name(model_type: ModelFileType) -> str:
+        return MODEL_FILE_TYPE_NAMES.get(model_type, "")
+
+    @staticmethod
+    def get_model_type(model_name: str) -> ModelFileType:
+        return {
+            ".pt": ModelFileType.PT,
+            ".pth": ModelFileType.PTH,
+            ".bin": ModelFileType.BIN,
+            ".safetensors": ModelFileType.SAFETENSORS,
+            ".json": ModelFileType.JSON,
+            ".model": ModelFileType.MODEL,
+            ".gguf": ModelFileType.GGUF,
+        }.get(model_name, ModelFileType.NON)
 
     @property
-    def tokenizer_type(self) -> LLaMaVocabType:
-        return LLaMaVocabType
+    def request(self) -> HFHubRequest:
+        return self._request
 
-    def resolve_filenames(self, tokt: LLaMaVocabType) -> tuple[str]:
-        filenames = ["config.json", "tokenizer_config.json", "tokenizer.json"]
-        if tokt == self.tokenizer_type.SPM:
-            filenames.append("tokenizer.model")
-        return tuple(filenames)
+    @property
+    def tokenizer(self) -> HFHubTokenizer:
+        return self._tokenizer
 
-    def resolve_tokenizer_model(
-        self,
-        filename: str,
-        filepath: pathlib.Path,
-        model: dict[str, object]
-    ) -> None:
-        try:  # NOTE: Do not use bare exceptions! They mask issues!
-            resolve_url = self.hub.resolve_url(model['repo'], filename)
-            response = self.hub.download_file(resolve_url)
-            self.hub.write_file(response.content, filepath)
+    def _request_single_file(
+        self, model_repo: str, file_name: str, file_path: pathlib.Path
+    ) -> bool:
+        # NOTE: Do not use bare exceptions! They mask issues!
+        # Allow the exception to occur or explicitly handle it.
+        try:
+            self.logger.info(f"Downloading '{file_name}' from {model_repo}")
+            resolved_url = self.request.resolve_url(model_repo, file_name)
+            response = self.request.get_response(resolved_url)
+            self.write_file(response.content, file_path)
+            self.logger.info(f"Model file successfully saved to {file_path}")
+            return True
         except requests.exceptions.HTTPError as e:
-            self.logger.error(f"Failed to download tokenizer {model['repo']}: {e}")
+            self.logger.error(f"Error while downloading '{file_name}': {str(e)}")
+            return False
 
-    def download_models(self) -> None:
-        for model in self.models:
-            os.makedirs(f"{self.model_path}/{model['repo']}", exist_ok=True)
-            filenames = self.resolve_filenames(model['tokt'])
-            for filename in filenames:
-                filepath = pathlib.Path(f"{self.model_path}/{model['repo']}/{filename}")
-                if filepath.is_file():
-                    self.logger.info(f"skipped pre-existing tokenizer {model['repo']} in {filepath}")
-                    continue
-                self.resolve_tokenizer_model(filename, filepath, model)
+    def _request_listed_files(self, model_repo: str, remote_files: list[str]) -> None:
+        for file_name in remote_files:
+            dir_path = self.model_path / model_repo
+            os.makedirs(dir_path, exist_ok=True)
+            self._request_single_file(model_repo, file_name, dir_path / file_name)
 
-    def generate_checksums(self) -> None:
-        checksums = []
-        for model in self.models:
-            mapping = {}
-            filepath = f"{self.model_path}/{model['repo']}"
+    def download_model_files(self, model_repo: str, file_type: ModelFileType) -> None:
+        filtered_files = self.request.list_filtered_remote_files(model_repo, file_type)
+        self._request_listed_files(model_repo, filtered_files)
 
-            try:
-                tokenizer = AutoTokenizer.from_pretrained(filepath, trust_remote=True)
-            except OSError as e:
-                self.logger.error(f"Failed to hash tokenizer {model['repo']}: {e}")
-                continue
+    def download_all_vocab_files(self, model_repo: str, vocab_type: VocabType) -> None:
+        vocab_files = self.tokenizer.list_vocab_files(vocab_type)
+        self._request_listed_files(model_repo, vocab_files)
 
-            mapping.update(model)
-            mapping['checksum'] = sha256(str(tokenizer.vocab).encode()).hexdigest()
-            self.logger.info(f"Hashed {mapping['repo']} as {mapping['checksum']}")
-            checksums.append(mapping)
-
-        with open(f"{self.model_path}/checksums.json", mode="w") as file:
-            json.dump(checksums, file)
-
-    def log_pre_tokenizer_info(self) -> None:
-        for model in self.models:
-            try:
-                with open(f"{self.model_path}/{model['repo']}/tokenizer.json", "r", encoding="utf-8") as f:
-                    self.logger.info(f"Start: {model['repo']}")
-                    cfg = json.load(f)
-                    self.logger.info(f"normalizer: {json.dumps(cfg['normalizer'], indent=4)}")
-                    self.logger.info(f"pre_tokenizer: {json.dumps(cfg['pre_tokenizer'], indent=4)}")
-                    if "type" in cfg["model"]:
-                        self.logger.info(f"type: {json.dumps(cfg['model']['type'])}")
-                    if "ignore_merges" in cfg["model"]:
-                        self.logger.info(f"ignore_merges: {json.dumps(cfg['model']['ignore_merges'], indent=4)}")
-                self.logger.info(f"End: {model['repo']}")
-            except FileNotFoundError as e:
-                self.logger.error(f"Failed to log tokenizer {model['repo']}: {e}")
-
-
-# TODO:
-class HFModelRequest(HFHubBase):
-    def __init__(
-        self,
-        model_path: None | str | pathlib.Path,
-        auth_token: str,
-        logger: None | logging.Logger
-    ):
-        super().__init__(model_path, auth_token, logger)
-
-    @property
-    def model_type(self) -> LLaMaModelType:
-        return LLaMaModelType
+    def download_all_model_files(self, model_repo: str) -> None:
+        all_files = self.request.list_remote_files(model_repo)
+        self._request_listed_files(model_repo, all_files)

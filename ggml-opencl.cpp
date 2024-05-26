@@ -1,4 +1,4 @@
-﻿#include "ggml.h"
+#include "ggml.h"
 #include "ggml-opencl.h"
 #include "ggml-backend-impl.h"
 
