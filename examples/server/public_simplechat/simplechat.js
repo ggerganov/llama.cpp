@@ -576,17 +576,17 @@ class Me {
      */
     show_settings(elDiv) {
 
-        let bb = ui.el_create_boolbutton("SetCompletionFreshChatAlways", {true: "[+] CompletionFreshChatAlways", false: "[-] CompletionFreshChatAlways"}, this.bCompletionFreshChatAlways, (val)=>{
+        let bb = ui.el_creatediv_boolbutton("SetCompletionFreshChatAlways", "CompletionFreshChatAlways", {true: "[+] CompletionFreshChatAlways", false: "[-] CompletionFreshChatAlways"}, this.bCompletionFreshChatAlways, (val)=>{
             this.bCompletionFreshChatAlways = val;
         });
         elDiv.appendChild(bb);
 
-        bb = ui.el_create_boolbutton("SetCompletionInsertStandardRolePrefix", {true: "[+] CompletionInsertStandardRolePrefix", false: "[-] CompletionInsertStandardRolePrefix"}, this.bCompletionInsertStandardRolePrefix, (val)=>{
+        bb = ui.el_creatediv_boolbutton("SetCompletionInsertStandardRolePrefix", "CompletionInsertStandardRolePrefix", {true: "[+] CompletionInsertStandardRolePrefix", false: "[-] CompletionInsertStandardRolePrefix"}, this.bCompletionInsertStandardRolePrefix, (val)=>{
             this.bCompletionInsertStandardRolePrefix = val;
         });
         elDiv.appendChild(bb);
 
-        let sel = ui.el_create_select("SetChatHistoryInCtxt", this.sRecentUserMsgCnt, this.iRecentUserMsgCnt, (val)=>{
+        let sel = ui.el_creatediv_select("SetChatHistoryInCtxt", "ChatHistoryInCtxt", this.sRecentUserMsgCnt, this.iRecentUserMsgCnt, (val)=>{
             this.iRecentUserMsgCnt = this.sRecentUserMsgCnt[val];
         });
         elDiv.appendChild(sel);

@@ -62,7 +62,9 @@ export function el_create_append_p(text, elParent=undefined, id=undefined) {
 }
 
 /**
- * Create a para and set it up. Optionaly append it to a passed parent.
+ * Create a button which represents bool value using specified text wrt true and false.
+ * When ever user clicks the button, it will toggle the value and update the shown text.
+ *
  * @param {string} id
  * @param {{true: string, false: string}} texts
  * @param {boolean} defaultValue
@@ -85,6 +87,31 @@ export function el_create_boolbutton(id, texts, defaultValue, cb) {
 }
 
 /**
+ * Create a div wrapped button which represents bool value using specified text wrt true and false.
+ * @param {string} id
+ * @param {string} label
+ * @param {{ true: string; false: string; }} texts
+ * @param {boolean} defaultValue
+ * @param {(arg0: boolean) => void} cb
+ */
+export function el_creatediv_boolbutton(id, label, texts, defaultValue, cb) {
+    let div = document.createElement("div");
+    let lbl = document.createElement("label");
+    lbl.setAttribute("for", id);
+    lbl.innerText = label;
+    div.appendChild(lbl);
+    let sel = el_create_boolbutton(id, texts, defaultValue, cb);
+    div.appendChild(sel);
+    return div;
+}
+
+
+/**
+ * Create a select ui element, with a set of options to select from.
+ * * options: an object which contains name-value pairs
+ * * defaultOption: the value whose name should be choosen, by default.
+ * * cb : the call back returns the name string of the option selected.
+ *
  * @param {string} id
  * @param {Object<string,*>} options
  * @param {*} defaultOption
@@ -113,4 +140,24 @@ export function el_create_select(id, options, defaultOption, cb) {
         cb(target.value);
     })
     return el;
+}
+
+/**
+ * Create a div wrapped select ui element, with a set of options to select from.
+ *
+ * @param {string} id
+ * @param {any} label
+ * @param {{ [x: string]: any; }} options
+ * @param {any} defaultOption
+ * @param {(arg0: string) => void} cb
+ */
+export function el_creatediv_select(id, label, options, defaultOption, cb) {
+    let div = document.createElement("div");
+    let lbl = document.createElement("label");
+    lbl.setAttribute("for", id);
+    lbl.innerText = label;
+    div.appendChild(lbl);
+    let sel = el_create_select(id, options,defaultOption, cb);
+    div.appendChild(sel);
+    return div;
 }
