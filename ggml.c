@@ -6392,6 +6392,16 @@ struct ggml_tensor * ggml_rope_custom_inplace(
     );
 }
 
+struct ggml_tensor * ggml_rope_xpos_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b,
+        int                   n_dims,
+        float                 base,
+        bool                  down) {
+    return ggml_rope_impl(ctx, a, b, NULL, n_dims, 0, 0, 0, 10000.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, base, down, true);
+}
+
 // ggml_rope_back
 
 struct ggml_tensor * ggml_rope_back(
