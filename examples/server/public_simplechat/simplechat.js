@@ -438,6 +438,7 @@ class MultiChatUI {
         //let respBody = await this.read_json_early(resp);
         console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let assistantMsg;
+        let trimmedMsg = "";
         if (apiEP == ApiEP.Chat) {
             assistantMsg = respBody["choices"][0]["message"]["content"];
         } else {
@@ -447,10 +448,17 @@ class MultiChatUI {
                 assistantMsg = respBody["content"];
             }
         }
-        assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 8, 16, 72);
+        if (gMe.bTrimGarbage) {
+            let origMsg = assistantMsg;
+            assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 8, 16, 72);
+            trimmedMsg = origMsg.substring(assistantMsg.length);
+        }
         chat.add(Roles.Assistant, assistantMsg);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
+            if (trimmedMsg.length > 0) {
+                ui.el_create_append_p(`TRIMMED:${trimmedMsg}`, this.elDivChat);
+            }
         } else {
             console.debug(`DBUG:SimpleChat:MCUI:HandleUserSubmit:ChatId has changed:[${chatId}] [${this.curChatId}]`);
         }
@@ -540,6 +548,7 @@ class Me {
         this.multiChat = new MultiChatUI();
         this.bCompletionFreshChatAlways = true;
         this.bCompletionInsertStandardRolePrefix = false;
+        this.bTrimGarbage = true;
         this.iRecentUserMsgCnt = 2;
         this.sRecentUserMsgCnt = {
             "Full": -1,
@@ -570,6 +579,8 @@ class Me {
 
         ui.el_create_append_p(`bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`, elDiv);
 
+        ui.el_create_append_p(`bTrimGarbage:${this.bTrimGarbage}`, elDiv);
+
         ui.el_create_append_p(`iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`, elDiv);
 
         ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`, elDiv);
@@ -589,6 +600,11 @@ class Me {
 
         bb = ui.el_creatediv_boolbutton("SetCompletionInsertStandardRolePrefix", "CompletionInsertStandardRolePrefix", {true: "[+] yes insert", false: "[-] dont insert"}, this.bCompletionInsertStandardRolePrefix, (val)=>{
             this.bCompletionInsertStandardRolePrefix = val;
+        });
+        elDiv.appendChild(bb);
+
+        bb = ui.el_creatediv_boolbutton("SetTrimGarbage", "TrimGarbage", {true: "[+] yes trim", false: "[-] dont trim"}, this.bTrimGarbage, (val)=>{
+            this.bTrimGarbage = val;
         });
         elDiv.appendChild(bb);
 
