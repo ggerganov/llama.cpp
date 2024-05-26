@@ -124,10 +124,8 @@ class SimpleChat {
         }
         let last = undefined;
         for(const x of this.recent_chat(gMe.iRecentUserMsgCnt)) {
-            let entry = document.createElement("p");
+            let entry = ui.el_create_append_p(`${x.role}: ${x.content}`, div);
             entry.className = `role-${x.role}`;
-            entry.innerText = `${x.role}: ${x.content}`;
-            div.appendChild(entry);
             last = entry;
         }
         if (last !== undefined) {
@@ -547,30 +545,21 @@ class Me {
     }
 
     /**
+     * Show the configurable parameters info in the passed Div element.
      * @param {HTMLDivElement} elDiv
      */
     show_info(elDiv) {
 
-        var p = document.createElement("p");
-        p.innerText = "Settings (devel-tools-console gMe)";
+        let p = ui.el_create_append_p("Settings (devel-tools-console document[gMe])", elDiv);
         p.className = "role-system";
-        elDiv.appendChild(p);
 
-        var p = document.createElement("p");
-        p.innerText = `bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`;
-        elDiv.appendChild(p);
+        ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
 
-        p = document.createElement("p");
-        p.innerText = `bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`;
-        elDiv.appendChild(p);
+        ui.el_create_append_p(`bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`, elDiv);
 
-        p = document.createElement("p");
-        p.innerText = `iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`;
-        elDiv.appendChild(p);
+        ui.el_create_append_p(`iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`, elDiv);
 
-        p = document.createElement("p");
-        p.innerText = `chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`;
-        elDiv.appendChild(p);
+        ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`, elDiv);
 
     }
 

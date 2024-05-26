@@ -42,3 +42,21 @@ export function el_create_button(id, callback, name=undefined, innerText=undefin
     btn.addEventListener("click", callback);
     return btn;
 }
+
+/**
+ * Create a para and set it up. Optionaly append it to a passed parent.
+ * @param {string} text
+ * @param {HTMLElement | undefined} elParent
+ * @param {string | undefined} id
+ */
+export function el_create_append_p(text, elParent=undefined, id=undefined) {
+    let para = document.createElement("p");
+    para.innerText = text;
+    if (id) {
+        para.id = id;
+    }
+    if (elParent) {
+        elParent.appendChild(para);
+    }
+    return para;
+}
