@@ -83,3 +83,34 @@ export function el_create_boolbutton(id, texts, defaultValue, cb) {
     })
     return el;
 }
+
+/**
+ * @param {string} id
+ * @param {string[]} options
+ * @param {string} defaultOption
+ * @param {function(string):void} cb
+ */
+export function el_create_select(id, options, defaultOption, cb) {
+    let el = document.createElement("select");
+    el["xselected"] = defaultOption;
+    el["xoptions"] = structuredClone(options);
+    for(let cur of options) {
+        let op = document.createElement("option");
+        op.value = cur;
+        op.innerText = cur;
+        if (cur == defaultOption) {
+            op.selected = true;
+        }
+        el.appendChild(op);
+    }
+    if (id) {
+        el.id = id;
+        el.name = id;
+    }
+    el.addEventListener('click', (ev)=>{
+        let target = /** @type{HTMLSelectElement} */(ev.target);
+        console.log("DBUG:UI:Select:", id, ":", target.value);
+        cb(target.value);
+    })
+    return el;
+}

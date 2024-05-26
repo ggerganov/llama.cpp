@@ -535,6 +535,12 @@ class Me {
         this.bCompletionFreshChatAlways = true;
         this.bCompletionInsertStandardRolePrefix = false;
         this.iRecentUserMsgCnt = 2;
+        this.sRecentUserMsgCnt = {
+            "Full": -1,
+            "Last0": 1,
+            "Last1": 2,
+            "Last2": 3,
+        };
         // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
         this.chatRequestOptions = {
             "temperature": 0.7,
@@ -579,6 +585,11 @@ class Me {
             this.bCompletionInsertStandardRolePrefix = val;
         });
         elDiv.appendChild(bb);
+
+        let sel = ui.el_create_select("SetChatHistoryInCtxt", Object.keys(this.sRecentUserMsgCnt), "Last0", (val)=>{
+            this.iRecentUserMsgCnt = this.sRecentUserMsgCnt[val];
+        });
+        elDiv.appendChild(sel);
 
     }
 
