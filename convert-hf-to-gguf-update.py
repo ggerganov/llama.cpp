@@ -108,7 +108,7 @@ def download_model(model):
         files.append("tokenizer.model")
 
     if os.path.isdir(repo):
-        # Если repo это путь на файловой системе, копируем директорию
+        # If repo is a path on the file system, copy the directory
         for file in files:
             src_path = os.path.join(repo, file)
             dst_path = f"models/tokenizers/{name}/{file}"
@@ -121,6 +121,7 @@ def download_model(model):
             else:
                 logger.warning(f"{name}: Source file {src_path} does not exist")
     else:
+        # If repo is a URL, download the files
         for file in files:
             save_path = f"models/tokenizers/{name}/{file}"
             if os.path.isfile(save_path):
