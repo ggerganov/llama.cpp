@@ -39,7 +39,6 @@ body:
         - Mac
         - Windows
         - BSD
-        - BIOS
         - Other? (Please let us know in description)
     validations:
       required: false
