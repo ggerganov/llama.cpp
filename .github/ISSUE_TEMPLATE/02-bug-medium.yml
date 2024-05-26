@@ -10,14 +10,6 @@ body:
         Please include information about your system, the steps to reproduce the bug,
         and the version of llama.cpp that you are using.
         If possible, please provide a minimal code example that reproduces the bug.
-  - type: input
-    id: contact
-    attributes:
-      label: Contact Details
-      description: How can we get in touch with you if we need more info?
-      placeholder: ex. email@example.com
-    validations:
-      required: false
   - type: textarea
     id: what-happened
     attributes:
