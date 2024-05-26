@@ -119,19 +119,15 @@ int ggml_cuda_get_device() {
     return id;
 }
 
-// ggml_cuda_host_malloc
-static inline cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device) {
-#if defined(GGML_USE_HIPBLAS)
-#if defined(GGML_HIP_UMA)
+static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device) {
+    ggml_cuda_set_device(device);
+#if defined(GGML_USE_HIPBLAS) && defined(GGML_HIP_UMA)
     auto res = hipMallocManaged(ptr, size);
     if (res == hipSuccess) {
         // if error we "need" to know why...
         CUDA_CHECK(hipMemAdvise(*ptr, size, hipMemAdviseSetCoarseGrain, device));
     }
     return res;
-#else
-    return hipMalloc(ptr, size);
-#endif
 #else
     return cudaMalloc(ptr, size);
 #endif
