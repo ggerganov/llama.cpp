@@ -15,11 +15,13 @@ The UI follows a responsive web design so that the layout can adapt to available
 enough manner, in general.
 
 Allows developer/end-user to control some of the behaviour by updating gMe members from browser's devel-tool
-console.
+console. Parallely some of the directly useful to end-user settings can also be changed using the provided
+settings ui.
 
-NOTE: Given that the idea is for basic minimal testing, it doesnt bother with any model context length and
-culling of old messages from the chat by default. However by enabling the sliding window chat logic, a crude
-form of old messages culling can be achieved.
+NOTE: Current web service api doesnt expose the model context length directly, so client logic doesnt provide
+any adaptive culling of old messages nor of replacing them with summary of their content etal. However there
+is a optional sliding window based chat logic, which provides a simple minded culling of old messages from
+the chat history before sending to the ai model.
 
 NOTE: It doesnt set any parameters other than temperature and max_tokens for now. However if someone wants
 they can update the js file or equivalent member in gMe as needed.
@@ -53,6 +55,8 @@ Open this simple web front end from your local browser
 Once inside
 
 * Select between chat and completion mode. By default it is set to chat mode.
+
+* Change the default global settings, if one wants to.
 
 * In completion mode
   * logic by default doesnt insert any role specific "ROLE: " prefix wrt each role's message.
@@ -104,14 +108,15 @@ by developers who may not be from web frontend background (so inturn may not be 
 end-use-specific-language-extensions driven flows) so that they can use it to explore/experiment things.
 
 And given that the idea is also to help explore/experiment for developers, some flexibility is provided
-to change behaviour easily using the devel-tools/console, for now. And skeletal logic has been implemented
-to explore some of the end points and ideas/implications around them.
+to change behaviour easily using the devel-tools/console or provided minimal settings ui (wrt few aspects).
+Skeletal logic has been implemented to explore some of the end points and ideas/implications around them.
 
 
 ### General
 
 Me/gMe consolidates the settings which control the behaviour into one object.
 One can see the current settings, as well as change/update them using browsers devel-tool/console.
+It is attached to the document object.
 
   bCompletionFreshChatAlways - whether Completion mode collates complete/sliding-window history when
   communicating with the server or only sends the latest user query/message.
@@ -189,9 +194,9 @@ also be started with a model context size of 1k or more, to be on safe side.
   internal n_predict, for now add the same here on the client side, maybe later add max_tokens
   to /completions endpoint handling code on server side.
 
-Frequency and presence penalty fields are set to 1.2 in the set of fields sent to server
-along with the user query. So that the model is partly set to try avoid repeating text in
-its response.
+NOTE: One may want to experiment with frequency/presence penalty fields in chatRequestOptions
+wrt the set of fields sent to server along with the user query. To check how the model behaves
+wrt repeatations in general in the generated text response.
 
 A end-user can change these behaviour by editing gMe from browser's devel-tool/console.
 

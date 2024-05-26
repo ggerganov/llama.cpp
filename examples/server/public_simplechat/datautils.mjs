@@ -3,9 +3,30 @@
 // by Humans for All
 //
 
+/**
+ * Given the limited context size of local LLMs and , many a times when context gets filled
+ * between the prompt and the response, it can lead to repeating text garbage generation.
+ * And many a times setting penalty wrt repeatation leads to over-intelligent garbage
+ * repeatation with slight variations. These garbage inturn can lead to overloading of the
+ * available model context, leading to less valuable response for subsequent prompts/queries,
+ * if chat history is sent to ai model.
+ *
+ * So two simple minded garbage trimming logics are experimented below.
+ * * one based on progressively-larger-substring-based-repeat-matching-with-partial-skip and
+ * * another based on char-histogram-driven garbage trimming.
+ *   * in future characteristic of histogram over varying lengths could be used to allow for
+ *     a more aggressive and adaptive trimming logic.
+ */
+
 
 /**
  * Simple minded logic to help remove repeating garbage at end of the string.
+ * The repeatation needs to be perfectly matching.
+ *
+ * The logic progressively goes on probing for longer and longer substring based
+ * repeatation, till there is no longer repeatation. Inturn picks the one with
+ * the longest chain.
+ *
  * @param {string} sIn
  * @param {number} maxSubL
  * @param {number} maxMatchLenThreshold
@@ -44,6 +65,9 @@ export function trim_repeat_garbage_at_end(sIn, maxSubL=10, maxMatchLenThreshold
 /**
  * Simple minded logic to help remove repeating garbage at end of the string, till it cant.
  * If its not able to trim, then it will try to skip a char at end and then trim, a few times.
+ * This ensures that even if there are multiple runs of garbage with different patterns, the
+ * logic still tries to munch through them.
+ *
  * @param {string} sIn
  * @param {number} maxSubL
  * @param {number | undefined} [maxMatchLenThreshold]
@@ -72,7 +96,14 @@ export function trim_repeat_garbage_at_end_loop(sIn, maxSubL, maxMatchLenThresho
 
 
 /**
- * A simple minded try trim garbage at end using histogram characteristics
+ * A simple minded try trim garbage at end using histogram driven characteristics.
+ * There can be variation in the repeatations, as long as no new char props up.
+ *
+ * This tracks the chars and their frequency in a specified length of substring at the end
+ * and inturn checks if moving further into the generated text from the end remains within
+ * the same char subset or goes beyond it and based on that either trims the string at the
+ * end or not. This allows to filter garbage at the end, including even if there are certain
+ * kind of small variations in the repeated text wrt position of seen chars.
  *
  * Allow the garbage to contain upto maxUniq chars, but at the same time ensure that
  * a given type of char ie numerals or alphabets or other types dont cross the specified
@@ -135,7 +166,10 @@ export function trim_hist_garbage_at_end(sIn, maxType, maxUniq, maxMatchLenThres
 }
 
 /**
- * Keep trimming repeatedly using hist_garbage logic, till you no longer can
+ * Keep trimming repeatedly using hist_garbage logic, till you no longer can.
+ * This ensures that even if there are multiple runs of garbage with different patterns,
+ * the logic still tries to munch through them.
+ *
  * @param {any} sIn
  * @param {number} maxType
  * @param {number} maxUniq
