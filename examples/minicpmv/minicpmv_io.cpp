@@ -60,7 +60,7 @@ struct clip_ctx * clip_init_context(gpt_params * params) {
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
     }
-    std::pair<int, int> load_image_size = std::make_pair(70, 70);
+    std::pair<int, int> load_image_size = std::make_pair(448, 448);
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1, load_image_size);
     return ctx_clip;
 }
@@ -112,27 +112,21 @@ void process_image(struct minicpmv_context * ctx_llava, std::vector<std::vector<
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
     eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, true);
     llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices[0][0], params->n_batch, &n_past);
+    eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
     if (image_embed_slices.size() > 1) {
-        eval_string(ctx_llava->ctx_llama, std::string("</image><slice>").c_str(), params->n_batch, &n_past, false);
+        eval_string(ctx_llava->ctx_llama, std::string("<slice>").c_str(), params->n_batch, &n_past, false);
         for (size_t i = 1; i < image_embed_slices.size(); ++i) {
-            eval_string(ctx_llava->ctx_llama, std::string("<image>").c_str(), params->n_batch, &n_past, false);
             for (size_t j = 0; j < image_embed_slices[i].size(); ++j) {
+                eval_string(ctx_llava->ctx_llama, std::string("<image>").c_str(), params->n_batch, &n_past, false);
                 llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices[i][j], params->n_batch, &n_past);
-                if (j != image_embed_slices[i].size() - 1) {
-                    eval_string(ctx_llava->ctx_llama, std::string("</image><image>").c_str(), params->n_batch, &n_past, false);
-                } else {
-                    if (i != image_embed_slices.size() - 1) {
-                        eval_string(ctx_llava->ctx_llama, std::string("</image>\n").c_str(), params->n_batch, &n_past, false);
-                    } else {
-                        eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
-                    }
+                eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
+                if (j == image_embed_slices[i].size() - 1) {
+                    eval_string(ctx_llava->ctx_llama, std::string("\n").c_str(), params->n_batch, &n_past, false);
                 }
             }
         }
-        eval_string(ctx_llava->ctx_llama, std::string("</slice>\n").c_str(), params->n_batch, &n_past, false);
+        eval_string(ctx_llava->ctx_llama, std::string("</slice>").c_str(), params->n_batch, &n_past, false);
 
-    } else {
-        eval_string(ctx_llava->ctx_llama, std::string("</image>\n").c_str(), params->n_batch, &n_past, false);
     }
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
 }

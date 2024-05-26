@@ -275,11 +275,11 @@ def _replace_name_resampler(s, v):
     if re.match("resampler.pos_embed", s):
         return {
             s: v,
-            re.sub("pos_embed", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(4096, (448//14, 448//14))),
+            re.sub("pos_embed", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(4096, (70, 70))),
         }
     if re.match("resampler.proj", s):
         return {
-            re.sub("proj", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(4096, (448//14, 448//14))),
+            re.sub("proj", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(4096, (70, 70))),
             re.sub("proj", "proj.weight", s): v.transpose(-1, -2).contiguous(),
         }
     if re.match("resampler.attn.in_proj_.*", s):
