@@ -2395,7 +2395,8 @@ class CommandR2Model(Model):
 
         # max_position_embeddings = 8192 in config.json but model was actually
         # trained on 128k context length
-        self.hparams["max_position_embeddings"] = self.hparams["model_max_length"]
+        # aya-23 models don't have model_max_length specified
+        self.hparams["max_position_embeddings"] = self.find_hparam(["model_max_length", "max_position_embeddings"])
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
