@@ -15379,16 +15379,33 @@ struct llama_model * llama_load_model_from_file(
         }
         model->rpc_servers.push_back(servers);
     }
-    int status = llama_model_load(path_model, *model, params);
-    GGML_ASSERT(status <= 0);
-    if (status < 0) {
-        if (status == -1) {
-            LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
-        } else if (status == -2) {
-            LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+    // int status = llama_model_load(path_model, *model, params);
+    // GGML_ASSERT(status <= 0);
+    // if (status < 0) {
+    //     if (status == -1) {
+    //         LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+    //     } else if (status == -2) {
+    //         LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+    //     }
+    //     delete model;
+    //     return nullptr;
+    // }
+    try {
+        int status = llama_model_load(path_model, *model, params);
+        GGML_ASSERT(status <= 0);
+        if (status < 0) {
+            if (status == -1) {
+                LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+            } else if (status == -2) {
+                LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+            }
+            delete model;
+            return nullptr;
         }
+    } catch (...) {
+        LLAMA_LOG_ERROR("%s: exception loading model\n", __func__);
         delete model;
-        return nullptr;
+        throw;
     }
 
     return model;
