@@ -2021,10 +2021,11 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     const auto & model = ctx->vision_model;
     const auto & hparams = model.hparams;
 
-    const int image_size    = hparams.image_size;
-    const int patch_size    = hparams.patch_size;
-    const int num_patches   = ((image_size / patch_size) * (image_size / patch_size));
-    const int num_positions = num_patches;
+    const int image_size_width     = load_image_size.first;
+    const int image_size_height    = load_image_size.second;
+    const int patch_size           = hparams.patch_size;
+    const int num_patches          = ((image_size_width / patch_size) * (image_size_height / patch_size));
+    const int num_positions        = num_patches;
 
     {
         struct ggml_tensor * inp_raw = ggml_graph_get_tensor(gf, "inp_raw");
@@ -2055,8 +2056,12 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
 
         int* positions_data = (int*)malloc(ggml_nbytes(positions));
+        int n = 0;
+        float t = 0;
         for (int i = 0; i < num_positions; i++) {
-            positions_data[i] = i;
+            positions_data[i] = n;
+            t=70.0*i/num_positions-1;
+            if(t>n)n++;
         }
         ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
         free(positions_data);
