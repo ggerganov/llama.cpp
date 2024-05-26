@@ -2000,9 +2000,15 @@ void main() {
 
 generic_binary_op_combined = f"{generic_binary_op_head}\n{generic_binary_op_layout}\n{generic_binary_op_funcs}\n{generic_binary_op_main}"
 
-# MUL F32
+# MUL
 mul_body = """
     data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(FLOAT_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]) * FLOAT_TYPE(data_b[src1_idx(gl_GlobalInvocationID.x)]));
+}
+"""
+
+# DIV
+div_body = """
+    data_d[p.d_offset + dst_idx(gl_GlobalInvocationID.x)] = D_TYPE(FLOAT_TYPE(data_a[src0_idx(gl_GlobalInvocationID.x)]) / FLOAT_TYPE(data_b[src1_idx(gl_GlobalInvocationID.x)]));
 }
 """
 
@@ -2618,6 +2624,41 @@ void main() {
 }
 """
 
+sum_rows_src = """
+#extension GL_EXT_control_flow_attributes : enable
+layout(local_size_x_id = 0, local_size_y = 1, local_size_z = 1) in;
+
+layout (binding = 0) readonly buffer A {A_TYPE data_a[];};
+layout (binding = 1) writeonly buffer D {D_TYPE data_d[];};
+
+layout (constant_id = 0) const uint BLOCK_SIZE = 32;
+
+shared FLOAT_TYPE tmp[BLOCK_SIZE];
+
+void main() {
+    const uint row = gl_WorkGroupID.x;
+    const uint col = gl_LocalInvocationID.x;
+
+    tmp[col] = FLOAT_TYPE(0.0f);
+
+    for (uint i = col; i < p.KX; i += BLOCK_SIZE) {
+        tmp[col] += FLOAT_TYPE(data_a[row*p.KX + i]);
+    }
+
+    barrier();
+    [[unroll]] for (int s = int(BLOCK_SIZE) / 2; s > 0; s >>= 1) {
+        if (col < s) {
+            tmp[col] += tmp[col + s];
+        }
+        barrier();
+    }
+
+    if (col == 0) {
+        data_d[row] = D_TYPE(tmp[0]);
+    }
+}
+"""
+
 GLSLC = "glslc"
 
 VK_NUM_TYPES = 16
@@ -2976,7 +3017,10 @@ async def main():
     tasks.append(string_to_spv("add_f32", f"{generic_binary_op_combined}\n{add_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
     tasks.append(string_to_spv("split_k_reduce", mulmat_split_k_reduce_src, {}))
+
     tasks.append(string_to_spv("mul_f32", f"{generic_binary_op_combined}\n{mul_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
+
+    tasks.append(string_to_spv("div_f32", f"{generic_binary_op_combined}\n{div_body}", {"A_TYPE": "float", "B_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
     tasks.append(string_to_spv("scale_f32", f"{generic_unary_op_combined}\n{scale_body}", {"A_TYPE": "float", "D_TYPE": "float", "FLOAT_TYPE": "float"}))
 
@@ -3000,6 +3044,8 @@ async def main():
     tasks.append(string_to_spv("rope_neox_f16", rope_neox_src, {"A_TYPE": "float16_t", "D_TYPE": "float16_t"}))
 
     tasks.append(string_to_spv("argsort_f32", argsort_src, {"A_TYPE": "float"}))
+
+    tasks.append(string_to_spv("sum_rows_f32", f"{generic_head}\n{shader_f32}\n{sum_rows_src}", {"A_TYPE": "float", "D_TYPE": "float"}))
 
     # Helper to decorate tasks with semaphore acquisition.
     async def withSemaphore(sem, task):
