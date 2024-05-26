@@ -46,9 +46,7 @@ body:
         - Linux
         - Mac
         - Windows
-        - FreeBSD
-        - OpenBSD
-        - NetBSD
+        - BSD
         - BIOS
         - Other? (Please let us know in description)
     validations:
