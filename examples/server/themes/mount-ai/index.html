@@ -615,8 +615,10 @@ const BoolField = ({ label, title, name, value }) => {
       const GrammarControl = () => (
         html`
           <div>
-            <label for="template"></label>
-            <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON-Scheme + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+            <div class="grammar">
+              <label for="template"></label>
+              <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON-Scheme + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+            </div>
             <div class="grammar-columns">
               <div class="json-schema-controls">
                 <input type="text" name="prop-order" placeholder="Order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />

@@ -78,8 +78,8 @@ p {
 
 .json-schema-controls {
   margin-top: 10px;
-  width: 97%;
-  max-width: 97%;
+  width: 100%;
+  max-width: 100%;
   display: grid;
   grid-template: "a a";
   gap: 1em;
@@ -443,7 +443,11 @@ button:disabled {
   box-shadow: 0 0 13px rgba(0, 0, 0, 0.1);
 }
 
-/* Grammar text field */
+.grammar {
+  width: 97%;
+  max-width: 97%;
+}
+
 textarea {
   padding: 5px;
   flex-grow: 1;
