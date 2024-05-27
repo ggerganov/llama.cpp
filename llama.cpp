@@ -1836,7 +1836,7 @@ struct llama_hparams {
     uint32_t n_expert_used = 0;
     uint32_t n_vocab_type = 0; // for BERT-style token types
 
-    uint32_t n_leading_dense_layer = 0;
+    uint32_t n_layer_dense_lead = 0;
     uint32_t n_lora_q = 0;
     uint32_t n_lora_kv = 0;
     uint32_t n_ff_exp = 0;
@@ -1884,11 +1884,11 @@ struct llama_hparams {
         if (this->n_expert      != other.n_expert)      return true;
         if (this->n_expert_used != other.n_expert_used) return true;
 
-        if (this->n_leading_dense_layer != other.n_leading_dense_layer) return true;
-        if (this->n_lora_q              != other.n_lora_q)              return true;
-        if (this->n_lora_kv             != other.n_lora_kv)             return true;
-        if (this->n_ff_exp              != other.n_ff_exp)              return true;
-        if (this->n_expert_shared       != other.n_expert_shared)       return true;
+        if (this->n_layer_dense_lead != other.n_layer_dense_lead) return true;
+        if (this->n_lora_q           != other.n_lora_q)           return true;
+        if (this->n_lora_kv          != other.n_lora_kv)          return true;
+        if (this->n_ff_exp           != other.n_ff_exp)           return true;
+        if (this->n_expert_shared    != other.n_expert_shared)    return true;
 
         if (this->rope_finetuned  != other.rope_finetuned)  return true;
         if (this->n_yarn_orig_ctx != other.n_yarn_orig_ctx) return true;
@@ -4465,7 +4465,7 @@ static void llm_load_hparams(
             {
                 bool is_lite = (hparams.n_layer == 27);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
-                ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT, hparams.n_leading_dense_layer);
+                ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT, hparams.n_layer_dense_lead);
                 if (!is_lite) {
                     ml.get_key(LLM_KV_ATTENTION_Q_LORA_RANK, hparams.n_lora_q);
                 }
@@ -6347,7 +6347,7 @@ static bool llm_load_tensors(
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
 
-                        if ((uint32_t) i < hparams.n_leading_dense_layer) {
+                        if ((uint32_t) i < hparams.n_layer_dense_lead) {
                             layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
                             layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                             layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
@@ -11321,7 +11321,7 @@ struct llm_build_context {
             struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
             cb(ffn_inp, "ffn_inp", il);
 
-            if ((uint32_t) il < hparams.n_leading_dense_layer) {
+            if ((uint32_t) il < hparams.n_layer_dense_lead) {
                 cur = llm_build_norm(ctx0, ffn_inp, hparams,
                         model.layers[il].ffn_norm, NULL,
                         LLM_NORM_RMS, cb, il);
