@@ -1,19 +1,22 @@
-<!-- <!DOCTYPE html> -->
+<!DOCTYPE html>
+
 <html>
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <meta name="color-scheme" content="light dark">
   <title>llama.cpp - chat</title>
+
   <link rel="stylesheet" href="style.css">
 
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
-    } from './index.js';
+    } from '/index.js';
 
-    import { llama } from './completion.js';
-    import { SchemaConverter } from './json-schema-to-grammar.mjs'; //BNF
+    import { llama } from '/completion.js';
+    import { SchemaConverter } from '/json-schema-to-grammar.mjs';
     import { promptFormats } from './promptFormats.js';
     import { systemPrompts } from './EN_systemPrompts.js'; // multilingual is wip
     let selected_image = false;
@@ -54,7 +57,9 @@
       api_key: ''
     })
 
-    /* START: Support for storing prompt templates and parameters in browsers LocalStorage */
+
+
+    /* START: Support for storing prompt templates and parameters in browser's LocalStorage */
 
     const local_storage_storageKey = "llamacpp_server_local_storage";
 
@@ -98,7 +103,7 @@
     let importedTemplates = local_storage_getDataAsObject('user_templates')
 
     if (importedTemplates) {
-      // saved templates were successfully imported.
+      // saved templates were successfuly imported.
 
       console.log('Processing saved templates and updating default template')
       params.value = { ...params.value, image_data: [] };
@@ -119,7 +124,7 @@
     }
 
     function userTemplateResetToDefault() {
-      console.log('Resetting template to default')
+      console.log('Reseting themplate to default')
       selectedUserTemplate.value.name = 'default';
       selectedUserTemplate.value.data = savedUserTemplates.value['default'];
     }
@@ -185,7 +190,7 @@
     console.log('Checking for autosaved last used template')
     userTemplateLoadAndApplyAutosaved()
 
-    /* END: Support for storing prompt templates and parameters in browsers LocalStorage */
+    /* END: Support for storing prompt templates and parameters in browser's LocalStorage */
 
     const llamaStats = signal(null)
     const controller = signal(null)
@@ -219,9 +224,8 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: location.pathname.replace(/\/+$/, '') })) {
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
         const data = chunk.data;
-
         if (data.stop) {
           while (
             currentMessages.length > 0 &&
@@ -235,17 +239,15 @@
           currentMessages.push(data);
           slot_id = data.slot_id;
           if (selected_image && !data.multimodal) {
-            alert("The server was not compiled for multimodal or the model projector can't be loaded.");
-            return;
+            alert("The server was not compiled for multimodal or the model projector can't be loaded.");            return;
           }
           transcriptUpdate([...history, [char, currentMessages]])
         }
-
         if (data.timings) {
+          // llamaStats.value = data.timings;
           llamaStats.value = data;
         }
       }
-
       controller.value = null;
     }
 
@@ -282,6 +284,20 @@
         stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
       }, "{{char}}");
     }
+
+    // const runCompletion = async () => {
+    //   if (controller.value) {
+    //     console.log('already running...');
+    //     return;
+    //   }
+    //   const { prompt } = session.value;
+    //   transcriptUpdate([...session.value.transcript, ["", prompt]]);
+    //   await runLlama(prompt, {
+    //     ...params.value,
+    //     slot_id: slot_id,
+    //     stop: [],
+    //   }, "");
+    // }
 
     const runCompletion = () => {
       if (controller.value) {
@@ -375,19 +391,56 @@
       `
     }
 
-    // completion view still needs some ux improvements
+    // the completion view needs some ux improvements
     function CompletionControls() {
       const submit = (e) => {
         stop(e);
         runCompletion();
       }
       return html`
-        <div>
+        <div class="right">
           <button onclick=${submit} type="button" disabled=${generating.value}>Start</button>
           <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-          <button onclick=${reset}>Reset</button>
+          <button onclick=${reset}>Back</button>
         </div>`;
     }
+
+    // const ChatLog = (props) => {
+    //   const messages = session.value.transcript;
+    //   const container = useRef(null)
+
+    //   useEffect(() => {
+    //     // scroll to bottom (if needed)
+    //     const parent = container.current.parentElement;
+    //     if (parent && parent.scrollHeight <= parent.scrollTop + parent.offsetHeight + 300) {
+    //       parent.scrollTo(0, parent.scrollHeight)
+    //     }
+    //   }, [messages])
+
+    //   const chatLine = ([user, data], index) => {
+    //     let message
+    //     const isArrayMessage = Array.isArray(data)
+    //     if (params.value.n_probs > 0 && isArrayMessage) {
+    //       message = html`<${Probabilities} data=${data} />`
+    //     } else {
+    //       const text = isArrayMessage ?
+    //         data.map(msg => msg.content).join('').replace(/^\s+/, '') :
+    //         data;
+    //       message = html`<${Markdownish} text=${template(text)} />`
+    //     }
+    //     if (user) {
+    //       return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
+    //     } else {
+    //       return html`<p key=${index}>${message}</p>`
+    //     }
+    //   };
+
+    //   return html`
+    //     <section id="chat" contenteditable="true" ref=${container}>
+    //       <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
+    //       ${messages.flatMap(chatLine)}
+    //     </section>`;
+    // };
 
     const ChatLog = (props) => {
       const messages = session.value.transcript;
@@ -438,20 +491,18 @@
         </div>`;
     };
 
-///////////////////////////////////////////
+
 
 ///////////// UI Improvements /////////////
 //
-// toggle chat/completion
+//
 const handleToggleChange = (e) => {
   const isChecked = e.target.checked;
   session.value = { ...session.value, type: isChecked ? 'completion' : 'chat' };
-  // todo require further actions to update the user interface
-  // for example, calling a function that re-renders the form or updates the state
-  // that controls the display of the form. Currently after reset chat toggle does not return
 }
 //
-// Insert the chosen prompt format
+//
+// function to update the prompt format
 function updatePromptFormat(e) {
   const promptFormat = e.target.value;
   if (promptFormats.hasOwnProperty(promptFormat)) {
@@ -472,46 +523,48 @@ function updatePromptFormat(e) {
   console.log('Updated session value:', session.value); //
 }
 //
-// Update the prompt format from the dropdown
+//
+// function to update the prompt format from the selected one
 function updatePromptFormatFromDropdown(element) {
   const promptFormat = element.getAttribute('data-value');
   console.log('Selected prompt format:', promptFormat); // debugging
   updatePromptFormat({ target: { value: promptFormat } });
 }
 //
-// adds the event listeners once the element is available
+//
+// function that adds the event listers as soon as the element is available
 function addEventListenersWhenAvailable() {
   var themeSelector = document.getElementById('theme-selector');
   if (themeSelector) {
     themeSelector.addEventListener('change', function(event) {
-      // event handler...
+      // event-handler-code...
     });
-    // placeholder further listeners wip
+    // placeholder event listeners here
   } else {
-    // if the element is not available yet, wait for the next frame
+    // if the element is not there yet, wait ahead
     requestAnimationFrame(addEventListenersWhenAvailable);
   }
 }
 //
+//
 // begin with the check
 requestAnimationFrame(addEventListenersWhenAvailable);
 //
-// handle the dropdown selection
+//
+// avoid default and create new event object with value from data value attribute
 function handleDropdownSelection(e, promptFormat) {
-  // avoid the default behavior of the link
   e.preventDefault();
-  // create a new event object with the value from the data-value attribute
   const customEvent = {
     target: {
       value: promptFormat
     }
   };
-  //
-  // call the updatePromptFormat function with the new event object
+  // call our updatePromptFormat-function
   updatePromptFormat(customEvent);
 }
 //
-// Update the system prompt
+//
+// function to update the system message
 function updateSystemPrompt(e) {
   const SystemPrompt = e.target.value;
   if (systemPrompts.hasOwnProperty(SystemPrompt)) {
@@ -521,17 +574,131 @@ function updateSystemPrompt(e) {
     };
   }
 }
+//
+//
 ///////////// UI Improvements /////////////
 
-///////////////////////////////////////////
 
-    const ConfigForm = (props) => {
+
+///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
+//
+//
+//
+///////////////////////////////////////////////////////////////////////////
+//
+// document.addEventListener('DOMContentLoaded', (event) => {
+//   // Add event listener for the language selection dropdown
+//   document.getElementById('systemLanguage').addEventListener('change', updateSystemLanguage);
+// });
+// //
+// async function updateSystemLanguage(event) {
+//   const language = event.target.value;
+//   const languageFile = language === 'default' ? 'EN_systemPrompts.js' : `${language.toUpperCase()}_systemPrompts.js`;
+//   const uiLanguageFile = language === 'default' ? 'EN_texts.json' : `${language.toUpperCase()}_texts.json`;
+// //
+//   try {
+//     // System prompts
+//     const promptsModule = await import(`./${languageFile}`);
+//     const systemPrompts = promptsModule.systemPrompts;
+//     // Update the system prompt
+//     document.getElementById('prompt').textContent = systemPrompts.default.systemPrompt;
+//     // The UI texts
+//     const response = await fetch(uiLanguageFile);
+//     const uiTexts = await response.json();
+//     // Update the label
+//     document.getElementById('id_user-name').textContent = uiTexts.USER_NAME;
+//     document.getElementById('id_bot-name').textContent = uiTexts.BOT_NAME;
+//     document.getElementById('id_toggle-label-chat').textContent = uiTexts.TOGGLE_LABEL_CHAT;
+//     document.getElementById('id_toggle-label-complete').textContent = uiTexts.TOGGLE_LABEL_COMPLETE;
+//     document.getElementById('id_history-template').textContent = uiTexts.HISTORY_TEMPLATE;
+//     document.getElementById('id_prompt-style').textContent = uiTexts.PROMPT_STYLE;
+//     document.getElementById('id_prompt-template').textContent = uiTexts.PROMPT_TEMPLATE;
+//     document.getElementById('id_reset').textContent = uiTexts.RESET;
+//     document.getElementById('id_grammar-title').textContent = uiTexts.GRAMMAR_TITLE;
+//     document.getElementById('id_grammar').textContent = uiTexts.GRAMMAR;
+//     document.getElementById('id_grammar-order-placeholder').textContent = uiTexts.GRAMMAR_ORDER_PLACEHOLDER;
+//     document.getElementById('id_grammar-convert-button').textContent = uiTexts.GRAMMAR_CONVERT_BUTTON;
+//     document.getElementById('id_predict-tokens').textContent = uiTexts.PREDICT_TOKENS;
+//     document.getElementById('id_temperature').textContent = uiTexts.TEMPERATURE;
+//     document.getElementById('id_top-k').textContent = uiTexts.TOP_K;
+//     document.getElementById('id_top-p').textContent = uiTexts.TOP_P;
+//     document.getElementById('id_repetition-penalty').textContent = uiTexts.REPETITION_PENALTY;
+//     document.getElementById('id_more-options').textContent = uiTexts.MORE_OPTIONS;
+//     document.getElementById('id_penalize-last').textContent = uiTexts.PENALIZE_LAST;
+//     document.getElementById('id_tfs-z').textContent = uiTexts.TFS_Z;
+//     document.getElementById('id_penalize-presence').textContent = uiTexts.PENALIZE_PRESENCE;
+//     document.getElementById('id_penalize-frequence').textContent = uiTexts.PENALIZE_FREQUENCE;
+//     document.getElementById('id_typical-p').textContent = uiTexts.TYPICAL_P;
+//     document.getElementById('id_mirostat-off').textContent = uiTexts.MIROSTAT_OFF;
+//     document.getElementById('id_mirostat-on-1').textContent = uiTexts.MIROSTAT_ON_1;
+//     document.getElementById('id_mirostat-on-2').textContent = uiTexts.MIROSTAT_ON_2;
+//     document.getElementById('id_mirostat-entropy').textContent = uiTexts.MIROSTAT_ENTROPY;
+//     document.getElementById('id_mirostat-learnrate').textContent = uiTexts.MIROSTAT_LEARNRATE;
+//     document.getElementById('id_show-probabilities').textContent = uiTexts.SHOW_PROBABILITIES;
+//     document.getElementById('id_user-input-placeholder').textContent = uiTexts.USER_INPUT_PLACEHOLDER;
+//     document.getElementById('id_button-back').textContent = uiTexts.BUTTON_BACK;
+//     document.getElementById('id_button-upload-image').textContent = uiTexts.BUTTON_UPLOAD_IMAGE;
+//     document.getElementById('id_button-stop-inference').textContent = uiTexts.BUTTON_STOP_INFERENCE;
+//     document.getElementById('id_button-start-inference').textContent = uiTexts.BUTTON_START_INFERENCE;
+//     document.getElementById('id_powered-by').textContent = uiTexts.POWERED_BY;
+//     document.getElementById('id_and').textContent = uiTexts.AND;
+//   } catch (error) {
+//     console.error('Error loading the language files:', error);
+//   }
+// }
+//
+// async function updateTexts(systemPrompts) {
+//   // Update the texts that come from the language files
+//   document.querySelector('#someElement').textContent = systemPrompts.default.systemPrompt;
+//   // Load the JSON file for the UI elements
+//   const uiLanguageFile = `./${language}_texts.json`;
+//   try {
+//     const response = await fetch(uiLanguageFile);
+//     const uiTexts = await response.json();
+//     // Update the UI elements
+//     // document.querySelector('label[for="user"]').textContent = uiTexts.USER_NAME;
+//     document.getElementById('label-user').textContent = uiTexts.USER_NAME;
+//     // Update further elements
+//   } catch (error) {
+//     console.error('Error when loading the UI texts:', error);
+//   }
+// }
+//
+///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
+//
+///////////////////////////////////////////////////////////////////////////
+
+
+
+
+
+
+      const ConfigForm = (props) => {
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
       const updateParamsFloat = (el) => params.value = { ...params.value, [el.target.name]: parseFloat(el.target.value) }
       const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: Math.floor(parseFloat(el.target.value)) }
       const updateParamsBool = (el) => params.value = { ...params.value, [el.target.name]: el.target.checked }
 
+      // const grammarJsonSchemaPropOrder = signal('')
+      // const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
+      // const convertJSONSchemaGrammar = () => {
+      //   try {
+      //     const schema = JSON.parse(params.value.grammar)
+      //     const converter = new SchemaConverter(
+      //       grammarJsonSchemaPropOrder.value
+      //         .split(',')
+      //         .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {})
+      //     )
+      //     converter.visit(schema, '')
+      //     params.value = {
+      //       ...params.value,
+      //       grammar: converter.formatGrammar(),
+      //     }
+      //   } catch (e) {
+      //     alert(`Conversion failed: ${e.message}`)
+      //   }
+      // }
       const grammarJsonSchemaPropOrder = signal('')
       const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
       const convertJSONSchemaGrammar = async () => {
@@ -554,6 +721,8 @@ function updateSystemPrompt(e) {
         }
       }
 
+
+
       const FloatField = ({ label, max, min, name, step, value }) => {
         return html`
           <div>
@@ -564,12 +733,12 @@ function updateSystemPrompt(e) {
         `
       };
 
-      const IntField = ({ label, max, min, name, value }) => {
+      const IntField = ({ label, max, min, step, name, value }) => {
         return html`
           <div>
             <label for="${name}">${label}</label>
-            <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
-            <span id="${name}-value">${value}</span>
+              <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+              <span id="${name}-value">${value}</span>
           </div>
         `
       };
@@ -639,7 +808,6 @@ function updateSystemPrompt(e) {
         `
       );
 
-      // todo update the form: reduce the amount, uset he new templates, integrate and adapt to the templates from https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
       const ChatConfigForm = () => (
         html`
           <fieldset class="dropdowns">
@@ -698,6 +866,7 @@ function updateSystemPrompt(e) {
                 <option value="airoboros">Airoboros</option>
                 <option value="alpaca">Alpaca</option>
                 <option value="atlas">Atlas</option>
+                <option value="atlas_de">Atlas - DE</option>
                 <option value="cot">Chain of Tought</option>
                 <option value="deduce">Critical Thinking</option>
                 <option value="deepseekcoder">Deepseek Coder</option>
@@ -723,15 +892,15 @@ function updateSystemPrompt(e) {
           <fieldset class="names">
             <div>
               <label for="user" id="id_user-name">User Name</label>
-              <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
+              <input type="text" id="user" name="user" value="${session.value.user}" oninput=${updateSession} />
             </div>
             <div>
               <label for="bot" id="id_bot-name">AI Name</label>
-              <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
+              <input type="text" id="bot" name="char" value="${session.value.char}" oninput=${updateSession} />
             </div>
           </fieldset>
           <fieldset>
-            <details open>
+            <details>
               <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
               <div class="two-columns">
                 <div>
@@ -743,7 +912,7 @@ function updateSystemPrompt(e) {
                 <div>
                   <div class="input-container">
                     <label for="template" class="input-label-sec" id="id_history-template">Chat History</label>
-                    <textarea id="template" class="persistent-input-sec" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+                    <textarea id="history-template" class="persistent-input-sec" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
                   </div>
                 </div>
               </div>
@@ -756,8 +925,6 @@ function updateSystemPrompt(e) {
             </fieldset>
         `
       );
-
-      // todo add possibility to concatenate special, well known
 
       const CompletionConfigForm = () => (
         html`
@@ -796,7 +963,6 @@ function updateSystemPrompt(e) {
               ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
               ${FloatField({ label: "Frequency Penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
               ${FloatField({ label: "Typical-P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
-              ${BoolField({ label: "Penalize repetition of newlines", name: "penalize_nl", value: params.value.penalize_nl })}
             </fieldset>
 
             <hr style="height: 1px; background-color: #ececf1; border: none;" />
@@ -811,17 +977,18 @@ function updateSystemPrompt(e) {
               ${FloatField({ label: "Learning-rate eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
 
               ${IntField({ label: "Show Probabilities", max: 10, min: 0, step: 1, name: "n_probs", value: params.value.n_probs })}
-            </fieldset>
               ${IntField({ label: "Min Probabilities from each Sampler", max: 10, min: 0, name: "min_keep", value: params.value.min_keep })}
             </fieldset>
-            <fieldset>
-              <label for="api_key">API Key</label>
-              <input type="text" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
-            </fieldset>
           </details>
+            <fieldset class="apiKey">
+              <label for="api_key">API Key</label>
+              <input type="text" id="api_key" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
+            </fieldset>
         </form>
       `
     }
+
+    // todo - beautify apikey css
 
     const probColor = (p) => {
       const r = Math.floor(192 * (1 - p));
@@ -897,23 +1064,13 @@ function updateSystemPrompt(e) {
       return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`;
     };
 
-    // const ModelGenerationInfo = (params) => {
-    //   if (!llamaStats.value) {
-    //     return html`<span/>`
-    //   }
-    //   return html`
-    //     <span>
-    //       ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
-    //     </span>
-    //   `
-    // }
     const ModelGenerationInfo = (params) => {
       if (!llamaStats.value) {
         return html`<span/>`
       }
       return html`
-        <span>
-          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
+        <span class=generation-statistics>
+          ${llamaStats.value.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
         </span>
       `
     }
@@ -1030,11 +1187,6 @@ function updateSystemPrompt(e) {
     }
 
     function App(props) {
-      useEffect(() => {
-        const query = new URLSearchParams(location.search).get("q");
-        if (query) chat(query);
-      }, []);
-
       return html`
         <div class="mode-${session.value.type}">
           <header>
@@ -1067,14 +1219,10 @@ function updateSystemPrompt(e) {
       `;
     }
 
-
-
-///////////// UI Improvements /////////////
-//
-document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', function() {
   var themeSelector = document.getElementById('theme-selector');
   var themeLinks = themeSelector.querySelectorAll('a[data-theme]');
-  //
+
   themeLinks.forEach(function(link) {
     link.addEventListener('click', function(event) {
       event.preventDefault(); // avoid default behaviour
@@ -1082,7 +1230,7 @@ document.addEventListener('DOMContentLoaded', function() {
       changeTheme(selectedTheme);
     });
   });
-  //
+
   function changeTheme(theme) {
     document.body.classList.remove('theme-default', 'theme-mangotango', 'theme-playground', 'theme-polarnight', 'theme-snowstorm', 'theme-beeninorder');
     if (theme !== 'default') {
@@ -1090,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     localStorage.setItem('selected-theme', theme);
   }
-  //
+
   // set the selected theme when loading the page
   var savedTheme = localStorage.getItem('selected-theme');
   if (savedTheme && savedTheme !== 'default') {
@@ -1102,7 +1250,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
-//
+
+
 // snapping of the slider to indicate 'disabled'
 document.addEventListener('DOMContentLoaded', (event) => {
   // define an object that contains snap values and ranges for each slider
@@ -1138,16 +1287,14 @@ document.addEventListener('DOMContentLoaded', (event) => {
     });
   });
 });
-//
-///////////// UI Improvements /////////////
-
-
 
     render(h(App), document.querySelector('#container'));
+
   </script>
 </head>
 
 <body>
+
   <div id="container">
     <input type="file" id="fileInput" accept="image/*" style="display: none;">
   </div>
@@ -1155,4 +1302,3 @@ document.addEventListener('DOMContentLoaded', (event) => {
 </body>
 
 </html>
-
