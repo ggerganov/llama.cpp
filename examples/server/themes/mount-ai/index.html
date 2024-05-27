@@ -569,12 +569,12 @@ function updateSystemPrompt(e) {
         `
       };
 
-      const IntField = ({ label, max, min, step, name, value }) => {
+      const IntField = ({ label, title, max, min, step, name, value }) => {
         return html`
           <div>
-            <label for="${name}">${label}</label>
-              <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
-              <span id="${name}-value">${value}</span>
+            <label for="${name}" title="${title}">${label}</label>
+            <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+            <span id="${name}-value">${value}</span>
           </div>
         `
       };
@@ -782,13 +782,17 @@ function updateSystemPrompt(e) {
                   <div id="id_toggle-label-chat">Chat</div>
                   <div id="id_toggle-label-complete">Complete</div>
                 </label>
-                <input type="text" id="api_key" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
+          <fieldset>
+
+              <input type="text" id="api_key" class="apiKey" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
+          </fieldset>
+
             <${UserTemplateResetButton}/>
           </fieldset>
 
           ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
-          <fieldset class="two">
+          <fieldset class="params">
             ${IntField({ label: "Prediction", max: 2048, min: -1, step: 16, name: "n_predict", value: params.value.n_predict, })}
             ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
             ${FloatField({ label: "Repetition Penalty", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
@@ -797,7 +801,7 @@ function updateSystemPrompt(e) {
 
           <details>
             <summary><span class="summary-title">Further Options</span></summary>
-            <fieldset class="two">
+            <fieldset class="params">
               ${IntField({ label: "Top-K", max: 100, min: 0, step: 1, name: "top_k", value: params.value.top_k })}
               ${IntField({ label: "Penalize Last N", max: 2048, min: 0, step: 16, name: "repeat_last_n", value: params.value.repeat_last_n })}
               ${FloatField({ label: "Top-P", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
@@ -805,27 +809,27 @@ function updateSystemPrompt(e) {
               ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
               ${FloatField({ label: "Frequency Penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
               ${FloatField({ label: "Typical-P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
+              ${IntField({ label: "Min Keep", title: "If greater than 0, samplers are forced to return N possible tokens at minimum. Default is 0", max: 10, min: 0, name: "min_keep", value: params.value.min_keep })}
             </fieldset>
 
             <hr style="height: 1px; background-color: #ececf1; border: none;" />
 
             <fieldset class="three">
-              <div>
                 <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> Mirostat off</label>
                 <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
                 <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
-              </div>
+              </fieldset>
+            <fieldset class="params">
               ${FloatField({ label: "Entropy tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
               ${FloatField({ label: "Learning-rate eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
-
-              ${IntField({ label: "Show Probabilities", max: 10, min: 0, step: 1, name: "n_probs", value: params.value.n_probs })}
-              ${IntField({ label: "Min Probabilities from each Sampler", max: 10, min: 0, name: "min_keep", value: params.value.min_keep })}
             </fieldset>
+
+              <hr style="height: 1px; background-color: #ececf1; border: none;" />
+
+              <fieldset class="params">
+                ${IntField({ label: "Show Probabilities", title: "Tooltip-Text hier", max: 10, min: 0, step: 1, name: "n_probs", value: params.value.n_probs })}
+              </fieldset>
           </details>
-            <fieldset class="apiKey">
-              <label for="api_key">API Key</label>
-
-            </fieldset>
         </form>
       `
     }

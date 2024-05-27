@@ -68,6 +68,8 @@ p {
 }
 
 .two-columns {
+  width: 97%;
+  max-width: 97%;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1em;
@@ -76,7 +78,8 @@ p {
 
 .json-schema-controls {
   margin-top: 10px;
-  width: 100%;
+  width: 97%;
+  max-width: 97%;
   display: grid;
   grid-template: "a a";
   gap: 1em;
@@ -110,8 +113,9 @@ fieldset {
 
 fieldset.two {
   display: grid;
-  grid-template: "a a";
+  grid-template: "a a a";
   gap: 1em;
+  align-items: center;
   font-size: x-small;
   color: var(--text-color-plain);
 }
@@ -131,6 +135,19 @@ fieldset.names {
   gap: 1em;
   font-size: x-small;
   color: var(--theme-nuance-color-3);
+  padding-top: 16px;
+  padding-bottom: 16px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* titles of name fields*/
+fieldset.params {
+  display: grid;
+  grid-template: "a a";
+  gap: 1em;
+  font-size: x-small;
+  color: var(--theme-nuance-color-4);
   padding-top: 16px;
   padding-bottom: 16px;
   text-transform: uppercase;
@@ -431,6 +448,7 @@ textarea {
   padding: 5px;
   flex-grow: 1;
   width: 100%;
+  max-width: 100%;
   border-radius: 8px;
   border: 1px solid var(--border-color-1);
   resize: none;
@@ -512,6 +530,8 @@ input[type="radio"] {
 
 .chat-input-container {
   position: relative;
+  max-width: 97%;
+  min-width: 97%;
 }
 
 .chat-input-label {
@@ -539,29 +559,39 @@ textarea#chat-input:focus {
 
 .input-container {
   position: relative;
+  box-sizing: border-box;
+  width: 100%; /* Setzt die Breite auf 100% */
+  max-width: 100%; /* Stellt sicher, dass die Breite nicht größer als 100% wird */
 }
 
 .input-container:focus {
   border: 1px solid var(--border-focus-color);
   box-shadow: 0 0 3px var(--border-focus-shadow);
 }
+/* titles of name fields*/
+/* fieldset.names {
+  display: grid;
+  grid-template: "a a";
+  gap: 1em;
+  font-size: x-small;
+  color: var(--theme-nuance-color-3);
+  padding-top: 16px;
+  padding-bottom: 16px;
+  text-transform: uppercase;
+  font-weight: 600;
+} */
 
-textarea#api_key {
-  margin-left: 20px;
-  padding-top: 10px;
-  padding-left: 10px;
+/* input of name fields*/
+/* .names input[type="text"] {
+  font-family: Arial, sans-serif;
   font-size: medium;
+  font-weight: 500;
+  padding: 5px;
   border: 1px solid var(--border-color-2);
-  resize: vertical;
-}
-
-textarea#api_key:focus {
-  border: 1px solid var(--border-focus-color);
-  box-shadow: 0 0 3px var(--border-focus-shadow);
-}
+} */
 
 fieldset.apiKey {
-  gap: 1em;
+  width: 100%;
   font-size: x-small;
   color: var(--theme-nuance-color-3);
   padding-top: 16px;
@@ -572,7 +602,6 @@ fieldset.apiKey {
 
 .apiKey {
   font-family: Arial, sans-serif;
-  font-size: medium;
   font-weight: 500;
   padding: 5px;
   border: 1px solid var(--border-color-2);
@@ -590,6 +619,19 @@ fieldset.apiKey {
   display: inline-block;
   width: auto;
   margin-right: 5px;
+}
+
+textarea#api_key {
+  padding-top: 10px;
+  padding-left: 10px;
+  font-size: medium;
+  border: 1px solid var(--border-color-2);
+  resize: vertical;
+}
+
+textarea#api_key:focus {
+  border: 1px solid var(--border-focus-color);
+  box-shadow: 0 0 3px var(--border-focus-shadow);
 }
 
 /* embedded title of the system prompt text area */
@@ -635,6 +677,8 @@ fieldset.apiKey {
 textarea.persistent-input {
   padding-top: 42px;
   padding-left: 11px;
+  width: 97%;
+  max-width: 97%;
   font-size: medium;
   overscroll-behavior: contain;
 }
@@ -642,7 +686,10 @@ textarea.persistent-input {
 /* chat history box */
 .persistent-input {
   height: auto;
+  width: 100%;
+  max-width: 100%;
   min-height: 150px;
+  padding: 3px;
 }
 
 /* chat history box */
@@ -660,6 +707,8 @@ textarea.persistent-input:focus {
 
 /* prompt style input area */
 textarea.persistent-input-sec {
+  width: 97%;
+  max-width: 97%;
   padding-top: 42px;
   padding-left: 11px;
   font-size: small;
@@ -731,7 +780,7 @@ footer {
   color: var(--background-color-3);
   text-align: center;
   cursor: default;
-  }
+}
 
 footer a {
   color: var(--background-color-4); /* Color of the link */
@@ -877,4 +926,14 @@ footer a:hover {
   font-size: x-small;
   font-weight: 600;
   background-color: var(-background-color-4);
+} */
+
+/* .omni {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5em;
+  border: 1px solid var(--border-color-3);
+  border-radius: 5px;
+  margin: 0.5em 0;
 } */
