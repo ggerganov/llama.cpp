@@ -1274,7 +1274,7 @@ struct test_concat : public test_case {
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
         ggml_tensor * b = ggml_new_tensor_4d(ctx, type, ne[0], ne[1], b_ne2, ne[3]);
-        ggml_tensor * out = ggml_concat(ctx, a, b);
+        ggml_tensor * out = ggml_concat(ctx, a, b, 2);
         return out;
     }
 };
