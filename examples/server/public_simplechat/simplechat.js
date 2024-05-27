@@ -579,6 +579,7 @@ class Me {
             "Last0": 1,
             "Last1": 2,
             "Last2": 3,
+            "Last4": 5,
         };
         this.apiEP = ApiEP.Type.Chat;
         // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.

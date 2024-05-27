@@ -54,9 +54,10 @@ Open this simple web front end from your local browser
 
 Once inside
 
-* Select between chat and completion mode. By default it is set to chat mode.
-
-* Change the default global settings, if one wants to.
+* If you want to, you can change many of the default global settings
+  * chat (default) vs completion mode
+  * try trim garbage in response or not
+  * amount of chat history in the context sent to server/ai-model
 
 * In completion mode
   * logic by default doesnt insert any role specific "ROLE: " prefix wrt each role's message.
@@ -92,6 +93,7 @@ Once inside
 * Wait for the logic to communicate with the server and get the response.
   * the user is not allowed to enter any fresh query during this time.
   * the user input box will be disabled and a working message will be shown in it.
+  * if trim garbage is enabled, the logic will try to trim repeating text kind of garbage to some extent.
 
 * just refresh the page, to reset wrt the chat history and or system prompt and start afresh.
 
@@ -118,6 +120,8 @@ Me/gMe consolidates the settings which control the behaviour into one object.
 One can see the current settings, as well as change/update them using browsers devel-tool/console.
 It is attached to the document object. Some of these can also be updated using the Settings UI.
 
+  apiEP - select between /completions and /chat/completions endpoint provided by the server/ai-model.
+
   bCompletionFreshChatAlways - whether Completion mode collates complete/sliding-window history when
   communicating with the server or only sends the latest user query/message.
 
@@ -129,8 +133,8 @@ It is attached to the document object. Some of these can also be updated using t
   subsequent chat history. At the same time the actual trimmed text is shown to the user, once
   when it was generated, so user can check if any useful info/data was there in the response.
 
-    One may be able to request the ai-model to continue (wrt the last response) (if chat-history is
-    enabled as part of the chat-history-in-context setting), and chances are the ai-model will
+    One may be able to request the ai-model to continue (wrt the last response) (if chat-history
+    is enabled as part of the chat-history-in-context setting), and chances are the ai-model will
     continue starting from the trimmed part, thus allows long response to be recovered/continued
     indirectly, in many cases.
 
@@ -155,7 +159,8 @@ It is attached to the document object. Some of these can also be updated using t
 
 By using gMe's iRecentUserMsgCnt and chatRequestOptions.max_tokens one can try to control the
 implications of loading of the ai-model's context window by chat history, wrt chat response to
-some extent in a simple crude way.
+some extent in a simple crude way. You may also want to control the context size enabled when
+the server loads ai-model, on the server end.
 
 
 Sometimes the browser may be stuborn with caching of the file, so your updates to html/css/js
@@ -194,7 +199,8 @@ However a developer when testing the server of ai-model may want to change these
 Using iRecentUserMsgCnt reduce chat history context sent to the server/ai-model to be
 just the system-prompt, prev-user-request-and-ai-response and cur-user-request, instead of
 full chat history. This way if there is any response with garbage/repeatation, it doesnt
-mess with things beyond the next question/request/query, in some ways.
+mess with things beyond the next question/request/query, in some ways. The trim garbage
+option also tries to help avoid issues with garbage in the context to an extent.
 
 Set max_tokens to 1024, so that a relatively large previous reponse doesnt eat up the space
 available wrt next query-response. However dont forget that the server when started should
