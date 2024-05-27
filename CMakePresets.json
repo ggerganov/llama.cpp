@@ -1,4 +1,4 @@
-﻿{
+{
   "version": 4,
   "configurePresets": [
     {
@@ -40,6 +40,10 @@
 
     { "name": "arm64-windows-msvc-debug"  , "inherits": [ "base", "arm64-windows-msvc",  "debug"   ] },
     { "name": "arm64-windows-msvc-release", "inherits": [ "base", "arm64-windows-msvc",  "release" ] },
-    { "name": "arm64-windows-msvc+static-release", "inherits": [ "base", "arm64-windows-msvc",  "release", "static" ] }
+    { "name": "arm64-windows-msvc+static-release", "inherits": [ "base", "arm64-windows-msvc",  "release", "static" ] },
+
+    { "name": "x64-windows-msvc-debug"  , "inherits": [ "base", "debug"   ] },
+    { "name": "x64-windows-msvc-release", "inherits": [ "base", "release" ] },
+    { "name": "x64-windows-msvc+static-release", "inherits": [ "base", "release", "static" ] }
   ]
 }
