@@ -4466,8 +4466,9 @@ static void llm_load_hparams(
                 bool is_lite = (hparams.n_layer == 27);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT, hparams.n_leading_dense_layer);
-                if (!is_lite) 
+                if (!is_lite) {
                     ml.get_key(LLM_KV_ATTENTION_Q_LORA_RANK, hparams.n_lora_q);
+                }
                 ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK, hparams.n_lora_kv);
                 ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_expert_ff);
                 ml.get_key(LLM_KV_EXPERT_SHARED_COUNT, hparams.n_expert_shared);
@@ -6330,8 +6331,9 @@ static bool llm_load_tensors(
                         auto & layer = model.layers[i];
 
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
-                        if (!is_lite)
+                        if (!is_lite) {
                             layer.attn_q_a_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_A_NORM, "weight", i), {q_lora_rank});
+                        }
                         layer.attn_kv_a_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_KV_A_NORM, "weight", i), {kv_lora_rank});
 
                         if (!is_lite) {
