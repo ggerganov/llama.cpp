@@ -2,36 +2,30 @@
 
 This is a demo of an approach of distributed evaluation/speculation using rpc.
 
-It is a fairly minimal app, and many more improvements could be made. 
-
-### Idea
-
 Idea is coming from discussion here: https://github.com/ggerganov/llama.cpp/discussions/6853#discussioncomment-9473494.
-When we run a large model and distribute the evaluation across multiple devices, they still evaluate model sequentially.
-In case of two identical devices and equal model split we would leave half of compute on the table, assuming individual use-case (e.g. personal chat).
+When we run a large model and distribute the evaluation across multiple instances, they still evaluate model sequentially in case of individial query/no pipelining. 
+In case of two identical devices and equal model split we would leave half of compute on the table.
 
-We can utilize this compute to speculate and then evaluate larger sequence of tokens.
+We can utilize this compute to speculate and then evaluate larger sequence of tokens. 
 
 This demo is fairly limited, more like a proof of concept:
 1. Expects exactly two instances running main model
-2. Only one of these instances speculating when main model is idle, so we still waste 25% of compute
+2. Only one of these instances speculating when main model is idle, so we still waste 25% of compute. Once we get a callback that a split is done, the instance running that split becomes idle and we start running speculation model there until main model becomes active again.
 3. Speculation is linear
 4. Sampling is greedy
 
-Improvement of the above points is probably easier to do as separate changes, to make reviewing easier.
+Improvement of the above points is probably easier to do as separate changes, to make reviewing and testing easier.
 
 ### Setup
 
 Devices:
 * Apple M1 16GB 
 * Apple M2 24GB
-* Connected with thunderbolt-4 cable and using TCP/IP over thunderbolt. 
+* Connected with thunderbolt-4 cable and using IP over thunderbolt. 
 
 Models:
 * Meta-Llama-3-8B-Instruct-fp16 as main
 * Meta-Llama-3-8B-Instruct-v2.Q2_K as speculation
-
-We could use different models as well.
 
 On M1
 ```
@@ -70,3 +64,7 @@ Extra:
 
 GPU util for both devices
 
+<img width="1350" alt="Screenshot 2024-05-27 at 12 42 34 PM" src="https://github.com/okuvshynov/llama.cpp/assets/661042/2275506d-ef3c-4cc0-9853-cb00354cc06d">
+
+In duo case: we utilize GPU at ~100% for instance running both speculation and main model, and ~50% for the one running main model only
+In main model only case: we utilize both at ~50%. The imbalance is likely because hardware is slightly different - M2 vs M1.
