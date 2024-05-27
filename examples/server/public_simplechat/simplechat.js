@@ -228,7 +228,7 @@ class SimpleChat {
         }
         if (gMe.bTrimGarbage) {
             let origMsg = theResp.assistant;
-            theResp.assistant = du.trim_hist_garbage_at_end_loop(theResp.assistant, 8, 24, 72);
+            theResp.assistant = du.trim_garbage_at_end(theResp.assistant);
             theResp.trimmed = origMsg.substring(theResp.assistant.length);
         }
         return theResp;

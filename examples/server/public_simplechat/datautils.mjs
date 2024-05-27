@@ -185,3 +185,17 @@ export function trim_hist_garbage_at_end_loop(sIn, maxType, maxUniq, maxMatchLen
         sCur = got.data;
     }
 }
+
+/**
+ * Try trim garbage at the end by using both the hist-driven-garbage-trimming as well as
+ * skip-a-bit-if-reqd-then-repeat-pattern-based-garbage-trimming, with blind retrying.
+ * @param {string} sIn
+ */
+export function trim_garbage_at_end(sIn) {
+    let sCur = sIn;
+    for(let i=0; i<2; i++) {
+        sCur = trim_hist_garbage_at_end_loop(sCur, 8, 24, 72);
+        sCur = trim_repeat_garbage_at_end_loop(sCur, 32, 72, 12);
+    }
+    return sCur;
+}
