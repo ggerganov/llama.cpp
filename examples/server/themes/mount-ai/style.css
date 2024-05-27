@@ -187,20 +187,6 @@ textarea-sec::placeholder, input-sec::placeholder {
   padding-left: 10px;
 }
 
-.apiKey input[type="text"] {
-  font-family: Arial, sans-serif;
-  font-size: medium;
-  font-weight: 500;
-  padding: 5px;
-  border: 1px solid var(--border-color-2);
-}
-
-.apiKey label {
-  display: inline-block;
-  width: auto;
-  margin-right: 5px;
-}
-
 .toggleCheckbox {
   display: none;
 }
@@ -558,6 +544,52 @@ textarea#chat-input:focus {
 .input-container:focus {
   border: 1px solid var(--border-focus-color);
   box-shadow: 0 0 3px var(--border-focus-shadow);
+}
+
+textarea#api_key {
+  margin-left: 20px;
+  padding-top: 10px;
+  padding-left: 10px;
+  font-size: medium;
+  border: 1px solid var(--border-color-2);
+  resize: vertical;
+}
+
+textarea#api_key:focus {
+  border: 1px solid var(--border-focus-color);
+  box-shadow: 0 0 3px var(--border-focus-shadow);
+}
+
+fieldset.apiKey {
+  gap: 1em;
+  font-size: x-small;
+  color: var(--theme-nuance-color-3);
+  padding-top: 16px;
+  padding-bottom: 16px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.apiKey {
+  font-family: Arial, sans-serif;
+  font-size: medium;
+  font-weight: 500;
+  padding: 5px;
+  border: 1px solid var(--border-color-2);
+}
+
+.apiKey input[type="text"] {
+  font-family: Arial, sans-serif;
+  font-size: medium;
+  font-weight: 500;
+  padding: 5px;
+  border: 1px solid var(--border-color-2);
+}
+
+.apiKey label {
+  display: inline-block;
+  width: auto;
+  margin-right: 5px;
 }
 
 /* embedded title of the system prompt text area */
