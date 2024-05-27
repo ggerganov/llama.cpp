@@ -187,6 +187,20 @@ textarea-sec::placeholder, input-sec::placeholder {
   padding-left: 10px;
 }
 
+.apiKey input[type="text"] {
+  font-family: Arial, sans-serif;
+  font-size: medium;
+  font-weight: 500;
+  padding: 5px;
+  border: 1px solid var(--border-color-2);
+}
+
+.apiKey label {
+  display: inline-block;
+  width: auto;
+  margin-right: 5px;
+}
+
 .toggleCheckbox {
   display: none;
 }
