@@ -988,6 +988,12 @@ VOCAB_TYPE_NAMES: dict[VocabType, str] = {
     VocabType.WPM: "WPM",
 }
 
+VOCAB_TYPE_MAP: dict[str, VocabType] = {
+    "SPM": VocabType.SPM,
+    "BPE": VocabType.BPE,
+    "WPM": VocabType.WPM,
+}
+
 
 #
 # Model File Types
@@ -1011,6 +1017,39 @@ MODEL_FILE_TYPE_NAMES: dict[ModelFileType, str] = {
     ModelFileType.JSON:        ".json",
     ModelFileType.MODEL:       ".model",
     ModelFileType.GGUF:        ".gguf",
+}
+
+MODEL_FILE_TYPE_MAP: dict[ModelFileType, str] = {
+    ".pt": ModelFileType.PT,
+    ".pth": ModelFileType.PTH,
+    ".bin": ModelFileType.BIN,
+    ".safetensors": ModelFileType.SAFETENSORS,
+    ".json": ModelFileType.JSON,
+    ".model": ModelFileType.MODEL,
+    ".gguf": ModelFileType.GGUF,
+}
+
+
+class PreTokenizerType(IntEnum):
+    NON                = auto()
+    BYTE_LEVEL         = auto()
+    BERT_PRE_TOKENIZER = auto()
+    METASPACE          = auto()
+    SEQUENCE           = auto()
+
+
+PRE_TOKENIZER_TYPE_NAMES: dict[PreTokenizerType, str] = {
+    PreTokenizerType.BYTE_LEVEL: "ByteLevel",
+    PreTokenizerType.BERT_PRE_TOKENIZER: "BertPreTokenizer",
+    PreTokenizerType.METASPACE: "Metaspace",
+    PreTokenizerType.SEQUENCE: "Sequence",
+}
+
+PRE_TOKENIZER_TYPE_MAP: dict[PreTokenizerType, str] = {
+    "ByteLevel": PreTokenizerType.BYTE_LEVEL,
+    "BertPreTokenizer": PreTokenizerType.BERT_PRE_TOKENIZER,
+    "Metaspace": PreTokenizerType.METASPACE,
+    "Sequence": PreTokenizerType.SEQUENCE,
 }
 
 #
