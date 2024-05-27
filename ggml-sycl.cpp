@@ -2978,10 +2978,9 @@ static int g_work_group_size = 0;
 
 #define GGML_SYCL_MAX_NODES 8192 //TODO: adapt to hardwares
 
-
-//define for XMX in Intel GPU
-//TODO: currently, it's not used for XMX really.
-#define SYCL_USE_XMX
+#if !defined(GGML_SYCL_FORCE_MMQ)
+    #define SYCL_USE_XMX
+#endif
 
 // max batch size to use MMQ kernels when tensor cores are available
 #define MMQ_MAX_BATCH_SIZE 32
@@ -15227,10 +15226,6 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
             min_compute_capability = g_device_caps[i].cc;
         }
     }
-
-#if !defined(GGML_SYCL_FORCE_MMQ)
-    #define SYCL_USE_XMX
-#endif
 
 #ifdef SYCL_USE_XMX
     bool use_xmx = true;
