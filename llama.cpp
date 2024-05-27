@@ -1839,7 +1839,7 @@ struct llama_hparams {
     uint32_t n_leading_dense_layer = 0;
     uint32_t n_lora_q = 0;
     uint32_t n_lora_kv = 0;
-    uint32_t n_expert_ff = 0;
+    uint32_t n_ff_exp = 0;
     uint32_t n_expert_shared = 0;
     float    expert_weights_scale = 0.0;
 
@@ -1887,7 +1887,7 @@ struct llama_hparams {
         if (this->n_leading_dense_layer != other.n_leading_dense_layer) return true;
         if (this->n_lora_q              != other.n_lora_q)              return true;
         if (this->n_lora_kv             != other.n_lora_kv)             return true;
-        if (this->n_expert_ff           != other.n_expert_ff)           return true;
+        if (this->n_ff_exp              != other.n_ff_exp)              return true;
         if (this->n_expert_shared       != other.n_expert_shared)       return true;
 
         if (this->rope_finetuned  != other.rope_finetuned)  return true;
@@ -4470,7 +4470,7 @@ static void llm_load_hparams(
                     ml.get_key(LLM_KV_ATTENTION_Q_LORA_RANK, hparams.n_lora_q);
                 }
                 ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK, hparams.n_lora_kv);
-                ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_expert_ff);
+                ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp);
                 ml.get_key(LLM_KV_EXPERT_SHARED_COUNT, hparams.n_expert_shared);
                 ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE, hparams.expert_weights_scale);
                 ml.get_key(LLM_KV_ROPE_SCALING_YARN_LOG_MUL, hparams.rope_yarn_log_mul);
@@ -6314,7 +6314,7 @@ static bool llm_load_tensors(
                     const uint32_t qk_nope_head_dim = hparams.n_embd_head_k - hparams.n_rot;
                     const uint32_t q_lora_rank = hparams.n_lora_q;
                     const uint32_t kv_lora_rank = hparams.n_lora_kv;
-                    const uint32_t moe_intermediate_size = hparams.n_expert_ff;
+                    const uint32_t moe_intermediate_size = hparams.n_ff_exp;
 
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
