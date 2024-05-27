@@ -15227,12 +15227,6 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
         }
     }
 
-#ifdef SYCL_USE_XMX
-    bool use_xmx = true;
-#else
-    bool use_xmx = false;
-#endif
-
     // check data types and tensor shapes for custom matrix multiplication kernels:
     bool use_dequantize_mul_mat_vec = (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
