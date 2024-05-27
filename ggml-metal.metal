@@ -3379,12 +3379,12 @@ kernel void kernel_concat(
 
     int64_t o[4] = {0, 0, 0, 0};
 
-    if (i1 < ne01 && i2 < ne02 && i3 < ne03) {
+    if (dim > 0 && i1 < ne01 && i2 < ne02 && i3 < ne03) {
         src = src0;
         o[dim] = 0;
     } else {
         src = src1;
-        o[dim] = ne00;
+        o[dim] = dim == 1 ? ne01 : (dim == 2 ? ne02 : ne03);
     }
 
     for (int i0 = tpitg.x; i0 < ne0; i0 += ntg.x) {
