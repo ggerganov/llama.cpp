@@ -560,33 +560,33 @@ function updateSystemPrompt(e) {
       }
 
       const FloatField = ({ label, title, max, min, name, step, value }) => {
-        return html`
-          <div>
-            <label for="${name}">${label}</label>
-            <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
-            <span id="${name}-value">${value}</span>
-          </div>
-        `
-      };
+  return html`
+    <div>
+      <label for="${name}"><span title="${title}">${label}</span></label>
+      <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} title="${title}" />
+      <span id="${name}-value">${value}</span>
+    </div>
+  `
+};
 
-      const IntField = ({ label, title, max, min, step, name, value }) => {
-        return html`
-          <div>
-            <label for="${name}" title="${title}">${label}</label>
-            <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
-            <span id="${name}-value">${value}</span>
-          </div>
-        `
-      };
+const IntField = ({ label, title, max, min, step, name, value }) => {
+  return html`
+    <div>
+      <label for="${name}"><span title="${title}">${label}</span></label>
+      <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} title="${title}" />
+      <span id="${name}-value">${value}</span>
+    </div>
+  `
+};
 
-      const BoolField = ({ label, title, name, value }) => {
-        return html`
-          <div>
-            <label for="${name}">${label}</label>
-            <input type="checkbox" id="${name}" name="${name}" checked="${value}" onclick=${updateParamsBool} />
-          </div>
-        `
-      };
+const BoolField = ({ label, title, name, value }) => {
+  return html`
+    <div>
+      <label for="${name}"><span title="${title}">${label}</span></label>
+      <input type="checkbox" id="${name}" name="${name}" checked="${value}" onclick=${updateParamsBool} title="${title}" />
+    </div>
+  `
+};
 
       const userTemplateReset = (e) => {
         e.preventDefault();
@@ -793,7 +793,7 @@ function updateSystemPrompt(e) {
           ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
           <fieldset class="params">
-            ${IntField({ label: "Prediction", title: "Set the maximum number of tokens to predict when generating text. Note: May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. The value -1 means infinity. Default is 0.8", max: 2048, min: -1, step: 16, name: "n_predict", value: params.value.n_predict, })}
+            ${IntField({ label: "Prediction", title: "Set the maximum number of tokens to predict when generating text. Note: May exceed the set limit slightly if the last token is a partial multibyte character. When 0, no tokens will be generated but the prompt is evaluated into the cache. The value -1 means infinity. Default is 358", max: 2048, min: -1, step: 16, name: "n_predict", value: params.value.n_predict, })}
             ${FloatField({ label: "Min-P sampling", title: "The minimum probability for a token to be considered, relative to the probability of the most likely token. Note that it's good practice to disable all other samplers aside from temperature when using min-p. It is also recommenend to go this approach. Default is 0.05 – But consider higher values like ~ 0.4 for non-English text generation. The value 1.0 means disabled", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
             ${FloatField({ label: "Repetition Penalty", title: "Control the repetition of token sequences in the generated text. Default is 1.1", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
             ${FloatField({ label: "Temperature", title: "This will adjust the overall randomness of the generated text. It is the most common sampler. Default is 0.8 but consider using lower values for more factual texts or for non-English text generation", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
@@ -827,7 +827,7 @@ function updateSystemPrompt(e) {
               <hr style="height: 1px; background-color: #ececf1; border: none;" />
 
               <fieldset class="params">
-                ${IntField({ label: "Show Probabilities", title: "If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. The tokens will be colored in gradient from green to red depending on their probabilities. Note that for temperature < 0 the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Defaults to 0", max: 10, min: 0, step: 1, name: "n_probs", title: "", value: params.value.n_probs })}
+                ${IntField({ label: "Show Probabilities", title: "If greater than 0, the response also contains the probabilities of top N tokens for each generated token given the sampling settings. The tokens will be colored in gradient from green to red depending on their probabilities. Note that for temperature 0 the tokens are sampled greedily but token probabilities are still being calculated via a simple softmax of the logits without considering any other sampler settings. Defaults to 0", max: 10, min: 0, step: 1, name: "n_probs", value: params.value.n_probs })}
               </fieldset>
           </details>
         </form>
