@@ -2317,9 +2317,9 @@ inline static __m512 ggml_v_expf(__m512 x) {
 
   // with the reduced range, we can use a min-maxed polynomial to calculate `e^r`.
   const __m512 expr =_mm512_fmadd_ps(_mm512_fmadd_ps(_mm512_fmadd_ps(_mm512_fmadd_ps(
-    _mm512_fmadd_ps(_mm512_fmadd_ps(_mm512_fmadd_ps(0x1.a1d714p-13, x, 0x1.6dd982p-10),
-    x, 0x1.126facp-7), x, 0x1.55541cp-5), x, 0x1.555404p-3), x, 0x1p-1), x, 0x1p+0),
-    x, 0x1p+0); 
+    _mm512_fmadd_ps(_mm512_fmadd_ps(_mm512_fmadd_ps(0x1.a1d714p-13, r, 0x1.6dd982p-10),
+    r, 0x1.126facp-7), r, 0x1.55541cp-5), r, 0x1.555404p-3), r, 0x1p-1), r, 0x1p+0),
+    r, 0x1p+0); 
   // exp(x) = exp(r + intc/log_2(e)) = exp(r)*exp(intc*log(2)) = exp(r)*pow(2,intc)
   return _mm512_scalef_ps(expr, intc);
 }
