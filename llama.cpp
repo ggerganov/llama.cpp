@@ -11268,14 +11268,14 @@ struct llm_build_context {
                 cb(k_nope, "k_nope", il);
 
                 // and {n_head * n_embd_head_v, n_tokens}
-                struct ggml_tensor * value_states = ggml_view_3d(ctx0, kv, hparams.n_embd_head_v, n_head, n_tokens, ggml_element_size(kv) * (n_embd_head_qk_nope + hparams.n_embd_head_v), ggml_element_size(kv) * n_head * (n_embd_head_qk_nope + hparams.n_embd_head_v), ggml_element_size(kv) * n_embd_head_qk_nope);
-                cb(value_states, "value_states", il);
+                struct ggml_tensor * v_states = ggml_view_3d(ctx0, kv, hparams.n_embd_head_v, n_head, n_tokens, ggml_element_size(kv) * (n_embd_head_qk_nope + hparams.n_embd_head_v), ggml_element_size(kv) * n_head * (n_embd_head_qk_nope + hparams.n_embd_head_v), ggml_element_size(kv) * n_embd_head_qk_nope);
+                cb(v_states, "v_states", il);
 
-                value_states = ggml_cont(ctx0, value_states);
-                cb(value_states, "value_states", il);
+                v_states = ggml_cont(ctx0, v_states);
+                cb(v_states, "v_states", il);
 
-                value_states = ggml_view_2d(ctx0, value_states, hparams.n_embd_head_v * n_head, n_tokens, ggml_element_size(kv) * hparams.n_embd_head_v * n_head, 0);
-                cb(value_states, "value_states", il);
+                v_states = ggml_view_2d(ctx0, v_states, hparams.n_embd_head_v * n_head, n_tokens, ggml_element_size(kv) * hparams.n_embd_head_v * n_head, 0);
+                cb(v_states, "v_states", il);
 
                 q_pe = ggml_rope_ext(
                     ctx0, q_pe, inp_pos, nullptr,
@@ -11292,22 +11292,22 @@ struct llm_build_context {
                 );
                 cb(k_pe, "k_pe", il);
 
-                struct ggml_tensor * query_states = ggml_new_tensor_3d(ctx0, q_nope->type, hparams.n_embd_head_k, n_head, n_tokens);
-                cb(query_states, "query_states", il);
-                query_states = ggml_set_inplace(ctx0, query_states, q_nope, query_states->nb[1], query_states->nb[2], query_states->nb[3], 0);
-                query_states = ggml_set_inplace(ctx0, query_states, q_pe, query_states->nb[1], query_states->nb[2], query_states->nb[3], ggml_element_size(query_states) * n_embd_head_qk_nope);
+                struct ggml_tensor * q_states = ggml_new_tensor_3d(ctx0, q_nope->type, hparams.n_embd_head_k, n_head, n_tokens);
+                cb(q_states, "q_states", il);
+                q_states = ggml_set_inplace(ctx0, q_states, q_nope, q_states->nb[1], q_states->nb[2], q_states->nb[3], 0);
+                q_states = ggml_set_inplace(ctx0, q_states, q_pe, q_states->nb[1], q_states->nb[2], q_states->nb[3], ggml_element_size(q_states) * n_embd_head_qk_nope);
 
                 k_pe = ggml_repeat(ctx0, k_pe, q_pe);
                 cb(k_pe, "k_pe", il);
 
-                struct ggml_tensor * key_states = ggml_new_tensor_3d(ctx0, q_nope->type, hparams.n_embd_head_k, n_head, n_tokens);
-                cb(key_states, "key_states", il);
-                key_states = ggml_set_inplace(ctx0, key_states, k_nope, key_states->nb[1], key_states->nb[2], key_states->nb[3], 0);
-                key_states = ggml_set_inplace(ctx0, key_states, k_pe, key_states->nb[1], key_states->nb[2], key_states->nb[3], ggml_element_size(key_states) * n_embd_head_qk_nope);
+                struct ggml_tensor * k_states = ggml_new_tensor_3d(ctx0, q_nope->type, hparams.n_embd_head_k, n_head, n_tokens);
+                cb(k_states, "k_states", il);
+                k_states = ggml_set_inplace(ctx0, k_states, k_nope, k_states->nb[1], k_states->nb[2], k_states->nb[3], 0);
+                k_states = ggml_set_inplace(ctx0, k_states, k_pe, k_states->nb[1], k_states->nb[2], k_states->nb[3], ggml_element_size(k_states) * n_embd_head_qk_nope);
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
-                        key_states, value_states, query_states, KQ_mask, n_tokens, kv_head, n_kv, kq_scale, cb, il);
+                        k_states, v_states, q_states, KQ_mask, n_tokens, kv_head, n_kv, kq_scale, cb, il);
             }
 
             if (il == n_layer - 1) {
