@@ -11243,7 +11243,7 @@ struct llm_build_context {
                 struct ggml_tensor * q_pe = ggml_view_3d(ctx0, q, n_embd_head_qk_rope, n_head, n_tokens, ggml_element_size(q) * hparams.n_embd_head_k, ggml_element_size(q) * hparams.n_embd_head_k * n_head, ggml_element_size(q) * n_embd_head_qk_nope);
                 cb(q_pe, "q_pe", il);
 
-                // {n_embd, kv_lora_rank + n_embd_head_qk_rope} * {n_embd, n_tokens} -> {kv_lora_rank + n_embd_head_qk_rope, n_tokens} 
+                // {n_embd, kv_lora_rank + n_embd_head_qk_rope} * {n_embd, n_tokens} -> {kv_lora_rank + n_embd_head_qk_rope, n_tokens}
                 struct ggml_tensor * compressed_kv_pe = ggml_mul_mat(ctx0, model.layers[il].wkv_a_mqa, cur);
                 cb(compressed_kv_pe, "compressed_kv_pe", il);
 
@@ -11340,7 +11340,7 @@ struct llm_build_context {
                         model.layers[il].ffn_norm, NULL,
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
-    
+
                 ggml_tensor * moe_out =
                         llm_build_moe_ffn(ctx0, cur,
                             model.layers[il].ffn_gate_inp,
@@ -11352,7 +11352,7 @@ struct llm_build_context {
                             true, hparams.expert_weights_scale,
                             cb, il);
                 cb(moe_out, "ffn_moe_out", il);
-    
+
                 // FFN shared expert
                 {
                     ggml_tensor * ffn_shexp = llm_build_ffn(ctx0, cur,
@@ -11362,7 +11362,7 @@ struct llm_build_context {
                             NULL,
                             LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                     cb(ffn_shexp, "ffn_shexp", il);
-    
+
                     cur = ggml_add(ctx0, moe_out, ffn_shexp);
                     cb(cur, "ffn_out", il);
                 }
