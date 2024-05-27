@@ -352,28 +352,30 @@
       }
 
       return html`
-        <form onsubmit=${submit}>
-          <div>
-            <textarea
-               className=${generating.value ? "loading" : null}
-               oninput=${(e) => message.value = e.target.value}
-               onkeypress=${enterSubmits}
-               placeholder="Say something..."
-               rows=2
-               type="text"
-               value="${message}"
-            />
-          </div>
+      <form onsubmit=${submit}>
+        <div class="chat-input-container">
+          <textarea
+            id="chat-input" placeholder="Say Something ..."
+            class="${generating.value ? 'loading' : null}"
+            oninput=${(e) => message.value = e.target.value}
+            onkeypress=${enterSubmits}
+            rows="2"
+            type="text"
+            value="${message}"
+          ></textarea>
+        </div>
+
           <div class="right">
-            <button type="submit" disabled=${generating.value}>Send</button>
+            <button class="button-back" onclick=${reset}>Back</button>
             <button onclick=${uploadImage}>Upload Image</button>
             <button onclick=${stop} disabled=${!generating.value}>Stop</button>
-            <button onclick=${reset}>Reset</button>
+            <button type="submit" disabled=${generating.value}>Submit</button>
           </div>
         </form>
       `
     }
 
+    // completion view still needs some ux improvements
     function CompletionControls() {
       const submit = (e) => {
         stop(e);
@@ -436,6 +438,93 @@
         </div>`;
     };
 
+///////////////////////////////////////////
+
+///////////// UI Improvements /////////////
+//
+// toggle chat/completion
+const handleToggleChange = (e) => {
+  const isChecked = e.target.checked;
+  session.value = { ...session.value, type: isChecked ? 'completion' : 'chat' };
+  // todo require further actions to update the user interface
+  // for example, calling a function that re-renders the form or updates the state
+  // that controls the display of the form. Currently after reset chat toggle does not return
+}
+//
+// Insert the chosen prompt format
+function updatePromptFormat(e) {
+  const promptFormat = e.target.value;
+  if (promptFormats.hasOwnProperty(promptFormat)) {
+    session.value = {
+      ...session.value,
+      ...promptFormats[promptFormat]
+    };
+  } else {
+    // llama.cpp's default setting
+    session.value = {
+      ...session.value,
+      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
+      historyTemplate: "{{name}}: {{message}}",
+      char: "Assistant",
+      user: "User"
+    };
+  }
+  console.log('Updated session value:', session.value); //
+}
+//
+// Update the prompt format from the dropdown
+function updatePromptFormatFromDropdown(element) {
+  const promptFormat = element.getAttribute('data-value');
+  console.log('Selected prompt format:', promptFormat); // debugging
+  updatePromptFormat({ target: { value: promptFormat } });
+}
+//
+// adds the event listeners once the element is available
+function addEventListenersWhenAvailable() {
+  var themeSelector = document.getElementById('theme-selector');
+  if (themeSelector) {
+    themeSelector.addEventListener('change', function(event) {
+      // event handler...
+    });
+    // placeholder further listeners wip
+  } else {
+    // if the element is not available yet, wait for the next frame
+    requestAnimationFrame(addEventListenersWhenAvailable);
+  }
+}
+//
+// begin with the check
+requestAnimationFrame(addEventListenersWhenAvailable);
+//
+// handle the dropdown selection
+function handleDropdownSelection(e, promptFormat) {
+  // avoid the default behavior of the link
+  e.preventDefault();
+  // create a new event object with the value from the data-value attribute
+  const customEvent = {
+    target: {
+      value: promptFormat
+    }
+  };
+  //
+  // call the updatePromptFormat function with the new event object
+  updatePromptFormat(customEvent);
+}
+//
+// Update the system prompt
+function updateSystemPrompt(e) {
+  const SystemPrompt = e.target.value;
+  if (systemPrompts.hasOwnProperty(SystemPrompt)) {
+    session.value = {
+      ...session.value,
+      prompt: systemPrompts[SystemPrompt].systemPrompt
+    };
+  }
+}
+///////////// UI Improvements /////////////
+
+///////////////////////////////////////////
+
     const ConfigForm = (props) => {
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
       const updateParams = (el) => params.value = { ...params.value, [el.target.name]: el.target.value }
@@ -470,7 +559,7 @@
           <div>
             <label for="${name}">${label}</label>
             <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsFloat} />
-            <span>${value}</span>
+            <span id="${name}-value">${value}</span>
           </div>
         `
       };
@@ -479,8 +568,8 @@
         return html`
           <div>
             <label for="${name}">${label}</label>
-            <input type="range" id="${name}" min="${min}" max="${max}" name="${name}" value="${value}" oninput=${updateParamsInt} />
-            <span>${value}</span>
+            <input type="range" id="${name}" min="${min}" max="${max}" step="${step}" name="${name}" value="${value}" oninput=${updateParamsInt} />
+            <span id="${name}-value">${value}</span>
           </div>
         `
       };
@@ -502,12 +591,14 @@
       const UserTemplateResetButton = () => {
         if (selectedUserTemplate.value.name == 'default') {
           return html`
-            <button disabled>Using default template</button>
+          <button class="reset-button" id="id_reset" onclick="${userTemplateReset}">Reset</button>
           `
         }
 
         return html`
-          <button onclick=${userTemplateReset}>Reset all to default</button>
+          <div class="button-container">
+            <button class="reset-button" title="Caution: This resets the entire form." onclick="${userTemplateReset}">Reset</button>
+          </div>
         `
       };
 
@@ -519,55 +610,154 @@
       const GrammarControl = () => (
         html`
           <div>
-            <label for="template">Grammar</label>
-            <textarea id="grammar" name="grammar" placeholder="Use gbnf or JSON Schema+convert" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
-            <input type="text" name="prop-order" placeholder="order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
-            <button type="button" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
+            <label for="template"></label>
+            <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON-Scheme + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+            <div class="grammar-columns">
+              <div class="json-schema-controls">
+                <input type="text" name="prop-order" placeholder="Order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
+                <button type="button" class="button-grammar" onclick=${convertJSONSchemaGrammar}>Convert JSON-Scheme</button>
+              </div>
+            </div>
           </div>
-          `
+        `
       );
 
       const PromptControlFieldSet = () => (
         html`
-        <fieldset>
-          <div>
-            <label htmlFor="prompt">Prompt</label>
-            <textarea type="text" name="prompt" value="${session.value.prompt}" oninput=${updateSession}/>
-          </div>
-        </fieldset>
+          <fieldset>
+            <div class="input-container">
+              <label for="prompt" class="input-label">System</label>
+              <textarea
+                id="prompt"
+                class="persistent-input"
+                name="prompt"
+                value="${session.value.prompt}"
+                oninput=${updateSession}
+              ></textarea>
+            </div>
+          </fieldset>
         `
       );
 
+      // todo update the form: reduce the amount, uset he new templates, integrate and adapt to the templates from https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
       const ChatConfigForm = () => (
         html`
-          ${PromptControlFieldSet()}
-
-          <fieldset class="two">
+          <fieldset class="dropdowns">
             <div>
-              <label for="user">User name</label>
+              <select id="promptFormat" name="promptFormat" onchange=${updatePromptFormat}>
+                  <option value="default">Prompt Style</option>
+                  <option value=""></option>
+                <optgroup label="Common Prompt-Styles">
+                  <option value="alpaca">Alpaca</option>
+                  <option value="chatml">ChatML</option>
+                  <option value="llama2">Llama 2</option>
+                  <option value="vicuna">Vicuna</option>
+                  <option value=""></option>
+                </optgroup>
+                <optgroup label="More Prompt-Styles">
+                  <option value="airoboros180">Airoboros L2</option>
+                  <option value="bakllava">BakLLaVA-1</option>
+                  <option value="codeCherryPop">Code Cherry Pop</option>
+                  <option value="deepseekCoder">Deepseek Coder</option>
+                  <option value="dolphinMistral">Dolphin Mistral</option>
+                  <option value="evolvedSeeker">evolvedSeeker 1.3B</option>
+                  <option value="goliath120b">Goliath 120B</option>
+                  <option value="jordan">Jordan</option>
+                  <option value="llava">LLaVA</option>
+                  <option value="leoHessianai">Leo Hessianai</option>
+                  <option value="leoMistral">Leo Mistral</option>
+                  <option value="marx">Marx</option>
+                  <option value="med42">Med42</option>
+                  <option value="metaMath">MetaMath</option>
+                  <option value="mistralInstruct">Mistral Instruct</option>
+                  <option value="mistralOpenOrca">Mistral 7B OpenOrca</option>
+                  <option value="mythomax">MythoMax</option>
+                  <option value="neuralchat">Neural Chat</option>
+                  <option value="nousCapybara">Nous Capybara</option>
+                  <option value="nousHermes">Nous Hermes</option>
+                  <option value="openChat">OpenChat</option>
+                  <option value="openhermes2Mistral">OpenHermes 2.5-Mistral</option>
+                  <option value="orcamini">Orca Mini v3</option>
+                  <option value="sauerkrautLM">SauerkrautLM</option>
+                  <option value="samantha">Samantha</option>
+                  <option value="samanthaMistral">Samantha Mistral</option>
+                  <option value="scarlett">Scarlett</option>
+                  <option value="starlingLM">Starling-7B</option>
+                  <option value="starlingLM">Starling-7B Coding</option>
+                  <option value="sydney">Sydney</option>
+                  <option value="synthia">Synthia</option>
+                  <option value="tess">Tess</option>
+                  <option value="yi34b">Yi-34B</option>
+                  <option value="zephyr">Zephyr</option>
+                  <option value=""></option>
+                </optgroup>
+              </select>
+              <select id="SystemPrompt" name="SystemPrompt" onchange=${updateSystemPrompt}>
+                <option value="default">System Prompt</option>
+                <option value="empty">None</option>
+                <option value="airoboros">Airoboros</option>
+                <option value="alpaca">Alpaca</option>
+                <option value="atlas">Atlas</option>
+                <option value="cot">Chain of Tought</option>
+                <option value="deduce">Critical Thinking</option>
+                <option value="deepseekcoder">Deepseek Coder</option>
+                <option value="jordan">Jordan</option>
+                <option value="leomistral">Leo Mistral</option>
+                <option value="med42">Med42</option>
+                <option value="migeltot">Migel's Tree of Thought</option>
+                <option value="mistralopenorca">Mistral OpenOrca</option>
+                <option value="orcamini">Orca Mini</option>
+                <option value="samantha">Samantha</option>
+                <option value="sauerkraut">Sauerkraut</option>
+                <option value="scarlett">Scarlett</option>
+                <option value="synthia">Synthia</option>
+              </select>
+              <!--<select id="systemLanguage" name="systemLanguage">-->
+                <!--<option value="default">English</option>-->
+                <!--<option value="DE">German</option>-->
+                <!--<option value="placeholderLanguage">Placeholder</option>-->
+              <!--</select>-->
+            </div>
+          </fieldset>
+          ${PromptControlFieldSet()}
+          <fieldset class="names">
+            <div>
+              <label for="user" id="id_user-name">User Name</label>
               <input type="text" name="user" value="${session.value.user}" oninput=${updateSession} />
             </div>
-
             <div>
-              <label for="bot">Bot name</label>
+              <label for="bot" id="id_bot-name">AI Name</label>
               <input type="text" name="char" value="${session.value.char}" oninput=${updateSession} />
             </div>
           </fieldset>
-
           <fieldset>
-            <div>
-              <label for="template">Prompt template</label>
-              <textarea id="template" name="template" value="${session.value.template}" rows=4 oninput=${updateSession}/>
-            </div>
+            <details open>
+              <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
+              <div class="two-columns">
+                <div>
+                  <div class="input-container">
+                    <label for="template" class="input-label-sec" id_prompt-template>Prompt Template</label>
+                    <textarea id="template" class="persistent-input-sec" name="template" value="${session.value.template}" rows=6 oninput=${updateSession}/>
+                  </div>
+                </div>
+                <div>
+                  <div class="input-container">
+                    <label for="template" class="input-label-sec" id="id_history-template">Chat History</label>
+                    <textarea id="template" class="persistent-input-sec" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
+                  </div>
+                </div>
+              </div>
+            </details>
+            <details>
+              <summary><span class="summary-title" id="id_grammar-title" id_grammar-title>Grammar</span></summary>
+              ${GrammarControl()}
+            </details>
 
-            <div>
-              <label for="template">Chat history template</label>
-              <textarea id="template" name="historyTemplate" value="${session.value.historyTemplate}" rows=1 oninput=${updateSession}/>
-            </div>
-            ${GrammarControl()}
-          </fieldset>
-      `
+            </fieldset>
+        `
       );
+
+      // todo add possibility to concatenate special, well known
 
       const CompletionConfigForm = () => (
         html`
@@ -579,47 +769,49 @@
       return html`
         <form>
           <fieldset class="two">
+              <input type="checkbox" id="toggle" class="toggleCheckbox" onchange=${handleToggleChange} />
+                <label for="toggle" class="toggleContainer">
+                  <div id="id_toggle-label-chat">Chat</div>
+                  <div id="id_toggle-label-complete">Complete</div>
+                </label>
             <${UserTemplateResetButton}/>
-            <div>
-              <label class="slim"><input type="radio" name="type" value="chat" checked=${session.value.type === "chat"} oninput=${updateSession} /> Chat</label>
-              <label class="slim"><input type="radio" name="type" value="completion" checked=${session.value.type === "completion"} oninput=${updateSession} /> Completion</label>
-            </div>
           </fieldset>
 
           ${session.value.type === 'chat' ? ChatConfigForm() : CompletionConfigForm()}
 
           <fieldset class="two">
-            ${IntField({ label: "Predictions", max: 2048, min: -1, name: "n_predict", value: params.value.n_predict })}
-            ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
-            ${FloatField({ label: "Penalize repeat sequence", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
-            ${IntField({ label: "Consider N tokens for penalize", max: 2048, min: 0, name: "repeat_last_n", value: params.value.repeat_last_n })}
-            ${BoolField({ label: "Penalize repetition of newlines", name: "penalize_nl", value: params.value.penalize_nl })}
-            ${IntField({ label: "Top-K sampling", max: 100, min: -1, name: "top_k", value: params.value.top_k })}
-            ${FloatField({ label: "Top-P sampling", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
+            ${IntField({ label: "Prediction", max: 2048, min: -1, step: 16, name: "n_predict", value: params.value.n_predict, })}
             ${FloatField({ label: "Min-P sampling", max: 1.0, min: 0.0, name: "min_p", step: 0.01, value: params.value.min_p })}
+            ${FloatField({ label: "Repetition Penalty", max: 2.0, min: 0.0, name: "repeat_penalty", step: 0.01, value: params.value.repeat_penalty })}
+            ${FloatField({ label: "Temperature", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
           </fieldset>
+
           <details>
-            <summary>More options</summary>
+            <summary><span class="summary-title">Further Options</span></summary>
             <fieldset class="two">
+              ${IntField({ label: "Top-K", max: 100, min: 0, step: 1, name: "top_k", value: params.value.top_k })}
+              ${IntField({ label: "Penalize Last N", max: 2048, min: 0, step: 16, name: "repeat_last_n", value: params.value.repeat_last_n })}
+              ${FloatField({ label: "Top-P", max: 1.0, min: 0.0, name: "top_p", step: 0.01, value: params.value.top_p })}
+              ${FloatField({ label: "Presence Penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
               ${FloatField({ label: "TFS-Z", max: 1.0, min: 0.0, name: "tfs_z", step: 0.01, value: params.value.tfs_z })}
-              ${FloatField({ label: "Typical P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
-              ${FloatField({ label: "Presence penalty", max: 1.0, min: 0.0, name: "presence_penalty", step: 0.01, value: params.value.presence_penalty })}
-              ${FloatField({ label: "Frequency penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
+              ${FloatField({ label: "Frequency Penalty", max: 1.0, min: 0.0, name: "frequency_penalty", step: 0.01, value: params.value.frequency_penalty })}
+              ${FloatField({ label: "Typical-P", max: 1.0, min: 0.0, name: "typical_p", step: 0.01, value: params.value.typical_p })}
+              ${BoolField({ label: "Penalize repetition of newlines", name: "penalize_nl", value: params.value.penalize_nl })}
             </fieldset>
-            <hr />
+
+            <hr style="height: 1px; background-color: #ececf1; border: none;" />
+
             <fieldset class="three">
               <div>
-                <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> no Mirostat</label>
+                <label><input type="radio" name="mirostat" value="0" checked=${params.value.mirostat == 0} oninput=${updateParamsInt} /> Mirostat off</label>
                 <label><input type="radio" name="mirostat" value="1" checked=${params.value.mirostat == 1} oninput=${updateParamsInt} /> Mirostat v1</label>
                 <label><input type="radio" name="mirostat" value="2" checked=${params.value.mirostat == 2} oninput=${updateParamsInt} /> Mirostat v2</label>
               </div>
-              ${FloatField({ label: "Mirostat tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
-              ${FloatField({ label: "Mirostat eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
+              ${FloatField({ label: "Entropy tau", max: 10.0, min: 0.0, name: "mirostat_tau", step: 0.01, value: params.value.mirostat_tau })}
+              ${FloatField({ label: "Learning-rate eta", max: 1.0, min: 0.0, name: "mirostat_eta", step: 0.01, value: params.value.mirostat_eta })}
+
+              ${IntField({ label: "Show Probabilities", max: 10, min: 0, step: 1, name: "n_probs", value: params.value.n_probs })}
             </fieldset>
-            <fieldset>
-              ${IntField({ label: "Show Probabilities", max: 10, min: 0, name: "n_probs", value: params.value.n_probs })}
-            </fieldset>
-            <fieldset>
               ${IntField({ label: "Min Probabilities from each Sampler", max: 10, min: 0, name: "min_keep", value: params.value.min_keep })}
             </fieldset>
             <fieldset>
@@ -705,13 +897,23 @@
       return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`;
     };
 
+    // const ModelGenerationInfo = (params) => {
+    //   if (!llamaStats.value) {
+    //     return html`<span/>`
+    //   }
+    //   return html`
+    //     <span>
+    //       ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
+    //     </span>
+    //   `
+    // }
     const ModelGenerationInfo = (params) => {
       if (!llamaStats.value) {
         return html`<span/>`
       }
       return html`
         <span>
-          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
+          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.predicted_per_second.toFixed(2)} tokens per second
         </span>
       `
     }
@@ -748,7 +950,7 @@
       }, []);
 
       return html`
-        <span style=${props.style} ref=${buttonRef} onClick=${togglePopover}>${props.children}</span>
+        <span style=${props.style} ref=${buttonRef} onClick=${togglePopover} contenteditable="true">${props.children}</span>
         ${isOpen.value && html`
           <${Portal} into="#portal">
             <div
@@ -836,7 +1038,18 @@
       return html`
         <div class="mode-${session.value.type}">
           <header>
-            <h1>llama.cpp</h1>
+            <h2>llama.cpp</h2>
+            <div class="dropdown">
+              <button class="dropbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg></button>
+              <div class="dropdown-content" id="theme-selector">
+                <a href="#" data-theme="default">Ketivah</a>
+                <a href="#" data-theme="mangotango">Mango Tango</a>
+                <a href="#" data-theme="playground">Playground</a>
+                <a href="#" data-theme="polarnight">Polar Night</a>
+                <a href="#" data-theme="snowstorm">Snow Storm</a>
+                <a href="#" data-theme="beeninorder">Been In Order</a>
+              </div>
+            </div>
           </header>
 
           <main id="content">
@@ -846,14 +1059,89 @@
           <section id="write">
             <${session.value.type === 'chat' ? MessageInput : CompletionControls} />
           </section>
-
           <footer>
             <p><${ModelGenerationInfo} /></p>
-            <p>Powered by <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> and <a href="https://ggml.ai">ggml.ai</a>.</p>
+            <p>Powered By <a href="https://github.com/ggerganov/llama.cpp#readme" target="_blank">llama.cpp</a> and <a href="https://ggml.ai/" target="_blank">ggml.ai</a></p>
           </footer>
         </div>
       `;
     }
+
+
+
+///////////// UI Improvements /////////////
+//
+document.addEventListener('DOMContentLoaded', function() {
+  var themeSelector = document.getElementById('theme-selector');
+  var themeLinks = themeSelector.querySelectorAll('a[data-theme]');
+  //
+  themeLinks.forEach(function(link) {
+    link.addEventListener('click', function(event) {
+      event.preventDefault(); // avoid default behaviour
+      var selectedTheme = event.target.getAttribute('data-theme');
+      changeTheme(selectedTheme);
+    });
+  });
+  //
+  function changeTheme(theme) {
+    document.body.classList.remove('theme-default', 'theme-mangotango', 'theme-playground', 'theme-polarnight', 'theme-snowstorm', 'theme-beeninorder');
+    if (theme !== 'default') {
+      document.body.classList.add('theme-' + theme);
+    }
+    localStorage.setItem('selected-theme', theme);
+  }
+  //
+  // set the selected theme when loading the page
+  var savedTheme = localStorage.getItem('selected-theme');
+  if (savedTheme && savedTheme !== 'default') {
+    document.body.classList.add('theme-' + savedTheme);
+    // update the dropdown if it still exists
+    var dropdown = document.getElementById('theme-selector-dropdown');
+    if (dropdown) {
+      dropdown.value = savedTheme;
+    }
+  }
+});
+//
+// snapping of the slider to indicate 'disabled'
+document.addEventListener('DOMContentLoaded', (event) => {
+  // define an object that contains snap values and ranges for each slider
+  const snapSettings = {
+    temperature: { snapValue: 1.0, snapRangeMultiplier: 6 },
+    min_p: { snapValue: 0.05, snapRangeMultiplier: 2 },
+    top_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    tfs_z: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    typical_p: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    repeat_penalty: { snapValue: 1.0, snapRangeMultiplier: 4 },
+    presence_penalty: { snapValue: 0.0, snapRangeMultiplier: 4 },
+    frequency_penalty: { snapValue: 0.0, snapRangeMultiplier: 4 },
+  };
+  // add an event listener for each slider
+  Object.keys(snapSettings).forEach(sliderName => {
+    const slider = document.querySelector(`input[name="${sliderName}"]`);
+    const settings = snapSettings[sliderName];
+
+    slider.addEventListener('input', (e) => {
+      let value = parseFloat(e.target.value);
+      const step = parseFloat(e.target.step);
+      const snapRange = step * settings.snapRangeMultiplier;
+      const valueDisplay = document.getElementById(`${e.target.name}-value`);
+
+      if (value >= settings.snapValue - snapRange && value <= settings.snapValue + snapRange) {
+        value = settings.snapValue; // set value to the snap value
+        e.target.value = value; // update the slider value
+      }
+      // update the displayed value
+      if (valueDisplay) {
+        valueDisplay.textContent = value.toFixed(2); // display value with two decimal places
+      }
+    });
+  });
+});
+//
+///////////// UI Improvements /////////////
+
+
 
     render(h(App), document.querySelector('#container'));
   </script>
