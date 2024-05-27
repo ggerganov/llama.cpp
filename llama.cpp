@@ -8046,7 +8046,7 @@ static struct ggml_tensor * llm_build_mamba(
         // store last (d_conv - 1) columns of the conv_state part of x_conv back into the KV cache
         ggml_build_forward_expand(graph,
             ggml_cpy(ctx,
-                ggml_view_2d(ctx, x_conv, d_conv - 1, d_inner*n_rs, d_conv*ggml_element_size(x_conv), (1+d_inner*n_tokens)*ggml_element_size(x_conv)),
+                ggml_view_2d(ctx, x_conv,      d_conv - 1,  d_inner * n_rs,                          d_conv*ggml_element_size(x_conv), (1+d_inner*n_tokens)*ggml_element_size(x_conv)),
                 ggml_view_1d(ctx, rs.r_l[il], (d_conv - 1)*(d_inner)*(n_rs), rs_head*(d_conv - 1)*(d_inner)*ggml_element_size(x_conv))));
 
         // extract x from x_conv
