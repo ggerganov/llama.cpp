@@ -705,10 +705,12 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
 
-            embeddings = ggml_gelu(ctx0, embeddings);
-            embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
-            embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
-
+            // paligemma missing second linear layer
+            if (model.mm_2_w) {
+                embeddings = ggml_gelu(ctx0, embeddings);
+                embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
+                embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
+            }
         } else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
@@ -2067,6 +2069,10 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
         return ctx->vision_model.mm_model_peg_0_b->ne[0];
     }
     if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
+        // paligemma missing second linear layer
+        if (ctx->vision_model.mm_2_b == nullptr) {
+            return ctx->vision_model.mm_0_b->ne[0];
+        }
         return ctx->vision_model.mm_2_b->ne[0];
     }
     if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
