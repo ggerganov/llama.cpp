@@ -10985,9 +10985,10 @@ static void ggml_compute_forward_concat_f32(
 
     GGML_ASSERT(dim >= 0 && dim < 4);
 
-    const char * src;
-
     int64_t o[4] = {0, 0, 0, 0};
+    o[dim] = src0->ne[dim];
+
+    const float * x;
 
     // TODO: smarter multi-theading
     for (int i3 = 0; i3 < ne3; i3++) {
@@ -10995,15 +10996,12 @@ static void ggml_compute_forward_concat_f32(
             for (int i1 = 0; i1 < ne1; i1++) {
                 for (int i0 = 0; i0 < ne0; i0++) {
                     if (i0 < ne00 && i1 < ne01 && i2 < ne02 && i3 < ne03) {
-                        src = (const char *) src0->data;
-                        o[dim] = 0;
+                        x = (const float *) (src0->data + (i0       )*nb00 + (i1       )*nb01 + (i2       )*nb02 + (i3       )*nb03);
                     } else {
-                        src = (const char *) src1->data;
-                        o[dim] = src0->ne[dim];
+                        x = (const float *) (src1->data + (i0 - o[0])*nb10 + (i1 - o[1])*nb11 + (i2 - o[2])*nb12 + (i3 - o[3])*nb13);
                     }
 
-                    const float * x = (const float *)(        src       + (i0 - o[0]) * nb10 + (i1 - o[1]) * nb11 + (i2 - o[2]) * nb12 + (i3 - o[3]) * nb13);
-                          float * y = (      float *)((char *)dst->data + (i0       ) * nb0  + (i1       ) * nb1  + (i2       ) * nb2  + (i3       ) * nb3);
+                    float * y = (      float *)((char *)dst->data + (i0       ) * nb0  + (i1       ) * nb1  + (i2       ) * nb2  + (i3       ) * nb3);
 
                     *y = *x;
                 }
