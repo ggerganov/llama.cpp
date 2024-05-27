@@ -207,6 +207,34 @@ class SimpleChat {
     }
 
     /**
+     * Extract the ai-model/assistant's response from the http response got.
+     * Optionally trim the message wrt any garbage at the end.
+     * @param {any} respBody
+     * @param {string} apiEP
+     */
+    response_extract(respBody, apiEP) {
+        let theResp = {
+            assistant: "",
+            trimmed: "",
+        }
+        if (apiEP == ApiEP.Type.Chat) {
+            theResp.assistant = respBody["choices"][0]["message"]["content"];
+        } else {
+            try {
+                theResp.assistant = respBody["choices"][0]["text"];
+            } catch {
+                theResp.assistant = respBody["content"];
+            }
+        }
+        if (gMe.bTrimGarbage) {
+            let origMsg = theResp.assistant;
+            theResp.assistant = du.trim_hist_garbage_at_end_loop(theResp.assistant, 8, 24, 72);
+            theResp.trimmed = origMsg.substring(theResp.assistant.length);
+        }
+        return theResp;
+    }
+
+    /**
      * Allow setting of system prompt, but only at begining.
      * @param {string} sysPrompt
      * @param {string} msgTag
@@ -447,27 +475,12 @@ class MultiChatUI {
         let respBody = await resp.json();
         //let respBody = await this.read_json_early(resp);
         console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
-        let assistantMsg;
-        let trimmedMsg = "";
-        if (apiEP == ApiEP.Type.Chat) {
-            assistantMsg = respBody["choices"][0]["message"]["content"];
-        } else {
-            try {
-                assistantMsg = respBody["choices"][0]["text"];
-            } catch {
-                assistantMsg = respBody["content"];
-            }
-        }
-        if (gMe.bTrimGarbage) {
-            let origMsg = assistantMsg;
-            assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 8, 24, 72);
-            trimmedMsg = origMsg.substring(assistantMsg.length);
-        }
-        chat.add(Roles.Assistant, assistantMsg);
+        let theResp = chat.response_extract(respBody, apiEP);
+        chat.add(Roles.Assistant, theResp.assistant);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
-            if (trimmedMsg.length > 0) {
-                let p = ui.el_create_append_p(`TRIMMED:${trimmedMsg}`, this.elDivChat);
+            if (theResp.trimmed.length > 0) {
+                let p = ui.el_create_append_p(`TRIMMED:${theResp.trimmed}`, this.elDivChat);
                 p.className="role-trim";
             }
         } else {
