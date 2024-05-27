@@ -1259,25 +1259,25 @@ struct test_im2col : public test_case {
 // GGML_OP_CONCAT
 struct test_concat : public test_case {
     const ggml_type type;
-    const std::array<int64_t, 4> ne;
+    const std::array<int64_t, 4> ne_a;
     const int dim;
     const int64_t b_ned;
 
     std::string vars() override {
-        return VARS_TO_STR4(type, ne, dim, b_ned);
+        return VARS_TO_STR4(type, ne_a, dim, b_ned);
     }
 
     test_concat(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 10},
+            std::array<int64_t, 4> ne_a = {10, 10, 10, 10},
             int dim = 2,
             int64_t b_ned = 10)
-        : type(type), ne(ne), dim(dim), b_ned(b_ned) {}
+        : type(type), ne_a(ne_a), dim(dim), b_ned(b_ned) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
-        auto b_ne = ne;
-        b_ne[dim] = b_ned;
-        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
-        ggml_tensor * b = ggml_new_tensor(ctx, type, 4, b_ne.data());
+        auto ne_b = ne_a;
+        ne_b[dim] = b_ned;
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne_a.data());
+        ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne_b.data());
         ggml_tensor * out = ggml_concat(ctx, a, b, dim);
         return out;
     }
