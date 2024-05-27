@@ -55,7 +55,25 @@ HF_MODEL_MAP = (
         "vocab_files": HF_TOKENIZER_SPM_FILES,
     },
     {
+        "model_repo": "mistralai/Mistral-7B-Instruct-v0.1",
+        "model_arch": MODEL_ARCH.LLAMA,
+        "model_parts": 2,
+        "model_type": ModelFileType.SAFETENSORS,
+        "vocab_type": VocabType.SPM,
+        "vocab_pre": None,
+        "vocab_files": HF_TOKENIZER_SPM_FILES,
+    },
+    {
         "model_repo": "mistralai/Mistral-7B-Instruct-v0.2",
+        "model_arch": MODEL_ARCH.LLAMA,
+        "model_parts": 3,
+        "model_type": ModelFileType.SAFETENSORS,
+        "vocab_type": VocabType.SPM,
+        "vocab_pre": None,
+        "vocab_files": HF_TOKENIZER_SPM_FILES,
+    },
+    {  # NOTE: Mistral v0.3 has a 'tokenizer.model.v3' file
+        "model_repo": "mistralai/Mistral-7B-Instruct-v0.3",
         "model_arch": MODEL_ARCH.LLAMA,
         "model_parts": 3,
         "model_type": ModelFileType.SAFETENSORS,
@@ -219,15 +237,15 @@ HF_MODEL_MAP = (
         "vocab_pre": None,
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
-    {  # NOTE: I don't have access to this model
-        "model_repo": "databricks/dbrx-base",
-        "model_arch": MODEL_ARCH.DBRX,
-        "model_parts": 0,
-        "model_type": ModelFileType.SAFETENSORS,
-        "vocab_type": VocabType.BPE,
-        "vocab_pre": None,
-        "vocab_files": HF_TOKENIZER_BPE_FILES,
-    },
+    # {  # NOTE: I don't have access to this model
+    #     "model_repo": "databricks/dbrx-base",
+    #     "model_arch": MODEL_ARCH.DBRX,
+    #     "model_parts": 0,
+    #     "model_type": ModelFileType.SAFETENSORS,
+    #     "vocab_type": VocabType.BPE,
+    #     "vocab_pre": None,
+    #     "vocab_files": HF_TOKENIZER_BPE_FILES,
+    # },
     {  # NOTE: RoBERTa post processor
         "model_repo": "jinaai/jina-embeddings-v2-base-es",
         "model_arch": MODEL_ARCH.JINA_BERT_V2,
@@ -274,3 +292,67 @@ HF_MODEL_MAP = (
         "vocab_files": HF_TOKENIZER_BPE_FILES,
     },
 )
+
+
+def get_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("auth_token", help="A huggingface read auth token")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Increase output verbosity."
+    )
+    parser.add_argument(
+        "--model-path",
+        default="models",
+        help="The models storage path. Default is 'models'.",
+    )
+    return parser.parse_args()
+
+
+args = get_arguments()
+
+if args.verbose:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
+
+hub_model = HFHubModel(
+    auth_token=args.auth_token,
+    model_path=args.model_path,
+    logger=logger,
+)
+
+hub_tokenizer = HFHubTokenizer(
+    model_path=args.model_path,
+    logger=logger,
+)
+
+
+for model in HF_MODEL_MAP:
+
+    model_repo = model["model_repo"]
+    model_arch = model["model_arch"]
+    vocab_type = model["vocab_type"]
+
+    print(
+        "HUB_REPO:", model_repo,
+        "LLAMA_ARCH:", MODEL_ARCH_NAMES[model_arch]
+    )
+
+    hub_model.download_all_vocab_files(
+        model_repo=model_repo,
+        vocab_type=vocab_type,
+    )
+    # log the downloaded results
+    hub_tokenizer.log_tokenizer_json_info(model_repo)
+
+    normalizer = hub_tokenizer.get_normalizer(model_repo)
+    # extract the normalizer metadata
+
+    pre_tokenizer = hub_tokenizer.get_pre_tokenizer(model_repo)
+    # extract the pre-tokenizer metadata
+
+    added_tokens = hub_tokenizer.get_added_tokens(model_repo)
+    # extract the added tokens metadata
+
+    sha256sum = hub_tokenizer.get_tokenizer_json_hash(model_repo)
+    # use the hash to validate the models vocabulary
