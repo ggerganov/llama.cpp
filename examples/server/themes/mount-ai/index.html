@@ -285,20 +285,6 @@
       }, "{{char}}");
     }
 
-    // const runCompletion = async () => {
-    //   if (controller.value) {
-    //     console.log('already running...');
-    //     return;
-    //   }
-    //   const { prompt } = session.value;
-    //   transcriptUpdate([...session.value.transcript, ["", prompt]]);
-    //   await runLlama(prompt, {
-    //     ...params.value,
-    //     slot_id: slot_id,
-    //     stop: [],
-    //   }, "");
-    // }
-
     const runCompletion = () => {
       if (controller.value) {
         console.log('already running...');
@@ -404,43 +390,6 @@
           <button onclick=${reset}>Back</button>
         </div>`;
     }
-
-    // const ChatLog = (props) => {
-    //   const messages = session.value.transcript;
-    //   const container = useRef(null)
-
-    //   useEffect(() => {
-    //     // scroll to bottom (if needed)
-    //     const parent = container.current.parentElement;
-    //     if (parent && parent.scrollHeight <= parent.scrollTop + parent.offsetHeight + 300) {
-    //       parent.scrollTo(0, parent.scrollHeight)
-    //     }
-    //   }, [messages])
-
-    //   const chatLine = ([user, data], index) => {
-    //     let message
-    //     const isArrayMessage = Array.isArray(data)
-    //     if (params.value.n_probs > 0 && isArrayMessage) {
-    //       message = html`<${Probabilities} data=${data} />`
-    //     } else {
-    //       const text = isArrayMessage ?
-    //         data.map(msg => msg.content).join('').replace(/^\s+/, '') :
-    //         data;
-    //       message = html`<${Markdownish} text=${template(text)} />`
-    //     }
-    //     if (user) {
-    //       return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
-    //     } else {
-    //       return html`<p key=${index}>${message}</p>`
-    //     }
-    //   };
-
-    //   return html`
-    //     <section id="chat" contenteditable="true" ref=${container}>
-    //       <img style="width: 60%;${!session.value.image_selected ? `display: none;` : ``}" src="${session.value.image_selected}"/>
-    //       ${messages.flatMap(chatLine)}
-    //     </section>`;
-    // };
 
     const ChatLog = (props) => {
       const messages = session.value.transcript;
@@ -580,98 +529,6 @@ function updateSystemPrompt(e) {
 
 
 
-///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
-//
-//
-//
-///////////////////////////////////////////////////////////////////////////
-//
-// document.addEventListener('DOMContentLoaded', (event) => {
-//   // Add event listener for the language selection dropdown
-//   document.getElementById('systemLanguage').addEventListener('change', updateSystemLanguage);
-// });
-// //
-// async function updateSystemLanguage(event) {
-//   const language = event.target.value;
-//   const languageFile = language === 'default' ? 'EN_systemPrompts.js' : `${language.toUpperCase()}_systemPrompts.js`;
-//   const uiLanguageFile = language === 'default' ? 'EN_texts.json' : `${language.toUpperCase()}_texts.json`;
-// //
-//   try {
-//     // System prompts
-//     const promptsModule = await import(`./${languageFile}`);
-//     const systemPrompts = promptsModule.systemPrompts;
-//     // Update the system prompt
-//     document.getElementById('prompt').textContent = systemPrompts.default.systemPrompt;
-//     // The UI texts
-//     const response = await fetch(uiLanguageFile);
-//     const uiTexts = await response.json();
-//     // Update the label
-//     document.getElementById('id_user-name').textContent = uiTexts.USER_NAME;
-//     document.getElementById('id_bot-name').textContent = uiTexts.BOT_NAME;
-//     document.getElementById('id_toggle-label-chat').textContent = uiTexts.TOGGLE_LABEL_CHAT;
-//     document.getElementById('id_toggle-label-complete').textContent = uiTexts.TOGGLE_LABEL_COMPLETE;
-//     document.getElementById('id_history-template').textContent = uiTexts.HISTORY_TEMPLATE;
-//     document.getElementById('id_prompt-style').textContent = uiTexts.PROMPT_STYLE;
-//     document.getElementById('id_prompt-template').textContent = uiTexts.PROMPT_TEMPLATE;
-//     document.getElementById('id_reset').textContent = uiTexts.RESET;
-//     document.getElementById('id_grammar-title').textContent = uiTexts.GRAMMAR_TITLE;
-//     document.getElementById('id_grammar').textContent = uiTexts.GRAMMAR;
-//     document.getElementById('id_grammar-order-placeholder').textContent = uiTexts.GRAMMAR_ORDER_PLACEHOLDER;
-//     document.getElementById('id_grammar-convert-button').textContent = uiTexts.GRAMMAR_CONVERT_BUTTON;
-//     document.getElementById('id_predict-tokens').textContent = uiTexts.PREDICT_TOKENS;
-//     document.getElementById('id_temperature').textContent = uiTexts.TEMPERATURE;
-//     document.getElementById('id_top-k').textContent = uiTexts.TOP_K;
-//     document.getElementById('id_top-p').textContent = uiTexts.TOP_P;
-//     document.getElementById('id_repetition-penalty').textContent = uiTexts.REPETITION_PENALTY;
-//     document.getElementById('id_more-options').textContent = uiTexts.MORE_OPTIONS;
-//     document.getElementById('id_penalize-last').textContent = uiTexts.PENALIZE_LAST;
-//     document.getElementById('id_tfs-z').textContent = uiTexts.TFS_Z;
-//     document.getElementById('id_penalize-presence').textContent = uiTexts.PENALIZE_PRESENCE;
-//     document.getElementById('id_penalize-frequence').textContent = uiTexts.PENALIZE_FREQUENCE;
-//     document.getElementById('id_typical-p').textContent = uiTexts.TYPICAL_P;
-//     document.getElementById('id_mirostat-off').textContent = uiTexts.MIROSTAT_OFF;
-//     document.getElementById('id_mirostat-on-1').textContent = uiTexts.MIROSTAT_ON_1;
-//     document.getElementById('id_mirostat-on-2').textContent = uiTexts.MIROSTAT_ON_2;
-//     document.getElementById('id_mirostat-entropy').textContent = uiTexts.MIROSTAT_ENTROPY;
-//     document.getElementById('id_mirostat-learnrate').textContent = uiTexts.MIROSTAT_LEARNRATE;
-//     document.getElementById('id_show-probabilities').textContent = uiTexts.SHOW_PROBABILITIES;
-//     document.getElementById('id_user-input-placeholder').textContent = uiTexts.USER_INPUT_PLACEHOLDER;
-//     document.getElementById('id_button-back').textContent = uiTexts.BUTTON_BACK;
-//     document.getElementById('id_button-upload-image').textContent = uiTexts.BUTTON_UPLOAD_IMAGE;
-//     document.getElementById('id_button-stop-inference').textContent = uiTexts.BUTTON_STOP_INFERENCE;
-//     document.getElementById('id_button-start-inference').textContent = uiTexts.BUTTON_START_INFERENCE;
-//     document.getElementById('id_powered-by').textContent = uiTexts.POWERED_BY;
-//     document.getElementById('id_and').textContent = uiTexts.AND;
-//   } catch (error) {
-//     console.error('Error loading the language files:', error);
-//   }
-// }
-//
-// async function updateTexts(systemPrompts) {
-//   // Update the texts that come from the language files
-//   document.querySelector('#someElement').textContent = systemPrompts.default.systemPrompt;
-//   // Load the JSON file for the UI elements
-//   const uiLanguageFile = `./${language}_texts.json`;
-//   try {
-//     const response = await fetch(uiLanguageFile);
-//     const uiTexts = await response.json();
-//     // Update the UI elements
-//     // document.querySelector('label[for="user"]').textContent = uiTexts.USER_NAME;
-//     document.getElementById('label-user').textContent = uiTexts.USER_NAME;
-//     // Update further elements
-//   } catch (error) {
-//     console.error('Error when loading the UI texts:', error);
-//   }
-// }
-//
-///////////// WORK IN PROGRESS ///////////// MULTILINGUAL UI AND PROMPTS //
-//
-///////////////////////////////////////////////////////////////////////////
-
-
-
-
-
 
       const ConfigForm = (props) => {
       const updateSession = (el) => session.value = { ...session.value, [el.target.name]: el.target.value }
@@ -680,25 +537,6 @@ function updateSystemPrompt(e) {
       const updateParamsInt = (el) => params.value = { ...params.value, [el.target.name]: Math.floor(parseFloat(el.target.value)) }
       const updateParamsBool = (el) => params.value = { ...params.value, [el.target.name]: el.target.checked }
 
-      // const grammarJsonSchemaPropOrder = signal('')
-      // const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
-      // const convertJSONSchemaGrammar = () => {
-      //   try {
-      //     const schema = JSON.parse(params.value.grammar)
-      //     const converter = new SchemaConverter(
-      //       grammarJsonSchemaPropOrder.value
-      //         .split(',')
-      //         .reduce((acc, cur, i) => ({ ...acc, [cur.trim()]: i }), {})
-      //     )
-      //     converter.visit(schema, '')
-      //     params.value = {
-      //       ...params.value,
-      //       grammar: converter.formatGrammar(),
-      //     }
-      //   } catch (e) {
-      //     alert(`Conversion failed: ${e.message}`)
-      //   }
-      // }
       const grammarJsonSchemaPropOrder = signal('')
       const updateGrammarJsonSchemaPropOrder = (el) => grammarJsonSchemaPropOrder.value = el.target.value
       const convertJSONSchemaGrammar = async () => {
@@ -720,8 +558,6 @@ function updateSystemPrompt(e) {
           alert(`Convert failed: ${e.message}`)
         }
       }
-
-
 
       const FloatField = ({ label, max, min, name, step, value }) => {
         return html`
@@ -929,10 +765,15 @@ function updateSystemPrompt(e) {
       const CompletionConfigForm = () => (
         html`
           ${PromptControlFieldSet()}
-          <fieldset>${GrammarControl()}</fieldset>
+          <fieldset>
+            <details>
+              <summary><span class="summary-title" id="id_grammar-title" id_grammar-title>Grammar</span></summary>
+              ${GrammarControl()}
+            </details>
+          </fieldset>
         `
       );
-
+// todo toggle button et api field et reset button in one nice row
       return html`
         <form>
           <fieldset class="two">
@@ -941,6 +782,7 @@ function updateSystemPrompt(e) {
                   <div id="id_toggle-label-chat">Chat</div>
                   <div id="id_toggle-label-complete">Complete</div>
                 </label>
+                <input type="text" id="api_key" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
             <${UserTemplateResetButton}/>
           </fieldset>
 
@@ -982,13 +824,13 @@ function updateSystemPrompt(e) {
           </details>
             <fieldset class="apiKey">
               <label for="api_key">API Key</label>
-              <input type="text" id="api_key" name="api_key" value="${params.value.api_key}" placeholder="Enter API key" oninput=${updateParams} />
+
             </fieldset>
         </form>
       `
     }
 
-    // todo - beautify apikey css
+    // todo - beautify apikey section with css
 
     const probColor = (p) => {
       const r = Math.floor(192 * (1 - p));
