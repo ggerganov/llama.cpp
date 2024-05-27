@@ -265,6 +265,8 @@ extern "C" {
         bool check_tensors; // validate model tensor data
     };
 
+    // NOTE: changing the default values of parameters marked as [EXPERIMENTAL] may cause crashes or incorrect results in certain configurations
+    //       https://github.com/ggerganov/llama.cpp/pull/7544
     struct llama_context_params {
         uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
@@ -291,14 +293,14 @@ extern "C" {
         ggml_backend_sched_eval_callback cb_eval;
         void * cb_eval_user_data;
 
-        enum ggml_type type_k; // data type for K cache
-        enum ggml_type type_v; // data type for V cache
+        enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
+        enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-        bool flash_attn;  // whether to use flash attention
+        bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
