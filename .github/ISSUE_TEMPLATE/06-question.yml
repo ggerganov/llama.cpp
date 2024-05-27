@@ -1,4 +1,4 @@
-name: Question template
+name: Question
 description: Used to ask questions about llama.cpp
 title: "Question: "
 labels: ["question"]
