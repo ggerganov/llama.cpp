@@ -11,10 +11,19 @@ class Roles {
     static Assistant = "assistant";
 }
 
+let gBaseURL = "http://127.0.0.1:8080";
+
 class ApiEP {
-    static Chat = "chat";
-    static Completion = "completion";
+    static Type = {
+        Chat: "chat",
+        Completion: "completion",
+    }
+    static Url = {
+        'chat': `${gBaseURL}/chat/completions`,
+        'completion': `${gBaseURL}/completions`,
+    }
 }
+
 
 let gUsageMsg = `
     <p class="role-system">Usage</p>
@@ -34,6 +43,7 @@ let gUsageMsg = `
         </ul>
     </ul>
 `;
+
 
 /** @typedef {{role: string, content: string}[]} ChatMessages */
 
@@ -144,7 +154,7 @@ class SimpleChat {
      * Convert the json into string.
      * @param {Object} obj
      */
-    request_jsonstr(obj) {
+    request_jsonstr_extend(obj) {
         for(let k in gMe.chatRequestOptions) {
             obj[k] = gMe.chatRequestOptions[k];
         }
@@ -158,7 +168,7 @@ class SimpleChat {
         let req = {
             messages: this.recent_chat(gMe.iRecentUserMsgCnt),
         }
-        return this.request_jsonstr(req);
+        return this.request_jsonstr_extend(req);
     }
 
     /**
@@ -181,7 +191,19 @@ class SimpleChat {
         let req = {
             prompt: prompt,
         }
-        return this.request_jsonstr(req);
+        return this.request_jsonstr_extend(req);
+    }
+
+    /**
+     * Return a string form of json object suitable for specified api endpoint.
+     * @param {string} apiEP
+     */
+    request_jsonstr(apiEP) {
+        if (apiEP == ApiEP.Type.Chat) {
+            return this.request_messages_jsonstr();
+        } else {
+            return this.request_prompt_jsonstr(gMe.bCompletionInsertStandardRolePrefix);
+        }
     }
 
     /**
@@ -243,13 +265,6 @@ class SimpleChat {
 }
 
 
-let gBaseURL = "http://127.0.0.1:8080";
-let gChatURL = {
-    'chat': `${gBaseURL}/chat/completions`,
-    'completion': `${gBaseURL}/completions`,
-}
-
-
 class MultiChatUI {
 
     constructor() {
@@ -263,14 +278,14 @@ class MultiChatUI {
         this.elDivChat = /** @type{HTMLDivElement} */(document.getElementById("chat-div"));
         this.elBtnUser = /** @type{HTMLButtonElement} */(document.getElementById("user-btn"));
         this.elInUser = /** @type{HTMLInputElement} */(document.getElementById("user-in"));
-        this.elSelectApiEP = /** @type{HTMLSelectElement} */(document.getElementById("api-ep"));
+        this.elDivHeading = /** @type{HTMLSelectElement} */(document.getElementById("heading"));
         this.elDivSessions = /** @type{HTMLDivElement} */(document.getElementById("sessions-div"));
         this.elBtnSettings = /** @type{HTMLButtonElement} */(document.getElementById("settings"));
 
         this.validate_element(this.elInSystem, "system-in");
         this.validate_element(this.elDivChat, "chat-div");
         this.validate_element(this.elInUser, "user-in");
-        this.validate_element(this.elSelectApiEP, "api-ep");
+        this.validate_element(this.elDivHeading, "heading");
         this.validate_element(this.elDivChat, "sessions-div");
         this.validate_element(this.elBtnSettings, "settings");
     }
@@ -322,7 +337,7 @@ class MultiChatUI {
             if (this.elInUser.disabled) {
                 return;
             }
-            this.handle_user_submit(this.curChatId, this.elSelectApiEP.value).catch((/** @type{Error} */reason)=>{
+            this.handle_user_submit(this.curChatId, gMe.apiEP).catch((/** @type{Error} */reason)=>{
                 let msg = `ERRR:SimpleChat\nMCUI:HandleUserSubmit:${this.curChatId}\n${reason.name}:${reason.message}`;
                 console.debug(msg.replace("\n", ":"));
                 alert(msg);
@@ -402,7 +417,7 @@ class MultiChatUI {
         // So if user wants to simulate a multi-chat based completion query,
         // they will have to enter the full thing, as a suitable multiline
         // user input/query.
-        if ((apiEP == ApiEP.Completion) && (gMe.bCompletionFreshChatAlways)) {
+        if ((apiEP == ApiEP.Type.Completion) && (gMe.bCompletionFreshChatAlways)) {
             chat.clear();
         }
 
@@ -415,13 +430,8 @@ class MultiChatUI {
         }
         chat.show(this.elDivChat);
 
-        let theBody;
-        let theUrl = gChatURL[apiEP]
-        if (apiEP == ApiEP.Chat) {
-            theBody = chat.request_messages_jsonstr();
-        } else {
-            theBody = chat.request_prompt_jsonstr(gMe.bCompletionInsertStandardRolePrefix);
-        }
+        let theUrl = ApiEP.Url[apiEP];
+        let theBody = chat.request_jsonstr(apiEP);
 
         this.elInUser.value = "working...";
         this.elInUser.disabled = true;
@@ -439,7 +449,7 @@ class MultiChatUI {
         console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let assistantMsg;
         let trimmedMsg = "";
-        if (apiEP == ApiEP.Chat) {
+        if (apiEP == ApiEP.Type.Chat) {
             assistantMsg = respBody["choices"][0]["message"]["content"];
         } else {
             try {
@@ -557,6 +567,7 @@ class Me {
             "Last1": 2,
             "Last2": 3,
         };
+        this.apiEP = ApiEP.Type.Chat;
         // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
         this.chatRequestOptions = {
             "temperature": 0.7,
@@ -586,6 +597,8 @@ class Me {
 
         ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`, elDiv);
 
+        ui.el_create_append_p(`ApiEndPoint:${this.apiEP}`, elDiv);
+
     }
 
     /**
@@ -611,6 +624,11 @@ class Me {
 
         let sel = ui.el_creatediv_select("SetChatHistoryInCtxt", "ChatHistoryInCtxt", this.sRecentUserMsgCnt, this.iRecentUserMsgCnt, (val)=>{
             this.iRecentUserMsgCnt = this.sRecentUserMsgCnt[val];
+        });
+        elDiv.appendChild(sel);
+
+        sel = ui.el_creatediv_select("SetApiEP", "ApiEndPoint", ApiEP.Type, this.apiEP, (val)=>{
+            this.apiEP = ApiEP.Type[val];
         });
         elDiv.appendChild(sel);
 
