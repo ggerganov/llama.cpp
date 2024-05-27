@@ -4593,6 +4593,9 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "dbrx") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DBRX;
+            } else if (
+                tokenizer_pre == "smaug-bpe") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMAUG;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -12512,6 +12515,7 @@ struct llm_tokenizer_bpe {
                         });
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_DBRX:
+                    case LLAMA_VOCAB_PRE_TYPE_SMAUG:
                         word_collection = unicode_regex_split(text, {
                             // same as llama3
                             "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
