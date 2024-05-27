@@ -11186,7 +11186,7 @@ struct llm_build_context {
 
         // We have to pre-scale kq_scale and attn_factor to make the YaRN RoPE work correctly.
         // See https://github.com/ggerganov/llama.cpp/discussions/7416 for detailed explanation.
-        const float mscale = 1.0f + hparams.rope_yarn_log_mul * logf(1.0f / freq_scale);
+        const float mscale = attn_factor * (1.0f + hparams.rope_yarn_log_mul * logf(1.0f / freq_scale));
         const float kq_scale = 1.0f*mscale*mscale/sqrtf(float(hparams.n_embd_head_k));
         const float attn_factor_scaled = 1.0f / (1.0f + 0.1f * logf(1.0f / freq_scale));
 
