@@ -21,6 +21,9 @@
 .role-user {
     background-color: lightgray;
 }
+.role-trim {
+    background-color: lightpink;
+}
 
 .flex-grow {
     flex-grow: 1;

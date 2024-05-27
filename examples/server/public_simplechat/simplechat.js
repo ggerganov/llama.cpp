@@ -450,14 +450,15 @@ class MultiChatUI {
         }
         if (gMe.bTrimGarbage) {
             let origMsg = assistantMsg;
-            assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 8, 16, 72);
+            assistantMsg = du.trim_hist_garbage_at_end_loop(assistantMsg, 8, 24, 72);
             trimmedMsg = origMsg.substring(assistantMsg.length);
         }
         chat.add(Roles.Assistant, assistantMsg);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
             if (trimmedMsg.length > 0) {
-                ui.el_create_append_p(`TRIMMED:${trimmedMsg}`, this.elDivChat);
+                let p = ui.el_create_append_p(`TRIMMED:${trimmedMsg}`, this.elDivChat);
+                p.className="role-trim";
             }
         } else {
             console.debug(`DBUG:SimpleChat:MCUI:HandleUserSubmit:ChatId has changed:[${chatId}] [${this.curChatId}]`);
