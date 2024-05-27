@@ -246,6 +246,12 @@ class HFHubModel(HFHubBase):
     def _request_single_file(
         self, model_repo: str, file_name: str, file_path: pathlib.Path
     ) -> bool:
+        # NOTE: Consider optional `force` parameter if files need to be updated.
+        # e.g. The model creator updated the vocabulary to resolve an issue or add a feature.
+        if file_path.exists():
+            self.logger.info(f"skipped - downloaded {file_path} exists already.")
+            return False
+
         # NOTE: Do not use bare exceptions! They mask issues!
         # Allow the exception to occur or explicitly handle it.
         try:
