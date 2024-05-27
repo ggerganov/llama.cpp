@@ -1221,7 +1221,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_VULKAN}    ${GGML_HEADERS_VULKAN}
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
-            )
+             "ggml-threading.cpp" "ggml-threading.h")
 
 target_include_directories(ggml PUBLIC . ${LLAMA_EXTRA_INCLUDES})
 target_compile_features   (ggml PUBLIC c_std_11) # don't bump
