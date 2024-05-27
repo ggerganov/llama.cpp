@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -327,8 +328,8 @@ hub_tokenizer = HFHubTokenizer(
 )
 
 
+metadata = []
 for model in HF_MODEL_MAP:
-
     model_repo = model["model_repo"]
     model_arch = model["model_arch"]
     vocab_type = model["vocab_type"]
@@ -345,14 +346,26 @@ for model in HF_MODEL_MAP:
     # log the downloaded results
     hub_tokenizer.log_tokenizer_json_info(model_repo)
 
+    model['model_arch'] = MODEL_ARCH_NAMES[model_arch]
+    model['vocab_type'] = hub_tokenizer.get_vocab_name(vocab_type)
+
     normalizer = hub_tokenizer.get_normalizer(model_repo)
     # extract the normalizer metadata
+    model['normalizer'] = normalizer
 
     pre_tokenizer = hub_tokenizer.get_pre_tokenizer(model_repo)
     # extract the pre-tokenizer metadata
+    model['pre_tokenizer'] = pre_tokenizer
 
     added_tokens = hub_tokenizer.get_added_tokens(model_repo)
     # extract the added tokens metadata
+    model['added_tokens'] = added_tokens
 
     sha256sum = hub_tokenizer.get_tokenizer_json_hash(model_repo)
     # use the hash to validate the models vocabulary
+    model['vocab_hash'] = sha256sum
+
+    metadata.append(model)
+
+with open(f"{args.model_path}/registry.json", mode="w") as file:
+    json.dump(metadata, file, indent=2)
