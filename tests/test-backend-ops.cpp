@@ -1261,21 +1261,21 @@ struct test_concat : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne_a;
     const int dim;
-    const int64_t b_ned;
+    const int64_t ne_b_d;
 
     std::string vars() override {
-        return VARS_TO_STR4(type, ne_a, dim, b_ned);
+        return VARS_TO_STR4(type, ne_a, dim, ne_b_d);
     }
 
     test_concat(ggml_type type = GGML_TYPE_F32,
             std::array<int64_t, 4> ne_a = {10, 10, 10, 10},
             int dim = 2,
-            int64_t b_ned = 10)
-        : type(type), ne_a(ne_a), dim(dim), b_ned(b_ned) {}
+            int64_t ne_b_d = 10)
+        : type(type), ne_a(ne_a), dim(dim), ne_b_d(ne_b_d) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         auto ne_b = ne_a;
-        ne_b[dim] = b_ned;
+        ne_b[dim] = ne_b_d;
         ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne_a.data());
         ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne_b.data());
         ggml_tensor * out = ggml_concat(ctx, a, b, dim);
