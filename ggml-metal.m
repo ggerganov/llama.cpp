@@ -990,6 +990,8 @@ static enum ggml_status ggml_metal_graph_compute(
                     {
                         id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_CONCAT].pipeline;
 
+                        const int32_t dim = ((int32_t *) dst->op_params)[0];
+
                         [encoder setComputePipelineState:pipeline];
                         [encoder setBuffer:id_src0 offset:offs_src0 atIndex:0];
                         [encoder setBuffer:id_src1 offset:offs_src1 atIndex:1];
@@ -1018,6 +1020,7 @@ static enum ggml_status ggml_metal_graph_compute(
                         [encoder setBytes:&nb1  length:sizeof(nb1)  atIndex:24];
                         [encoder setBytes:&nb2  length:sizeof(nb2)  atIndex:25];
                         [encoder setBytes:&nb3  length:sizeof(nb3)  atIndex:26];
+                        [encoder setBytes:&dim  length:sizeof(dim)  atIndex:27];
 
                         const int nth = MIN(1024, ne0);
 
