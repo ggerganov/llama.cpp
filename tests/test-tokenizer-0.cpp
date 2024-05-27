@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
     atexit([]() { console::cleanup(); });
 #endif
 
-    bool success = true;
+    int n_failed = 0;
 
     const auto k_tests = [&]() -> llama_tests {
         if (!fname_text.empty()) {
@@ -214,22 +214,27 @@ int main(int argc, char **argv) {
         }
 
         if (!correct) {
-            fprintf(stderr, "%s : failed test:    '%s'\n", __func__, test_kv.first.c_str());
-            fprintf(stderr, "%s : detokenized to: '%s' instead of '%s'\n", __func__,
-                llama_detokenize_bpe(ctx, res).c_str(),
-                llama_detokenize_bpe(ctx, test_kv.second).c_str());
-            fprintf(stderr, "%s : expected tokens: ", __func__);
+            fprintf(stderr, "failed test:    '%s'\n", test_kv.first.c_str());
+            auto detok = llama_detokenize_bpe(ctx, res).c_str();
+            auto expected = llama_detokenize_bpe(ctx, test_kv.second).c_str();
+            fprintf(stderr, "detokenized to: '%s'\n", detok);
+            if(detok != expected) {
+                fprintf(stderr, "but we wanted:  '%s'\n", expected);
+            } else {
+                fprintf(stderr, "(which matches the expected output)\n", expected);
+            }
+            fprintf(stderr, "expected tokens: \n");
             for (const auto & t : test_kv.second) {
-                fprintf(stderr, "%6d '%s', ", t, llama_token_to_piece(ctx, t).c_str());
+                fprintf(stderr, "%6d '%s'\n", t, llama_token_to_piece(ctx, t).c_str());
             }
             fprintf(stderr, "\n");
-            fprintf(stderr, "%s : got tokens:      ", __func__);
+            fprintf(stderr, "got tokens:      \n");
             for (const auto & t : res) {
-                fprintf(stderr, "%6d '%s', ", t, llama_token_to_piece(ctx, t).c_str());
+                fprintf(stderr, "%6d '%s'\n", t, llama_token_to_piece(ctx, t).c_str());
             }
-            fprintf(stderr, "\n");
+            fprintf(stderr, "\n====================\n");
 
-            success = false;
+            n_failed ++;
         }
     }
 
@@ -286,7 +291,11 @@ int main(int argc, char **argv) {
     llama_backend_free();
 
     printf("\n");
-    printf("Tests %s\n", success ? "passed" : "failed");
+    if(n_failed) {
+        printf("%d tests failed\n", n_failed);
+    } else {
+        printf("Tests passed\n");
+    }
 
-    return success ? 0 : 3;
+    return !n_failed ? 0 : 3;
 }
