@@ -86,6 +86,7 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
         LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
         LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
+        LLAMA_VOCAB_PRE_TYPE_PORO           = 15,
     };
 
     // note: these values should be synchronized with ggml_rope
