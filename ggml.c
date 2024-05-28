@@ -19402,6 +19402,9 @@ static bool __thread_priority(int32_t prio) {
 
 #else // posix?
 
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
 #include <sched.h>
 
 static bool __thread_affinity(const bool * mask) {
@@ -19473,17 +19476,16 @@ static bool __thread_priority(int32_t prio) {
 
 #endif
 
-#ifdef __aarch64__
-
+#if defined(__aarch64__) && ( defined(__clang__) || defined(__GNUC__) )
 static inline void __cpu_relax(void) {
     __asm__ volatile("yield" ::: "memory");
 }
-
-#else
-
+#elif defined(__x86_64__)
 static inline void __cpu_relax(void) {
-    __asm__ volatile("rep; nop" ::: "memory");
+    _mm_pause();
 }
+#else
+static inline void __cpu_relax(void) {;}
 #endif
 
 static void __cpumask_next(const bool * global_mask, bool * local_mask, bool strict, int32_t* iter) {
