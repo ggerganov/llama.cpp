@@ -918,7 +918,7 @@ const BoolField = ({ label, title, name, value }) => {
       }
       return html`
       <span class=generation-statistics>
-          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_token_ms.toFixed()}ms per token, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
+          ${llamaStats.value.tokens_predicted} predicted, ${llamaStats.value.tokens_cached} cached, ${llamaStats.value.timings.predicted_per_second.toFixed(2)} tokens per second
         </span>
       `
     }
