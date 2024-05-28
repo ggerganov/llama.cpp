@@ -577,7 +577,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         /*.no_alloc   =*/ true,
     };
 
-    LOG_TEE("%s: ctx->buf_compute_meta.size(): %d \n", __func__, ctx->buf_compute_meta.size());
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph * gf = ggml_new_graph(ctx0);
     
@@ -1446,7 +1445,7 @@ bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length
     return true;
 }
 
-static void normalize_image_u8_to_f32(struct clip_ctx * ctx, const clip_image_u8* src, clip_image_f32* dst) {
+void normalize_image_u8_to_f32(struct clip_ctx * ctx, const clip_image_u8* src, clip_image_f32* dst) {
     dst->nx = src->nx;
     dst->ny = src->ny;
     dst->buf.resize(src->buf.size());
@@ -1511,7 +1510,7 @@ int clip_n_patches(const struct clip_ctx * ctx) {
     return n_patches;
 }
 
-std::vector<std::vector<std::vector<float>>> get_1d_sincos_pos_embed_from_grid_new(int embed_dim, const std::vector<std::vector<float>>& pos) {
+static std::vector<std::vector<std::vector<float>>> get_1d_sincos_pos_embed_from_grid_new(int embed_dim, const std::vector<std::vector<float>>& pos) {
     assert(embed_dim % 2 == 0);
     int H = pos.size();
     int W = pos[0].size();
@@ -1535,7 +1534,7 @@ std::vector<std::vector<std::vector<float>>> get_1d_sincos_pos_embed_from_grid_n
     return emb;
 }
 
-std::vector<std::vector<std::vector<float>>> get_2d_sincos_pos_embed_from_grid(int embed_dim, const std::vector<std::vector<std::vector<float>>>& grid) {
+static std::vector<std::vector<std::vector<float>>> get_2d_sincos_pos_embed_from_grid(int embed_dim, const std::vector<std::vector<std::vector<float>>>& grid) {
     assert(embed_dim % 2 == 0);
     std::vector<std::vector<std::vector<float>>> emb_h = get_1d_sincos_pos_embed_from_grid_new(embed_dim / 2, grid[0]); // (H, W, D/2)
     std::vector<std::vector<std::vector<float>>> emb_w = get_1d_sincos_pos_embed_from_grid_new(embed_dim / 2, grid[1]); // (H, W, D/2)
@@ -1555,7 +1554,7 @@ std::vector<std::vector<std::vector<float>>> get_2d_sincos_pos_embed_from_grid(i
     return emb;
 }
 
-std::vector<std::vector<float>> get_2d_sincos_pos_embed(int embed_dim, const std::pair<int, int> image_size) {
+static std::vector<std::vector<float>> get_2d_sincos_pos_embed(int embed_dim, const std::pair<int, int> image_size) {
     int grid_h_size = image_size.first;
     int grid_w_size = image_size.second;
 

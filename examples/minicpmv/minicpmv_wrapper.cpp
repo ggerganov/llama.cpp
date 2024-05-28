@@ -23,8 +23,6 @@ struct llama_model * llava_init(gpt_params * params) {
 }
 
 struct minicpmv_context * llava_init_context(gpt_params * params, llama_model * model) {
-    const char * clip_path = params->mmproj.c_str();
-
     auto prompt = params->prompt;
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
@@ -65,9 +63,9 @@ struct clip_ctx * clip_init_context(gpt_params * params) {
     return ctx_clip;
 }
 
-std::vector<std::vector<struct llava_image_embed *>> minicpmv_image_embed(gpt_params * params, const std::string & fname){
+struct uhd_image_embed * minicpmv_image_embed(gpt_params * params, const std::string & fname){
     auto ctx_clip = clip_init_context(params);
-    auto image_embed_and_slices = llava_image_embed_make_with_filename_slice(ctx_clip, params->n_threads, fname.c_str());
+    auto image_embed_and_slices = llava_image_embed_make_with_filename_uhd(ctx_clip, params->n_threads, fname.c_str());
     if (ctx_clip) {
         clip_free(ctx_clip);
         ctx_clip = NULL;

@@ -34,7 +34,7 @@ MINICPMV_API struct minicpmv_context * llava_init_context(gpt_params * params, l
 MINICPMV_API void llava_free(struct minicpmv_context * ctx_llava);
 
 MINICPMV_API struct clip_ctx * clip_init_context(gpt_params * params);
-MINICPMV_API std::vector<std::vector<struct llava_image_embed *>> minicpmv_image_embed(gpt_params * params, const std::string & fname);
+MINICPMV_API struct uhd_image_embed * minicpmv_image_embed(gpt_params * params, const std::string & fname);
 
 MINICPMV_API bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past);
 MINICPMV_API bool eval_id(struct llama_context * ctx_llama, int id, int * n_past);

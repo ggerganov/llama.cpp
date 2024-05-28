@@ -108,11 +108,11 @@ bool llava_eval_image_embed(llama_context * ctx_llama, const struct llava_image_
     return true;
 }
 
-int ensure_divide(int length, int patch_size) {
+static int ensure_divide(int length, int patch_size) {
     return std::max(static_cast<int>(std::round(static_cast<float>(length) / patch_size) * patch_size), patch_size);
 }
 
-std::pair<int, int> uhd_find_best_resize(std::pair<int, int> original_size, int scale_resolution, int patch_size, bool allow_upscale = false) {
+static std::pair<int, int> uhd_find_best_resize(std::pair<int, int> original_size, int scale_resolution, int patch_size, bool allow_upscale = false) {
     int width = original_size.first;
     int height = original_size.second;
     if ((width * height > scale_resolution * scale_resolution) || allow_upscale) {
@@ -129,7 +129,7 @@ inline float clip(float x, float lower, float upper) {
     return std::max(lower, std::min(x, upper));
 }
 
-std::pair<int, int> uhd_get_refine_size(std::pair<int, int> original_size, std::pair<int, int> grid, int scale_resolution, int patch_size, bool allow_upscale = false) {
+static std::pair<int, int> uhd_get_refine_size(std::pair<int, int> original_size, std::pair<int, int> grid, int scale_resolution, int patch_size, bool allow_upscale = false) {
     int width, height;
     std::tie(width, height) = original_size;
     int grid_x, grid_y;
@@ -218,7 +218,7 @@ static bool bicubic_resize(const clip_image_u8 &img, clip_image_u8 &dst, int tar
 //    -> https://arxiv.org/pdf/2403.11703
 //    -> https://github.com/thunlp/LLaVA-UHD
 //    -> https://github.com/thunlp/LLaVA-UHD/blob/302301bc2175f7e717fb8548516188e89f649753/llava_uhd/train/llava-uhd/slice_logic.py#L118
-std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_image_u8 * img, const int max_slice_nums=9, const int scale_resolution=448, const int patch_size=14, const bool never_split=false) {
+static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_image_u8 * img, const int max_slice_nums=9, const int scale_resolution=448, const int patch_size=14) {
     const std::pair<int, int> original_size={img->nx,img->ny};
     const int original_width = img->nx;
     const int original_height = img->ny;
@@ -311,30 +311,30 @@ std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_image_u8 * 
     return images;
 }
 
-std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_bytes_uhd(struct clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img) {
+struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img) {
     std::vector<std::vector<clip_image_u8 *>> imgs = uhd_slice_image(img);
     for (size_t i = 0; i < imgs.size(); ++i){
         for (size_t j = 0; j < imgs[i].size(); ++j) {
             LOG_TEE("%s: %d %d\n", __func__,imgs[i][j]->nx,imgs[i][j]->ny);
         }
     }
-    std::vector<std::vector<llava_image_embed *>> results;
+    struct uhd_image_embed * results = new uhd_image_embed();
 
     for (size_t i = 0; i < imgs.size(); ++i){
-        results.push_back(std::vector<llava_image_embed *>());
+        results->image_embeds.push_back(std::vector<llava_image_embed *>());
         for (size_t j = 0; j < imgs[i].size(); ++j) {
             float* image_embed = NULL;
             int n_image_pos = 0;
             bool image_embed_result = llava_image_embed_make_with_clip_img(ctx_clip, n_threads, imgs[i][j], &image_embed, &n_image_pos);
             if (!image_embed_result) {
                 LOG_TEE("%s: coulnd't embed the image\n", __func__);
-                return std::vector<std::vector<struct llava_image_embed *>>();
+                return NULL;
             }
 
             auto result = (llava_image_embed*)malloc(sizeof(llava_image_embed));
             result->embed = image_embed;
             result->n_image_pos = n_image_pos;
-            results[i].push_back(result);
+            results->image_embeds[i].push_back(result);
         }
     }
     return results;
@@ -374,7 +374,8 @@ static bool load_file_to_bytes(const char* path, unsigned char** bytesOut, long 
 }
 
 bool llava_image_embed_make_with_clip_img_ollama(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
-    auto image_embed_slices = llava_image_embed_make_with_bytes_uhd(ctx_clip, n_threads, img);
+    auto embeds = llava_image_embed_make_with_bytes_uhd(ctx_clip, n_threads, img);
+    auto image_embed_slices = embeds->image_embeds;
     if (!image_embed_slices[0][0]){
         LOG_TEE("%s: failed to embeding image\n", __func__);
         return false;
@@ -416,35 +417,35 @@ bool llava_image_embed_make_with_clip_img_ollama(clip_ctx * ctx_clip, int n_thre
     return true;
 }
 
-std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_filename_uhd(struct clip_ctx * ctx_clip, int n_threads, const char * image_path) {
+struct uhd_image_embed * llava_image_embed_make_with_filename_uhd(struct clip_ctx * ctx_clip, int n_threads, const char * image_path) {
     unsigned char* image_bytes;
     long image_bytes_length;
     auto loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
     if (!loaded) {
         LOG_TEE("%s: failed to load %s\n", __func__, image_path);
-        return std::vector<std::vector<struct llava_image_embed *>>();
+        return NULL;
     }
     clip_image_u8 * img = clip_image_u8_init();
     if (!clip_image_load_from_bytes(image_bytes, image_bytes_length, img)) {
         clip_image_u8_free(img);
         LOG_TEE("%s: can't load image from bytes, is it a valid image?", __func__);
-        return std::vector<std::vector<struct llava_image_embed *>>();
+        return NULL;
     }
 
-    std::vector<std::vector<struct llava_image_embed *>> embeds = llava_image_embed_make_with_bytes_uhd(ctx_clip, n_threads, img);
+    struct uhd_image_embed * embeds = llava_image_embed_make_with_bytes_uhd(ctx_clip, n_threads, img);
 
     clip_image_u8_free(img);
     free(image_bytes);
     return embeds;
 }
 
-void llava_image_embed_free_uhd(std::vector<std::vector<struct llava_image_embed *>> embed) {
-    for (size_t i = 0; i < embed.size(); ++i){
-        for (size_t j = 0; j < embed[i].size(); ++j){
-            free(embed[i][j]->embed);
-            free(embed[i][j]);
+void llava_image_embed_free_uhd(struct uhd_image_embed * embed) {
+    for (size_t i = 0; i < embed->image_embeds.size(); ++i){
+        for (size_t j = 0; j < embed->image_embeds[i].size(); ++j){
+            free(embed->image_embeds[i][j]->embed);
+            free(embed->image_embeds[i][j]->embed);
         }
-        embed[i] = std::vector<struct llava_image_embed *>();
+        embed->image_embeds[i] = std::vector<struct llava_image_embed *>();
     }
-    embed = std::vector<std::vector<struct llava_image_embed *>>();
+    embed->image_embeds = std::vector<std::vector<struct llava_image_embed *>>();
 }

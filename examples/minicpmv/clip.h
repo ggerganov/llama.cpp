@@ -69,7 +69,7 @@ CLIP_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8
 /** interpret bytes as an image file with length bytes_length, and use the result to populate img */
 CLIP_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img);
 
-static void normalize_image_u8_to_f32(struct clip_ctx * ctx, const clip_image_u8* src, clip_image_f32* dst);
+CLIP_API void normalize_image_u8_to_f32(struct clip_ctx * ctx, const clip_image_u8* src, clip_image_f32* dst);
 
 CLIP_API struct ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx);
 

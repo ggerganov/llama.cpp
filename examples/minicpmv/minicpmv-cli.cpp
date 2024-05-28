@@ -21,8 +21,9 @@ static void llama_log_callback_logTee(ggml_log_level level, const char * text, v
     LOG_TEE("%s", text);
 }
 
-struct minicpmv_context * minicpmv_init(gpt_params * params, const std::string & fname, int &n_past){
-    auto image_embed_slices = minicpmv_image_embed(params, fname);
+static struct minicpmv_context * minicpmv_init(gpt_params * params, const std::string & fname, int &n_past){
+    auto embeds = minicpmv_image_embed(params, fname);
+    auto image_embed_slices = embeds->image_embeds;
     if (!image_embed_slices[0][0]) {
         std::cerr << "error: failed to load image " << fname << ". Terminating\n\n";
         return NULL;
@@ -52,14 +53,13 @@ struct minicpmv_context * minicpmv_init(gpt_params * params, const std::string &
     float t_process_image_ms = (t_process_image_end_us - t_process_image_start_us) / 1000.0;
     LOG_TEE("\n%s: llama process image in %8.2f ms.\n", __func__, t_process_image_ms);
 
-    llava_image_embed_free_slice(image_embed_slices);
+    llava_image_embed_free_uhd(embeds);
     return ctx_llava;
 }
 
-struct llama_sampling_context * llama_init(struct minicpmv_context * ctx_llava, gpt_params * params, std::string prompt, int &n_past, bool is_first = false){
+static struct llama_sampling_context * llama_init(struct minicpmv_context * ctx_llava, gpt_params * params, std::string prompt, int &n_past, bool is_first = false){
     std::string user_prompt = prompt;
     if (!is_first) user_prompt = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n" + prompt;
-    const int max_tgt_len = params->n_predict < 0 ? 256 : params->n_predict;
 
     eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, false);
     eval_string(ctx_llava->ctx_llama, "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n", params->n_batch, &n_past, false);
@@ -71,7 +71,7 @@ struct llama_sampling_context * llama_init(struct minicpmv_context * ctx_llava, 
     return ctx_sampling;
 }
 
-const char * llama_loop(struct minicpmv_context * ctx_llava,struct llama_sampling_context * ctx_sampling, int &n_past){
+static const char * llama_loop(struct minicpmv_context * ctx_llava,struct llama_sampling_context * ctx_sampling, int &n_past){
     
     const char * tmp = sample(ctx_sampling, ctx_llava->ctx_llama, &n_past);
     return tmp;
