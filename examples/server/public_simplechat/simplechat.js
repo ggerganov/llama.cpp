@@ -235,6 +235,27 @@ class SimpleChat {
     }
 
     /**
+     * Extract the ai-model/assistant's response from the http response got in streaming mode.
+     * @param {any} respBody
+     * @param {string} apiEP
+     */
+    response_extract_stream(respBody, apiEP) {
+        let assistant = "";
+        if (apiEP == ApiEP.Type.Chat) {
+            if (respBody["choices"][0]["finish_reason"] !== "stop") {
+                assistant = respBody["choices"][0]["delta"]["content"];
+            }
+        } else {
+            try {
+                assistant = respBody["choices"][0]["text"];
+            } catch {
+                assistant = respBody["content"];
+            }
+        }
+        return assistant;
+    }
+
+    /**
      * Allow setting of system prompt, but only at begining.
      * @param {string} sysPrompt
      * @param {string} msgTag
@@ -411,9 +432,10 @@ class MultiChatUI {
 
     /**
      * Try read json response early, if available.
+     * @param {SimpleChat} chat
      * @param {Response} resp
      */
-    async read_json_early(resp) {
+    async read_json_early(chat, resp) {
         if (!resp.body) {
             throw Error("ERRR:SimpleChat:MCUI:ReadJsonEarly:No body...");
         }
@@ -421,15 +443,30 @@ class MultiChatUI {
         let rr = resp.body.getReader();
         let gotBody = "";
         while(true) {
-            let { value: cur,  done: done} = await rr.read();
+            let { value: cur,  done: done } = await rr.read();
             let curBody = tdUtf8.decode(cur);
-            console.debug("DBUG:SC:PART:", curBody);
-            gotBody += curBody;
+            console.debug("DBUG:SC:PART:Str:", curBody);
+            if (curBody.length > 0) {
+                let curArrays = curBody.split("\n");
+                for(let curArray of curArrays) {
+                    console.debug("DBUG:SC:PART:StrPart:", curArray);
+                    if (curArray.length <= 0) {
+                        continue;
+                    }
+                    if (curArray.startsWith("data:")) {
+                        curArray = curArray.substring(5);
+                    }
+                    let curJson = JSON.parse(curArray);
+                    console.debug("DBUG:SC:PART:Json:", curJson);
+                    gotBody += chat.response_extract_stream(curJson, gMe.apiEP);
+                }
+            }
             if (done) {
                 break;
             }
         }
-        return JSON.parse(gotBody);
+        console.debug("DBUG:SC:PART:Full:", gotBody);
+        return gotBody;
     }
 
     /**
@@ -472,8 +509,8 @@ class MultiChatUI {
             body: theBody,
         });
 
-        let respBody = await resp.json();
-        //let respBody = await this.read_json_early(resp);
+        //let respBody = await resp.json();
+        let respBody = await this.read_json_early(chat, resp);
         console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let theResp = chat.response_extract(respBody, apiEP);
         chat.add(Roles.Assistant, theResp.assistant);
