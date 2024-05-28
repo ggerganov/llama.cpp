@@ -202,7 +202,9 @@ export function trim_garbage_at_end(sIn) {
 
 
 /**
- * NewLines array helper
+ * NewLines array helper.
+ * Allow for maintaining a list of lines.
+ * Allow for a line to be builtup/appended part by part.
  */
 export class NewLines {
 
@@ -244,7 +246,20 @@ export class NewLines {
         }
     }
 
-    shift() {
+    /**
+     * Shift the oldest/0th line in the array.
+     * Optionally control whether only full lines will be returned
+     * or will a partial line (last line) be returned.
+     * @param {boolean} bFullOnly
+     */
+    shift(bFullOnly=true) {
+        let line = this.lines[0];
+        if (line == undefined) {
+            return undefined;
+        }
+        if ((line[line.length-1] != "\n") && bFullOnly){
+            return undefined;
+        }
         return this.lines.shift();
     }
 
