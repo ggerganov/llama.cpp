@@ -186,8 +186,6 @@ class MODEL_TENSOR(IntEnum):
     ATTN_Q_NORM        = auto()
     ATTN_K_NORM        = auto()
     LAYER_OUT_NORM     = auto()
-    LAYER_NORM_1       = auto()
-    LAYER_NORM_2       = auto()
     SSM_IN             = auto()
     SSM_CONV1D         = auto()
     SSM_X              = auto()
@@ -276,8 +274,6 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.FFN_DOWN_EXP:       "blk.{bid}.ffn_down_exps",
     MODEL_TENSOR.FFN_UP_EXP:         "blk.{bid}.ffn_up_exps",
     MODEL_TENSOR.LAYER_OUT_NORM:     "blk.{bid}.layer_output_norm",
-    MODEL_TENSOR.LAYER_NORM_1:       "blk.{bid}.layer_norm_1",
-    MODEL_TENSOR.LAYER_NORM_2:       "blk.{bid}.layer_norm_2",
     MODEL_TENSOR.SSM_IN:             "blk.{bid}.ssm_in",
     MODEL_TENSOR.SSM_CONV1D:         "blk.{bid}.ssm_conv1d",
     MODEL_TENSOR.SSM_X:              "blk.{bid}.ssm_x",
@@ -430,8 +426,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.LAYER_OUT_NORM,
-        MODEL_TENSOR.LAYER_NORM_1,
-        MODEL_TENSOR.LAYER_NORM_2,
+        MODEL_TENSOR.ATTN_NORM_2,
     ],
     MODEL_ARCH.MPT: [
         MODEL_TENSOR.TOKEN_EMBD,

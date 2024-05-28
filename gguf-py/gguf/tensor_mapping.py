@@ -102,6 +102,7 @@ class TensorNameMap:
         # Attention norm 2
         MODEL_TENSOR.ATTN_NORM_2: (
             "transformer.h.{bid}.ln_attn",  # falcon40b
+            "encoder.layer.{bid}.layer_norm_1",             # jina-v2-code
         ),
 
         # Attention query-key-value
@@ -351,18 +352,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.norm2",                   # nomic-bert
             "transformer.decoder_layer.{bid}.rms_norm_3",   # Grok
             "encoder.layer.{bid}.mlp.layernorm",            # jina-bert-v2
-            "encoder.layer.{bid}.layer_norm_1",             # jina-v2-code
             "encoder.layer.{bid}.layer_norm_2"              # jina-v2-code
-        ),
-
-
-        MODEL_TENSOR.LAYER_NORM_1: (
-            "encoder.layer.{bid}.layer_norm_1",             # jina-v2-code
-        ),
-
-
-        MODEL_TENSOR.LAYER_NORM_2: (
-            "encoder.layer.{bid}.layer_norm_2",             # jina-v2-code
         ),
 
         MODEL_TENSOR.SSM_IN: (
