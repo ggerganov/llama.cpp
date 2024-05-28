@@ -443,7 +443,7 @@ void llava_image_embed_free_uhd(struct uhd_image_embed * embed) {
     for (size_t i = 0; i < embed->image_embeds.size(); ++i){
         for (size_t j = 0; j < embed->image_embeds[i].size(); ++j){
             free(embed->image_embeds[i][j]->embed);
-            free(embed->image_embeds[i][j]->embed);
+            free(embed->image_embeds[i][j]);
         }
         embed->image_embeds[i] = std::vector<struct llava_image_embed *>();
     }
