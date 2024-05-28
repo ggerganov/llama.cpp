@@ -39,4 +39,4 @@ target_compile_features(minicpmv PRIVATE cxx_std_11)
 add_library(minicpmv_io OBJECT
         minicpmv_io.cpp
 )
-target_link_libraries(minicpmv_io PRIVATE llava ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(minicpmv_io PRIVATE minicpmv ${CMAKE_THREAD_LIBS_INIT})
