@@ -313,11 +313,10 @@ class Model:
                         data = data.astype(np.float32)
                     data_qtype = gguf.GGMLQuantizationType.F32
 
-                block_size, type_size = gguf.GGML_QUANT_SIZES[data_qtype]
+                shape = gguf.quant_shape_from_byte_shape(data.shape, data_qtype) if data.dtype == np.uint8 else data.shape
+
                 # reverse shape to make it similar to the internal ggml dimension order
-                shape_str = f"""{{{', '.join(str(n) for n in reversed(
-                    (*data.shape[:-1], data.shape[-1] * data.dtype.itemsize // type_size * block_size))
-                )}}}"""
+                shape_str = f"{{{', '.join(str(n) for n in reversed(shape))}}}"
 
                 # n_dims is implicit in the shape
                 logger.info(f"{f'%-{max_name_len}s' % f'{new_name},'} {old_dtype} --> {data_qtype.name}, shape = {shape_str}")
@@ -474,6 +473,9 @@ class Model:
         if chkhsh == "27949a2493fc4a9f53f5b9b029c82689cfbe5d3a1929bb25e043089e28466de6":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-de
             res = "jina-v2-de"
+        if chkhsh == "c136ed14d01c2745d4f60a9596ae66800e2b61fa45643e72436041855ad4089d":
+            # ref: https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct
+            res = "smaug-bpe"
 
         if res is None:
             logger.warning("\n")
@@ -2393,7 +2395,8 @@ class CommandR2Model(Model):
 
         # max_position_embeddings = 8192 in config.json but model was actually
         # trained on 128k context length
-        self.hparams["max_position_embeddings"] = self.hparams["model_max_length"]
+        # aya-23 models don't have model_max_length specified
+        self.hparams["max_position_embeddings"] = self.find_hparam(["model_max_length", "max_position_embeddings"])
 
     def set_gguf_parameters(self):
         super().set_gguf_parameters()

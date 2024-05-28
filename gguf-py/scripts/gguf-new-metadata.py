@@ -118,9 +118,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
 
     for tensor in reader.tensors:
         total_bytes += tensor.n_bytes
-        # Dimensions are written in reverse order, so flip them first
-        shape = np.flipud(tensor.shape).tolist()
-        writer.add_tensor_info(tensor.name, shape, tensor.data.dtype, tensor.data.nbytes, tensor.tensor_type)
+        writer.add_tensor_info(tensor.name, tensor.data.shape, tensor.data.dtype, tensor.data.nbytes, tensor.tensor_type)
 
     bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
 

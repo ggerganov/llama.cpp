@@ -1,0 +1,38 @@
+name: Question template
+description: Used to ask questions about llama.cpp
+title: "Question: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        [Please search your question first in Discussion if you got a common general question.](https://github.com/ggerganov/llama.cpp/discussions/categories/q-a)
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      description: Please confirm the following before submitting your question.
+      options:
+        - label: I searched using keywords relevant to my issue to make sure that I am creating a new issue that is not already open (or closed).
+          required: true
+        - label: I reviewed the [Discussions](https://github.com/ggerganov/llama.cpp/discussions), and have a new useful question to share that cannot be answered within Discussions.
+          required: true
+
+  - type: textarea
+    id: background-description
+    attributes:
+      label: Background Description
+      description: Please provide a detailed written description of what you were trying to do, and what you expected `llama.cpp` to do as an question.
+      placeholder: Detailed description of your question
+    validations:
+      required: true
+
+  - type: textarea
+    id: possible-answer
+    attributes:
+      label: Possible Answer
+      description: If you have some idea of possible answers you want to confirm, that would also be appreciated.
+      placeholder: Your idea of possible answers
+    validations:
+      required: false

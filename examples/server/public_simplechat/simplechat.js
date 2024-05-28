@@ -14,21 +14,84 @@ class ApiEP {
 }
 
 let gUsageMsg = `
-    <p> Enter the system prompt above, before entering/submitting any user query.</p>
-    <p> Enter your text to the ai assistant below.</p>
-    <p> Use shift+enter for inserting enter.</p>
-    <p> Refresh the page to start over fresh.</p>
+    <p class="role-system">Usage</p>
+    <ul class="ul1">
+    <li> Set system prompt above, to try control ai response charactersitic, if model supports same.</li>
+        <ul class="ul2">
+        <li> Completion mode normally wont have a system prompt.</li>
+        </ul>
+    <li> Enter your query to ai assistant below.</li>
+        <ul class="ul2">
+        <li> Completion mode doesnt insert user/role: prefix implicitly.</li>
+        <li> Use shift+enter for inserting enter/newline.</li>
+        </ul>
+    <li> Default ContextWindow = [System, Last Query+Resp, Cur Query].</li>
+        <ul class="ul2">
+        <li> experiment iRecentUserMsgCnt, max_tokens, model ctxt window to expand</li>
+        </ul>
+    </ul>
 `;
+
+/** @typedef {{role: string, content: string}[]} ChatMessages */
 
 class SimpleChat {
 
     constructor() {
         /**
          * Maintain in a form suitable for common LLM web service chat/completions' messages entry
-         * @type {{role: string, content: string}[]}
+         * @type {ChatMessages}
          */
         this.xchat = [];
         this.iLastSys = -1;
+    }
+
+    clear() {
+        this.xchat = [];
+        this.iLastSys = -1;
+    }
+
+    /**
+     * Recent chat messages.
+     * If iRecentUserMsgCnt < 0
+     *   Then return the full chat history
+     * Else
+     *   Return chat messages from latest going back till the last/latest system prompt.
+     *   While keeping track that the number of user queries/messages doesnt exceed iRecentUserMsgCnt.
+     * @param {number} iRecentUserMsgCnt
+     */
+    recent_chat(iRecentUserMsgCnt) {
+        if (iRecentUserMsgCnt < 0) {
+            return this.xchat;
+        }
+        if (iRecentUserMsgCnt == 0) {
+            console.warn("WARN:SimpleChat:SC:RecentChat:iRecentUsermsgCnt of 0 means no user message/query sent");
+        }
+        /** @type{ChatMessages} */
+        let rchat = [];
+        let sysMsg = this.get_system_latest();
+        if (sysMsg.length != 0) {
+            rchat.push({role: Roles.System, content: sysMsg});
+        }
+        let iUserCnt = 0;
+        let iStart = this.xchat.length;
+        for(let i=this.xchat.length-1; i > this.iLastSys; i--) {
+            if (iUserCnt >= iRecentUserMsgCnt) {
+                break;
+            }
+            let msg = this.xchat[i];
+            if (msg.role == Roles.User) {
+                iStart = i;
+                iUserCnt += 1;
+            }
+        }
+        for(let i = iStart; i < this.xchat.length; i++) {
+            let msg = this.xchat[i];
+            if (msg.role == Roles.System) {
+                continue;
+            }
+            rchat.push({role: msg.role, content: msg.content});
+        }
+        return rchat;
     }
 
     /**
@@ -57,7 +120,7 @@ class SimpleChat {
             div.replaceChildren();
         }
         let last = undefined;
-        for(const x of this.xchat) {
+        for(const x of this.recent_chat(gMe.iRecentUserMsgCnt)) {
             let entry = document.createElement("p");
             entry.className = `role-${x.role}`;
             entry.innerText = `${x.role}: ${x.content}`;
@@ -69,17 +132,21 @@ class SimpleChat {
         } else {
             if (bClear) {
                 div.innerHTML = gUsageMsg;
+                gMe.show_info(div);
             }
         }
     }
 
     /**
-     * Add needed fields wrt json object to be sent wrt LLM web services completions endpoint
+     * Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
+     * The needed fields/options are picked from a global object.
      * Convert the json into string.
      * @param {Object} obj
      */
     request_jsonstr(obj) {
-        obj["temperature"] = 0.7;
+        for(let k in gMe.chatRequestOptions) {
+            obj[k] = gMe.chatRequestOptions[k];
+        }
         return JSON.stringify(obj);
     }
 
@@ -88,18 +155,27 @@ class SimpleChat {
      */
     request_messages_jsonstr() {
         let req = {
-            messages: this.xchat,
+            messages: this.recent_chat(gMe.iRecentUserMsgCnt),
         }
         return this.request_jsonstr(req);
     }
 
     /**
      * Return a string form of json object suitable for /completions
+     * @param {boolean} bInsertStandardRolePrefix Insert "<THE_ROLE>: " as prefix wrt each role's message
      */
-    request_prompt_jsonstr() {
+    request_prompt_jsonstr(bInsertStandardRolePrefix) {
         let prompt = "";
-        for(const chat of this.xchat) {
-            prompt += `${chat.role}: ${chat.content}\n`;
+        let iCnt = 0;
+        for(const chat of this.recent_chat(gMe.iRecentUserMsgCnt)) {
+            iCnt += 1;
+            if (iCnt > 1) {
+                prompt += "\n";
+            }
+            if (bInsertStandardRolePrefix) {
+                prompt += `${chat.role}: `;
+            }
+            prompt += `${chat.content}`;
         }
         let req = {
             prompt: prompt,
@@ -171,7 +247,6 @@ let gChatURL = {
     'chat': `${gBaseURL}/chat/completions`,
     'completion': `${gBaseURL}/completions`,
 }
-const gbCompletionFreshChatAlways = true;
 
 
 /**
@@ -291,6 +366,8 @@ class MultiChatUI {
             // allow user to insert enter into their message using shift+enter.
             // while just pressing enter key will lead to submitting.
             if ((ev.key === "Enter") && (!ev.shiftKey)) {
+                let value = this.elInUser.value;
+                this.elInUser.value = value.substring(0,value.length-1);
                 this.elBtnUser.click();
                 ev.preventDefault();
             }
@@ -322,6 +399,29 @@ class MultiChatUI {
     }
 
     /**
+     * Try read json response early, if available.
+     * @param {Response} resp
+     */
+    async read_json_early(resp) {
+        if (!resp.body) {
+            throw Error("ERRR:SimpleChat:MCUI:ReadJsonEarly:No body...");
+        }
+        let tdUtf8 = new TextDecoder("utf-8");
+        let rr = resp.body.getReader();
+        let gotBody = "";
+        while(true) {
+            let { value: cur,  done: done} = await rr.read();
+            let curBody = tdUtf8.decode(cur);
+            console.debug("DBUG:SC:PART:", curBody);
+            gotBody += curBody;
+            if (done) {
+                break;
+            }
+        }
+        return JSON.parse(gotBody);
+    }
+
+    /**
      * Handle user query submit request, wrt specified chat session.
      * @param {string} chatId
      * @param {string} apiEP
@@ -329,6 +429,14 @@ class MultiChatUI {
     async handle_user_submit(chatId, apiEP) {
 
         let chat = this.simpleChats[chatId];
+
+        // In completion mode, if configured, clear any previous chat history.
+        // So if user wants to simulate a multi-chat based completion query,
+        // they will have to enter the full thing, as a suitable multiline
+        // user input/query.
+        if ((apiEP == ApiEP.Completion) && (gMe.bCompletionFreshChatAlways)) {
+            chat.clear();
+        }
 
         chat.add_system_anytime(this.elInSystem.value, chatId);
 
@@ -344,7 +452,7 @@ class MultiChatUI {
         if (apiEP == ApiEP.Chat) {
             theBody = chat.request_messages_jsonstr();
         } else {
-            theBody = chat.request_prompt_jsonstr();
+            theBody = chat.request_prompt_jsonstr(gMe.bCompletionInsertStandardRolePrefix);
         }
 
         this.elInUser.value = "working...";
@@ -359,6 +467,7 @@ class MultiChatUI {
         });
 
         let respBody = await resp.json();
+        //let respBody = await this.read_json_early(resp);
         console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
         let assistantMsg;
         if (apiEP == ApiEP.Chat) {
@@ -375,13 +484,6 @@ class MultiChatUI {
             chat.show(this.elDivChat);
         } else {
             console.debug(`DBUG:SimpleChat:MCUI:HandleUserSubmit:ChatId has changed:[${chatId}] [${this.curChatId}]`);
-        }
-        // Purposefully clear at end rather than begin of this function
-        // so that one can switch from chat to completion mode and sequece
-        // in a completion mode with multiple user-assistant chat data
-        // from before to be sent/occur once.
-        if ((apiEP == ApiEP.Completion) && (gbCompletionFreshChatAlways)) {
-            chat.xchat.length = 0;
         }
         this.ui_reset_userinput();
     }
@@ -462,17 +564,66 @@ class MultiChatUI {
 }
 
 
-let gMuitChat;
-const gChatIds = [ "Default", "Other" ];
+class Me {
+
+    constructor() {
+        this.defaultChatIds = [ "Default", "Other" ];
+        this.multiChat = new MultiChatUI();
+        this.bCompletionFreshChatAlways = true;
+        this.bCompletionInsertStandardRolePrefix = false;
+        this.iRecentUserMsgCnt = 2;
+        // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
+        this.chatRequestOptions = {
+            "temperature": 0.7,
+            "max_tokens": 1024,
+            "frequency_penalty": 1.2,
+            "presence_penalty": 1.2,
+            "n_predict": 1024
+        };
+    }
+
+    /**
+     * @param {HTMLDivElement} elDiv
+     */
+    show_info(elDiv) {
+
+        var p = document.createElement("p");
+        p.innerText = "Settings (devel-tools-console gMe)";
+        p.className = "role-system";
+        elDiv.appendChild(p);
+
+        var p = document.createElement("p");
+        p.innerText = `bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`;
+        elDiv.appendChild(p);
+
+        p = document.createElement("p");
+        p.innerText = `bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`;
+        elDiv.appendChild(p);
+
+        p = document.createElement("p");
+        p.innerText = `iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`;
+        elDiv.appendChild(p);
+
+        p = document.createElement("p");
+        p.innerText = `chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`;
+        elDiv.appendChild(p);
+
+    }
+
+}
+
+
+/** @type {Me} */
+let gMe;
 
 function startme() {
     console.log("INFO:SimpleChat:StartMe:Starting...");
-    gMuitChat = new MultiChatUI();
-    for (let cid of gChatIds) {
-        gMuitChat.new_chat_session(cid);
+    gMe = new Me();
+    for (let cid of gMe.defaultChatIds) {
+        gMe.multiChat.new_chat_session(cid);
     }
-    gMuitChat.setup_ui(gChatIds[0]);
-    gMuitChat.show_sessions();
+    gMe.multiChat.setup_ui(gMe.defaultChatIds[0], true);
+    gMe.multiChat.show_sessions();
 }
 
 document.addEventListener("DOMContentLoaded", startme);
