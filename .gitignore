@@ -60,6 +60,8 @@ models-mnt
 /libllama.so
 /llama-bench
 /llava-cli
+/minicpmv-cli
+/openbmb
 /lookahead
 /lookup
 /lookup-create

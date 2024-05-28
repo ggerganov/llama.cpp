@@ -1768,24 +1768,17 @@ static llama_state g_state;
 // available llama models
 enum e_model {
     MODEL_UNKNOWN,
-    MODEL_14M,
     MODEL_17M,
     MODEL_22M,
     MODEL_33M,
-    MODEL_70M,
     MODEL_109M,
     MODEL_137M,
-    MODEL_160M,
     MODEL_335M,
-    MODEL_410M,
     MODEL_0_5B,
     MODEL_1B,
-    MODEL_1_4B,
     MODEL_2B,
-    MODEL_2_8B,
     MODEL_3B,
     MODEL_4B,
-    MODEL_6_9B,
     MODEL_7B,
     MODEL_8B,
     MODEL_12B,
@@ -1820,7 +1813,6 @@ static const size_t GiB = 1024*MiB;
 struct llama_hparams {
     bool vocab_only;
     bool rope_finetuned;
-    bool use_par_res;
 
     uint32_t n_vocab;
     uint32_t n_ctx_train; // context size the model was trained on
@@ -2585,6 +2577,7 @@ static bool llama_kv_cache_init(
 static bool llama_kv_cache_find_slot(
            struct llama_kv_cache & cache,
         const struct llama_batch & batch) {
+    const uint32_t n_ctx    = cache.size;
     const uint32_t n_tokens = batch.n_tokens;
 
     if (cache.recurrent) {
@@ -2635,16 +2628,16 @@ static bool llama_kv_cache_find_slot(
     }
     // otherwise, one cell per token.
 
-    if (n_tokens > cache.size) {
-        LLAMA_LOG_ERROR("%s: n_tokens=%d > cache.size=%d\n", __func__, n_tokens, cache.size);
+    if (n_tokens > n_ctx) {
+        LLAMA_LOG_ERROR("%s: n_tokens=%d > n_ctx=%d\n", __func__, n_tokens, n_ctx);
         return false;
     }
 
     uint32_t n_tested = 0;
 
     while (true) {
-        if (cache.head + n_tokens > cache.size) {
-            n_tested += cache.size - cache.head;
+        if (cache.head + n_tokens > n_ctx) {
+            n_tested += n_ctx - cache.head;
             cache.head = 0;
             continue;
         }
@@ -2663,7 +2656,7 @@ static bool llama_kv_cache_find_slot(
             break;
         }
 
-        if (n_tested >= cache.size) {
+        if (n_tested >= n_ctx) {
             //LLAMA_LOG_ERROR("%s: failed to find a slot for %d tokens\n", __func__, n_tokens);
             return false;
         }
@@ -5173,18 +5166,27 @@ static bool llm_load_tensors(
             case LLM_ARCH_MINICPM:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                    model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
 
-                    // output
-                    {
-                        model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        if (model.arch != LLM_ARCH_MINICPM){
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                            // if output is NULL, init from the input tok embed
-                            if (model.output == NULL) {
-                                model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
-                            }
-                        }
+                    // if output is NULL, init from the input tok embed
+                    if (model.output == NULL) {
+                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                        ml.n_created--; // artificial tensor
+                        ml.size_data += ggml_nbytes(model.output);
                     }
+
+                    // // output
+                    // {
+                    //     model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+                    //     if (model.arch != LLM_ARCH_MINICPM){
+                    //         model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                    //         // if output is NULL, init from the input tok embed
+                    //         if (model.output == NULL) {
+                    //             model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                    //         }
+                    //     }
+                    // }
+                    model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -10144,7 +10146,9 @@ struct llm_build_context {
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
 
         // scale the input embeddings
-        inpL = ggml_scale(ctx0, inpL, scale_embd);
+        if (batch.token) {
+            inpL = ggml_scale(ctx0, inpL, scale_embd);
+        }                
         cb(inpL, "inp_scaled", -1);
 
         // inp_pos - contains the positions
@@ -10260,7 +10264,8 @@ struct llm_build_context {
         cb(cur, "lmhead_scaling", -1);
 
         // lm_head
-        cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
+        // cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
+        cur = ggml_mul_mat(ctx0, model.output, cur);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
@@ -16216,16 +16221,33 @@ struct llama_model * llama_load_model_from_file(
         }
         model->rpc_servers.push_back(servers);
     }
-    int status = llama_model_load(path_model, *model, params);
-    GGML_ASSERT(status <= 0);
-    if (status < 0) {
-        if (status == -1) {
-            LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
-        } else if (status == -2) {
-            LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+    // int status = llama_model_load(path_model, *model, params);
+    // GGML_ASSERT(status <= 0);
+    // if (status < 0) {
+    //     if (status == -1) {
+    //         LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+    //     } else if (status == -2) {
+    //         LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+    //     }
+    //     delete model;
+    //     return nullptr;
+    // }
+    try {
+        int status = llama_model_load(path_model, *model, params);
+        GGML_ASSERT(status <= 0);
+        if (status < 0) {
+            if (status == -1) {
+                LLAMA_LOG_ERROR("%s: failed to load model\n", __func__);
+            } else if (status == -2) {
+                LLAMA_LOG_INFO("%s: cancelled model load\n", __func__);
+            }
+            delete model;
+            return nullptr;
         }
+    } catch (...) {
+        LLAMA_LOG_ERROR("%s: exception loading model\n", __func__);
         delete model;
-        return nullptr;
+        throw;
     }
 
     return model;
@@ -16612,6 +16634,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         // these models do not use RoPE
         case LLM_ARCH_GPT2:
         case LLM_ARCH_GPTJ:
+        case LLM_ARCH_GPTNEOX:
         case LLM_ARCH_MPT:
         case LLM_ARCH_REFACT:
         case LLM_ARCH_BLOOM:
@@ -16649,7 +16672,6 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_PHI3:
         case LLM_ARCH_GEMMA:
         case LLM_ARCH_STARCODER2:
-        case LLM_ARCH_GPTNEOX:
             return LLAMA_ROPE_TYPE_NEOX;
 
         // all model arches should be listed explicitly here
