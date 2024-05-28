@@ -6012,6 +6012,8 @@ static ggml_backend_buffer_type_i ggml_backend_vk_buffer_type_interface = {
 };
 
 GGML_CALL ggml_backend_buffer_type_t ggml_backend_vk_buffer_type(size_t dev_num) {
+    ggml_vk_instance_init();
+
 #ifdef GGML_VULKAN_DEBUG
     std::cerr << "ggml_backend_vk_buffer_type(" << dev_num << ")" << std::endl;
 #endif

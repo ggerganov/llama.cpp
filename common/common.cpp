@@ -904,6 +904,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.interactive_specials = true;
         return true;
     }
+    if (arg == "--special") {
+        params.special = true;
+        return true;
+    }
     if (arg == "--embedding") {
         params.embedding = true;
         return true;
@@ -1362,6 +1366,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     printf("  -h, --help            show this help message and exit\n");
     printf("  --version             show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
+    printf("  --special             special tokens output enabled\n");
     printf("  --interactive-specials allow special tokens in user text, in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
     printf("  -cnv, --conversation  run in conversation mode (does not print special tokens and suffix/prefix)\n");
@@ -1855,11 +1860,15 @@ bool fs_create_directory_with_parents(const std::string & path) {
 
 std::string fs_get_cache_directory() {
     std::string cache_directory = "";
+    auto ensure_trailing_slash = [](std::string p) {
+        // Make sure to add trailing slash
+        if (p.back() != DIRECTORY_SEPARATOR) {
+            p += DIRECTORY_SEPARATOR;
+        }
+        return p;
+    };
     if (getenv("LLAMA_CACHE")) {
         cache_directory = std::getenv("LLAMA_CACHE");
-        if (cache_directory.back() != DIRECTORY_SEPARATOR) {
-            cache_directory += DIRECTORY_SEPARATOR;
-        }
     } else {
 #ifdef __linux__
         if (std::getenv("XDG_CACHE_HOME")) {
@@ -1870,12 +1879,12 @@ std::string fs_get_cache_directory() {
 #elif defined(__APPLE__)
         cache_directory = std::getenv("HOME") + std::string("/Library/Caches/");
 #elif defined(_WIN32)
-        cache_directory = std::getenv("APPDATA");
+        cache_directory = std::getenv("LOCALAPPDATA");
 #endif // __linux__
+        cache_directory = ensure_trailing_slash(cache_directory);
         cache_directory += "llama.cpp";
-        cache_directory += DIRECTORY_SEPARATOR;
     }
-    return cache_directory;
+    return ensure_trailing_slash(cache_directory);
 }
 
 
@@ -2840,6 +2849,7 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "cpu_has_fma: %s\n",         ggml_cpu_has_fma()         ? "true" : "false");
     fprintf(stream, "cpu_has_gpublas: %s\n",     ggml_cpu_has_gpublas()     ? "true" : "false");
     fprintf(stream, "cpu_has_neon: %s\n",        ggml_cpu_has_neon()        ? "true" : "false");
+    fprintf(stream, "cpu_has_sve: %s\n",         ggml_cpu_has_sve()         ? "true" : "false");
     fprintf(stream, "cpu_has_f16c: %s\n",        ggml_cpu_has_f16c()        ? "true" : "false");
     fprintf(stream, "cpu_has_fp16_va: %s\n",     ggml_cpu_has_fp16_va()     ? "true" : "false");
     fprintf(stream, "cpu_has_wasm_simd: %s\n",   ggml_cpu_has_wasm_simd()   ? "true" : "false");

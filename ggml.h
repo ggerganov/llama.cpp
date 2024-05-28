@@ -1007,12 +1007,13 @@ extern "C" {
             struct ggml_tensor  * a,
             struct ggml_tensor  * b);
 
-    // concat a and b on dim 2
+    // concat a and b along dim
     // used in stable-diffusion
     GGML_API struct ggml_tensor * ggml_concat(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            struct ggml_tensor  * b);
+            struct ggml_tensor  * b,
+            int                   dim);
 
     GGML_API struct ggml_tensor * ggml_abs(
             struct ggml_context * ctx,
@@ -2404,6 +2405,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_avx512_bf16(void);
     GGML_API int ggml_cpu_has_fma        (void);
     GGML_API int ggml_cpu_has_neon       (void);
+    GGML_API int ggml_cpu_has_sve        (void);
     GGML_API int ggml_cpu_has_arm_fma    (void);
     GGML_API int ggml_cpu_has_metal      (void);
     GGML_API int ggml_cpu_has_f16c       (void);
