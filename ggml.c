@@ -19501,7 +19501,7 @@ static void __cpumask_next(const bool * global_mask, bool * local_mask, bool str
         int32_t base_idx = *iter;
         for (int32_t i = 0; i < GGML_N_CORES_MAX; i++) {
             int32_t idx = base_idx + i;
-            if (idx > GGML_N_CORES_MAX) {
+            if (idx >= GGML_N_CORES_MAX) {
                 // Just a cheaper modulo
                 idx -= GGML_N_CORES_MAX;
             }

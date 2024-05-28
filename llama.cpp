@@ -11366,10 +11366,11 @@ static void llama_graph_compute(
 
     if (lctx.backend_cpu != nullptr) {
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
+        ggml_backend_cpu_set_threadpool(lctx.backend_cpu, threadpool);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
 
-    ggml_backend_sched_graph_compute_async(lctx.sched, gf, threadpool);
+    ggml_backend_sched_graph_compute_async(lctx.sched, gf);
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
@@ -15428,7 +15429,7 @@ static int llama_apply_lora_from_file_internal(
             return 1;
         }
 
-        ggml_backend_graph_compute(backend_cpu, gf, nullptr);
+        ggml_backend_graph_compute(backend_cpu, gf);
 
         ggml_backend_tensor_set(model_t, r->data, 0, ggml_nbytes(r));
 

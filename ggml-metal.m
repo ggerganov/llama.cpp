@@ -3103,12 +3103,7 @@ GGML_CALL static ggml_backend_buffer_type_t ggml_backend_metal_get_default_buffe
     UNUSED(backend);
 }
 
-GGML_CALL static enum ggml_status ggml_backend_metal_graph_compute(
-                   ggml_backend_t   backend,
-               struct ggml_cgraph * cgraph,
-        ggml_compute_threadpool_t   threadpool) {
-
-    UNUSED(threadpool);
+GGML_CALL static enum ggml_status ggml_backend_metal_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
 
     return ggml_metal_graph_compute(metal_ctx, cgraph);
