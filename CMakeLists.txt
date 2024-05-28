@@ -628,6 +628,10 @@ if (LLAMA_SYCL)
         add_compile_definitions(GGML_SYCL_F16)
     endif()
 
+    if (LLAMA_CUDA_FORCE_MMQ)
+        add_compile_definitions(GGML_SYCL_FORCE_MMQ)
+    endif()
+
     add_compile_options(-I./) #include DPCT
     add_compile_options(-I/${SYCL_INCLUDE_DIR})
 
