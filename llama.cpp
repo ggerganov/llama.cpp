@@ -16290,11 +16290,18 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     qs.n_ffn_down = qs.n_ffn_gate = qs.n_ffn_up = (int)model.hparams.n_layer;
 
     // sanity checks
-    //
-    //  - qs.n_attention_wv == 0                     for Mamba       models
-    //  - qs.n_attention_wv == model.hparams.n_layer for Transformer models
-    //
-    GGML_ASSERT((qs.n_attention_wv == 0 || qs.n_attention_wv == (int)model.hparams.n_layer) && "n_attention_wv is unexpected");
+    {
+        const auto & n_head_kv_vec = model.hparams.n_head_kv_vec;
+        int n_attn_layer;
+        if (model.hparams.n_head_kv == 0) {
+            // Mamba models don't have attention layers
+            n_attn_layer = 0;
+        } else {
+            // Transformers and hybrid models (like Jamba) have attention layers
+            n_attn_layer = model.hparams.n_layer - std::count(n_head_kv_vec.begin(), n_head_kv_vec.end(), 0);
+        }
+        GGML_ASSERT((qs.n_attention_wv == n_attn_layer) && "n_attention_wv is unexpected");
+    }
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
