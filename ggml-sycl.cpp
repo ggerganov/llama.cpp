@@ -15251,7 +15251,7 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
         && src0->ne[0] % GGML_SYCL_DMMV_X == 0 && src1->ne[1] == 1;
 
-    bool          use_mul_mat_vec_q =  ggml_is_quantized(src0->type)
+    bool use_mul_mat_vec_q =  ggml_is_quantized(src0->type)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
         && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
 
