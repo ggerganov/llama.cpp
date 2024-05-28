@@ -49,7 +49,11 @@ let gUsageMsg = `
 
 class SimpleChat {
 
-    constructor() {
+    /**
+     * @param {string} chatId
+     */
+    constructor(chatId) {
+        this.chatId = chatId;
         /**
          * Maintain in a form suitable for common LLM web service chat/completions' messages entry
          * @type {ChatMessages}
@@ -311,6 +315,23 @@ class SimpleChat {
         return sysPrompt;
     }
 
+    /**
+     * Handle the oneshot response from server/ai-model
+     * @param {Response} resp
+     * @param {string} apiEP
+     */
+    async handle_response_oneshot(resp, apiEP) {
+        let respBody = await resp.json();
+        console.debug(`DBUG:SimpleChat:SC:${this.chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
+        return this.response_extract(respBody, apiEP);
+    }
+
+    async handle_response(resp, apiEP) {
+        if (apiEP == ApiEP.Type.Chat) {
+            return this.handle_response_oneshot(resp, apiEP);
+        }
+    }
+
 }
 
 
@@ -424,7 +445,7 @@ class MultiChatUI {
      * @param {boolean} bSwitchSession
      */
     new_chat_session(chatId, bSwitchSession=false) {
-        this.simpleChats[chatId] = new SimpleChat();
+        this.simpleChats[chatId] = new SimpleChat(chatId);
         if (bSwitchSession) {
             this.handle_session_switch(chatId);
         }
@@ -509,10 +530,8 @@ class MultiChatUI {
             body: theBody,
         });
 
-        //let respBody = await resp.json();
         let respBody = await this.read_json_early(chat, resp);
-        console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:RespBody:${JSON.stringify(respBody)}`);
-        let theResp = chat.response_extract(respBody, apiEP);
+        let theResp = chat.handle_response(respBody, apiEP);
         chat.add(Roles.Assistant, theResp.assistant);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
