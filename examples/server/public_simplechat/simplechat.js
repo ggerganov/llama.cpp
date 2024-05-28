@@ -315,6 +315,46 @@ class SimpleChat {
         return sysPrompt;
     }
 
+
+    /**
+     * Handle the multipart response from server/ai-model
+     * @param {Response} resp
+     * @param {string} apiEP
+     */
+    async handle_response_multipart(resp, apiEP) {
+        if (!resp.body) {
+            throw Error("ERRR:SimpleChat:SC:ReadJsonEarly:No body...");
+        }
+        let tdUtf8 = new TextDecoder("utf-8");
+        let rr = resp.body.getReader();
+        let gotBody = "";
+        while(true) {
+            let { value: cur,  done: done } = await rr.read();
+            let curBody = tdUtf8.decode(cur);
+            console.debug("DBUG:SC:PART:Str:", curBody);
+            if (curBody.length > 0) {
+                let curArrays = curBody.split("\n");
+                for(let curArray of curArrays) {
+                    console.debug("DBUG:SC:PART:StrPart:", curArray);
+                    if (curArray.length <= 0) {
+                        continue;
+                    }
+                    if (curArray.startsWith("data:")) {
+                        curArray = curArray.substring(5);
+                    }
+                    let curJson = JSON.parse(curArray);
+                    console.debug("DBUG:SC:PART:Json:", curJson);
+                    gotBody += chat.response_extract_stream(curJson, gMe.apiEP);
+                }
+            }
+            if (done) {
+                break;
+            }
+        }
+        console.debug("DBUG:SC:PART:Full:", gotBody);
+        return gotBody;
+    }
+
     /**
      * Handle the oneshot response from server/ai-model
      * @param {Response} resp
@@ -451,44 +491,6 @@ class MultiChatUI {
         }
     }
 
-    /**
-     * Try read json response early, if available.
-     * @param {SimpleChat} chat
-     * @param {Response} resp
-     */
-    async read_json_early(chat, resp) {
-        if (!resp.body) {
-            throw Error("ERRR:SimpleChat:MCUI:ReadJsonEarly:No body...");
-        }
-        let tdUtf8 = new TextDecoder("utf-8");
-        let rr = resp.body.getReader();
-        let gotBody = "";
-        while(true) {
-            let { value: cur,  done: done } = await rr.read();
-            let curBody = tdUtf8.decode(cur);
-            console.debug("DBUG:SC:PART:Str:", curBody);
-            if (curBody.length > 0) {
-                let curArrays = curBody.split("\n");
-                for(let curArray of curArrays) {
-                    console.debug("DBUG:SC:PART:StrPart:", curArray);
-                    if (curArray.length <= 0) {
-                        continue;
-                    }
-                    if (curArray.startsWith("data:")) {
-                        curArray = curArray.substring(5);
-                    }
-                    let curJson = JSON.parse(curArray);
-                    console.debug("DBUG:SC:PART:Json:", curJson);
-                    gotBody += chat.response_extract_stream(curJson, gMe.apiEP);
-                }
-            }
-            if (done) {
-                break;
-            }
-        }
-        console.debug("DBUG:SC:PART:Full:", gotBody);
-        return gotBody;
-    }
 
     /**
      * Handle user query submit request, wrt specified chat session.
