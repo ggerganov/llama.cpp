@@ -34,11 +34,11 @@ MINICPMV_API bool llava_validate_embed_size(const struct llama_context * ctx_lla
 MINICPMV_API bool llava_image_embed_make_with_clip_img(struct clip_ctx * ctx_clip, int n_threads, const struct clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out);
 
 /** build an image embed from image file bytes */
-MINICPMV_API std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_bytes_slice(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length);
+MINICPMV_API std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_bytes_uhd(struct clip_ctx * ctx_clip, int n_threads, const unsigned char * image_bytes, int image_bytes_length);
 /** build an image embed from a path to an image filename */
 MINICPMV_API bool llava_image_embed_make_with_clip_img_ollama(struct clip_ctx * ctx_clip, int n_threads, const struct clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out);
-MINICPMV_API std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_filename_slice(struct clip_ctx * ctx_clip, int n_threads, const char * image_path);
-MINICPMV_API void llava_image_embed_free_slice(std::vector<std::vector<struct llava_image_embed *>> embed);
+MINICPMV_API std::vector<std::vector<struct llava_image_embed *>> llava_image_embed_make_with_filename_uhd(struct clip_ctx * ctx_clip, int n_threads, const char * image_path);
+MINICPMV_API void llava_image_embed_free_uhd(std::vector<std::vector<struct llava_image_embed *>> embed);
 /** free an embedding made with llava_image_embed_make_* */
 
 /** write the image represented by embed into the llama context with batch size n_batch, starting at context pos n_past. on completion, n_past points to the next position in the context after the image embed. */
