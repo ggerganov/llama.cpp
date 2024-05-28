@@ -673,6 +673,16 @@ class Me {
     }
 
     /**
+     * Disable console.debug by mapping it to a empty function.
+     */
+    debug_disable() {
+        this.console_debug = console.debug;
+        console.debug = () => {
+
+        };
+    }
+
+    /**
      * Show the configurable parameters info in the passed Div element.
      * @param {HTMLDivElement} elDiv
      */
@@ -744,6 +754,7 @@ let gMe;
 function startme() {
     console.log("INFO:SimpleChat:StartMe:Starting...");
     gMe = new Me();
+    gMe.debug_disable();
     document["gMe"] = gMe;
     document["du"] = du;
     for (let cid of gMe.defaultChatIds) {
