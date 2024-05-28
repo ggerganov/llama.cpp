@@ -70,14 +70,15 @@ class Keys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
 
     class Tokenizer:
-        MODEL            = "tokenizer.ggml.model"             # Model arch, e.g. llama
-        TYPE             = "tokenizer.ggml.type"              # BPE, SPM, WPM, etc.
-        PRE              = "tokenizer.ggml.pre"               # Pre-tokenizer reg-ex
-        HASH             = "tokenizer.ggml.hash"              # Merged vocab hash sum
+        MODEL            = "tokenizer.ggml.model"             # STRING: e.g. llama
+        TYPE             = "tokenizer.ggml.type"              # STRING: BPE, SPM, WPM, etc.
+        NORM             = "tokenizer.ggml.norm"              # OBJECT {"type": "ByteLevel"}
+        PRE              = "tokenizer.ggml.pre"               # OBJECT {"type": "ByteLevel"}
+        ADDED            = "tokenizer.ggml.added"             # ARRAY of OBJECTs {"id": 1}
         LIST             = "tokenizer.ggml.tokens"
         TOKEN_TYPE       = "tokenizer.ggml.token_type"
         TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # BERT token types
-        SCORES           = "tokenizer.ggml.scores"
+        SCORES           = "tokenizer.ggml.scores"            # Word Piece Only
         MERGES           = "tokenizer.ggml.merges"
         BOS_ID           = "tokenizer.ggml.bos_token_id"
         EOS_ID           = "tokenizer.ggml.eos_token_id"
@@ -796,15 +797,6 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
 #
 # types
 #
-class TokenType(IntEnum):
-    NORMAL       = 1
-    UNKNOWN      = 2
-    CONTROL      = 3
-    USER_DEFINED = 4
-    UNUSED       = 5
-    BYTE         = 6
-
-
 class RopeScalingType(Enum):
     NONE   = 'none'
     LINEAR = 'linear'
@@ -975,88 +967,60 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
 #
 # Tokenizer Types
 #
-class VocabType(IntEnum):
-    NON = auto()  # For models without vocab
-    SPM = auto()  # SentencePiece LLaMa tokenizer
-    BPE = auto()  # BytePair GPT-2 tokenizer
-    WPM = auto()  # WordPiece BERT tokenizer
+class TokenType(IntEnum):
+    NORMAL       = 1
+    UNKNOWN      = 2
+    CONTROL      = 3
+    USER_DEFINED = 4
+    UNUSED       = 5
+    BYTE         = 6
 
 
-VOCAB_TYPE_NAMES: dict[VocabType, str] = {
-    VocabType.SPM: "SPM",
-    VocabType.BPE: "BPE",
-    VocabType.WPM: "WPM",
-}
-
-VOCAB_TYPE_MAP: dict[str, VocabType] = {
-    "SPM": VocabType.SPM,
-    "BPE": VocabType.BPE,
-    "WPM": VocabType.WPM,
-}
+class VocabType(Enum):
+    SPM = "SPM"  # SentencePiece LLaMa tokenizer
+    BPE = "BPE"  # BytePair GPT-2 tokenizer
+    WPM = "WPM"  # WordPiece BERT tokenizer
 
 
 #
 # Model File Types
 #
-class ModelFileType(IntEnum):
-    NON         = auto()  # undefined
-    PT          = auto()  # torch
-    PTH         = auto()  # torch
-    BIN         = auto()  # torch
-    SAFETENSORS = auto()  # safetensors
-    JSON        = auto()  # transformers/tokenizers
-    MODEL       = auto()  # sentencepiece
-    GGUF        = auto()  # ggml/llama.cpp
+class ModelFileExtension(Enum):
+    PT          = ".pt"  # torch
+    PTH         = ".pth"  # torch
+    BIN         = ".bin"  # torch
+    SAFETENSORS = ".safetensors"  # safetensors
+    JSON        = ".json"  # transformers/tokenizers
+    MODEL       = ".model"  # sentencepiece
+    GGUF        = ".gguf"  # ggml/llama.cpp
 
 
-MODEL_FILE_TYPE_NAMES: dict[ModelFileType, str] = {
-    ModelFileType.PT:          ".pt",
-    ModelFileType.PTH:         ".pth",
-    ModelFileType.BIN:         ".bin",
-    ModelFileType.SAFETENSORS: ".safetensors",
-    ModelFileType.JSON:        ".json",
-    ModelFileType.MODEL:       ".model",
-    ModelFileType.GGUF:        ".gguf",
-}
-
-MODEL_FILE_TYPE_MAP: dict[ModelFileType, str] = {
-    ".pt": ModelFileType.PT,
-    ".pth": ModelFileType.PTH,
-    ".bin": ModelFileType.BIN,
-    ".safetensors": ModelFileType.SAFETENSORS,
-    ".json": ModelFileType.JSON,
-    ".model": ModelFileType.MODEL,
-    ".gguf": ModelFileType.GGUF,
-}
+#
+# Normalizer Types
+#
+class NormalizerType(Enum):
+    SEQUENCE = "Sequence"
+    NFC      = "NFC"
+    NFD      = "NFD"
+    NFKC     = "NFKC"
+    NFKD     = "NFKD"
 
 
-class PreTokenizerType(IntEnum):
-    NON                = auto()
-    BYTE_LEVEL         = auto()
-    BERT_PRE_TOKENIZER = auto()
-    METASPACE          = auto()
-    SEQUENCE           = auto()
+#
+# Pre-tokenizer Types
+#
+class PreTokenizerType(Enum):
+    SEQUENCE           = "Sequence"
+    BYTE_LEVEL         = "ByteLevel"
+    BERT_PRE_TOKENIZER = "BertPreTokenizer"
+    METASPACE          = "Metaspace"
 
-
-PRE_TOKENIZER_TYPE_NAMES: dict[PreTokenizerType, str] = {
-    PreTokenizerType.BYTE_LEVEL: "ByteLevel",
-    PreTokenizerType.BERT_PRE_TOKENIZER: "BertPreTokenizer",
-    PreTokenizerType.METASPACE: "Metaspace",
-    PreTokenizerType.SEQUENCE: "Sequence",
-}
-
-PRE_TOKENIZER_TYPE_MAP: dict[PreTokenizerType, str] = {
-    "ByteLevel": PreTokenizerType.BYTE_LEVEL,
-    "BertPreTokenizer": PreTokenizerType.BERT_PRE_TOKENIZER,
-    "Metaspace": PreTokenizerType.METASPACE,
-    "Sequence": PreTokenizerType.SEQUENCE,
-}
 
 #
 # HF Vocab Files
 #
 HF_TOKENIZER_BPE_FILES = ("config.json", "tokenizer_config.json", "tokenizer.json",)
-HF_TOKENIZER_SPM_FILES = (HF_TOKENIZER_BPE_FILES + ("tokenizer.model",))
+HF_TOKENIZER_SPM_FILES = HF_TOKENIZER_BPE_FILES + ("tokenizer.model",)
 
 #
 # Pre-tokenization Regular Expressions
@@ -1068,8 +1032,7 @@ HF_TOKENIZER_SPM_FILES = (HF_TOKENIZER_BPE_FILES + ("tokenizer.model",))
 # https://github.com/huggingface/tokenizers/blob/main/tokenizers/src/pre_tokenizers/byte_level.rs#L40-L42
 
 # These are fallback values if the pre-tokenizer cannot be dynamically discovered at runtime.
-BPE_PRE_TOKENIZER_DEFAULT = "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)"
-GPT_PRE_TOKENIZER_DEFAULT = f"{BPE_PRE_TOKENIZER_DEFAULT}|\\s+"
+GPT_PRE_TOKENIZER_DEFAULT = ("'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)|\\s+",)
 
 # Aliases for backward compatibility.
 
@@ -1120,8 +1083,9 @@ KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
 KEY_TOKENIZER_TYPE       = Keys.Tokenizer.TYPE
+KEY_TOKENIZER_NORM       = Keys.Tokenizer.NORM
 KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
-KEY_TOKENIZER_HASH       = Keys.Tokenizer.HASH
+KEY_TOKENIZER_ADDED      = Keys.Tokenizer.ADDED
 KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
 KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
