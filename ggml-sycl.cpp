@@ -15255,7 +15255,7 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
         && src1->ne[1] <= MMVQ_MAX_BATCH_SIZE;
 
-    bool              use_mul_mat_q =  ggml_sycl_supports_mmq(src0->type)
+    bool use_mul_mat_q =  ggml_sycl_supports_mmq(src0->type)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32;
 
     // mmvq and mmq need the __dp4a instruction which is available for gen12+
