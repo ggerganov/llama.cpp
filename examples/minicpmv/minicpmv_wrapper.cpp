@@ -2,7 +2,7 @@
 #include "common.h"
 #include "clip.h"
 #include "minicpmv.h"
-#include "minicpmv_io.h"
+#include "minicpmv_wrapper.h"
 #include "llama.h"
 #include <cstdio>
 #include <cstdlib>
