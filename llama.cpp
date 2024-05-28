@@ -17940,7 +17940,16 @@ static std::string llama_decode_text(const std::string & text) {
 
     const auto cpts = unicode_cpts_from_utf8(text);
     for (const auto cpt : cpts) {
-        decoded_text += unicode_utf8_to_byte(unicode_cpt_to_utf8(cpt));
+        const auto utf8 = unicode_cpt_to_utf8(cpt);
+        try {
+            decoded_text += unicode_utf8_to_byte(utf8);
+        } catch (const std::out_of_range & e) {
+            decoded_text += "[UNK_BYTE_0x";
+            for (const auto c : utf8) {
+                decoded_text += format("%02x", (uint8_t) c);
+            }
+            decoded_text += text + "]";
+        }
     }
 
     return decoded_text;
