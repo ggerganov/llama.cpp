@@ -15212,6 +15212,25 @@ bool ggml_sycl_supports_mmq(enum ggml_type type) {
     // }
 }
 
+bool ggml_sycl_supports_dmmv(enum ggml_type type) {
+    switch (type) {
+        case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q4_1:
+        case GGML_TYPE_Q5_0:
+        case GGML_TYPE_Q5_1:
+        case GGML_TYPE_Q8_0:
+        case GGML_TYPE_Q2_K:
+        case GGML_TYPE_Q3_K:
+        case GGML_TYPE_Q4_K:
+        case GGML_TYPE_Q5_K:
+        case GGML_TYPE_Q6_K:
+        case GGML_TYPE_F16:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     const bool all_on_device =
         (src0->backend == GGML_BACKEND_TYPE_GPU || src0->backend == GGML_BACKEND_TYPE_GPU_SPLIT) &&
@@ -15228,7 +15247,7 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     }
 
     // check data types and tensor shapes for custom matrix multiplication kernels:
-    bool use_dequantize_mul_mat_vec = (ggml_is_quantized(src0->type) || src0->type == GGML_TYPE_F16)
+    bool use_dequantize_mul_mat_vec = ggml_sycl_supports_dmmv(src0->type)
         && src1->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32
         && src0->ne[0] % GGML_SYCL_DMMV_X == 0 && src1->ne[1] == 1;
 
@@ -15243,16 +15262,11 @@ static void ggml_sycl_mul_mat(const ggml_tensor * src0, const ggml_tensor * src1
     const bool fp16_performance_good = true;
 
     // mmvq and mmq need the __dp4a instruction which is available for gen12+
-    use_mul_mat_vec_q = use_mul_mat_vec_q; // Check dp4a
     // Workaround in https://github.com/ggerganov/llama.cpp/commit/95f84d5ce8b449a9b16009434aca800df504a02e
     use_mul_mat_q     = use_mul_mat_q && (src0->type != GGML_TYPE_IQ2_XXS);
 #ifdef SYCL_USE_XMX
     use_mul_mat_q     = use_mul_mat_q     && (!fp16_performance_good || src1->ne[1] <= MMQ_MAX_BATCH_SIZE);
 #endif // SYCL_USE_XMX
-
-#ifndef GGML_SYCL_FORCE_DMMV
-    use_dequantize_mul_mat_vec = use_dequantize_mul_mat_vec && !use_mul_mat_vec_q;
-#endif // GGML_SYCL_FORCE_DMMV
 
     if (!split && !fp16_performance_good && src0->type == GGML_TYPE_F16 && ggml_is_permuted(src0) && ggml_is_permuted(src1) && src1->ne[1] == 1) {
         // KQ single-batch
