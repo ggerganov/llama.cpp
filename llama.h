@@ -424,8 +424,8 @@ extern "C" {
 
     LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
 
-    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model   * model);
-    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model   * model);
+    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
+    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
