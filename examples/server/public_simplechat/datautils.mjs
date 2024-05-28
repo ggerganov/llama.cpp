@@ -199,3 +199,53 @@ export function trim_garbage_at_end(sIn) {
     }
     return sCur;
 }
+
+
+/**
+ * NewLines array helper
+ */
+export class NewLines {
+
+    constructor() {
+        /** @type {string[]} */
+        this.lines = [];
+    }
+
+    /**
+     * Extracts lines from the passed string and inturn either
+     * append to a previous partial line or add a new line.
+     * @param {string} sLines
+     */
+    add_append(sLines) {
+        let aLines = sLines.split("\n");
+        let lCnt = 0;
+        for(let line of aLines) {
+            lCnt += 1;
+            // Add back newline removed if any during split
+            if (lCnt < aLines.length) {
+                line += "\n";
+            } else {
+                if (sLines.endsWith("\n")) {
+                    line += "\n";
+                }
+            }
+            // Append if required
+            if (lCnt == 1) {
+                let lastLine = this.lines[this.lines.length-1];
+                if (lastLine != undefined) {
+                    if (!lastLine.endsWith("\n")) {
+                        this.lines[this.lines.length-1] += line;
+                        continue;
+                    }
+                }
+            }
+            // Add new line
+            this.lines.push(line);
+        }
+    }
+
+    shift() {
+        return this.lines.shift();
+    }
+
+}
