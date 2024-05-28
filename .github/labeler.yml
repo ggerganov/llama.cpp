@@ -1,5 +1,16 @@
 # https://github.com/actions/labeler
-
+Kompute:
+    - changed-files:
+        - any-glob-to-any-file:
+            - ggml-kompute.h
+            - ggml-kompute.cpp
+            - README-kompute.md
+Apple Metal:
+    - changed-files:
+        - any-glob-to-any-file:
+            - ggml-metal.h
+            - ggml-metal.cpp
+            - README-metal.md
 SYCL:
     - changed-files:
         - any-glob-to-any-file:
@@ -9,6 +20,7 @@ SYCL:
 Nvidia GPU:
     - changed-files:
         - any-glob-to-any-file:
+            - ggml-cuda.h
             - ggml-cuda/**
 Vulkan:
     - changed-files:
@@ -62,6 +74,8 @@ server:
 ggml:
     - changed-files:
         - any-glob-to-any-file:
+            - ggml.c
+            - ggml.h
             - ggml-*.c
             - ggml-*.h
             - ggml-cuda/**
@@ -71,3 +85,6 @@ nix:
             - "**/*.nix"
             - .github/workflows/nix-*.yml
             - .devops/nix/nixpkgs-instances.nix
+embedding:
+    - changed-files:
+        - any-glob-to-any-file: examples/embedding/
