@@ -11305,18 +11305,11 @@ struct llm_build_context {
                 );
                 cb(k_pe, "k_pe", il);
 
-                struct ggml_tensor * q_states = ggml_new_tensor_3d(ctx0, q_nope->type, hparams.n_embd_head_k, n_head, n_tokens);
+                struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope, q_pe, 0);
                 cb(q_states, "q_states", il);
-                q_states = ggml_set_inplace(ctx0, q_states, q_nope, q_states->nb[1], q_states->nb[2], q_states->nb[3], 0);
-                q_states = ggml_set_inplace(ctx0, q_states, q_pe, q_states->nb[1], q_states->nb[2], q_states->nb[3], ggml_element_size(q_states) * n_embd_head_qk_nope);
 
-                k_pe = ggml_repeat(ctx0, k_pe, q_pe);
-                cb(k_pe, "k_pe", il);
-
-                struct ggml_tensor * k_states = ggml_new_tensor_3d(ctx0, q_nope->type, hparams.n_embd_head_k, n_head, n_tokens);
+                struct ggml_tensor * k_states = ggml_concat(ctx0, k_nope, ggml_repeat(ctx0, k_pe, q_pe), 0);
                 cb(k_states, "k_states", il);
-                k_states = ggml_set_inplace(ctx0, k_states, k_nope, k_states->nb[1], k_states->nb[2], k_states->nb[3], 0);
-                k_states = ggml_set_inplace(ctx0, k_states, k_pe, k_states->nb[1], k_states->nb[2], k_states->nb[3], ggml_element_size(k_states) * n_embd_head_qk_nope);
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
