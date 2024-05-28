@@ -13567,7 +13567,7 @@ inline void ggml_sycl_op_concat(const ggml_tensor *src0,
 #pragma message("TODO: generalize concat kernel for dim != 2")
 #pragma message("      https://github.com/ggerganov/llama.cpp/pull/7563")
     int dim = dst->op_params[0];
-    GGML_ASSERT(dim != 2);
+    GGML_ASSERT(dim == 2);
 
     GGML_ASSERT(src0->type == GGML_TYPE_F32);
     GGML_ASSERT(src1->type == GGML_TYPE_F32);
