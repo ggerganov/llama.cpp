@@ -2767,6 +2767,8 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
             }
         } else if (arg == "--embedding" || arg == "--embeddings") {
             params.embedding = true;
+        } else if (arg == "-nocb" || arg == "--no-cont-batching") {
+            params.cont_batching = false;
         } else if (arg == "-cb" || arg == "--cont-batching") {
             params.cont_batching = true;
         } else if (arg == "-fa" || arg == "--flash-attn") {
