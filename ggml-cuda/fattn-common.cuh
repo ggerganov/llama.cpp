@@ -1,3 +1,5 @@
+#pragma once
+
 #include "common.cuh"
 #include "vecdotq.cuh"
 
@@ -510,6 +512,48 @@ static __device__ __forceinline__ T dequantize_1_f16(const void * __restrict__ v
     return x[i];
 }
 
+template <int D>
+constexpr __device__ vec_dot_KQ_f16_t get_vec_dot_KQ_f16(ggml_type type_K) {
+    return type_K == GGML_TYPE_Q4_0 ? vec_dot_fattn_vec_KQ_q4_0<half, D> :
+        type_K == GGML_TYPE_Q4_1 ? vec_dot_fattn_vec_KQ_q4_1<half, D> :
+        type_K == GGML_TYPE_Q5_0 ? vec_dot_fattn_vec_KQ_q5_0<half, D> :
+        type_K == GGML_TYPE_Q5_1 ? vec_dot_fattn_vec_KQ_q5_1<half, D> :
+        type_K == GGML_TYPE_Q8_0 ? vec_dot_fattn_vec_KQ_q8_0<half, D> :
+        type_K == GGML_TYPE_F16 ? vec_dot_fattn_vec_KQ_f16<half, D> :
+        nullptr;
+}
+
+template <int D>
+constexpr __device__ vec_dot_KQ_f32_t get_vec_dot_KQ_f32(ggml_type type_K) {
+    return type_K == GGML_TYPE_Q4_0 ? vec_dot_fattn_vec_KQ_q4_0<float, D> :
+        type_K == GGML_TYPE_Q4_1 ? vec_dot_fattn_vec_KQ_q4_1<float, D> :
+        type_K == GGML_TYPE_Q5_0 ? vec_dot_fattn_vec_KQ_q5_0<float, D> :
+        type_K == GGML_TYPE_Q5_1 ? vec_dot_fattn_vec_KQ_q5_1<float, D> :
+        type_K == GGML_TYPE_Q8_0 ? vec_dot_fattn_vec_KQ_q8_0<float, D> :
+        type_K == GGML_TYPE_F16 ? vec_dot_fattn_vec_KQ_f16<float, D> :
+        nullptr;
+}
+
+constexpr __device__ dequantize_1_f16_t get_dequantize_1_f16(ggml_type type_V) {
+    return type_V == GGML_TYPE_Q4_0 ? dequantize_1_q4_0<half> :
+        type_V == GGML_TYPE_Q4_1 ? dequantize_1_q4_1<half> :
+        type_V == GGML_TYPE_Q5_0 ? dequantize_1_q5_0<half> :
+        type_V == GGML_TYPE_Q5_1 ? dequantize_1_q5_1<half> :
+        type_V == GGML_TYPE_Q8_0 ? dequantize_1_q8_0<half> :
+        type_V == GGML_TYPE_F16 ? dequantize_1_f16<half> :
+        nullptr;
+}
+
+constexpr __device__ dequantize_1_f32_t get_dequantize_1_f32(ggml_type type_V) {
+    return type_V == GGML_TYPE_Q4_0 ? dequantize_1_q4_0<float> :
+        type_V == GGML_TYPE_Q4_1 ? dequantize_1_q4_1<float> :
+        type_V == GGML_TYPE_Q5_0 ? dequantize_1_q5_0<float> :
+        type_V == GGML_TYPE_Q5_1 ? dequantize_1_q5_1<float> :
+        type_V == GGML_TYPE_Q8_0 ? dequantize_1_q8_0<float> :
+        type_V == GGML_TYPE_F16 ? dequantize_1_f16<float> :
+        nullptr;
+}
+
 template<int D, int parallel_blocks> // D == head size
 #if !(defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__))
 __launch_bounds__(D, 1)
@@ -565,13 +609,12 @@ static constexpr ggml_type ggml_type_f16  = GGML_TYPE_F16;
 typedef half f16;
 typedef float f32;
 
-#define FATTN_VEC_CASE(type_VKQ, D, type_suffix_K, type_suffix_V)                                                 \
-    if (Q->ne[0] == (D) && K->type == ggml_type_##type_suffix_K && V->type == ggml_type_##type_suffix_V) {        \
+#define FATTN_VEC_CASE(type_VKQ, D, type_K, type_V)                                                 \
+    if (Q->ne[0] == (D) && K->type == type_K && V->type == type_V) {        \
         constexpr int nwarps = (D)/WARP_SIZE;                                                                     \
-        constexpr bool Q_q8_1 = ggml_type_##type_suffix_K != GGML_TYPE_F16;                                       \
         fattn_kernel_t fattn_kernel = flash_attn_vec_ext_##type_VKQ<                                              \
             (D), cols_per_block, parallel_blocks,                                                                 \
-            vec_dot_fattn_vec_KQ_##type_suffix_K<type_VKQ, (D)>, Q_q8_1, dequantize_1_##type_suffix_V<type_VKQ>>; \
+            type_K, type_V>; \
         launch_fattn<(D), parallel_blocks>(ctx, dst, fattn_kernel, nwarps, cols_per_block);                       \
         return;                                                                                                   \
     }                                                                                                             \
@@ -582,13 +625,17 @@ static void on_no_fattn_vec_case(const int D) {
         fprintf(stderr, "By default only f16 KV cache is supported.\n");
         fprintf(stderr, "Compile with LLAMA_CUDA_FA_ALL_QUANTS for V cache quantization support.\n");
         GGML_ASSERT(false);
-    } else {
+    } else if (D == 128) {
         fprintf(stderr, "Unsupported KV type combination for head_size 128.\n");
         fprintf(stderr, "Supported combinations:\n");
         fprintf(stderr, "  - K == q4_0, V == q4_0,  4.50 BPV\n");
         fprintf(stderr, "  - K == q8_0, V == q8_0,  8.50 BPV\n");
         fprintf(stderr, "  - K == f16,  V == f16,  16.00 BPV\n");
         fprintf(stderr, "Compile with LLAMA_CUDA_FA_ALL_QUANTS for all combinations of q4_0, q4_1, q5_0, q5_1, q8_0, and f16.\n");
+        GGML_ASSERT(false);
+    } else {
+        fprintf(stderr, "Unsupported KV type combination for head_size 256.\n");
+        fprintf(stderr, "Only f16 is supported.\n");
         GGML_ASSERT(false);
     }
 }
