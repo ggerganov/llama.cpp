@@ -11,6 +11,9 @@ in a simple way with minimal code from a common code base. Inturn additionally i
 multiple independent back and forth chatting to an extent, with the ai llm model at a basic level, with their
 own system prompts.
 
+This allows seeing the generated text / ai-model response in oneshot at the end, after it is fully generated,
+or potentially as it is being generated, in a streamed manner from the server/ai-model.
+
 The UI follows a responsive web design so that the layout can adapt to available display space in a usable
 enough manner, in general.
 
@@ -58,6 +61,7 @@ Once inside
   * chat (default) vs completion mode
   * try trim garbage in response or not
   * amount of chat history in the context sent to server/ai-model
+  * oneshot or streamed mode.
 
 * In completion mode
   * logic by default doesnt insert any role specific "ROLE: " prefix wrt each role's message.

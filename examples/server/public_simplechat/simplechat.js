@@ -150,6 +150,7 @@ class SimpleChat {
                 gMe.show_info(div);
             }
         }
+        return last;
     }
 
     /**
@@ -316,8 +317,10 @@ class SimpleChat {
      * Handle the multipart response from server/ai-model
      * @param {Response} resp
      * @param {string} apiEP
+     * @param {HTMLDivElement} elDiv
      */
-    async handle_response_multipart(resp, apiEP) {
+    async handle_response_multipart(resp, apiEP, elDiv) {
+        let elP = ui.el_create_append_p("", elDiv);
         if (!resp.body) {
             throw Error("ERRR:SimpleChat:SC:ReadJsonEarly:No body...");
         }
@@ -343,6 +346,8 @@ class SimpleChat {
                     gotBody += this.response_extract_stream(curJson, apiEP);
                 }
             }
+            elP.innerText = gotBody;
+            elP.scrollIntoView(false);
             if (done) {
                 break;
             }
@@ -367,15 +372,16 @@ class SimpleChat {
      * Also take care of the optional garbage trimming.
      * @param {Response} resp
      * @param {string} apiEP
+     * @param {HTMLDivElement} elDiv
      */
-    async handle_response(resp, apiEP) {
+    async handle_response(resp, apiEP, elDiv) {
         let theResp = {
             assistant: "",
             trimmed: "",
         }
         let origMsg;
         if (gMe.bStream) {
-            origMsg = await this.handle_response_multipart(resp, apiEP);
+            origMsg = await this.handle_response_multipart(resp, apiEP, elDiv);
         } else {
             origMsg = await this.handle_response_oneshot(resp, apiEP);
         }
@@ -546,7 +552,7 @@ class MultiChatUI {
             body: theBody,
         });
 
-        let theResp = await chat.handle_response(resp, apiEP);
+        let theResp = await chat.handle_response(resp, apiEP, this.elDivChat);
         chat.add(Roles.Assistant, theResp.assistant);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
