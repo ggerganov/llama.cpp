@@ -155,12 +155,16 @@ class SimpleChat {
     /**
      * Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
      * The needed fields/options are picked from a global object.
+     * Add optional stream flag, if required.
      * Convert the json into string.
      * @param {Object} obj
      */
     request_jsonstr_extend(obj) {
         for(let k in gMe.chatRequestOptions) {
             obj[k] = gMe.chatRequestOptions[k];
+        }
+        if (gMe.bStream) {
+            obj["stream"] = true;
         }
         return JSON.stringify(obj);
     }
@@ -217,25 +221,17 @@ class SimpleChat {
      * @param {string} apiEP
      */
     response_extract(respBody, apiEP) {
-        let theResp = {
-            assistant: "",
-            trimmed: "",
-        }
+        let assistant = "";
         if (apiEP == ApiEP.Type.Chat) {
-            theResp.assistant = respBody["choices"][0]["message"]["content"];
+            assistant = respBody["choices"][0]["message"]["content"];
         } else {
             try {
-                theResp.assistant = respBody["choices"][0]["text"];
+                assistant = respBody["choices"][0]["text"];
             } catch {
-                theResp.assistant = respBody["content"];
+                assistant = respBody["content"];
             }
         }
-        if (gMe.bTrimGarbage) {
-            let origMsg = theResp.assistant;
-            theResp.assistant = du.trim_garbage_at_end(theResp.assistant);
-            theResp.trimmed = origMsg.substring(theResp.assistant.length);
-        }
-        return theResp;
+        return assistant;
     }
 
     /**
@@ -344,7 +340,7 @@ class SimpleChat {
                     }
                     let curJson = JSON.parse(curArray);
                     console.debug("DBUG:SC:PART:Json:", curJson);
-                    gotBody += chat.response_extract_stream(curJson, gMe.apiEP);
+                    gotBody += this.response_extract_stream(curJson, apiEP);
                 }
             }
             if (done) {
@@ -366,10 +362,28 @@ class SimpleChat {
         return this.response_extract(respBody, apiEP);
     }
 
+    /**
+     * Handle the response from the server be it in oneshot or multipart/stream mode.
+     * Also take care of the optional garbage trimming.
+     * @param {Response} resp
+     * @param {string} apiEP
+     */
     async handle_response(resp, apiEP) {
-        if (apiEP == ApiEP.Type.Chat) {
-            return this.handle_response_oneshot(resp, apiEP);
+        let theResp = {
+            assistant: "",
+            trimmed: "",
         }
+        let origMsg;
+        if (gMe.bStream) {
+            origMsg = await this.handle_response_multipart(resp, apiEP);
+        } else {
+            origMsg = await this.handle_response_oneshot(resp, apiEP);
+        }
+        if (gMe.bTrimGarbage) {
+            theResp.assistant = du.trim_garbage_at_end(origMsg);
+            theResp.trimmed = origMsg.substring(theResp.assistant.length);
+        }
+        return theResp;
     }
 
 }
@@ -532,8 +546,7 @@ class MultiChatUI {
             body: theBody,
         });
 
-        let respBody = await this.read_json_early(chat, resp);
-        let theResp = chat.handle_response(respBody, apiEP);
+        let theResp = await chat.handle_response(resp, apiEP);
         chat.add(Roles.Assistant, theResp.assistant);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
@@ -628,6 +641,7 @@ class Me {
     constructor() {
         this.defaultChatIds = [ "Default", "Other" ];
         this.multiChat = new MultiChatUI();
+        this.bStream = true;
         this.bCompletionFreshChatAlways = true;
         this.bCompletionInsertStandardRolePrefix = false;
         this.bTrimGarbage = true;
@@ -659,6 +673,8 @@ class Me {
         let p = ui.el_create_append_p("Settings (devel-tools-console document[gMe])", elDiv);
         p.className = "role-system";
 
+        ui.el_create_append_p(`bStream:${this.bStream}`, elDiv);
+
         ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
 
         ui.el_create_append_p(`bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`, elDiv);
@@ -679,7 +695,12 @@ class Me {
      */
     show_settings(elDiv) {
 
-        let bb = ui.el_creatediv_boolbutton("SetCompletionFreshChatAlways", "CompletionFreshChatAlways", {true: "[+] yes fresh", false: "[-] no, with history"}, this.bCompletionFreshChatAlways, (val)=>{
+        let bb = ui.el_creatediv_boolbutton("SetStream", "Stream", {true: "[+] yes stream", false: "[-] do oneshot"}, this.bStream, (val)=>{
+            this.bStream = val;
+        });
+        elDiv.appendChild(bb);
+
+        bb = ui.el_creatediv_boolbutton("SetCompletionFreshChatAlways", "CompletionFreshChatAlways", {true: "[+] yes fresh", false: "[-] no, with history"}, this.bCompletionFreshChatAlways, (val)=>{
             this.bCompletionFreshChatAlways = val;
         });
         elDiv.appendChild(bb);
