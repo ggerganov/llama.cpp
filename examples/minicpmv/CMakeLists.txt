@@ -33,7 +33,7 @@ endif()
 set(TARGET minicpmv-cli)
 add_executable(minicpmv-cli minicpmv-cli.cpp)
 install(TARGETS minicpmv-cli RUNTIME)
-target_link_libraries(minicpmv-cli PRIVATE common minicpmv ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(minicpmv-cli PRIVATE common minicpmv_io minicpmv ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(minicpmv PRIVATE cxx_std_11)
 
 add_library(minicpmv_io OBJECT
