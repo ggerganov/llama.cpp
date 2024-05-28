@@ -676,7 +676,7 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const
     size_t max_size = get_max_size(sock);
     ggml_backend_rpc_buffer_type_context * buft_ctx = new ggml_backend_rpc_buffer_type_context {
         /* .endpoint  = */ endpoint,
-        /* .name      = */ "RPC",
+        /* .name      = */ "RPC[" + std::string(endpoint) + "]",
         /* .alignment = */ alignment,
         /* .max_size  = */ max_size
     };
