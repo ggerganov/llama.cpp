@@ -445,8 +445,8 @@ class GGUFWriter:
     def add_description(self, description: str) -> None:
         self.add_string(Keys.General.DESCRIPTION, description)
 
-    def add_licence(self, licence: str) -> None:
-        self.add_string(Keys.General.LICENSE, licence)
+    def add_license(self, license: str) -> None:
+        self.add_string(Keys.General.LICENSE, license)
 
     def add_source_url(self, url: str) -> None:
         self.add_string(Keys.General.SOURCE_URL, url)

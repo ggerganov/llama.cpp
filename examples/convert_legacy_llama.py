@@ -829,7 +829,7 @@ class OutputFile:
             if metadata.description is not None:
                 self.gguf.add_description(metadata.description)
             if metadata.license is not None:
-                self.gguf.add_licence(metadata.license)
+                self.gguf.add_license(metadata.license)
             if metadata.source_url is not None:
                 self.gguf.add_source_url(metadata.source_url)
             if metadata.source_hf_repo is not None:
