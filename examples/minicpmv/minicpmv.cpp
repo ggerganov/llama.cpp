@@ -33,45 +33,28 @@ struct clip_image_grid_shape {
 
 static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos) {
     // std::vector<clip_image_f32*> img_res_v; // format VectN x H x W x RGB (N x 336 x 336 x 3), so interleaved RGB - different to the python implementation which is N x 3 x 336 x 336
-    clip_image_f32_batch img_res_v;
-    img_res_v.size = 0;
-    img_res_v.data = nullptr;
+
+    clip_image_f32 * img_res_v = clip_image_f32_init();
     std::pair<int, int> load_image_size;
     load_image_size.first = img->nx;
     load_image_size.second = img->ny;
-    const int64_t t_img_enc_start_us_ip = ggml_time_us();
-    if (!clip_image_preprocess(ctx_clip, img, &img_res_v)) {
-        LOG_TEE("%s: unable to preprocess image\n", __func__);
-        delete[] img_res_v.data;
-        return false;
-    }
-
-    const int64_t t_img_enc_end_us_ip = ggml_time_us();
-    float t_img_enc_ms_ip = (t_img_enc_end_us_ip - t_img_enc_start_us_ip) / 1000.0;
-
-    LOG_TEE("\n%s: image encoded in %8.2f ms by clip_image_preprocess.\n", __func__, t_img_enc_ms_ip);
+    normalize_image_u8_to_f32(ctx_clip, img, img_res_v);
 
     const int64_t t_img_enc_start_us = ggml_time_us();
 
     const char * mm_patch_merge_type = clip_patch_merge_type(ctx_clip);
-
     LOG_TEE("\n%s: mm_patch_merge_type is  %s.\n", __func__, mm_patch_merge_type);
     
     *n_img_pos = clip_n_patches(ctx_clip);
-    
-    bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd, load_image_size); // image_embd shape is 576 x 4096
-    delete[] img_res_v.data;
+    bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v, image_embd, load_image_size); // image_embd shape is 576 x 4096
     if (!encoded) {
         LOG_TEE("Unable to encode image\n");
-
         return false;
     }
-
     LOG_TEE("%s: image embedding created: %d tokens\n", __func__, *n_img_pos);
 
     const int64_t t_img_enc_end_us = ggml_time_us();
     float t_img_enc_ms = (t_img_enc_end_us - t_img_enc_start_us) / 1000.0;
-
     LOG_TEE("\n%s: image encoded in %8.2f ms by CLIP (%8.2f ms per image patch)\n", __func__, t_img_enc_ms, t_img_enc_ms / *n_img_pos);
 
     return true;
@@ -231,7 +214,7 @@ static bool bicubic_resize(const clip_image_u8 &img, clip_image_u8 &dst, int tar
     return true;
 }
 
-std::vector<std::vector<clip_image_u8 *>> slice_image(const clip_image_u8 * img, const int max_slice_nums, const int scale_resolution, const int patch_size, const bool never_split) {
+std::vector<std::vector<clip_image_u8 *>> slice_image(const clip_image_u8 * img, const int max_slice_nums=9, const int scale_resolution=448, const int patch_size=14, const bool never_split=false) {
     const std::pair<int, int> original_size={img->nx,img->ny};
     const int original_width = img->nx;
     const int original_height = img->ny;
@@ -244,10 +227,6 @@ std::vector<std::vector<clip_image_u8 *>> slice_image(const clip_image_u8 * img,
     images.push_back(std::vector<clip_image_u8 *>());
 
     if(multiple <= 1){
-        // auto best_resolution = select_best_resolution(image_size, grid_pinpoints);
-        // clip_image_u8 *image_original_resize = clip_image_u8_init();
-        // bicubic_resize(*img, *image_original_resize, best_resolution.first, best_resolution.second);
-
         auto best_size = find_best_resize(original_size, scale_resolution, patch_size, true);
         clip_image_u8 *source_image = clip_image_u8_init();
         bicubic_resize(*img, *source_image, best_size.first, best_size.second);
@@ -324,10 +303,7 @@ std::vector<std::vector<clip_image_u8 *>> slice_image(const clip_image_u8 * img,
                 images[images.size()-1].push_back(patch);
             }
         }
-
-
     }
-
     return images;
 }
 
