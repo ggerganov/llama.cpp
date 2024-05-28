@@ -322,29 +322,31 @@ class SimpleChat {
     async handle_response_multipart(resp, apiEP, elDiv) {
         let elP = ui.el_create_append_p("", elDiv);
         if (!resp.body) {
-            throw Error("ERRR:SimpleChat:SC:ReadJsonEarly:No body...");
+            throw Error("ERRR:SimpleChat:SC:HandleResponseMultiPart:No body...");
         }
         let tdUtf8 = new TextDecoder("utf-8");
         let rr = resp.body.getReader();
         let gotBody = "";
+        let xLines = new du.NewLines();
         while(true) {
             let { value: cur,  done: done } = await rr.read();
             let curBody = tdUtf8.decode(cur);
             console.debug("DBUG:SC:PART:Str:", curBody);
-            if (curBody.length > 0) {
-                let curArrays = curBody.split("\n");
-                for(let curArray of curArrays) {
-                    console.debug("DBUG:SC:PART:StrPart:", curArray);
-                    if (curArray.length <= 0) {
-                        continue;
-                    }
-                    if (curArray.startsWith("data:")) {
-                        curArray = curArray.substring(5);
-                    }
-                    let curJson = JSON.parse(curArray);
-                    console.debug("DBUG:SC:PART:Json:", curJson);
-                    gotBody += this.response_extract_stream(curJson, apiEP);
+            xLines.add_append(curBody);
+            while(true) {
+                let curLine = xLines.shift();
+                if (curLine == undefined) {
+                    break;
                 }
+                if (curLine.trim() == "") {
+                    continue;
+                }
+                if (curLine.startsWith("data:")) {
+                    curLine = curLine.substring(5);
+                }
+                let curJson = JSON.parse(curLine);
+                console.debug("DBUG:SC:PART:Json:", curJson);
+                gotBody += this.response_extract_stream(curJson, apiEP);
             }
             elP.innerText = gotBody;
             elP.scrollIntoView(false);
