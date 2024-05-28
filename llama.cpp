@@ -496,6 +496,8 @@ enum llm_tensor {
     LLM_TENSOR_ATTN_KV_B,
     LLM_TENSOR_ATTN_Q_A_NORM,
     LLM_TENSOR_ATTN_KV_A_NORM,
+    LLM_TENSOR_LAYER_NORM_1,
+    LLM_TENSOR_LAYER_NORM_2,
 };
 
 static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
@@ -717,6 +719,8 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+            { LLM_TENSOR_LAYER_NORM_1,    "blk.%d.layer_norm_1" },
+            { LLM_TENSOR_LAYER_NORM_2,    "blk.%d.layer_norm_2" },
         },
     },
     {
@@ -2009,6 +2013,12 @@ struct llama_layer {
     struct ggml_tensor * layer_out_norm;
     struct ggml_tensor * layer_out_norm_b;
     struct ggml_tensor * ffn_norm_exps;
+
+    // extra normalization layers needed by `jina-embeddings-v2-base-code`
+    struct ggml_tensor * layer_norm_1;
+    struct ggml_tensor * layer_norm_1_b;
+    struct ggml_tensor * layer_norm_2;
+    struct ggml_tensor * layer_norm_2_b;
 
     // ff
     struct ggml_tensor * ffn_gate; // w1
@@ -5537,6 +5547,12 @@ static bool llm_load_tensors(
                         layer.attn_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "weight", i), {n_embd}); //output_norm
                         layer.attn_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "bias", i),   {n_embd});
 
+                        layer.layer_norm_1   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_NORM_1, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.layer_norm_1_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_NORM_1, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        
+                        layer.layer_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_NORM_2, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.layer_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_NORM_2, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+
                         layer.ffn_up = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,        "weight", i), {n_embd, n_ff});
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE,    "weight", i), {n_embd, n_ff});
 
@@ -8499,6 +8515,14 @@ struct llm_build_context {
 
             // attention layer norm
             cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].attn_out_norm, model.layers[il].attn_out_norm_b, LLM_NORM, cb, il);
+
+            if (model.layers[il].layer_norm_1 != nullptr) {
+                cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].layer_norm_1, model.layers[il].layer_norm_1_b, LLM_NORM, cb, il);
+            }
+
+            if (model.layers[il].layer_norm_2 != nullptr) {
+                cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].layer_norm_2, model.layers[il].layer_norm_2_b, LLM_NORM, cb, il);
+            }
 
             struct ggml_tensor * ffn_inp = cur;
             cb(ffn_inp, "ffn_inp", il);
