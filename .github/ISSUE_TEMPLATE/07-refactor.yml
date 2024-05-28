@@ -18,41 +18,6 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: grokkability
-    attributes:
-      label: Whats the current grokkability of the code in question
-      multiple: false
-      options:
-        - Easy
-        - Normal
-        - Hard
-        - "=.0"
-
-  - type: dropdown
-    id: subsystems
-    attributes:
-      label: Which subsystems are you trying to refactor?
-      multiple: true
-      options:
-        - Kompute
-        - Apple Metal
-        - SYCL
-        - Nvidia GPU
-        - Vulkan
-        - Documentation
-        - Testing
-        - Build
-        - Examples
-        - Devops
-        - Python
-        - Script
-        - Android
-        - Server
-        - GGML
-        - Nix
-        - Embedding
-
   - type: textarea
     id: possible-approaches
     attributes:
