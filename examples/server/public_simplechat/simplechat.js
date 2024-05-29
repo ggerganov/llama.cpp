@@ -11,17 +11,28 @@ class Roles {
     static Assistant = "assistant";
 }
 
-let gBaseURL = "http://127.0.0.1:8080";
-
 class ApiEP {
     static Type = {
         Chat: "chat",
         Completion: "completion",
     }
-    static Url = {
-        'chat': `${gBaseURL}/chat/completions`,
-        'completion': `${gBaseURL}/completions`,
+    static UrlSuffix = {
+        'chat': `/chat/completions`,
+        'completion': `/completions`,
     }
+
+    /**
+     * Build the url from given baseUrl and apiEp id.
+     * @param {string} baseUrl
+     * @param {string} apiEP
+     */
+    static Url(baseUrl, apiEP) {
+        if (baseUrl.endsWith("/")) {
+            baseUrl = baseUrl.substring(0, baseUrl.length-1);
+        }
+        return `${baseUrl}${this.UrlSuffix[apiEP]}`;
+    }
+
 }
 
 
@@ -542,7 +553,7 @@ class MultiChatUI {
         }
         chat.show(this.elDivChat);
 
-        let theUrl = ApiEP.Url[apiEP];
+        let theUrl = ApiEP.Url(gMe.baseURL, apiEP);
         let theBody = chat.request_jsonstr(apiEP);
 
         this.elInUser.value = "working...";
@@ -649,6 +660,7 @@ class MultiChatUI {
 class Me {
 
     constructor() {
+        this.baseURL = "http://127.0.0.1:8080";
         this.defaultChatIds = [ "Default", "Other" ];
         this.multiChat = new MultiChatUI();
         this.bStream = true;
