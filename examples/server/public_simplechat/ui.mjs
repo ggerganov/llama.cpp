@@ -161,3 +161,45 @@ export function el_creatediv_select(id, label, options, defaultOption, cb) {
     div.appendChild(sel);
     return div;
 }
+
+
+/**
+ * Create a input ui element.
+ *
+ * @param {string} id
+ * @param {string} type
+ * @param {any} defaultValue
+ * @param {function(any):void} cb
+ */
+export function el_create_input(id, type, defaultValue, cb) {
+    let el = document.createElement("input");
+    el.type = type;
+    el.value = defaultValue;
+    if (id) {
+        el.id = id;
+    }
+    el.addEventListener('change', (ev)=>{
+        cb(el.value);
+    })
+    return el;
+}
+
+/**
+ * Create a div wrapped button which represents bool value using specified text wrt true and false.
+ *
+ * @param {string} id
+ * @param {string} label
+ * @param {string} type
+ * @param {any} defaultValue
+ * @param {function(any):void} cb
+ */
+export function el_creatediv_input(id, label, type, defaultValue, cb) {
+    let div = document.createElement("div");
+    let lbl = document.createElement("label");
+    lbl.setAttribute("for", id);
+    lbl.innerText = label;
+    div.appendChild(lbl);
+    let el = el_create_input(id, type, defaultValue, cb);
+    div.appendChild(el);
+    return div;
+}
