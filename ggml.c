@@ -60,6 +60,9 @@
 
 typedef volatile LONG atomic_int;
 typedef atomic_int atomic_bool;
+typedef atomic_int atomic_flag;
+
+#define ATOMIC_FLAG_INIT 0
 
 static void atomic_store(atomic_int * ptr, LONG val) {
     InterlockedExchange(ptr, val);
@@ -72,6 +75,12 @@ static LONG atomic_fetch_add(atomic_int * ptr, LONG inc) {
 }
 static LONG atomic_fetch_sub(atomic_int * ptr, LONG dec) {
     return atomic_fetch_add(ptr, -(dec));
+}
+static atomic_bool atomic_flag_test_and_set(atomic_flag * ptr) {
+    return InterlockedExchange(ptr, 1);
+}
+static void atomic_flag_clear(atomic_flag * ptr) {
+    InterlockedExchange(ptr, 0);
 }
 
 typedef HANDLE pthread_t;
@@ -2883,24 +2892,20 @@ struct ggml_state {
 
 // global state
 static struct ggml_state g_state;
-static atomic_int g_state_barrier = 0;
+static atomic_flag g_state_critical = ATOMIC_FLAG_INIT;
 
 // barrier via spin lock
 inline static void ggml_critical_section_start(void) {
-    int processing = atomic_fetch_add(&g_state_barrier, 1);
-
-    while (processing > 0) {
-        // wait for other threads to finish
-        atomic_fetch_sub(&g_state_barrier, 1);
-        sched_yield(); // TODO: reconsider this
-        processing = atomic_fetch_add(&g_state_barrier, 1);
+    while (atomic_flag_test_and_set(&g_state_critical)) {
+        // spin
+        sched_yield();
     }
 }
 
 // TODO: make this somehow automatically executed
 //       some sort of "sentry" mechanism
 inline static void ggml_critical_section_end(void) {
-    atomic_fetch_sub(&g_state_barrier, 1);
+    atomic_flag_clear(&g_state_critical);
 }
 
 #if defined(__gnu_linux__)
@@ -6390,6 +6395,16 @@ struct ggml_tensor * ggml_rope_custom_inplace(
         ctx, a, b, NULL, n_dims, mode, n_ctx, n_orig_ctx, freq_base, freq_scale,
         ext_factor, attn_factor, beta_fast, beta_slow, 0.0f, false, true
     );
+}
+
+struct ggml_tensor * ggml_rope_xpos_inplace(
+        struct ggml_context * ctx,
+        struct ggml_tensor  * a,
+        struct ggml_tensor  * b,
+        int                   n_dims,
+        float                 base,
+        bool                  down) {
+    return ggml_rope_impl(ctx, a, b, NULL, n_dims, 0, 0, 0, 10000.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, base, down, true);
 }
 
 // ggml_rope_back
@@ -11012,7 +11027,7 @@ static void ggml_compute_forward_concat_f32(
 
 static void ggml_compute_forward_concat(
     const struct ggml_compute_params * params,
-    struct ggml_tensor* dst) {
+    struct ggml_tensor * dst) {
 
     const struct ggml_tensor * src0 = dst->src[0];
 
@@ -22851,6 +22866,14 @@ int ggml_cpu_has_kompute(void) {
 
 int ggml_cpu_has_sycl(void) {
 #if defined(GGML_USE_SYCL)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_rpc(void) {
+#if defined(GGML_USE_RPC)
     return 1;
 #else
     return 0;
