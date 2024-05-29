@@ -4842,21 +4842,28 @@ static void llm_load_vocab(
             }
         );
 
-        LLAMA_LOG_INFO("%s: special tokens cache size = %u.\n", __func__, (uint32_t)vocab.cache_special_tokens.size());
+        LLAMA_LOG_INFO("%s: special tokens cache size = %u\n", __func__, (uint32_t)vocab.cache_special_tokens.size());
     }
 
     // build token to piece caches
     {
-       std::vector<llama_vocab::token> cache_token_to_piece        (n_vocab);
-       std::vector<llama_vocab::token> cache_token_to_piece_special(n_vocab);
+        size_t size_cache = 0;
 
-       for (uint32_t id = 0; id < n_vocab; ++id) {
-           cache_token_to_piece[id]         = llama_token_to_piece(&model, id, false);
-           cache_token_to_piece_special[id] = llama_token_to_piece(&model, id, true);
-       }
+        std::vector<llama_vocab::token> cache_token_to_piece        (n_vocab);
+        std::vector<llama_vocab::token> cache_token_to_piece_special(n_vocab);
 
-       std::swap(vocab.cache_token_to_piece,         cache_token_to_piece);
-       std::swap(vocab.cache_token_to_piece_special, cache_token_to_piece_special);
+        for (uint32_t id = 0; id < n_vocab; ++id) {
+            cache_token_to_piece[id]         = llama_token_to_piece(&model, id, false);
+            cache_token_to_piece_special[id] = llama_token_to_piece(&model, id, true);
+
+            size_cache += cache_token_to_piece[id].size();
+            size_cache += cache_token_to_piece_special[id].size();
+        }
+
+        std::swap(vocab.cache_token_to_piece,         cache_token_to_piece);
+        std::swap(vocab.cache_token_to_piece_special, cache_token_to_piece_special);
+
+        LLAMA_LOG_INFO("%s: token to piece cache size = %.4f MB\n", __func__, size_cache / 1024.0 / 1024.0);
     }
 }
 
