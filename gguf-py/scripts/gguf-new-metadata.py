@@ -174,7 +174,6 @@ def main() -> None:
                 new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE] = MetadataDetails(gguf.GGUFValueType.STRING, template)
 
     if args.pre_tokenizer:
-        print(args.pre_tokenizer)
         new_metadata[gguf.Keys.Tokenizer.PRE] = MetadataDetails(gguf.GGUFValueType.STRING, args.pre_tokenizer)
 
     if remove_metadata:
