@@ -29,6 +29,9 @@ the chat history before sending to the ai model.
 NOTE: Wrt options sent with the request, it mainly sets temperature, max_tokens and optionaly stream for now.
 However if someone wants they can update the js file or equivalent member in gMe as needed.
 
+NOTE: One may be able to use this to chat with openai api web-service /chat/completions endpoint, in a very
+limited / minimal way. One will need to set openai url and authorization bearer key in settings ui.
+
 
 ## usage
 
@@ -155,6 +158,10 @@ It is attached to the document object. Some of these can also be updated using t
     modify the existing options value or remove them, for now you can update this global var
     using browser's development-tools/console.
 
+  headers - maintains the list of http headers sent when request is made to the server. By default
+  Content-Type is set to application/json. Additionally Authorization entry is provided, which can
+  be set if needed using the settings ui.
+
   iRecentUserMsgCnt - a simple minded SlidingWindow to limit context window load at Ai Model end.
   This is disabled by default. However if enabled, then in addition to latest system message, only
   the last/latest iRecentUserMsgCnt user messages after the latest system prompt and its responses
@@ -214,6 +221,27 @@ wrt repeatations in general in the generated text response.
 
 A end-user can change these behaviour by editing gMe from browser's devel-tool/console or by
 using the providing settings ui.
+
+
+### OpenAi / Equivalent API WebService
+
+One may be abe to handshake with OpenAI/Equivalent api web service's /chat/completions endpoint
+for a minimal chatting experimentation by setting the below.
+
+* the baseUrl in settings ui
+  * https://api.openai.com/v1 or similar
+
+* Wrt request body - gMe.chatRequestOptions
+  * model
+  * any additional fields if required in future
+
+* Wrt request headers - gMe.headers
+  * Authorization (available through settings ui)
+    * Bearer THE_OPENAI_API_KEY
+  * any additional optional header entries like "OpenAI-Organization", "OpenAI-Project" or so
+
+NOTE: Not tested, as there is no free tier api testing available. However logically this might
+work.
 
 
 ## At the end
