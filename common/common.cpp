@@ -218,7 +218,7 @@ void gpt_params_handle_model_default(gpt_params & params) {
     }
 }
 
-static void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model = nullptr) {
+void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model) {
     int32_t n_set = 0;
 
     if (cpuparams.n_threads < 0) {
@@ -226,7 +226,7 @@ static void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role
         if (role_model != nullptr) {
             cpuparams = *role_model;
         } else {
-            cpuparams.n_threads = cpu_get_num_math();
+            cpuparams.n_threads = std::thread::hardware_concurrency();
         }
     }
 
@@ -235,11 +235,13 @@ static void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role
             n_set++;
         }
     }
+
     if (n_set == 0) {
         // You hit the jackpot!
         memset(&cpuparams.cpumask[0], 1, GGML_N_CORES_MAX);
         n_set = GGML_N_CORES_MAX;
     }
+
     if (n_set < cpuparams.n_threads) {
         // Not enough set bits, may experience performance issues.
         fprintf(stderr, "warn: Not enough set bits in CPU mask (%d) to satisfy requested thread count: %d\n", n_set, cpuparams.n_threads);
@@ -313,7 +315,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     return result;
 }
 
-static bool parse_cpu_range(const std::string & range, bool (&boolmask)[GGML_N_CORES_MAX]) {
+bool parse_cpu_range(const std::string & range, bool (&boolmask)[GGML_N_CORES_MAX]) {
     size_t dash_loc = range.find('-');
     if (dash_loc == std::string::npos) {
         fprintf(stderr, "Format of CPU range is invalid! Expected [<start>]-[<end>].\n");
@@ -350,7 +352,7 @@ static bool parse_cpu_range(const std::string & range, bool (&boolmask)[GGML_N_C
     return true;
 }
 
-static bool parse_cpu_mask(const std::string & mask, bool (&boolmask)[GGML_N_CORES_MAX]) {
+bool parse_cpu_mask(const std::string & mask, bool (&boolmask)[GGML_N_CORES_MAX]) {
     // Discard potential 0x prefix
     size_t start_i = 0;
     if (mask.length() >= 2 && mask.substr(0, 2) == "0x") {

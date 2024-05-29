@@ -274,7 +274,7 @@
 #define GGML_UNREACHABLE() ((void) 0)
 #endif
 
-#define GGML_N_CORES_MAX 512
+#define GGML_N_CORES_MAX 16
 
 // used to copy the number of elements and stride in bytes of tensors into local variables.
 // main purpose is to reduce code duplication and improve readability.

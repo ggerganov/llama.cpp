@@ -198,6 +198,10 @@ bool gpt_params_parse      (int argc, char ** argv, gpt_params & params);
 bool gpt_params_find_arg   (int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
 void gpt_params_print_usage(int argc, char ** argv, const gpt_params & params);
 
+bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_N_CORES_MAX]);
+bool parse_cpu_mask(const std::string& mask, bool(&boolmask)[GGML_N_CORES_MAX]);
+void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model = nullptr);
+
 std::string gpt_params_get_system_info(const gpt_params & params);
 
 //
