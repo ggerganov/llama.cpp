@@ -26,8 +26,8 @@ any adaptive culling of old messages nor of replacing them with summary of their
 is a optional sliding window based chat logic, which provides a simple minded culling of old messages from
 the chat history before sending to the ai model.
 
-NOTE: It doesnt set any parameters other than temperature and max_tokens for now. However if someone wants
-they can update the js file or equivalent member in gMe as needed.
+NOTE: Wrt options sent with the request, it mainly sets temperature, max_tokens and optionaly stream for now.
+However if someone wants they can update the js file or equivalent member in gMe as needed.
 
 
 ## usage
@@ -58,6 +58,7 @@ Open this simple web front end from your local browser
 Once inside
 
 * If you want to, you can change many of the default global settings
+  * the base url (ie ip addr / domain name, port)
   * chat (default) vs completion mode
   * try trim garbage in response or not
   * amount of chat history in the context sent to server/ai-model
@@ -124,6 +125,11 @@ Me/gMe consolidates the settings which control the behaviour into one object.
 One can see the current settings, as well as change/update them using browsers devel-tool/console.
 It is attached to the document object. Some of these can also be updated using the Settings UI.
 
+  baseURL - the domain-name/ip-address and inturn the port to send the request.
+
+  bStream - control between oneshot-at-end and live-stream-as-its-generated collating and showing
+  of the generated response.
+
   apiEP - select between /completions and /chat/completions endpoint provided by the server/ai-model.
 
   bCompletionFreshChatAlways - whether Completion mode collates complete/sliding-window history when
@@ -183,18 +189,6 @@ By switching between chat.add_system_begin/anytime, one can control whether one 
 the system prompt, anytime during the conversation or only at the beginning.
 
 
-read_json_early, is to experiment with reading json response data early on, if available,
-so that user can be shown generated data, as and when it is being generated, rather than
-at the end when full data is available.
-
-  the server flow doesnt seem to be sending back data early, atleast for request (inc options)
-  that is currently sent.
-
-  if able to read json data early on in future, as and when ai model is generating data, then
-  this helper needs to indirectly update the chat div with the recieved data, without waiting
-  for the overall data to be available.
-
-
 ### Default setup
 
 By default things are setup to try and make the user experience a bit better, if possible.
@@ -218,7 +212,8 @@ NOTE: One may want to experiment with frequency/presence penalty fields in chatR
 wrt the set of fields sent to server along with the user query. To check how the model behaves
 wrt repeatations in general in the generated text response.
 
-A end-user can change these behaviour by editing gMe from browser's devel-tool/console.
+A end-user can change these behaviour by editing gMe from browser's devel-tool/console or by
+using the providing settings ui.
 
 
 ## At the end

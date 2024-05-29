@@ -705,6 +705,8 @@ class Me {
         let p = ui.el_create_append_p("Settings (devel-tools-console document[gMe])", elDiv);
         p.className = "role-system";
 
+        ui.el_create_append_p(`baseURL:${this.baseURL}`, elDiv);
+
         ui.el_create_append_p(`bStream:${this.bStream}`, elDiv);
 
         ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
@@ -726,6 +728,11 @@ class Me {
      * @param {HTMLDivElement} elDiv
      */
     show_settings(elDiv) {
+
+        let inp = ui.el_creatediv_input("SetBaseURL", "BaseURL", "text", this.baseURL, (val)=>{
+            this.baseURL = val;
+        });
+        elDiv.appendChild(inp);
 
         let bb = ui.el_creatediv_boolbutton("SetStream", "Stream", {true: "[+] yes stream", false: "[-] do oneshot"}, this.bStream, (val)=>{
             this.bStream = val;
