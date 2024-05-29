@@ -256,6 +256,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_UP_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.up_proj",  # qwen2moe
+            "model.layers.{bid}.mlp.shared_experts.up_proj", # deepseek2
         ),
 
         # AWQ-activation gate
@@ -285,6 +286,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_GATE_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.gate_proj",  # qwen2moe
+            "model.layers.{bid}.mlp.shared_experts.gate_proj", # deepseek2
         ),
 
         # Feed-forward down
@@ -320,6 +322,7 @@ class TensorNameMap:
 
         MODEL_TENSOR.FFN_DOWN_SHEXP: (
             "model.layers.{bid}.mlp.shared_expert.down_proj",  # qwen2moe
+            "model.layers.{bid}.mlp.shared_experts.down_proj", # deepseek2
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
@@ -383,6 +386,30 @@ class TensorNameMap:
             "model.layers.{bid}.out_proj",
             "backbone.layers.{bid}.mixer.out_proj",
         ),
+
+        MODEL_TENSOR.ATTN_Q_A: (
+            "model.layers.{bid}.self_attn.q_a_proj", # deepseek2
+        ),
+
+        MODEL_TENSOR.ATTN_Q_B: (
+            "model.layers.{bid}.self_attn.q_b_proj", # deepseek2
+        ),
+
+        MODEL_TENSOR.ATTN_KV_A_MQA: (
+            "model.layers.{bid}.self_attn.kv_a_proj_with_mqa", # deepseek2
+        ),
+
+        MODEL_TENSOR.ATTN_KV_B: (
+            "model.layers.{bid}.self_attn.kv_b_proj", # deepseek2
+        ),
+
+        MODEL_TENSOR.ATTN_Q_A_NORM: (
+            "model.layers.{bid}.self_attn.q_a_layernorm", # deepseek2
+        ),
+
+        MODEL_TENSOR.ATTN_KV_A_NORM: (
+            "model.layers.{bid}.self_attn.kv_a_layernorm", # deepseek2
+        ),
     }
 
     # architecture-specific block mappings
@@ -415,7 +442,7 @@ class TensorNameMap:
                 if tensor not in MODEL_TENSORS[arch]:
                     continue
                 # TODO: make this configurable
-                n_experts = 128
+                n_experts = 160
                 for xid in range(n_experts):
                     tensor_name = TENSOR_NAMES[tensor].format(bid = bid, xid = xid)
                     self.mapping[tensor_name] = (tensor, tensor_name)
