@@ -168,6 +168,53 @@ kernel void kernel_div(
     }
 }
 
+template<typename T>
+kernel void kernel_repeat(
+        device const char * src0,
+        device       char * dst,
+        constant  int64_t & ne00,
+        constant  int64_t & ne01,
+        constant  int64_t & ne02,
+        constant  int64_t & ne03,
+        constant uint64_t & nb00,
+        constant uint64_t & nb01,
+        constant uint64_t & nb02,
+        constant uint64_t & nb03,
+        constant  int64_t & ne0,
+        constant  int64_t & ne1,
+        constant  int64_t & ne2,
+        constant  int64_t & ne3,
+        constant uint64_t & nb0,
+        constant uint64_t & nb1,
+        constant uint64_t & nb2,
+        constant uint64_t & nb3,
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint3 tpitg[[thread_position_in_threadgroup]],
+        uint3   ntg[[threads_per_threadgroup]]) {
+    const int64_t i3 = tgpig.z;
+    const int64_t i2 = tgpig.y;
+    const int64_t i1 = tgpig.x;
+
+    const int64_t i03 = i3 % ne03;
+    const int64_t i02 = i2 % ne02;
+    const int64_t i01 = i1 % ne01;
+
+    device const char * src0_ptr = src0 + i03*nb03 + i02*nb02 + i01*nb01;
+    device       char * dst_ptr  = dst  +  i3*nb3  +  i2*nb2  +  i1*nb1 ;
+
+    for (int i0 = tpitg.x; i0 < ne0; i0 += ntg.x) {
+        const int i00 = i0 % ne00;
+        *((device T *)(dst_ptr + i0*nb0)) = *((device T *)(src0_ptr + i00*nb00));
+    }
+}
+
+typedef decltype(kernel_repeat<float>) kernel_repeat_t;
+
+template [[host_name("kernel_repeat_f32")]] kernel kernel_repeat_t kernel_repeat<float>;
+template [[host_name("kernel_repeat_f16")]] kernel kernel_repeat_t kernel_repeat<half>;
+template [[host_name("kernel_repeat_i32")]] kernel kernel_repeat_t kernel_repeat<int>;
+template [[host_name("kernel_repeat_i16")]] kernel kernel_repeat_t kernel_repeat<short>;
+
 // assumption: src1 is a row
 // broadcast src1 into src0
 kernel void kernel_add_row(
@@ -1720,13 +1767,13 @@ kernel void kernel_rope(
 
     const int64_t p = pos[i2];
 
-    const float theta_0 = (float)p;
+    const float theta_base = (float)p;
     const float inv_ndims = -1.f/n_dims;
 
     if (!is_neox) {
         for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
+            const float theta = theta_base * pow(freq_base, inv_ndims*i0);
 
-            const float theta = theta_0 * pow(freq_base, inv_ndims*i0);
             float cos_theta, sin_theta;
             rope_yarn(theta, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
@@ -1742,18 +1789,14 @@ kernel void kernel_rope(
     } else {
         for (int64_t ic = 2*tiitg; ic < ne0; ic += 2*tptg.x) {
             if (ic < n_dims) {
-                const int64_t ib = 0;
+                const int64_t i0 = ic/2;
 
-                // simplified from `(ib * n_dims + ic) * inv_ndims`
-                const float cur_rot = inv_ndims*ic - ib;
-                const float freq_factor = src2 != src0 ? src2[ic/2] : 1.0f;
+                const float freq_factor = src2 != src0 ? src2[i0] : 1.0f;
 
-                const float theta = theta_0 * pow(freq_base, cur_rot) / freq_factor;
+                const float theta = theta_base * pow(freq_base, inv_ndims*ic);
 
                 float cos_theta, sin_theta;
-                rope_yarn(theta, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor, &cos_theta, &sin_theta);
-
-                const int64_t i0 = ib*n_dims + ic/2;
+                rope_yarn(theta/freq_factor, freq_scale, corr_dims, ic, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
                 device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
                 device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
@@ -2418,7 +2461,7 @@ template [[host_name("kernel_flash_attn_ext_f16_h80" )]] kernel flash_attn_ext_f
 template [[host_name("kernel_flash_attn_ext_f16_h96" )]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<96>;
 template [[host_name("kernel_flash_attn_ext_f16_h112")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<112>;
 template [[host_name("kernel_flash_attn_ext_f16_h128")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<128>;
-template [[host_name("kernel_flash_attn_ext_f16_h256")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<256>;
+//template [[host_name("kernel_flash_attn_ext_f16_h256")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_f16<256>;
 
 template<int64_t D, int64_t Q = 1, int64_t C = 32> // head size, queries per threadgroup, cache items per threadgroup
 kernel void kernel_flash_attn_ext_vec_f16(
@@ -2696,7 +2739,7 @@ kernel void kernel_flash_attn_ext_vec_f16(
 }
 
 template [[host_name("kernel_flash_attn_ext_vec_f16_h128")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<128>;
-template [[host_name("kernel_flash_attn_ext_vec_f16_h256")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<256>;
+//template [[host_name("kernel_flash_attn_ext_vec_f16_h256")]] kernel flash_attn_ext_f16_t kernel_flash_attn_ext_vec_f16<256>;
 
 kernel void kernel_cpy_f16_f16(
         device  const half * src0,
@@ -3319,31 +3362,30 @@ kernel void kernel_concat(
     constant  uint64_t & nb1,
     constant  uint64_t & nb2,
     constant  uint64_t & nb3,
+    constant   int32_t & dim,
     uint3 tgpig[[threadgroup_position_in_grid]],
     uint3 tpitg[[thread_position_in_threadgroup]],
     uint3   ntg[[threads_per_threadgroup]]) {
 
-    const int64_t i03 = tgpig.z;
-    const int64_t i02 = tgpig.y;
-    const int64_t i01 = tgpig.x;
+    const int64_t i3 = tgpig.z;
+    const int64_t i2 = tgpig.y;
+    const int64_t i1 = tgpig.x;
 
-    const int64_t i13 = i03 % ne13;
-    const int64_t i12 = i02 % ne12;
-    const int64_t i11 = i01 % ne11;
+    int64_t o[4] = {0, 0, 0, 0};
+    o[dim] = dim == 0 ? ne00 : (dim == 1 ? ne01 : (dim == 2 ? ne02 : ne03));
 
-    device const char * src0_ptr = src0 + i03*nb03 + i02*nb02 + i01*nb01 + tpitg.x*nb00;
-    device const char * src1_ptr = src1 + i13*nb13 + i12*nb12 + i11*nb11 + tpitg.x*nb10;
-    device       char * dst_ptr  = dst  + i03*nb3  + i02*nb2  + i01*nb1  + tpitg.x*nb0;
+    device const float * x;
 
     for (int i0 = tpitg.x; i0 < ne0; i0 += ntg.x) {
-        if (i02 < ne02) {
-            ((device float *)dst_ptr)[0] = ((device float *)src0_ptr)[0];
-            src0_ptr += ntg.x*nb00;
+        if (i0 < ne00 && i1 < ne01 && i2 < ne02 && i3 < ne03) {
+            x = (device const float *)(src0 + (i3       )*nb03 + (i2       )*nb02 + (i1       )*nb01 + (i0       )*nb00);
         } else {
-            ((device float *)dst_ptr)[0] = ((device float *)src1_ptr)[0];
-            src1_ptr += ntg.x*nb10;
+            x = (device const float *)(src1 + (i3 - o[3])*nb13 + (i2 - o[2])*nb12 + (i1 - o[1])*nb11 + (i0 - o[0])*nb10);
         }
-        dst_ptr += ntg.x*nb0;
+
+        device float * y = (device float *)(dst + i3*nb3 + i2*nb2 + i1*nb1 + i0*nb0);
+
+        *y = *x;
     }
 }
 

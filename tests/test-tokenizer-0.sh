@@ -28,6 +28,8 @@ printf "Tokenizing using (cpp) llama.cpp ...\n"
 cat /tmp/test-tokenizer-0-$name-py.log | grep "tokenized in"
 cat /tmp/test-tokenizer-0-$name-cpp.log | grep "tokenized in"
 
+set +e
+
 diff $input.tok $input.tokcpp > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then

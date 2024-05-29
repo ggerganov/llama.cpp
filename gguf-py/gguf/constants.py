@@ -33,17 +33,21 @@ class Keys:
         FILE_TYPE            = "general.file_type"
 
     class LLM:
-        VOCAB_SIZE            = "{arch}.vocab_size"
-        CONTEXT_LENGTH        = "{arch}.context_length"
-        EMBEDDING_LENGTH      = "{arch}.embedding_length"
-        BLOCK_COUNT           = "{arch}.block_count"
-        FEED_FORWARD_LENGTH   = "{arch}.feed_forward_length"
-        USE_PARALLEL_RESIDUAL = "{arch}.use_parallel_residual"
-        TENSOR_DATA_LAYOUT    = "{arch}.tensor_data_layout"
-        EXPERT_COUNT          = "{arch}.expert_count"
-        EXPERT_USED_COUNT     = "{arch}.expert_used_count"
-        POOLING_TYPE          = "{arch}.pooling_type"
-        LOGIT_SCALE           = "{arch}.logit_scale"
+        VOCAB_SIZE                 = "{arch}.vocab_size"
+        CONTEXT_LENGTH             = "{arch}.context_length"
+        EMBEDDING_LENGTH           = "{arch}.embedding_length"
+        BLOCK_COUNT                = "{arch}.block_count"
+        LEADING_DENSE_BLOCK_COUNT  = "{arch}.leading_dense_block_count"
+        FEED_FORWARD_LENGTH        = "{arch}.feed_forward_length"
+        EXPERT_FEED_FORWARD_LENGTH = "{arch}.expert_feed_forward_length"
+        USE_PARALLEL_RESIDUAL      = "{arch}.use_parallel_residual"
+        TENSOR_DATA_LAYOUT         = "{arch}.tensor_data_layout"
+        EXPERT_COUNT               = "{arch}.expert_count"
+        EXPERT_USED_COUNT          = "{arch}.expert_used_count"
+        EXPERT_SHARED_COUNT        = "{arch}.expert_shared_count"
+        EXPERT_WEIGHTS_SCALE       = "{arch}.expert_weights_scale"
+        POOLING_TYPE               = "{arch}.pooling_type"
+        LOGIT_SCALE                = "{arch}.logit_scale"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -55,6 +59,8 @@ class Keys:
         LAYERNORM_EPS     = "{arch}.attention.layer_norm_epsilon"
         LAYERNORM_RMS_EPS = "{arch}.attention.layer_norm_rms_epsilon"
         CAUSAL            = "{arch}.attention.causal"
+        Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
+        KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
@@ -64,6 +70,7 @@ class Keys:
         SCALING_ATTN_FACTOR     = "{arch}.rope.scaling.attn_factor"
         SCALING_ORIG_CTX_LEN    = "{arch}.rope.scaling.original_context_length"
         SCALING_FINETUNED       = "{arch}.rope.scaling.finetuned"
+        SCALING_YARN_LOG_MUL    = "{arch}.rope.scaling.yarn_log_multiplier"
 
     class SSM:
         CONV_KERNEL    = "{arch}.ssm.conv_kernel"
@@ -140,6 +147,7 @@ class MODEL_ARCH(IntEnum):
     DBRX       = auto()
     OLMO       = auto()
     ARCTIC     = auto()
+    DEEPSEEK2  = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -185,6 +193,12 @@ class MODEL_TENSOR(IntEnum):
     SSM_A              = auto()
     SSM_D              = auto()
     SSM_OUT            = auto()
+    ATTN_Q_A           = auto()
+    ATTN_Q_B           = auto()
+    ATTN_KV_A_MQA      = auto()
+    ATTN_KV_B          = auto()
+    ATTN_Q_A_NORM      = auto()
+    ATTN_KV_A_NORM     = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -221,6 +235,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
     MODEL_ARCH.ARCTIC:         "arctic",
+    MODEL_ARCH.DEEPSEEK2:      "deepseek2",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -266,6 +281,12 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.SSM_A:              "blk.{bid}.ssm_a",
     MODEL_TENSOR.SSM_D:              "blk.{bid}.ssm_d",
     MODEL_TENSOR.SSM_OUT:            "blk.{bid}.ssm_out",
+    MODEL_TENSOR.ATTN_Q_A:           "blk.{bid}.attn_q_a",
+    MODEL_TENSOR.ATTN_Q_B:           "blk.{bid}.attn_q_b",
+    MODEL_TENSOR.ATTN_KV_A_MQA:      "blk.{bid}.attn_kv_a_mqa",
+    MODEL_TENSOR.ATTN_KV_B:          "blk.{bid}.attn_kv_b",
+    MODEL_TENSOR.ATTN_Q_A_NORM:      "blk.{bid}.attn_q_a_norm",
+    MODEL_TENSOR.ATTN_KV_A_NORM:     "blk.{bid}.attn_kv_a_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -757,6 +778,33 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN_EXP,
         MODEL_TENSOR.FFN_UP_EXP,
     ],
+    MODEL_ARCH.DEEPSEEK2: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_Q_A,
+        MODEL_TENSOR.ATTN_Q_B,
+        MODEL_TENSOR.ATTN_KV_A_MQA,
+        MODEL_TENSOR.ATTN_KV_B,
+        MODEL_TENSOR.ATTN_Q_A_NORM,
+        MODEL_TENSOR.ATTN_KV_A_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
+        MODEL_TENSOR.FFN_GATE_SHEXP,
+        MODEL_TENSOR.FFN_DOWN_SHEXP,
+        MODEL_TENSOR.FFN_UP_SHEXP,
+    ],
     # TODO
 }
 
@@ -787,6 +835,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
     MODEL_ARCH.XVERSE: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.DEEPSEEK2: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
