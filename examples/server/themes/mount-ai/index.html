@@ -257,7 +257,7 @@
         console.log('already running...');
         return;
       }
-    // just in case
+    // just in case (e.g. llama2)
     const suffix = session.value.userMsgSuffix || "";
     const prefix = session.value.userMsgPrefix || "";
     const userMsg = prefix + msg + suffix;
@@ -285,7 +285,7 @@
       await runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
-        stop: ["</s>", "<|end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_end|>", "<|EOT|>", "<|END_OF_TURN_TOKEN|>", "<|endoftext|>", template("{{char}}"), template("{{user}}")],
+        stop: ["</s>", "<|end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_end|>", "<|EOT|>", "<|END_OF_TURN_TOKEN|>", "<|end_of_turn|>", "<|endoftext|>", template("{{char}}"), template("{{user}}")],
       }, "{{char}}");
     }
 
@@ -642,6 +642,7 @@ const BoolField = ({ label, title, name, value }) => {
                 id="prompt"
                 class="persistent-input"
                 name="prompt"
+                placeholder="The following models do not support System Prompt by design: OpenChat, Orion, Phi-3, Starling"
                 value="${session.value.prompt}"
                 oninput=${updateSession}
               ></textarea>
@@ -663,16 +664,17 @@ const BoolField = ({ label, title, name, value }) => {
                   <option value="llama2">Llama 2</option>
                   <option value="llama3">Llama 3</option>
                   <option value="phi3">Phi-3</option>
+                  <option value="openchat">OpenChat/Starling</option>
                   <option value="vicuna">Vicuna</option>
                   <option value=""></option>
                 </optgroup>
                 <optgroup label="More Prompt-Styles">
-                  <option value="airoboros180">Airoboros L2</option>
-                  <option value="bakllava">BakLLaVA-1</option>
+                  <option value="vicuna">Airoboros L2</option>
+                  <option value="vicuna">BakLLaVA-1</option>
                   <option value="codeCherryPop">Code Cherry Pop</option>
                   <option value="deepseekCoder">Deepseek Coder</option>
-                  <option value="dolphinMistral">Dolphin Mistral</option>
-                  <option value="evolvedSeeker">evolvedSeeker 1.3B</option>
+                  <option value="chatml">Dolphin Mistral</option>
+                  <option value="chatml">evolvedSeeker 1.3B</option>
                   <option value="goliath120b">Goliath 120B</option>
                   <option value="jordan">Jordan</option>
                   <option value="llava">LLaVA</option>
@@ -687,15 +689,15 @@ const BoolField = ({ label, title, name, value }) => {
                   <option value="neuralchat">Neural Chat</option>
                   <option value="nousCapybara">Nous Capybara</option>
                   <option value="nousHermes">Nous Hermes</option>
-                  <option value="openChat">OpenChat</option>
+                  <option value="openchatMath">OpenChat Math</option>
                   <option value="openhermes2Mistral">OpenHermes 2.5-Mistral</option>
                   <option value="orcamini">Orca Mini v3</option>
+                  <option value="orion">Orion</option>
                   <option value="sauerkrautLM">SauerkrautLM</option>
                   <option value="samantha">Samantha</option>
                   <option value="samanthaMistral">Samantha Mistral</option>
                   <option value="scarlett">Scarlett</option>
-                  <option value="starlingLM">Starling-7B</option>
-                  <option value="starlingLM">Starling-7B Coding</option>
+                  <option value="starlingCode">Starling Coding</option>
                   <option value="sydney">Sydney</option>
                   <option value="synthia">Synthia</option>
                   <option value="tess">Tess</option>

@@ -1,44 +1,56 @@
 // extended list
 export const promptFormats = {
 "alpaca": {
-template: `{{prompt}}
+template: `{{prompt}}\n\n{{history}}\n\n{{char}}:`,
 
-{{history}}
+historyTemplate: `### {{name}}:\n{{message}}`,
 
-### {{char}}:`,
-historyTemplate: `### {{name}}:
-{{message}}`,
 char: "Response",
-user: "Instruction"
+charMsgPrefix: "",
+charMsgSuffix: "",
+
+user: "Instruction",
+userMsgPrefix: "",
+userMsgSuffix: "",
+
+stops: ""
 },
 
-
+// ----------------------------
 
 "chatml": {
-template: `<|im_start|>system
-{{prompt}}<|im_end|>
-{{history}}
-{{char}}`,
-historyTemplate: `{{name}}
-{{message}}`,
-char: "<|im_start|>assistant",
-user: "<|im_start|>user",
-userMsgSuffix: "<|im_end|>"
+template: `<|im_start|>system\n{{prompt}}<|im_end|>{{history}}{{char}}`,
+
+historyTemplate: `\n<|im_start|>{{name}}\n{{message}}<|im_end|>`,
+
+char: "assistant",
+charMsgPrefix: "",
+charMsgSuffix: "",
+
+user: "user",
+userMsgPrefix: "",
+userMsgSuffix: "",
+
+stops: ""
 },
 
-
+// ----------------------------
 
 "llama2": {
-template: `<s>[INST] <<SYS>>
-{{prompt}}
-<</SYS>>
+template: `<s>[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\nTest Message [/INST] Test Successfull </s>{{history}}{{char}}`,
+historyTemplate: `{{name}}: {{message}}`,
 
-{{history}} [/INST] {{char}} </s><s>[INST] `,
-historyTemplate: `{{name}}: {{message}} [/INST]`,
-char: "llama",
-user: "user",
-userMsgSuffix: ""
+char: "Assistant",
+charMsgPrefix: "",
+charMsgSuffix: "</s>",
+
+user: "User",
+userMsgPrefix: "<s>[INST] ",
+userMsgSuffix: " [/INST]",
+
+stops: ""
 },
+// ref: https://huggingface.co/blog/llama2#how-to-prompt-llama-2
 
 // ----------------------------
 
@@ -59,6 +71,23 @@ stops: "<|eot_id|>"
 
 // ----------------------------
 
+"openchat": {
+template: `{{history}}{{char}}`,
+historyTemplate: `GPT4 Correct {{name}}: {{message}}<|end_of_turn|>`,
+
+char: "Assistant",
+charMsgPrefix: "",
+charMsgSuffix: "",
+
+user: "User",
+userMsgPrefix: "",
+userMsgSuffix: "",
+
+stops: ""
+},
+
+// ----------------------------
+
 "phi3": {
 template: `{{history}}{{char}}`,
 
@@ -75,26 +104,26 @@ userMsgSuffix: "",
 stops: "<|end|>"
 },
 
+// ----------------------------
 
+"vicuna": {
+template: `SYSTEM: {{prompt}}\n{{history}}{{char}}`,
 
-"airoborosl2": {
-template: `{{prompt}} {{history}} {{char}}`,
-historyTemplate: `{{name}}: {{message}}`,
+historyTemplate: `
+{{name}}: {{message}}\n`,
+
 char: "ASSISTANT",
-user: "USER"
+charMsgPrefix: "",
+charMsgSuffix: "",
+
+user: "USER",
+userMsgPrefix: "",
+userMsgSuffix: "",
+
+stops: ""
 },
 
-
-
-"bakllava": {
-template: `{{history}}{{char}}:`,
-historyTemplate: `{{name}}: {{message}}
-`,
-char: "ASSISTANT",
-user: "USER"
-},
-
-
+// ----------------------------
 
 "codeCherryPop": {
 template: `{{prompt}}
@@ -108,45 +137,25 @@ char: "Response",
 user: "Instruction"
 },
 
-
+// ----------------------------
 
 "deepseekCoder": {
-template: `{{prompt}}
-{{history}}
-### {{char}}:`,
-historyTemplate: `### {{name}}:
-{{message}}`,
+template: `{{prompt}}{{history}}{{char}}:`,
+
+historyTemplate: `### {{name}}:\n{{message}}`,
+
 char: "Response",
-user: "Instruction"
+charMsgPrefix: "",
+charMsgSuffix: "",
+
+user: "Instruction",
+userMsgPrefix: "",
+userMsgSuffix: "",
+
+stops: "<|EOT|>"
 },
 
-
-
-"dolphinMistral": {
-template: `<|im_start|>system
-{{prompt}}<|im_end|>
-{{history}}
-<|im_start|>{{char}}`,
-historyTemplate: `<|im_start|>{{user}}
-{{message}}<|im_end|>`,
-char: "assistant",
-user: "user"
-},
-
-
-
-"evolvedSeeker": {
-template: `<|im_start|>system
-{{prompt}}<|im_end|>
-{{history}}
-<|im_start|>{{char}}`,
-historyTemplate: `<|im_start|>{{user}}
-{{message}}<|im_end|>`,
-char: "assistant",
-user: "user"
-},
-
-
+// ----------------------------
 
 "goliath120b": {
 template: `{{prompt}}
@@ -158,7 +167,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "jordan": {
 template: `{{prompt}}
@@ -170,7 +179,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "llava": {
 template: `{{history}}{{char}}:`,
@@ -180,7 +189,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "leoHessianai": {
 template: `<|im_start|>system
@@ -193,7 +202,7 @@ char: "assistant",
 user: "user"
 },
 
-
+// ----------------------------
 
 "leoMistral": {
 template: `{{prompt}} {{history}} {{char}}`,
@@ -202,7 +211,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "marx": {
 template: `{{history}}
@@ -212,7 +221,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "med42": {
 template: `<|system|>: {{prompt}}
@@ -223,7 +232,7 @@ char: "assistant",
 user: "prompter"
 },
 
-
+// ----------------------------
 
 "metaMath": {
 template: `{{prompt}}
@@ -237,7 +246,7 @@ char: "Response",
 user: "Instruction"
 },
 
-
+// ----------------------------
 
 "mistralInstruct": {
 template: `<s>[INST] ({{prompt}}) {{history}} {{char}}</s>`,
@@ -246,7 +255,7 @@ char: "[/INST] Assistant:",
 user: "[INST] User:"
 },
 
-
+// ----------------------------
 
 "mistralOpenOrca": {
 template: `<|im_start|>system
@@ -259,7 +268,7 @@ char: "assistant",
 user: "user"
 },
 
-
+// ----------------------------
 
 "mythomax": {
 template: `{{prompt}}
@@ -273,7 +282,7 @@ char: "Response",
 user: "Instruction"
 },
 
-
+// ----------------------------
 
 "neuralchat": {
 template: `### System:
@@ -286,7 +295,7 @@ char: "Assistant",
 user: "User"
 },
 
-
+// ----------------------------
 
 "nousCapybara": {
 template: `{{history}}
@@ -297,7 +306,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "nousHermes": {
 template: `### Instruction: {{prompt}}
@@ -309,16 +318,16 @@ char: "Response",
 user: "Input"
 },
 
+// ----------------------------
 
-
-"openChat": {
+"openchatMath": {
 template: `{{history}}{{char}}`,
-historyTemplate: `GPT4 {{user}}: {{message}}<|end_of_turn|>`,
+historyTemplate: `Math Correct {{name}}: {{message}}<|end_of_turn|>`,
 char: "Assistant",
 user: "User"
 },
 
-
+// ----------------------------
 
 "openhermes2Mistral": {
 template: `<|im_start|>system
@@ -331,7 +340,7 @@ char: "assistant",
 user: "user"
 },
 
-
+// ----------------------------
 
 "orcamini": {
 template: `{{prompt}}
@@ -345,7 +354,24 @@ char: "Response",
 user: "Instruction"
 },
 
+// ----------------------------
 
+"orion": {
+template: `<s>Human: Test Message\n\nAssistant: </s>Test Successful</s>{{history}}{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+
+char: "Assistant </s>",
+charMsgPrefix: "",
+charMsgSuffix: "",
+
+user: "Human",
+userMsgPrefix: "",
+userMsgSuffix: "\n\n",
+
+stops: ""
+},
+
+// ----------------------------
 
 "sauerkraut": {
 template: `{{prompt}}
@@ -356,7 +382,7 @@ char: "Assistant",
 user: "User"
 },
 
-
+// ----------------------------
 
 "samantha": {
 template: `{{prompt}}
@@ -368,7 +394,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "samanthaMistral": {
 template: `<|im_start|>system
@@ -381,7 +407,7 @@ char: "assistant",
 user: "user"
 },
 
-
+// ----------------------------
 
 "scarlett": {
 template: `{{prompt}}
@@ -393,25 +419,16 @@ char: "ASSISTANT",
 user: "USER"
 },
 
+// ----------------------------
 
-
-"starlingLM": {
+"starlingCode": {
 template: `{{history}}{{char}}`,
-historyTemplate: `GPT4 Correct {{user}}: {{message}}<|end_of_turn|>`,
+historyTemplate: `Code {{name}}: {{message}}<|end_of_turn|>`,
 char: "Assistant",
 user: "User"
 },
 
-
-
-"starlingLMCode": {
-template: `{{history}}{{char}}`,
-historyTemplate: `Code {{user}}: {{message}}<|end_of_turn|>`,
-char: "Assistant",
-user: "User"
-},
-
-
+// ----------------------------
 
 "sydney": {
 template: `{{prompt}}
@@ -425,7 +442,7 @@ char: "Response",
 user: "Instruction"
 },
 
-
+// ----------------------------
 
 "synthia": {
 template: `SYSTEM: {{prompt}}
@@ -436,7 +453,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
+// ----------------------------
 
 "tess": {
 template: `SYSTEM: {{prompt}}
@@ -447,19 +464,7 @@ char: "ASSISTANT",
 user: "USER"
 },
 
-
-
-"vicuna": {
-template: `{{prompt}}
-{{history}}
-{{char}}:`,
-historyTemplate: `
-{{name}}: {{message}}`,
-char: "ASSISTANT",
-user: "USER"
-},
-
-
+// ----------------------------
 
 "yi34b": {
 template: `{{history}} {{char}}`,
@@ -468,7 +473,7 @@ char: "Assistant",
 user: "Human"
 },
 
-
+// ----------------------------
 
 "zephyr": {
 template: `<|system|>
