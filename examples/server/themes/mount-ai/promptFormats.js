@@ -45,7 +45,7 @@ userMsgSuffix: ""
 "llama3": {
 template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
-{{prompt}}<|eot_id|>{{history}}{{char}}`,
+{{prompt}}<|eot_id|>{{history}}`,
 historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>
 
 {{message}}`,
