@@ -164,6 +164,12 @@ class SimpleChat {
         return last;
     }
 
+    /**
+     * Setup the fetch headers.
+     * It picks the headers from gMe.headers.
+     * It inserts Authorization only if its non-empty.
+     * @param {string} apiEP
+     */
     fetch_headers(apiEP) {
         let headers = new Headers();
         for(let k in gMe.headers) {
@@ -171,7 +177,7 @@ class SimpleChat {
             if ((k == "Authorization") && (v.trim() == "")) {
                 continue;
             }
-            headers[k] = v;
+            headers.append(k, v);
         }
         return headers;
     }
