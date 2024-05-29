@@ -502,7 +502,7 @@ class MultiChatUI {
             }
             this.handle_user_submit(this.curChatId, gMe.apiEP).catch((/** @type{Error} */reason)=>{
                 let msg = `ERRR:SimpleChat\nMCUI:HandleUserSubmit:${this.curChatId}\n${reason.name}:${reason.message}`;
-                console.debug(msg.replace("\n", ":"));
+                console.error(msg.replace("\n", ":"));
                 alert(msg);
                 this.ui_reset_userinput();
             });

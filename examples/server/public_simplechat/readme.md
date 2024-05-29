@@ -133,6 +133,8 @@ It is attached to the document object. Some of these can also be updated using t
   bStream - control between oneshot-at-end and live-stream-as-its-generated collating and showing
   of the generated response.
 
+    the logic assumes that the text sent from the server follows utf-8 encoding.
+
   apiEP - select between /completions and /chat/completions endpoint provided by the server/ai-model.
 
   bCompletionFreshChatAlways - whether Completion mode collates complete/sliding-window history when
@@ -150,6 +152,9 @@ It is attached to the document object. Some of these can also be updated using t
     is enabled as part of the chat-history-in-context setting), and chances are the ai-model will
     continue starting from the trimmed part, thus allows long response to be recovered/continued
     indirectly, in many cases.
+
+    The histogram/freq based trimming logic is currently tuned for english language wrt its
+    is-it-a-alpabetic|numeral-char regex match logic.
 
   chatRequestOptions - maintains the list of options/fields to send along with chat request,
   irrespective of whether /chat/completions or /completions endpoint.
