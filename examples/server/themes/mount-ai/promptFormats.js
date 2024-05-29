@@ -40,31 +40,39 @@ user: "user",
 userMsgSuffix: ""
 },
 
-
+// ----------------------------
 
 "llama3": {
-template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{{prompt}}{{history}}`,
+historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>\n\n{{message}}<|eot_id|>`,
 
-{{prompt}}<|eot_id|>{{history}}`,
-historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>
-
-{{message}}`,
 char: "assistant",
+charMsgPrefix: "",
+charMsgSuffix: "",
+
 user: "user",
-userMsgSuffix: "<|eot_id|>"
+userMsgPrefix: "",
+userMsgSuffix: "",
+
+stops: "<|eot_id|>"
 },
 
-
+// ----------------------------
 
 "phi3": {
-template: `{{history}}
-{{char}}
-`,
-historyTemplate: `{{name}}
-{{message}}`,
-char: "<|assistant|>",
-user: "<|user|>",
-userMsgSuffix: "<|end|>"
+template: `{{history}}{{char}}`,
+
+historyTemplate: `<|{{name}}|>\n{{message}}<|end|>\n`,
+
+char: "assistant",
+charMsgPrefix: "",
+charMsgSuffix: "",
+
+user: "user",
+userMsgPrefix: "",
+userMsgSuffix: "",
+
+stops: "<|end|>"
 },
 
 

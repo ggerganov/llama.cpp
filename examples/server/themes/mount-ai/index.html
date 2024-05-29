@@ -257,9 +257,10 @@
         console.log('already running...');
         return;
       }
-
+    // just in case
     const suffix = session.value.userMsgSuffix || "";
-    const userMsg = msg + suffix;
+    const prefix = session.value.userMsgPrefix || "";
+    const userMsg = prefix + msg + suffix;
 
       transcriptUpdate([...session.value.transcript, ["{{user}}", userMsg]])
 
@@ -276,7 +277,7 @@
                   data,
               }
             )
-        ).join("\n"),
+        )
       });
       if (selected_image) {
         prompt = `A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:[img-10]${msg}\nASSISTANT:`;
@@ -284,7 +285,7 @@
       await runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
-        stop: ["</s>", template("{{char}}"), template("{{user}}")],
+        stop: ["</s>", template("{{stops}}"), template("{{char}}"), template("{{user}}")],
       }, "{{char}}");
     }
 
