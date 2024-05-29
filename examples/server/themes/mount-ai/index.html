@@ -8,6 +8,7 @@
   <meta name="color-scheme" content="light dark">
   <title>llama.cpp - chat</title>
 
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="stylesheet" href="style.css">
 
   <script type="module">
@@ -752,7 +753,7 @@ return html`
       </fieldset>
       ${PromptControlFieldSet()}
         <fieldset>
-          <details open>
+          <details>
             <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
             <fieldset class="names">
           <div>
@@ -1066,11 +1067,12 @@ return html`
             <div class="dropdown">
               <button class="dropbtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke-width="2"/></svg></button>
               <div class="dropdown-content" id="theme-selector">
-                <a href="#" data-theme="default">Ketivah</a>
+                <!-- <a href="index.html">Old UI</a> -->
+                <a href="#" data-theme="default">Snow Storm</a>
+                <a href="#" data-theme="polarnight">Polar Night</a>
+                <a href="#" data-theme="ketivah">Ketivah</a>
                 <a href="#" data-theme="mangotango">Mango Tango</a>
                 <a href="#" data-theme="playground">Playground</a>
-                <a href="#" data-theme="polarnight">Polar Night</a>
-                <a href="#" data-theme="snowstorm">Snow Storm</a>
                 <a href="#" data-theme="beeninorder">Been In Order</a>
               </div>
             </div>
@@ -1104,7 +1106,7 @@ return html`
   });
 
   function changeTheme(theme) {
-    document.body.classList.remove('theme-default', 'theme-mangotango', 'theme-playground', 'theme-polarnight', 'theme-snowstorm', 'theme-beeninorder');
+    document.body.classList.remove('theme-default', 'theme-polarnight', 'theme-ketivah', 'theme-mangotango', 'theme-playground', 'theme-beeninorder');
     if (theme !== 'default') {
       document.body.classList.add('theme-' + theme);
     }
