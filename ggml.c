@@ -22872,6 +22872,14 @@ int ggml_cpu_has_sycl(void) {
 #endif
 }
 
+int ggml_cpu_has_rpc(void) {
+#if defined(GGML_USE_RPC)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 int ggml_cpu_has_gpublas(void) {
     return ggml_cpu_has_cuda() || ggml_cpu_has_clblast() || ggml_cpu_has_vulkan() || ggml_cpu_has_kompute() ||
            ggml_cpu_has_sycl();
