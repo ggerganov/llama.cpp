@@ -3731,7 +3731,7 @@ static void ggml_vk_mul_mat_vec_id_q_f16(ggml_backend_vk_context * ctx, vk_conte
     ggml_vk_sync_buffers(subctx);
     ggml_vk_dispatch_pipeline(ctx, subctx, dmmv,
         { { d_X, x_buf_offset, x_sz * ne02 * ne03 }, { d_Y, y_buf_offset, y_sz * ne12 * ne13 }, { d_D, d_buf_offset, d_sz * ne22 * ne23}, { d_ids, ids_buf_offset, ids_sz } },
-        sizeof(vk_mat_vec_id_push_constants), &pc, { (uint32_t)ne01, (uint32_t)(ne12 * ne13), (uint32_t)nei0 });
+        sizeof(vk_mat_vec_id_push_constants), &pc, { (uint32_t)ne01, (uint32_t)(ne22 * ne23), 1 });
 }
 
 static void ggml_vk_mul_mat_id(ggml_backend_vk_context * ctx, vk_context * subctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, ggml_tensor * dst) {
