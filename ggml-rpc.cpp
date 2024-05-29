@@ -585,8 +585,7 @@ static void serialize_graph(const ggml_cgraph * cgraph, std::vector<uint8_t> & o
     memcpy(out_tensors, tensors.data(), n_tensors * sizeof(rpc_tensor));
 }
 
-GGML_CALL static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph, ggml_compute_threadpool * tp) {
-    UNUSED(tp);
+GGML_CALL static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t backend, ggml_cgraph * cgraph) {
     ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
     std::vector<uint8_t> input;
     serialize_graph(cgraph, input);
@@ -1021,7 +1020,7 @@ bool rpc_server::graph_compute(const std::vector<uint8_t> & input, std::vector<u
     for (uint32_t i = 0; i < n_nodes; i++) {
         graph->nodes[i] = create_node(nodes[i], ctx, tensor_ptrs, tensor_map);
     }
-    ggml_status status = ggml_backend_graph_compute(backend, graph, NULL);
+    ggml_status status = ggml_backend_graph_compute(backend, graph);
     // output serialization format: | status (1 byte) |
     output.resize(1, 0);
     output[0] = status;
