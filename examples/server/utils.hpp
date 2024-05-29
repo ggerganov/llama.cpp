@@ -653,3 +653,52 @@ static json format_error_response(const std::string & message, const enum error_
         {"type", type_str},
     };
 }
+
+static int lcs_length(const std::string & str1, const std::string & str2) {
+    // check for empty strings
+    if (str1.empty() || str2.empty()) {
+        return 0;
+    }
+
+    // get the lengths of the input strings
+    int str1_len = str1.size();
+    int str2_len = str2.size();
+
+    // initialize the maximum length of the longest common subsequence (LCS)
+    int max_length = 0;
+
+    // use two rows instead of a 2D matrix to optimize space
+    std::vector<int> prev_row(str2_len + 1, 0);
+    std::vector<int> curr_row(str2_len + 1, 0);
+
+    // iterate through the characters of str1
+    for (int i = 1; i <= str1_len; i++) {
+        // iterate through the characters of str2
+        for (int j = 1; j <= str2_len; j++) {
+            // if characters at the current positions match
+            if (str1[i - 1] == str2[j - 1]) {
+                // if it's the first character of either string, set LCS length to 1
+                if (i == 1 || j == 1) {
+                    curr_row[j] = 1;
+                } else {
+                    // increment LCS length by 1 compared to the previous character
+                    curr_row[j] = prev_row[j - 1] + 1;
+                }
+
+                // update max_length if necessary
+                if (curr_row[j] > max_length) {
+                    max_length = curr_row[j];
+                }
+            } else {
+                // reset LCS length if characters don't match
+                curr_row[j] = 0;
+            }
+        }
+
+        // update the previous row for the next iteration
+        prev_row = curr_row;
+    }
+
+    // return the maximum length of the LCS
+    return max_length;
+}
