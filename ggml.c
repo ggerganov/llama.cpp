@@ -14358,7 +14358,7 @@ static void ggml_compute_forward_rope_f32(
     int ir = 0;
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
-    const float inv_ndims = -1.f/n_dims;
+
     float corr_dims[2];
     ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
 
@@ -14407,7 +14407,7 @@ static void ggml_compute_forward_rope_f32(
                         const float cos_block_theta = cosf(block_theta);
                         const float sin_block_theta = sinf(block_theta) * sin_sign;
 
-                        theta_base *= theta_scale;
+                        theta_base  *= theta_scale;
                         block_theta *= theta_scale;
 
                         const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
@@ -14442,28 +14442,21 @@ static void ggml_compute_forward_rope_f32(
                         dst_data[1] = x0*sin_theta*zeta + x1*cos_theta*zeta;
                     }
                 } else {
-                    // TODO: this might be wrong for ne0 != n_dims - need double check
-                    //       it seems we have to rope just the first n_dims elements and do nothing with the rest
-                    // ref:  https://github.com/ml-explore/mlx/blob/dc2edc762c797e3b8de50b1dad4dc0a131691033/benchmarks/python/llama_jax_bench.py#L11-L26
-                    theta_base *= freq_scale;
+                    // ref: https://github.com/jquesnelle/yarn/blob/master/scaled_rope/LlamaYaRNScaledRotaryEmbedding.py
                     for (int64_t ic = 0; ic < ne0; ic += 2) {
                         if (ic < n_dims) {
-                            const int64_t ib = 0;
+                            const int64_t i0 = ic/2;
 
-                            // simplified from `(ib * n_dims + ic) * inv_ndims`
-                            float cur_rot = inv_ndims * ic - ib;
-                            float freq_factor = freq_factors ? freq_factors[ic/2] : 1.0f;
+                            const float freq_factor = freq_factors ? freq_factors[i0] : 1.0f;
 
                             float cos_theta, sin_theta;
                             rope_yarn(
-                                theta_base/freq_factor, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor,
+                                theta_base/freq_factor, freq_scale, corr_dims, ic, ext_factor, attn_factor,
                                 &cos_theta, &sin_theta
                             );
-                            sin_theta *= sin_sign;
 
+                            sin_theta  *= sin_sign;
                             theta_base *= theta_scale;
-
-                            const int64_t i0 = ib*n_dims + ic/2;
 
                             const float * const src = (float *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
                                   float * dst_data  = (float *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
@@ -14543,7 +14536,7 @@ static void ggml_compute_forward_rope_f16(
     int ir = 0;
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
-    const float inv_ndims = -1.f/n_dims;
+
     float corr_dims[2];
     ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
 
@@ -14592,7 +14585,7 @@ static void ggml_compute_forward_rope_f16(
                         const float cos_block_theta = cosf(block_theta);
                         const float sin_block_theta = sinf(block_theta) * sin_sign;
 
-                        theta_base *= theta_scale;
+                        theta_base  *= theta_scale;
                         block_theta *= theta_scale;
 
                         const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
@@ -14623,28 +14616,21 @@ static void ggml_compute_forward_rope_f16(
                         dst_data[1] = GGML_FP32_TO_FP16(x0*sin_theta + x1*cos_theta);
                     }
                 } else {
-                    // TODO: this might be wrong for ne0 != n_dims - need double check
-                    //       it seems we have to rope just the first n_dims elements and do nothing with the rest
-                    // ref:  https://github.com/ml-explore/mlx/blob/dc2edc762c797e3b8de50b1dad4dc0a131691033/benchmarks/python/llama_jax_bench.py#L11-L26
-                    theta_base *= freq_scale;
+                    // ref: https://github.com/jquesnelle/yarn/blob/master/scaled_rope/LlamaYaRNScaledRotaryEmbedding.py
                     for (int64_t ic = 0; ic < ne0; ic += 2) {
                         if (ic < n_dims) {
-                            const int64_t ib = 0;
+                            const int64_t i0 = ic/2;
 
-                            // simplified from `(ib * n_dims + ic) * inv_ndims`
-                            float cur_rot = inv_ndims * ic - ib;
-                            float freq_factor = freq_factors ? freq_factors[ic/2] : 1.0f;
+                            const float freq_factor = freq_factors ? freq_factors[i0] : 1.0f;
 
                             float cos_theta, sin_theta;
                             rope_yarn(
-                                theta_base/freq_factor, freq_scale, corr_dims, cur_rot, ext_factor, attn_factor,
+                                theta_base/freq_factor, freq_scale, corr_dims, ic, ext_factor, attn_factor,
                                 &cos_theta, &sin_theta
                             );
-                            sin_theta *= sin_sign;
 
+                            sin_theta  *= sin_sign;
                             theta_base *= theta_scale;
-
-                            const int64_t i0 = ib*n_dims + ic/2;
 
                             const ggml_fp16_t * const src = (ggml_fp16_t *)((char *) src0->data + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
                                   ggml_fp16_t * dst_data  = (ggml_fp16_t *)((char *)  dst->data + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
