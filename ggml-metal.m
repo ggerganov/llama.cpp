@@ -1519,7 +1519,9 @@ static enum ggml_status ggml_metal_graph_compute(
                     {
                         GGML_ASSERT(ne00 == ne10);
 
-                        // TODO: assert that dim2 and dim3 are contiguous
+                        ggml_is_contiguous_2(src0);
+                        ggml_is_contiguous_2(src1);
+
                         GGML_ASSERT(ne12 % ne02 == 0);
                         GGML_ASSERT(ne13 % ne03 == 0);
 
@@ -2187,7 +2189,7 @@ static enum ggml_status ggml_metal_graph_compute(
                 case GGML_OP_RMS_NORM:
                     {
                         GGML_ASSERT(ne00 % 4 == 0);
-                        GGML_ASSERT(ggml_is_contiguous(src0)); // TODO: only requires contiguous dim 1, 2, 3
+                        GGML_ASSERT(ggml_is_contiguous_1(src0));
 
                         float eps;
                         memcpy(&eps, dst->op_params, sizeof(float));
@@ -2249,7 +2251,7 @@ static enum ggml_status ggml_metal_graph_compute(
                     } break;
                 case GGML_OP_NORM:
                     {
-                        GGML_ASSERT(ggml_is_contiguous(src0)); // TODO: only requires contiguous dim 1, 2, 3
+                        GGML_ASSERT(ggml_is_contiguous_1(src0));
 
                         float eps;
                         memcpy(&eps, dst->op_params, sizeof(float));

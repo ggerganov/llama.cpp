@@ -3221,12 +3221,24 @@ GGML_CALL bool ggml_is_contiguous(const struct ggml_tensor * tensor) {
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
-static inline bool ggml_is_contiguous_except_dim_1(const struct ggml_tensor * tensor) {
+GGML_CALL bool ggml_is_contiguous_0(const struct ggml_tensor * tensor) {
+    return ggml_is_contiguous(tensor);
+}
+
+GGML_CALL bool ggml_is_contiguous_1(const struct ggml_tensor * tensor) {
     static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
 
     return
         tensor->nb[0] == ggml_type_size(tensor->type) &&
         tensor->nb[2] == tensor->nb[1]*tensor->ne[1] &&
+        tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
+}
+
+GGML_CALL bool ggml_is_contiguous_2(const struct ggml_tensor * tensor) {
+    static_assert(GGML_MAX_DIMS == 4, "GGML_MAX_DIMS is not 4 - update this function");
+
+    return
+        tensor->nb[0] == ggml_type_size(tensor->type) &&
         tensor->nb[3] == tensor->nb[2]*tensor->ne[2];
 }
 
@@ -11420,8 +11432,8 @@ static void ggml_compute_forward_gelu_f32(
 
     const struct ggml_tensor * src0 = dst->src[0];
 
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
+    GGML_ASSERT(ggml_is_contiguous_1(src0));
+    GGML_ASSERT(ggml_is_contiguous_1(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
@@ -11483,8 +11495,8 @@ static void ggml_compute_forward_gelu_quick_f32(
 
     const struct ggml_tensor * src0 = dst->src[0];
 
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
+    GGML_ASSERT(ggml_is_contiguous_1(src0));
+    GGML_ASSERT(ggml_is_contiguous_1(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
@@ -11546,8 +11558,8 @@ static void ggml_compute_forward_silu_f32(
 
     const struct ggml_tensor * src0 = dst->src[0];
 
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
+    GGML_ASSERT(ggml_is_contiguous_1(src0));
+    GGML_ASSERT(ggml_is_contiguous_1(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
 
     if (params->type == GGML_TASK_TYPE_INIT || params->type == GGML_TASK_TYPE_FINALIZE) {
@@ -11658,9 +11670,9 @@ static void ggml_compute_forward_silu_back_f32(
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * grad = dst->src[1];
 
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(grad));
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(src0));
-    GGML_ASSERT(ggml_is_contiguous_except_dim_1(dst));
+    GGML_ASSERT(ggml_is_contiguous_1(grad));
+    GGML_ASSERT(ggml_is_contiguous_1(src0));
+    GGML_ASSERT(ggml_is_contiguous_1(dst));
     GGML_ASSERT(ggml_are_same_shape(src0, dst));
     GGML_ASSERT(ggml_are_same_shape(src0, grad));
 
