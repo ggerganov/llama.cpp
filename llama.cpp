@@ -2163,11 +2163,9 @@ struct llama_vocab {
     std::unordered_map<token, id> token_to_id;
     std::vector<token_data>       id_to_token;
 
-    bool has_cache = false;
-
-    std::vector<id> cache_special_tokens;
-    std::unordered_map<id, token> cache_token_to_piece;         // llama_token_to_piece(special = false);
-    std::unordered_map<id, token> cache_token_to_piece_special; // llama_token_to_piece(special = true);
+    std::vector<id>    cache_special_tokens;
+    std::vector<token> cache_token_to_piece;         // llama_token_to_piece(special = false);
+    std::vector<token> cache_token_to_piece_special; // llama_token_to_piece(special = true);
 
     std::map<std::pair<std::string, std::string>, int> bpe_ranks;
 
@@ -4852,12 +4850,18 @@ static void llm_load_vocab(
     }
 
     // build token to piece caches
-    for (llama_token id = 0; id < (llama_token) n_vocab; ++id) {
-        vocab.cache_token_to_piece[id]         = llama_token_to_piece(&model, id, false);
-        vocab.cache_token_to_piece_special[id] = llama_token_to_piece(&model, id, true);
-    }
+    {
+       std::vector<llama_vocab::token> cache_token_to_piece        (n_vocab);
+       std::vector<llama_vocab::token> cache_token_to_piece_special(n_vocab);
 
-    vocab.has_cache = true;
+       for (uint32_t id = 0; id < n_vocab; ++id) {
+           cache_token_to_piece[id]         = llama_token_to_piece(&model, id, false);
+           cache_token_to_piece_special[id] = llama_token_to_piece(&model, id, true);
+       }
+
+       std::swap(vocab.cache_token_to_piece,         cache_token_to_piece);
+       std::swap(vocab.cache_token_to_piece_special, cache_token_to_piece_special);
+    }
 }
 
 static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
@@ -14417,7 +14421,8 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
     candidates_decoded.reserve(candidates->size);
-    std::vector<llama_grammar_candidate>                              candidates_grammar;
+
+    std::vector<llama_grammar_candidate> candidates_grammar;
     candidates_grammar.reserve(candidates->size);
 
     for (size_t i = 0; i < candidates->size; ++i) {
@@ -18305,14 +18310,18 @@ static std::string llama_decode_text(const std::string & text) {
 
 // does not write null-terminator to buf
 int32_t llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int32_t length, bool special) {
-    if (model->vocab.has_cache) {
+    // if we have a cache - use it
+    {
         const auto & cache = special ? model->vocab.cache_token_to_piece_special : model->vocab.cache_token_to_piece;
-        const auto & res = cache.at(token);
-        if (length < (int) res.size()) {
-            return -(int) res.size();
+
+        if (!cache.empty()) {
+            const auto & res = cache.at(token);
+            if (length < (int) res.size()) {
+                return -(int) res.size();
+            }
+            memcpy(buf, res.c_str(), res.size());
+            return res.size();
         }
-        memcpy(buf, res.c_str(), res.size());
-        return res.size();
     }
 
     if (0 <= token && token < llama_n_vocab(model)) {
