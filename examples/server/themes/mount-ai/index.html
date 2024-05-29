@@ -285,7 +285,7 @@
       await runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
-        stop: ["</s>", template("{{stops}}"), template("{{char}}"), template("{{user}}")],
+        stop: ["</s>", "<|end|>", "<|eot_id|>", "<|end_of_text|>", "<|im_end|>", "<|EOT|>", "<|END_OF_TURN_TOKEN|>", "<|endoftext|>", template("{{char}}"), template("{{user}}")],
       }, "{{char}}");
     }
 
