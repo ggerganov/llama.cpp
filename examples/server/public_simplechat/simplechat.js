@@ -755,42 +755,43 @@ class Me {
         let inp = ui.el_creatediv_input("SetBaseURL", "BaseURL", "text", this.baseURL, (val)=>{
             this.baseURL = val;
         });
-        elDiv.appendChild(inp);
+        elDiv.appendChild(inp.div);
 
         inp = ui.el_creatediv_input("SetAuthorization", "Authorization", "text", this.headers["Authorization"], (val)=>{
             this.headers["Authorization"] = val;
         });
-        elDiv.appendChild(inp);
+        inp.el.placeholder = "Bearer OPENAI_API_KEY";
+        elDiv.appendChild(inp.div);
 
         let bb = ui.el_creatediv_boolbutton("SetStream", "Stream", {true: "[+] yes stream", false: "[-] do oneshot"}, this.bStream, (val)=>{
             this.bStream = val;
         });
-        elDiv.appendChild(bb);
+        elDiv.appendChild(bb.div);
 
         bb = ui.el_creatediv_boolbutton("SetCompletionFreshChatAlways", "CompletionFreshChatAlways", {true: "[+] yes fresh", false: "[-] no, with history"}, this.bCompletionFreshChatAlways, (val)=>{
             this.bCompletionFreshChatAlways = val;
         });
-        elDiv.appendChild(bb);
+        elDiv.appendChild(bb.div);
 
         bb = ui.el_creatediv_boolbutton("SetCompletionInsertStandardRolePrefix", "CompletionInsertStandardRolePrefix", {true: "[+] yes insert", false: "[-] dont insert"}, this.bCompletionInsertStandardRolePrefix, (val)=>{
             this.bCompletionInsertStandardRolePrefix = val;
         });
-        elDiv.appendChild(bb);
+        elDiv.appendChild(bb.div);
 
         bb = ui.el_creatediv_boolbutton("SetTrimGarbage", "TrimGarbage", {true: "[+] yes trim", false: "[-] dont trim"}, this.bTrimGarbage, (val)=>{
             this.bTrimGarbage = val;
         });
-        elDiv.appendChild(bb);
+        elDiv.appendChild(bb.div);
 
         let sel = ui.el_creatediv_select("SetChatHistoryInCtxt", "ChatHistoryInCtxt", this.sRecentUserMsgCnt, this.iRecentUserMsgCnt, (val)=>{
             this.iRecentUserMsgCnt = this.sRecentUserMsgCnt[val];
         });
-        elDiv.appendChild(sel);
+        elDiv.appendChild(sel.div);
 
         sel = ui.el_creatediv_select("SetApiEP", "ApiEndPoint", ApiEP.Type, this.apiEP, (val)=>{
             this.apiEP = ApiEP.Type[val];
         });
-        elDiv.appendChild(sel);
+        elDiv.appendChild(sel.div);
 
     }
 

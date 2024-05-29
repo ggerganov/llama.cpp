@@ -100,9 +100,9 @@ export function el_creatediv_boolbutton(id, label, texts, defaultValue, cb) {
     lbl.setAttribute("for", id);
     lbl.innerText = label;
     div.appendChild(lbl);
-    let sel = el_create_boolbutton(id, texts, defaultValue, cb);
-    div.appendChild(sel);
-    return div;
+    let btn = el_create_boolbutton(id, texts, defaultValue, cb);
+    div.appendChild(btn);
+    return { div: div, el: btn };
 }
 
 
@@ -159,7 +159,7 @@ export function el_creatediv_select(id, label, options, defaultOption, cb) {
     div.appendChild(lbl);
     let sel = el_create_select(id, options,defaultOption, cb);
     div.appendChild(sel);
-    return div;
+    return { div: div, el: sel };
 }
 
 
@@ -185,7 +185,7 @@ export function el_create_input(id, type, defaultValue, cb) {
 }
 
 /**
- * Create a div wrapped button which represents bool value using specified text wrt true and false.
+ * Create a div wrapped input.
  *
  * @param {string} id
  * @param {string} label
@@ -201,5 +201,5 @@ export function el_creatediv_input(id, label, type, defaultValue, cb) {
     div.appendChild(lbl);
     let el = el_create_input(id, type, defaultValue, cb);
     div.appendChild(el);
-    return div;
+    return { div: div, el: el };
 }
