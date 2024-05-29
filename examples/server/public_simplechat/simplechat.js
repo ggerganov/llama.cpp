@@ -422,19 +422,19 @@ class SimpleChat {
             assistant: "",
             trimmed: "",
         }
-        let origMsg;
         if (gMe.bStream) {
             try {
-                origMsg = await this.handle_response_multipart(resp, apiEP, elDiv);
+                theResp.assistant = await this.handle_response_multipart(resp, apiEP, elDiv);
                 this.latestResponse = "";
             } catch (error) {
-                origMsg = this.latestResponse;
+                theResp.assistant = this.latestResponse;
                 throw error;
             }
         } else {
-            origMsg = await this.handle_response_oneshot(resp, apiEP);
+            theResp.assistant = await this.handle_response_oneshot(resp, apiEP);
         }
         if (gMe.bTrimGarbage) {
+            let origMsg = theResp.assistant;
             theResp.assistant = du.trim_garbage_at_end(origMsg);
             theResp.trimmed = origMsg.substring(theResp.assistant.length);
         }
