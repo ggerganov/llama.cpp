@@ -728,6 +728,8 @@ class Me {
 
         ui.el_create_append_p(`baseURL:${this.baseURL}`, elDiv);
 
+        ui.el_create_append_p(`Authorization:${this.headers["Authorization"]}`, elDiv);
+
         ui.el_create_append_p(`bStream:${this.bStream}`, elDiv);
 
         ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
@@ -752,6 +754,11 @@ class Me {
 
         let inp = ui.el_creatediv_input("SetBaseURL", "BaseURL", "text", this.baseURL, (val)=>{
             this.baseURL = val;
+        });
+        elDiv.appendChild(inp);
+
+        inp = ui.el_creatediv_input("SetAuthorization", "Authorization", "text", this.headers["Authorization"], (val)=>{
+            this.headers["Authorization"] = val;
         });
         elDiv.appendChild(inp);
 
