@@ -428,6 +428,8 @@ class SimpleChat {
                 this.latestResponse = "";
             } catch (error) {
                 theResp.assistant = this.latestResponse;
+                this.add(Roles.Assistant, theResp.assistant);
+                this.latestResponse = "";
                 throw error;
             }
         } else {
@@ -438,6 +440,7 @@ class SimpleChat {
             theResp.assistant = du.trim_garbage_at_end(origMsg);
             theResp.trimmed = origMsg.substring(theResp.assistant.length);
         }
+        this.add(Roles.Assistant, theResp.assistant);
         return theResp;
     }
 
@@ -601,7 +604,6 @@ class MultiChatUI {
         });
 
         let theResp = await chat.handle_response(resp, apiEP, this.elDivChat);
-        chat.add(Roles.Assistant, theResp.assistant);
         if (chatId == this.curChatId) {
             chat.show(this.elDivChat);
             if (theResp.trimmed.length > 0) {

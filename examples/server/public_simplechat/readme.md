@@ -108,6 +108,9 @@ Once inside
 * Using NewChat one can start independent chat sessions.
   * two independent chat sessions are setup by default.
 
+* When you want to print, switching ChatHistoryInCtxt to Full and clicking on the chat session button of
+  interest, will display the full chat history till then wrt same, if you want full history for printing.
+
 
 ## Devel note
 
@@ -134,6 +137,13 @@ It is attached to the document object. Some of these can also be updated using t
   of the generated response.
 
     the logic assumes that the text sent from the server follows utf-8 encoding.
+
+    in streaming mode - if there is any exception, the logic traps the same and tries to ensure
+    that text generated till then is not lost.
+
+      if a very long text is being generated, which leads to no user interaction for sometime and
+      inturn the machine goes into power saving mode or so, the platform may stop network connection,
+      leading to exception.
 
   apiEP - select between /completions and /chat/completions endpoint provided by the server/ai-model.
 
