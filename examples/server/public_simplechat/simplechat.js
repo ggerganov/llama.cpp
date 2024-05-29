@@ -164,6 +164,18 @@ class SimpleChat {
         return last;
     }
 
+    fetch_headers(apiEP) {
+        let headers = new Headers();
+        for(let k in gMe.headers) {
+            let v = gMe.headers[k];
+            if ((k == "Authorization") && (v.trim() == "")) {
+                continue;
+            }
+            headers[k] = v;
+        }
+        return headers;
+    }
+
     /**
      * Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
      * The needed fields/options are picked from a global object.
@@ -559,11 +571,10 @@ class MultiChatUI {
         this.elInUser.value = "working...";
         this.elInUser.disabled = true;
         console.debug(`DBUG:SimpleChat:MCUI:${chatId}:HandleUserSubmit:${theUrl}:ReqBody:${theBody}`);
+        let theHeaders = chat.fetch_headers(apiEP);
         let resp = await fetch(theUrl, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: theHeaders,
             body: theBody,
         });
 
@@ -676,6 +687,10 @@ class Me {
             "Last4": 5,
         };
         this.apiEP = ApiEP.Type.Chat;
+        this.headers = {
+            "Content-Type": "application/json",
+            "Authorization": "", // Authorization: Bearer OPENAI_API_KEY
+        }
         // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
         this.chatRequestOptions = {
             "temperature": 0.7,
