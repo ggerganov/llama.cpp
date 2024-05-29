@@ -258,7 +258,10 @@
         return;
       }
 
-      transcriptUpdate([...session.value.transcript, ["{{user}}", msg]])
+    const suffix = session.value.userMsgSuffix || "";
+    const userMsg = msg + suffix;
+
+      transcriptUpdate([...session.value.transcript, ["{{user}}", userMsg]])
 
       let prompt = template(session.value.template, {
         message: msg,
