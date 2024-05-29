@@ -361,7 +361,7 @@
       <form onsubmit=${submit}>
         <div class="chat-input-container">
           <textarea
-            id="chat-input" placeholder="Say Something ...\n(Shift + Enter for new line)"
+            id="chat-input" placeholder="Say Something ... (Shift + Enter for new line)"
             class="${generating.value ? 'loading' : null}"
             oninput=${(e) => message.value = e.target.value}
             onkeypress=${enterSubmits}
@@ -733,19 +733,19 @@ const BoolField = ({ label, title, name, value }) => {
             </div>
           </fieldset>
           ${PromptControlFieldSet()}
-          <fieldset class="names">
-            <div>
-              <label for="user" id="id_user-name">User ID Token</label>
-              <input type="text" id="user" name="user" value="${session.value.user}" oninput=${updateSession} />
-            </div>
-            <div>
-              <label for="bot" id="id_bot-name">AI ID Token</label>
-              <input type="text" id="bot" name="char" value="${session.value.char}" oninput=${updateSession} />
-            </div>
-          </fieldset>
-          <fieldset>
-            <details>
-              <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
+            <fieldset>
+              <details open>
+                <summary><span class="summary-title" id="id_prompt-style">Prompt Style</span></summary>
+                <fieldset class="names">
+              <div>
+                <label for="user" id="id_user-name">User ID</label>
+                <input type="text" id="user" name="user" value="${session.value.user}" oninput=${updateSession} />
+              </div>
+              <div>
+                <label for="bot" id="id_bot-name">AI ID</label>
+                <input type="text" id="bot" name="char" value="${session.value.char}" oninput=${updateSession} />
+              </div>
+            </fieldset>
               <div class="two-columns">
                 <div>
                   <div class="input-container">

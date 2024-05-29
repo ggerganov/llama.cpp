@@ -615,6 +615,11 @@ fieldset.apiKey {
   border: 1px solid var(--border-color-2);
 }
 
+.apiKey:focus {
+  border: 1px solid var(--border-focus-color);
+  box-shadow: 0 0 3px var(--border-focus-shadow);
+}
+
 .apiKey input[type="text"] {
   font-family: Arial, sans-serif;
   font-size: medium;
@@ -687,17 +692,19 @@ textarea.persistent-input {
   padding-left: 11px;
   width: 97%;
   max-width: 97%;
+  height: 50px;
   font-size: medium;
   overscroll-behavior: contain;
 }
 
-/* chat history box */
+/* system prompt box */
 .persistent-input {
   height: auto;
   width: 100%;
   max-width: 100%;
-  min-height: 150px;
+  min-height: 50px;
   padding: 3px;
+  transition: min-height 0.3s ease;
 }
 
 /* chat history box */
