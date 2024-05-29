@@ -247,17 +247,17 @@ export class NewLines {
     }
 
     /**
-     * Shift the oldest/0th line in the array.
-     * Optionally control whether only full lines will be returned
-     * or will a partial line (last line) be returned.
-     * @param {boolean} bFullOnly
+     * Shift the oldest/earliest/0th line in the array. [Old-New|Earliest-Latest]
+     * Optionally control whether only full lines (ie those with newline at end) will be returned
+     * or will a partial line without a newline at end (can only be the last line) be returned.
+     * @param {boolean} bFullWithNewLineOnly
      */
-    shift(bFullOnly=true) {
+    shift(bFullWithNewLineOnly=true) {
         let line = this.lines[0];
         if (line == undefined) {
             return undefined;
         }
-        if ((line[line.length-1] != "\n") && bFullOnly){
+        if ((line[line.length-1] != "\n") && bFullWithNewLineOnly){
             return undefined;
         }
         return this.lines.shift();

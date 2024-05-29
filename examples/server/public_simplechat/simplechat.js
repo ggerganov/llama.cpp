@@ -330,11 +330,13 @@ class SimpleChat {
         let xLines = new du.NewLines();
         while(true) {
             let { value: cur,  done: done } = await rr.read();
-            let curBody = tdUtf8.decode(cur);
-            console.debug("DBUG:SC:PART:Str:", curBody);
-            xLines.add_append(curBody);
+            if (cur) {
+                let curBody = tdUtf8.decode(cur, {stream: true});
+                console.debug("DBUG:SC:PART:Str:", curBody);
+                xLines.add_append(curBody);
+            }
             while(true) {
-                let curLine = xLines.shift();
+                let curLine = xLines.shift(!done);
                 if (curLine == undefined) {
                     break;
                 }
