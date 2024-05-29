@@ -281,7 +281,7 @@
       await runLlama(prompt, {
         ...params.value,
         slot_id: slot_id,
-        stop: ["</s>", template("{{char}}:"), template("{{user}}:")],
+        stop: ["</s>", template("{{char}}"), template("{{user}}")],
       }, "{{char}}");
     }
 
@@ -357,7 +357,7 @@
       <form onsubmit=${submit}>
         <div class="chat-input-container">
           <textarea
-            id="chat-input" placeholder="Say Something ..."
+            id="chat-input" placeholder="Say Something ...\n(Shift + Enter for new line)"
             class="${generating.value ? 'loading' : null}"
             oninput=${(e) => message.value = e.target.value}
             onkeypress=${enterSubmits}
@@ -418,7 +418,7 @@
             html`<${Markdownish} text=${template(text)} />`
         }
         if (user) {
-          return html`<p key=${index}><strong>${template(user)}:</strong> ${message}</p>`
+          return html`<p key=${index}><strong class="chat-id-color">${template(user)}</strong> ${message}</p>`
         } else {
           return isCompletionMode ?
             html`<span key=${index}>${message}</span>` :
@@ -655,9 +655,9 @@ const BoolField = ({ label, title, name, value }) => {
                   <option value=""></option>
                 <optgroup label="Common Prompt-Styles">
                   <option value="alpaca">Alpaca</option>
-                  <option value="phi3">ChatML</option>
+                  <option value="chatml">ChatML</option>
                   <option value="llama2">Llama 2</option>
-                  <option value="chatml">Phi-3</option>
+                  <option value="phi3">Phi-3</option>
                   <option value="vicuna">Vicuna</option>
                   <option value=""></option>
                 </optgroup>

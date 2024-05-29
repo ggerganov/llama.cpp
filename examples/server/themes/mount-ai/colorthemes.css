@@ -101,6 +101,8 @@
 
     --textarea-border-color: var(--secondary-color-4);
 
+    --chat-id-color:         var(--theme-nuance-color-4);
+
     /* ------------------------------------------- */
     --button-alert-text-hover:       var(--primary-color-1);
     --button-alert-color-hover:      var(--theme-purple-color);

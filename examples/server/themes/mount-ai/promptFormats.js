@@ -314,8 +314,8 @@ user: "Instruction"
 template: `{{history}}
 {{char}}
 `,
-historyTemplate: `{{user}}
-{{message}}<|end|>`,
+historyTemplate: `{{name}}
+{{message}}`,
 char: "<|assistant|>",
 user: "<|user|>"
 },
