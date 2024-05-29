@@ -225,7 +225,7 @@ mulmat_head = """#version 450
 #extension GL_EXT_shader_16bit_storage : require
 
 #ifdef MUL_MAT_ID
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
 
 #define EXPERT_COUNT 8
 #endif
@@ -294,7 +294,7 @@ shared FLOAT_TYPE buf_a[BM * (BK+1)];
 shared FLOAT_TYPE buf_b[BN * (BK+1)];
 
 #ifdef MUL_MAT_ID
-shared u8vec2 row_ids[2048];
+shared u16vec2 row_ids[2048];
 #endif
 
 void main() {
@@ -342,7 +342,7 @@ void main() {
     for (uint ii1 = 0; ii1 < p.nei1; ii1++) {
         for (uint ii0 = 0; ii0 < p.nei0; ii0++) {
             if (data_ids[ii1*p.nbi1 + ii0] == expert_idx) {
-                row_ids[_ne1] = u8vec2(ii0, ii1);
+                row_ids[_ne1] = u16vec2(ii0, ii1);
                 _ne1++;
             }
         }
@@ -616,7 +616,7 @@ mulmat_body2 = """
         [[unroll]] for (uint l = 0; l < BN; l += loadstride_b) {
 #if LOAD_VEC_B == 8
 #ifdef MUL_MAT_ID
-            const u8vec2 row_idx = row_ids[ic * BN + loadc_b + l];
+            const u16vec2 row_idx = row_ids[ic * BN + loadc_b + l];
             const uint idx = pos_b + row_idx.y * p.batch_stride_b / LOAD_VEC_B + (row_idx.x % p.ne11) * p.stride_b / LOAD_VEC_B + loadr_b;
 #else
             const uint idx = pos_b + (loadc_b + l) * p.stride_b / LOAD_VEC_B + loadr_b;
@@ -632,7 +632,7 @@ mulmat_body2 = """
             buf_b[buf_idx + 7] = FLOAT_TYPE(data_b[idx][1].w);
 #elif LOAD_VEC_B == 4
 #ifdef MUL_MAT_ID
-            const u8vec2 row_idx = row_ids[ic * BN + loadc_b + l];
+            const u16vec2 row_idx = row_ids[ic * BN + loadc_b + l];
             const uint idx = pos_b + row_idx.y * p.batch_stride_b / LOAD_VEC_B + (row_idx.x % p.ne11) * p.stride_b / LOAD_VEC_B + loadr_b;
 #else
             const uint idx = pos_b + (loadc_b + l) * p.stride_b / LOAD_VEC_B + loadr_b;
@@ -651,7 +651,7 @@ mulmat_body2 = """
 #else
             const uint row_i = ic * BN + loadc_b + l;
             if (row_i < _ne1) {
-                const u8vec2 row_idx = row_ids[row_i];
+                const u16vec2 row_idx = row_ids[row_i];
                 buf_b[(loadc_b + l) * (BK+1) + loadr_b] = FLOAT_TYPE(data_b[pos_b + row_idx.y * p.batch_stride_b + (row_idx.x % p.ne11) * p.stride_b + loadr_b]);
             } else {
                 buf_b[(loadc_b + l) * (BK+1) + loadr_b] = FLOAT_TYPE(0.0f);
@@ -705,10 +705,10 @@ mulmat_body2 = """
             const uint dc_warp = dc + wsic * WSUBN + tiwc * TN;
             [[unroll]] for (uint cc = 0; cc < TN; cc++) {
 #ifdef MUL_MAT_ID
-                const uint row_i = ic * BN + dc_warp + cc;
+                const uint row_i = dc_warp + cc;
                 if (row_i >= _ne1) break;
 
-                const u8vec2 row_idx = row_ids[row_i];
+                const u16vec2 row_idx = row_ids[row_i];
 #endif
                 [[unroll]] for (uint cr = 0; cr < TM; cr++) {
 #ifdef MUL_MAT_ID
