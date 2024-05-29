@@ -28,6 +28,10 @@
 #include <syscall.h>
 #endif
 
+#ifdef GGML_USE_OPENMP
+#include <omp.h>
+#endif
+
 #ifdef GGML_USE_METAL
 #include <unistd.h>
 #endif
@@ -19661,6 +19665,48 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
     return cplan;
 }
 
+static enum ggml_status ggml_graph_compute_parallel(struct ggml_compute_state * workers, int n_threads){
+    enum ggml_status compute_status = GGML_STATUS_SUCCESS;
+
+#ifdef GGML_USE_OPENMP
+#pragma omp parallel num_threads(n_threads)
+    {
+        ggml_graph_compute_thread(&workers[omp_get_thread_num()]);
+    }
+#else
+    // create thread pool
+    if (n_threads > 1) {
+        for (int j = 1; j < n_threads; ++j) {
+            const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
+            GGML_ASSERT(rc == 0);
+            UNUSED(rc);
+        }
+    }
+
+    // this is a work thread too
+    ggml_graph_compute_thread(&workers[0]);
+
+    // don't leave affinity set on the main thread
+    clear_numa_thread_affinity();
+
+    // join or kill thread pool
+    if (n_threads > 1) {
+        for (int j = 1; j < n_threads; j++) {
+            const int rc = ggml_thread_join(workers[j].thrd, NULL);
+            GGML_ASSERT(rc == 0);
+            UNUSED(rc);
+        }
+    }
+#endif
+    for (int j = 0; j < n_threads; j++) {
+        if (workers[j].ec != GGML_STATUS_SUCCESS) {
+            compute_status = workers[j].ec;
+            break;
+        }
+    }
+    return compute_status;
+}
+
 enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
     {
         GGML_ASSERT(cplan);
@@ -19687,46 +19733,19 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         /*.current_chunk;          =*/ 0,
     };
     struct ggml_compute_state * workers = alloca(sizeof(struct ggml_compute_state)*n_threads);
-
-    // create thread pool
-    if (n_threads > 1) {
-        for (int j = 1; j < n_threads; ++j) {
-            workers[j] = (struct ggml_compute_state) {
-                .thrd   = 0,
-                .ith = j,
-                .shared = &state_shared,
-                .ec = GGML_STATUS_SUCCESS,
-            };
-
-            const int rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_thread, &workers[j]);
-            GGML_ASSERT(rc == 0);
-            UNUSED(rc);
-        }
-    }
-
-    workers[0].ith = 0;
-    workers[0].shared = &state_shared;
-    workers[0].ec = GGML_STATUS_SUCCESS;
-
     const int64_t perf_start_cycles  = ggml_perf_cycles();
     const int64_t perf_start_time_us = ggml_perf_time_us();
 
-    // this is a work thread too
-    ggml_graph_compute_thread(&workers[0]);
-    enum ggml_status compute_status = workers[0].ec;
-
-    // don't leave affinity set on the main thread
-    clear_numa_thread_affinity();
-
-    // join or kill thread pool
-    if (n_threads > 1) {
-        for (int j = 1; j < n_threads; j++) {
-            const int rc = ggml_thread_join(workers[j].thrd, NULL);
-            GGML_ASSERT(rc == 0);
-            if (workers[j].ec != GGML_STATUS_SUCCESS)
-                compute_status = workers[j].ec;
-        }
+    for (int j = 0; j < n_threads; ++j) {
+        workers[j] = (struct ggml_compute_state) {
+            .thrd   = 0,
+            .ith    = j,
+            .shared = &state_shared,
+            .ec     = GGML_STATUS_SUCCESS,
+        };
     }
+
+    enum ggml_status compute_status = ggml_graph_compute_parallel(workers, n_threads);
 
     // performance stats (graph)
     {

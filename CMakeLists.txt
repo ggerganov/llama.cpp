@@ -125,6 +125,7 @@ set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
 set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
 option(LLAMA_RPC                             "llama: use RPC"                                   OFF)
+option(LLAMA_OPENMP                          "llama: use OpenMP"                                OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
 set(LLAMA_SYCL_TARGET   "INTEL" CACHE STRING "llama: sycl target device")
@@ -293,6 +294,17 @@ if (LLAMA_METAL)
         ${METAL_FRAMEWORK}
         ${METALKIT_FRAMEWORK}
         )
+endif()
+
+if (LLAMA_OPENMP)
+    find_package(OpenMP)
+    if(OpenMP_FOUND)
+        message(STATUS "OpenMP found")
+        add_compile_definitions(GGML_USE_OPENMP)
+
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    endif()
 endif()
 
 if (LLAMA_BLAS)
