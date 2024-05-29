@@ -23,13 +23,13 @@
     var slot_id = -1;
 
     const session = signal({
-      prompt: "This is a conversation between a user and a friendly chatbot. The chatbot is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision.",
-      template: "{{prompt}}\n\n{{history}}\n{{char}}:",
-      historyTemplate: "{{name}}: {{message}}",
+      prompt: "",
+      template: "{{prompt}}\n{{history}}{{char}}",
+      historyTemplate: "{{name}}: {{message}}\n",
       transcript: [],
       type: "chat",  // "chat" | "completion"
-      char: "Assistant",
-      user: "User",
+      char: "ASSISTANT",
+      user: "USER",
       image_selected: ''
     })
 
@@ -654,7 +654,7 @@ return html`
             id="prompt"
             class="persistent-input"
             name="prompt"
-            placeholder="The following models do not support System Prompt by design: OpenChat, Orion, Phi-3, Starling, Yi-6/9/34B-Chat"
+            placeholder="[Note] The following models do not support System Prompts by design:\n• OpenChat\n• Orion\n• Phi-3\n• Starling\n• Yi-...-Chat"
             value="${session.value.prompt}"
             oninput=${updateSession}
           ></textarea>
