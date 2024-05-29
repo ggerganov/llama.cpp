@@ -30,7 +30,7 @@ NOTE: Wrt options sent with the request, it mainly sets temperature, max_tokens 
 However if someone wants they can update the js file or equivalent member in gMe as needed.
 
 NOTE: One may be able to use this to chat with openai api web-service /chat/completions endpoint, in a very
-limited / minimal way. One will need to set openai url and authorization bearer key in settings ui.
+limited / minimal way. One will need to set model, openai url and authorization bearer key in settings ui.
 
 
 ## usage
@@ -232,7 +232,7 @@ for a minimal chatting experimentation by setting the below.
   * https://api.openai.com/v1 or similar
 
 * Wrt request body - gMe.chatRequestOptions
-  * model
+  * model (settings ui)
   * any additional fields if required in future
 
 * Wrt request headers - gMe.headers

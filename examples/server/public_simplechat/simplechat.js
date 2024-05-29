@@ -699,6 +699,7 @@ class Me {
         }
         // Add needed fields wrt json object to be sent wrt LLM web services completions endpoint.
         this.chatRequestOptions = {
+            "model": "gpt-3.5-turbo",
             "temperature": 0.7,
             "max_tokens": 1024,
             "n_predict": 1024,
@@ -761,6 +762,11 @@ class Me {
             this.headers["Authorization"] = val;
         });
         inp.el.placeholder = "Bearer OPENAI_API_KEY";
+        elDiv.appendChild(inp.div);
+
+        inp = ui.el_creatediv_input("SetModel", "Model", "text", this.chatRequestOptions["model"], (val)=>{
+            this.chatRequestOptions["model"] = val;
+        });
         elDiv.appendChild(inp.div);
 
         let bb = ui.el_creatediv_boolbutton("SetStream", "Stream", {true: "[+] yes stream", false: "[-] do oneshot"}, this.bStream, (val)=>{
