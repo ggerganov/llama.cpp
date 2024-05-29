@@ -147,6 +147,8 @@ Typically finetunes of the base models below are supported as well.
 
 [llama.cpp web server](./examples/server) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
+- [Inferenceable](https://github.com/HyperMink/inferenceable)
+
 **Bindings:**
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
