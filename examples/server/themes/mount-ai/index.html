@@ -660,6 +660,7 @@ const BoolField = ({ label, title, name, value }) => {
                   <option value="alpaca">Alpaca</option>
                   <option value="chatml">ChatML</option>
                   <option value="llama2">Llama 2</option>
+                  <option value="llama3">Llama 3</option>
                   <option value="phi3">Phi-3</option>
                   <option value="vicuna">Vicuna</option>
                   <option value=""></option>
@@ -733,11 +734,11 @@ const BoolField = ({ label, title, name, value }) => {
           ${PromptControlFieldSet()}
           <fieldset class="names">
             <div>
-              <label for="user" id="id_user-name">User Name</label>
+              <label for="user" id="id_user-name">User ID Token</label>
               <input type="text" id="user" name="user" value="${session.value.user}" oninput=${updateSession} />
             </div>
             <div>
-              <label for="bot" id="id_bot-name">AI Name</label>
+              <label for="bot" id="id_bot-name">AI ID Token</label>
               <input type="text" id="bot" name="char" value="${session.value.char}" oninput=${updateSession} />
             </div>
           </fieldset>

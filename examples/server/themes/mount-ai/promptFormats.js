@@ -1,459 +1,475 @@
 // extended list
 export const promptFormats = {
-  "airoborosl2": {
-  template: `{{prompt}} {{history}} {{char}}`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
+"alpaca": {
+template: `{{prompt}}
 
+{{history}}
 
+### {{char}}:`,
+historyTemplate: `### {{name}}:
+{{message}}`,
+char: "Response",
+user: "Instruction"
+},
 
-  "alpaca": {
-  template: `{{prompt}}
 
-  {{history}}
 
-  ### {{char}}:`,
-  historyTemplate: `### {{name}}:
-  {{message}}`,
-  char: "Response",
-  user: "Instruction"
-  },
+"chatml": {
+template: `<|im_start|>system
+{{prompt}}<|im_end|>
+{{history}}
+{{char}}`,
+historyTemplate: `{{name}}
+{{message}}`,
+char: "<|im_start|>assistant",
+user: "<|im_start|>user",
+userMsgSuffix: "<|im_end|>"
+},
 
 
 
-  "bakllava": {
-  template: `{{history}}{{char}}:`,
-  historyTemplate: `{{name}}: {{message}}
-  `,
-  char: "ASSISTANT",
-  user: "USER"
-  },
+"llama2": {
+template: `<s>[INST] <<SYS>>
+{{prompt}}
+<</SYS>>
 
+{{history}} [/INST] {{char}} </s><s>[INST] `,
+historyTemplate: `{{name}}: {{message}} [/INST]`,
+char: "llama",
+user: "user",
+userMsgSuffix: ""
+},
 
 
-  "chatml": {
-  template: `<|im_start|>system
-  {{prompt}}<|im_end|>
-  {{history}}
-  <|im_start|>{{char}}`,
-  historyTemplate: `<|im_start|>{{user}}
-  {{message}}<|im_end|>`,
-  char: "assistant",
-  user: "user"
-  },
 
+"llama3": {
+template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
+{{prompt}}<|eot_id|>{{history}}{{char}}`,
+historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>
 
-  "codeCherryPop": {
-  template: `{{prompt}}
+{{message}}`,
+char: "assistant",
+user: "user",
+userMsgSuffix: "<|eot_id|>"
+},
 
-  {{history}}
 
-  ### {{char}}:`,
-  historyTemplate: `### {{name}}:
-  {{message}}`,
-  char: "Response",
-  user: "Instruction"
-  },
 
+"phi3": {
+template: `{{history}}
+{{char}}
+`,
+historyTemplate: `{{name}}
+{{message}}`,
+char: "<|assistant|>",
+user: "<|user|>",
+userMsgSuffix: "<|end|>"
+},
 
 
-  "deepseekCoder": {
-  template: `{{prompt}}
-  {{history}}
-  ### {{char}}:`,
-  historyTemplate: `### {{name}}:
-  {{message}}`,
-  char: "Response",
-  user: "Instruction"
-  },
 
+"airoborosl2": {
+template: `{{prompt}} {{history}} {{char}}`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
 
-  "dolphinMistral": {
-  template: `<|im_start|>system
-  {{prompt}}<|im_end|>
-  {{history}}
-  <|im_start|>{{char}}`,
-  historyTemplate: `<|im_start|>{{user}}
-  {{message}}<|im_end|>`,
-  char: "assistant",
-  user: "user"
-  },
 
+"bakllava": {
+template: `{{history}}{{char}}:`,
+historyTemplate: `{{name}}: {{message}}
+`,
+char: "ASSISTANT",
+user: "USER"
+},
 
 
-  "evolvedSeeker": {
-  template: `<|im_start|>system
-  {{prompt}}<|im_end|>
-  {{history}}
-  <|im_start|>{{char}}`,
-  historyTemplate: `<|im_start|>{{user}}
-  {{message}}<|im_end|>`,
-  char: "assistant",
-  user: "user"
-  },
 
+"codeCherryPop": {
+template: `{{prompt}}
 
+{{history}}
 
-  "goliath120b": {
-  template: `{{prompt}}
+### {{char}}:`,
+historyTemplate: `### {{name}}:
+{{message}}`,
+char: "Response",
+user: "Instruction"
+},
 
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
 
+"deepseekCoder": {
+template: `{{prompt}}
+{{history}}
+### {{char}}:`,
+historyTemplate: `### {{name}}:
+{{message}}`,
+char: "Response",
+user: "Instruction"
+},
 
-  "jordan": {
-  template: `{{prompt}}
 
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
+"dolphinMistral": {
+template: `<|im_start|>system
+{{prompt}}<|im_end|>
+{{history}}
+<|im_start|>{{char}}`,
+historyTemplate: `<|im_start|>{{user}}
+{{message}}<|im_end|>`,
+char: "assistant",
+user: "user"
+},
 
 
-  "llama2": {
-  template: `<s>[INST] <<SYS>>
-  {{prompt}}
-  <</SYS>>
 
-  {{history}} [/INST] {{char}} </s><s>[INST] `,
-  historyTemplate: `{{name}}: {{message}} [/INST]`,
-  char: "llama",
-  user: "user"
-  },
+"evolvedSeeker": {
+template: `<|im_start|>system
+{{prompt}}<|im_end|>
+{{history}}
+<|im_start|>{{char}}`,
+historyTemplate: `<|im_start|>{{user}}
+{{message}}<|im_end|>`,
+char: "assistant",
+user: "user"
+},
 
 
 
-  "llava": {
-  template: `{{history}}{{char}}:`,
-  historyTemplate: `{{name}}: {{message}}
-  `,
-  char: "ASSISTANT",
-  user: "USER"
-  },
+"goliath120b": {
+template: `{{prompt}}
 
+{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
 
-  "leoHessianai": {
-  template: `<|im_start|>system
-  {{prompt}}<|im_end|>
-  {{history}}
-  <|im_start|>{{char}}`,
-  historyTemplate: `<|im_start|>{{user}}
-  {{message}}<|im_end|>`,
-  char: "assistant",
-  user: "user"
-  },
 
+"jordan": {
+template: `{{prompt}}
 
+{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "leoMistral": {
-  template: `{{prompt}} {{history}} {{char}}`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
 
+"llava": {
+template: `{{history}}{{char}}:`,
+historyTemplate: `{{name}}: {{message}}
+`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "marx": {
-  template: `{{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
 
+"leoHessianai": {
+template: `<|im_start|>system
+{{prompt}}<|im_end|>
+{{history}}
+<|im_start|>{{char}}`,
+historyTemplate: `<|im_start|>{{user}}
+{{message}}<|im_end|>`,
+char: "assistant",
+user: "user"
+},
 
-  "med42": {
-  template: `<|system|>: {{prompt}}
-  {{history}}
-  {{char}}`,
-  historyTemplate: `<|{{name}}|>:{{message}}`,
-  char: "assistant",
-  user: "prompter"
-  },
 
 
+"leoMistral": {
+template: `{{prompt}} {{history}} {{char}}`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "metaMath": {
-  template: `{{prompt}}
 
-  {{history}}
 
-  ### {{char}}:`,
-  historyTemplate: `### {{name}}:
-  {{message}}`,
-  char: "Response",
-  user: "Instruction"
-  },
+"marx": {
+template: `{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
 
 
-  "mistralInstruct": {
-  template: `<s>[INST] ({{prompt}}) {{history}} {{char}}</s>`,
-  historyTemplate: `{{name}} {{message}}`,
-  char: "[/INST] Assistant:",
-  user: "[INST] User:"
-  },
+"med42": {
+template: `<|system|>: {{prompt}}
+{{history}}
+{{char}}`,
+historyTemplate: `<|{{name}}|>:{{message}}`,
+char: "assistant",
+user: "prompter"
+},
 
 
 
-  "mistralOpenOrca": {
-  template: `<|im_start|>system
-  {{prompt}}<|im_end|>
-  {{history}}
-  <|im_start|>{{char}}`,
-  historyTemplate: `<|im_start|>{{user}}
-  {{message}}<|im_end|>`,
-  char: "assistant",
-  user: "user"
-  },
+"metaMath": {
+template: `{{prompt}}
 
+{{history}}
 
+### {{char}}:`,
+historyTemplate: `### {{name}}:
+{{message}}`,
+char: "Response",
+user: "Instruction"
+},
 
-  "mythomax": {
-  template: `{{prompt}}
 
-  {{history}}
 
-  ### {{char}}:`,
-  historyTemplate: `### {{name}}:
-  {{message}}`,
-  char: "Response",
-  user: "Instruction"
-  },
+"mistralInstruct": {
+template: `<s>[INST] ({{prompt}}) {{history}} {{char}}</s>`,
+historyTemplate: `{{name}} {{message}}`,
+char: "[/INST] Assistant:",
+user: "[INST] User:"
+},
 
 
 
-  "neuralchat": {
-  template: `### System:
-  {{prompt}}
-  {{history}}
-  ### {{char}}:`,
-  historyTemplate: `### {{name}}:
-  {{message}}`,
-  char: "Assistant",
-  user: "User"
-  },
+"mistralOpenOrca": {
+template: `<|im_start|>system
+{{prompt}}<|im_end|>
+{{history}}
+<|im_start|>{{char}}`,
+historyTemplate: `<|im_start|>{{user}}
+{{message}}<|im_end|>`,
+char: "assistant",
+user: "user"
+},
 
 
 
-  "nousCapybara": {
-  template: `{{history}}
-  {{char}}`,
-  historyTemplate: `
-  {{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
+"mythomax": {
+template: `{{prompt}}
 
+{{history}}
 
+### {{char}}:`,
+historyTemplate: `### {{name}}:
+{{message}}`,
+char: "Response",
+user: "Instruction"
+},
 
-  "nousHermes": {
-  template: `### Instruction: {{prompt}}
-  {{history}}
-  ### {{char}}:`,
-  historyTemplate: `
-  ### {{name}}: {{message}}`,
-  char: "Response",
-  user: "Input"
-  },
 
 
+"neuralchat": {
+template: `### System:
+{{prompt}}
+{{history}}
+### {{char}}:`,
+historyTemplate: `### {{name}}:
+{{message}}`,
+char: "Assistant",
+user: "User"
+},
 
-  "openChat": {
-  template: `{{history}}{{char}}`,
-  historyTemplate: `GPT4 {{user}}: {{message}}<|end_of_turn|>`,
-  char: "Assistant",
-  user: "User"
-  },
 
 
+"nousCapybara": {
+template: `{{history}}
+{{char}}`,
+historyTemplate: `
+{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "openhermes2Mistral": {
-  template: `<|im_start|>system
-  {{prompt}}<|im_end|>
-  {{history}}
-  <|im_start|>{{char}}`,
-  historyTemplate: `<|im_start|>{{user}}
-  {{message}}<|im_end|>`,
-  char: "assistant",
-  user: "user"
-  },
 
 
+"nousHermes": {
+template: `### Instruction: {{prompt}}
+{{history}}
+### {{char}}:`,
+historyTemplate: `
+### {{name}}: {{message}}`,
+char: "Response",
+user: "Input"
+},
 
-  "orcamini": {
-  template: `{{prompt}}
 
-  {{history}}
 
-  ### {{char}}:`,
-  historyTemplate: `### {{name}}:
-  {{message}}`,
-  char: "Response",
-  user: "Instruction"
-  },
+"openChat": {
+template: `{{history}}{{char}}`,
+historyTemplate: `GPT4 {{user}}: {{message}}<|end_of_turn|>`,
+char: "Assistant",
+user: "User"
+},
 
 
 
-  "phi3": {
-  template: `{{history}}
-  {{char}}
-  `,
-  historyTemplate: `{{name}}
-  {{message}}`,
-  char: "<|assistant|>",
-  user: "<|user|>",
-  userMsgSuffix: "<|end|>"
-  },
+"openhermes2Mistral": {
+template: `<|im_start|>system
+{{prompt}}<|im_end|>
+{{history}}
+<|im_start|>{{char}}`,
+historyTemplate: `<|im_start|>{{user}}
+{{message}}<|im_end|>`,
+char: "assistant",
+user: "user"
+},
 
 
 
-  "sauerkraut": {
-  template: `{{prompt}}
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "Assistant",
-  user: "User"
-  },
+"orcamini": {
+template: `{{prompt}}
 
+{{history}}
 
+### {{char}}:`,
+historyTemplate: `### {{name}}:
+{{message}}`,
+char: "Response",
+user: "Instruction"
+},
 
-  "samantha": {
-  template: `{{prompt}}
 
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
+"sauerkraut": {
+template: `{{prompt}}
+{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "Assistant",
+user: "User"
+},
 
 
-  "samanthaMistral": {
-  template: `<|im_start|>system
-  {{prompt}}<|im_end|>
-  {{history}}
-  <|im_start|>{{char}}`,
-  historyTemplate: `<|im_start|>{{user}}
-  {{message}}<|im_end|>`,
-  char: "assistant",
-  user: "user"
-  },
 
+"samantha": {
+template: `{{prompt}}
 
+{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "scarlett": {
-  template: `{{prompt}}
 
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
+"samanthaMistral": {
+template: `<|im_start|>system
+{{prompt}}<|im_end|>
+{{history}}
+<|im_start|>{{char}}`,
+historyTemplate: `<|im_start|>{{user}}
+{{message}}<|im_end|>`,
+char: "assistant",
+user: "user"
+},
 
 
-  "starlingLM": {
-  template: `{{history}}{{char}}`,
-  historyTemplate: `GPT4 Correct {{user}}: {{message}}<|end_of_turn|>`,
-  char: "Assistant",
-  user: "User"
-  },
 
+"scarlett": {
+template: `{{prompt}}
 
+{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "starlingLMCode": {
-  template: `{{history}}{{char}}`,
-  historyTemplate: `Code {{user}}: {{message}}<|end_of_turn|>`,
-  char: "Assistant",
-  user: "User"
-  },
 
 
+"starlingLM": {
+template: `{{history}}{{char}}`,
+historyTemplate: `GPT4 Correct {{user}}: {{message}}<|end_of_turn|>`,
+char: "Assistant",
+user: "User"
+},
 
-  "sydney": {
-  template: `{{prompt}}
 
-  {{history}}
-  {{char}}`,
-  historyTemplate: `### {{name}}:
-  {{message}}
-  `,
-  char: "Response",
-  user: "Instruction"
-  },
 
+"starlingLMCode": {
+template: `{{history}}{{char}}`,
+historyTemplate: `Code {{user}}: {{message}}<|end_of_turn|>`,
+char: "Assistant",
+user: "User"
+},
 
 
-  "synthia": {
-  template: `SYSTEM: {{prompt}}
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
+"sydney": {
+template: `{{prompt}}
 
+{{history}}
+{{char}}`,
+historyTemplate: `### {{name}}:
+{{message}}
+`,
+char: "Response",
+user: "Instruction"
+},
 
-  "tess": {
-  template: `SYSTEM: {{prompt}}
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
 
+"synthia": {
+template: `SYSTEM: {{prompt}}
+{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "vicuna": {
-  template: `{{prompt}}
-  {{history}}
-  {{char}}:`,
-  historyTemplate: `
-  {{name}}: {{message}}`,
-  char: "ASSISTANT",
-  user: "USER"
-  },
 
 
+"tess": {
+template: `SYSTEM: {{prompt}}
+{{history}}
+{{char}}:`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "yi34b": {
-  template: `{{history}} {{char}}`,
-  historyTemplate: `{{name}}: {{message}}`,
-  char: "Assistant",
-  user: "Human"
-  },
 
 
+"vicuna": {
+template: `{{prompt}}
+{{history}}
+{{char}}:`,
+historyTemplate: `
+{{name}}: {{message}}`,
+char: "ASSISTANT",
+user: "USER"
+},
 
-  "zephyr": {
-  template: `<|system|>
-  {{prompt}}</s>
-  {{history}}
-  {{char}}`,
-  historyTemplate: `<|{{name}}|>
-  {{message}}</s>`,
-  char: "assistant",
-  user: "user"
-  }
-  };
+
+
+"yi34b": {
+template: `{{history}} {{char}}`,
+historyTemplate: `{{name}}: {{message}}`,
+char: "Assistant",
+user: "Human"
+},
+
+
+
+"zephyr": {
+template: `<|system|>
+{{prompt}}</s>
+{{history}}
+{{char}}`,
+historyTemplate: `<|{{name}}|>
+{{message}}</s>`,
+char: "assistant",
+user: "user"
+}
+};
