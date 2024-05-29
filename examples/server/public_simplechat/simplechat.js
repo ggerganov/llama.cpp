@@ -71,6 +71,7 @@ class SimpleChat {
          */
         this.xchat = [];
         this.iLastSys = -1;
+        this.latestResponse = "";
     }
 
     clear() {
@@ -120,6 +121,15 @@ class SimpleChat {
             rchat.push({role: msg.role, content: msg.content});
         }
         return rchat;
+    }
+
+    /**
+     * Collate the latest response from the server/ai-model, as it is becoming available.
+     * This is mainly useful for the stream mode.
+     * @param {string} content
+     */
+    append_response(content) {
+        this.latestResponse += content;
     }
 
     /**
@@ -355,7 +365,7 @@ class SimpleChat {
         }
         let tdUtf8 = new TextDecoder("utf-8");
         let rr = resp.body.getReader();
-        let gotBody = "";
+        this.latestResponse = "";
         let xLines = new du.NewLines();
         while(true) {
             let { value: cur,  done: done } = await rr.read();
@@ -377,16 +387,16 @@ class SimpleChat {
                 }
                 let curJson = JSON.parse(curLine);
                 console.debug("DBUG:SC:PART:Json:", curJson);
-                gotBody += this.response_extract_stream(curJson, apiEP);
+                this.append_response(this.response_extract_stream(curJson, apiEP));
             }
-            elP.innerText = gotBody;
+            elP.innerText = this.latestResponse;
             elP.scrollIntoView(false);
             if (done) {
                 break;
             }
         }
-        console.debug("DBUG:SC:PART:Full:", gotBody);
-        return gotBody;
+        console.debug("DBUG:SC:PART:Full:", this.latestResponse);
+        return this.latestResponse;
     }
 
     /**
@@ -414,7 +424,13 @@ class SimpleChat {
         }
         let origMsg;
         if (gMe.bStream) {
-            origMsg = await this.handle_response_multipart(resp, apiEP, elDiv);
+            try {
+                origMsg = await this.handle_response_multipart(resp, apiEP, elDiv);
+                this.latestResponse = "";
+            } catch (error) {
+                origMsg = this.latestResponse;
+                throw error;
+            }
         } else {
             origMsg = await this.handle_response_oneshot(resp, apiEP);
         }
