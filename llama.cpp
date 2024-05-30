@@ -4330,7 +4330,7 @@ static void llm_load_vocab(
                 [](unsigned char c){ return std::tolower(c); });
 
             if (gen_name.find("code") != std::string::npos) {
-                if (model.arch == LLM_ARCH_LLAMA) {
+                if (model.arch == LLM_ARCH_LLAMA && gen_name.find("llama") != std::string::npos) {
                     vocab.special_prefix_id = 32007;
                     vocab.special_suffix_id = 32008;
                     vocab.special_middle_id = 32009;
