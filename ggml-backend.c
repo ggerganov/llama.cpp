@@ -272,14 +272,146 @@ enum ggml_status ggml_backend_graph_plan_compute(ggml_backend_t backend, ggml_ba
     return backend->iface.graph_plan_compute(backend, plan);
 }
 
+static ggml_backend_t g_cpu_backend = NULL;
+static bool GGML_OP_HAS_INIT    [GGML_OP_COUNT] = { 0 };
+static bool GGML_OP_HAS_FINALIZE[GGML_OP_COUNT] = { 0 };
+static void ggml_setup_op_has_task_pass(void) {
+    {   // INIT
+        bool * p = GGML_OP_HAS_INIT;
+
+        p[GGML_OP_ACC                    ] = true;
+        p[GGML_OP_MUL_MAT                ] = true;
+        p[GGML_OP_MUL_MAT_ID             ] = true;
+        p[GGML_OP_OUT_PROD               ] = true;
+        p[GGML_OP_SET                    ] = true;
+        p[GGML_OP_GET_ROWS_BACK          ] = true;
+        p[GGML_OP_DIAG_MASK_INF          ] = true;
+        p[GGML_OP_DIAG_MASK_ZERO         ] = true;
+        p[GGML_OP_CONV_TRANSPOSE_1D      ] = true;
+        p[GGML_OP_CONV_TRANSPOSE_2D      ] = true;
+        p[GGML_OP_FLASH_ATTN_BACK        ] = true;
+        p[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
+        p[GGML_OP_ADD_REL_POS            ] = true;
+    }
+
+    {   // FINALIZE
+        bool * p = GGML_OP_HAS_FINALIZE;
+
+        p[GGML_OP_CROSS_ENTROPY_LOSS     ] = true;
+    }
+}
+
+
+struct ggml_compute_state;
+extern void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor, struct ggml_compute_state * state);
+static enum ggml_status ggml_backend_graph_compute_mixed(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
+    enum ggml_status result         = GGML_STATUS_SUCCESS;
+    int node_n                      = -1;
+
+    static bool is_first_call = true;
+    if (is_first_call) {
+        ggml_setup_op_has_task_pass();
+        is_first_call = false;
+    }
+
+    struct ggml_cplan plan          = ggml_graph_plan(cgraph, 1);
+    if (plan.work_size > 0) {
+        plan.work_data = (uint8_t *)(malloc(plan.work_size));
+        if (NULL == plan.work_data) {
+            return GGML_STATUS_ALLOC_FAILED;
+        }
+    }
+
+    struct ggml_compute_params params = {
+            /*.type  =*/ GGML_TASK_TYPE_FINALIZE,
+            /*.ith   =*/ 0,
+            /*.nth   =*/ 0,
+            /*.wsize =*/ plan.work_size,
+            /*.wdata =*/ plan.work_data
+    };
+    while (++node_n < cgraph->n_nodes) {
+        struct ggml_tensor * node = cgraph->nodes[node_n];
+        params.nth = 1;
+
+        if (ggml_is_empty(node) || node->op == GGML_OP_RESHAPE || node->op == GGML_OP_TRANSPOSE || node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_NONE) {
+            continue;
+        }
+
+        if (ggml_backend_supports_op(backend, node)) {
+            if (backend->iface.offload_op != NULL) {
+                backend->iface.offload_op(backend, node);
+            }
+        } else {
+            if (GGML_OP_HAS_INIT[node->op]) {
+                params.type = GGML_TASK_TYPE_INIT;
+                ggml_compute_forward(&params, node, NULL);
+            }
+            params.type = GGML_TASK_TYPE_COMPUTE;
+            ggml_compute_forward(&params, node, NULL);
+            if (GGML_OP_HAS_FINALIZE[node->op]) {
+                params.type = GGML_TASK_TYPE_FINALIZE;
+                ggml_compute_forward(&params, node, NULL);
+            }
+        }
+    }
+
+    if (NULL != plan.work_data) {
+        free(plan.work_data);
+    }
+
+    return result;
+}
+
+#ifdef GGML_USE_QNN
+extern bool ggml_backend_is_qnn(ggml_backend_t backend);
+#endif
+
+static bool is_qnn_backend(ggml_backend_t backend) {
+#ifdef GGML_USE_QNN
+    return ggml_backend_is_qnn(backend);
+#else
+    GGML_UNUSED(backend);
+    return false;
+#endif
+}
+
 enum ggml_status ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    enum ggml_status err = ggml_backend_graph_compute_async(backend, cgraph);
+    enum ggml_status err = GGML_STATUS_SUCCESS;
+
+    if (NULL == g_cpu_backend) {
+        ggml_backend_cpu_init();
+    }
+    if (backend != g_cpu_backend) {
+        if (is_qnn_backend(backend)) {
+            err = ggml_backend_graph_compute_mixed(backend, cgraph);
+        } else {
+            err = backend->iface.graph_compute(backend, cgraph);
+        }
+    } else {
+        err = backend->iface.graph_compute(backend, cgraph);;
+    }
     ggml_backend_synchronize(backend);
     return err;
 }
 
+
 enum ggml_status ggml_backend_graph_compute_async(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    return backend->iface.graph_compute(backend, cgraph);
+    enum ggml_status err = GGML_STATUS_SUCCESS;
+
+    if (NULL == g_cpu_backend) {
+        ggml_backend_cpu_init();
+    }
+    if (backend != g_cpu_backend) {
+        if (is_qnn_backend(backend)) {
+            err = ggml_backend_graph_compute_mixed(backend, cgraph);
+        } else {
+            err = backend->iface.graph_compute(backend, cgraph);
+        }
+    } else {
+        err = backend->iface.graph_compute(backend, cgraph);;
+    }
+    ggml_backend_synchronize(backend);
+    return err;
 }
 
 bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
@@ -287,6 +419,10 @@ bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor *
 }
 
 bool ggml_backend_offload_op(ggml_backend_t backend, const struct ggml_tensor * op) {
+    if (is_qnn_backend(backend)) {
+        return false;
+    }
+
     if (backend->iface.offload_op != NULL) {
         return backend->iface.offload_op(backend, op);
     }
@@ -445,7 +581,13 @@ GGML_CALL static void ggml_backend_registry_init(void) {
     extern GGML_CALL void ggml_backend_kompute_reg_devices(void);
     ggml_backend_kompute_reg_devices();
 #endif
+
+#ifdef GGML_USE_QNN
+    extern GGML_CALL int ggml_backend_qnn_reg_devices(void);
+    ggml_backend_qnn_reg_devices();
+#endif
 }
+
 
 GGML_CALL void ggml_backend_register(const char * name, ggml_backend_init_fn init_fn, ggml_backend_buffer_type_t default_buffer_type, void * user_data) {
     GGML_ASSERT(ggml_backend_registry_count < GGML_REG_MAX_BACKENDS);
@@ -885,6 +1027,8 @@ ggml_backend_t ggml_backend_cpu_init(void) {
         /* .interface = */ cpu_backend_i,
         /* .context   = */ ctx
     };
+    g_cpu_backend = cpu_backend;
+
     return cpu_backend;
 }
 
