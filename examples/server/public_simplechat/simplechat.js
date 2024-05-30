@@ -759,7 +759,7 @@ class Me {
 
         ui.el_create_append_p(`iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`, elDiv);
 
-        ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions)}`, elDiv);
+        ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions, null, "\t")}`, elDiv);
 
         ui.el_create_append_p(`ApiEndPoint:${this.apiEP}`, elDiv);
 
