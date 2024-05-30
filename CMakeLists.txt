@@ -298,7 +298,7 @@ endif()
 
 if (LLAMA_OPENMP)
     find_package(OpenMP)
-    if(OpenMP_FOUND)
+    if (OpenMP_FOUND)
         message(STATUS "OpenMP found")
         add_compile_definitions(GGML_USE_OPENMP)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
