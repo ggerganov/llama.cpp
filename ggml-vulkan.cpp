@@ -6865,7 +6865,7 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
     } else if (tensor->op == GGML_OP_ROPE) {
         const int n_dims      = ((int32_t *) tensor->op_params)[1];
         const int mode        = ((int32_t *) tensor->op_params)[2];
-        const int n_ctx_ggml       = ((int32_t *) tensor->op_params)[3];
+        //const int n_ctx_ggml       = ((int32_t *) tensor->op_params)[3];
         const int n_ctx_orig_ggml  = ((int32_t *) tensor->op_params)[4];
         float freq_base       = ((float *)   tensor->op_params)[5];
         float freq_scale      = ((float *)   tensor->op_params)[6];
@@ -6873,7 +6873,7 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
         float attn_factor     = ((float *)   tensor->op_params)[8];
         float beta_fast       = ((float *)   tensor->op_params)[9];
         float beta_slow       = ((float *)   tensor->op_params)[10];
-        tensor_clone = ggml_rope_ext(ggml_ctx, src0_clone, src1_clone, src2_clone, n_dims, mode, n_ctx_ggml, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+        tensor_clone = ggml_rope_ext(ggml_ctx, src0_clone, src1_clone, src2_clone, n_dims, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
     } else if (tensor->op == GGML_OP_UNARY) {
         switch (ggml_get_unary_op(tensor)) {
         case GGML_UNARY_OP_SILU:
