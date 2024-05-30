@@ -73,7 +73,11 @@
 
 using json = nlohmann::ordered_json;
 
-int32_t get_num_physical_cores() {
+//
+// CPU utils
+//
+
+int32_t cpu_get_num_physical_cores() {
 #ifdef __linux__
     // enumerate the set of thread siblings, num entries is num cores
     std::unordered_set<std::string> siblings;
@@ -142,9 +146,9 @@ static bool is_running_on_efficiency_core(void) {
     return core_type == intel_atom;
 }
 
-static int count_math_cpus(int cpu_count) {
+static int cpu_count_math_cpus(int n_cpu) {
     int result = 0;
-    for (int cpu = 0; cpu < cpu_count; ++cpu) {
+    for (int cpu = 0; cpu < n_cpu; ++cpu) {
         if (pin_cpu(cpu)) {
             return -1;
         }
@@ -162,16 +166,16 @@ static int count_math_cpus(int cpu_count) {
 /**
  * Returns number of CPUs on system that are useful for math.
  */
-int get_math_cpu_count() {
+int32_t cpu_get_num_math() {
 #if defined(__x86_64__) && defined(__linux__) && !defined(__ANDROID__)
-    int cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
-    if (cpu_count < 1) {
-        return get_num_physical_cores();
+    int n_cpu = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n_cpu < 1) {
+        return cpu_get_num_physical_cores();
     }
     if (is_hybrid_cpu()) {
         cpu_set_t affinity;
         if (!pthread_getaffinity_np(pthread_self(), sizeof(affinity), &affinity)) {
-            int result = count_math_cpus(cpu_count);
+            int result = cpu_count_math_cpus(n_cpu);
             pthread_setaffinity_np(pthread_self(), sizeof(affinity), &affinity);
             if (result > 0) {
                 return result;
@@ -179,106 +183,101 @@ int get_math_cpu_count() {
         }
     }
 #endif
-    return get_num_physical_cores();
+    return cpu_get_num_physical_cores();
 }
 
-void process_escapes(std::string & input) {
-    std::size_t input_len = input.length();
-    std::size_t output_idx = 0;
+//
+// CLI argument parsing
+//
 
-    for (std::size_t input_idx = 0; input_idx < input_len; ++input_idx) {
-        if (input[input_idx] == '\\' && input_idx + 1 < input_len) {
-            switch (input[++input_idx]) {
-                case 'n':  input[output_idx++] = '\n'; break;
-                case 'r':  input[output_idx++] = '\r'; break;
-                case 't':  input[output_idx++] = '\t'; break;
-                case '\'': input[output_idx++] = '\''; break;
-                case '\"': input[output_idx++] = '\"'; break;
-                case '\\': input[output_idx++] = '\\'; break;
-                case 'x':
-                    // Handle \x12, etc
-                    if (input_idx + 2 < input_len) {
-                        const char x[3] = { input[input_idx + 1], input[input_idx + 2], 0 };
-                        char *err_p = nullptr;
-                        const long val = std::strtol(x, &err_p, 16);
-                        if (err_p == x + 2) {
-                            input_idx += 2;
-                            input[output_idx++] = char(val);
-                            break;
-                        }
-                    }
-                    // fall through
-                default:   input[output_idx++] = '\\';
-                           input[output_idx++] = input[input_idx]; break;
+void gpt_params_handle_model_default(gpt_params & params) {
+    if (!params.hf_repo.empty()) {
+        // short-hand to avoid specifying --hf-file -> default it to --model
+        if (params.hf_file.empty()) {
+            if (params.model.empty()) {
+                throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
             }
-        } else {
-            input[output_idx++] = input[input_idx];
+            params.hf_file = params.model;
+        } else if (params.model.empty()) {
+            std::string cache_directory = fs_get_cache_directory();
+            const bool success = fs_create_directory_with_parents(cache_directory);
+            if (!success) {
+                throw std::runtime_error("failed to create cache directory: " + cache_directory);
+            }
+            params.model = cache_directory + string_split(params.hf_file, '/').back();
+        }
+    } else if (!params.model_url.empty()) {
+        if (params.model.empty()) {
+            auto f = string_split(params.model_url, '#').front();
+            f = string_split(f, '?').front();
+            f = string_split(f, '/').back();
+            params.model =  "models/" + f;
+        }
+    } else if (params.model.empty()) {
+        params.model = DEFAULT_MODEL_PATH;
+    }
+}
+
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
+    bool invalid_param = false;
+    std::string arg;
+    const std::string arg_prefix = "--";
+    llama_sampling_params & sparams = params.sparams;
+
+    for (int i = 1; i < argc; i++) {
+        arg = argv[i];
+        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+            std::replace(arg.begin(), arg.end(), '_', '-');
+        }
+        if (!gpt_params_find_arg(argc, argv, arg, params, i, invalid_param)) {
+            throw std::invalid_argument("error: unknown argument: " + arg);
+        }
+        if (invalid_param) {
+            throw std::invalid_argument("error: invalid parameter for argument: " + arg);
         }
     }
 
-    input.resize(output_idx);
+    if (params.prompt_cache_all &&
+            (params.interactive || params.interactive_first ||
+             params.instruct)) {
+
+        throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
+    }
+
+    gpt_params_handle_model_default(params);
+
+    if (params.escape) {
+        string_process_escapes(params.prompt);
+        string_process_escapes(params.input_prefix);
+        string_process_escapes(params.input_suffix);
+        string_process_escapes(sparams.cfg_negative_prompt);
+        for (auto & antiprompt : params.antiprompt) {
+            string_process_escapes(antiprompt);
+        }
+    }
+
+    if (!params.kv_overrides.empty()) {
+        params.kv_overrides.emplace_back();
+        params.kv_overrides.back().key[0] = 0;
+    }
+
+    return true;
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
     bool result = true;
     try {
         if (!gpt_params_parse_ex(argc, argv, params)) {
-            gpt_print_usage(argc, argv, gpt_params());
+            gpt_params_print_usage(argc, argv, gpt_params());
             exit(0);
         }
     }
     catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
-        gpt_print_usage(argc, argv, gpt_params());
+        gpt_params_print_usage(argc, argv, gpt_params());
         exit(1);
     }
     return result;
-}
-
-bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides) {
-    const char * sep = strchr(data, '=');
-    if (sep == nullptr || sep - data >= 128) {
-        fprintf(stderr, "%s: malformed KV override '%s'\n", __func__, data);
-        return false;
-    }
-    llama_model_kv_override kvo;
-    std::strncpy(kvo.key, data, sep - data);
-    kvo.key[sep - data] = 0;
-    sep++;
-    if (strncmp(sep, "int:", 4) == 0) {
-        sep += 4;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-        kvo.val_i64 = std::atol(sep);
-    } else if (strncmp(sep, "float:", 6) == 0) {
-        sep += 6;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-        kvo.val_f64 = std::atof(sep);
-    } else if (strncmp(sep, "bool:", 5) == 0) {
-        sep += 5;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
-        if (std::strcmp(sep, "true") == 0) {
-            kvo.val_bool = true;
-        } else if (std::strcmp(sep, "false") == 0) {
-            kvo.val_bool = false;
-        } else {
-            fprintf(stderr, "%s: invalid boolean value for KV override '%s'\n", __func__, data);
-            return false;
-        }
-    } else if (strncmp(sep, "str:", 4) == 0) {
-        sep += 4;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
-        if (strlen(sep) > 127) {
-            fprintf(stderr, "%s: malformed KV override '%s', value cannot exceed 127 chars\n", __func__, data);
-            return false;
-        }
-        strncpy(kvo.val_str, sep, 127);
-        kvo.val_str[127] = '\0';
-    } else {
-        fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
-        return false;
-    }
-    overrides.emplace_back(std::move(kvo));
-    return true;
 }
 
 bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param) {
@@ -546,7 +545,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         const auto sampler_names = string_split(argv[i], ';');
-        sparams.samplers_sequence = sampler_types_from_names(sampler_names, true);
+        sparams.samplers_sequence = llama_sampling_types_from_names(sampler_names, true);
         return true;
     }
     if (arg == "--sampling-seq") {
@@ -554,7 +553,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-        sparams.samplers_sequence = sampler_types_from_chars(argv[i]);
+        sparams.samplers_sequence = llama_sampling_types_from_chars(argv[i]);
         return true;
     }
     if (arg == "--top-p") {
@@ -905,6 +904,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.interactive_specials = true;
         return true;
     }
+    if (arg == "--special") {
+        params.special = true;
+        return true;
+    }
     if (arg == "--embedding") {
         params.embedding = true;
         return true;
@@ -1240,7 +1243,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "-h" || arg == "--help") {
-        gpt_print_usage(argc, argv, gpt_params());
+        gpt_params_print_usage(argc, argv, gpt_params());
         exit(0);
     }
     if (arg == "--version") {
@@ -1311,7 +1314,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-        if (!parse_kv_override(argv[i], params.kv_overrides)) {
+        if (!string_parse_kv_override(argv[i], params.kv_overrides)) {
             fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
             invalid_param = true;
             return true;
@@ -1345,83 +1348,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     return false;
 }
 
-void gpt_params_handle_model_default(gpt_params & params) {
-    if (!params.hf_repo.empty()) {
-        // short-hand to avoid specifying --hf-file -> default it to --model
-        if (params.hf_file.empty()) {
-            if (params.model.empty()) {
-                throw std::invalid_argument("error: --hf-repo requires either --hf-file or --model\n");
-            }
-            params.hf_file = params.model;
-        } else if (params.model.empty()) {
-            params.model = "models/" + string_split(params.hf_file, '/').back();
-        }
-    } else if (!params.model_url.empty()) {
-        if (params.model.empty()) {
-            auto f = string_split(params.model_url, '#').front();
-            f = string_split(f, '?').front();
-            f = string_split(f, '/').back();
-            params.model =  "models/" + f;
-        }
-    } else if (params.model.empty()) {
-        params.model = DEFAULT_MODEL_PATH;
-    }
-}
-
-bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
-    bool invalid_param = false;
-    std::string arg;
-    const std::string arg_prefix = "--";
-    llama_sampling_params & sparams = params.sparams;
-
-    for (int i = 1; i < argc; i++) {
-        arg = argv[i];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
-            std::replace(arg.begin(), arg.end(), '_', '-');
-        }
-        if (!gpt_params_find_arg(argc, argv, arg, params, i, invalid_param)) {
-            throw std::invalid_argument("error: unknown argument: " + arg);
-        }
-        if (invalid_param) {
-            throw std::invalid_argument("error: invalid parameter for argument: " + arg);
-        }
-    }
-
-    if (params.prompt_cache_all &&
-            (params.interactive || params.interactive_first ||
-             params.instruct)) {
-
-        throw std::invalid_argument("error: --prompt-cache-all not supported in interactive mode yet\n");
-    }
-
-    gpt_params_handle_model_default(params);
-
-    if (params.escape) {
-        process_escapes(params.prompt);
-        process_escapes(params.input_prefix);
-        process_escapes(params.input_suffix);
-        process_escapes(sparams.cfg_negative_prompt);
-        for (auto & antiprompt : params.antiprompt) {
-            process_escapes(antiprompt);
-        }
-    }
-
-    if (!params.kv_overrides.empty()) {
-        params.kv_overrides.emplace_back();
-        params.kv_overrides.back().key[0] = 0;
-    }
-
-    return true;
-}
-
-void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
+void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const llama_sampling_params & sparams = params.sparams;
 
     std::string sampler_type_chars;
     std::string sampler_type_names;
     for (const auto sampler_type : sparams.samplers_sequence) {
         sampler_type_chars += static_cast<char>(sampler_type);
-        sampler_type_names += sampler_type_to_name_string(sampler_type) + ";";
+        sampler_type_names += llama_sampling_type_to_str(sampler_type) + ";";
     }
     sampler_type_names.pop_back();
 
@@ -1432,6 +1366,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("  -h, --help            show this help message and exit\n");
     printf("  --version             show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
+    printf("  --special             special tokens output enabled\n");
     printf("  --interactive-specials allow special tokens in user text, in interactive mode\n");
     printf("  --interactive-first   run in interactive mode and wait for input right away\n");
     printf("  -cnv, --conversation  run in conversation mode (does not print special tokens and suffix/prefix)\n");
@@ -1618,7 +1553,7 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
 #endif // LOG_DISABLE_LOGS
 }
 
-std::string get_system_info(const gpt_params & params) {
+std::string gpt_params_get_system_info(const gpt_params & params) {
     std::ostringstream os;
 
     os << "system_info: n_threads = " << params.n_threads;
@@ -1630,7 +1565,52 @@ std::string get_system_info(const gpt_params & params) {
     return os.str();
 }
 
-std::string gpt_random_prompt(std::mt19937 & rng) {
+//
+// String utils
+//
+
+std::vector<std::string> string_split(std::string input, char separator) {
+    std::vector<std::string> parts;
+    size_t separator_pos = input.find(separator);
+    while (separator_pos != std::string::npos) {
+        std::string part = input.substr(0, separator_pos);
+        parts.emplace_back(part);
+        input = input.substr(separator_pos + 1);
+        separator_pos = input.find(separator);
+    }
+    parts.emplace_back(input);
+    return parts;
+}
+
+std::string string_strip(const std::string & str) {
+    size_t start = 0;
+    size_t end = str.size();
+    while (start < end && std::isspace(str[start])) {
+        start++;
+    }
+    while (end > start && std::isspace(str[end - 1])) {
+        end--;
+    }
+    return str.substr(start, end - start);
+}
+
+std::string string_get_sortable_timestamp() {
+    using clock = std::chrono::system_clock;
+
+    const clock::time_point current_time = clock::now();
+    const time_t as_time_t = clock::to_time_t(current_time);
+    char timestamp_no_ns[100];
+    std::strftime(timestamp_no_ns, 100, "%Y_%m_%d-%H_%M_%S", std::localtime(&as_time_t));
+
+    const int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        current_time.time_since_epoch() % 1000000000).count();
+    char timestamp_ns[11];
+    snprintf(timestamp_ns, 11, "%09" PRId64, ns);
+
+    return std::string(timestamp_no_ns) + "." + std::string(timestamp_ns);
+}
+
+std::string string_random_prompt(std::mt19937 & rng) {
     const int r = rng() % 10;
     switch (r) {
         case 0: return "So";
@@ -1648,9 +1628,96 @@ std::string gpt_random_prompt(std::mt19937 & rng) {
     GGML_UNREACHABLE();
 }
 
+void string_process_escapes(std::string & input) {
+    std::size_t input_len = input.length();
+    std::size_t output_idx = 0;
+
+    for (std::size_t input_idx = 0; input_idx < input_len; ++input_idx) {
+        if (input[input_idx] == '\\' && input_idx + 1 < input_len) {
+            switch (input[++input_idx]) {
+                case 'n':  input[output_idx++] = '\n'; break;
+                case 'r':  input[output_idx++] = '\r'; break;
+                case 't':  input[output_idx++] = '\t'; break;
+                case '\'': input[output_idx++] = '\''; break;
+                case '\"': input[output_idx++] = '\"'; break;
+                case '\\': input[output_idx++] = '\\'; break;
+                case 'x':
+                    // Handle \x12, etc
+                    if (input_idx + 2 < input_len) {
+                        const char x[3] = { input[input_idx + 1], input[input_idx + 2], 0 };
+                        char *err_p = nullptr;
+                        const long val = std::strtol(x, &err_p, 16);
+                        if (err_p == x + 2) {
+                            input_idx += 2;
+                            input[output_idx++] = char(val);
+                            break;
+                        }
+                    }
+                    // fall through
+                default:   input[output_idx++] = '\\';
+                           input[output_idx++] = input[input_idx]; break;
+            }
+        } else {
+            input[output_idx++] = input[input_idx];
+        }
+    }
+
+    input.resize(output_idx);
+}
+
+bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides) {
+    const char * sep = strchr(data, '=');
+    if (sep == nullptr || sep - data >= 128) {
+        fprintf(stderr, "%s: malformed KV override '%s'\n", __func__, data);
+        return false;
+    }
+    llama_model_kv_override kvo;
+    std::strncpy(kvo.key, data, sep - data);
+    kvo.key[sep - data] = 0;
+    sep++;
+    if (strncmp(sep, "int:", 4) == 0) {
+        sep += 4;
+        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+        kvo.val_i64 = std::atol(sep);
+    } else if (strncmp(sep, "float:", 6) == 0) {
+        sep += 6;
+        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
+        kvo.val_f64 = std::atof(sep);
+    } else if (strncmp(sep, "bool:", 5) == 0) {
+        sep += 5;
+        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
+        if (std::strcmp(sep, "true") == 0) {
+            kvo.val_bool = true;
+        } else if (std::strcmp(sep, "false") == 0) {
+            kvo.val_bool = false;
+        } else {
+            fprintf(stderr, "%s: invalid boolean value for KV override '%s'\n", __func__, data);
+            return false;
+        }
+    } else if (strncmp(sep, "str:", 4) == 0) {
+        sep += 4;
+        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+        if (strlen(sep) > 127) {
+            fprintf(stderr, "%s: malformed KV override '%s', value cannot exceed 127 chars\n", __func__, data);
+            return false;
+        }
+        strncpy(kvo.val_str, sep, 127);
+        kvo.val_str[127] = '\0';
+    } else {
+        fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
+        return false;
+    }
+    overrides.emplace_back(std::move(kvo));
+    return true;
+}
+
+//
+// Filesystem utils
+//
+
 // Validate if a filename is safe to use
 // To validate a full path, split the path by the OS-specific path separator, and validate each part with this function
-bool validate_file_name(const std::string & filename) {
+bool fs_validate_filename(const std::string & filename) {
     if (!filename.length()) {
         // Empty filename invalid
         return false;
@@ -1719,119 +1786,197 @@ bool validate_file_name(const std::string & filename) {
     return true;
 }
 
-//
-// String utils
-//
+// returns true if successful, false otherwise
+bool fs_create_directory_with_parents(const std::string & path) {
+#ifdef _WIN32
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
+    std::wstring wpath = converter.from_bytes(path);
 
-std::vector<std::string> string_split(std::string input, char separator) {
-    std::vector<std::string> parts;
-    size_t separator_pos = input.find(separator);
-    while (separator_pos != std::string::npos) {
-        std::string part = input.substr(0, separator_pos);
-        parts.emplace_back(part);
-        input = input.substr(separator_pos + 1);
-        separator_pos = input.find(separator);
+    // if the path already exists, check whether it's a directory
+    const DWORD attributes = GetFileAttributesW(wpath.c_str());
+    if ((attributes != INVALID_FILE_ATTRIBUTES) && (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        return true;
     }
-    parts.emplace_back(input);
-    return parts;
-}
 
-std::string string_strip(const std::string & str) {
-    size_t start = 0;
-    size_t end = str.size();
-    while (start < end && std::isspace(str[start])) {
-        start++;
-    }
-    while (end > start && std::isspace(str[end - 1])) {
-        end--;
-    }
-    return str.substr(start, end - start);
-}
+    size_t pos_slash = 0;
 
-std::vector<llama_sampler_type> sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
-    std::unordered_map<std::string, llama_sampler_type> sampler_canonical_name_map {
-        {"top_k",       llama_sampler_type::TOP_K},
-        {"top_p",       llama_sampler_type::TOP_P},
-        {"typical_p",   llama_sampler_type::TYPICAL_P},
-        {"min_p",       llama_sampler_type::MIN_P},
-        {"tfs_z",       llama_sampler_type::TFS_Z},
-        {"temperature", llama_sampler_type::TEMPERATURE}
-    };
+    // process path from front to back, procedurally creating directories
+    while ((pos_slash = path.find('\\', pos_slash)) != std::string::npos) {
+        const std::wstring subpath = wpath.substr(0, pos_slash);
+        const wchar_t * test = subpath.c_str();
 
-    // since samplers names are written multiple ways
-    // make it ready for both system names and input names
-    std::unordered_map<std::string, llama_sampler_type> sampler_alt_name_map {
-        {"top-k",       llama_sampler_type::TOP_K},
-        {"top-p",       llama_sampler_type::TOP_P},
-        {"nucleus",     llama_sampler_type::TOP_P},
-        {"typical-p",   llama_sampler_type::TYPICAL_P},
-        {"typical",     llama_sampler_type::TYPICAL_P},
-        {"min-p",       llama_sampler_type::MIN_P},
-        {"tfs-z",       llama_sampler_type::TFS_Z},
-        {"tfs",         llama_sampler_type::TFS_Z},
-        {"temp",        llama_sampler_type::TEMPERATURE}
-    };
+        const bool success = CreateDirectoryW(test, NULL);
+        if (!success) {
+            const DWORD error = GetLastError();
 
-    std::vector<llama_sampler_type> sampler_types;
-    sampler_types.reserve(names.size());
-    for (const auto & name : names)
-    {
-        auto sampler_item = sampler_canonical_name_map.find(name);
-        if (sampler_item != sampler_canonical_name_map.end())
-        {
-            sampler_types.push_back(sampler_item->second);
-        }
-        else
-        {
-            if (allow_alt_names)
-            {
-                sampler_item = sampler_alt_name_map.find(name);
-                if (sampler_item != sampler_alt_name_map.end())
-                {
-                    sampler_types.push_back(sampler_item->second);
+            // if the path already exists, ensure that it's a directory
+            if (error == ERROR_ALREADY_EXISTS) {
+                const DWORD attributes = GetFileAttributesW(subpath.c_str());
+                if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                    return false;
                 }
+            } else {
+                return false;
             }
         }
+
+        pos_slash += 1;
     }
-    return sampler_types;
-}
 
-std::vector<llama_sampler_type> sampler_types_from_chars(const std::string & names_string) {
-    std::unordered_map<char, llama_sampler_type> sampler_name_map {
-        {'k', llama_sampler_type::TOP_K},
-        {'p', llama_sampler_type::TOP_P},
-        {'y', llama_sampler_type::TYPICAL_P},
-        {'m', llama_sampler_type::MIN_P},
-        {'f', llama_sampler_type::TFS_Z},
-        {'t', llama_sampler_type::TEMPERATURE}
-    };
+    return true;
+#else
+    // if the path already exists, check whether it's a directory
+    struct stat info;
+    if (stat(path.c_str(), &info) == 0) {
+        return S_ISDIR(info.st_mode);
+    }
 
-    std::vector<llama_sampler_type> sampler_types;
-    sampler_types.reserve(names_string.size());
-    for (const auto & c : names_string) {
-        const auto sampler_item = sampler_name_map.find(c);
-        if (sampler_item != sampler_name_map.end()) {
-            sampler_types.push_back(sampler_item->second);
+    size_t pos_slash = 1; // skip leading slashes for directory creation
+
+    // process path from front to back, procedurally creating directories
+    while ((pos_slash = path.find('/', pos_slash)) != std::string::npos) {
+        const std::string subpath = path.substr(0, pos_slash);
+        struct stat info;
+
+        // if the path already exists, ensure that it's a directory
+        if (stat(subpath.c_str(), &info) == 0) {
+            if (!S_ISDIR(info.st_mode)) {
+                return false;
+            }
+        } else {
+            // create parent directories
+            const int ret = mkdir(subpath.c_str(), 0755);
+            if (ret != 0) {
+                return false;
+            }
         }
+
+        pos_slash += 1;
     }
-    return sampler_types;
+
+    return true;
+#endif // _WIN32
 }
 
-std::string sampler_type_to_name_string(llama_sampler_type sampler_type) {
-    switch (sampler_type) {
-        case llama_sampler_type::TOP_K:       return "top_k";
-        case llama_sampler_type::TFS_Z:       return "tfs_z";
-        case llama_sampler_type::TYPICAL_P:   return "typical_p";
-        case llama_sampler_type::TOP_P:       return "top_p";
-        case llama_sampler_type::MIN_P:       return "min_p";
-        case llama_sampler_type::TEMPERATURE: return "temperature";
-        default : return "";
+std::string fs_get_cache_directory() {
+    std::string cache_directory = "";
+    auto ensure_trailing_slash = [](std::string p) {
+        // Make sure to add trailing slash
+        if (p.back() != DIRECTORY_SEPARATOR) {
+            p += DIRECTORY_SEPARATOR;
+        }
+        return p;
+    };
+    if (getenv("LLAMA_CACHE")) {
+        cache_directory = std::getenv("LLAMA_CACHE");
+    } else {
+#ifdef __linux__
+        if (std::getenv("XDG_CACHE_HOME")) {
+            cache_directory = std::getenv("XDG_CACHE_HOME");
+        } else {
+            cache_directory = std::getenv("HOME") + std::string("/.cache/");
+        }
+#elif defined(__APPLE__)
+        cache_directory = std::getenv("HOME") + std::string("/Library/Caches/");
+#elif defined(_WIN32)
+        cache_directory = std::getenv("LOCALAPPDATA");
+#endif // __linux__
+        cache_directory = ensure_trailing_slash(cache_directory);
+        cache_directory += "llama.cpp";
     }
+    return ensure_trailing_slash(cache_directory);
 }
+
 
 //
 // Model utils
 //
+
+std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
+    auto mparams = llama_model_params_from_gpt_params(params);
+
+    llama_model * model = nullptr;
+
+    if (!params.hf_repo.empty() && !params.hf_file.empty()) {
+        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), mparams);
+    } else if (!params.model_url.empty()) {
+        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), mparams);
+    } else {
+        model = llama_load_model_from_file(params.model.c_str(), mparams);
+    }
+
+    if (model == NULL) {
+        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
+        return std::make_tuple(nullptr, nullptr);
+    }
+
+    auto cparams = llama_context_params_from_gpt_params(params);
+
+    llama_context * lctx = llama_new_context_with_model(model, cparams);
+    if (lctx == NULL) {
+        fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
+        llama_free_model(model);
+        return std::make_tuple(nullptr, nullptr);
+    }
+
+    if (!params.control_vectors.empty()) {
+        if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
+        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
+
+        const auto cvec = llama_control_vector_load(params.control_vectors);
+        if (cvec.n_embd == -1) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+
+        int err = llama_control_vector_apply(lctx,
+                                             cvec.data.data(),
+                                             cvec.data.size(),
+                                             cvec.n_embd,
+                                             params.control_vector_layer_start,
+                                             params.control_vector_layer_end);
+        if (err) {
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+    }
+
+    for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
+        const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
+        float lora_scale = std::get<1>(params.lora_adapter[i]);
+        int err = llama_model_apply_lora_from_file(model,
+                                             lora_adapter.c_str(),
+                                             lora_scale,
+                                             ((i > 0) || params.lora_base.empty())
+                                                ? NULL
+                                                : params.lora_base.c_str(),
+                                             params.n_threads);
+        if (err != 0) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+            llama_free(lctx);
+            llama_free_model(model);
+            return std::make_tuple(nullptr, nullptr);
+        }
+    }
+
+    if (params.ignore_eos) {
+        params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
+    }
+
+    if (params.warmup) {
+        LOG("warming up the model with an empty run\n");
+
+        std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
+        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
+        llama_kv_cache_clear(lctx);
+        llama_synchronize(lctx);
+        llama_reset_timings(lctx);
+    }
+
+    return std::make_tuple(model, lctx);
+}
 
 struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & params) {
     auto mparams = llama_model_default_params();
@@ -1916,27 +2061,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.type_v = kv_cache_type_from_str(params.cache_type_v);
 
     return cparams;
-}
-
-void llama_batch_clear(struct llama_batch & batch) {
-    batch.n_tokens = 0;
-}
-
-void llama_batch_add(
-                 struct llama_batch & batch,
-                        llama_token   id,
-                          llama_pos   pos,
-    const std::vector<llama_seq_id> & seq_ids,
-                               bool   logits) {
-    batch.token   [batch.n_tokens] = id;
-    batch.pos     [batch.n_tokens] = pos;
-    batch.n_seq_id[batch.n_tokens] = seq_ids.size();
-    for (size_t i = 0; i < seq_ids.size(); ++i) {
-        batch.seq_id[batch.n_tokens][i] = seq_ids[i];
-    }
-    batch.logits  [batch.n_tokens] = logits;
-
-    batch.n_tokens++;
 }
 
 #ifdef LLAMA_USE_CURL
@@ -2269,90 +2393,29 @@ struct llama_model * llama_load_model_from_hf(
 
 #endif // LLAMA_USE_CURL
 
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
-    auto mparams = llama_model_params_from_gpt_params(params);
+//
+// Batch utils
+//
 
-    llama_model * model = nullptr;
+void llama_batch_clear(struct llama_batch & batch) {
+    batch.n_tokens = 0;
+}
 
-    if (!params.hf_repo.empty() && !params.hf_file.empty()) {
-        model = llama_load_model_from_hf(params.hf_repo.c_str(), params.hf_file.c_str(), params.model.c_str(), mparams);
-    } else if (!params.model_url.empty()) {
-        model = llama_load_model_from_url(params.model_url.c_str(), params.model.c_str(), mparams);
-    } else {
-        model = llama_load_model_from_file(params.model.c_str(), mparams);
+void llama_batch_add(
+                 struct llama_batch & batch,
+                        llama_token   id,
+                          llama_pos   pos,
+    const std::vector<llama_seq_id> & seq_ids,
+                               bool   logits) {
+    batch.token   [batch.n_tokens] = id;
+    batch.pos     [batch.n_tokens] = pos;
+    batch.n_seq_id[batch.n_tokens] = seq_ids.size();
+    for (size_t i = 0; i < seq_ids.size(); ++i) {
+        batch.seq_id[batch.n_tokens][i] = seq_ids[i];
     }
+    batch.logits  [batch.n_tokens] = logits;
 
-    if (model == NULL) {
-        fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
-        return std::make_tuple(nullptr, nullptr);
-    }
-
-    auto cparams = llama_context_params_from_gpt_params(params);
-
-    llama_context * lctx = llama_new_context_with_model(model, cparams);
-    if (lctx == NULL) {
-        fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
-        llama_free_model(model);
-        return std::make_tuple(nullptr, nullptr);
-    }
-
-    if (!params.control_vectors.empty()) {
-        if (params.control_vector_layer_start <= 0) params.control_vector_layer_start = 1;
-        if (params.control_vector_layer_end   <= 0) params.control_vector_layer_end   = llama_n_layer(model);
-
-        const auto cvec = llama_control_vector_load(params.control_vectors);
-        if (cvec.n_embd == -1) {
-            llama_free(lctx);
-            llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
-        }
-
-        int err = llama_control_vector_apply(lctx,
-                                             cvec.data.data(),
-                                             cvec.data.size(),
-                                             cvec.n_embd,
-                                             params.control_vector_layer_start,
-                                             params.control_vector_layer_end);
-        if (err) {
-            llama_free(lctx);
-            llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
-        }
-    }
-
-    for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
-        const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
-        float lora_scale = std::get<1>(params.lora_adapter[i]);
-        int err = llama_model_apply_lora_from_file(model,
-                                             lora_adapter.c_str(),
-                                             lora_scale,
-                                             ((i > 0) || params.lora_base.empty())
-                                                ? NULL
-                                                : params.lora_base.c_str(),
-                                             params.n_threads);
-        if (err != 0) {
-            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
-            llama_free(lctx);
-            llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
-        }
-    }
-
-    if (params.ignore_eos) {
-        params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
-    }
-
-    if (params.warmup) {
-        LOG("warming up the model with an empty run\n");
-
-        std::vector<llama_token> tmp = { llama_token_bos(model), llama_token_eos(model), };
-        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
-        llama_kv_cache_clear(lctx);
-        llama_synchronize(lctx);
-        llama_reset_timings(lctx);
-    }
-
-    return std::make_tuple(model, lctx);
+    batch.n_tokens++;
 }
 
 //
@@ -2441,320 +2504,10 @@ bool llama_should_add_bos_token(const llama_model * model) {
 }
 
 //
-// YAML utils
-//
-
-// returns true if successful, false otherwise
-bool create_directory_with_parents(const std::string & path) {
-#ifdef _WIN32
-    std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
-    std::wstring wpath = converter.from_bytes(path);
-
-    // if the path already exists, check whether it's a directory
-    const DWORD attributes = GetFileAttributesW(wpath.c_str());
-    if ((attributes != INVALID_FILE_ATTRIBUTES) && (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-        return true;
-    }
-
-    size_t pos_slash = 0;
-
-    // process path from front to back, procedurally creating directories
-    while ((pos_slash = path.find('\\', pos_slash)) != std::string::npos) {
-        const std::wstring subpath = wpath.substr(0, pos_slash);
-        const wchar_t * test = subpath.c_str();
-
-        const bool success = CreateDirectoryW(test, NULL);
-        if (!success) {
-            const DWORD error = GetLastError();
-
-            // if the path already exists, ensure that it's a directory
-            if (error == ERROR_ALREADY_EXISTS) {
-                const DWORD attributes = GetFileAttributesW(subpath.c_str());
-                if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
-
-        pos_slash += 1;
-    }
-
-    return true;
-#else
-    // if the path already exists, check whether it's a directory
-    struct stat info;
-    if (stat(path.c_str(), &info) == 0) {
-        return S_ISDIR(info.st_mode);
-    }
-
-    size_t pos_slash = 1; // skip leading slashes for directory creation
-
-    // process path from front to back, procedurally creating directories
-    while ((pos_slash = path.find('/', pos_slash)) != std::string::npos) {
-        const std::string subpath = path.substr(0, pos_slash);
-        struct stat info;
-
-        // if the path already exists, ensure that it's a directory
-        if (stat(subpath.c_str(), &info) == 0) {
-            if (!S_ISDIR(info.st_mode)) {
-                return false;
-            }
-        } else {
-            // create parent directories
-            const int ret = mkdir(subpath.c_str(), 0755);
-            if (ret != 0) {
-                return false;
-            }
-        }
-
-        pos_slash += 1;
-    }
-
-    return true;
-#endif // _WIN32
-}
-
-void dump_vector_float_yaml(FILE * stream, const char * prop_name, const std::vector<float> & data) {
-    if (data.empty()) {
-        fprintf(stream, "%s:\n", prop_name);
-        return;
-    }
-
-    fprintf(stream, "%s: [", prop_name);
-    for (size_t i = 0; i < data.size() - 1; ++i) {
-        fprintf(stream, "%e, ", data[i]);
-    }
-    fprintf(stream, "%e]\n", data.back());
-}
-
-void dump_vector_int_yaml(FILE * stream, const char * prop_name, const std::vector<int> & data) {
-    if (data.empty()) {
-        fprintf(stream, "%s:\n", prop_name);
-        return;
-    }
-
-    fprintf(stream, "%s: [", prop_name);
-    for (size_t i = 0; i < data.size() - 1; ++i) {
-        fprintf(stream, "%d, ", data[i]);
-    }
-    fprintf(stream, "%d]\n", data.back());
-}
-
-void dump_string_yaml_multiline(FILE * stream, const char * prop_name, const char * data) {
-    std::string data_str(data == NULL ? "" : data);
-
-    if (data_str.empty()) {
-        fprintf(stream, "%s:\n", prop_name);
-        return;
-    }
-
-    size_t pos_start = 0;
-    size_t pos_found = 0;
-
-    if (std::isspace(data_str[0]) || std::isspace(data_str.back())) {
-        data_str = std::regex_replace(data_str, std::regex("\n"), "\\n");
-        data_str = std::regex_replace(data_str, std::regex("\""), "\\\"");
-        data_str = std::regex_replace(data_str, std::regex(R"(\\[^n"])"), R"(\$&)");
-        data_str = "\"" + data_str + "\"";
-        fprintf(stream, "%s: %s\n", prop_name, data_str.c_str());
-        return;
-    }
-
-    if (data_str.find('\n') == std::string::npos) {
-        fprintf(stream, "%s: %s\n", prop_name, data_str.c_str());
-        return;
-    }
-
-    fprintf(stream, "%s: |\n", prop_name);
-    while ((pos_found = data_str.find('\n', pos_start)) != std::string::npos) {
-        fprintf(stream, "  %s\n", data_str.substr(pos_start, pos_found-pos_start).c_str());
-        pos_start = pos_found + 1;
-    }
-}
-
-std::string get_sortable_timestamp() {
-    using clock = std::chrono::system_clock;
-
-    const clock::time_point current_time = clock::now();
-    const time_t as_time_t = clock::to_time_t(current_time);
-    char timestamp_no_ns[100];
-    std::strftime(timestamp_no_ns, 100, "%Y_%m_%d-%H_%M_%S", std::localtime(&as_time_t));
-
-    const int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        current_time.time_since_epoch() % 1000000000).count();
-    char timestamp_ns[11];
-    snprintf(timestamp_ns, 11, "%09" PRId64, ns);
-
-    return std::string(timestamp_no_ns) + "." + std::string(timestamp_ns);
-}
-
-void dump_non_result_info_yaml(FILE * stream, const gpt_params & params, const llama_context * lctx,
-                               const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
-    const llama_sampling_params & sparams = params.sparams;
-
-    fprintf(stream, "build_commit: %s\n",        LLAMA_COMMIT);
-    fprintf(stream, "build_number: %d\n",        LLAMA_BUILD_NUMBER);
-    fprintf(stream, "cpu_has_arm_fma: %s\n",     ggml_cpu_has_arm_fma()     ? "true" : "false");
-    fprintf(stream, "cpu_has_avx: %s\n",         ggml_cpu_has_avx()         ? "true" : "false");
-    fprintf(stream, "cpu_has_avx_vnni: %s\n",    ggml_cpu_has_avx_vnni()    ? "true" : "false");
-    fprintf(stream, "cpu_has_avx2: %s\n",        ggml_cpu_has_avx2()        ? "true" : "false");
-    fprintf(stream, "cpu_has_avx512: %s\n",      ggml_cpu_has_avx512()      ? "true" : "false");
-    fprintf(stream, "cpu_has_avx512_vbmi: %s\n", ggml_cpu_has_avx512_vbmi() ? "true" : "false");
-    fprintf(stream, "cpu_has_avx512_vnni: %s\n", ggml_cpu_has_avx512_vnni() ? "true" : "false");
-    fprintf(stream, "cpu_has_cuda: %s\n",        ggml_cpu_has_cuda()        ? "true" : "false");
-    fprintf(stream, "cpu_has_vulkan: %s\n",      ggml_cpu_has_vulkan()      ? "true" : "false");
-    fprintf(stream, "cpu_has_clblast: %s\n",     ggml_cpu_has_clblast()     ? "true" : "false");
-    fprintf(stream, "cpu_has_kompute: %s\n",     ggml_cpu_has_kompute()     ? "true" : "false");
-    fprintf(stream, "cpu_has_fma: %s\n",         ggml_cpu_has_fma()         ? "true" : "false");
-    fprintf(stream, "cpu_has_gpublas: %s\n",     ggml_cpu_has_gpublas()     ? "true" : "false");
-    fprintf(stream, "cpu_has_neon: %s\n",        ggml_cpu_has_neon()        ? "true" : "false");
-    fprintf(stream, "cpu_has_f16c: %s\n",        ggml_cpu_has_f16c()        ? "true" : "false");
-    fprintf(stream, "cpu_has_fp16_va: %s\n",     ggml_cpu_has_fp16_va()     ? "true" : "false");
-    fprintf(stream, "cpu_has_wasm_simd: %s\n",   ggml_cpu_has_wasm_simd()   ? "true" : "false");
-    fprintf(stream, "cpu_has_blas: %s\n",        ggml_cpu_has_blas()        ? "true" : "false");
-    fprintf(stream, "cpu_has_sse3: %s\n",        ggml_cpu_has_sse3()        ? "true" : "false");
-    fprintf(stream, "cpu_has_vsx: %s\n",         ggml_cpu_has_vsx()         ? "true" : "false");
-    fprintf(stream, "cpu_has_matmul_int8: %s\n", ggml_cpu_has_matmul_int8() ? "true" : "false");
-
-#ifdef NDEBUG
-    fprintf(stream, "debug: false\n");
-#else
-    fprintf(stream, "debug: true\n");
-#endif // NDEBUG
-
-    fprintf(stream, "model_desc: %s\n", model_desc);
-    fprintf(stream, "n_vocab: %d  # output size of the final layer, 32001 for some models\n", llama_n_vocab(llama_get_model(lctx)));
-
-#ifdef __OPTIMIZE__
-    fprintf(stream, "optimize: true\n");
-#else
-    fprintf(stream, "optimize: false\n");
-#endif // __OPTIMIZE__
-
-    fprintf(stream, "time: %s\n", timestamp.c_str());
-
-    fprintf(stream, "\n");
-    fprintf(stream, "###############\n");
-    fprintf(stream, "# User Inputs #\n");
-    fprintf(stream, "###############\n");
-    fprintf(stream, "\n");
-
-    fprintf(stream, "alias: %s # default: unknown\n", params.model_alias.c_str());
-    fprintf(stream, "batch_size: %d # default: 512\n", params.n_batch);
-    dump_string_yaml_multiline(stream, "cfg_negative_prompt", sparams.cfg_negative_prompt.c_str());
-    fprintf(stream, "cfg_scale: %f # default: 1.0\n", sparams.cfg_scale);
-    fprintf(stream, "chunks: %d # default: -1 (unlimited)\n", params.n_chunks);
-    fprintf(stream, "color: %s # default: false\n", params.use_color ? "true" : "false");
-    fprintf(stream, "ctx_size: %d # default: 512\n", params.n_ctx);
-    fprintf(stream, "escape: %s # default: false\n", params.escape ? "true" : "false");
-    fprintf(stream, "file: # never logged, see prompt instead. Can still be specified for input.\n");
-    fprintf(stream, "frequency_penalty: %f # default: 0.0 \n", sparams.penalty_freq);
-    dump_string_yaml_multiline(stream, "grammar", sparams.grammar.c_str());
-    fprintf(stream, "grammar-file: # never logged, see grammar instead. Can still be specified for input.\n");
-    fprintf(stream, "hellaswag: %s # default: false\n", params.hellaswag ? "true" : "false");
-    fprintf(stream, "hellaswag_tasks: %zu # default: 400\n", params.hellaswag_tasks);
-
-    const auto logit_bias_eos = sparams.logit_bias.find(llama_token_eos(llama_get_model(lctx)));
-    const bool ignore_eos = logit_bias_eos != sparams.logit_bias.end() && logit_bias_eos->second == -INFINITY;
-    fprintf(stream, "ignore_eos: %s # default: false\n", ignore_eos ? "true" : "false");
-
-    dump_string_yaml_multiline(stream, "in_prefix", params.input_prefix.c_str());
-    fprintf(stream, "in_prefix_bos: %s # default: false\n", params.input_prefix_bos ? "true" : "false");
-    dump_string_yaml_multiline(stream, "in_suffix", params.input_prefix.c_str());
-    fprintf(stream, "instruct: %s # default: false\n", params.instruct ? "true" : "false");
-    fprintf(stream, "interactive: %s # default: false\n", params.interactive ? "true" : "false");
-    fprintf(stream, "interactive_specials: %s # default: false\n", params.interactive_specials ? "true" : "false");
-    fprintf(stream, "interactive_first: %s # default: false\n", params.interactive_first ? "true" : "false");
-    fprintf(stream, "keep: %d # default: 0\n", params.n_keep);
-    fprintf(stream, "logdir: %s # default: unset (no logging)\n", params.logdir.c_str());
-
-    fprintf(stream, "logit_bias:\n");
-    for (std::pair<llama_token, float> lb : sparams.logit_bias) {
-        if (ignore_eos && lb.first == logit_bias_eos->first) {
-            continue;
-        }
-        fprintf(stream, "  %d: %f", lb.first, lb.second);
-    }
-
-    fprintf(stream, "lora:\n");
-    for (std::tuple<std::string, float> la : params.lora_adapter) {
-        if (std::get<1>(la) != 1.0f) {
-            continue;
-        }
-        fprintf(stream, "  - %s\n", std::get<0>(la).c_str());
-    }
-    fprintf(stream, "lora_scaled:\n");
-    for (std::tuple<std::string, float> la : params.lora_adapter) {
-        if (std::get<1>(la) == 1.0f) {
-            continue;
-        }
-        fprintf(stream, "  - %s: %f\n", std::get<0>(la).c_str(), std::get<1>(la));
-    }
-    fprintf(stream, "lora_base: %s\n", params.lora_base.c_str());
-    fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
-    fprintf(stream, "min_keep: %d # default: 0 (disabled)\n", sparams.min_keep);
-    fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", sparams.mirostat);
-    fprintf(stream, "mirostat_ent: %f # default: 5.0\n", sparams.mirostat_tau);
-    fprintf(stream, "mirostat_lr: %f # default: 0.1\n", sparams.mirostat_eta);
-    fprintf(stream, "mlock: %s # default: false\n", params.use_mlock ? "true" : "false");
-    fprintf(stream, "model: %s # default: %s\n", params.model.c_str(), DEFAULT_MODEL_PATH);
-    fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
-    fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
-    fprintf(stream, "n_gpu_layers: %d # default: -1\n", params.n_gpu_layers);
-    fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
-    fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", sparams.n_probs);
-    fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");
-    fprintf(stream, "penalize_nl: %s # default: false\n", sparams.penalize_nl ? "true" : "false");
-    fprintf(stream, "ppl_output_type: %d # default: 0\n", params.ppl_output_type);
-    fprintf(stream, "ppl_stride: %d # default: 0\n", params.ppl_stride);
-    fprintf(stream, "presence_penalty: %f # default: 0.0\n", sparams.penalty_present);
-    dump_string_yaml_multiline(stream, "prompt", params.prompt.c_str());
-    fprintf(stream, "prompt_cache: %s\n", params.path_prompt_cache.c_str());
-    fprintf(stream, "prompt_cache_all: %s # default: false\n", params.prompt_cache_all ? "true" : "false");
-    fprintf(stream, "prompt_cache_ro: %s # default: false\n", params.prompt_cache_ro ? "true" : "false");
-    dump_vector_int_yaml(stream, "prompt_tokens", prompt_tokens);
-    fprintf(stream, "random_prompt: %s # default: false\n", params.random_prompt ? "true" : "false");
-    fprintf(stream, "repeat_penalty: %f # default: 1.1\n", sparams.penalty_repeat);
-
-    fprintf(stream, "reverse_prompt:\n");
-    for (std::string ap : params.antiprompt) {
-        size_t pos = 0;
-        while ((pos = ap.find('\n', pos)) != std::string::npos) {
-            ap.replace(pos, 1, "\\n");
-            pos += 1;
-        }
-
-        fprintf(stream, "  - %s\n", ap.c_str());
-    }
-
-    fprintf(stream, "rope_freq_base: %f # default: 10000.0\n", params.rope_freq_base);
-    fprintf(stream, "rope_freq_scale: %f # default: 1.0\n", params.rope_freq_scale);
-    fprintf(stream, "seed: %u # default: -1 (random seed)\n", params.seed);
-    fprintf(stream, "simple_io: %s # default: false\n", params.simple_io ? "true" : "false");
-    fprintf(stream, "cont_batching: %s # default: false\n", params.cont_batching ? "true" : "false");
-    fprintf(stream, "flash_attn: %s # default: false\n", params.flash_attn ? "true" : "false");
-    fprintf(stream, "temp: %f # default: 0.8\n", sparams.temp);
-
-    const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + llama_max_devices());
-    dump_vector_float_yaml(stream, "tensor_split", tensor_split_vector);
-
-    fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
-    fprintf(stream, "threads: %d # default: %u\n", params.n_threads, std::thread::hardware_concurrency());
-    fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
-    fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
-    fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
-    fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
-    fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
-    fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
-}
-
-//
 // KV cache utils
 //
 
-void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
+void llama_kv_cache_dump_view(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = ".123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d",
@@ -2777,7 +2530,7 @@ void dump_kv_cache_view(const llama_kv_cache_view & view, int row_size) {
     printf("\n=== Done dumping\n");
 }
 
-void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
+void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_size) {
     static const char slot_chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
     printf("=== Dumping KV cache. total cells %d, max sequences per cell %d, populated cells %d, total tokens in cache %d, largest empty slot=%d @ %d\n",
@@ -2824,6 +2577,10 @@ void dump_kv_cache_view_seqs(const llama_kv_cache_view & view, int row_size) {
 
     printf("\n=== Done dumping\n");
 }
+
+//
+// Embedding utils
+//
 
 void llama_embd_normalize(const float * inp, float * out, int n) {
     double sum = 0.0;
@@ -3008,4 +2765,227 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
     }
 
     return result;
+}
+
+//
+// YAML utils
+//
+
+void yaml_dump_vector_float(FILE * stream, const char * prop_name, const std::vector<float> & data) {
+    if (data.empty()) {
+        fprintf(stream, "%s:\n", prop_name);
+        return;
+    }
+
+    fprintf(stream, "%s: [", prop_name);
+    for (size_t i = 0; i < data.size() - 1; ++i) {
+        fprintf(stream, "%e, ", data[i]);
+    }
+    fprintf(stream, "%e]\n", data.back());
+}
+
+void yaml_dump_vector_int(FILE * stream, const char * prop_name, const std::vector<int> & data) {
+    if (data.empty()) {
+        fprintf(stream, "%s:\n", prop_name);
+        return;
+    }
+
+    fprintf(stream, "%s: [", prop_name);
+    for (size_t i = 0; i < data.size() - 1; ++i) {
+        fprintf(stream, "%d, ", data[i]);
+    }
+    fprintf(stream, "%d]\n", data.back());
+}
+
+void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const char * data) {
+    std::string data_str(data == NULL ? "" : data);
+
+    if (data_str.empty()) {
+        fprintf(stream, "%s:\n", prop_name);
+        return;
+    }
+
+    size_t pos_start = 0;
+    size_t pos_found = 0;
+
+    if (std::isspace(data_str[0]) || std::isspace(data_str.back())) {
+        data_str = std::regex_replace(data_str, std::regex("\n"), "\\n");
+        data_str = std::regex_replace(data_str, std::regex("\""), "\\\"");
+        data_str = std::regex_replace(data_str, std::regex(R"(\\[^n"])"), R"(\$&)");
+        data_str = "\"" + data_str + "\"";
+        fprintf(stream, "%s: %s\n", prop_name, data_str.c_str());
+        return;
+    }
+
+    if (data_str.find('\n') == std::string::npos) {
+        fprintf(stream, "%s: %s\n", prop_name, data_str.c_str());
+        return;
+    }
+
+    fprintf(stream, "%s: |\n", prop_name);
+    while ((pos_found = data_str.find('\n', pos_start)) != std::string::npos) {
+        fprintf(stream, "  %s\n", data_str.substr(pos_start, pos_found-pos_start).c_str());
+        pos_start = pos_found + 1;
+    }
+}
+
+void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const llama_context * lctx,
+                               const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
+    const llama_sampling_params & sparams = params.sparams;
+
+    fprintf(stream, "build_commit: %s\n",        LLAMA_COMMIT);
+    fprintf(stream, "build_number: %d\n",        LLAMA_BUILD_NUMBER);
+    fprintf(stream, "cpu_has_arm_fma: %s\n",     ggml_cpu_has_arm_fma()     ? "true" : "false");
+    fprintf(stream, "cpu_has_avx: %s\n",         ggml_cpu_has_avx()         ? "true" : "false");
+    fprintf(stream, "cpu_has_avx_vnni: %s\n",    ggml_cpu_has_avx_vnni()    ? "true" : "false");
+    fprintf(stream, "cpu_has_avx2: %s\n",        ggml_cpu_has_avx2()        ? "true" : "false");
+    fprintf(stream, "cpu_has_avx512: %s\n",      ggml_cpu_has_avx512()      ? "true" : "false");
+    fprintf(stream, "cpu_has_avx512_vbmi: %s\n", ggml_cpu_has_avx512_vbmi() ? "true" : "false");
+    fprintf(stream, "cpu_has_avx512_vnni: %s\n", ggml_cpu_has_avx512_vnni() ? "true" : "false");
+    fprintf(stream, "cpu_has_cuda: %s\n",        ggml_cpu_has_cuda()        ? "true" : "false");
+    fprintf(stream, "cpu_has_vulkan: %s\n",      ggml_cpu_has_vulkan()      ? "true" : "false");
+    fprintf(stream, "cpu_has_clblast: %s\n",     ggml_cpu_has_clblast()     ? "true" : "false");
+    fprintf(stream, "cpu_has_kompute: %s\n",     ggml_cpu_has_kompute()     ? "true" : "false");
+    fprintf(stream, "cpu_has_fma: %s\n",         ggml_cpu_has_fma()         ? "true" : "false");
+    fprintf(stream, "cpu_has_gpublas: %s\n",     ggml_cpu_has_gpublas()     ? "true" : "false");
+    fprintf(stream, "cpu_has_neon: %s\n",        ggml_cpu_has_neon()        ? "true" : "false");
+    fprintf(stream, "cpu_has_sve: %s\n",         ggml_cpu_has_sve()         ? "true" : "false");
+    fprintf(stream, "cpu_has_f16c: %s\n",        ggml_cpu_has_f16c()        ? "true" : "false");
+    fprintf(stream, "cpu_has_fp16_va: %s\n",     ggml_cpu_has_fp16_va()     ? "true" : "false");
+    fprintf(stream, "cpu_has_wasm_simd: %s\n",   ggml_cpu_has_wasm_simd()   ? "true" : "false");
+    fprintf(stream, "cpu_has_blas: %s\n",        ggml_cpu_has_blas()        ? "true" : "false");
+    fprintf(stream, "cpu_has_sse3: %s\n",        ggml_cpu_has_sse3()        ? "true" : "false");
+    fprintf(stream, "cpu_has_vsx: %s\n",         ggml_cpu_has_vsx()         ? "true" : "false");
+    fprintf(stream, "cpu_has_matmul_int8: %s\n", ggml_cpu_has_matmul_int8() ? "true" : "false");
+
+#ifdef NDEBUG
+    fprintf(stream, "debug: false\n");
+#else
+    fprintf(stream, "debug: true\n");
+#endif // NDEBUG
+
+    fprintf(stream, "model_desc: %s\n", model_desc);
+    fprintf(stream, "n_vocab: %d  # output size of the final layer, 32001 for some models\n", llama_n_vocab(llama_get_model(lctx)));
+
+#ifdef __OPTIMIZE__
+    fprintf(stream, "optimize: true\n");
+#else
+    fprintf(stream, "optimize: false\n");
+#endif // __OPTIMIZE__
+
+    fprintf(stream, "time: %s\n", timestamp.c_str());
+
+    fprintf(stream, "\n");
+    fprintf(stream, "###############\n");
+    fprintf(stream, "# User Inputs #\n");
+    fprintf(stream, "###############\n");
+    fprintf(stream, "\n");
+
+    fprintf(stream, "alias: %s # default: unknown\n", params.model_alias.c_str());
+    fprintf(stream, "batch_size: %d # default: 512\n", params.n_batch);
+    yaml_dump_string_multiline(stream, "cfg_negative_prompt", sparams.cfg_negative_prompt.c_str());
+    fprintf(stream, "cfg_scale: %f # default: 1.0\n", sparams.cfg_scale);
+    fprintf(stream, "chunks: %d # default: -1 (unlimited)\n", params.n_chunks);
+    fprintf(stream, "color: %s # default: false\n", params.use_color ? "true" : "false");
+    fprintf(stream, "ctx_size: %d # default: 512\n", params.n_ctx);
+    fprintf(stream, "escape: %s # default: false\n", params.escape ? "true" : "false");
+    fprintf(stream, "file: # never logged, see prompt instead. Can still be specified for input.\n");
+    fprintf(stream, "frequency_penalty: %f # default: 0.0 \n", sparams.penalty_freq);
+    yaml_dump_string_multiline(stream, "grammar", sparams.grammar.c_str());
+    fprintf(stream, "grammar-file: # never logged, see grammar instead. Can still be specified for input.\n");
+    fprintf(stream, "hellaswag: %s # default: false\n", params.hellaswag ? "true" : "false");
+    fprintf(stream, "hellaswag_tasks: %zu # default: 400\n", params.hellaswag_tasks);
+
+    const auto logit_bias_eos = sparams.logit_bias.find(llama_token_eos(llama_get_model(lctx)));
+    const bool ignore_eos = logit_bias_eos != sparams.logit_bias.end() && logit_bias_eos->second == -INFINITY;
+    fprintf(stream, "ignore_eos: %s # default: false\n", ignore_eos ? "true" : "false");
+
+    yaml_dump_string_multiline(stream, "in_prefix", params.input_prefix.c_str());
+    fprintf(stream, "in_prefix_bos: %s # default: false\n", params.input_prefix_bos ? "true" : "false");
+    yaml_dump_string_multiline(stream, "in_suffix", params.input_prefix.c_str());
+    fprintf(stream, "instruct: %s # default: false\n", params.instruct ? "true" : "false");
+    fprintf(stream, "interactive: %s # default: false\n", params.interactive ? "true" : "false");
+    fprintf(stream, "interactive_specials: %s # default: false\n", params.interactive_specials ? "true" : "false");
+    fprintf(stream, "interactive_first: %s # default: false\n", params.interactive_first ? "true" : "false");
+    fprintf(stream, "keep: %d # default: 0\n", params.n_keep);
+    fprintf(stream, "logdir: %s # default: unset (no logging)\n", params.logdir.c_str());
+
+    fprintf(stream, "logit_bias:\n");
+    for (std::pair<llama_token, float> lb : sparams.logit_bias) {
+        if (ignore_eos && lb.first == logit_bias_eos->first) {
+            continue;
+        }
+        fprintf(stream, "  %d: %f", lb.first, lb.second);
+    }
+
+    fprintf(stream, "lora:\n");
+    for (std::tuple<std::string, float> la : params.lora_adapter) {
+        if (std::get<1>(la) != 1.0f) {
+            continue;
+        }
+        fprintf(stream, "  - %s\n", std::get<0>(la).c_str());
+    }
+    fprintf(stream, "lora_scaled:\n");
+    for (std::tuple<std::string, float> la : params.lora_adapter) {
+        if (std::get<1>(la) == 1.0f) {
+            continue;
+        }
+        fprintf(stream, "  - %s: %f\n", std::get<0>(la).c_str(), std::get<1>(la));
+    }
+    fprintf(stream, "lora_base: %s\n", params.lora_base.c_str());
+    fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
+    fprintf(stream, "min_keep: %d # default: 0 (disabled)\n", sparams.min_keep);
+    fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", sparams.mirostat);
+    fprintf(stream, "mirostat_ent: %f # default: 5.0\n", sparams.mirostat_tau);
+    fprintf(stream, "mirostat_lr: %f # default: 0.1\n", sparams.mirostat_eta);
+    fprintf(stream, "mlock: %s # default: false\n", params.use_mlock ? "true" : "false");
+    fprintf(stream, "model: %s # default: %s\n", params.model.c_str(), DEFAULT_MODEL_PATH);
+    fprintf(stream, "model_draft: %s # default:\n", params.model_draft.c_str());
+    fprintf(stream, "multiline_input: %s # default: false\n", params.multiline_input ? "true" : "false");
+    fprintf(stream, "n_gpu_layers: %d # default: -1\n", params.n_gpu_layers);
+    fprintf(stream, "n_predict: %d # default: -1 (unlimited)\n", params.n_predict);
+    fprintf(stream, "n_probs: %d # only used by server binary, default: 0\n", sparams.n_probs);
+    fprintf(stream, "no_mmap: %s # default: false\n", !params.use_mmap ? "true" : "false");
+    fprintf(stream, "penalize_nl: %s # default: false\n", sparams.penalize_nl ? "true" : "false");
+    fprintf(stream, "ppl_output_type: %d # default: 0\n", params.ppl_output_type);
+    fprintf(stream, "ppl_stride: %d # default: 0\n", params.ppl_stride);
+    fprintf(stream, "presence_penalty: %f # default: 0.0\n", sparams.penalty_present);
+    yaml_dump_string_multiline(stream, "prompt", params.prompt.c_str());
+    fprintf(stream, "prompt_cache: %s\n", params.path_prompt_cache.c_str());
+    fprintf(stream, "prompt_cache_all: %s # default: false\n", params.prompt_cache_all ? "true" : "false");
+    fprintf(stream, "prompt_cache_ro: %s # default: false\n", params.prompt_cache_ro ? "true" : "false");
+    yaml_dump_vector_int(stream, "prompt_tokens", prompt_tokens);
+    fprintf(stream, "random_prompt: %s # default: false\n", params.random_prompt ? "true" : "false");
+    fprintf(stream, "repeat_penalty: %f # default: 1.1\n", sparams.penalty_repeat);
+
+    fprintf(stream, "reverse_prompt:\n");
+    for (std::string ap : params.antiprompt) {
+        size_t pos = 0;
+        while ((pos = ap.find('\n', pos)) != std::string::npos) {
+            ap.replace(pos, 1, "\\n");
+            pos += 1;
+        }
+
+        fprintf(stream, "  - %s\n", ap.c_str());
+    }
+
+    fprintf(stream, "rope_freq_base: %f # default: 10000.0\n", params.rope_freq_base);
+    fprintf(stream, "rope_freq_scale: %f # default: 1.0\n", params.rope_freq_scale);
+    fprintf(stream, "seed: %u # default: -1 (random seed)\n", params.seed);
+    fprintf(stream, "simple_io: %s # default: false\n", params.simple_io ? "true" : "false");
+    fprintf(stream, "cont_batching: %s # default: false\n", params.cont_batching ? "true" : "false");
+    fprintf(stream, "flash_attn: %s # default: false\n", params.flash_attn ? "true" : "false");
+    fprintf(stream, "temp: %f # default: 0.8\n", sparams.temp);
+
+    const std::vector<float> tensor_split_vector(params.tensor_split, params.tensor_split + llama_max_devices());
+    yaml_dump_vector_float(stream, "tensor_split", tensor_split_vector);
+
+    fprintf(stream, "tfs: %f # default: 1.0\n", sparams.tfs_z);
+    fprintf(stream, "threads: %d # default: %u\n", params.n_threads, std::thread::hardware_concurrency());
+    fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
+    fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
+    fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
+    fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
+    fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
+    fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
 }

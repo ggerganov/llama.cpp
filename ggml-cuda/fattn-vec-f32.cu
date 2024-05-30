@@ -91,7 +91,7 @@ static __global__ void flash_attn_vec_ext_f32(
         for (int i0 = 0; i0 < D/2; i0 += WARP_SIZE) {
             const int i = i0 + threadIdx.x;
 
-            Q_h2[j][i0/WARP_SIZE]    = Q_f2[j*(nb01/sizeof(float2)) + i];
+            Q_h2[j][i0/WARP_SIZE]    = ncols <= 2 || ic0 + j ? Q_f2[j*(nb01/sizeof(float2)) + i] : make_float2(0.0f, 0.0f);
             Q_h2[j][i0/WARP_SIZE].x *= scale;
             Q_h2[j][i0/WARP_SIZE].y *= scale;
         }
@@ -200,6 +200,10 @@ static __global__ void flash_attn_vec_ext_f32(
 
 #pragma unroll
     for (int j_VKQ = 0; j_VKQ < ncols; ++j_VKQ) {
+        if (ncols > 2 && ic0 + j_VKQ >= ne01) {
+            break;
+        }
+
         kqsum[j_VKQ] = kqsum_shared[j_VKQ][threadIdx.x];
         kqsum[j_VKQ] = warp_reduce_sum(kqsum[j_VKQ]);
 
@@ -211,7 +215,7 @@ static __global__ void flash_attn_vec_ext_f32(
         dst[j_dst*D*gridDim.y + D*blockIdx.y + tid] = dst_val;
     }
 
-    if (parallel_blocks != 1 && tid < ncols) {
+    if (parallel_blocks != 1 && tid < ncols && (ncols <= 2 || ic0 + tid < ne01)) {
         dst_meta[(ic0 + tid)*gridDim.y*parallel_blocks + blockIdx.y*parallel_blocks + ip] = make_float2(kqmax[tid], kqsum[tid]);
     }
 }

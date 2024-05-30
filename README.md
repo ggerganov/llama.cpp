@@ -6,6 +6,8 @@
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
+[![Conan Center](https://shields.io/conan/v/llama-cpp)](https://conan.io/center/llama-cpp)
+
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
 ### Recent API changes
@@ -107,7 +109,6 @@ Typically finetunes of the base models below are supported as well.
 - [X] [Aquila 1 & 2](https://huggingface.co/models?search=BAAI/Aquila)
 - [X] [Starcoder models](https://github.com/ggerganov/llama.cpp/pull/3187)
 - [X] [Refact](https://huggingface.co/smallcloudai/Refact-1_6B-fim)
-- [X] [Persimmon 8B](https://github.com/ggerganov/llama.cpp/pull/3410)
 - [X] [MPT](https://github.com/ggerganov/llama.cpp/pull/3417)
 - [X] [Bloom](https://github.com/ggerganov/llama.cpp/pull/3553)
 - [x] [Yi models](https://huggingface.co/models?search=01-ai/Yi)
@@ -128,6 +129,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
 - [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
 - [x] [OLMo](https://allenai.org/olmo)
+- [x] [GPT-NeoX](https://github.com/EleutherAI/gpt-neox) + [Pythia](https://github.com/EleutherAI/pythia)
 
 (instructions for supporting more models: [HOWTO-add-model.md](./docs/HOWTO-add-model.md))
 
@@ -141,6 +143,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [Yi-VL](https://huggingface.co/models?search=Yi-VL)
 - [x] [Mini CPM](https://huggingface.co/models?search=MiniCPM)
 - [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
+- [x] [Bunny](https://github.com/BAAI-DCAI/Bunny)
 
 **HTTP server**
 
@@ -201,6 +204,10 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
+
+**Tools:**
+
+- [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
 
 ---
 
@@ -310,8 +317,6 @@ In order to build llama.cpp you have four different options.
       make
       ```
 
-      **Note**: for `Debug` builds, run `make LLAMA_DEBUG=1`
-
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
@@ -323,23 +328,32 @@ In order to build llama.cpp you have four different options.
         make
         ```
 
+  - Notes:
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, run `make LLAMA_DEBUG=1`
+
 - Using `CMake`:
 
-    ```bash
-    cmake -B build
-    cmake --build build --config Release
-    ```
+  ```bash
+  cmake -B build
+  cmake --build build --config Release
+  ```
 
-    **Note**: for `Debug` builds, there are two cases:
+  **Notes**:
 
-    - Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, there are two cases:
+
+      1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
       ```bash
       cmake -B build -DCMAKE_BUILD_TYPE=Debug
       cmake --build build
       ```
 
-    - Multi-config generators (`-G` param set to Visual Studio, XCode...):
+      2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
       ```bash
       cmake -B build -G "Xcode"
@@ -472,7 +486,8 @@ Building the program with BLAS support may lead to some performance improvements
   |--------------------------------|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
   | LLAMA_CUDA_FORCE_DMMV          | Boolean                | false   | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_X              | Positive integer >= 32 | 32      | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants.                                         |
-  | LLAMA_CUDA_MMV_Y               | Positive integer       | 1       | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended.                                                                                                                                         |
+  | LLAMA_CUDA_MMV_Y               | Positive integer       | 1       | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended.                                               |
+  | LLAMA_CUDA_FORCE_MMQ           | Boolean                | false   | Force the use of dequantization + matrix multiplication kernels instead of leveraging Math libraries. |                                                                                                                                         |
   | LLAMA_CUDA_F16                 | Boolean                | false   | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs.                                                           |
   | LLAMA_CUDA_KQUANTS_ITER        | 1 or 2                 | 2       | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                                                                     |
   | LLAMA_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       | 128     | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial.                                                                         |
@@ -691,7 +706,8 @@ Building the program with BLAS support may lead to some performance improvements
 
 To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 
-Note: `convert.py` does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
+Note: `convert.py` has been moved to `examples/convert-legacy-llama.py` and shouldn't be used for anything other than `Llama/Llama2/Mistral` models and their derievatives.
+It does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
 
 ```bash
 # obtain the official LLaMA model weights and place them in ./models
@@ -708,10 +724,10 @@ ls ./models
 python3 -m pip install -r requirements.txt
 
 # convert the model to ggml FP16 format
-python3 convert.py models/mymodel/
+python3 convert-hf-to-gguf.py models/mymodel/
 
 # [Optional] for models using BPE tokenizers
-python convert.py models/mymodel/ --vocab-type bpe
+python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
 
 # quantize the model to 4-bits (using Q4_K_M method)
 ./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M

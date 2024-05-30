@@ -1,2 +1,2 @@
--r ./requirements-convert.txt
+-r ./requirements-convert-legacy-llama.txt
 torch~=2.1.1
