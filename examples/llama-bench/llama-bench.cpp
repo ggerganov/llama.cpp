@@ -191,13 +191,16 @@ struct cmd_params {
     bool verbose;
     output_formats output_format;
 };
+//
+//static const cpu_params default_cpuparams(
+//    int32_t(std::thread::hardware_concurrency()),
+//    {false},
+//    false,
+//    1,
+//    false,
+//    false
+//);
 
-int32_t  n_threads = -1;
-bool     cpumask[GGML_N_CORES_MAX] = { false }; // CPU affinity mask.
-bool     mask_valid = false;   // Default: any CPU
-int32_t  priority = 0;      // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
-bool     strict_cpu = false;   // Use strict CPU placement
-bool     poll = false;   // Use polling (busywait) to wait for work
 static const cmd_params cmd_params_defaults = {
     /* model         */ {"models/7B/ggml-model-q4_0.gguf"},
     /* n_prompt      */ {512},
@@ -217,7 +220,7 @@ static const cmd_params cmd_params_defaults = {
     /* use_mmap      */ {true},
     /* embeddings    */ {false},
     /* numa          */ GGML_NUMA_STRATEGY_DISABLED,
-    /* cpuparams     */ {int32_t(std::thread::hardware_concurrency()), {false}, false, 1, false, false},
+    /* cpuparams     */ {},
     /* reps          */ 5,
     /* verbose       */ false,
     /* output_format */ MARKDOWN

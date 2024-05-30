@@ -20062,7 +20062,7 @@ struct ggml_cplan ggml_graph_plan(
     }
 
     cplan.threadpool = threadpool;
-    cplan.n_threads  = n_threads;
+    cplan.n_threads  = MIN(max_tasks, n_threads);
     cplan.work_size  = work_size;
     cplan.work_data  = NULL;
 
