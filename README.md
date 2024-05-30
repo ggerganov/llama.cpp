@@ -315,8 +315,6 @@ In order to build llama.cpp you have four different options.
       make
       ```
 
-      **Note**: for `Debug` builds, run `make LLAMA_DEBUG=1`
-
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
@@ -328,23 +326,32 @@ In order to build llama.cpp you have four different options.
         make
         ```
 
+  - Notes:
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, run `make LLAMA_DEBUG=1`
+
 - Using `CMake`:
 
-    ```bash
-    cmake -B build
-    cmake --build build --config Release
-    ```
+  ```bash
+  cmake -B build
+  cmake --build build --config Release
+  ```
 
-    **Note**: for `Debug` builds, there are two cases:
+  **Notes**:
 
-    - Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, there are two cases:
+
+      1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
       ```bash
       cmake -B build -DCMAKE_BUILD_TYPE=Debug
       cmake --build build
       ```
 
-    - Multi-config generators (`-G` param set to Visual Studio, XCode...):
+      2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
       ```bash
       cmake -B build -G "Xcode"
