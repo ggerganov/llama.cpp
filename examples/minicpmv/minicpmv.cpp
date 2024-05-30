@@ -125,10 +125,6 @@ static std::pair<int, int> uhd_find_best_resize(std::pair<int, int> original_siz
     return std::make_pair(best_width, best_height);
 }
 
-inline float clip(float x, float lower, float upper) {
-    return std::max(lower, std::min(x, upper));
-}
-
 static std::pair<int, int> uhd_get_refine_size(std::pair<int, int> original_size, std::pair<int, int> grid, int scale_resolution, int patch_size, bool allow_upscale = false) {
     int width, height;
     std::tie(width, height) = original_size;
@@ -149,6 +145,10 @@ static std::pair<int, int> uhd_get_refine_size(std::pair<int, int> original_size
   //  std::pair<int, int> refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y); (old line)
     std::pair<int, int> refine_size = std::make_pair(best_grid_width * grid_x, best_grid_height * grid_y); // (new line)
     return refine_size;
+}
+
+inline int clip(int x, int lower, int upper) {
+    return std::max(lower, std::min(x, upper));
 }
 
 static bool bicubic_resize(const clip_image_u8 &img, clip_image_u8 &dst, int target_width, int target_height) {
@@ -210,7 +210,7 @@ static bool bicubic_resize(const clip_image_u8 &img, clip_image_u8 &dst, int tar
             }
         }
     }
-
+    
     return true;
 }
 
@@ -251,6 +251,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
         clip_image_u8 *source_image = clip_image_u8_init();
         bicubic_resize(*img, *source_image, best_size.first, best_size.second);
         // source_image = image.copy().resize(best_resize, Image.Resampling.BICUBIC)
+        LOG_TEE("%s: image_size: %d %d; source_image size: %d %d\n", __func__, img->nx, img->ny, best_size.first, best_size.second);
         images[images.size()-1].push_back(source_image);
 
         std::vector<std::pair<int, int>> candidate_grids;
@@ -281,7 +282,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
         clip_image_u8 *refine_image = clip_image_u8_init();
         bicubic_resize(*img, *refine_image, refine_size.first, refine_size.second);
 
-        LOG_TEE("%s: refine_image_size: %d %d; best_grid: %d %d\n", __func__, refine_image->nx, refine_image->ny, best_grid.first, best_grid.second);
+        LOG_TEE("%s: refine_image_size: %d %d; refine_size: %d %d\n", __func__, refine_image->nx, refine_image->ny, refine_size.first, refine_size.second);
 
         // split_to_patches
         int width = refine_image->nx;
