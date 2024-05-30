@@ -5,6 +5,7 @@
 #include "ggml-quants.h"
 #include "ggml.h"
 
+
 #if defined(_MSC_VER) || defined(__MINGW32__)
 #include <malloc.h> // using malloc.h with MSC/MINGW
 #elif !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
@@ -19485,6 +19486,12 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
     if (n_threads <= 0) {
         n_threads = GGML_DEFAULT_N_THREADS;
     }
+#if defined(GGML_USE_OPENMP)
+    // Limit the number of threads used to avoid deadlock
+    // ref: https://github.com/ggerganov/llama.cpp/pull/7606
+    n_threads = MIN(n_threads, omp_get_max_threads());
+    n_threads = MIN(n_threads, omp_get_thread_limit());
+#endif
 
     size_t work_size = 0;
 
