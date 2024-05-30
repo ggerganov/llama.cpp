@@ -388,6 +388,14 @@ In order to build llama.cpp you have four different options.
     CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
     the instructions for use and activate this options in this document below.
 
+### Homebrew
+
+On Mac and Linux, the homebrew package manager can be used via 
+```
+brew install llama.cpp
+```
+The formula is automatically updated with new `llama.cpp` releases.
+
 ### Metal Build
 
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
