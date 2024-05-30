@@ -321,7 +321,9 @@ void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst
         ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
     } else if (ggml_backend_buffer_is_host(dst->buffer)) {
         ggml_backend_tensor_get(src, dst->data, 0, ggml_nbytes(src));
-    } else if (!ggml_backend_buffer_copy_tensor(src, dst)) {
+    }
+    bool same_backend = strcmp(ggml_backend_buffer_name(src->buffer), ggml_backend_buffer_name(dst->buffer)) == 0;
+    if (!same_backend || !ggml_backend_buffer_copy_tensor(src, dst)) {
 #ifndef NDEBUG
         fprintf(stderr, "%s: warning: slow copy from %s to %s\n", __func__, ggml_backend_buffer_name(src->buffer), ggml_backend_buffer_name(dst->buffer));
 #endif
