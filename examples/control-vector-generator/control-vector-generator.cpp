@@ -381,7 +381,8 @@ static void export_gguf(std::vector<float *> v_final, int n_embd, const std::str
 
     // TODO customize mem size - I have no idea what this is supposed to be
     struct ggml_init_params params = {
-        /*.mem_size   =*/ ggml_tensor_overhead() * v_final.size(),
+        /*.mem_size   =*/ (ggml_tensor_overhead() * v_final.size())
+                            + (n_embd * v_final.size() * sizeof(float)),
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
