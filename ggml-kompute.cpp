@@ -1680,6 +1680,9 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
 #pragma message("      https://github.com/ggerganov/llama.cpp/pull/7225")
                         GGML_ASSERT(dst->src[2] == nullptr && "phi3 frequency factors not implemented yet");
 
+#pragma message("TODO: update rope NORM mode to match NEOX mode")
+#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7634")
+
                         GGML_ASSERT(ne10 == ne02);
                         GGML_ASSERT(src0t == dstt);
                         // const int n_past = ((int32_t *) dst->op_params)[0];

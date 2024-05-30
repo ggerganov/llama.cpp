@@ -4303,6 +4303,9 @@ static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context * subctx, con
 
     const bool is_neox = mode & 2;
 
+#pragma message("TODO: update rope NORM mode to match NEOX mode")
+#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7634")
+
     float corr_dims[2];
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 

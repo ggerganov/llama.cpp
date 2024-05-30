@@ -14029,6 +14029,9 @@ inline void ggml_sycl_op_rope(const ggml_tensor *src0, const ggml_tensor *src1,
 
     const bool is_neox = mode & 2;
 
+#pragma message("TODO: update rope NORM mode to match NEOX mode")
+#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7634")
+
     if (is_neox) {
         pos = (const int32_t *) src1_dd;
 
