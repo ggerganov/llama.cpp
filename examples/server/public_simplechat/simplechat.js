@@ -189,6 +189,15 @@ class SimpleChat {
         } else {
             if (bClear) {
                 div.innerHTML = gUsageMsg;
+                div.innerHTML += `<p class="role-system">Restore</p>`;
+                let btn = ui.el_create_button(this.ods_key(), (ev)=>{
+                    console.log("DBUG:SimpleChat:SC:Load", this);
+                    this.load();
+                    queueMicrotask(()=>{
+                        this.show(div);
+                    });
+                });
+                div.appendChild(btn);
                 gMe.show_info(div);
             }
         }
