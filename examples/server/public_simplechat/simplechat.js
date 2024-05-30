@@ -78,14 +78,18 @@ class SimpleChat {
         this.iLastSys = -1;
     }
 
+    ods_key() {
+        return `SimpleChat-${this.chatId}`
+    }
+
     save() {
         /** @type {SimpleChatODS} */
         let ods = {iLastSys: this.iLastSys, xchat: this.xchat};
-        localStorage.setItem(this.chatId, JSON.stringify(ods));
+        localStorage.setItem(this.ods_key(), JSON.stringify(ods));
     }
 
     load() {
-        let sods = localStorage.getItem(this.chatId);
+        let sods = localStorage.getItem(this.ods_key());
         if (sods == null) {
             return;
         }
