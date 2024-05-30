@@ -15937,6 +15937,14 @@ bool llama_supports_mlock(void) {
     return llama_mlock::SUPPORTED;
 }
 
+bool llama_supports_rpc(void) {
+#if defined(GGML_USE_RPC)
+    return true;
+#else
+    return false;
+#endif
+}
+
 bool llama_supports_gpu_offload(void) {
 #if defined(GGML_USE_CUDA) || defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
     defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
