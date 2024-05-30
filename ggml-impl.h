@@ -144,6 +144,10 @@ extern "C" {
 #endif
 #endif
 
+#if defined(__ARM_FEATURE_SVE)
+#include <arm_sve.h>
+#endif
+
 // 16-bit float
 // on Arm, we use __fp16
 // on x86, we use uint16_t

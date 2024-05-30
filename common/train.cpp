@@ -1052,7 +1052,7 @@ struct train_params_common get_default_train_params_common() {
 
     params.custom_n_ctx = false;
 
-    params.use_flash              = true;
+    params.use_flash              = false;
     params.use_checkpointing      = true;
 
     params.sample_start           = "";
@@ -1380,7 +1380,7 @@ bool consume_common_train_arg(
 
 void finish_processing_train_args(struct train_params_common * params) {
     if (params->escape) {
-        process_escapes(params->sample_start);
+        string_process_escapes(params->sample_start);
     }
 }
 

@@ -389,10 +389,6 @@ else
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
 endif
 
-ifdef LLAMA_QKK_64
-	MK_CPPFLAGS += -DGGML_QKK_64
-endif
-
 ifndef LLAMA_NO_ACCELERATE
 	# Mac OS - include Accelerate framework.
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
@@ -445,6 +441,9 @@ endif # JETSON_EOL_MODULE_DETECT
 ifdef LLAMA_DEBUG
 	MK_NVCCFLAGS += -lineinfo
 endif # LLAMA_DEBUG
+ifdef LLAMA_CUDA_DEBUG
+	MK_NVCCFLAGS += --device-debug
+endif # LLAMA_CUDA_DEBUG
 ifdef LLAMA_CUDA_NVCC
 	NVCC = $(CCACHE) $(LLAMA_CUDA_NVCC)
 else

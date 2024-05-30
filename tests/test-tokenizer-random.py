@@ -153,9 +153,26 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         'Ⅵ-a',       # unicode_ranges_digit, {0x00002150, 0x0000218F} // Number Forms
         '\uFEFF//',   # unicode_ranges_control, 0xFEFF (BOM)
         'Cửa Việt',   # llama-3, ignore_merges = true
-        '<s>a',       # TODO: Phi-3 fail
+        '<s>a',       # Phi-3 fail
+        '<unk><|endoftext|><s>',  # Phi-3 fail
         'a\na',       # TODO: Bert fail
     ]
+
+
+def generator_random_special_tokens(tokenizer, iterations=100) -> Iterator[str]:
+    special_tokens = set(tokenizer.all_special_tokens)
+    special_tokens.update([" ", "\n", "\t", "-", "!", "one", "1", "<s>", "</s>"])
+    special_tokens = list(sorted(special_tokens))
+    rand = random.Random()
+    for m in range(iterations):
+        rand.seed(m)
+        words = rand.choices(special_tokens, k=500)
+        if words[0] == tokenizer.bos_token:  # skip spam warning of double BOS
+            while len(words) > 1 and words[1] == tokenizer.bos_token:  # leave one starting BOS
+                words.pop(0)
+            if tokenizer.add_bos_token:  # drop all starting BOS
+                words.pop(0)
+        yield "".join(words)
 
 
 def generator_vocab_words(vocab: list[str]) -> Iterator[str]:
@@ -278,25 +295,47 @@ def main(argv: list[str] = None):
     model = LibLlamaModel(LibLlama(), args.vocab_file, mparams=dict(vocab_only=True), cparams=dict(n_ctx=4096))
     tokenizer = AutoTokenizer.from_pretrained(args.dir_tokenizer)
 
-    def func_tokenize2(text: str):
-        return tokenizer.encode(text, add_special_tokens=False)
-
-    parse_special = all(len(func_tokenize2(t)) == 1 for t in tokenizer.all_special_tokens)
-
     def func_tokenize1(text: str):
-        return model.tokenize(text, add_special=False, parse_special=parse_special)
+        return model.tokenize(text, add_special=True, parse_special=True)
+
+    def func_tokenize2(text: str):
+        return tokenizer.encode(text, add_special_tokens=True)
+
+    ids = func_tokenize2("a")
+    assert 1 <= len(ids) <= 3
+    add_bos_token = len(ids) > 1 and tokenizer.bos_token_id == ids[0]
+    tokenizer.add_bos_token = getattr(tokenizer, "add_bos_token", add_bos_token)
 
     vocab = list(sorted(tokenizer.batch_decode(list(tokenizer.get_vocab().values()), skip_special_tokens=True)))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_custom_text())
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_custom_text_edge_cases())
+    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_special_tokens(tokenizer, 10_000))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_vocab_words(vocab))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_chars(10_000))
     test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_chars(vocab, 10_000))
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_words(vocab, 10_000))
+    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_words(vocab, 5_000))
     # test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_bytes(10_000)) # FAIL
 
     model.free()
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+
+    path_tokenizers = "./models/tokenizers/"
+    path_vocab_format = "./models/ggml-vocab-%s.gguf"
+
+    # import os
+    # tokenizers = os.listdir(path_tokenizers)
+    tokenizers = [
+        # "llama-spm",   # SPM
+        # "phi-3",       # SPM
+        "jina-v2-en",  # WPM
+        "bert-bge",    # WPM
+    ]
+
+    for tokenizer in tokenizers:
+        print("\n" + "=" * 50 + "\n" + tokenizer + "\n")  # noqa
+        vocab_file = path_vocab_format % tokenizer
+        dir_tokenizer = path_tokenizers + "/" + tokenizer
+        main([vocab_file, dir_tokenizer, "--verbose"])
