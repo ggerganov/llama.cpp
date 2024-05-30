@@ -55,6 +55,8 @@ let gUsageMsg = `
 
 /** @typedef {{role: string, content: string}[]} ChatMessages */
 
+/** @typedef {{iLastSys: number, xchat: ChatMessages}} SimpleChatODS */
+
 class SimpleChat {
 
     /**
@@ -74,6 +76,23 @@ class SimpleChat {
     clear() {
         this.xchat = [];
         this.iLastSys = -1;
+    }
+
+    save() {
+        /** @type {SimpleChatODS} */
+        let ods = {iLastSys: this.iLastSys, xchat: this.xchat};
+        localStorage.setItem(this.chatId, JSON.stringify(ods));
+    }
+
+    load() {
+        let sods = localStorage.getItem(this.chatId);
+        if (sods == null) {
+            return;
+        }
+        /** @type {SimpleChatODS} */
+        let ods = JSON.parse(sods);
+        this.iLastSys = ods.iLastSys;
+        this.xchat = ods.xchat;
     }
 
     /**
@@ -142,6 +161,7 @@ class SimpleChat {
         if (role == Roles.System) {
             this.iLastSys = this.xchat.length - 1;
         }
+        this.save();
         return true;
     }
 

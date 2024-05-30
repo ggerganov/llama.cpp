@@ -68,6 +68,7 @@ Once inside
   * oneshot or streamed mode.
 
 * In completion mode
+  * one normally doesnt use a system prompt in completion mode.
   * logic by default doesnt insert any role specific "ROLE: " prefix wrt each role's message.
     If the model requires any prefix wrt user role messages, then the end user has to
     explicitly add the needed prefix, when they enter their chat message.
