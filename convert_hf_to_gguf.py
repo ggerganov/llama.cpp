@@ -33,6 +33,8 @@ logger = logging.getLogger("hf-to-gguf")
 @dataclass
 class Metadata:
     name: Optional[str] = None
+    basename: Optional[str] = None
+    finetune: Optional[str] = None
     author: Optional[str] = None
     version: Optional[str] = None
     url: Optional[str] = None
@@ -55,6 +57,8 @@ class Metadata:
         # Assigning values to Metadata attributes if they exist in the JSON file
         # This is based on LLM_KV_NAMES mapping in llama.cpp
         metadata.name = data.get("general.name")
+        metadata.basename = data.get("general.basename")
+        metadata.finetune = data.get("general.finetune")
         metadata.author = data.get("general.author")
         metadata.version = data.get("general.version")
         metadata.url = data.get("general.url")
@@ -201,7 +205,7 @@ class Model:
         weight_estimate = per_model_weight_count_estimation(model_tensors, expert_count)
 
         # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.model_name, self.metadata.version, expert_count, weight_estimate, encodingScheme)
+        self.fname_default = gguf.naming_convention(self.model_name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, encodingScheme)
 
         # Filename Output
         if fname_out is not None:
@@ -311,6 +315,10 @@ class Model:
         self.gguf_writer.add_name(self.model_name)
 
         if self.metadata is not None:
+            if self.metadata.basename is not None:
+                self.gguf_writer.add_basename(self.metadata.basename)
+            if self.metadata.finetune is not None:
+                self.gguf_writer.add_finetune(self.metadata.finetune)
             if self.metadata.author is not None:
                 self.gguf_writer.add_author(self.metadata.author)
             if self.metadata.version is not None:

@@ -24,6 +24,8 @@ class Keys:
         QUANTIZATION_VERSION = "general.quantization_version"
         ALIGNMENT            = "general.alignment"
         NAME                 = "general.name"
+        BASENAME             = "general.basename"
+        FINETUNE             = "general.finetune"
         AUTHOR               = "general.author"
         VERSION              = "general.version"
         URL                  = "general.url"

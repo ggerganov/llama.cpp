@@ -349,6 +349,8 @@ class Params:
 @dataclass
 class Metadata:
     name: Optional[str] = None
+    basename: Optional[str] = None
+    finetune: Optional[str] = None
     author: Optional[str] = None
     version: Optional[str] = None
     url: Optional[str] = None
@@ -371,6 +373,8 @@ class Metadata:
         # Assigning values to Metadata attributes if they exist in the JSON file
         # This is based on LLM_KV_NAMES mapping in llama.cpp
         metadata.name = data.get("general.name")
+        metadata.basename = data.get("general.basename")
+        metadata.finetune = data.get("general.finetune")
         metadata.author = data.get("general.author")
         metadata.version = data.get("general.version")
         metadata.url = data.get("general.url")
@@ -820,6 +824,10 @@ class OutputFile:
         self.gguf.add_name(name)
 
         if metadata is not None:
+            if metadata.basename is not None:
+                self.gguf.add_basename(metadata.basename)
+            if metadata.finetune is not None:
+                self.gguf.add_finetune(metadata.finetune)
             if metadata.author is not None:
                 self.gguf.add_author(metadata.author)
             if metadata.version is not None:
@@ -1226,6 +1234,8 @@ class VocabFactory:
 
 def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: Metadata) -> str:
     name = metadata.name if metadata is not None and metadata.name is not None else model_name
+    basename = metadata.basename if metadata is not None and metadata.basename is not None else None
+    finetune = metadata.finetune if metadata is not None and metadata.finetune is not None else None
     version = metadata.version if metadata is not None and metadata.version is not None else None
 
     encodingScheme = {
@@ -1234,7 +1244,7 @@ def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_c
         GGMLFileType.MostlyQ8_0: "Q8_0",
     }[file_type]
 
-    return gguf.naming_convention(name, version, expert_count, model_params_count, encodingScheme)
+    return gguf.naming_convention(name, basename, finetune, version, expert_count, model_params_count, encodingScheme)
 
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: Metadata) -> Path:

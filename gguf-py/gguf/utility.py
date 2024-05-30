@@ -25,11 +25,26 @@ def model_weight_count_rounded_notation(model_params_count: int) -> str:
     return f"{round(scaled_model_params)}{scale_suffix}"
 
 
-def naming_convention(model_name: str, version_string:str, expert_count_int:int, model_params_count: int, encodingScheme: str) -> str:
+def naming_convention(model_name: str, base_name: str, finetune_string:str, version_string:str, expert_count_int:int, model_params_count: int, encoding_scheme: str) -> str:
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
-    name = model_name.strip().replace(' ', '-') if model_name is not None else "ggml-model"
-    version = f"-{version_string}" if version_string is not None else ""
-    expert_count_chunk = f"{expert_count_int}x" if expert_count_int is not None and expert_count_int > 0 else ""
-    parameters = model_weight_count_rounded_notation(model_params_count)
-    encodingScheme = encodingScheme.upper()
-    return f"{name}{version}-{expert_count_chunk}{parameters}-{encodingScheme}"
+
+    if base_name is not None:
+        name = base_name.strip().title().replace(' ', '_')
+    elif model_name is not None:
+        name = model_name.strip().title().replace(' ', '_')
+    else:
+        name = "ggml-model"
+
+    per_model_rounded_weight_estimate = model_weight_count_rounded_notation(model_params_count)
+    if expert_count_int is not None and expert_count_int > 0:
+        parameters = f"-{expert_count_int}x{per_model_rounded_weight_estimate}"
+    else:
+        parameters = f"-{per_model_rounded_weight_estimate}"
+
+    finetune = f"-{finetune_string.strip().title().replace(' ', '_')}" if finetune_string is not None else ""
+
+    version = f"-{version_string.strip().replace(' ', '_')}" if version_string is not None else ""
+
+    encoding = f"-{encoding_scheme.strip().replace(' ', '_').upper()}"
+
+    return f"{name}{parameters}{finetune}{version}{encoding}"

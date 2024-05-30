@@ -430,6 +430,12 @@ class GGUFWriter:
     def add_architecture(self) -> None:
         self.add_string(Keys.General.ARCHITECTURE, self.arch)
 
+    def add_basename(self, basename: str) -> None:
+        self.add_string(Keys.General.BASENAME, basename)
+
+    def add_finetune(self, finetune: str) -> None:
+        self.add_string(Keys.General.FINETUNE, finetune)
+
     def add_author(self, author: str) -> None:
         self.add_string(Keys.General.AUTHOR, author)
 
