@@ -7,6 +7,8 @@
 #include <tuple>
 #include <vector>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
 
 struct callback_data {
     std::vector<uint8_t> data;
@@ -22,8 +24,11 @@ struct callback_data {
 
 struct ctrl_params {
     std::string outfile = "control_vector.gguf";
+    std::string completions_file = "examples/control-vector-generator/completions.txt";
     std::string positive = "happy"; // TODO support multiple positive prompts
     std::string negative = "sad"; // TODO support multiple negative prompts
+    std::vector<std::string> positive_entries;
+    std::vector<std::string> negative_entries;
 };
 
 static void print_usage(const char * executable) {
@@ -35,6 +40,7 @@ static void print_usage(const char * executable) {
     printf("options:\n");
     printf("  -h, --help          show this help message and exit\n");
     printf("  --outfile           output file (default: 'control_vector.gguf')\n");
+    printf("  --completions-file  completions file (default: 'examples/control-vector-generator/completions.txt')\n");
     printf("  --positive          positive prompt (default: 'happy')\n");
     printf("  --negative          negative prompt (default: 'sad')\n");
     printf("\n");
@@ -66,6 +72,16 @@ static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params)
         if (arg == "--outfile") {
             if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
                 params.outfile = argv[arg_idx];
+                // FIXME hack to skip these args in gpt_parse_params
+                skipme += 2;
+            }
+            else {
+                throw std::invalid_argument("error: missing argument for " + arg);
+            }
+        }
+        if (arg == "--completions-file") {
+            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
+                params.completions_file = argv[arg_idx];
                 // FIXME hack to skip these args in gpt_parse_params
                 skipme += 2;
             }
@@ -111,6 +127,29 @@ static int ctrlvec_params_parse(int argc, char ** argv, ctrl_params & params) {
     }
     return skipme;
 }
+
+static std::string format_template(std::string persona, std::string suffix) {
+    const std::string user_tag = "[INST]";
+    const std::string asst_tag = "[/INST]";
+    // TODO make this dynamic - allow the user to change it somehow
+    return user_tag + " Act as if you're extremely " + persona + ". " + asst_tag + " " + suffix;
+}
+
+static void populate_entries(ctrl_params & cparams) {
+    std::string line;
+    std::ifstream completions_file(cparams.completions_file);
+    if (completions_file.is_open()) {
+        while (std::getline(completions_file, line)) {
+            // TODO replicate the truncations done by the python implementation
+            cparams.positive_entries.push_back(format_template(cparams.positive, line));
+            cparams.negative_entries.push_back(format_template(cparams.negative, line));
+        }
+        completions_file.close();
+    }
+    else {
+        throw std::invalid_argument("error: invalid completions file or file could not be opened");
+    }
+} // TODO actually do something with this
 
 static std::string ggml_ne_string(const ggml_tensor * t) {
     std::string str;
@@ -358,6 +397,7 @@ static void export_gguf(callback_data & cb_data, const std::string fname, const 
 int main(int argc, char ** argv) {
     ctrl_params cparams;
     int skipme = ctrlvec_params_parse(argc, argv, cparams);
+    //populate_entries(cparams);
 
     // FIXME hack to skip the ctrlvec args in parsing gpt params
     argc -= skipme;
