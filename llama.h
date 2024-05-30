@@ -430,7 +430,7 @@ extern "C" {
 
     LLAMA_API bool llama_supports_mmap       (void);
     LLAMA_API bool llama_supports_mlock      (void);
-    LLAMA_API bool llama_supports_rpc        (void);
+    LLAMA_API bool llama_supports_rpc        (void); // TMP: https://github.com/ggerganov/llama.cpp/pull/7647#issuecomment-2140234367
     LLAMA_API bool llama_supports_gpu_offload(void);
 
     LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
