@@ -189,15 +189,7 @@ class SimpleChat {
         } else {
             if (bClear) {
                 div.innerHTML = gUsageMsg;
-                div.innerHTML += `<p class="role-system">Restore</p>`;
-                let btn = ui.el_create_button(this.ods_key(), (ev)=>{
-                    console.log("DBUG:SimpleChat:SC:Load", this);
-                    this.load();
-                    queueMicrotask(()=>{
-                        this.show(div);
-                    });
-                });
-                div.appendChild(btn);
+                gMe.setup_load(div, this);
                 gMe.show_info(div);
             }
         }
@@ -766,6 +758,25 @@ class Me {
         console.debug = () => {
 
         };
+    }
+
+    /**
+     * Setup the load saved chat ui.
+     * @param {HTMLDivElement} div
+     * @param {SimpleChat} chat
+     */
+    setup_load(div, chat) {
+        div.innerHTML += `<p class="role-system">Restore</p>
+        <p>Load previously saved chat session, if available</p>`;
+        let btn = ui.el_create_button(chat.ods_key(), (ev)=>{
+            console.log("DBUG:SimpleChat:SC:Load", chat);
+            chat.load();
+            queueMicrotask(()=>{
+                chat.show(div);
+                this.multiChat.elInSystem.value = chat.get_system_latest();
+            });
+        });
+        div.appendChild(btn);
     }
 
     /**
