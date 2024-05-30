@@ -1314,7 +1314,7 @@ set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
-    FILES convert.py
+    FILES convert-hf-to-gguf.py
     PERMISSIONS
         OWNER_READ
         OWNER_WRITE
