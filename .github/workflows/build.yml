@@ -294,10 +294,20 @@ jobs:
 
       - name: Build
         id: cmake_build
+        if: ${{ matrix.sanitizer != 'THREAD' }}
         run: |
           mkdir build
           cd build
           cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
+
+      - name: Build (no OpenMP)
+        id: cmake_build_no_openmp
+        if: ${{ matrix.sanitizer == 'THREAD' }}
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLAMA_OPENMP=OFF
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
