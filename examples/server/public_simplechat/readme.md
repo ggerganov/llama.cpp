@@ -14,6 +14,9 @@ own system prompts.
 This allows seeing the generated text / ai-model response in oneshot at the end, after it is fully generated,
 or potentially as it is being generated, in a streamed manner from the server/ai-model.
 
+Auto saves the chat session locally as and when the chat is progressing and inturn at a later time when you
+open SimpleChat, option is provided to restore the old chat session, if a matching one exists.
+
 The UI follows a responsive web design so that the layout can adapt to available display space in a usable
 enough manner, in general.
 
@@ -202,10 +205,9 @@ matter clearing site data, dont directly override site caching in all cases. Wor
 have to change port. Or in dev tools of browser, you may be able to disable caching fully.
 
 
-Concept of multiple chat sessions with different servers, as well as saving and restoring of
-those across browser usage sessions, can be woven around the SimpleChat/MultiChatUI class and
-its instances relatively easily, however given the current goal of keeping this simple, it has
-not been added, for now.
+Currently the server to communicate with is maintained globally and not as part of a specific
+chat session. So if one changes the server ip/url in setting, then all chat sessions will auto
+switch to this new server, when you try using those sessions.
 
 
 By switching between chat.add_system_begin/anytime, one can control whether one can change
