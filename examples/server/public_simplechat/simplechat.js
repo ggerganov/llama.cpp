@@ -739,29 +739,35 @@ class Me {
     /**
      * Show the configurable parameters info in the passed Div element.
      * @param {HTMLDivElement} elDiv
+     * @param {boolean} bAll
      */
-    show_info(elDiv) {
+    show_info(elDiv, bAll=false) {
 
         let p = ui.el_create_append_p("Settings (devel-tools-console document[gMe])", elDiv);
         p.className = "role-system";
 
-        ui.el_create_append_p(`baseURL:${this.baseURL}`, elDiv);
+        if (bAll) {
 
-        ui.el_create_append_p(`Authorization:${this.headers["Authorization"]}`, elDiv);
+            ui.el_create_append_p(`baseURL:${this.baseURL}`, elDiv);
 
-        ui.el_create_append_p(`bStream:${this.bStream}`, elDiv);
+            ui.el_create_append_p(`Authorization:${this.headers["Authorization"]}`, elDiv);
 
-        ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
+            ui.el_create_append_p(`bStream:${this.bStream}`, elDiv);
 
-        ui.el_create_append_p(`bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`, elDiv);
+            ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
 
-        ui.el_create_append_p(`bTrimGarbage:${this.bTrimGarbage}`, elDiv);
+            ui.el_create_append_p(`bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`, elDiv);
 
-        ui.el_create_append_p(`iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`, elDiv);
+            ui.el_create_append_p(`bTrimGarbage:${this.bTrimGarbage}`, elDiv);
 
-        ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions, null, "\t")}`, elDiv);
+            ui.el_create_append_p(`iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`, elDiv);
 
-        ui.el_create_append_p(`ApiEndPoint:${this.apiEP}`, elDiv);
+            ui.el_create_append_p(`ApiEndPoint:${this.apiEP}`, elDiv);
+
+        }
+
+        ui.el_create_append_p(`chatRequestOptions:${JSON.stringify(this.chatRequestOptions, null, " - ")}`, elDiv);
+        ui.el_create_append_p(`headers:${JSON.stringify(this.headers, null, " - ")}`, elDiv);
 
     }
 
