@@ -19733,7 +19733,6 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
 
 #if defined(GGML_USE_OPENMP)
     n_threads = MIN(n_threads, omp_get_max_threads());
-    n_threads = MIN(n_threads, omp_get_thread_limit());
 #endif
 
     struct ggml_compute_state_shared state_shared = {
