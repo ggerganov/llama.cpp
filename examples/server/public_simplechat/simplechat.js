@@ -39,18 +39,15 @@ class ApiEP {
 let gUsageMsg = `
     <p class="role-system">Usage</p>
     <ul class="ul1">
-    <li> Set system prompt above, to try control ai response charactersitic, if model supports same.</li>
+    <li> System prompt above, to try control ai response characteristics.</li>
         <ul class="ul2">
-        <li> Completion mode normally wont have a system prompt.</li>
+        <li> Completion mode - no system prompt normally.</li>
         </ul>
+    <li> Use shift+enter for inserting enter/newline.</li>
     <li> Enter your query to ai assistant below.</li>
-        <ul class="ul2">
-        <li> Completion mode doesnt insert user/role: prefix implicitly.</li>
-        <li> Use shift+enter for inserting enter/newline.</li>
-        </ul>
     <li> Default ContextWindow = [System, Last Query+Resp, Cur Query].</li>
         <ul class="ul2">
-        <li> experiment iRecentUserMsgCnt, max_tokens, model ctxt window to expand</li>
+        <li> ChatHistInCtxt, MaxTokens, ModelCtxt window to expand</li>
         </ul>
     </ul>
 `;
@@ -542,6 +539,8 @@ class MultiChatUI {
             // allow user to insert enter into the system prompt using shift+enter.
             // while just pressing enter key will lead to setting the system prompt.
             if ((ev.key === "Enter") && (!ev.shiftKey)) {
+                let value = this.elInSystem.value;
+                this.elInSystem.value = value.substring(0,value.length-1);
                 let chat = this.simpleChats[this.curChatId];
                 chat.add_system_anytime(this.elInSystem.value, this.curChatId);
                 chat.show(this.elDivChat);
