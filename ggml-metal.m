@@ -2289,7 +2289,7 @@ static enum ggml_status ggml_metal_graph_compute(
                         const int n_dims     = ((int32_t *) dst->op_params)[1];
                         const int mode       = ((int32_t *) dst->op_params)[2];
                         // skip 3, n_ctx, used in GLM RoPE, unimplemented in metal
-                        const int n_orig_ctx = ((int32_t *) dst->op_params)[4];
+                        const int n_ctx_orig = ((int32_t *) dst->op_params)[4];
 
                         float freq_base;
                         float freq_scale;
@@ -2350,7 +2350,7 @@ static enum ggml_status ggml_metal_graph_compute(
                         [encoder setBytes:&nb3         length:sizeof(uint64_t) atIndex:19];
                         [encoder setBytes:&n_past      length:sizeof(     int) atIndex:20];
                         [encoder setBytes:&n_dims      length:sizeof(     int) atIndex:21];
-                        [encoder setBytes:&n_orig_ctx  length:sizeof(     int) atIndex:22];
+                        [encoder setBytes:&n_ctx_orig  length:sizeof(     int) atIndex:22];
                         [encoder setBytes:&freq_base   length:sizeof(   float) atIndex:23];
                         [encoder setBytes:&freq_scale  length:sizeof(   float) atIndex:24];
                         [encoder setBytes:&ext_factor  length:sizeof(   float) atIndex:25];

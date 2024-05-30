@@ -1671,16 +1671,16 @@ static void rope_yarn(
 
 // Apparently solving `n_rot = 2pi * x * base^((2 * max_pos_emb) / n_dims)` for x, we get
 // `corr_fac(n_rot) = n_dims * log(max_pos_emb / (n_rot * 2pi)) / (2 * log(base))`
-static float rope_yarn_corr_factor(int n_dims, int n_orig_ctx, float n_rot, float base) {
-    return n_dims * log(n_orig_ctx / (n_rot * 2 * M_PI_F)) / (2 * log(base));
+static float rope_yarn_corr_factor(int n_dims, int n_ctx_orig, float n_rot, float base) {
+    return n_dims * log(n_ctx_orig / (n_rot * 2 * M_PI_F)) / (2 * log(base));
 }
 
 static void rope_yarn_corr_dims(
-    int n_dims, int n_orig_ctx, float freq_base, float beta_fast, float beta_slow, float dims[2]
+    int n_dims, int n_ctx_orig, float freq_base, float beta_fast, float beta_slow, float dims[2]
 ) {
     // start and end correction dims
-    dims[0] = max(0.0f,         floor(rope_yarn_corr_factor(n_dims, n_orig_ctx, beta_fast, freq_base)));
-    dims[1] = min(n_dims - 1.0f, ceil(rope_yarn_corr_factor(n_dims, n_orig_ctx, beta_slow, freq_base)));
+    dims[0] = max(0.0f,         floor(rope_yarn_corr_factor(n_dims, n_ctx_orig, beta_fast, freq_base)));
+    dims[1] = min(n_dims - 1.0f, ceil(rope_yarn_corr_factor(n_dims, n_ctx_orig, beta_slow, freq_base)));
 }
 
 template<typename T>
@@ -1707,7 +1707,7 @@ kernel void kernel_rope_norm(
         constant    uint64_t & nb3,
         constant         int & n_past,
         constant         int & n_dims,
-        constant         int & n_orig_ctx,
+        constant         int & n_ctx_orig,
         constant       float & freq_base,
         constant       float & freq_scale,
         constant       float & ext_factor,
@@ -1722,7 +1722,7 @@ kernel void kernel_rope_norm(
     const int64_t i1 = tgpig[0];
 
     float corr_dims[2];
-    rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
+    rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
     device const int32_t * pos = src1;
 
@@ -1784,7 +1784,7 @@ kernel void kernel_rope_neox(
         constant    uint64_t & nb3,
         constant         int & n_past,
         constant         int & n_dims,
-        constant         int & n_orig_ctx,
+        constant         int & n_ctx_orig,
         constant       float & freq_base,
         constant       float & freq_scale,
         constant       float & ext_factor,
@@ -1799,7 +1799,7 @@ kernel void kernel_rope_neox(
     const int64_t i1 = tgpig[0];
 
     float corr_dims[2];
-    rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
+    rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
     device const int32_t * pos = src1;
 

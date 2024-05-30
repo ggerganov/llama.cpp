@@ -1615,7 +1615,7 @@ struct llama_hparams {
 
     // cparams
     static constexpr uint32_t n_ctx = 512; // user-specified context size
-    static constexpr uint32_t n_orig_ctx = n_ctx;
+    static constexpr uint32_t n_ctx_orig = n_ctx;
 
     // batch
     int32_t n_tokens;
@@ -1806,13 +1806,13 @@ struct test_llama : public test_llm {
 
                 Qcur = ggml_rope_ext(
                     ctx, ggml_reshape_3d(ctx, Qcur, hp.n_embd_head, hp.n_head,    hp.n_tokens), inp_pos, nullptr,
-                    hp.n_rot, 0, hp.n_orig_ctx, freq_base, freq_scale,
+                    hp.n_rot, 0, hp.n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
                 Kcur = ggml_rope_ext(
                     ctx, ggml_reshape_3d(ctx, Kcur, hp.n_embd_head, hp.n_head_kv, hp.n_tokens), inp_pos, nullptr,
-                    hp.n_rot, 0, hp.n_orig_ctx, freq_base, freq_scale,
+                    hp.n_rot, 0, hp.n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
@@ -1931,12 +1931,12 @@ struct test_falcon : public test_llm {
 
                 // using mode = 2 for neox mode
                 Qcur = ggml_rope_ext(
-                    ctx, Qcur, inp_pos, nullptr, hp.n_rot, 2, hp.n_orig_ctx,
+                    ctx, Qcur, inp_pos, nullptr, hp.n_rot, 2, hp.n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
                 Kcur = ggml_rope_ext(
-                    ctx, Kcur, inp_pos, nullptr, hp.n_rot, 2, hp.n_orig_ctx,
+                    ctx, Kcur, inp_pos, nullptr, hp.n_rot, 2, hp.n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
 

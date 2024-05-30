@@ -14008,7 +14008,7 @@ inline void ggml_sycl_op_rope(const ggml_tensor *src0, const ggml_tensor *src1,
     const int n_dims      = ((int32_t *) dst->op_params)[1];
     const int mode        = ((int32_t *) dst->op_params)[2];
     //const int n_ctx       = ((int32_t *) dst->op_params)[3];
-    const int n_orig_ctx  = ((int32_t *) dst->op_params)[4];
+    const int n_ctx_orig  = ((int32_t *) dst->op_params)[4];
 
     // RoPE alteration for extended context
     float freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow;
@@ -14040,7 +14040,7 @@ inline void ggml_sycl_op_rope(const ggml_tensor *src0, const ggml_tensor *src1,
     }
 
     rope_corr_dims corr_dims;
-    ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims.v);
+    ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims.v);
 
     // compute
     if (is_neox) {
