@@ -20,6 +20,98 @@ struct callback_data {
     std::vector<float *> v_final; // vector of finished vectors of size [n_embd]
 };
 
+struct ctrl_params {
+    std::string outfile = "control_vector.gguf";
+    std::string positive = "happy"; // TODO support multiple positive prompts
+    std::string negative = "sad"; // TODO support multiple negative prompts
+};
+
+static void print_usage(const char * executable) {
+    printf("\n");
+    printf("usage: %s [options] -m <model> [gpt-opts]", executable);
+    printf("\n");
+    printf("Creates a GGUF control vector for a given model.");
+    printf("\n");
+    printf("options:\n");
+    printf("  -h, --help          show this help message and exit\n");
+    printf("  --outfile           output file (default: 'control_vector.gguf')\n");
+    printf("  --positive          positive prompt (default: 'happy')\n");
+    printf("  --negative          negative prompt (default: 'sad')\n");
+    printf("\n");
+    printf("gpt-opts: other options from main\n");
+    printf("\n");
+}
+
+static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params) {
+    std::string arg;
+    const std::string arg_prefix = "--";
+    int skipme = 0;
+
+    int arg_idx = 1;
+    for(; arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) == 0; ++arg_idx) {
+        arg = argv[arg_idx];
+        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+            std::replace(arg.begin(), arg.end(), '_', '-');
+        }
+
+        if (arg == "-h" || arg == "--help") {
+            print_usage(argv[0]);
+            exit(0);
+        }
+        if (arg == "--version") {
+            fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
+            fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
+            exit(0);
+        }
+        if (arg == "--outfile") {
+            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
+                params.outfile = argv[arg_idx];
+                // FIXME hack to skip these args in gpt_parse_params
+                skipme += 2;
+            }
+            else {
+                throw std::invalid_argument("error: missing argument for " + arg);
+            }
+        }
+        if (arg == "--positive") {
+            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
+                params.positive = argv[arg_idx];
+                // FIXME hack to skip these args in gpt_parse_params
+                skipme += 2;
+            }
+            else {
+                throw std::invalid_argument("error: missing argument for " + arg);
+            }
+        }
+        if (arg == "--negative") {
+            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
+                params.negative = argv[arg_idx];
+                // FIXME hack to skip these args in gpt_parse_params
+                skipme += 2;
+            }
+            else {
+                throw std::invalid_argument("error: missing argument for " + arg);
+            }
+        }
+
+        // we do not handle any other unknown arguments here because they will be handled by gpt_parse_params
+    }
+    return skipme;
+}
+
+static int ctrlvec_params_parse(int argc, char ** argv, ctrl_params & params) {
+    int skipme = 0;
+    try {
+        skipme = ctrlvec_params_parse_ex(argc, argv, params);
+    }
+    catch (const std::invalid_argument & ex) {
+        fprintf(stderr, "%s\n", ex.what());
+        print_usage(argv[0]);
+        exit(EXIT_FAILURE);    
+    }
+    return skipme;
+}
+
 static std::string ggml_ne_string(const ggml_tensor * t) {
     std::string str;
     for (int i = 0; i < GGML_MAX_DIMS; ++i) {
@@ -192,14 +284,14 @@ static std::vector<float> power_iteration(callback_data & cb_data, const float *
 
 // TODO translate to ggml
 static void pca(callback_data & cb_data) {
-    for (size_t i = 0; i < cb_data.v_diff.size(); i++) {
+    for (int i = 0; i < cb_data.v_diff.size(); i++) {
         float* matrix = square_diff(cb_data, i);
         std::vector<float> eigenvector = power_iteration(cb_data, matrix);
         cb_data.v_final.push_back(&eigenvector[0]);
         delete[] matrix;
-        // TODO make your print outputs nicer
-        std::cout << "Done with layer " << i << "\n";
+        printf("Done with layer %d\n", i);
     }
+    printf("Done with PCA.");
 }
 
 template <typename T>
@@ -209,59 +301,53 @@ static std::string to_string(const T & val) {
     return ss.str();
 }
 
-static void export_gguf(callback_data & cb_data, const std::string fname) {
+static void export_gguf(callback_data & cb_data, const std::string fname, const std::string model_hint) {
     struct gguf_context * ctx = gguf_init_empty();
 
-    gguf_set_val_str(ctx, "general.architecture", "controlvector");
-    gguf_set_val_str(ctx, "controlvector.model_hint", "mistral"); // TODO steal this from the model somehow (arch)
-    gguf_set_val_i32(ctx, "controlvector.layer_count", cb_data.v_final.size());
+    const std::string arch = "controlvector";
+    gguf_set_val_str(ctx, "general.architecture", arch.c_str());
+    gguf_set_val_str(ctx, (arch + ".model_hint").c_str(), model_hint.c_str());
+    gguf_set_val_i32(ctx, (arch + ".layer_count").c_str(), cb_data.v_final.size());
 
-    //size_t buf_size = 3u*cb_data.n_embd*sizeof(float); // TODO how much size do i need???
-    size_t buf_size = 128u*1024u*4096u;
-    std::vector<uint8_t> buf(buf_size); 
+    //size_t buf_size = 3u*cb_data.n_embd*sizeof(float); // TODO how much size do i need?
+    size_t buf_size = 128u*1024u*4096u; // FIXME placehokder
 
-    // TODO customize mem size - I have no idea
+    // TODO customize mem size - I have no idea what this is supposed to be
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_size,
-        /*.mem_buffer =*/ buf.data(),
+        /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
 
     struct ggml_context * ctx_data = ggml_init(params);
 
-    // TODO direction tensor invalid??? probably because you start at 0. see below
-    for (int i = 0; i < cb_data.v_final.size(); i++) {
-        const std::string name = "direction." + to_string(i+1); // TODO figure out how to get the number for direction - dl repeng locally and debug
-        // clone the repo and use importlib
-        // git clone https://github.com/vgel/repeng.git
+    for (int i = 0; i < cb_data.v_final.size(); ++i) {
+        // TODO this number is probably not right - figure out which layer is which
+        // the python implementation uses a dict to handle this, we don't know if it's 1, 2, 3, 4... or other
+        const std::string name = "direction." + to_string(i+1);
 
         struct ggml_tensor * cur = ggml_new_tensor_1d(ctx_data, GGML_TYPE_F32, cb_data.n_embd);
 
-        std::cout << "Made it past tensor creation";
-
         ggml_set_name(cur, name.c_str());
-        std::cout << "Made it past tensor name set";
 
-        // whining about buf != NULL
-        // TODO figure out how to set data
-        //ggml_backend_tensor_set(cur, cb_data.v_final[i], 0, cb_data.n_embd * sizeof(float)); // if this doesn't work refer to gguf.cpp example
+        // TODO figure out how to set data - it's whining about buf != NULL when using the below commented line
+        //ggml_backend_tensor_set(cur, cb_data.v_final[i], 0, cb_data.n_embd * sizeof(float));
         {
             float * data = (float *) cur->data;
             for(int j = 0; j < ggml_nelements(cur); j++) {
                 data[j] = cb_data.v_final[i][j];
             }
         }
-        std::cout << "Made it past tensor backend set";
 
         gguf_add_tensor(ctx, cur);
-        std::cout << "Added tensor " << i << "\n";
+        printf("Added tensor %d\n", i);
     }
 
-    std::cout << "Writing file\n";
+    printf("Writing file...\n"); 
 
     gguf_write_to_file(ctx, fname.c_str(), false);
 
-    printf("%s: wrote file '%s;\n", __func__, fname.c_str());
+    printf("%s: wrote file '%s'\n", __func__, fname.c_str());
 
     ggml_free(ctx_data);
     gguf_free(ctx);
@@ -270,10 +356,14 @@ static void export_gguf(callback_data & cb_data, const std::string fname) {
 // END NON-GGML IMPLEMENTATION
 
 int main(int argc, char ** argv) {
-    callback_data cb_data;
-    std::string prompt_pos = "happy";
-    std::string prompt_neg = "sad";
+    ctrl_params cparams;
+    int skipme = ctrlvec_params_parse(argc, argv, cparams);
 
+    // FIXME hack to skip the ctrlvec args in parsing gpt params
+    argc -= skipme;
+    argv += skipme;
+
+    callback_data cb_data;
     gpt_params params;
     if (!gpt_params_parse(argc, argv, params)) {
         return 1;
@@ -305,8 +395,17 @@ int main(int argc, char ** argv) {
     }
 
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
-    std::vector<llama_token> tokens_pos = ::llama_tokenize(ctx, prompt_pos, add_bos);
-    std::vector<llama_token> tokens_neg = ::llama_tokenize(ctx, prompt_neg, add_bos);
+
+    /* TODO this just tokenizes the exact pos/neg strings, correct?
+     * instead we want to create a bunch of starter prompts for it to work off
+     * we need to run get_hidden_layers many many times and then figure out how to combine the resulting vectors
+     * see the blogpost + python implementation for reference
+     * 
+     * https://vgel.me/posts/representation-engineering/
+     * https://github.com/vgel/repeng/blob/main/repeng/extract.py
+     */
+    std::vector<llama_token> tokens_pos = ::llama_tokenize(ctx, cparams.positive, add_bos);
+    std::vector<llama_token> tokens_neg = ::llama_tokenize(ctx, cparams.negative, add_bos);
     size_t max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
     padding_seq(ctx, tokens_pos, max_seq_len);
     padding_seq(ctx, tokens_neg, max_seq_len);
@@ -325,9 +424,12 @@ int main(int argc, char ** argv) {
     printf("%f %f \n", cb_data.v_diff[0][4096], cb_data.v_diff[0][4096]);
 
     pca(cb_data);
-    // TODO --outfile
-    std::cout << "Done with PCA" << "\n";
-    export_gguf(cb_data, "controlvector.gguf");
+
+    // TODO figure out how to extract this from model - there's no API exposed to get model arch string
+    // we need get_arch_name() from llama.cpp
+    // TODO also has support been implemeneted for arches other than llama yet? see #5970
+    std::string model_hint = "llama";
+    export_gguf(cb_data, cparams.outfile, model_hint);
 
     //llama_print_timings(ctx);
 
