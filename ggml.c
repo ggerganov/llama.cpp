@@ -3472,7 +3472,7 @@ size_t ggml_used_mem(const struct ggml_context * ctx) {
     return ctx->objects_end == NULL ? 0 : ctx->objects_end->offs + ctx->objects_end->size;
 }
 
-size_t ggml_set_scratch(struct ggml_context * ctx, struct ggml_scratch scratch) {
+size_t ggml_set_scratch(struct ggml_context * ctx, const struct ggml_scratch scratch) {
     const size_t result = ctx->scratch.data ? ctx->scratch.offs : 0;
 
     ctx->scratch = scratch;
@@ -20525,7 +20525,7 @@ static void ggml_opt_acc_grad(int np, struct ggml_tensor * const ps[], float * g
 static enum ggml_opt_result ggml_opt_adam(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
-        struct ggml_opt_params params,
+        const struct ggml_opt_params params,
         struct ggml_tensor * f,
         struct ggml_cgraph * gf,
         struct ggml_cgraph * gb,
@@ -21224,7 +21224,7 @@ struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
 GGML_API void ggml_opt_init(
         struct ggml_context * ctx,
         struct ggml_opt_context * opt,
-        struct ggml_opt_params params,
+        const struct ggml_opt_params params,
         int64_t nx) {
     opt->ctx = ctx;
     opt->params = params;
@@ -21296,7 +21296,7 @@ GGML_API void ggml_opt_init(
 
 enum ggml_opt_result ggml_opt(
         struct ggml_context * ctx,
-        struct ggml_opt_params params,
+        const struct ggml_opt_params params,
         struct ggml_tensor * f) {
     bool free_ctx = false;
     if (ctx == NULL) {
