@@ -1580,7 +1580,7 @@ do {                                                              \
 #define GGML_F32Cx8_ZERO    (__m256)__lasx_xvldi(0)
 #define GGML_F32Cx8_SET1(x) (__m256)__lasx_xvreplgr2vr_w((x))
 
-static inline __m256 __lasx_f32cx8_load(ggml_fp16_t *x) {
+static inline __m256 __lasx_f32cx8_load(const ggml_fp16_t *x) {
     float tmp[8];
 
     for (int i = 0; i < 8; i++) {
