@@ -13,9 +13,6 @@
 extern "C" {
 #endif
 
-#define GGML_SYCL_MAX_DEVICES       48
-#define GGML_SYCL_NAME "SYCL"
-
 // backend API
 GGML_API ggml_backend_t ggml_backend_sycl_init(int device);
 
