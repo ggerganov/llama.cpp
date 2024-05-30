@@ -19698,9 +19698,6 @@ static enum ggml_status ggml_graph_compute_parallel(struct ggml_compute_state * 
     // this is a work thread too
     ggml_graph_compute_thread(&workers[0]);
 
-    // don't leave affinity set on the main thread
-    clear_numa_thread_affinity();
-
     // join or kill thread pool
     if (n_threads > 1) {
         for (int j = 1; j < n_threads; j++) {
@@ -19710,6 +19707,9 @@ static enum ggml_status ggml_graph_compute_parallel(struct ggml_compute_state * 
         }
     }
 #endif
+    // don't leave affinity set on the main thread
+    clear_numa_thread_affinity();
+
     for (int j = 0; j < n_threads; j++) {
         if (workers[j].ec != GGML_STATUS_SUCCESS) {
             compute_status = workers[j].ec;
