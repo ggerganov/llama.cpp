@@ -2302,9 +2302,6 @@ static enum ggml_status ggml_metal_graph_compute(
                         memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
                         const bool is_neox = mode & 2;
-                        const bool is_glm  = mode & 4;
-
-                        GGML_ASSERT(!is_glm && "GLM RoPE not implemented in Metal");
 
                         if (!is_neox) {
                             GGML_ASSERT(id_src2 == nil && "TODO: freq_factors not implemented for !is_neox");
