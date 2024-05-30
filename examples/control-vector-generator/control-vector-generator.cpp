@@ -352,16 +352,19 @@ static void pca(callback_data & cb_data) {
         for (int il = worker_id; il < n_layers; il += n_threads) {
             float * matrix = square_diff(cb_data, il);
             std::vector<float> eigenvector = power_iteration(cb_data, matrix);
-            cb_data.v_final[il] = &eigenvector[0];
+            cb_data.v_final[il] = (float *) malloc(eigenvector.size() * sizeof(float));
+            memcpy(cb_data.v_final[il], eigenvector.data(), eigenvector.size() * sizeof(float));
             delete[] matrix;
             printf("Done with layer %d\n", il);
+            printf("il = %d | %f %f \n", il, cb_data.v_final[il][0], cb_data.v_final[il][1]);
         }
     };
+    printf("Running PCA...\n");
     for (int i = 0; i < n_threads; ++i) {
         threads.emplace_back(worker_function, i);
     }
     for (auto & th : threads) th.join();
-    printf("Done with PCA.");
+    printf("Done with PCA.\n");
 }
 
 template <typename T>
@@ -509,13 +512,12 @@ int main(int argc, char ** argv) {
         cb_data.is_eval_pos = false;
         get_hidden_layers(ctx, tokens_neg);
 
-        printf("%f %f \n", cb_data.v_pos[0][4096], cb_data.v_pos[0][4096]);
-        printf("%f %f \n", cb_data.v_neg[0][4096], cb_data.v_neg[0][4096]);
+        printf("%f %f \n", cb_data.v_pos[0][4096], cb_data.v_pos[0][4097]);
+        printf("%f %f \n", cb_data.v_neg[0][4096], cb_data.v_neg[0][4097]);
 
         calc_diff(cb_data);
-        printf("%f %f \n", cb_data.v_diff[0][4096], cb_data.v_diff[0][4096]);
+        printf("%f %f \n", cb_data.v_diff[0][4096], cb_data.v_diff[0][4097]);
 
-        printf("Running PCA...\n");
         pca(cb_data);
 
         // add the output vector to v_final
@@ -524,6 +526,7 @@ int main(int argc, char ** argv) {
                 v_final[j][k] += cb_data.v_final[j][k];
             }
         }
+        printf("v_final %f %f \n", cb_data.v_final[0][0], cb_data.v_final[0][1]);
 
         llama_free(ctx);
         llama_free_model(model);
