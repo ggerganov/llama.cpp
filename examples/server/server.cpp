@@ -102,7 +102,6 @@ struct slot_params {
     bool stream       = true;
     bool cache_prompt = false; // remember the prompt to avoid reprocessing all prompt
 
-    uint32_t seed      = -1; // RNG seed
     int32_t  n_keep    =  0; // number of tokens to keep from initial prompt
     int32_t  n_discard =  0; // number of tokens after n_keep that may be discarded when shifting context, 0 defaults to half
     int32_t  n_predict = -1; // new tokens to predict
@@ -651,9 +650,6 @@ struct server_context {
     std::string              system_prompt;
     std::vector<llama_token> system_tokens;
 
-    std::string name_user;      // this should be the antiprompt
-    std::string name_assistant;
-
     // slots / clients
     std::vector<server_slot> slots;
     json default_generation_settings_for_props;
@@ -673,6 +669,15 @@ struct server_context {
             llama_free_model(model);
             model = nullptr;
         }
+
+        // Clear any sampling context
+        for (server_slot & slot : slots) {
+            if (slot.ctx_sampling != nullptr) {
+                llama_sampling_free(slot.ctx_sampling);
+            }
+        }
+
+        llama_batch_free(batch);
     }
 
     bool load_model(const gpt_params & params_) {
@@ -1014,7 +1019,7 @@ struct server_context {
                         sampler_names.emplace_back(sampler_name);
                     }
                 }
-                slot.sparams.samplers_sequence = sampler_types_from_names(sampler_names, false);
+                slot.sparams.samplers_sequence = llama_sampling_types_from_names(sampler_names, false);
             } else {
                 slot.sparams.samplers_sequence = default_sparams.samplers_sequence;
             }
@@ -1098,15 +1103,11 @@ struct server_context {
         system_need_update = false;
     }
 
-    void system_prompt_set(const json & sys_props) {
-        system_prompt  = sys_props.value("prompt", "");
-        name_user      = sys_props.value("anti_prompt", "");
-        name_assistant = sys_props.value("assistant_name", "");
+    bool system_prompt_set(const std::string & sys_prompt) {
+        system_prompt = sys_prompt;
 
         LOG_VERBOSE("system prompt process", {
             {"system_prompt",  system_prompt},
-            {"name_user",      name_user},
-            {"name_assistant", name_assistant},
         });
 
         // release all slots
@@ -1115,6 +1116,7 @@ struct server_context {
         }
 
         system_need_update = true;
+        return true;
     }
 
     bool process_token(completion_token_output & result, server_slot & slot) {
@@ -1254,14 +1256,14 @@ struct server_context {
         std::vector<std::string> samplers_sequence;
         samplers_sequence.reserve(slot.sparams.samplers_sequence.size());
         for (const auto & sampler_type : slot.sparams.samplers_sequence) {
-            samplers_sequence.emplace_back(sampler_type_to_name_string(sampler_type));
+            samplers_sequence.emplace_back(llama_sampling_type_to_str(sampler_type));
         }
 
         return json {
             {"n_ctx",                     slot.n_ctx},
             {"n_predict",                 slot.n_predict},
             {"model",                     params.model_alias},
-            {"seed",                      slot.params.seed},
+            {"seed",                      slot.sparams.seed},
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
@@ -1534,7 +1536,8 @@ struct server_context {
                     }
 
                     if (task.data.contains("system_prompt")) {
-                        system_prompt_set(task.data.at("system_prompt"));
+                        std::string sys_prompt = json_value(task.data, "system_prompt", std::string());
+                        system_prompt_set(sys_prompt);
 
                         for (server_slot & slot : slots) {
                             slot.n_past    = 0;
@@ -1978,8 +1981,7 @@ struct server_context {
                                 slot.state = SLOT_STATE_PROCESSING;
                                 slot.command = SLOT_COMMAND_NONE;
                                 slot.release();
-                                slot.print_timings();
-                                send_final_response(slot);
+                                send_error(slot, "input is too large to process. increase the physical batch size", ERROR_TYPE_SERVER);
                                 continue;
                             }
                         } else {
@@ -2270,10 +2272,10 @@ struct server_context {
 
                 const size_t n_probs = std::min(cur_p.size, (size_t) slot.sparams.n_probs);
                 if (n_probs > 0) {
-                    const size_t n_considered = slot.ctx_sampling->n_considered;
+                    const size_t n_valid = slot.ctx_sampling->n_valid;
 
                     // Make sure at least n_probs top tokens are at the front of the vector:
-                    if (slot.sparams.temp == 0.0f && n_probs > n_considered) {
+                    if (slot.sparams.temp == 0.0f && n_probs > n_valid) {
                         llama_sample_top_k(ctx, &cur_p, n_probs, 0);
                     }
 
@@ -2289,7 +2291,7 @@ struct server_context {
                         for (size_t i = 0; i < n_probs; ++i) {
                             result.probs.push_back({
                                 cur_p.data[i].id,
-                                i >= n_considered ? 0.0f : cur_p.data[i].p // Tokens filtered out due to e.g. top_k have 0 probability.
+                                i >= n_valid ? 0.0f : cur_p.data[i].p // Tokens filtered out due to e.g. top_k have 0 probability.
                             });
                         }
                     }
@@ -2383,6 +2385,7 @@ static void server_print_usage(const char * argv0, const gpt_params & params, co
     printf("  --lora-base FNAME         optional model to use as a base for the layers modified by the LoRA adapter\n");
     printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
     printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
+    printf("  --rpc SERVERS             comma separated list of RPC servers\n");
     printf("  --path PUBLIC_PATH        path from which to serve static files (default: disabled)\n");
     printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
     printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
@@ -2435,6 +2438,12 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 break;
             }
             sparams.port = std::stoi(argv[i]);
+        } else if (arg == "--rpc") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.rpc_servers = argv[i];
         } else if (arg == "--host") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2843,7 +2852,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            if (!parse_kv_override(argv[i], params.kv_overrides)) {
+            if (!string_parse_kv_override(argv[i], params.kv_overrides)) {
                 fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
                 invalid_param = true;
                 break;
@@ -2918,7 +2927,7 @@ int main(int argc, char ** argv) {
     server_params_parse(argc, argv, sparams, params);
 
     if (!sparams.system_prompt.empty()) {
-        ctx_server.system_prompt_set(json::parse(sparams.system_prompt));
+        ctx_server.system_prompt_set(sparams.system_prompt);
     }
 
     if (params.model_alias == "unknown") {
@@ -3308,7 +3317,7 @@ int main(int argc, char ** argv) {
     const auto handle_slots_save = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
-        if (!validate_file_name(filename)) {
+        if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
@@ -3338,7 +3347,7 @@ int main(int argc, char ** argv) {
     const auto handle_slots_restore = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
-        if (!validate_file_name(filename)) {
+        if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
@@ -3414,8 +3423,7 @@ int main(int argc, char ** argv) {
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
-            { "user_name",                   ctx_server.name_user.c_str() },
-            { "assistant_name",              ctx_server.name_assistant.c_str() },
+            { "system_prompt",               ctx_server.system_prompt.c_str() },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel }
         };

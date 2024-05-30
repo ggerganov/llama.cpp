@@ -25,6 +25,8 @@ from .constants import (
     TokenType,
 )
 
+from .quants import quant_shape_from_byte_shape
+
 logger = logging.getLogger(__name__)
 
 
@@ -176,7 +178,7 @@ class GGUFWriter:
         if pack_fmt is not None:
             self.kv_data += self._pack(pack_fmt, val, skip_pack_prefix = vtype == GGUFValueType.BOOL)
         elif vtype == GGUFValueType.STRING:
-            encoded_val = val.encode("utf8") if isinstance(val, str) else val
+            encoded_val = val.encode("utf-8") if isinstance(val, str) else val
             self.kv_data += self._pack("Q", len(encoded_val))
             self.kv_data += encoded_val
         elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and val:
@@ -195,7 +197,7 @@ class GGUFWriter:
         return ((x + n - 1) // n) * n
 
     def add_tensor_info(
-        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype[np.float16] | np.dtype[np.float32],
+        self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype,
         tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None,
     ) -> None:
         if self.state is not WriterState.EMPTY:
@@ -205,13 +207,9 @@ class GGUFWriter:
             raise ValueError(f'Duplicated tensor name {name}')
         self.ti_names.add(name)
 
-        encoded_name = name.encode("utf8")
+        encoded_name = name.encode("utf-8")
         self.ti_data += self._pack("Q", len(encoded_name))
         self.ti_data += encoded_name
-        n_dims = len(tensor_shape)
-        self.ti_data += self._pack("I", n_dims)
-        for i in range(n_dims):
-            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         if raw_dtype is None:
             if tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
@@ -231,6 +229,12 @@ class GGUFWriter:
                 raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
             dtype = raw_dtype
+            if tensor_dtype == np.uint8:
+                tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
+        n_dims = len(tensor_shape)
+        self.ti_data += self._pack("I", n_dims)
+        for i in range(n_dims):
+            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
         self.ti_data += self._pack("I", dtype)
         self.ti_data += self._pack("Q", self.offset_tensor)
         self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
@@ -272,15 +276,33 @@ class GGUFWriter:
         tensor.tofile(self.fout)
         self.write_padding(self.fout, tensor.nbytes)
 
-    def write_tensors_to_file(self) -> None:
+    def write_tensors_to_file(self, *, progress: bool = False) -> None:
         self.write_ti_data_to_file()
 
         self.write_padding(self.fout, self.fout.tell())
 
         if self.temp_file is None:
+            self.tensors.reverse()  # to pop from the "beginning" in constant time
+
+            if progress:
+                from tqdm import tqdm
+
+                total_bytes = sum(t.nbytes for t in self.tensors)
+
+                bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
+
+                while True:
+                    try:
+                        tensor = self.tensors.pop()
+                    except IndexError:
+                        break
+                    tensor.tofile(self.fout)
+                    bar.update(tensor.nbytes)
+                    self.write_padding(self.fout, tensor.nbytes)
+                return
             while True:
                 try:
-                    tensor = self.tensors.pop(0)
+                    tensor = self.tensors.pop()
                 except IndexError:
                     break
                 tensor.tofile(self.fout)
@@ -332,7 +354,7 @@ class GGUFWriter:
     def add_name(self, name: str) -> None:
         self.add_string(Keys.General.NAME, name)
 
-    def add_quantization_version(self, quantization_version: GGMLQuantizationType) -> None:
+    def add_quantization_version(self, quantization_version: int) -> None:
         self.add_uint32(
             Keys.General.QUANTIZATION_VERSION, quantization_version)
 
@@ -352,8 +374,14 @@ class GGUFWriter:
     def add_block_count(self, length: int) -> None:
         self.add_uint32(Keys.LLM.BLOCK_COUNT.format(arch=self.arch), length)
 
+    def add_leading_dense_block_count(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.LEADING_DENSE_BLOCK_COUNT.format(arch=self.arch), length)
+
     def add_feed_forward_length(self, length: int) -> None:
         self.add_uint32(Keys.LLM.FEED_FORWARD_LENGTH.format(arch=self.arch), length)
+
+    def add_expert_feed_forward_length(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
 
     def add_parallel_residual(self, use: bool) -> None:
         self.add_bool(Keys.LLM.USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
@@ -385,6 +413,12 @@ class GGUFWriter:
     def add_expert_used_count(self, count: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_USED_COUNT.format(arch=self.arch), count)
 
+    def add_expert_shared_count(self, count: int) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_SHARED_COUNT.format(arch=self.arch), count)
+
+    def add_expert_weights_scale(self, value: float) -> None:
+        self.add_float32(Keys.LLM.EXPERT_WEIGHTS_SCALE.format(arch=self.arch), value)
+
     def add_layer_norm_eps(self, value: float) -> None:
         self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
 
@@ -393,6 +427,12 @@ class GGUFWriter:
 
     def add_causal_attention(self, value: bool) -> None:
         self.add_bool(Keys.Attention.CAUSAL.format(arch=self.arch), value)
+
+    def add_q_lora_rank(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.Q_LORA_RANK.format(arch=self.arch), length)
+
+    def add_kv_lora_rank(self, length: int) -> None:
+        self.add_uint32(Keys.Attention.KV_LORA_RANK.format(arch=self.arch), length)
 
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
@@ -409,11 +449,17 @@ class GGUFWriter:
     def add_rope_scaling_factor(self, value: float) -> None:
         self.add_float32(Keys.Rope.SCALING_FACTOR.format(arch=self.arch), value)
 
+    def add_rope_scaling_attn_factors(self, value: Sequence[float]) -> None:
+        self.add_float32(Keys.Rope.SCALING_ATTN_FACTOR.format(arch=self.arch), value)
+
     def add_rope_scaling_orig_ctx_len(self, value: int) -> None:
         self.add_uint32(Keys.Rope.SCALING_ORIG_CTX_LEN.format(arch=self.arch), value)
 
     def add_rope_scaling_finetuned(self, value: bool) -> None:
         self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
+
+    def add_rope_scaling_yarn_log_mul(self, value: float) -> None:
+        self.add_float32(Keys.Rope.SCALING_YARN_LOG_MUL.format(arch=self.arch), value)
 
     def add_ssm_conv_kernel(self, value: int) -> None:
         self.add_uint32(Keys.SSM.CONV_KERNEL.format(arch=self.arch), value)
@@ -479,7 +525,7 @@ class GGUFWriter:
         self.add_bool(Keys.Tokenizer.ADD_PREFIX, value)
 
     def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
-        if isinstance(value, list):
+        if not isinstance(value, str):
             template_default = None
             template_names = set()
 

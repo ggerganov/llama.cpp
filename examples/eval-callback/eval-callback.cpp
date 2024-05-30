@@ -52,15 +52,15 @@ static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne
                     size_t i = i3 * nb[3] + i2 * nb[2] + i1 * nb[1] + i0 * nb[0];
                     float v;
                     if (type == GGML_TYPE_F16) {
-                        v = ggml_fp16_to_fp32(*(ggml_fp16_t *) data + i);
+                        v = ggml_fp16_to_fp32(*(ggml_fp16_t *) &data[i]);
                     } else if (type == GGML_TYPE_F32) {
-                        v = *(float *) data + i;
+                        v = *(float *) &data[i];
                     } else if (type == GGML_TYPE_I32) {
-                        v = (float) *(int32_t *) data + i;
+                        v = (float) *(int32_t *) &data[i];
                     } else if (type == GGML_TYPE_I16) {
-                        v = (float) *(int16_t *) data + i;
+                        v = (float) *(int16_t *) &data[i];
                     } else if (type == GGML_TYPE_I8) {
-                        v = (float) *(int8_t *) data + i;
+                        v = (float) *(int8_t *) &data[i];
                     } else {
                         GGML_ASSERT(false);
                     }
@@ -152,7 +152,7 @@ int main(int argc, char ** argv) {
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
+        params.prompt = string_random_prompt(rng);
     }
 
     llama_backend_init();
@@ -176,7 +176,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     bool OK = run(ctx, params);
