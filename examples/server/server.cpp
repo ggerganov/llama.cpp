@@ -3028,13 +3028,26 @@ int main(int argc, char ** argv) {
         log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
     }
 
-    // load the model
-    if (!ctx_server.load_model(params)) {
-        state.store(SERVER_STATE_ERROR);
-        return 1;
-    } else {
+    try {
+        // Attempt to load the model
+        if (!ctx_server.load_model(params)) {
+            LOG_ERROR("unable to load model", {{"error", "Load model failed"}});
+            state.store(SERVER_STATE_ERROR);
+            return 1;
+        }
+        
+        // Initialize the server context if the model is loaded successfully
         ctx_server.init();
         state.store(SERVER_STATE_READY);
+
+    } catch (const std::exception &e) {
+        // Catch known standard exceptions
+        LOG_ERROR("unable to load model", {{"error", e.what()}});
+        exit(1);
+    } catch (...) {
+        // Catch all other exceptions
+        LOG_ERROR("unable to load model", {{"error", "Unknown Exception"}});
+        exit(1);
     }
 
     LOG_INFO("model loaded", {});
