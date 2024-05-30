@@ -93,9 +93,11 @@ export function el_create_boolbutton(id, texts, defaultValue, cb) {
  * @param {{ true: string; false: string; }} texts
  * @param {boolean} defaultValue
  * @param {(arg0: boolean) => void} cb
+ * @param {string} className
  */
-export function el_creatediv_boolbutton(id, label, texts, defaultValue, cb) {
+export function el_creatediv_boolbutton(id, label, texts, defaultValue, cb, className="gridx2") {
     let div = document.createElement("div");
+    div.className = className;
     let lbl = document.createElement("label");
     lbl.setAttribute("for", id);
     lbl.innerText = label;
@@ -150,9 +152,11 @@ export function el_create_select(id, options, defaultOption, cb) {
  * @param {{ [x: string]: any; }} options
  * @param {any} defaultOption
  * @param {(arg0: string) => void} cb
+ * @param {string} className
  */
-export function el_creatediv_select(id, label, options, defaultOption, cb) {
+export function el_creatediv_select(id, label, options, defaultOption, cb, className="gridx2") {
     let div = document.createElement("div");
+    div.className = className;
     let lbl = document.createElement("label");
     lbl.setAttribute("for", id);
     lbl.innerText = label;
@@ -192,9 +196,11 @@ export function el_create_input(id, type, defaultValue, cb) {
  * @param {string} type
  * @param {any} defaultValue
  * @param {function(any):void} cb
+ * @param {string} className
  */
-export function el_creatediv_input(id, label, type, defaultValue, cb) {
+export function el_creatediv_input(id, label, type, defaultValue, cb, className="gridx2") {
     let div = document.createElement("div");
+    div.className = className;
     let lbl = document.createElement("label");
     lbl.setAttribute("for", id);
     lbl.innerText = label;
