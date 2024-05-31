@@ -20130,7 +20130,9 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     int compute_status = GGML_STATUS_SUCCESS;
 
     // The main-thread is a work thread too. Start computing...
-    atomic_fetch_sub(&threadpool->n_ready, 1);
+    if (n_threads > 1) {
+        atomic_fetch_sub(&threadpool->n_ready, 1);
+    }
     compute_status = (size_t) ggml_graph_compute_thread(&threadpool->workers[0]);
 
     // don't leave affinity set on the main thread
