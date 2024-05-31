@@ -684,7 +684,8 @@ if (LLAMA_SYCL)
     endif()
 
     set(GGML_HEADERS_SYCL ggml-sycl.h)
-    set(GGML_SOURCES_SYCL ggml-sycl.cpp)
+    file(GLOB GGML_SOURCES_SYCL "ggml-sycl/*.cpp")
+    list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
 
     if (WIN32)
         set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl sycl7 OpenCL mkl_sycl_blas_dll.lib mkl_intel_ilp64_dll.lib mkl_sequential_dll.lib mkl_core_dll.lib)

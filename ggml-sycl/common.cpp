@@ -12,10 +12,6 @@
 
 #include "common.hpp"
 
-int get_main_device() {
-  return g_main_device;
-}
-
 int get_current_device_id() {
   return dpct::dev_mgr::instance().current_device_id();
 }

@@ -136,6 +136,7 @@ typedef sycl::float2 dfloat2;
 
 static const int8_t kvalues_iq4nl[16]={-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 
+static int g_all_sycl_device_count = -1;
 static bool g_ggml_backend_sycl_buffer_type_initialized = false;
 
 static ggml_sycl_backend_gpu_mode g_ggml_sycl_backend_gpu_mode =
@@ -144,8 +145,6 @@ static ggml_sycl_backend_gpu_mode g_ggml_sycl_backend_gpu_mode =
 static void* g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
-
-int get_main_device();
 
 [[noreturn]] static inline void bad_arch(const sycl::stream& stream_ct1) {
   stream_ct1 << "ERROR: ggml-sycl was compiled without support for the "

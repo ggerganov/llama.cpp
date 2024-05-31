@@ -2866,7 +2866,7 @@ namespace dpct
             /// when usm is used and dimension is greater than 1.
             template <size_t D = Dimension>
             typename std::enable_if<D != 1, dpct_accessor_t>::type
-            get_access(sycl::handler &cgh) {
+            get_access([[maybe_unused]] sycl::handler &cgh) {
                 return dpct_accessor_t((T *)_device_ptr, _range);
             }
 
