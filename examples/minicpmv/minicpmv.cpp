@@ -210,7 +210,7 @@ static bool bicubic_resize(const clip_image_u8 &img, clip_image_u8 &dst, int tar
             }
         }
     }
-    
+
     return true;
 }
 

@@ -108,7 +108,7 @@ void process_image(struct minicpmv_context * ctx_llava, std::vector<std::vector<
 
     system_prompt = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n";
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
-    eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, true);
+    eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, false);
     llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices[0][0], params->n_batch, &n_past);
     eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
     if (image_embed_slices.size() > 1) {
