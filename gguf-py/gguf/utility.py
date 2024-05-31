@@ -29,9 +29,9 @@ def naming_convention(model_name: str, base_name: str, finetune_string:str, vers
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
 
     if base_name is not None:
-        name = base_name.strip().title().replace(' ', '_')
+        name = base_name.strip().title().replace(' ', '-')
     elif model_name is not None:
-        name = model_name.strip().title().replace(' ', '_')
+        name = model_name.strip().title().replace(' ', '-')
     else:
         name = "ggml-model"
 
@@ -41,10 +41,10 @@ def naming_convention(model_name: str, base_name: str, finetune_string:str, vers
     else:
         parameters = f"-{per_model_rounded_weight_estimate}"
 
-    finetune = f"-{finetune_string.strip().title().replace(' ', '_')}" if finetune_string is not None else ""
+    finetune = f"-{finetune_string.strip().title().replace(' ', '-')}" if finetune_string is not None else ""
 
-    version = f"-{version_string.strip().replace(' ', '_')}" if version_string is not None else ""
+    version = f"-{version_string.strip().replace(' ', '-')}" if version_string is not None else ""
 
-    encoding = f"-{encoding_scheme.strip().replace(' ', '_').upper()}"
+    encoding = f"-{encoding_scheme.strip().replace(' ', '-').upper()}"
 
     return f"{name}{parameters}{finetune}{version}{encoding}"
