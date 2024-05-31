@@ -48,6 +48,13 @@ button {
     flex-direction: column;
 }
 
+.ul1 {
+    padding-inline-start: 2vw;
+}
+.ul2 {
+    padding-inline-start: 2vw;
+}
+
 * {
     margin: 0.6vmin;
 }

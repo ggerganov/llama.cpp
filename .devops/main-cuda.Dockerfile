@@ -23,7 +23,7 @@ ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 # Enable CUDA
 ENV LLAMA_CUDA=1
 
-RUN make
+RUN make -j$(nproc)
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
