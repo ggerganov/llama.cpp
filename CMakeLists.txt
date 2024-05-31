@@ -588,6 +588,8 @@ if (LLAMA_HIPBLAS)
     list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
     file(GLOB SRCS "ggml-cuda/template-instances/fattn-wmma*.cu")
     list(APPEND GGML_SOURCES_ROCM ${SRCS})
+    file(GLOB SRCS "ggml-cuda/template-instances/mmq*.cu")
+    list(APPEND GGML_SOURCES_ROCM ${SRCS})
 
     add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUDA)
 

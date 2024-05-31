@@ -160,7 +160,7 @@
 #endif
 
 #define MMVQ_MAX_BATCH_SIZE  8 // max batch size to use MMVQ kernels
-#define  MMQ_MAX_BATCH_SIZE 32 // max batch size to use MMQ kernels when tensor cores are available
+#define  MMQ_MAX_BATCH_SIZE 64 // max batch size to use MMQ kernels when tensor cores are available
 
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
 
@@ -482,6 +482,71 @@ static __device__ __forceinline__ float get_alibi_slope(
     const int   exph = h < n_head_log2 ? h + 1 : 2*(h - n_head_log2) + 1;
 
     return powf(base, exph);
+}
+
+static constexpr __device__ int ggml_blck_size_device(ggml_type type) {
+    return type == GGML_TYPE_F16 ? 1 :
+        type == GGML_TYPE_Q4_0 ? QK4_0 :
+        type == GGML_TYPE_Q4_1 ? QK4_1 :
+        type == GGML_TYPE_Q5_0 ? QK5_0 :
+        type == GGML_TYPE_Q5_1 ? QK5_1 :
+        type == GGML_TYPE_Q8_0 ? QK8_0 :
+        type == GGML_TYPE_Q2_K ? QK_K :
+        type == GGML_TYPE_Q3_K ? QK_K :
+        type == GGML_TYPE_Q4_K ? QK_K :
+        type == GGML_TYPE_Q5_K ? QK_K :
+        type == GGML_TYPE_Q6_K ? QK_K :
+        type == GGML_TYPE_IQ2_XXS ? QK_K :
+        type == GGML_TYPE_IQ2_XS ? QK_K :
+        type == GGML_TYPE_IQ2_S ? QK_K :
+        type == GGML_TYPE_IQ3_XXS ? QK_K :
+        type == GGML_TYPE_IQ1_S ? QK_K :
+        type == GGML_TYPE_IQ1_M ? QK_K :
+        type == GGML_TYPE_IQ4_NL ? QK4_NL :
+        type == GGML_TYPE_IQ4_XS ? QK_K :
+        type == GGML_TYPE_IQ3_S ? QK_K :
+        0;
+}
+
+static constexpr __device__ int get_qr_device(ggml_type type) {
+    return type == GGML_TYPE_F16 ? 1 :
+        type == GGML_TYPE_Q4_0 ? QR4_0 :
+        type == GGML_TYPE_Q4_1 ? QR4_1 :
+        type == GGML_TYPE_Q5_0 ? QR5_0 :
+        type == GGML_TYPE_Q5_1 ? QR5_1 :
+        type == GGML_TYPE_Q8_0 ? QR8_0 :
+        type == GGML_TYPE_Q2_K ? QR2_K :
+        type == GGML_TYPE_Q3_K ? QR3_K :
+        type == GGML_TYPE_Q4_K ? QR4_K :
+        type == GGML_TYPE_Q5_K ? QR5_K :
+        type == GGML_TYPE_Q6_K ? QR6_K :
+        type == GGML_TYPE_IQ2_XXS ? QR2_XXS :
+        type == GGML_TYPE_IQ2_XS ? QR2_XS :
+        type == GGML_TYPE_IQ2_S ? QR2_S :
+        type == GGML_TYPE_IQ3_XXS ? QR3_XXS :
+        type == GGML_TYPE_IQ1_S ? QR1_S :
+        type == GGML_TYPE_IQ1_M ? QR1_M :
+        type == GGML_TYPE_IQ4_NL ? QR4_NL :
+        type == GGML_TYPE_IQ4_XS ? QR4_XS :
+        type == GGML_TYPE_IQ3_S ? QR3_S :
+        0;
+}
+
+static constexpr __device__ int get_qi_device(ggml_type type) {
+    return ggml_blck_size_device(type) / (sizeof(int)*get_qr_device(type));
+}
+
+static int get_mmq_x_max_host(const int cc) {
+#ifdef CUDA_USE_TENSOR_CORES
+    return cc >= CC_VOLTA && cc < CC_OFFSET_AMD ? MMQ_MAX_BATCH_SIZE : 64;
+#else
+    return cc >= CC_VOLTA && cc < CC_OFFSET_AMD ? 128 : 64;
+#endif // CUDA_USE_TENSOR_CORES
+}
+
+// Round rows to this value for --split-mode row:
+static int get_mmq_y_host(const int cc, const int mmq_x) {
+    return cc >= CC_VOLTA && mmq_x >= 32 ? 128 : 64;
 }
 
 //////////////////////
