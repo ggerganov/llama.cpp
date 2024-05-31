@@ -1382,37 +1382,38 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
 
     // TODO: filter by tags
 
-    options.push_back({ "*",           "-h,   --help, --usage", "print usage and exit" });
-    options.push_back({ "*",           "      --version", "show version and build info" });
-    options.push_back({ "*",           "-co,  --color", "colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false" });
-    options.push_back({ "*",           "-s,   --seed SEED", "RNG seed (default: %d, use random seed for < 0)", params.seed });
-    options.push_back({ "*",           "-t,   --threads N", "number of threads to use during generation (default: %d)", params.n_threads });
-    options.push_back({ "*",           "-tb,  --threads-batch N", "number of threads to use during batch and prompt processing (default: same as --threads)" });
-    options.push_back({ "speculative", "-td,  --threads-draft N", "number of threads to use during generation (default: same as --threads)" });
+    options.push_back({ "*",           "-h,   --help, --usage",         "print usage and exit" });
+    options.push_back({ "*",           "      --version",               "show version and build info" });
+    options.push_back({ "*",           "-co,  --color",                 "colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false" });
+    options.push_back({ "*",           "-s,   --seed SEED",             "RNG seed (default: %d, use random seed for < 0)", params.seed });
+    options.push_back({ "*",           "-t,   --threads N",             "number of threads to use during generation (default: %d)", params.n_threads });
+    options.push_back({ "*",           "-tb,  --threads-batch N",       "number of threads to use during batch and prompt processing (default: same as --threads)" });
+    options.push_back({ "speculative", "-td,  --threads-draft N",       "number of threads to use during generation (default: same as --threads)" });
     options.push_back({ "speculative", "-tbd, --threads-batch-draft N", "number of threads to use during batch and prompt processing (default: same as --threads-draft)" });
-    options.push_back({ "*",           "-c,   --ctx-size N", "size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx });
-    options.push_back({ "*",           "-n,   --n-predict N", "number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict });
-    options.push_back({ "*",           "-b,   --batch-size N", "logical maximum batch size (default: %d)", params.n_batch });
-    options.push_back({ "*",           "-ub,  --ubatch-size N", "physical maximum batch size (default: %d)", params.n_ubatch });
-    options.push_back({ "*",           "-p,   --prompt PROMPT", "prompt to start generation with (default: empty)" });
-    options.push_back({ "*",           "-f,   --file FNAME", "a file containing the prompt (default: none)" });
-    options.push_back({ "*",           "-bf,  --binary-file FNAME", "binary file containing the prompt (default: none)" });
-    options.push_back({ "*",           "-e,   --escape", "process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)" });
-    options.push_back({ "main",        "      --prompt-cache FNAME", "file to cache prompt state for faster startup (default: none)" });
-    options.push_back({ "main",        "      --prompt-cache-all", "if specified, saves user input and generations to cache as well\nnot supported with --interactive or other interactive options" });
-    options.push_back({ "main",        "      --prompt-cache-ro", "if specified, uses the prompt cache but does not update it" });
-    options.push_back({ "main",        "-r,   --reverse-prompt PROMPT", "halt generation at PROMPT, return control in interactive mode\ncan be specified more than once for multiple prompts" });
-
-    options.push_back({ "main",        "-sp,  --special", "special tokens output enabled (default: %s)", params.special ? "true" : "false" });
-    options.push_back({ "main",        "-cnv, --conversation", "run in conversation mode (does not print special tokens and suffix/prefix) (default: %s)", params.conversation ? "true" : "false" });
-    options.push_back({ "main",        "-ins, --instruct", "run in instruction mode (use with Alpaca models) (default: %s)", params.instruct ? "true" : "false" });
-    options.push_back({ "main",        "-cml, --chatml", "run in chatml mode (use with ChatML-compatible models) (default: %s)", params.chatml ? "true" : "false" });
-    options.push_back({ "main infill", "-i,   --interactive", "run in interactive mode (default: %s)", params.interactive ? "true" : "false" });
-    options.push_back({ "main infill", "-if,  --interactive-first", "run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false" });
-    options.push_back({ "main infill", "-mli, --multiline-input", "allows you to write or paste multiple lines without ending each in '\\'" });
-    options.push_back({ "main infill", "      --in-prefix-bos", "prefix BOS to user inputs, preceding the `--in-prefix` string" });
-    options.push_back({ "main infill", "      --in-prefix STRING", "string to prefix user inputs with (default: empty)" });
-    options.push_back({ "main infill", "      --in-suffix STRING", "string to suffix after user inputs with (default: empty)" });
+    options.push_back({ "*",           "-c,   --ctx-size N",            "size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx });
+    options.push_back({ "*",           "-n,   --n-predict N",           "number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict });
+    options.push_back({ "*",           "-b,   --batch-size N",          "logical maximum batch size (default: %d)", params.n_batch });
+    options.push_back({ "*",           "-ub,  --ubatch-size N",         "physical maximum batch size (default: %d)", params.n_ubatch });
+    options.push_back({ "*",           "-p,   --prompt PROMPT",         "prompt to start generation with (default: empty)" });
+    options.push_back({ "*",           "-f,   --file FNAME",            "a file containing the prompt (default: none)" });
+    options.push_back({ "*",           "-bf,  --binary-file FNAME",     "binary file containing the prompt (default: none)" });
+    options.push_back({ "*",           "-e,   --escape",                "process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)" });
+    options.push_back({ "main",        "      --prompt-cache FNAME",    "file to cache prompt state for faster startup (default: none)" });
+    options.push_back({ "main",        "      --prompt-cache-all",      "if specified, saves user input and generations to cache as well\n"
+                                                                        "not supported with --interactive or other interactive options" });
+    options.push_back({ "main",        "      --prompt-cache-ro",       "if specified, uses the prompt cache but does not update it" });
+    options.push_back({ "main",        "-r,   --reverse-prompt PROMPT", "halt generation at PROMPT, return control in interactive mode\n"
+                                                                        "can be specified more than once for multiple prompts" });
+    options.push_back({ "main",        "-sp,  --special",               "special tokens output enabled (default: %s)", params.special ? "true" : "false" });
+    options.push_back({ "main",        "-cnv, --conversation",          "run in conversation mode (does not print special tokens and suffix/prefix) (default: %s)", params.conversation ? "true" : "false" });
+    options.push_back({ "main",        "-ins, --instruct",              "run in instruction mode (use with Alpaca models) (default: %s)", params.instruct ? "true" : "false" });
+    options.push_back({ "main",        "-cml, --chatml",                "run in chatml mode (use with ChatML-compatible models) (default: %s)", params.chatml ? "true" : "false" });
+    options.push_back({ "main infill", "-i,   --interactive",           "run in interactive mode (default: %s)", params.interactive ? "true" : "false" });
+    options.push_back({ "main infill", "-if,  --interactive-first",     "run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false" });
+    options.push_back({ "main infill", "-mli, --multiline-input",       "allows you to write or paste multiple lines without ending each in '\\'" });
+    options.push_back({ "main infill", "      --in-prefix-bos",         "prefix BOS to user inputs, preceding the `--in-prefix` string" });
+    options.push_back({ "main infill", "      --in-prefix STRING",      "string to prefix user inputs with (default: empty)" });
+    options.push_back({ "main infill", "      --in-suffix STRING",      "string to suffix after user inputs with (default: empty)" });
 
     printf("\n");
     printf("usage: %s [options]\n", argv[0]);
