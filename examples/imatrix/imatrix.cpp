@@ -598,9 +598,6 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = string_random_prompt(rng);
-    }
 
     sparams.dataset = params.prompt_file;
     g_collector.set_parameters(std::move(sparams));

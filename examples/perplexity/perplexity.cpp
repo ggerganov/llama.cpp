@@ -1032,7 +1032,7 @@ struct winogrande_entry {
     std::vector<llama_token> seq_tokens[2];
 };
 
-static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string& prompt) {
+static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string & prompt) {
     std::vector<winogrande_entry> result;
     std::istringstream in(prompt);
     std::string line;
@@ -2007,9 +2007,6 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = string_random_prompt(rng);
-    }
 
     llama_backend_init();
     llama_numa_init(params.numa);

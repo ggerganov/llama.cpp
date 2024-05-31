@@ -289,7 +289,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-        // This is temporary, in the future the samplign state will be moved fully to llama_sampling_context.
+        // TODO: this is temporary, in the future the sampling state will be moved fully to llama_sampling_context.
         params.seed = std::stoul(argv[i]);
         sparams.seed = std::stoul(argv[i]);
         return true;
@@ -901,11 +901,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.interactive = true;
         return true;
     }
-    if (arg == "--interactive-specials") {
-        params.interactive_specials = true;
-        return true;
-    }
-    if (arg == "--special") {
+    if (arg == "-sp" || arg == "--special") {
         params.special = true;
         return true;
     }
@@ -913,7 +909,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.embedding = true;
         return true;
     }
-    if (arg == "--interactive-first") {
+    if (arg == "-if" || arg == "--interactive-first") {
         params.interactive_first = true;
         return true;
     }
@@ -965,7 +961,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.flash_attn = true;
         return true;
     }
-    if (arg == "--color") {
+    if (arg == "-co" || arg == "--color") {
         params.use_color = true;
         return true;
     }
@@ -1252,10 +1248,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
         exit(0);
     }
-    if (arg == "--random-prompt") {
-        params.random_prompt = true;
-        return true;
-    }
     if (arg == "--in-prefix-bos") {
         params.input_prefix_bos = true;
         return true;
@@ -1349,6 +1341,16 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     return false;
 }
 
+#ifdef __GNUC__
+#ifdef __MINGW32__
+#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(gnu_printf, __VA_ARGS__)))
+#else
+#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...) __attribute__((format(printf, __VA_ARGS__)))
+#endif
+#else
+#define LLAMA_COMMON_ATTRIBUTE_FORMAT(...)
+#endif
+
 void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const llama_sampling_params & sparams = params.sparams;
 
@@ -1360,52 +1362,83 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     }
     sampler_type_names.pop_back();
 
+    struct option_info {
+        LLAMA_COMMON_ATTRIBUTE_FORMAT(4, 5)
+        option_info(const std::string & tags, const char * args, const char * desc, ...) : tags(tags), args(args), desc(desc) {
+            va_list args_list;
+            va_start(args_list, desc);
+            char buffer[1024];
+            vsnprintf(buffer, sizeof(buffer), desc, args_list);
+            va_end(args_list);
+            this->desc = buffer;
+        }
+
+        std::string tags;
+        std::string args;
+        std::string desc;
+    };
+
+    std::vector<option_info> options;
+
+    // TODO: filter by tags
+
+    options.push_back({ "*",           "-h,   --help, --usage", "print usage and exit" });
+    options.push_back({ "*",           "      --version", "show version and build info" });
+    options.push_back({ "*",           "-co,  --color", "colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false" });
+    options.push_back({ "*",           "-s,   --seed SEED", "RNG seed (default: %d, use random seed for < 0)", params.seed });
+    options.push_back({ "*",           "-t,   --threads N", "number of threads to use during generation (default: %d)", params.n_threads });
+    options.push_back({ "*",           "-tb,  --threads-batch N", "number of threads to use during batch and prompt processing (default: same as --threads)" });
+    options.push_back({ "speculative", "-td,  --threads-draft N", "number of threads to use during generation (default: same as --threads)" });
+    options.push_back({ "speculative", "-tbd, --threads-batch-draft N", "number of threads to use during batch and prompt processing (default: same as --threads-draft)" });
+    options.push_back({ "*",           "-c,   --ctx-size N", "size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx });
+    options.push_back({ "*",           "-n,   --n-predict N", "number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict });
+    options.push_back({ "*",           "-b,   --batch-size N", "logical maximum batch size (default: %d)", params.n_batch });
+    options.push_back({ "*",           "-ub,  --ubatch-size N", "physical maximum batch size (default: %d)", params.n_ubatch });
+    options.push_back({ "*",           "-p,   --prompt PROMPT", "prompt to start generation with (default: empty)" });
+    options.push_back({ "*",           "-f,   --file FNAME", "a file containing the prompt (default: none)" });
+    options.push_back({ "*",           "-bf,  --binary-file FNAME", "binary file containing the prompt (default: none)" });
+    options.push_back({ "*",           "-e,   --escape", "process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)" });
+    options.push_back({ "main",        "      --prompt-cache FNAME", "file to cache prompt state for faster startup (default: none)" });
+    options.push_back({ "main",        "      --prompt-cache-all", "if specified, saves user input and generations to cache as well\nnot supported with --interactive or other interactive options" });
+    options.push_back({ "main",        "      --prompt-cache-ro", "if specified, uses the prompt cache but does not update it" });
+    options.push_back({ "main",        "-r,   --reverse-prompt PROMPT", "halt generation at PROMPT, return control in interactive mode\ncan be specified more than once for multiple prompts" });
+
+    options.push_back({ "main",        "-sp,  --special", "special tokens output enabled (default: %s)", params.special ? "true" : "false" });
+    options.push_back({ "main",        "-cnv, --conversation", "run in conversation mode (does not print special tokens and suffix/prefix) (default: %s)", params.conversation ? "true" : "false" });
+    options.push_back({ "main",        "-ins, --instruct", "run in instruction mode (use with Alpaca models) (default: %s)", params.instruct ? "true" : "false" });
+    options.push_back({ "main",        "-cml, --chatml", "run in chatml mode (use with ChatML-compatible models) (default: %s)", params.chatml ? "true" : "false" });
+    options.push_back({ "main infill", "-i,   --interactive", "run in interactive mode (default: %s)", params.interactive ? "true" : "false" });
+    options.push_back({ "main infill", "-if,  --interactive-first", "run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false" });
+    options.push_back({ "main infill", "-mli, --multiline-input", "allows you to write or paste multiple lines without ending each in '\\'" });
+    options.push_back({ "main infill", "      --in-prefix-bos", "prefix BOS to user inputs, preceding the `--in-prefix` string" });
+    options.push_back({ "main infill", "      --in-prefix STRING", "string to prefix user inputs with (default: empty)" });
+    options.push_back({ "main infill", "      --in-suffix STRING", "string to suffix after user inputs with (default: empty)" });
+
     printf("\n");
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
-    printf("options:\n");
-    printf("  -h, --help, --usage   print usage and exit\n");
-    printf("  --version             show version and build info\n");
-    printf("  -i, --interactive     run in interactive mode\n");
-    printf("  --special             special tokens output enabled\n");
-    printf("  --interactive-specials allow special tokens in user text, in interactive mode\n");
-    printf("  --interactive-first   run in interactive mode and wait for input right away\n");
-    printf("  -cnv, --conversation  run in conversation mode (does not print special tokens and suffix/prefix)\n");
-    printf("  -ins, --instruct      run in instruction mode (use with Alpaca models)\n");
-    printf("  -cml, --chatml        run in chatml mode (use with ChatML-compatible models)\n");
-    printf("  --multiline-input     allows you to write or paste multiple lines without ending each in '\\'\n");
-    printf("  -r PROMPT, --reverse-prompt PROMPT\n");
-    printf("                        halt generation at PROMPT, return control in interactive mode\n");
-    printf("                        (can be specified more than once for multiple prompts).\n");
-    printf("  --color               colorise output to distinguish prompt and user input from generations\n");
-    printf("  -s SEED, --seed SEED  RNG seed (default: -1, use random seed for < 0)\n");
-    printf("  -t N, --threads N     number of threads to use during generation (default: %d)\n", params.n_threads);
-    printf("  -tb N, --threads-batch N\n");
-    printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");
-    printf("  -td N, --threads-draft N");
-    printf("                        number of threads to use during generation (default: same as --threads)\n");
-    printf("  -tbd N, --threads-batch-draft N\n");
-    printf("                        number of threads to use during batch and prompt processing (default: same as --threads-draft)\n");
-    printf("  -p PROMPT, --prompt PROMPT\n");
-    printf("                        prompt to start generation with (default: empty)\n");
-    printf("  -e, --escape          process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
-    printf("  --prompt-cache FNAME  file to cache prompt state for faster startup (default: none)\n");
-    printf("  --prompt-cache-all    if specified, saves user input and generations to cache as well.\n");
-    printf("                        not supported with --interactive or other interactive options\n");
-    printf("  --prompt-cache-ro     if specified, uses the prompt cache but does not update it.\n");
-    printf("  --random-prompt       start with a randomized prompt.\n");
-    printf("  --in-prefix-bos       prefix BOS to user inputs, preceding the `--in-prefix` string\n");
-    printf("  --in-prefix STRING    string to prefix user inputs with (default: empty)\n");
-    printf("  --in-suffix STRING    string to suffix after user inputs with (default: empty)\n");
-    printf("  -f FNAME, --file FNAME\n");
-    printf("                        prompt file to start generation.\n");
-    printf("  -bf FNAME, --binary-file FNAME\n");
-    printf("                        binary file containing multiple choice tasks.\n");
-    printf("  -n N, --n-predict N   number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)\n", params.n_predict);
-    printf("  -c N, --ctx-size N    size of the prompt context (default: %d, 0 = loaded from model)\n", params.n_ctx);
-    printf("  -b N, --batch-size N  logical maximum batch size (default: %d)\n", params.n_batch);
-    printf("  -ub N, --ubatch-size N\n");
-    printf("                        physical maximum batch size (default: %d)\n", params.n_ubatch);
+    printf("options:\n\n");
+
+    for (const auto & o : options) {
+        printf("  %-32s", o.args.c_str());
+        if (o.args.length() > 34) {
+            printf("\n%34s", "");
+        }
+
+        //printf("%s\n", o.desc.c_str());
+        // print line by line and pad with spaces
+        const auto desc = o.desc;
+        size_t start = 0;
+        size_t end = desc.find('\n');
+        while (end != std::string::npos) {
+            printf("%s\n%34s", desc.substr(start, end - start).c_str(), "");
+            start = end + 1;
+            end = desc.find('\n', start);
+        }
+
+        printf("%s\n", desc.substr(start).c_str());
+    }
+
     printf("  --samplers            samplers that will be used for generation in the order, separated by \';\'\n");
     printf("                        (default: %s)\n", sampler_type_names.c_str());
     printf("  --sampling-seq        simplified sequence for samplers that will be used (default: %s)\n", sampler_type_chars.c_str());
@@ -1549,6 +1582,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     printf("                        print token count every N tokens (default: %d)\n", params.n_print);
     printf("  --check-tensors       check model tensor data for invalid values\n");
     printf("\n");
+
 #ifndef LOG_DISABLE_LOGS
     log_print_usage();
 #endif // LOG_DISABLE_LOGS
@@ -1609,24 +1643,6 @@ std::string string_get_sortable_timestamp() {
     snprintf(timestamp_ns, 11, "%09" PRId64, ns);
 
     return std::string(timestamp_no_ns) + "." + std::string(timestamp_ns);
-}
-
-std::string string_random_prompt(std::mt19937 & rng) {
-    const int r = rng() % 10;
-    switch (r) {
-        case 0: return "So";
-        case 1: return "Once upon a time";
-        case 2: return "When";
-        case 3: return "The";
-        case 4: return "After";
-        case 5: return "If";
-        case 6: return "import";
-        case 7: return "He";
-        case 8: return "She";
-        case 9: return "They";
-    }
-
-    GGML_UNREACHABLE();
 }
 
 void string_process_escapes(std::string & input) {
@@ -2906,7 +2922,6 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     yaml_dump_string_multiline(stream, "in_suffix", params.input_prefix.c_str());
     fprintf(stream, "instruct: %s # default: false\n", params.instruct ? "true" : "false");
     fprintf(stream, "interactive: %s # default: false\n", params.interactive ? "true" : "false");
-    fprintf(stream, "interactive_specials: %s # default: false\n", params.interactive_specials ? "true" : "false");
     fprintf(stream, "interactive_first: %s # default: false\n", params.interactive_first ? "true" : "false");
     fprintf(stream, "keep: %d # default: 0\n", params.n_keep);
     fprintf(stream, "logdir: %s # default: unset (no logging)\n", params.logdir.c_str());
@@ -2956,7 +2971,6 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "prompt_cache_all: %s # default: false\n", params.prompt_cache_all ? "true" : "false");
     fprintf(stream, "prompt_cache_ro: %s # default: false\n", params.prompt_cache_ro ? "true" : "false");
     yaml_dump_vector_int(stream, "prompt_tokens", prompt_tokens);
-    fprintf(stream, "random_prompt: %s # default: false\n", params.random_prompt ? "true" : "false");
     fprintf(stream, "repeat_penalty: %f # default: 1.1\n", sparams.penalty_repeat);
 
     fprintf(stream, "reverse_prompt:\n");

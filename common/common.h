@@ -99,23 +99,23 @@ struct gpt_params {
     // // sampling parameters
     struct llama_sampling_params sparams;
 
-    std::string model                = "";  // model path
-    std::string model_draft          = "";  // draft model for speculative decoding
+    std::string model                = ""; // model path
+    std::string model_draft          = ""; // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
-    std::string model_url            = "";  // model url to download
-    std::string hf_repo              = "";  // HF repo
-    std::string hf_file              = "";  // HF file
+    std::string model_url            = ""; // model url to download
+    std::string hf_repo              = ""; // HF repo
+    std::string hf_file              = ""; // HF file
     std::string prompt               = "";
-    std::string prompt_file          = "";  // store the external prompt file name
-    std::string path_prompt_cache    = "";  // path to file for saving/loading prompt eval state
-    std::string input_prefix         = "";  // string to prefix user inputs with
-    std::string input_suffix         = "";  // string to suffix user inputs with
-    std::vector<std::string> antiprompt; // string upon seeing which more user input is prompted
-    std::string logdir               = "";  // directory in which to save YAML log files
+    std::string prompt_file          = ""; // store the external prompt file name
+    std::string path_prompt_cache    = ""; // path to file for saving/loading prompt eval state
+    std::string input_prefix         = ""; // string to prefix user inputs with
+    std::string input_suffix         = ""; // string to suffix user inputs with
+    std::string logdir               = ""; // directory in which to save YAML log files
     std::string lookup_cache_static  = ""; // path of static ngram cache file for lookup decoding
     std::string lookup_cache_dynamic = ""; // path of dynamic ngram cache file for lookup decoding
-    std::string logits_file          = "";  // file for saving *all* logits
+    std::string logits_file          = ""; // file for saving *all* logits
 
+    std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
 
     // TODO: avoid tuple, use struct
@@ -143,11 +143,10 @@ struct gpt_params {
     bool   kl_divergence   = false; // compute KL divergence
 
     bool usage             = false; // print usage
-    bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
-    bool interactive       = false; // interactive mode
-    bool interactive_specials = false; // whether to allow special tokens from user, during interactive mode
     bool special           = false; // enable special token output
+    bool interactive       = false; // interactive mode
+    bool interactive_first = false; // wait for user input immediately
     bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
     bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
@@ -155,7 +154,6 @@ struct gpt_params {
 
     bool embedding         = false; // get only sentence embedding
     bool escape            = false; // escape "\n", "\r", "\t", "\'", "\"", and "\\"
-    bool interactive_first = false; // wait for user input immediately
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
     bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
@@ -200,7 +198,6 @@ std::vector<std::string> string_split(std::string input, char separator);
 
 std::string string_strip(const std::string & str);
 std::string string_get_sortable_timestamp();
-std::string string_random_prompt(std::mt19937 & rng);
 
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);

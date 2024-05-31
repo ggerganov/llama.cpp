@@ -182,9 +182,6 @@ int main(int argc, char ** argv) {
     LOG_TEE("%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = string_random_prompt(rng);
-    }
 
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init();
@@ -893,7 +890,7 @@ int main(int argc, char ** argv) {
                     }
 
                     const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true);
-                    const auto line_inp = ::llama_tokenize(ctx, buffer,              false, params.interactive_specials);
+                    const auto line_inp = ::llama_tokenize(ctx, buffer,              false, false);
                     const auto line_sfx = ::llama_tokenize(ctx, params.input_suffix, false, true);
 
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp).c_str());

@@ -80,9 +80,6 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = string_random_prompt(rng);
-    }
 
     llama_backend_init();
     llama_numa_init(params.numa);

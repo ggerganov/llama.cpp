@@ -140,44 +140,9 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: warning: minimum context size is 8, using minimum size.\n", __func__);
         params.n_ctx = 8;
     }
-    if (params.instruct) {
-        printf("\n************\n");
-        printf("%s: please use the 'main' tool for instruct mode\n", __func__);
-        printf("************\n\n");
-
-        return 0;
-    }
-    if (params.chatml) {
-        printf("\n************\n");
-        printf("%s: please use the 'main' tool for chatml mode\n", __func__);
-        printf("************\n\n");
-
-        return 0;
-    }
-    if (!params.antiprompt.empty()) {
-        printf("\n************\n");
-        printf("%s: please use the 'main' tool for antiprompt mode\n", __func__);
-        printf("************\n\n");
-
-        return 0;
-    }
     if (!params.interactive_first && (params.input_prefix.empty() && params.input_suffix.empty())) {
         printf("\n************\n");
         printf("%s: please use '--interactive_first' or specify '--in_prefix' and/or '--in_suffix'\n", __func__);
-        printf("************\n\n");
-
-        return 0;
-    }
-    if (params.random_prompt) {
-        printf("\n************\n");
-        printf("%s: please use the 'main' tool for random prompt mode\n", __func__);
-        printf("************\n\n");
-
-        return 0;
-    }
-    if (!params.path_prompt_cache.empty()) {
-        printf("\n************\n");
-        printf("%s: infill does not support prompt caching\n", __func__);
         printf("************\n\n");
 
         return 0;

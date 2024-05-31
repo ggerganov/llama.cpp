@@ -152,9 +152,6 @@ int main(int argc, char ** argv) {
     print_build_info();
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = string_random_prompt(rng);
-    }
 
     llama_backend_init();
     llama_numa_init(params.numa);
