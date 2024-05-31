@@ -181,7 +181,7 @@ Example usage: `--temp 0.5`
 
 ### Repeat Penalty
 
--   `--repeat-penalty N`: Control the repetition of token sequences in the generated text (default: 1.1).
+-   `--repeat-penalty N`: Control the repetition of token sequences in the generated text (default: 1.1, 1.0 = disabled).
 -   `--repeat-last-n N`: Last n tokens to consider for penalizing repetition (default: 64, 0 = disabled, -1 = ctx-size).
 -   `--no-penalize-nl`: Disable penalization for newline tokens when applying the repeat penalty.
 
