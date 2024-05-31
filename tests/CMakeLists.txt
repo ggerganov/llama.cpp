@@ -129,8 +129,11 @@ llama_target_and_test(test-rope.cpp)
 llama_target_and_test(test-model-load-cancel.cpp  LABEL "model")
 llama_target_and_test(test-autorelease.cpp        LABEL "model")
 
-llama_target_and_test(test-json-schema-to-grammar.cpp   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
-target_include_directories(test-json-schema-to-grammar PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../examples/server)
+# TODO: disabled on loongarch64 because the ggml-ci node lacks Python 3.8
+if (NOT ${CMAKE_SYSTEM_PROCESSOR} MATCHES "loongarch64")
+    llama_target_and_test(test-json-schema-to-grammar.cpp   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..)
+    target_include_directories(test-json-schema-to-grammar PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../examples/server)
+endif()
 
 # dummy executable - not installed
 get_filename_component(TEST_TARGET test-c.c NAME_WE)
