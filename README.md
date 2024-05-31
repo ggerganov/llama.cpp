@@ -2,11 +2,11 @@
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![Conan Center](https://shields.io/conan/v/llama-cpp)](https://conan.io/center/llama-cpp)
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
-
-[![Conan Center](https://shields.io/conan/v/llama-cpp)](https://conan.io/center/llama-cpp)
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
@@ -22,7 +22,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- **Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021**
+- **`convert.py` has been deprecated and moved to `examples/convert-legacy-llama.py`, please use `convert-hf-to-gguf.py`** https://github.com/ggerganov/llama.cpp/pull/7430
+- Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021
 - BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
 - MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
 - Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
@@ -202,6 +203,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
 - [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
+- [AIKit](https://github.com/sozercan/aikit) (MIT)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
@@ -387,6 +389,14 @@ In order to build llama.cpp you have four different options.
     **Notes:** With this packages you can build llama.cpp with OPENBLAS and
     CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
     the instructions for use and activate this options in this document below.
+
+### Homebrew
+
+On Mac and Linux, the homebrew package manager can be used via
+```
+brew install llama.cpp
+```
+The formula is automatically updated with new `llama.cpp` releases.
 
 ### Metal Build
 
