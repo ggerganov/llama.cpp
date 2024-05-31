@@ -1576,11 +1576,11 @@ do {                                                              \
 
 // F16 arithmetic is not supported by AVX, so we use F32 instead
 
-#define GGML_F32Cx8             __m256
+#define GGML_F32Cx8          __m256
 #define GGML_F32Cx8_ZERO    (__m256)__lasx_xvldi(0)
 #define GGML_F32Cx8_SET1(x) (__m256)__lasx_xvreplgr2vr_w((x))
 
-static inline __m256 __lasx_f32cx8_load(ggml_fp16_t *x) {
+static inline __m256 __lasx_f32cx8_load(const ggml_fp16_t * x) {
     float tmp[8];
 
     for (int i = 0; i < 8; i++) {
@@ -1589,13 +1589,14 @@ static inline __m256 __lasx_f32cx8_load(ggml_fp16_t *x) {
 
     return (__m256)__lasx_xvld(tmp, 0);
 }
-static inline void __lasx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
+static inline void __lasx_f32cx8_store(ggml_fp16_t * x, __m256 y) {
     float arr[8];
 
     __lasx_xvst(y, arr, 0);
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 8; i++) {
         x[i] = GGML_FP32_TO_FP16(arr[i]);
+    }
 }
 #define GGML_F32Cx8_LOAD(x)     __lasx_f32cx8_load(x)
 #define GGML_F32Cx8_STORE(x, y) __lasx_f32cx8_store(x, y)
@@ -1671,7 +1672,7 @@ static inline void __lasx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F16_STEP 32
 #define GGML_F16_EPR  4
 
-static inline __m128 __lsx_f16x4_load(ggml_fp16_t *x) {
+static inline __m128 __lsx_f16x4_load(const ggml_fp16_t * x) {
     float tmp[4];
 
     tmp[0] = GGML_FP16_TO_FP32(x[0]);
@@ -1682,7 +1683,7 @@ static inline __m128 __lsx_f16x4_load(ggml_fp16_t *x) {
     return __lsx_vld(tmp, 0);
 }
 
-static inline void __lsx_f16x4_store(ggml_fp16_t *x, __m128 y) {
+static inline void __lsx_f16x4_store(ggml_fp16_t * x, __m128 y) {
     float arr[4];
 
     __lsx_vst(y, arr, 0);
@@ -2315,32 +2316,27 @@ inline static __m512 ggml_v_expf(__m512 x) {
   const __m512 r = _mm512_set1_ps(0x1.8p23f);
   const __m512 z = _mm512_fmadd_ps(x, _mm512_set1_ps(0x1.715476p+0f), r);
   const __m512 n = _mm512_sub_ps(z, r);
-  const __m512 b = _mm512_fnmadd_ps(n, _mm512_set1_ps(0x1.7f7d1cp-20f),
-                                    _mm512_fnmadd_ps(n, _mm512_set1_ps(0x1.62e4p-1f), x));
-  const __m512i e = _mm512_slli_epi32(_mm512_castps_si512(z), 23);
-  const __m512 k = _mm512_castsi512_ps(_mm512_add_epi32(e, _mm512_castps_si512(_mm512_set1_ps(1))));
-  const __mmask16 c = _mm512_cmp_ps_mask(_mm512_abs_ps(n), _mm512_set1_ps(126), _CMP_GT_OQ);
-  const __m512 u = _mm512_mul_ps(b, b);
-  const __m512 j = _mm512_fmadd_ps(_mm512_fmadd_ps(_mm512_fmadd_ps(_mm512_set1_ps(0x1.0e4020p-7f), b,
-                                                                   _mm512_set1_ps(0x1.573e2ep-5f)), u,
-                                                   _mm512_fmadd_ps(_mm512_set1_ps(0x1.555e66p-3f), b,
-                                                                   _mm512_set1_ps(0x1.fffdb6p-2f))),
-                                   u, _mm512_mul_ps(_mm512_set1_ps(0x1.ffffecp-1f), b));
-  if (_mm512_kortestz(c, c))
-    return _mm512_fmadd_ps(j, k, k);
-  const __m512i g = _mm512_and_si512(
-      _mm512_movm_epi32(_mm512_cmp_ps_mask(n, _mm512_setzero_ps(), _CMP_LE_OQ)),
-      _mm512_set1_epi32(0x82000000u));
-  const __m512 s1 =
-      _mm512_castsi512_ps(_mm512_add_epi32(g, _mm512_set1_epi32(0x7f000000u)));
-  const __m512 s2 = _mm512_castsi512_ps(_mm512_sub_epi32(e, g));
+  const __m512 b =
+      _mm512_fnmadd_ps(n, _mm512_set1_ps(0x1.7f7d1cp-20f),
+                       _mm512_fnmadd_ps(n, _mm512_set1_ps(0x1.62e4p-1f), x));
   const __mmask16 d =
       _mm512_cmp_ps_mask(_mm512_abs_ps(n), _mm512_set1_ps(192), _CMP_GT_OQ);
-  return _mm512_mask_blend_ps(
-      d, _mm512_mask_blend_ps(
-          c, _mm512_fmadd_ps(k, j, k),
-          _mm512_mul_ps(_mm512_fmadd_ps(s2, j, s2), s1)),
-      _mm512_mul_ps(s1, s1));
+  const __m512 u = _mm512_mul_ps(b, b);
+  const __m512 j = _mm512_fmadd_ps(
+      _mm512_fmadd_ps(_mm512_fmadd_ps(_mm512_set1_ps(0x1.0e4020p-7f), b,
+                                      _mm512_set1_ps(0x1.573e2ep-5f)),
+                      u,
+                      _mm512_fmadd_ps(_mm512_set1_ps(0x1.555e66p-3f), b,
+                                      _mm512_set1_ps(0x1.fffdb6p-2f))),
+      u,
+      _mm512_fmadd_ps(_mm512_set1_ps(0x1.ffffecp-1f), b, _mm512_set1_ps(1.0F)));
+  const __m512 res = _mm512_scalef_ps(j, n);
+  if (_mm512_kortestz(d, d))
+    return res;
+  const __m512 zero = _mm512_setzero_ps();
+  const __m512 alt = _mm512_mask_blend_ps(
+      _mm512_cmp_ps_mask(n, zero, _CMP_LE_OQ), _mm512_set1_ps(INFINITY), zero);
+  return _mm512_mask_blend_ps(d, res, alt);
 }
 
 // computes silu x/(1+exp(-x)) in single precision vector
