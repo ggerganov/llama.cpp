@@ -142,6 +142,7 @@ struct gpt_params {
 
     bool   kl_divergence   = false; // compute KL divergence
 
+    bool usage             = false; // print usage
     bool random_prompt     = false; // do not randomize prompt if none provided
     bool use_color         = false; // use color to distinguish generations and inputs
     bool interactive       = false; // interactive mode

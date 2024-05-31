@@ -140,11 +140,12 @@ static bool run(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-
     callback_data cb_data;
 
     gpt_params params;
+
     if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
 

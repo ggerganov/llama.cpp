@@ -27,7 +27,7 @@ static void retrieval_params_parse(int argc, char ** argv, gpt_params & gpt_para
     while (i < argc) {
         arg = argv[i];
         bool invalid_gpt_param = false;
-        if(gpt_params_find_arg(argc, argv, argv[i], gpt_params, i, invalid_gpt_param)) {
+        if (gpt_params_find_arg(argc, argv, argv[i], gpt_params, i, invalid_gpt_param)) {
             if (invalid_gpt_param) {
                 fprintf(stderr, "error: invalid argument: %s\n", arg.c_str());
                 retrieval_params_print_usage(argc, argv, gpt_params, retrieval_params);

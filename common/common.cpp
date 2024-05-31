@@ -265,19 +265,20 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
-    bool result = true;
+    const auto params_org = params; // the example can modify the default params
+
     try {
-        if (!gpt_params_parse_ex(argc, argv, params)) {
-            gpt_params_print_usage(argc, argv, gpt_params());
-            exit(0);
+        if (!gpt_params_parse_ex(argc, argv, params) || params.usage) {
+            params = params_org;
+            params.usage = true;
+            return false;
         }
-    }
-    catch (const std::invalid_argument & ex) {
+    } catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
-        gpt_params_print_usage(argc, argv, gpt_params());
-        exit(1);
+        return false;
     }
-    return result;
+
+    return true;
 }
 
 bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param) {
@@ -1242,9 +1243,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         }
         return true;
     }
-    if (arg == "-h" || arg == "--help") {
-        gpt_params_print_usage(argc, argv, gpt_params());
-        exit(0);
+    if (arg == "-h" || arg == "--help" || arg == "--usage"  ) {
+        params.usage = true;
+        return true;
     }
     if (arg == "--version") {
         fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
@@ -1363,7 +1364,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     printf("usage: %s [options]\n", argv[0]);
     printf("\n");
     printf("options:\n");
-    printf("  -h, --help            show this help message and exit\n");
+    printf("  -h, --help, --usage   print usage and exit\n");
     printf("  --version             show version and build info\n");
     printf("  -i, --interactive     run in interactive mode\n");
     printf("  --special             special tokens output enabled\n");
