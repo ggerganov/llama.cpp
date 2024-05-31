@@ -22,7 +22,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- **Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021**
+- **`convert.py` has been deprecated and moved to `examples/convert-legacy-llama.py`, please use `convert-hf-to-gguf.py` https://github.com/ggerganov/llama.cpp/pull/7430
+- Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021
 - BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
 - MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
 - Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
