@@ -11,8 +11,8 @@
 #include <fstream>
 
 struct diff_wrapper {
-    float * diff;
-    size_t n_rows;
+    float * diff;   // matrix of size [n_rows, cb_data.n_embd] with zero rows stripped
+    size_t n_rows;  // number of rows in the matrix for size calculation
 };
 
 struct callback_data {
@@ -56,23 +56,24 @@ static void print_usage(const char * executable) {
     printf("Creates a GGUF control vector for a given model.");
     printf("\n");
     printf("options:\n");
-    printf("  -h, --help            show this help message and exit\n");
-    printf("  --outfile             output file (default: 'control_vector.gguf')\n");
-    printf("  --completions-file    completions file (default: 'examples/control-vector-generator/completions.txt')\n");
-    printf("  -pf, --positive-file  positive prompts file, one prompt per line (default: 'positive.txt')\n");
-    printf("  -nf, --negative-file  negative prompts file, one prompt per line (default: 'negative.txt')\n");
+    printf("  -h, --help                show this help message and exit\n");
+    printf("  -o, --outfile             output file (default: 'control_vector.gguf')\n");
+    printf("  -cf, --completions-file   completions file (default: 'examples/control-vector-generator/completions.txt')\n");
+    printf("  -pf, --positive-file      positive prompts file, one prompt per line (default: 'examples/control-vector-generator/positive.txt')\n");
+    printf("  -nf, --negative-file      negative prompts file, one prompt per line (default: 'examples/control-vector-generator/negative.txt')\n");
     printf("\n");
-    printf("gpt-opts: other options from main\n");
+    printf("gpt-opts:\n");
+    printf("  other options from main\n");
     printf("\n");
 }
 
 static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params) {
     std::string arg;
     const std::string arg_prefix = "--";
+    // hack to skip ctrlvec args in gpt_parse_params but we'll leave it as is
     int skipme = 0;
 
-    int arg_idx = 1;
-    for(; arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) == 0; ++arg_idx) {
+    for(int arg_idx = 1; arg_idx < argc; ++arg_idx) {
         arg = argv[arg_idx];
         if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
@@ -87,19 +88,17 @@ static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params)
             fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
             exit(0);
         }
-        if (arg == "--outfile") {
+        if (arg == "--outfile" || arg == "-o") {
             if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
                 params.outfile = argv[arg_idx];
-                // FIXME hack to skip these args in gpt_parse_params
                 skipme += 2;
             } else {
                 throw std::invalid_argument("error: missing argument for " + arg);
             }
         }
-        if (arg == "--completions-file") {
+        if (arg == "--completions-file" || arg == "-cf") {
             if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
                 params.completions_file = argv[arg_idx];
-                // FIXME hack to skip these args in gpt_parse_params
                 skipme += 2;
             } else {
                 throw std::invalid_argument("error: missing argument for " + arg);
@@ -108,7 +107,6 @@ static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params)
         if (arg == "--positive-file" || arg == "-pf") {
             if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
                 params.positive_prompts_file = argv[arg_idx];
-                // FIXME hack to skip these args in gpt_parse_params
                 skipme += 2;
             } else {
                 throw std::invalid_argument("error: missing argument for " + arg);
@@ -117,13 +115,12 @@ static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params)
         if (arg == "--negative-file" || arg == "-nf") {
             if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
                 params.negative_prompts_file = argv[arg_idx];
-                // FIXME hack to skip these args in gpt_parse_params
                 skipme += 2;
             } else {
                 throw std::invalid_argument("error: missing argument for " + arg);
             }
         }
-
+        // TODO it might be nice QoL to have single positive/negative args
         // we do not handle any other unknown arguments here because they will be handled by gpt_parse_params
     }
     return skipme;
@@ -161,8 +158,9 @@ static std::vector<std::string> ctrlvec_load_prompt_file(std::string path) {
 static std::string format_template(std::string persona, std::string suffix) {
     const std::string user_tag = "[INST]";
     const std::string asst_tag = "[/INST]";
-    // TODO make this dynamic - allow the user to change it somehow
-    return user_tag + " Act as if you're extremely " + persona + ". " + asst_tag + " " + suffix;
+    // TODO make this dynamic - allow the user to change it somehow - and adapt based on model
+    //return user_tag + " Act as if you're extremely " + persona + ". " + asst_tag + " " + suffix;
+    return persona + " " + suffix; // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
 }
 
 static void populate_entries(ctrl_params & cparams, std::string positive, std::string negative) {
@@ -259,14 +257,15 @@ static void padding_seq(llama_context * ctx, std::vector<llama_token> & tokens, 
     }
 }
 
-static bool is_row_all_zeros(float * diff, size_t row, size_t cols) {
-    for (size_t i = 0; i < cols; ++i) if (diff[row * cols + i] != 0.0) return false;
+static bool is_row_all_zeros(float * diff, size_t row, size_t cols, float eps = 1e-6) {
+    for (size_t i = 0; i < cols; ++i) if (diff[row * cols + i] > eps) return false;
     return true;
 }
 
 static void calc_diff(callback_data & cb_data) {
     // TODO: assert cb_data.v_pos.size() == cb_data.v_neg.size()
     const size_t n_elems = cb_data.n_embd * cb_data.n_tokens;
+    cb_data.v_diffs_wrapped.resize(cb_data.v_pos.size());
     for (size_t il = 0; il < cb_data.v_pos.size(); il++) {
         auto & inp_pos = cb_data.v_pos[il];
         auto & inp_neg = cb_data.v_neg[il];
@@ -274,6 +273,8 @@ static void calc_diff(callback_data & cb_data) {
         for (size_t i = 0; i < n_elems; i++) {
             dest[i] = inp_pos[i] - inp_neg[i];
         }
+
+        // TODO can we make this faster? like check during the above operation rather than on a second pass?
 
         // strip zero rows
         std::vector<size_t> nonzero_rows;
@@ -283,7 +284,13 @@ static void calc_diff(callback_data & cb_data) {
             }
         }
 
-        diff_wrapper dw;
+        /* debug
+        if(cb_data.n_tokens != nonzero_rows.size()) {
+            std::cout << "original n_tokens: " << cb_data.n_tokens << std::endl;
+            std::cout << "zero rows in layer " << il << ": " << cb_data.n_tokens - nonzero_rows.size() << std::endl;
+        } */
+
+        struct diff_wrapper dw;
         dw.n_rows = nonzero_rows.size();
         dw.diff = (float *) malloc(dw.n_rows * cb_data.n_embd * sizeof(float));
 
@@ -303,16 +310,16 @@ static void concatenate_diffs(callback_data & cb_data) {
     for (size_t i = 0; i < cb_data.v_diffs_wrapped.size(); ++i) {
         std::vector<diff_wrapper> & vec = cb_data.v_diffs_wrapped[i];
         size_t n_rows_total = 0;
-        for (size_t j = 0; i < vec.size(); ++j) {
+        for (size_t j = 0; j < vec.size(); ++j) {
             n_rows_total += vec[j].n_rows;
         }
+        // std::cout << "n_rows_total: " << n_rows_total << std::endl;
         float * diff = (float *) malloc(n_rows_total * cb_data.n_embd * sizeof(float));
         size_t offset = 0;
         for (size_t j = 0; j < vec.size(); ++j) {
             float * origin = vec[j].diff;
             memcpy(diff + offset, origin, vec[j].n_rows * cb_data.n_embd * sizeof(float));
             offset += vec[j].n_rows * cb_data.n_embd;
-            delete vec[j].diff;
         }
         cb_data.v_diff.push_back(diff);
     }
@@ -344,6 +351,7 @@ static void normalize_inplace(std::vector<float> & vec) {
     for (const float& val : vec) {
         norm += val * val;
     }
+    if(norm == 0) throw std::runtime_error("norm is zero"); 
     norm = std::sqrt(norm);
     for (float& val : vec) {
         val /= norm;
@@ -407,7 +415,6 @@ static void pca(callback_data & cb_data) {
             std::vector<float> eigenvector = power_iteration(cb_data, matrix);
             cb_data.v_final[il] = (float *) malloc(eigenvector.size() * sizeof(float));
             memcpy(cb_data.v_final[il], eigenvector.data(), eigenvector.size() * sizeof(float));
-            delete[] matrix;
             printf("Done with layer %d\n", il);
             printf("il = %d | %f %f \n", il, cb_data.v_final[il][0], cb_data.v_final[il][1]);
         }
@@ -427,39 +434,39 @@ static std::string to_string(const T & val) {
     return ss.str();
 }
 
-static void export_gguf(std::vector<float *> v_final, int n_embd, const std::string fname, const std::string model_hint) {
+static void export_gguf(callback_data & cb_data, int n_layers, const std::string fname, const std::string model_hint) {
     struct gguf_context * ctx = gguf_init_empty();
 
+    //int test = cb_data.v_final.size();
+    int test = n_layers - 1;
+    // replaced cb_data.v_final.size() with n_layers - 1
+    
     const std::string arch = "controlvector";
     gguf_set_val_str(ctx, "general.architecture", arch.c_str());
     gguf_set_val_str(ctx, (arch + ".model_hint").c_str(), model_hint.c_str());
-    gguf_set_val_i32(ctx, (arch + ".layer_count").c_str(), v_final.size());
+    gguf_set_val_i32(ctx, (arch + ".layer_count").c_str(), test);
 
     struct ggml_init_params params = {
-        /*.mem_size   =*/ (ggml_tensor_overhead() * v_final.size())
-                            + (n_embd * v_final.size() * sizeof(float)),
+        /*.mem_size   =*/ (ggml_tensor_overhead() * test)
+                            + (cb_data.n_embd * test * sizeof(float)),
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
 
     struct ggml_context * ctx_data = ggml_init(params);
 
-    for (size_t i = 0; i < v_final.size(); ++i) {
+    for (size_t i = 0; i < test; ++i) {
         // TODO this number is probably not right - figure out which layer is which
         // the python implementation uses a dict to handle this, we don't know if it's 1, 2, 3, 4... or other
         const std::string name = "direction." + to_string(i+1);
 
-        struct ggml_tensor * cur = ggml_new_tensor_1d(ctx_data, GGML_TYPE_F32, n_embd);
+        struct ggml_tensor * cur = ggml_new_tensor_1d(ctx_data, GGML_TYPE_F32, cb_data.n_embd);
 
         ggml_set_name(cur, name.c_str());
 
-        // TODO figure out how to set data - it's whining about buf != NULL when using the below commented line
-        //ggml_backend_tensor_set(cur, cb_data.v_final[i], 0, cb_data.n_embd * sizeof(float));
-        {
-            float * data = (float *) cur->data;
-            for(int j = 0; j < ggml_nelements(cur); j++) {
-                data[j] = v_final[i][j];
-            }
+        float * data = (float *) cur->data;
+        for(int j = 0; j < cb_data.n_embd; j++) {
+            data[j] = cb_data.v_final[i][j];
         }
 
         gguf_add_tensor(ctx, cur);
@@ -480,10 +487,8 @@ static void export_gguf(std::vector<float *> v_final, int n_embd, const std::str
 
 int main(int argc, char ** argv) {
     ctrl_params cparams;
-    int skipme = ctrlvec_params_parse(argc, argv, cparams);
-    //populate_entries(cparams);
 
-    // FIXME hack to skip the ctrlvec args in parsing gpt params
+    int skipme = ctrlvec_params_parse(argc, argv, cparams);
     argc -= skipme;
     argv += skipme;
 
@@ -500,6 +505,14 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    callback_data cb_data;
+
+    // pass the callback to the backend scheduler
+    // it will be executed for each node during the graph computation
+    params.cb_eval = cb_eval;
+    params.cb_eval_user_data = &cb_data;
+    params.warmup = false;
+
     print_build_info();
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -508,9 +521,11 @@ int main(int argc, char ** argv) {
     llama_model * model;
     llama_context * ctx;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
+
     int n_layers = llama_n_layer(model);
     int n_embd = llama_n_embd(model);
     int n_prompts = cparams.positive_prompts.size();
+    
     // vector of finished vectors of size [n_embd], we have (n_layers - 1) vectors in total
     std::vector<float *> v_final(n_layers - 1, NULL);
     for (size_t i = 0; i < v_final.size(); ++i) {
@@ -520,18 +535,14 @@ int main(int argc, char ** argv) {
     // create templated prompts
     for (size_t i = 0; i < n_prompts; ++i) {
         populate_entries(cparams, cparams.positive_prompts[i], cparams.negative_prompts[i]);
-    }    
-
-    callback_data cb_data;
-
-    // pass the callback to the backend scheduler
-    // it will be executed for each node during the graph computation
-    params.cb_eval = cb_eval;
-    params.cb_eval_user_data = &cb_data;
-    params.warmup = false;
+    }
 
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
+    int token_ct = 0;
+    int n_ctx = llama_n_ctx(ctx);
+
+    // TODO multithread this
     for(size_t i = 0; i < cparams.positive_entries.size(); ++i) {
         std::string positive_prompt = cparams.positive_entries[i];
         std::string negative_prompt = cparams.negative_entries[i];
@@ -543,17 +554,29 @@ int main(int argc, char ** argv) {
         cb_data.n_tokens = max_seq_len;
         cb_data.n_embd = n_embd;
 
+        // need to reload the model so it doesn't run out of context
+        // this should scale with -c option passed by main
+        // TODO maybe we want to add an option to reload for every new prompt
+        token_ct += 2 * max_seq_len;
+        if (token_ct >= n_ctx) {
+            //break;
+            llama_free(ctx);
+            llama_free_model(model);
+            std::tie(model, ctx) = llama_init_from_gpt_params(params);
+            token_ct = 2 * max_seq_len;
+        }
+
         printf("Evaluating prompt: \"%s\" - \"%s\" (%ld tokens)\n", positive_prompt.c_str(), negative_prompt.c_str(), max_seq_len);
 
         cb_data.is_eval_pos = true;
         get_hidden_layers(ctx, tokens_pos);
         cb_data.is_eval_pos = false;
         get_hidden_layers(ctx, tokens_neg);
-        // FIXME because you don't reload the model you actually run out of context lmao
-        // fix that... or do we want to reload for every new prompt? but that would take forever
-        // perhaps add that as a flag to the program
 
-        // TODO actually check that this works
+        // TODO check whether the same tokens correspond to zero rows because we don't seem to be getting many zero rows anymore
+        // we get a lot of zero rows for the first few prompts and then they drop off
+        // likewise most of the zero rows are in the first few layers for each prompt
+
         calc_diff(cb_data);
 
         // reset for next iteration
@@ -561,39 +584,18 @@ int main(int argc, char ** argv) {
         cb_data.v_neg.clear();
     }
 
-    // TODO actually check that this works
     concatenate_diffs(cb_data);
-
-    // TODO diffs should be the same from here but still check that this works
     pca(cb_data);
-
-    // TODO get rid of this
-    // add the output vector to v_final
-    for (size_t j = 0; j < cb_data.v_final.size(); ++j) {
-        for (size_t k = 0; k < n_embd; ++k) {
-            v_final[j][k] += cb_data.v_final[j][k];
-        }
-    }
     printf("v_final %f %f \n", cb_data.v_final[0][0], cb_data.v_final[0][1]);
 
     llama_free(ctx);
     llama_free_model(model);
 
-
-
-    // calculate the mean value of v_final
-    // TODO: maybe using LERP here
-    for (size_t j = 0; j < v_final.size(); ++j) {
-        for (size_t k = 0; k < n_embd; ++k) {
-            v_final[j][k] /= n_prompts;
-        }
-    }
-
     // TODO figure out how to extract this from model - there's no API exposed to get model arch string
     // we need get_arch_name() from llama.cpp
     // TODO also has support been implemeneted for arches other than llama yet? see #5970
     std::string model_hint = "llama";
-    export_gguf(v_final, n_embd, cparams.outfile, model_hint);
+    export_gguf(cb_data, n_layers, cparams.outfile, model_hint);
 
     llama_backend_free();
 

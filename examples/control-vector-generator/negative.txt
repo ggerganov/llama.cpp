@@ -1,1 +1,1 @@
-sad
+[INST] Act like a person who is extremely sad. [/INST]
