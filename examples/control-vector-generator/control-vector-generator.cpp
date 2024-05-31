@@ -10,6 +10,11 @@
 #include <iostream>
 #include <fstream>
 
+struct diff_wrapper {
+    float * diff;
+    size_t n_rows;
+};
+
 struct callback_data {
     std::vector<uint8_t> data;
     int n_tokens = 0;
@@ -20,11 +25,14 @@ struct callback_data {
     std::vector<float *> v_neg;  // vector of matrices of size [n_embd, n_tokens]
     std::vector<float *> v_diff; // vector of matrices of size [n_embd, n_tokens]
     std::vector<float *> v_final; // vector of finished vectors of size [n_embd]
+    // each element of the outer vector correspond to one layer, each element of the inner vector correspond to one prompt pass
+    std::vector<std::vector<diff_wrapper>> v_diffs_wrapped; // vector of compiled diff matrices to be concatenated
     ~callback_data() {
         for (auto ptr : v_pos) free(ptr);
         for (auto ptr : v_neg) free(ptr);
         for (auto ptr : v_diff) free(ptr);
         for (auto ptr : v_final) free(ptr);
+        for (auto & vec : v_diffs_wrapped) for (auto ptr : vec) free(ptr.diff);
     }
 };
 
@@ -32,8 +40,8 @@ struct ctrl_params {
     std::string outfile = "control_vector.gguf";
     std::string completions_file = "examples/control-vector-generator/completions.txt";
     /* pair of prompts to be used for generating the vectors */
-    std::string positive_prompts_file = "positive.txt";
-    std::string negative_prompts_file = "negative.txt";
+    std::string positive_prompts_file = "examples/control-vector-generator/positive.txt";
+    std::string negative_prompts_file = "examples/control-vector-generator/negative.txt";
     std::vector<std::string> positive_prompts;
     std::vector<std::string> negative_prompts;
     /* pair of prompts to be used for testing */
@@ -157,20 +165,20 @@ static std::string format_template(std::string persona, std::string suffix) {
     return user_tag + " Act as if you're extremely " + persona + ". " + asst_tag + " " + suffix;
 }
 
-/*static void populate_entries(ctrl_params & cparams) {
+static void populate_entries(ctrl_params & cparams, std::string positive, std::string negative) {
     std::string line;
     std::ifstream completions_file(cparams.completions_file);
     if (completions_file.is_open()) {
         while (std::getline(completions_file, line)) {
             // TODO replicate the truncations done by the python implementation
-            cparams.positive_entries.push_back(format_template(cparams.positive, line));
-            cparams.negative_entries.push_back(format_template(cparams.negative, line));
+            cparams.positive_entries.push_back(format_template(positive, line));
+            cparams.negative_entries.push_back(format_template(negative, line));
         }
         completions_file.close();
     } else {
         throw std::invalid_argument("error: invalid completions file or file could not be opened");
     }
-}*/ // TODO actually do something with this
+}
 
 static std::string ggml_ne_string(const ggml_tensor * t) {
     std::string str;
@@ -251,6 +259,11 @@ static void padding_seq(llama_context * ctx, std::vector<llama_token> & tokens, 
     }
 }
 
+static bool is_row_all_zeros(float * diff, size_t row, size_t cols) {
+    for (size_t i = 0; i < cols; ++i) if (diff[row * cols + i] != 0.0) return false;
+    return true;
+}
+
 static void calc_diff(callback_data & cb_data) {
     // TODO: assert cb_data.v_pos.size() == cb_data.v_neg.size()
     const size_t n_elems = cb_data.n_embd * cb_data.n_tokens;
@@ -261,7 +274,47 @@ static void calc_diff(callback_data & cb_data) {
         for (size_t i = 0; i < n_elems; i++) {
             dest[i] = inp_pos[i] - inp_neg[i];
         }
-        cb_data.v_diff.push_back(dest);
+
+        // strip zero rows
+        std::vector<size_t> nonzero_rows;
+        for (size_t i = 0; i < cb_data.n_tokens; ++i) {
+            if (!is_row_all_zeros(dest, i, cb_data.n_embd)) {
+                nonzero_rows.push_back(i);
+            }
+        }
+
+        diff_wrapper dw;
+        dw.n_rows = nonzero_rows.size();
+        dw.diff = (float *) malloc(dw.n_rows * cb_data.n_embd * sizeof(float));
+
+        size_t offset = 0;
+        for (size_t i = 0; i < dw.n_rows; ++i) {
+            float * origin = dest + nonzero_rows[i] * cb_data.n_embd;
+            memcpy(dw.diff + offset, origin, cb_data.n_embd * sizeof(float));
+            offset += cb_data.n_embd;
+        }
+
+        cb_data.v_diffs_wrapped[il].push_back(dw);
+        delete dest;
+    }
+}
+
+static void concatenate_diffs(callback_data & cb_data) {
+    for (size_t i = 0; i < cb_data.v_diffs_wrapped.size(); ++i) {
+        std::vector<diff_wrapper> & vec = cb_data.v_diffs_wrapped[i];
+        size_t n_rows_total = 0;
+        for (size_t j = 0; i < vec.size(); ++j) {
+            n_rows_total += vec[j].n_rows;
+        }
+        float * diff = (float *) malloc(n_rows_total * cb_data.n_embd * sizeof(float));
+        size_t offset = 0;
+        for (size_t j = 0; j < vec.size(); ++j) {
+            float * origin = vec[j].diff;
+            memcpy(diff + offset, origin, vec[j].n_rows * cb_data.n_embd * sizeof(float));
+            offset += vec[j].n_rows * cb_data.n_embd;
+            delete vec[j].diff;
+        }
+        cb_data.v_diff.push_back(diff);
     }
 }
 
@@ -382,7 +435,6 @@ static void export_gguf(std::vector<float *> v_final, int n_embd, const std::str
     gguf_set_val_str(ctx, (arch + ".model_hint").c_str(), model_hint.c_str());
     gguf_set_val_i32(ctx, (arch + ".layer_count").c_str(), v_final.size());
 
-    // TODO customize mem size - I have no idea what this is supposed to be
     struct ggml_init_params params = {
         /*.mem_size   =*/ (ggml_tensor_overhead() * v_final.size())
                             + (n_embd * v_final.size() * sizeof(float)),
@@ -464,39 +516,25 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < v_final.size(); ++i) {
         v_final[i] = (float *) calloc(n_embd, sizeof(float));
     }
-    llama_free(ctx);
-    llama_free_model(model);
 
+    // create templated prompts
     for (size_t i = 0; i < n_prompts; ++i) {
-        callback_data cb_data;
+        populate_entries(cparams, cparams.positive_prompts[i], cparams.negative_prompts[i]);
+    }    
 
-        // pass the callback to the backend scheduler
-        // it will be executed for each node during the graph computation
-        params.cb_eval = cb_eval;
-        params.cb_eval_user_data = &cb_data;
-        params.warmup = false;
+    callback_data cb_data;
 
-        // load model
-        llama_model * model;
-        llama_context * ctx;
-        std::tie(model, ctx) = llama_init_from_gpt_params(params);
-        if (model == nullptr || ctx == nullptr) {
-            fprintf(stderr, "%s : failed to init\n", __func__);
-            return 1;
-        }
+    // pass the callback to the backend scheduler
+    // it will be executed for each node during the graph computation
+    params.cb_eval = cb_eval;
+    params.cb_eval_user_data = &cb_data;
+    params.warmup = false;
 
-        const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
-        /* TODO this just tokenizes the exact pos/neg strings, correct?
-        * instead we want to create a bunch of starter prompts for it to work off
-        * we need to run get_hidden_layers many many times and then figure out how to combine the resulting vectors
-        * see the blogpost + python implementation for reference
-        * 
-        * https://vgel.me/posts/representation-engineering/
-        * https://github.com/vgel/repeng/blob/main/repeng/extract.py
-        */
-        std::string positive_prompt = cparams.positive_prompts[i];
-        std::string negative_prompt = cparams.negative_prompts[i];
+    for(size_t i = 0; i < cparams.positive_entries.size(); ++i) {
+        std::string positive_prompt = cparams.positive_entries[i];
+        std::string negative_prompt = cparams.negative_entries[i];
         std::vector<llama_token> tokens_pos = ::llama_tokenize(ctx, positive_prompt, add_bos);
         std::vector<llama_token> tokens_neg = ::llama_tokenize(ctx, negative_prompt, add_bos);
         size_t max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
@@ -511,26 +549,37 @@ int main(int argc, char ** argv) {
         get_hidden_layers(ctx, tokens_pos);
         cb_data.is_eval_pos = false;
         get_hidden_layers(ctx, tokens_neg);
+        // FIXME because you don't reload the model you actually run out of context lmao
+        // fix that... or do we want to reload for every new prompt? but that would take forever
+        // perhaps add that as a flag to the program
 
-        printf("%f %f \n", cb_data.v_pos[0][4096], cb_data.v_pos[0][4097]);
-        printf("%f %f \n", cb_data.v_neg[0][4096], cb_data.v_neg[0][4097]);
-
+        // TODO actually check that this works
         calc_diff(cb_data);
-        printf("%f %f \n", cb_data.v_diff[0][4096], cb_data.v_diff[0][4097]);
 
-        pca(cb_data);
-
-        // add the output vector to v_final
-        for (size_t j = 0; j < cb_data.v_final.size(); ++j) {
-            for (size_t k = 0; k < n_embd; ++k) {
-                v_final[j][k] += cb_data.v_final[j][k];
-            }
-        }
-        printf("v_final %f %f \n", cb_data.v_final[0][0], cb_data.v_final[0][1]);
-
-        llama_free(ctx);
-        llama_free_model(model);
+        // reset for next iteration
+        cb_data.v_pos.clear();
+        cb_data.v_neg.clear();
     }
+
+    // TODO actually check that this works
+    concatenate_diffs(cb_data);
+
+    // TODO diffs should be the same from here but still check that this works
+    pca(cb_data);
+
+    // TODO get rid of this
+    // add the output vector to v_final
+    for (size_t j = 0; j < cb_data.v_final.size(); ++j) {
+        for (size_t k = 0; k < n_embd; ++k) {
+            v_final[j][k] += cb_data.v_final[j][k];
+        }
+    }
+    printf("v_final %f %f \n", cb_data.v_final[0][0], cb_data.v_final[0][1]);
+
+    llama_free(ctx);
+    llama_free_model(model);
+
+
 
     // calculate the mean value of v_final
     // TODO: maybe using LERP here
