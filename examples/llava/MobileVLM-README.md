@@ -54,10 +54,10 @@ python ./examples/llava/convert-image-encoder-to-gguf \
     --projector-type ldpv2
 ```
 
-4. Use `convert.py` to convert the LLaMA part of LLaVA to GGUF:
+4. Use `examples/convert-legacy-llama.py` to convert the LLaMA part of LLaVA to GGUF:
 
 ```sh
-python ./convert.py path/to/MobileVLM-1.7B
+python ./examples/convert-legacy-llama.py path/to/MobileVLM-1.7B
 ```
 
 5. Use `quantize` to convert LLaMA part's DataType from `fp16` to `q4_k`

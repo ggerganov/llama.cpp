@@ -18,7 +18,7 @@ COPY . .
 ENV LLAMA_CURL=1
 
 
-RUN make
+RUN make -j$(nproc)
 
 ENV LC_ALL=C.utf8
 
