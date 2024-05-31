@@ -239,9 +239,9 @@ static size_t quantize_q4_0_nr_bl(const float * restrict src, void * restrict ds
         out_ptr_B = (block_q4_0x4 *) malloc(sizeof(block_q4_0x4) * nb);
         out_ptr_B_start = out_ptr_B;
     }
+    block_q4_0 ** in_ptrs = (block_q4_0 **) malloc(sizeof(block_q4_0 *) * nrows_interleaved);
 
     for (int b = 0; b < (nrow * n_per_row); b += nrows_interleaved * n_per_row) {
-        block_q4_0 * in_ptrs[nrows_interleaved];
 
         for (int i  = 0; i < nrows_interleaved; i++ ) {
             in_ptrs[i] = (block_q4_0 *) dst + (b + i * n_per_row) / QK4_0;
@@ -267,6 +267,7 @@ static size_t quantize_q4_0_nr_bl(const float * restrict src, void * restrict ds
         else if (nrows_interleaved == 4) memcpy ((block_q4_0 *) dst + b / QK4_0, out_ptr_B_start, sizeof(block_q4_0x4) * nb);
     }
     if (out_ptr_B_start) free(out_ptr_B_start);
+    if (in_ptrs) free(in_ptrs);
 
     return ((nrow * n_per_row) / QK4_0 * sizeof(block_q4_0));
 }
