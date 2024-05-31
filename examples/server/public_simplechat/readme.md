@@ -177,6 +177,10 @@ It is attached to the document object. Some of these can also be updated using t
     modify the existing options value or remove them, for now you can update this global var
     using browser's development-tools/console.
 
+    For string and numeric fields in chatRequestOptions, including even those added by a user
+    at runtime by directly modifying gMe.chatRequestOptions, setting ui entries will be auto
+    created.
+
   headers - maintains the list of http headers sent when request is made to the server. By default
   Content-Type is set to application/json. Additionally Authorization entry is provided, which can
   be set if needed using the settings ui.

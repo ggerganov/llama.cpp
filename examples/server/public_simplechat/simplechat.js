@@ -818,6 +818,37 @@ class Me {
     }
 
     /**
+     * Auto create ui input elements for fields in ChatRequestOptions
+     * Currently supports text and number field types.
+     * @param {HTMLDivElement} elDiv
+     */
+    show_settings_chatrequestoptions(elDiv) {
+        let typeDict = {
+            "string": "text",
+            "number": "number",
+        };
+        let fs = document.createElement("fieldset");
+        let legend = document.createElement("legend");
+        legend.innerText = "ChatRequestOptions";
+        fs.appendChild(legend);
+        elDiv.appendChild(fs);
+        for(const k in this.chatRequestOptions) {
+            let val = this.chatRequestOptions[k];
+            let type = typeof(val);
+            if (!((type == "string") || (type == "number"))) {
+                continue;
+            }
+            let inp = ui.el_creatediv_input(`Set${k}`, k, typeDict[type], this.chatRequestOptions[k], (val)=>{
+                if (type == "number") {
+                    val = Number(val);
+                }
+                this.chatRequestOptions[k] = val;
+            });
+            fs.appendChild(inp.div);
+        }
+    }
+
+    /**
      * Show settings ui for configurable parameters, in the passed Div element.
      * @param {HTMLDivElement} elDiv
      */
@@ -832,11 +863,6 @@ class Me {
             this.headers["Authorization"] = val;
         });
         inp.el.placeholder = "Bearer OPENAI_API_KEY";
-        elDiv.appendChild(inp.div);
-
-        inp = ui.el_creatediv_input("SetModel", "Model", "text", this.chatRequestOptions["model"], (val)=>{
-            this.chatRequestOptions["model"] = val;
-        });
         elDiv.appendChild(inp.div);
 
         let bb = ui.el_creatediv_boolbutton("SetStream", "Stream", {true: "[+] yes stream", false: "[-] do oneshot"}, this.bStream, (val)=>{
@@ -868,6 +894,8 @@ class Me {
             this.apiEP = ApiEP.Type[val];
         });
         elDiv.appendChild(sel.div);
+
+        this.show_settings_chatrequestoptions(elDiv);
 
     }
 
