@@ -571,6 +571,7 @@ ifdef LLAMA_HIP_UMA
 	MK_CPPFLAGS += -DGGML_HIP_UMA
 endif # LLAMA_HIP_UMA
 	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
+	MK_LDFLAGS  += -L$(ROCM_PATH)/lib64 -Wl,-rpath=$(ROCM_PATH)/lib64
 	MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
 	HIPFLAGS    += $(addprefix --offload-arch=,$(AMDGPU_TARGETS))
 	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)

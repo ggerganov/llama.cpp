@@ -50,10 +50,10 @@ python ./examples/llava/llava-surgery.py -m ../llava-v1.5-7b
 python ./examples/llava/convert-image-encoder-to-gguf.py -m ../clip-vit-large-patch14-336 --llava-projector ../llava-v1.5-7b/llava.projector --output-dir ../llava-v1.5-7b
 ```
 
-5. Use `convert.py` to convert the LLaMA part of LLaVA to GGUF:
+5. Use `examples/convert-legacy-llama.py` to convert the LLaMA part of LLaVA to GGUF:
 
 ```sh
-python ./convert.py ../llava-v1.5-7b --skip-unknown
+python ./examples/convert-legacy-llama.py ../llava-v1.5-7b --skip-unknown
 ```
 
 Now both the LLaMA part and the image encoder are in the `llava-v1.5-7b` directory.
@@ -92,7 +92,7 @@ python ./examples/llava/convert-image-encoder-to-gguf.py -m vit --llava-projecto
 
 6) Then convert the model to gguf format:
 ```console
-python ./convert.py ../llava-v1.6-vicuna-7b/ --skip-unknown
+python ./examples/convert-legacy-llama.py ../llava-v1.6-vicuna-7b/ --skip-unknown
 ```
 
 7) And finally we can run the llava-cli using the 1.6 model version:

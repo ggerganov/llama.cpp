@@ -4,7 +4,7 @@
 # Package versions must stay compatible across all top-level python scripts.
 #
 
--r ./requirements/requirements-convert.txt
+-r ./requirements/requirements-convert-legacy-llama.txt
 
 -r ./requirements/requirements-convert-hf-to-gguf.txt
 -r ./requirements/requirements-convert-hf-to-gguf-update.txt
