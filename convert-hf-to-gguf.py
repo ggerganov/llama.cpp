@@ -2442,10 +2442,10 @@ class JinaBertV2Model(BertModel):
             if 'gated_layer' in name:
                 d1 = data[:self.intermediate_size, :]
                 name1 = name.replace('gated_layers', 'gated_layers_w')
-                name1 = name.replace('up_gated_layer', 'gated_layers_w')
+                name1 = name.replace('up_gated_layer', 'gated_layers_v')
                 d2 = data[self.intermediate_size:, :]
                 name2 = name.replace('gated_layers', 'gated_layers_v')
-                name2 = name.replace('up_gated_layer', 'gated_layers_v')
+                name2 = name.replace('up_gated_layer', 'gated_layers_w')
                 yield name1, d1
                 yield name2, d2
                 continue
