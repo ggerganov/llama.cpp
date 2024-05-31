@@ -1362,7 +1362,6 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
     parser.add_argument("--metadata",     type=Path,              help="Specify the path for a metadata file")
     parser.add_argument("--get-outfile",  action="store_true",    help="get calculated default outfile name")
-    args_in = ["R:\\llama\\LLaMA 3\\Meta-Llama-3-8B"]
     args = parser.parse_args(args_in)
 
     if args.verbose:
