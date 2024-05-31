@@ -2,7 +2,9 @@
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![Conan Center](https://shields.io/conan/v/llama-cpp)](https://conan.io/center/llama-cpp)
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
@@ -200,6 +202,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
 - [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
+- [AIKit](https://github.com/sozercan/aikit) (MIT)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
@@ -315,8 +318,6 @@ In order to build llama.cpp you have four different options.
       make
       ```
 
-      **Note**: for `Debug` builds, run `make LLAMA_DEBUG=1`
-
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
@@ -328,23 +329,32 @@ In order to build llama.cpp you have four different options.
         make
         ```
 
+  - Notes:
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, run `make LLAMA_DEBUG=1`
+
 - Using `CMake`:
 
-    ```bash
-    cmake -B build
-    cmake --build build --config Release
-    ```
+  ```bash
+  cmake -B build
+  cmake --build build --config Release
+  ```
 
-    **Note**: for `Debug` builds, there are two cases:
+  **Notes**:
 
-    - Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, there are two cases:
+
+      1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
       ```bash
       cmake -B build -DCMAKE_BUILD_TYPE=Debug
       cmake --build build
       ```
 
-    - Multi-config generators (`-G` param set to Visual Studio, XCode...):
+      2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
       ```bash
       cmake -B build -G "Xcode"
@@ -378,6 +388,14 @@ In order to build llama.cpp you have four different options.
     **Notes:** With this packages you can build llama.cpp with OPENBLAS and
     CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
     the instructions for use and activate this options in this document below.
+
+### Homebrew
+
+On Mac and Linux, the homebrew package manager can be used via
+```
+brew install llama.cpp
+```
+The formula is automatically updated with new `llama.cpp` releases.
 
 ### Metal Build
 
@@ -697,7 +715,8 @@ Building the program with BLAS support may lead to some performance improvements
 
 To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 
-Note: `convert.py` does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
+Note: `convert.py` has been moved to `examples/convert-legacy-llama.py` and shouldn't be used for anything other than `Llama/Llama2/Mistral` models and their derievatives.
+It does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
 
 ```bash
 # obtain the official LLaMA model weights and place them in ./models
@@ -714,10 +733,10 @@ ls ./models
 python3 -m pip install -r requirements.txt
 
 # convert the model to ggml FP16 format
-python3 convert.py models/mymodel/
+python3 convert-hf-to-gguf.py models/mymodel/
 
 # [Optional] for models using BPE tokenizers
-python convert.py models/mymodel/ --vocab-type bpe
+python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
 
 # quantize the model to 4-bits (using Q4_K_M method)
 ./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M

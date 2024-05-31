@@ -25,8 +25,6 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
-from convert import LlamaHfVocab
-
 logger = logging.getLogger("hf-to-gguf")
 
 
@@ -634,7 +632,7 @@ class Model:
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _set_vocab_llama_hf(self):
-        vocab = LlamaHfVocab(self.dir_model)
+        vocab = gguf.LlamaHfVocab(self.dir_model)
         tokens = []
         scores = []
         toktypes = []

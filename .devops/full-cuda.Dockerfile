@@ -31,6 +31,6 @@ ENV LLAMA_CUDA=1
 # Enable cURL
 ENV LLAMA_CURL=1
 
-RUN make
+RUN make -j$(nproc)
 
 ENTRYPOINT ["/app/.devops/tools.sh"]

@@ -40,6 +40,6 @@ ENV LLAMA_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 
-RUN make
+RUN make -j$(nproc)
 
 ENTRYPOINT [ "/app/main" ]
