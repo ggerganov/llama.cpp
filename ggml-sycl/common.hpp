@@ -136,6 +136,7 @@ typedef sycl::float2 dfloat2;
 
 static const int8_t kvalues_iq4nl[16]={-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 
+static int g_all_sycl_device_count = -1;
 static bool g_ggml_backend_sycl_buffer_type_initialized = false;
 
 static ggml_sycl_backend_gpu_mode g_ggml_sycl_backend_gpu_mode =
