@@ -271,49 +271,15 @@ jobs:
           path: llama-${{ steps.tag.outputs.name }}-bin-ubuntu-x64.zip
           name: llama-bin-ubuntu-x64.zip
 
-#  ubuntu-latest-cmake-sanitizer:
-#    runs-on: ubuntu-latest
-#
-#    continue-on-error: true
-#
-#    strategy:
-#      matrix:
-#        sanitizer: [ADDRESS, THREAD, UNDEFINED]
-#        build_type: [Debug, Release]
-#
-#    steps:
-#      - name: Clone
-#        id: checkout
-#        uses: actions/checkout@v4
-#
-#      - name: Dependencies
-#        id: depends
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install build-essential
-#
-#      - name: Build
-#        id: cmake_build
-#        run: |
-#          mkdir build
-#          cd build
-#          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-#          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
-#
-#      - name: Test
-#        id: cmake_test
-#        run: |
-#          cd build
-#          ctest -L main --verbose --timeout 900
-
-  ubuntu-latest-cmake-mpi:
+  ubuntu-latest-cmake-sanitizer:
     runs-on: ubuntu-latest
 
     continue-on-error: true
 
     strategy:
       matrix:
-        mpi_library: [mpich, libopenmpi-dev]
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [Debug, Release]
 
     steps:
       - name: Clone
@@ -324,21 +290,21 @@ jobs:
         id: depends
         run: |
           sudo apt-get update
-          sudo apt-get install build-essential ${{ matrix.mpi_library }}
+          sudo apt-get install build-essential
 
       - name: Build
         id: cmake_build
         run: |
           mkdir build
           cd build
-          cmake -DLLAMA_MPI=ON ..
-          cmake --build . --config Release -j $(nproc)
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
         id: cmake_test
         run: |
           cd build
-          ctest -L main --verbose
+          ctest -L main --verbose --timeout 900
 
   ubuntu-latest-cmake-rpc:
     runs-on: ubuntu-latest
@@ -391,6 +357,33 @@ jobs:
           cd build
           cmake -DLLAMA_VULKAN=ON ..
           cmake --build . --config Release -j $(nproc)
+
+  ubuntu-22-cmake-hip:
+    runs-on: ubuntu-22.04
+    container: rocm/dev-ubuntu-22.04:6.0.2
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Dependencies
+        id: depends
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git cmake rocblas-dev hipblas-dev
+
+      - name: Build with native CMake HIP support
+        id: cmake_build
+        run: |
+          cmake -B build -S . -DCMAKE_HIP_COMPILER="$(hipconfig -l)/clang" -DLLAMA_HIPBLAS=ON
+          cmake --build build --config Release -j $(nproc)
+
+      - name: Build with legacy HIP support
+        id: cmake_build_legacy_hip
+        run: |
+          cmake -B build2 -S . -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc -DLLAMA_HIPBLAS=ON
+          cmake --build build2 --config Release -j $(nproc)
 
   ubuntu-22-cmake-sycl:
     runs-on: ubuntu-22.04
@@ -988,6 +981,37 @@ jobs:
         with:
           path: llama-${{ steps.tag.outputs.name }}-bin-win-sycl-x64.zip
           name: llama-bin-win-sycl-x64.zip
+
+  windows-latest-cmake-hip:
+    runs-on: windows-latest
+
+    steps:
+      - name: Clone
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Install
+        id: depends
+        run: |
+          $ErrorActionPreference = "Stop"
+          write-host "Downloading AMD HIP SDK Installer"
+          Invoke-WebRequest -Uri "https://download.amd.com/developer/eula/rocm-hub/AMD-Software-PRO-Edition-23.Q4-WinSvr2022-For-HIP.exe" -OutFile "${env:RUNNER_TEMP}\rocm-install.exe"
+          write-host "Installing AMD HIP SDK"
+          Start-Process "${env:RUNNER_TEMP}\rocm-install.exe" -ArgumentList '-install' -NoNewWindow -Wait
+          write-host "Completed AMD HIP SDK installation"
+
+      - name: Verify ROCm
+        id: verify
+        run: |
+          & 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' --version
+
+      - name: Build
+        id: cmake_build
+        run: |
+          $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
+          $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
+          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DLLAMA_HIPBLAS=ON
+          cmake --build build --config Release
 
   ios-xcode-build:
     runs-on: macos-latest
