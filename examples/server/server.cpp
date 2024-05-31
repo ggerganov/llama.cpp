@@ -29,8 +29,8 @@
 #include "index-new.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
-#include "EN_systemPrompts.js.hpp"
-#include "promptFormats.js.hpp"
+#include "system-prompts.js.hpp"
+#include "prompt-format.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
 
 #include <atomic>
@@ -3778,8 +3778,8 @@ int main(int argc, char ** argv) {
     svr->Get("/theme-polarnight.css", handle_static_file(theme_polarnight_css, theme_polarnight_css_len, "text/css; charset=utf-8"));
     svr->Get("/theme-snowstorm.css", handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
     svr->Get("/index-new.html", handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
-    svr->Get("/EN_systemPrompts.js", handle_static_file(EN_systemPrompts_js, EN_systemPrompts_js_len, "text/javascript; charset=utf-8"));
-    svr->Get("/promptFormats.js", handle_static_file(promptFormats_js, promptFormats_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/system-prompts.js", handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/prompt-format.js", handle_static_file(prompt_format_js, prompt_format_js_len, "text/javascript; charset=utf-8"));
 
     // register API routes
     svr->Get ("/health",              handle_health);

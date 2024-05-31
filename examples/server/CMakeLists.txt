@@ -20,8 +20,8 @@ set(PUBLIC_ASSETS
     index-new.html
     index.js
     completion.js
-    EN_systemPrompts.js
-    promptFormats.js
+    system-prompts.js
+    prompt-format.js
     json-schema-to-grammar.mjs
 )
 foreach(asset ${PUBLIC_ASSETS})
