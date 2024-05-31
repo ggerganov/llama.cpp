@@ -30,7 +30,7 @@
 #include "index.js.hpp"
 #include "completion.js.hpp"
 #include "system-prompts.js.hpp"
-#include "prompt-format.js.hpp"
+#include "prompt-formats.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
 
 #include <atomic>
@@ -3779,7 +3779,7 @@ int main(int argc, char ** argv) {
     svr->Get("/theme-snowstorm.css", handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
     svr->Get("/index-new.html", handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
     svr->Get("/system-prompts.js", handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
-    svr->Get("/prompt-format.js", handle_static_file(prompt_format_js, prompt_format_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/prompt-formats.js", handle_static_file(prompt_formats_js, prompt_formats_js_len, "text/javascript; charset=utf-8"));
 
     // register API routes
     svr->Get ("/health",              handle_health);

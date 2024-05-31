@@ -21,7 +21,7 @@ set(PUBLIC_ASSETS
     index.js
     completion.js
     system-prompts.js
-    prompt-format.js
+    prompt-formats.js
     json-schema-to-grammar.mjs
 )
 foreach(asset ${PUBLIC_ASSETS})
