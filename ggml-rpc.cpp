@@ -491,7 +491,7 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_rpc_buffer_type_alloc_buffer
     if (remote_ptr != 0) {
         ggml_backend_buffer_t buffer = ggml_backend_buffer_init(buft,
             ggml_backend_rpc_buffer_interface,
-            new ggml_backend_rpc_buffer_context{sock, {}, remote_ptr, "RPC"},
+            new ggml_backend_rpc_buffer_context{sock, {}, remote_ptr, "RPC[" + std::string(buft_ctx->endpoint) + "]"},
             remote_size);
         return buffer;
     } else {
@@ -692,7 +692,7 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const
 GGML_CALL ggml_backend_t ggml_backend_rpc_init(const char * endpoint) {
     ggml_backend_rpc_context * ctx = new ggml_backend_rpc_context {
         /* .endpoint  = */ endpoint,
-        /* .name      = */ "RPC",
+        /* .name      = */ "RPC[" + std::string(endpoint) + "]",
     };
 
     ggml_backend_t backend = new ggml_backend {
