@@ -11512,14 +11512,11 @@ static int llama_decode_internal(
             if (lctx.threadpool_batch) {
                 ggml_resume_threadpool(lctx.threadpool_batch);
                 threadpool = lctx.threadpool_batch;
-                n_threads = cparams.n_threads_batch;
             } else if (lctx.threadpool) {
                 ggml_resume_threadpool(lctx.threadpool);
                 threadpool = lctx.threadpool;
-                n_threads = cparams.n_threads;
-            } else {
-                n_threads = cparams.n_threads_batch;
             }
+            n_threads = cparams.n_threads_batch;
         }
 
         GGML_ASSERT(n_threads > 0);
