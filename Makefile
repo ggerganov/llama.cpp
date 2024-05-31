@@ -416,6 +416,12 @@ ifdef LLAMA_BLIS
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
 
+ifdef LLAMA_RPC
+	MK_CPPFLAGS += -DGGML_USE_RPC
+	OBJS        += ggml-rpc.o
+endif # LLAMA_RPC
+
+
 ifdef LLAMA_CUBLAS
 # LLAMA_CUBLAS is deprecated and will be removed in the future
 	LLAMA_CUDA := 1
@@ -645,6 +651,12 @@ ifndef LLAMA_NO_LLAMAFILE
 sgemm.o: sgemm.cpp sgemm.h ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif
+
+ifdef LLAMA_RPC
+ggml-rpc.o: ggml-rpc.cpp ggml-rpc.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+endif # LLAMA_RPC
+
 
 GF_CC := $(CC)
 include scripts/get-flags.mk

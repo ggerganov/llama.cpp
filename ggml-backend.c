@@ -151,7 +151,7 @@ void ggml_backend_buffer_reset(ggml_backend_buffer_t buffer) {
 bool ggml_backend_buffer_copy_tensor(const struct ggml_tensor * src, struct ggml_tensor * dst) {
     ggml_backend_buffer_t dst_buf = dst->view_src ? dst->view_src->buffer : dst->buffer;
     if (dst_buf->iface.cpy_tensor) {
-        return src->buffer->iface.cpy_tensor(dst_buf, src, dst);
+        return dst_buf->iface.cpy_tensor(dst_buf, src, dst);
     }
     return false;
 }
@@ -321,9 +321,7 @@ void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst
         ggml_backend_tensor_set(dst, src->data, 0, ggml_nbytes(src));
     } else if (ggml_backend_buffer_is_host(dst->buffer)) {
         ggml_backend_tensor_get(src, dst->data, 0, ggml_nbytes(src));
-    }
-    bool same_backend = strcmp(ggml_backend_buffer_name(src->buffer), ggml_backend_buffer_name(dst->buffer)) == 0;
-    if (!same_backend || !ggml_backend_buffer_copy_tensor(src, dst)) {
+    } else if (!ggml_backend_buffer_copy_tensor(src, dst)) {
 #ifndef NDEBUG
         fprintf(stderr, "%s: warning: slow copy from %s to %s\n", __func__, ggml_backend_buffer_name(src->buffer), ggml_backend_buffer_name(dst->buffer));
 #endif
@@ -1889,15 +1887,15 @@ ggml_backend_t ggml_backend_sched_get_tensor_backend(ggml_backend_sched_t sched,
 
 // utils
 
-void ggml_backend_view_init(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor) {
+void ggml_backend_view_init(struct ggml_tensor * tensor) {
     GGML_ASSERT(tensor->buffer == NULL);
     GGML_ASSERT(tensor->view_src != NULL);
     GGML_ASSERT(tensor->view_src->buffer != NULL);
     GGML_ASSERT(tensor->view_src->data != NULL);
 
-    tensor->buffer = buffer;
+    tensor->buffer = tensor->view_src->buffer;
     tensor->data = (char *)tensor->view_src->data + tensor->view_offs;
-    ggml_backend_buffer_init_tensor(buffer, tensor);
+    ggml_backend_buffer_init_tensor(tensor->buffer, tensor);
 }
 
 void ggml_backend_tensor_alloc(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, void * addr) {
@@ -1956,7 +1954,7 @@ static void graph_copy_init_tensor(struct ggml_hash_set hash_set, struct ggml_te
     struct ggml_tensor * dst = node_copies[id];
     if (dst->view_src != NULL) {
         graph_copy_init_tensor(hash_set, node_copies, node_init, src->view_src);
-        ggml_backend_view_init(dst->view_src->buffer, dst);
+        ggml_backend_view_init(dst);
     }
     else {
         ggml_backend_tensor_copy(src, dst);
