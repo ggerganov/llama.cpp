@@ -766,6 +766,9 @@ class Me {
      * @param {SimpleChat} chat
      */
     setup_load(div, chat) {
+        if (!(chat.ods_key() in localStorage)) {
+            return;
+        }
         div.innerHTML += `<p class="role-system">Restore</p>
         <p>Load previously saved chat session, if available</p>`;
         let btn = ui.el_create_button(chat.ods_key(), (ev)=>{
