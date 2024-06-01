@@ -333,7 +333,7 @@ static void calc_diff(callback_data & cb_data) {
 
         // strip zero rows
         std::vector<size_t> nonzero_rows;
-        for (size_t i = 0; i < cb_data.n_tokens; ++i) {
+        for (int i = 0; i < cb_data.n_tokens; ++i) {
             if (!is_row_all_zeros(dest, i, cb_data.n_embd)) {
                 nonzero_rows.push_back(i);
             }
@@ -357,7 +357,7 @@ static void calc_diff(callback_data & cb_data) {
         }
 
         cb_data.v_diffs_wrapped[il].push_back(dw);
-        delete dest;
+        free(dest);
     }
 }
 
@@ -391,8 +391,8 @@ static void concatenate_diffs(callback_data & cb_data) {
 static float* square_diff(callback_data & cb_data, size_t idx) {
     float* result = new float[cb_data.n_embd * cb_data.n_embd];
     std::memset(result, 0, cb_data.n_embd * cb_data.n_embd * sizeof(float));
-    for (size_t i = 0; i < cb_data.n_embd; i++) {
-        for (size_t j = 0; j < cb_data.n_embd; j++) {
+    for (size_t i = 0; i < (size_t) cb_data.n_embd; i++) {
+        for (size_t j = 0; j < (size_t) cb_data.n_embd; j++) {
             float sum = 0.0f;
             for (size_t k = 0; k < cb_data.v_diff[idx].n_rows; k++) {
                 sum += cb_data.v_diff[idx].diff[i + cb_data.n_embd * k] * cb_data.v_diff[idx].diff[j + cb_data.n_embd * k];
@@ -463,7 +463,7 @@ static std::vector<float> power_iteration(callback_data & cb_data, const float *
 }
 
 // TODO translate to ggml
-static void pca(callback_data & cb_data, size_t n_threads) {
+static void pca(callback_data & cb_data, int n_threads) {
     int n_layers = cb_data.v_diff.size();
     std::vector<std::thread> threads;
     cb_data.v_final.reserve(n_layers);
@@ -495,25 +495,23 @@ static std::string to_string(const T & val) {
 static void export_gguf(callback_data & cb_data, int n_layers, const std::string fname, const std::string model_hint) {
     struct gguf_context * ctx = gguf_init_empty();
 
-    //int test = cb_data.v_final.size();
-    int test = n_layers - 1;
-    // replaced cb_data.v_final.size() with n_layers - 1
+    size_t v_final_size_eff = n_layers - 1;
     
     const std::string arch = "controlvector";
     gguf_set_val_str(ctx, "general.architecture", arch.c_str());
     gguf_set_val_str(ctx, (arch + ".model_hint").c_str(), model_hint.c_str());
-    gguf_set_val_i32(ctx, (arch + ".layer_count").c_str(), test);
+    gguf_set_val_i32(ctx, (arch + ".layer_count").c_str(), v_final_size_eff);
 
     struct ggml_init_params params = {
-        /*.mem_size   =*/ (ggml_tensor_overhead() * test)
-                            + (cb_data.n_embd * test * sizeof(float)),
+        /*.mem_size   =*/ (ggml_tensor_overhead() * v_final_size_eff)
+                            + (cb_data.n_embd * v_final_size_eff * sizeof(float)),
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ false,
     };
 
     struct ggml_context * ctx_data = ggml_init(params);
 
-    for (size_t i = 0; i < test; ++i) {
+    for (size_t i = 0; i < v_final_size_eff; ++i) {
         // TODO this number is probably not right - figure out which layer is which
         // the python implementation uses a dict to handle this, we don't know if it's 1, 2, 3, 4... or other
         const std::string name = "direction." + to_string(i+1);
@@ -528,7 +526,7 @@ static void export_gguf(callback_data & cb_data, int n_layers, const std::string
         }
 
         gguf_add_tensor(ctx, cur);
-        printf("Added tensor %d\n", i);
+        printf("Added tensor %zu\n", i);
     }
 
     printf("Writing file...\n"); 
@@ -592,7 +590,7 @@ int main(int argc, char ** argv) {
     }
 
     // create templated prompts
-    for (size_t i = 0; i < n_prompts; ++i) {
+    for (int i = 0; i < n_prompts; ++i) {
         populate_entries(cparams, cparams.positive_prompts[i], cparams.negative_prompts[i]);
     }
 
@@ -623,7 +621,7 @@ int main(int argc, char ** argv) {
             token_ct = 2 * max_seq_len;
         }
         if (token_ct > n_ctx) {
-            fprintf(stderr, "context size exceeded on iteration %d\n", i);
+            fprintf(stderr, "context size exceeded on iteration %zu\n", i);
             break;
         }
 
