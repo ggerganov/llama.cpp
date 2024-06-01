@@ -156,6 +156,8 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         '<s>a',       # Phi-3 fail
         '<unk><|endoftext|><s>',  # Phi-3 fail
         'a\na',       # TODO: Bert fail
+        'a </s> b',   # rstrip phi-3
+        'a <mask> b', # lstrip jina-v2
     ]
 
 
