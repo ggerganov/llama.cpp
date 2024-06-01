@@ -643,6 +643,8 @@ int main(int argc, char ** argv) {
         calc_diff(cb_data);
 
         // reset for next iteration
+        for (auto ptr : cb_data.v_pos) free(ptr);
+        for (auto ptr : cb_data.v_neg) free(ptr);
         cb_data.v_pos.clear();
         cb_data.v_neg.clear();
     }
