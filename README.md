@@ -396,7 +396,7 @@ On Mac and Linux, the homebrew package manager can be used via
 ```
 brew install llama.cpp
 ```
-The formula is automatically updated with new `llama.cpp` releases.
+The formula is automatically updated with new `llama.cpp` releases. More info: https://github.com/ggerganov/llama.cpp/discussions/7668
 
 ### Metal Build
 

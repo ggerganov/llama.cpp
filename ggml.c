@@ -1576,11 +1576,11 @@ do {                                                              \
 
 // F16 arithmetic is not supported by AVX, so we use F32 instead
 
-#define GGML_F32Cx8             __m256
+#define GGML_F32Cx8          __m256
 #define GGML_F32Cx8_ZERO    (__m256)__lasx_xvldi(0)
 #define GGML_F32Cx8_SET1(x) (__m256)__lasx_xvreplgr2vr_w((x))
 
-static inline __m256 __lasx_f32cx8_load(const ggml_fp16_t *x) {
+static inline __m256 __lasx_f32cx8_load(const ggml_fp16_t * x) {
     float tmp[8];
 
     for (int i = 0; i < 8; i++) {
@@ -1589,13 +1589,14 @@ static inline __m256 __lasx_f32cx8_load(const ggml_fp16_t *x) {
 
     return (__m256)__lasx_xvld(tmp, 0);
 }
-static inline void __lasx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
+static inline void __lasx_f32cx8_store(ggml_fp16_t * x, __m256 y) {
     float arr[8];
 
     __lasx_xvst(y, arr, 0);
 
-    for (int i = 0; i < 8; i++)
+    for (int i = 0; i < 8; i++) {
         x[i] = GGML_FP32_TO_FP16(arr[i]);
+    }
 }
 #define GGML_F32Cx8_LOAD(x)     __lasx_f32cx8_load(x)
 #define GGML_F32Cx8_STORE(x, y) __lasx_f32cx8_store(x, y)
@@ -1671,7 +1672,7 @@ static inline void __lasx_f32cx8_store(ggml_fp16_t *x, __m256 y) {
 #define GGML_F16_STEP 32
 #define GGML_F16_EPR  4
 
-static inline __m128 __lsx_f16x4_load(ggml_fp16_t *x) {
+static inline __m128 __lsx_f16x4_load(const ggml_fp16_t * x) {
     float tmp[4];
 
     tmp[0] = GGML_FP16_TO_FP32(x[0]);
@@ -1682,7 +1683,7 @@ static inline __m128 __lsx_f16x4_load(ggml_fp16_t *x) {
     return __lsx_vld(tmp, 0);
 }
 
-static inline void __lsx_f16x4_store(ggml_fp16_t *x, __m128 y) {
+static inline void __lsx_f16x4_store(ggml_fp16_t * x, __m128 y) {
     float arr[4];
 
     __lsx_vst(y, arr, 0);
