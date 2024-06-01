@@ -1,5 +1,45 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Iterator
+
+if TYPE_CHECKING:
+    from torch import Tensor
+
+
+def fill_templated_filename(filename: str, encoding_scheme: str):
+    # Given a file name fill in any type templates e.g. 'some-model-name.{ftype}.gguf'
+    ftype_uppercase: str = encoding_scheme.upper()
+    ftype_lowercase: str = encoding_scheme.lower()
+    return filename.format(ftype_lowercase,
+                           outtype=ftype_lowercase, ftype=ftype_lowercase,
+                           OUTTYPE=ftype_uppercase, FTYPE=ftype_uppercase)
+
+
+def per_model_weight_count_estimation(tensors: Iterator[tuple[str, Tensor]], expert_count: int) -> int:
+    # TODO: Ensure parameter count is accurate throughout various model type
+    #       May currently overestimate parameter count in Mamba model because
+    #       output weights is tied with token embeddings.
+    sum_weight_estimate = 0
+    for name, data_torch in tensors:
+        # Got A Tensor
+
+        # We don't need these
+        if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
+            continue
+
+        # Calculate Tensor Volume
+        sum_weights_in_tensor = 1
+        for dim in data_torch.shape:
+            sum_weights_in_tensor *= dim
+
+        # Add Tensor Volume To Running Count
+        sum_weight_estimate += sum_weights_in_tensor
+
+    # Calculate weight estimate per model
+    per_model_weight_estimate = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
+
+    return per_model_weight_estimate
+
 
 def model_weight_count_rounded_notation(model_params_count: int) -> str:
     if model_params_count > 1e15 :

@@ -24,7 +24,7 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, IO, Iterable, Literal, TypeVar, Optional
+from typing import TYPE_CHECKING, Any, Callable, IO, Iterable, Literal, TypeVar
 
 import numpy as np
 
@@ -344,46 +344,6 @@ class Params:
         params.path_model = model_plus.paths[0].parent
 
         return params
-
-
-@dataclass
-class Metadata:
-    name: Optional[str] = None
-    basename: Optional[str] = None
-    finetune: Optional[str] = None
-    author: Optional[str] = None
-    version: Optional[str] = None
-    url: Optional[str] = None
-    description: Optional[str] = None
-    license: Optional[str] = None
-    source_url: Optional[str] = None
-    source_hf_repo: Optional[str] = None
-
-    @staticmethod
-    def load(metadata_path: Path) -> Metadata:
-        if metadata_path is None or not metadata_path.exists():
-            return Metadata()
-
-        with open(metadata_path, 'r') as file:
-            data = json.load(file)
-
-        # Create a new Metadata instance
-        metadata = Metadata()
-
-        # Assigning values to Metadata attributes if they exist in the JSON file
-        # This is based on LLM_KV_NAMES mapping in llama.cpp
-        metadata.name = data.get("general.name")
-        metadata.basename = data.get("general.basename")
-        metadata.finetune = data.get("general.finetune")
-        metadata.author = data.get("general.author")
-        metadata.version = data.get("general.version")
-        metadata.url = data.get("general.url")
-        metadata.description = data.get("general.description")
-        metadata.license = data.get("general.license")
-        metadata.source_url = data.get("general.source.url")
-        metadata.source_hf_repo = data.get("general.source.huggingface.repository")
-
-        return metadata
 
 
 #
@@ -810,7 +770,7 @@ class OutputFile:
     def __init__(self, fname_out: Path, endianess:gguf.GGUFEndian = gguf.GGUFEndian.LITTLE):
         self.gguf = gguf.GGUFWriter(fname_out, gguf.MODEL_ARCH_NAMES[ARCH], endianess=endianess)
 
-    def add_meta_model(self, params: Params, metadata: Metadata | None) -> None:
+    def add_meta_model(self, params: Params, metadata: gguf.Metadata | None) -> None:
         # Metadata About The Model And Its Provenence
         name = "LLaMA"
         if metadata is not None and metadata.name is not None:
@@ -952,7 +912,7 @@ class OutputFile:
     @staticmethod
     def write_vocab_only(
         fname_out: Path, params: Params, vocab: Vocab, svocab: gguf.SpecialVocab,
-        endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE, pad_vocab: bool = False, metadata: Metadata | None = None,
+        endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE, pad_vocab: bool = False, metadata: gguf.Metadata | None = None,
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
@@ -986,7 +946,7 @@ class OutputFile:
         fname_out: Path, ftype: GGMLFileType, params: Params, model: LazyModel, vocab: BaseVocab, svocab: gguf.SpecialVocab,
         concurrency: int = DEFAULT_CONCURRENCY, endianess: gguf.GGUFEndian = gguf.GGUFEndian.LITTLE,
         pad_vocab: bool = False,
-        metadata: Metadata | None = None,
+        metadata: gguf.Metadata | None = None,
     ) -> None:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
@@ -1029,10 +989,10 @@ def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileT
     raise ValueError(f"Unexpected combination of types: {name_to_type}")
 
 
-def per_model_weight_count_estimation(model: LazyModel, expert_count:int) -> int:
+def per_model_weight_count_estimation(tensors: dict[str, LazyTensor], expert_count:int) -> int:
     # TODO: Ensure parameter count is accurate throughout various model type
     sum_weight_estimate = 0
-    for name, lazy_tensor in model.items():
+    for name, lazy_tensor in tensors:
         # We don't need these
         if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
             continue
@@ -1232,7 +1192,7 @@ class VocabFactory:
         return vocab, special_vocab
 
 
-def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: Metadata) -> str:
+def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> str:
     name = metadata.name if metadata is not None and metadata.name is not None else model_name
     basename = metadata.basename if metadata is not None and metadata.basename is not None else None
     finetune = metadata.finetune if metadata is not None and metadata.finetune is not None else None
@@ -1247,7 +1207,7 @@ def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_c
     return gguf.naming_convention(name, basename, finetune, version, expert_count, model_params_count, encodingScheme)
 
 
-def default_outfile(model_paths: list[Path], file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: Metadata) -> Path:
+def default_outfile(model_paths: list[Path], file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> Path:
     default_filename = default_convention_outfile(file_type, model_name, expert_count, model_params_count, metadata)
     ret = model_paths[0].parent / f"{default_filename}.gguf"
     if ret in model_paths:
@@ -1300,13 +1260,13 @@ def main(args_in: list[str] | None = None) -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
-    metadata = Metadata.load(args.metadata)
+    metadata = gguf.Metadata.load(args.metadata)
 
     if args.get_outfile:
         model_plus = load_some_model(args.model)
         params = Params.load(model_plus)
         model = convert_model_names(model_plus.model, params, args.skip_unknown)
-        model_params_count = per_model_weight_count_estimation(model_plus.model, params.n_experts)
+        model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
         ftype = pick_output_type(model, args.outtype)
         print(f"{default_convention_outfile(ftype, params.path_model.name, params.n_experts, model_params_count, metadata)}") # noqa: NP100
         return
@@ -1324,7 +1284,7 @@ def main(args_in: list[str] | None = None) -> None:
     else:
         model_plus = ModelPlus(model = {}, paths = [args.model / 'dummy'], format = 'none', vocab = None)
 
-    model_params_count = per_model_weight_count_estimation(model_plus.model, params.n_experts)
+    model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
     logger.info(f"model parameters count : {model_params_count} ({gguf.model_weight_count_rounded_notation(model_params_count)})")
 
     if args.dump:

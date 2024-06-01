@@ -31,46 +31,6 @@ import gguf
 logger = logging.getLogger("hf-to-gguf")
 
 
-@dataclass
-class Metadata:
-    name: Optional[str] = None
-    basename: Optional[str] = None
-    finetune: Optional[str] = None
-    author: Optional[str] = None
-    version: Optional[str] = None
-    url: Optional[str] = None
-    description: Optional[str] = None
-    licence: Optional[str] = None
-    source_url: Optional[str] = None
-    source_hf_repo: Optional[str] = None
-
-    @staticmethod
-    def load(metadata_path: Path) -> Metadata:
-        if metadata_path is None or not metadata_path.exists():
-            return Metadata()
-
-        with open(metadata_path, 'r') as file:
-            data = json.load(file)
-
-        # Create a new Metadata instance
-        metadata = Metadata()
-
-        # Assigning values to Metadata attributes if they exist in the JSON file
-        # This is based on LLM_KV_NAMES mapping in llama.cpp
-        metadata.name = data.get("general.name")
-        metadata.basename = data.get("general.basename")
-        metadata.finetune = data.get("general.finetune")
-        metadata.author = data.get("general.author")
-        metadata.version = data.get("general.version")
-        metadata.url = data.get("general.url")
-        metadata.description = data.get("general.description")
-        metadata.license = data.get("general.license")
-        metadata.source_url = data.get("general.source.url")
-        metadata.source_hf_repo = data.get("general.source.huggingface.repository")
-
-        return metadata
-
-
 ###### MODEL DEFINITIONS ######
 
 class SentencePieceTokenTypes(IntEnum):
@@ -105,12 +65,12 @@ class Model:
     fname_out: Path
     fname_default: Path
     gguf_writer: gguf.GGUFWriter
-    metadata: Metadata
+    metadata: gguf.Metadata
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool, metadata: Metadata,
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool, metadata: gguf.Metadata,
                  model_name: str | None, split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
@@ -164,72 +124,23 @@ class Model:
                 if self.model_card is not None and "license" in self.model_card:
                     self.metadata.source_hf_repo = self.model_card["license"]
 
-        # Set model name based on latest metadata either provided or calculated from environment
-        def get_model_name(metadata, huggingface_parameters, dir_model, model_arch):
-            if metadata is not None and metadata.name is not None:
-                # Explicit Metadata Was Provided By User
-                return metadata.name
-            elif huggingface_parameters is not None and "_name_or_path" in huggingface_parameters:
-                # Hugging Face Parameters Model Name or Model Folder Name is Provided
-                return huggingface_parameters["_name_or_path"]
-            elif huggingface_parameters is not None and "model_type" in huggingface_parameters:
-                # Hugging Face Parameters Model Type is Provided
-                return huggingface_parameters["model_type"]
-            elif dir_model is not None and dir_model.name is not None:
-                # Use directory folder name
-                return dir_model.name
-            else:
-                return gguf.MODEL_ARCH_NAMES[model_arch]
-        self.model_name = get_model_name(self.metadata, self.hparams, self.dir_model, self.model_arch)
+        self.model_name = Model.get_model_name(self.metadata, self.hparams, self.dir_model, self.model_arch)
 
         # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
-        encodingScheme = self.ftype.name.partition("_")[2]
+        encoding_scheme = self.ftype.name.partition("_")[2]
 
         # Get Expert Count From huggingface_parameters
         expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
 
-        def per_model_weight_count_estimation(tensors, expert_count):
-            # TODO: Ensure parameter count is accurate throughout various model type
-            #       May currently overestimate parameter count in Mamba model because
-            #       output weights is tied with token embeddings.
-            sum_weight_estimate = 0
-            for name, data_torch in tensors:
-                # Got A Tensor
-
-                # We don't need these
-                if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
-                    continue
-
-                # Calculate Tensor Volume
-                sum_weights_in_tensor = 1
-                for dim in data_torch.shape:
-                    sum_weights_in_tensor *= dim
-
-                # Add Tensor Volume To Running Count
-                sum_weight_estimate += sum_weights_in_tensor
-
-            # Calculate weight estimate per model
-            per_model_weight_estimate = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
-
-            return per_model_weight_estimate
-
-        weight_estimate = per_model_weight_count_estimation(model_tensors, expert_count)
+        weight_estimate = gguf.per_model_weight_count_estimation(model_tensors, expert_count)
 
         # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.model_name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, encodingScheme)
+        self.fname_default = gguf.naming_convention(self.model_name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, encoding_scheme)
 
         # Filename Output
         if fname_out is not None:
             # custom defined filename and path was provided
-            def fill_templated_filename(filename: str, encodingScheme: str):
-                # Given a file name fill in any type templates e.g. 'some-model-name.{ftype}.gguf'
-                ftype_uppercase: str = encodingScheme.upper()
-                ftype_lowercase: str = encodingScheme.lower()
-                return filename.format(ftype_lowercase,
-                                       outtype=ftype_lowercase, ftype=ftype_lowercase,
-                                       OUTTYPE=ftype_uppercase, FTYPE=ftype_uppercase)
-
-            self.fname_out = fname_out.parent / fill_templated_filename(fname_out.name, encodingScheme)
+            self.fname_out = fname_out.parent / gguf.fill_templated_filename(fname_out.name, encoding_scheme)
         else:
             # output in the same directory as the model by default
             self.fname_out = dir_model.parent / self.fname_default
@@ -498,6 +409,24 @@ class Model:
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
+
+    # Set model name based on latest metadata either provided or calculated from environment
+    @staticmethod
+    def get_model_name(metadata, huggingface_parameters, dir_model, model_arch):
+        if metadata is not None and metadata.name is not None:
+            # Explicit Metadata Was Provided By User
+            return metadata.name
+        elif huggingface_parameters is not None and "_name_or_path" in huggingface_parameters:
+            # Hugging Face Parameters Model Name or Model Folder Name is Provided
+            return huggingface_parameters["_name_or_path"]
+        elif huggingface_parameters is not None and "model_type" in huggingface_parameters:
+            # Hugging Face Parameters Model Type is Provided
+            return huggingface_parameters["model_type"]
+        elif dir_model is not None and dir_model.name is not None:
+            # Use directory folder name
+            return dir_model.name
+        else:
+            return gguf.MODEL_ARCH_NAMES[model_arch]
 
     @staticmethod
     def get_model_part_names(dir_model: Path, prefix: str, suffix: str) -> list[str]:
@@ -3682,7 +3611,7 @@ def main() -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
-    metadata = Metadata.load(args.metadata)
+    metadata = gguf.Metadata.load(args.metadata)
     dir_model = args.model
 
     if not dir_model.is_dir():
@@ -3713,7 +3642,7 @@ def main() -> None:
     hparams = Model.load_hparams(dir_model)
 
     with torch.inference_mode():
-        encodingScheme = ftype_map[args.outtype]
+        encoding_scheme = ftype_map[args.outtype]
         model_architecture = hparams["architectures"][0]
 
         try:
