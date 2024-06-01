@@ -12,6 +12,8 @@
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+static ggml_backend_t g_cpu_backend = NULL;
+
 // backend buffer type
 
 const char * ggml_backend_buft_name(ggml_backend_buffer_type_t buft) {
@@ -177,6 +179,10 @@ void ggml_backend_free(ggml_backend_t backend) {
         return;
     }
 
+    if (backend == g_cpu_backend) {
+        g_cpu_backend = NULL;
+    }
+
     backend->iface.free(backend);
 }
 
@@ -272,7 +278,6 @@ enum ggml_status ggml_backend_graph_plan_compute(ggml_backend_t backend, ggml_ba
     return backend->iface.graph_plan_compute(backend, plan);
 }
 
-static ggml_backend_t g_cpu_backend = NULL;
 static bool GGML_OP_HAS_INIT    [GGML_OP_COUNT] = { 0 };
 static bool GGML_OP_HAS_FINALIZE[GGML_OP_COUNT] = { 0 };
 static void ggml_setup_op_has_task_pass(void) {
@@ -301,6 +306,13 @@ static void ggml_setup_op_has_task_pass(void) {
     }
 }
 
+ggml_backend_t  ggml_backend_get_default_cpu_backend() {
+    if (NULL == g_cpu_backend) {
+        ggml_backend_cpu_init();
+    }
+
+    return g_cpu_backend;
+}
 
 struct ggml_compute_state;
 extern void ggml_compute_forward(struct ggml_compute_params * params, struct ggml_tensor * tensor, struct ggml_compute_state * state);
@@ -382,12 +394,14 @@ enum ggml_status ggml_backend_graph_compute(ggml_backend_t backend, struct ggml_
         ggml_backend_cpu_init();
     }
     if (backend != g_cpu_backend) {
-        if (is_qnn_backend(backend)) {
+        if (is_qnn_backend(backend)) { // or ggml_backend_xxx_buffer_type_is_host return true
+            //mixed inference between Qualcomm's CPU/GPU or CPU/NPU
             err = ggml_backend_graph_compute_mixed(backend, cgraph);
-        } else {
+        } else {  //compatible for sycl backend or other existing backend
             err = backend->iface.graph_compute(backend, cgraph);
         }
     } else {
+        //compatible for existing backend
         err = backend->iface.graph_compute(backend, cgraph);;
     }
     ggml_backend_synchronize(backend);
@@ -402,15 +416,17 @@ enum ggml_status ggml_backend_graph_compute_async(ggml_backend_t backend, struct
         ggml_backend_cpu_init();
     }
     if (backend != g_cpu_backend) {
-        if (is_qnn_backend(backend)) {
+        if (is_qnn_backend(backend)) { // or ggml_backend_xxx_buffer_type_is_host return true
+            //mixed inference between Qualcomm's CPU/GPU or CPU/NPU
             err = ggml_backend_graph_compute_mixed(backend, cgraph);
-        } else {
+        } else {  //compatible for sycl backend or other existing backend
             err = backend->iface.graph_compute(backend, cgraph);
         }
     } else {
+        //compatible for existing backend
         err = backend->iface.graph_compute(backend, cgraph);;
     }
-    ggml_backend_synchronize(backend);
+
     return err;
 }
 
@@ -419,7 +435,7 @@ bool ggml_backend_supports_op(ggml_backend_t backend, const struct ggml_tensor *
 }
 
 bool ggml_backend_offload_op(ggml_backend_t backend, const struct ggml_tensor * op) {
-    if (is_qnn_backend(backend)) {
+    if (is_qnn_backend(backend)) {  // or ggml_backend_xxx_buffer_type_is_host return true, used for compatible with the existing "Backend Sched" feature
         return false;
     }
 
