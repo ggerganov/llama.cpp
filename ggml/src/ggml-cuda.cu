@@ -2885,6 +2885,8 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
         case GGML_OP_ARANGE:
         case GGML_OP_TIMESTEP_EMBEDDING:
         case GGML_OP_LEAKY_RELU:
+        case GGML_OP_SSM_CONV:
+        case GGML_OP_SSM_SCAN:
             return true;
         case GGML_OP_FLASH_ATTN_EXT:
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
