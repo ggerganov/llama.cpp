@@ -107,6 +107,20 @@ extern "C" {
         LLAMA_TOKEN_TYPE_BYTE         = 6,
     };
 
+    enum llama_token_attrib {
+        LLAMA_TOKEN_ATTRIB_UNDEFINED    = 0,
+        LLAMA_TOKEN_ATTRIB_UNKNOWN      = 1 <<  1,
+        LLAMA_TOKEN_ATTRIB_UNUSED       = 1 <<  2,
+        LLAMA_TOKEN_ATTRIB_NORMAL       = 1 <<  3,
+        LLAMA_TOKEN_ATTRIB_CONTROL      = 1 <<  4,  // SPECIAL?
+        LLAMA_TOKEN_ATTRIB_USER_DEFINED = 1 <<  5,
+        LLAMA_TOKEN_ATTRIB_BYTE         = 1 <<  6,
+        LLAMA_TOKEN_ATTRIB_NORMALIZED   = 1 <<  7,
+        LLAMA_TOKEN_ATTRIB_LSTRIP       = 1 <<  8,
+        LLAMA_TOKEN_ATTRIB_RSTRIP       = 1 <<  9,
+        LLAMA_TOKEN_ATTRIB_SINGLE_WORD  = 1 << 10,
+    };
+
     // model file types
     enum llama_ftype {
         LLAMA_FTYPE_ALL_F32              = 0,

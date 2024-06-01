@@ -2147,14 +2147,16 @@ struct llama_control_vector {
 };
 
 struct llama_vocab {
-    using id    = int32_t;
-    using token = std::string;
-    using ttype = llama_token_type;
+    using id      = int32_t;
+    using token   = std::string;
+    using ttype   = llama_token_type;
+    using tattrib = llama_token_attrib;
 
     struct token_data {
-        token text;
-        float score;
-        ttype type;
+        token   text;
+        float   score;
+        ttype   type;
+        tattrib attribs;
     };
 
     enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
@@ -4864,6 +4866,24 @@ static void llm_load_vocab(
         std::swap(vocab.cache_token_to_piece_special, cache_token_to_piece_special);
 
         LLAMA_LOG_INFO("%s: token to piece cache size = %.4f MB\n", __func__, size_cache / 1024.0 / 1024.0);
+    }
+
+    // Handle per token attributes
+    //NOTE: Each model customizes per token attributes.
+    //NOTE: Per token attributes are missing from the GGUF file.
+    //TODO: Merge llama_token_type and llama_token_attrib.
+    {
+        // convert token type as an attribute
+        for (auto data : vocab.id_to_token) {
+            uint32_t attrib = LLAMA_TOKEN_ATTRIB_UNDEFINED;
+            attrib |= LLAMA_TOKEN_ATTRIB_UNKNOWN      * (data.type == LLAMA_TOKEN_TYPE_UNKNOWN);
+            attrib |= LLAMA_TOKEN_ATTRIB_UNUSED       * (data.type == LLAMA_TOKEN_TYPE_UNUSED);
+            attrib |= LLAMA_TOKEN_ATTRIB_NORMAL       * (data.type == LLAMA_TOKEN_TYPE_NORMAL);
+            attrib |= LLAMA_TOKEN_ATTRIB_CONTROL      * (data.type == LLAMA_TOKEN_TYPE_CONTROL);
+            attrib |= LLAMA_TOKEN_ATTRIB_USER_DEFINED * (data.type == LLAMA_TOKEN_TYPE_USER_DEFINED);
+            attrib |= LLAMA_TOKEN_ATTRIB_BYTE         * (data.type == LLAMA_TOKEN_TYPE_BYTE);
+            data.attribs = (llama_token_attrib) attrib;
+        }
     }
 }
 
