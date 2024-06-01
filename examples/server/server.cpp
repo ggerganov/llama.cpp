@@ -3046,7 +3046,7 @@ int main(int argc, char ** argv) {
     } catch (...) {
         // Catch all other exceptions
         LOG_ERROR("unable to load model", {{"error", "Unknown Exception"}});
-        exit(1);
+        return 1;
     }
 
     LOG_INFO("model loaded", {});
