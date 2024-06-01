@@ -1121,7 +1121,7 @@ KEY_GENERAL_URL                  = GGUFMetadataKeys.General.URL
 KEY_GENERAL_DESCRIPTION          = GGUFMetadataKeys.General.DESCRIPTION
 KEY_GENERAL_LICENSE              = GGUFMetadataKeys.General.LICENSE
 KEY_GENERAL_SOURCE_URL           = GGUFMetadataKeys.General.SOURCE_URL
-KEY_GENERAL_SOURCE_HF_REPO       = GGUFMetadataKeys.General.SOURCE_HF_REPO
+KEY_GENERAL_SOURCE_REPO          = GGUFMetadataKeys.General.SOURCE_REPO
 KEY_GENERAL_FILE_TYPE            = GGUFMetadataKeys.General.FILE_TYPE
 
 # LLM
