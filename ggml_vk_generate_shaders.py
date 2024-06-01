@@ -257,26 +257,22 @@ layout (push_constant) uniform parameter
     uint stride_a;
     uint stride_b;
     uint stride_d;
-    uint k_split;
-
-    uint ne02;
-    uint ne12;
-    uint broadcast2;
-    uint broadcast3;
 
     uint batch_stride_a;
     uint batch_stride_b;
     uint batch_stride_d;
 
 #ifdef MUL_MAT_ID
-    uint expert_stride_a;
-    uint expert_stride_d;
-
-    uint n_as;
     uint nei0;
     uint nei1;
     uint nbi1;
     uint ne11;
+#else
+    uint k_split;
+    uint ne02;
+    uint ne12;
+    uint broadcast2;
+    uint broadcast3;
 #endif
 } p;
 
@@ -354,12 +350,17 @@ void main() {
     if (ic * BN >= _ne1) return;
 #endif
 
+#ifdef MUL_MAT_ID
+    const uint start_k = 0;
+    const uint end_k = p.K;
+#else
     const uint start_k = ik * p.k_split;
     const uint end_k = min(p.K, (ik + 1) * p.k_split);
+#endif
 
     uint pos_a = (
 #ifdef MUL_MAT_ID
-        expert_idx * p.expert_stride_a +
+        expert_idx * p.batch_stride_a +
 #else
         batch_idx_a * p.batch_stride_a +
 #endif
@@ -1193,29 +1194,26 @@ layout (push_constant) uniform parameter
     uint stride_b;
     uint stride_d;
 
-    uint ne02;
-    uint ne12;
-    uint broadcast2;
-    uint broadcast3;
-
     uint batch_stride_a;
     uint batch_stride_b;
     uint batch_stride_d;
 
 #ifdef MUL_MAT_ID
-    uint expert_stride_a;
-    uint expert_stride_d;
-
-    uint n_as;
     uint nei0;
-    uint nbi1;
+    uint ne11;
+#else
+    uint ne02;
+    uint ne12;
+    uint broadcast2;
+    uint broadcast3;
 #endif
 } p;
 
 void get_offsets(out uint a_offset, out uint b_offset, out uint d_offset) {
-    const uint batch_idx = gl_GlobalInvocationID.y;
 #ifdef MUL_MAT_ID
-    const uint expert_idx = gl_GlobalInvocationID.z;
+    const uint expert_idx = gl_GlobalInvocationID.y;
+#else
+    const uint batch_idx = gl_GlobalInvocationID.y;
 #endif
 
 #ifndef MUL_MAT_ID
@@ -1227,21 +1225,27 @@ void get_offsets(out uint a_offset, out uint b_offset, out uint d_offset) {
 
     const uint batch_idx_a = i03 * p.ne02 + i02;
 #else
-    const uint expert_id = data_ids[batch_idx * p.nbi1 + expert_idx];
+    const uint expert_id = data_ids[expert_idx];
 #endif
 
     a_offset =
 #ifdef MUL_MAT_ID
-            expert_id * p.expert_stride_a;
+            expert_id * p.batch_stride_a;
 #else
             batch_idx_a * p.batch_stride_a;
 #endif
-    b_offset = batch_idx * p.batch_stride_b;
+    b_offset =
+#ifdef MUL_MAT_ID
+            (expert_idx % p.ne11) * p.stride_b;
+#else
+            batch_idx * p.batch_stride_b;
+#endif
     d_offset =
 #ifdef MUL_MAT_ID
-            expert_idx * p.expert_stride_d +
-#endif
+            expert_idx * p.stride_d;
+#else
             batch_idx * p.batch_stride_d;
+#endif
 }
 """
 
