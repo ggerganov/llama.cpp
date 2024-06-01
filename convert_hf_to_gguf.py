@@ -127,7 +127,7 @@ class Model:
         self.model_name = Model.get_model_name(self.metadata, self.hparams, self.dir_model, self.model_arch)
 
         # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
-        encoding_scheme = self.ftype.name.partition("_")[2]
+        output_type = self.ftype.name.partition("_")[2]
 
         # Get Expert Count From huggingface_parameters
         expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
@@ -135,12 +135,12 @@ class Model:
         weight_estimate = gguf.per_model_weight_count_estimation(model_tensors, expert_count)
 
         # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.model_name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, encoding_scheme)
+        self.fname_default = gguf.naming_convention(self.model_name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, output_type)
 
         # Filename Output
         if fname_out is not None:
             # custom defined filename and path was provided
-            self.fname_out = fname_out.parent / gguf.fill_templated_filename(fname_out.name, encoding_scheme)
+            self.fname_out = fname_out.parent / gguf.fill_templated_filename(fname_out.name, output_type)
         else:
             # output in the same directory as the model by default
             self.fname_out = dir_model.parent / self.fname_default
@@ -3642,7 +3642,7 @@ def main() -> None:
     hparams = Model.load_hparams(dir_model)
 
     with torch.inference_mode():
-        encoding_scheme = ftype_map[args.outtype]
+        output_type = ftype_map[args.outtype]
         model_architecture = hparams["architectures"][0]
 
         try:
@@ -3651,8 +3651,8 @@ def main() -> None:
             logger.error(f"Model {hparams['architectures'][0]} is not supported")
             sys.exit(1)
 
-        model_instance = model_class(dir_model, encodingScheme, fname_out, args.bigendian, args.use_temp_file,
-                                     args.no_lazy, args.model_name, split_max_tensors=args.split_max_tensors,
+        model_instance = model_class(dir_model, output_type, fname_out, args.bigendian, args.use_temp_file, args.no_lazy,
+                                     metadata, args.model_name, split_max_tensors=args.split_max_tensors,
                                      split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
                                      small_first_shard=args.no_tensor_first_split)
 

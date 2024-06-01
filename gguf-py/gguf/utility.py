@@ -6,10 +6,10 @@ if TYPE_CHECKING:
     from torch import Tensor
 
 
-def fill_templated_filename(filename: str, encoding_scheme: str):
+def fill_templated_filename(filename: str, output_type: str):
     # Given a file name fill in any type templates e.g. 'some-model-name.{ftype}.gguf'
-    ftype_uppercase: str = encoding_scheme.upper()
-    ftype_lowercase: str = encoding_scheme.lower()
+    ftype_uppercase: str = output_type.upper()
+    ftype_lowercase: str = output_type.lower()
     return filename.format(ftype_lowercase,
                            outtype=ftype_lowercase, ftype=ftype_lowercase,
                            OUTTYPE=ftype_uppercase, FTYPE=ftype_uppercase)
@@ -65,7 +65,7 @@ def model_weight_count_rounded_notation(model_params_count: int) -> str:
     return f"{round(scaled_model_params)}{scale_suffix}"
 
 
-def naming_convention(model_name: str, base_name: str, finetune_string:str, version_string:str, expert_count_int:int, model_params_count: int, encoding_scheme: str) -> str:
+def naming_convention(model_name: str, base_name: str, finetune_string:str, version_string:str, expert_count_int:int, model_params_count: int, output_type: str) -> str:
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
 
     if base_name is not None:
@@ -85,6 +85,6 @@ def naming_convention(model_name: str, base_name: str, finetune_string:str, vers
 
     version = f"-{version_string.strip().replace(' ', '-')}" if version_string is not None else ""
 
-    encoding = f"-{encoding_scheme.strip().replace(' ', '-').upper()}"
+    precision = f"-{output_type.strip().replace(' ', '-').upper()}"
 
-    return f"{name}{parameters}{finetune}{version}{encoding}"
+    return f"{name}{parameters}{finetune}{version}{precision}"
