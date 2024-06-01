@@ -13,9 +13,9 @@ GGML_QUANT_VERSION     = 2  # GGML_QNT_VERSION from ggml.h
 
 
 #
-# metadata keys
+# model metadata keys
 #
-class Keys:
+class GGUFMetadataKeys:
     class General:
         ARCHITECTURE         = "general.architecture"
         QUANTIZATION_VERSION = "general.quantization_version"
@@ -27,7 +27,7 @@ class Keys:
         DESCRIPTION          = "general.description"
         LICENSE              = "general.license"
         SOURCE_URL           = "general.source.url"
-        SOURCE_HF_REPO       = "general.source.huggingface.repository"
+        SOURCE_REPO          = "general.source.repository"
         FILE_TYPE            = "general.file_type"
 
     class LLM:
@@ -77,36 +77,35 @@ class Keys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
 
     class Tokenizer:
-        MODEL            = "tokenizer.ggml.model"             # STRING: e.g. llama
-        TYPE             = "tokenizer.ggml.type"              # STRING: BPE, SPM, WPM, etc.
-        NORM             = "tokenizer.ggml.norm"              # OBJECT {"type": "ByteLevel"}
-        PRE              = "tokenizer.ggml.pre"               # OBJECT {"type": "ByteLevel"}
-        ADDED            = "tokenizer.ggml.added"             # ARRAY of OBJECTs {"id": 1}
-        LIST             = "tokenizer.ggml.tokens"
-        TOKEN_TYPE       = "tokenizer.ggml.token_type"
-        TOKEN_TYPE_COUNT = "tokenizer.ggml.token_type_count"  # BERT token types
-        SCORES           = "tokenizer.ggml.scores"            # Word Piece Only
-        MERGES           = "tokenizer.ggml.merges"
-        BOS_ID           = "tokenizer.ggml.bos_token_id"
-        EOS_ID           = "tokenizer.ggml.eos_token_id"
-        UNK_ID           = "tokenizer.ggml.unknown_token_id"
-        SEP_ID           = "tokenizer.ggml.seperator_token_id"
-        PAD_ID           = "tokenizer.ggml.padding_token_id"
-        CLS_ID           = "tokenizer.ggml.cls_token_id"
-        MASK_ID          = "tokenizer.ggml.mask_token_id"
-        ADD_BOS          = "tokenizer.ggml.add_bos_token"
-        ADD_EOS          = "tokenizer.ggml.add_eos_token"
-        ADD_PREFIX       = "tokenizer.ggml.add_space_prefix"
-        HF_JSON          = "tokenizer.huggingface.json"
+        MODEL            = "tokenizer.model"  # STRING: e.g. llama, gpt2, etc...
+        TYPE             = "tokenizer.type"  # STRING: BPE, SPM, WPM, etc.
+        NORM             = "tokenizer.norm"  # OBJECT {"type": "ByteLevel", ...}
+        PRE              = "tokenizer.pre"  # OBJECT {"type": "ByteLevel", ...}
+        ADDED            = "tokenizer.added"  # ARRAY of OBJECTs: [{"id": 1, ...}, ...]
+        VOCAB            = "tokenizer.vocab"  # ARRAY of STRINGs: ["[BOS]", ...]
+        MERGES           = "tokenizer.merges"  # ARRAY of STRINGs: ["▁ t", ...]
+        TOKEN_TYPE       = "tokenizer.token_type"  # ARRAY of INT [2, ...]
+        TOKEN_TYPE_COUNT = "tokenizer.token_type_count"  # BERT token types
+        SCORES           = "tokenizer.scores"  # WPM only
+        BOS_ID           = "tokenizer.bos_token_id"
+        EOS_ID           = "tokenizer.eos_token_id"
+        UNK_ID           = "tokenizer.unknown_token_id"
+        SEP_ID           = "tokenizer.seperator_token_id"
+        PAD_ID           = "tokenizer.padding_token_id"
+        CLS_ID           = "tokenizer.cls_token_id"
+        MASK_ID          = "tokenizer.mask_token_id"
+        ADD_BOS          = "tokenizer.add_bos_token"
+        ADD_EOS          = "tokenizer.add_eos_token"
+        ADD_PREFIX       = "tokenizer.add_space_prefix"
         RWKV             = "tokenizer.rwkv.world"
         CHAT_TEMPLATE    = "tokenizer.chat_template"
         CHAT_TEMPLATE_N  = "tokenizer.chat_template.{name}"
         CHAT_TEMPLATES   = "tokenizer.chat_templates"
         # FIM/Infill special tokens constants
-        PREFIX_ID        = "tokenizer.ggml.prefix_token_id"
-        SUFFIX_ID        = "tokenizer.ggml.suffix_token_id"
-        MIDDLE_ID        = "tokenizer.ggml.middle_token_id"
-        EOT_ID           = "tokenizer.ggml.eot_token_id"
+        PREFIX_ID        = "tokenizer.prefix_token_id"
+        SUFFIX_ID        = "tokenizer.suffix_token_id"
+        MIDDLE_ID        = "tokenizer.middle_token_id"
+        EOT_ID           = "tokenizer.eot_token_id"
 
 
 #
@@ -849,13 +848,13 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
 #
 # types
 #
-class RopeScalingType(Enum):
+class GGMLRopeScalingType(Enum):
     NONE   = 'none'
     LINEAR = 'linear'
     YARN   = 'yarn'
 
 
-class PoolingType(IntEnum):
+class GGMLPoolingType(IntEnum):
     NONE = 0
     MEAN = 1
     CLS  = 2
@@ -898,7 +897,7 @@ class GGMLQuantizationType(IntEnum):
 
 # from llama_ftype in llama.h
 # ALL VALUES SHOULD BE THE SAME HERE AS THEY ARE OVER THERE.
-class LlamaFileType(IntEnum):
+class GGUFFileType(IntEnum):
     ALL_F32              = 0
     MOSTLY_F16           = 1   # except 1d tensors
     MOSTLY_Q4_0          = 2   # except 1d tensors
@@ -936,47 +935,70 @@ class LlamaFileType(IntEnum):
     GUESSED              = 1024  # not specified in the model file
 
 
-LLAMA_FILE_TYPE_NAMES: dict[LlamaFileType, str] = {
-    LlamaFileType.ALL_F32     : "F32",
-    LlamaFileType.MOSTLY_F16  : "F16",
-    LlamaFileType.MOSTLY_BF16 : "BF16",
-    LlamaFileType.MOSTLY_Q8_0 : "Q8_0",
+GGUF_FILE_TYPE_MAP: dict[str, GGUFFileType] = {
+    "F32"  : GGUFFileType.ALL_F32,
+    "F16"  : GGUFFileType.MOSTLY_F16,
+    "BF16" : GGUFFileType.MOSTLY_BF16,
+    "Q8_0" : GGUFFileType.MOSTLY_Q8_0,
+}
+
+
+GGUF_FILE_TYPE_NAMES: dict[GGUFFileType, str] = {
+    GGUFFileType.ALL_F32     : "F32",
+    GGUFFileType.MOSTLY_F16  : "F16",
+    GGUFFileType.MOSTLY_BF16 : "BF16",
+    GGUFFileType.MOSTLY_Q8_0 : "Q8_0",
 }
 
 
 class GGUFEndian(IntEnum):
     LITTLE = 0
-    BIG = 1
+    BIG    = 1
 
 
 class GGUFValueType(IntEnum):
-    UINT8   = 0
-    INT8    = 1
-    UINT16  = 2
-    INT16   = 3
-    UINT32  = 4
-    INT32   = 5
-    FLOAT32 = 6
-    BOOL    = 7
-    STRING  = 8
-    ARRAY   = 9
-    UINT64  = 10
-    INT64   = 11
-    FLOAT64 = 12
+    UINT8   = auto()
+    INT8    = auto()
+    UINT16  = auto()
+    INT16   = auto()
+    UINT32  = auto()
+    INT32   = auto()
+    UINT64  = auto()
+    INT64   = auto()
+    FLOAT32 = auto()
+    FLOAT64 = auto()
+    BOOL    = auto()
+    STRING  = auto()
+    ARRAY   = auto()
+    OBJECT  = auto()
 
     @staticmethod
     def get_type(val: Any) -> GGUFValueType:
         if isinstance(val, (str, bytes, bytearray)):
             return GGUFValueType.STRING
-        elif isinstance(val, list):
-            return GGUFValueType.ARRAY
-        elif isinstance(val, float):
-            return GGUFValueType.FLOAT32
+
         elif isinstance(val, bool):
             return GGUFValueType.BOOL
-        elif isinstance(val, int):
+
+        # TODO: Need help with 64-bit types in Python.
+        # NOTE: Maybe use numpy, e.g. np.dtypes to determine data type?
+        # Using base types is unreliable in python as all numbers in python are 64-bits.
+
+        # If it's an integer (either signed or unsigned)
+        if isinstance(val, int):
             return GGUFValueType.INT32
-        # TODO: need help with 64-bit types in Python
+
+        elif isinstance(val, float):
+            # NOTE: This is unreliable in python as all numbers in python are 64-bits
+            return GGUFValueType.FLOAT32
+
+        elif isinstance(val, list):
+            return GGUFValueType.ARRAY
+
+        elif isinstance(val, dict):
+            # NOTE: JSON Object, Dict, or Mapping are valid types
+            return GGUFValueType.OBJECT
+
         else:
             raise ValueError(f"Unknown type: {type(val)}")
 
@@ -1019,7 +1041,7 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
 #
 # Tokenizer Types
 #
-class TokenType(IntEnum):
+class GGUFTokenType(IntEnum):
     NORMAL       = 1
     UNKNOWN      = 2
     CONTROL      = 3
@@ -1028,7 +1050,7 @@ class TokenType(IntEnum):
     BYTE         = 6
 
 
-class VocabType(Enum):
+class GGUFTokenizerType(Enum):
     SPM = "SPM"  # SentencePiece LLaMa tokenizer
     BPE = "BPE"  # BytePair GPT-2 tokenizer
     WPM = "WPM"  # WordPiece BERT tokenizer
@@ -1037,42 +1059,43 @@ class VocabType(Enum):
 #
 # Model File Types
 #
-class ModelFileExtension(Enum):
-    PT          = ".pt"  # torch
-    PTH         = ".pth"  # torch
-    BIN         = ".bin"  # torch
+class GGUFFileExtension(Enum):
+    PT          = ".pt"           # torch
+    PTH         = ".pth"          # torch
+    BIN         = ".bin"          # torch
     SAFETENSORS = ".safetensors"  # safetensors
-    JSON        = ".json"  # transformers/tokenizers
-    MODEL       = ".model"  # sentencepiece
-    GGUF        = ".gguf"  # ggml/llama.cpp
+    JSON        = ".json"         # transformers/tokenizers
+    MODEL       = ".model"        # sentencepiece
+    GGUF        = ".gguf"         # ggml/llama.cpp
 
 
 #
 # Normalizer Types
 #
-class NormalizerType(Enum):
+class GGUFNormalizerType(Enum):
     SEQUENCE = "Sequence"
-    NFC      = "NFC"
-    NFD      = "NFD"
-    NFKC     = "NFKC"
-    NFKD     = "NFKD"
+    NFC = "NFC"
+    NFD = "NFD"
+    NFKC = "NFKC"
+    NFKD = "NFKD"
 
 
 #
 # Pre-tokenizer Types
 #
-class PreTokenizerType(Enum):
-    SEQUENCE           = "Sequence"
-    BYTE_LEVEL         = "ByteLevel"
+class GGUFPreTokenizerType(Enum):
+    WHITESPACE = "Whitespace"
+    METASPACE = "Metaspace"
+    BYTE_LEVEL = "ByteLevel"
     BERT_PRE_TOKENIZER = "BertPreTokenizer"
-    METASPACE          = "Metaspace"
+    SEQUENCE = "Sequence"
 
 
 #
 # HF Vocab Files
 #
-HF_TOKENIZER_BPE_FILES = ("config.json", "tokenizer_config.json", "tokenizer.json",)
-HF_TOKENIZER_SPM_FILES = HF_TOKENIZER_BPE_FILES + ("tokenizer.model",)
+HF_TOKENIZER_BPE_FILES: tuple[str, ...] = ("config.json", "tokenizer_config.json", "tokenizer.json",)
+HF_TOKENIZER_SPM_FILES: tuple[str, ...] = HF_TOKENIZER_BPE_FILES + ("tokenizer.model",)
 
 #
 # Pre-tokenization Regular Expressions
@@ -1089,69 +1112,75 @@ GPT_PRE_TOKENIZER_DEFAULT = ("'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\
 # Aliases for backward compatibility.
 
 # general
-KEY_GENERAL_ARCHITECTURE         = Keys.General.ARCHITECTURE
-KEY_GENERAL_QUANTIZATION_VERSION = Keys.General.QUANTIZATION_VERSION
-KEY_GENERAL_ALIGNMENT            = Keys.General.ALIGNMENT
-KEY_GENERAL_NAME                 = Keys.General.NAME
-KEY_GENERAL_AUTHOR               = Keys.General.AUTHOR
-KEY_GENERAL_URL                  = Keys.General.URL
-KEY_GENERAL_DESCRIPTION          = Keys.General.DESCRIPTION
-KEY_GENERAL_LICENSE              = Keys.General.LICENSE
-KEY_GENERAL_SOURCE_URL           = Keys.General.SOURCE_URL
-KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
-KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
+KEY_GENERAL_ARCHITECTURE         = GGUFMetadataKeys.General.ARCHITECTURE
+KEY_GENERAL_QUANTIZATION_VERSION = GGUFMetadataKeys.General.QUANTIZATION_VERSION
+KEY_GENERAL_ALIGNMENT            = GGUFMetadataKeys.General.ALIGNMENT
+KEY_GENERAL_NAME                 = GGUFMetadataKeys.General.NAME
+KEY_GENERAL_AUTHOR               = GGUFMetadataKeys.General.AUTHOR
+KEY_GENERAL_URL                  = GGUFMetadataKeys.General.URL
+KEY_GENERAL_DESCRIPTION          = GGUFMetadataKeys.General.DESCRIPTION
+KEY_GENERAL_LICENSE              = GGUFMetadataKeys.General.LICENSE
+KEY_GENERAL_SOURCE_URL           = GGUFMetadataKeys.General.SOURCE_URL
+KEY_GENERAL_SOURCE_HF_REPO       = GGUFMetadataKeys.General.SOURCE_HF_REPO
+KEY_GENERAL_FILE_TYPE            = GGUFMetadataKeys.General.FILE_TYPE
 
 # LLM
-KEY_VOCAB_SIZE            = Keys.LLM.VOCAB_SIZE
-KEY_CONTEXT_LENGTH        = Keys.LLM.CONTEXT_LENGTH
-KEY_EMBEDDING_LENGTH      = Keys.LLM.EMBEDDING_LENGTH
-KEY_BLOCK_COUNT           = Keys.LLM.BLOCK_COUNT
-KEY_FEED_FORWARD_LENGTH   = Keys.LLM.FEED_FORWARD_LENGTH
-KEY_USE_PARALLEL_RESIDUAL = Keys.LLM.USE_PARALLEL_RESIDUAL
-KEY_TENSOR_DATA_LAYOUT    = Keys.LLM.TENSOR_DATA_LAYOUT
+KEY_VOCAB_SIZE                   = GGUFMetadataKeys.LLM.VOCAB_SIZE
+KEY_CONTEXT_LENGTH               = GGUFMetadataKeys.LLM.CONTEXT_LENGTH
+KEY_EMBEDDING_LENGTH             = GGUFMetadataKeys.LLM.EMBEDDING_LENGTH
+KEY_BLOCK_COUNT                  = GGUFMetadataKeys.LLM.BLOCK_COUNT
+KEY_FEED_FORWARD_LENGTH          = GGUFMetadataKeys.LLM.FEED_FORWARD_LENGTH
+KEY_USE_PARALLEL_RESIDUAL        = GGUFMetadataKeys.LLM.USE_PARALLEL_RESIDUAL
+KEY_TENSOR_DATA_LAYOUT           = GGUFMetadataKeys.LLM.TENSOR_DATA_LAYOUT
 
 # attention
-KEY_ATTENTION_HEAD_COUNT        = Keys.Attention.HEAD_COUNT
-KEY_ATTENTION_HEAD_COUNT_KV     = Keys.Attention.HEAD_COUNT_KV
-KEY_ATTENTION_MAX_ALIBI_BIAS    = Keys.Attention.MAX_ALIBI_BIAS
-KEY_ATTENTION_CLAMP_KQV         = Keys.Attention.CLAMP_KQV
-KEY_ATTENTION_LAYERNORM_EPS     = Keys.Attention.LAYERNORM_EPS
-KEY_ATTENTION_LAYERNORM_RMS_EPS = Keys.Attention.LAYERNORM_RMS_EPS
+KEY_ATTENTION_HEAD_COUNT         = GGUFMetadataKeys.Attention.HEAD_COUNT
+KEY_ATTENTION_HEAD_COUNT_KV      = GGUFMetadataKeys.Attention.HEAD_COUNT_KV
+KEY_ATTENTION_MAX_ALIBI_BIAS     = GGUFMetadataKeys.Attention.MAX_ALIBI_BIAS
+KEY_ATTENTION_CLAMP_KQV          = GGUFMetadataKeys.Attention.CLAMP_KQV
+KEY_ATTENTION_LAYERNORM_EPS      = GGUFMetadataKeys.Attention.LAYERNORM_EPS
+KEY_ATTENTION_LAYERNORM_RMS_EPS  = GGUFMetadataKeys.Attention.LAYERNORM_RMS_EPS
 
 # RoPE
-KEY_ROPE_DIMENSION_COUNT      = Keys.Rope.DIMENSION_COUNT
-KEY_ROPE_FREQ_BASE            = Keys.Rope.FREQ_BASE
-KEY_ROPE_SCALING_TYPE         = Keys.Rope.SCALING_TYPE
-KEY_ROPE_SCALING_FACTOR       = Keys.Rope.SCALING_FACTOR
-KEY_ROPE_SCALING_ORIG_CTX_LEN = Keys.Rope.SCALING_ORIG_CTX_LEN
-KEY_ROPE_SCALING_FINETUNED    = Keys.Rope.SCALING_FINETUNED
+KEY_ROPE_DIMENSION_COUNT         = GGUFMetadataKeys.Rope.DIMENSION_COUNT
+KEY_ROPE_FREQ_BASE               = GGUFMetadataKeys.Rope.FREQ_BASE
+KEY_ROPE_SCALING_TYPE            = GGUFMetadataKeys.Rope.SCALING_TYPE
+KEY_ROPE_SCALING_FACTOR          = GGUFMetadataKeys.Rope.SCALING_FACTOR
+KEY_ROPE_SCALING_ORIG_CTX_LEN    = GGUFMetadataKeys.Rope.SCALING_ORIG_CTX_LEN
+KEY_ROPE_SCALING_FINETUNED       = GGUFMetadataKeys.Rope.SCALING_FINETUNED
 
 # SSM
-KEY_SSM_CONV_KERNEL    = Keys.SSM.CONV_KERNEL
-KEY_SSM_INNER_SIZE     = Keys.SSM.INNER_SIZE
-KEY_SSM_STATE_SIZE     = Keys.SSM.STATE_SIZE
-KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
+KEY_SSM_CONV_KERNEL              = GGUFMetadataKeys.SSM.CONV_KERNEL
+KEY_SSM_INNER_SIZE               = GGUFMetadataKeys.SSM.INNER_SIZE
+KEY_SSM_STATE_SIZE               = GGUFMetadataKeys.SSM.STATE_SIZE
+KEY_SSM_TIME_STEP_RANK           = GGUFMetadataKeys.SSM.TIME_STEP_RANK
 
 # tokenization
-KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
-KEY_TOKENIZER_TYPE       = Keys.Tokenizer.TYPE
-KEY_TOKENIZER_NORM       = Keys.Tokenizer.NORM
-KEY_TOKENIZER_PRE        = Keys.Tokenizer.PRE
-KEY_TOKENIZER_ADDED      = Keys.Tokenizer.ADDED
-KEY_TOKENIZER_LIST       = Keys.Tokenizer.LIST
-KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
-KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
-KEY_TOKENIZER_MERGES     = Keys.Tokenizer.MERGES
-KEY_TOKENIZER_BOS_ID     = Keys.Tokenizer.BOS_ID
-KEY_TOKENIZER_EOS_ID     = Keys.Tokenizer.EOS_ID
-KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
-KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
-KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID
-KEY_TOKENIZER_CLS_ID     = Keys.Tokenizer.CLS_ID
-KEY_TOKENIZER_MASK_ID    = Keys.Tokenizer.MASK_ID
-KEY_TOKENIZER_HF_JSON    = Keys.Tokenizer.HF_JSON
-KEY_TOKENIZER_RWKV       = Keys.Tokenizer.RWKV
-KEY_TOKENIZER_PRIFIX_ID  = Keys.Tokenizer.PREFIX_ID
-KEY_TOKENIZER_SUFFIX_ID  = Keys.Tokenizer.SUFFIX_ID
-KEY_TOKENIZER_MIDDLE_ID  = Keys.Tokenizer.MIDDLE_ID
-KEY_TOKENIZER_EOT_ID     = Keys.Tokenizer.EOT_ID
+KEY_TOKENIZER_MODEL              = GGUFMetadataKeys.Tokenizer.MODEL
+KEY_TOKENIZER_TYPE               = GGUFMetadataKeys.Tokenizer.TYPE
+KEY_TOKENIZER_NORM               = GGUFMetadataKeys.Tokenizer.NORM
+KEY_TOKENIZER_PRE                = GGUFMetadataKeys.Tokenizer.PRE
+KEY_TOKENIZER_ADDED              = GGUFMetadataKeys.Tokenizer.ADDED
+KEY_TOKENIZER_VOCAB              = GGUFMetadataKeys.Tokenizer.VOCAB
+KEY_TOKENIZER_MERGES             = GGUFMetadataKeys.Tokenizer.MERGES
+KEY_TOKENIZER_TOKEN_TYPE         = GGUFMetadataKeys.Tokenizer.TOKEN_TYPE
+KEY_TOKENIZER_TOKEN_TYPE_COUNT   = GGUFMetadataKeys.Tokenizer.TOKEN_TYPE_COUNT
+KEY_TOKENIZER_SCORES             = GGUFMetadataKeys.Tokenizer.SCORES
+KEY_TOKENIZER_BOS_ID             = GGUFMetadataKeys.Tokenizer.BOS_ID
+KEY_TOKENIZER_EOS_ID             = GGUFMetadataKeys.Tokenizer.EOS_ID
+KEY_TOKENIZER_UNK_ID             = GGUFMetadataKeys.Tokenizer.UNK_ID
+KEY_TOKENIZER_SEP_ID             = GGUFMetadataKeys.Tokenizer.SEP_ID
+KEY_TOKENIZER_PAD_ID             = GGUFMetadataKeys.Tokenizer.PAD_ID
+KEY_TOKENIZER_CLS_ID             = GGUFMetadataKeys.Tokenizer.CLS_ID
+KEY_TOKENIZER_MASK_ID            = GGUFMetadataKeys.Tokenizer.MASK_ID
+KEY_TOKENIZER_ADD_BOS            = GGUFMetadataKeys.Tokenizer.ADD_BOS
+KEY_TOKENIZER_ADD_EOS            = GGUFMetadataKeys.Tokenizer.ADD_EOS
+KEY_TOKENIZER_ADD_PREFIX         = GGUFMetadataKeys.Tokenizer.ADD_PREFIX
+KEY_TOKENIZER_RWKV               = GGUFMetadataKeys.Tokenizer.RWKV
+KEY_TOKENIZER_CHAT_TEMPLATE      = GGUFMetadataKeys.Tokenizer.CHAT_TEMPLATE
+KEY_TOKENIZER_CHAT_TEMPLATE_N    = GGUFMetadataKeys.Tokenizer.CHAT_TEMPLATE_N
+KEY_TOKENIZER_CHAT_TEMPLATES     = GGUFMetadataKeys.Tokenizer.CHAT_TEMPLATES
+KEY_TOKENIZER_PRIFIX_ID          = GGUFMetadataKeys.Tokenizer.PREFIX_ID
+KEY_TOKENIZER_SUFFIX_ID          = GGUFMetadataKeys.Tokenizer.SUFFIX_ID
+KEY_TOKENIZER_MIDDLE_ID          = GGUFMetadataKeys.Tokenizer.MIDDLE_ID
+KEY_TOKENIZER_EOT_ID             = GGUFMetadataKeys.Tokenizer.EOT_ID
