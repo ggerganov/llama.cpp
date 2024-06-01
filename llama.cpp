@@ -4884,6 +4884,44 @@ static void llm_load_vocab(
             attrib |= LLAMA_TOKEN_ATTRIB_BYTE         * (data.type == LLAMA_TOKEN_TYPE_BYTE);
             data.attribs = (llama_token_attrib) attrib;
         }
+
+        // set attributes by model name
+        std::string model_name;
+        if (ml.get_key(LLM_KV_GENERAL_NAME, model_name, false)) {
+            std::transform(model_name.begin(), model_name.end(), model_name.begin(),
+                [] (const std::string::value_type x) {
+                    return std::tolower(x);
+                }
+            );
+
+            auto _contains_any = [&model_name] (const std::vector<std::string> &substrs) -> bool {
+                for (auto substr : substrs) {
+                    if (model_name.find(substr) < std::string::npos) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            auto _set_token_attrib = [&vocab] (const std::string & token, llama_token_attrib attrib, bool value) {
+                llama_vocab::id id = vocab.token_to_id.at(token);
+                uint32_t attribs = vocab.id_to_token[id].attribs;
+                attribs = value ? (attribs | attrib) : (attribs & ~attrib);
+                vocab.id_to_token[id].attribs = (llama_token_attrib) attribs;
+            };
+
+            if (_contains_any({"phi-3", "phi3"})) {
+                for (auto token : vocab.cache_token_to_piece_special) {
+                    _set_token_attrib(token, LLAMA_TOKEN_ATTRIB_RSTRIP, true);
+                }
+                for (auto token : {"</s>"}) {
+                    _set_token_attrib(token, LLAMA_TOKEN_ATTRIB_RSTRIP, true);
+                }
+                for (auto token : {"<unk>", "<s>", "<|endoftext|>"}) {
+                    _set_token_attrib(token, LLAMA_TOKEN_ATTRIB_RSTRIP, false);
+                }
+            }
+        }
     }
 }
 
