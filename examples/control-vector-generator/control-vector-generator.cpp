@@ -19,16 +19,20 @@ struct diff_wrapper {
 
 struct callback_data {
     std::vector<uint8_t> data;
+
     int n_tokens = 0;
     int n_embd = 0;
     bool is_eval_pos = true;
+
     // each element of the vector correspond to one layer
-    std::vector<float *> v_pos;  // vector of matrices of size [n_embd, n_tokens]
-    std::vector<float *> v_neg;  // vector of matrices of size [n_embd, n_tokens]
-    std::vector<float *> v_final; // vector of finished vectors of size [n_embd]
-    std::vector<diff_wrapper> v_diff; // vector of matrices of size [n_embd, m] where m is some some sum of concatenated matrices
+    std::vector<float *> v_pos;       // vector of matrices of size [n_embd, n_tokens]
+    std::vector<float *> v_neg;       // vector of matrices of size [n_embd, n_tokens]
+    std::vector<float *> v_final;     // vector of finished vectors of size [n_embd]
+    std::vector<diff_wrapper> v_diff; // vector of matrices of size [n_embd, m] where m ~ n_tokens * n_completions
+
     // each element of the outer vector correspond to one layer, each element of the inner vector correspond to one prompt pass
     std::vector<std::vector<diff_wrapper>> v_diffs_wrapped; // vector of compiled diff matrices to be concatenated
+
     ~callback_data() {
         for (auto ptr : v_pos) free(ptr);
         for (auto ptr : v_neg) free(ptr);
@@ -66,10 +70,8 @@ static void print_usage(const char * executable) {
     printf("Creates a GGUF control vector for a given model.");
     printf("\n");
     printf("options:\n");
-    printf("  -h, --help                show this help message and exit\n");
-    printf("  -t, --num-threads         number of threads to use (do not confuse with gpt-opts -t)\n");
-    printf("                              default: 8\n");
-    printf("  -o, --outfile             output file\n");
+    printf("  -h,  --help               show this help message and exit\n");
+    printf("  -o,  --outfile            output file\n");
     printf("                              default: 'control_vector.gguf'\n");
     printf("  -pf, --positive-file      positive prompts file, one prompt per line\n");
     printf("                              default: 'examples/control-vector-generator/positive.txt'\n");
@@ -77,9 +79,11 @@ static void print_usage(const char * executable) {
     printf("                              default: 'examples/control-vector-generator/negative.txt'\n");
     printf("  -cf, --completions-file   completions file\n");
     printf("                              default: 'examples/control-vector-generator/completions.txt'\n");
-    printf("  -nc, --num-completions    number of lines of completions file to use\n");
+    printf("  -nc, --num-completions N  number of lines of completions file to use\n");
     printf("                              default: 64\n");
-    printf("  --always-reload           reload the model for every new template to parse\n");
+    printf("  -t,  --num-threads N      number of threads to use (do not confuse with gpt-opts -t)\n");
+    printf("                              default: 8\n");
+    printf("       --always-reload      reload the model for every new template to parse\n");
     printf("\n");
     printf("gpt-opts:\n");
     printf("  other options from main\n");
@@ -88,7 +92,7 @@ static void print_usage(const char * executable) {
 
 static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params) {
     std::string arg;
-    const std::string arg_prefix = "--";
+    const std::string arg_prefix = "-";
     // hack to skip ctrlvec args in gpt_parse_params but we'll leave it as is
     int skipme = 0;
 
@@ -357,6 +361,7 @@ static void calc_diff(callback_data & cb_data) {
     }
 }
 
+// TODO do we want to multithread this? it takes very little time as it is
 static void concatenate_diffs(callback_data & cb_data) {
     for (size_t i = 0; i < cb_data.v_diffs_wrapped.size(); ++i) {
         std::vector<diff_wrapper> & vec = cb_data.v_diffs_wrapped[i];
@@ -398,7 +403,7 @@ static float* square_diff(callback_data & cb_data, size_t idx) {
     return result;
 }
 
-// TODO translate to ggml
+// TODO translate to ggml (this is a built-in function in ggml)
 static void normalize_inplace(std::vector<float> & vec) {
     // inefficient(?) norm computation
     float norm = 0.0f;
@@ -412,7 +417,7 @@ static void normalize_inplace(std::vector<float> & vec) {
     }
 }
 
-// TODO translate to ggml
+// TODO translate to ggml (this is a built-in function in ggml)
 static std::vector<float> mul_mat(const float * mat, const std::vector<float> & vec, size_t dim) {
     std::vector<float> result(dim, 0.0f);
     for (size_t i = 0; i < dim; ++i) {
@@ -459,7 +464,7 @@ static std::vector<float> power_iteration(callback_data & cb_data, const float *
 
 // TODO translate to ggml
 static void pca(callback_data & cb_data, size_t n_threads) {
-    int    n_layers  = cb_data.v_diff.size();
+    int n_layers = cb_data.v_diff.size();
     std::vector<std::thread> threads;
     cb_data.v_final.reserve(n_layers);
     auto worker_function = [&](int worker_id) {
@@ -577,6 +582,7 @@ int main(int argc, char ** argv) {
 
     int n_layers = llama_n_layer(model);
     int n_embd = llama_n_embd(model);
+    cb_data.n_embd = n_embd;
     int n_prompts = cparams.positive_prompts.size();
     
     // vector of finished vectors of size [n_embd], we have (n_layers - 1) vectors in total
@@ -605,7 +611,6 @@ int main(int argc, char ** argv) {
         padding_seq(ctx, tokens_pos, max_seq_len);
         padding_seq(ctx, tokens_neg, max_seq_len);
         cb_data.n_tokens = max_seq_len;
-        cb_data.n_embd = n_embd;
 
         // need to reload the model so it doesn't run out of context
         // this should scale with -c option passed by main
