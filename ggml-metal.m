@@ -779,6 +779,12 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
         case GGML_OP_LEAKY_RELU:
             return true;
         case GGML_OP_FLASH_ATTN_EXT:
+            if (op->src[1]->type != GGML_TYPE_F16) {
+                return false;
+            }
+            if (op->src[2]->type != GGML_TYPE_F16) {
+                return false;
+            }
             if (op->src[0]->ne[0] == 256) {
                 return false;
             }

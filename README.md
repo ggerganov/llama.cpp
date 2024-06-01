@@ -2,7 +2,9 @@
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![Conan Center](https://shields.io/conan/v/llama-cpp)](https://conan.io/center/llama-cpp)
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
@@ -20,7 +22,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- **Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021**
+- **`convert.py` has been deprecated and moved to `examples/convert-legacy-llama.py`, please use `convert-hf-to-gguf.py`** https://github.com/ggerganov/llama.cpp/pull/7430
+- Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021
 - BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
 - MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
 - Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
@@ -200,6 +203,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
 - [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
+- [AIKit](https://github.com/sozercan/aikit) (MIT)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
@@ -386,6 +390,14 @@ In order to build llama.cpp you have four different options.
     CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
     the instructions for use and activate this options in this document below.
 
+### Homebrew
+
+On Mac and Linux, the homebrew package manager can be used via
+```
+brew install llama.cpp
+```
+The formula is automatically updated with new `llama.cpp` releases. More info: https://github.com/ggerganov/llama.cpp/discussions/7668
+
 ### Metal Build
 
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
@@ -489,6 +501,7 @@ Building the program with BLAS support may lead to some performance improvements
   | LLAMA_CUDA_F16                 | Boolean                | false   | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs.                                                           |
   | LLAMA_CUDA_KQUANTS_ITER        | 1 or 2                 | 2       | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                                                                     |
   | LLAMA_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       | 128     | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial.                                                                         |
+  | LLAMA_CUDA_FA_ALL_QUANTS       | Boolean                | false   | Compile support for all KV cache quantization type (combinations) for the FlashAttention CUDA kernels. More fine-grained control over KV cache size but compilation takes much longer.                                                                                                  |
 
 - #### hipBLAS
 
@@ -704,7 +717,8 @@ Building the program with BLAS support may lead to some performance improvements
 
 To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 
-Note: `convert.py` does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
+Note: `convert.py` has been moved to `examples/convert-legacy-llama.py` and shouldn't be used for anything other than `Llama/Llama2/Mistral` models and their derievatives.
+It does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
 
 ```bash
 # obtain the official LLaMA model weights and place them in ./models
@@ -721,10 +735,10 @@ ls ./models
 python3 -m pip install -r requirements.txt
 
 # convert the model to ggml FP16 format
-python3 convert.py models/mymodel/
+python3 convert-hf-to-gguf.py models/mymodel/
 
 # [Optional] for models using BPE tokenizers
-python convert.py models/mymodel/ --vocab-type bpe
+python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
 
 # quantize the model to 4-bits (using Q4_K_M method)
 ./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
