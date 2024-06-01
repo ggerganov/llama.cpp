@@ -17,6 +17,15 @@ struct diff_wrapper {
     size_t n_rows;  // number of rows in the matrix for size calculation
 };
 
+/* TODO part of multithreading
+struct tokens_pair {
+    size_t max_seq_len;
+    std::string positive;
+    std::string negative;
+    std::vector<llama_token> tokens_pos;
+    std::vector<llama_token> tokens_neg;
+}; */
+
 struct callback_data {
     std::vector<uint8_t> data;
 
@@ -45,6 +54,8 @@ struct callback_data {
 struct ctrl_params {
     /* default meta parameters */
     bool always_reload = false;
+    // TODO part of multithreading
+    // bool max_batch = false;
     int n_completions = 64;
     int n_threads = 8;
 
@@ -84,6 +95,8 @@ static void print_usage(const char * executable) {
     printf("  -t,  --num-threads N      number of threads to use (do not confuse with gpt-opts -t)\n");
     printf("                              default: 8\n");
     printf("       --always-reload      reload the model for every new template to parse\n");
+    // TODO part of multithreading
+    //printf("       --max-batch          maximize batch sizes, rather than optimizing for multithreading\n");
     printf("\n");
     printf("gpt-opts:\n");
     printf("  other options from main\n");
@@ -173,6 +186,11 @@ static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params)
             params.always_reload = true;
             skipme += 1;
         }
+        /* TODO part of multithreading
+        if (arg == "--max-batch") {
+            params.max_batch = true;
+            skipme += 1;
+        } */
         // TODO it might be nice QoL to have single positive/negative args
         // we do not handle any other unknown arguments here because they will be handled by gpt_parse_params
     }
@@ -209,10 +227,10 @@ static std::vector<std::string> ctrlvec_load_prompt_file(std::string path) {
 }
 
 static std::string format_template(std::string persona, std::string suffix) {
-    const std::string user_tag = "[INST]";
-    const std::string asst_tag = "[/INST]";
-    // TODO make this dynamic - allow the user to change it somehow - and adapt based on model
+    //const std::string user_tag = "[INST]";
+    //const std::string asst_tag = "[/INST]";
     //return user_tag + " Act as if you're extremely " + persona + ". " + asst_tag + " " + suffix;
+    // TODO make this dynamic - allow the user to change it somehow - and adapt based on model
     return persona + " " + suffix; // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
 }
 
@@ -232,6 +250,61 @@ static void populate_entries(ctrl_params & cparams, std::string positive, std::s
         throw std::invalid_argument("error: invalid completions file or file could not be opened");
     }
 }
+
+/* TODO part of multithreading
+static size_t tokenize_pair(tokens_pair & tp, llama_context * ctx, const std::string & pos, const std::string & neg, const bool add_bos) {
+    tp.positive = pos;
+    tp.negative = neg;
+    tp.tokens_pos = ::llama_tokenize(ctx, pos, add_bos);
+    tp.tokens_neg = ::llama_tokenize(ctx, neg, add_bos);
+    tp.max_seq_len = std::max(tp.tokens_pos.size(), tp.tokens_neg.size());
+    padding_seq(ctx, tp.tokens_pos, tp.max_seq_len);
+    padding_seq(ctx, tp.tokens_neg, tp.max_seq_len);
+    return 2 * max_seq_len;
+}
+
+// current batching strategy works as follows:
+// each batch runs on one model load, since we reload the model after every batch to clear context
+// therefore each batch must be small enough to fit in the context size
+// we try to make the batches multiples of thread count so threads are used most efficiently
+static std::vector<std::vector<tokens_pair>> batch_prompts(llama_context * ctx, ctrl_params & cparams, int n_ctx, const bool add_bos) {
+    std::vector<std::vector<tokens_pair>> batched_prompts;
+    std::vector<tokens_pair> thread_batch;
+    std::vector<tokens_pair> batch;
+    size_t n_batch_tokens = 0;
+
+    for (size_t i = 0; i < cparams.positive_entries.size(); ++i) {
+        tokens_pair tp;
+        size_t n_tokens = tokenize_pair(tp, ctx, cparams.positive_entries[i], cparams.negative_entries[i], add_bos);
+        n_batch_tokens += n_tokens;
+
+        if (n_batch_tokens > n_ctx) {
+            if (cparams.max_batch) {
+                batch.insert(batch.end(), thread_batch.begin(), thread_batch.end());
+                thread_batch.clear();
+            }
+            batched_prompts.push_back(batch);
+            batch.clear();
+            n_batch_tokens = n_tokens;
+        }
+
+        thread_batch.push_back(tp);
+        
+        if (thread_batch.size() >= cparams.n_threads) {
+            batch.insert(batch.end(), thread_batch.begin(), thread_batch.end());
+            thread_batch.clear();;
+        }
+    }
+
+    if (!thread_batch.empty()) {
+        batch.insert(batch.end(), thread_batch.begin(), thread_batch.end());
+    }
+    if (!batch.empty()) {
+        batched_prompts.push_back(batch);
+    }
+
+    return batched_prompts;
+} */
 
 static std::string ggml_ne_string(const ggml_tensor * t) {
     std::string str;
@@ -387,13 +460,14 @@ static void concatenate_diffs(callback_data & cb_data) {
 // BEGIN NON-GGML IMPLEMENTATION
 
 // TODO translate to ggml
-// this probably doesn't want to be here - put it into the compute graph as a step in processing each layer
+// this probably doesn't want to be a separate function - put it into the compute graph as a step in processing each layer
 static float* square_diff(callback_data & cb_data, size_t idx) {
     float* result = new float[cb_data.n_embd * cb_data.n_embd];
     std::memset(result, 0, cb_data.n_embd * cb_data.n_embd * sizeof(float));
     for (size_t i = 0; i < (size_t) cb_data.n_embd; i++) {
         for (size_t j = 0; j < (size_t) cb_data.n_embd; j++) {
             float sum = 0.0f;
+            // watch out for indexing - can't just use cb_data.n_tokens
             for (size_t k = 0; k < cb_data.v_diff[idx].n_rows; k++) {
                 sum += cb_data.v_diff[idx].diff[i + cb_data.n_embd * k] * cb_data.v_diff[idx].diff[j + cb_data.n_embd * k];
             }
@@ -560,6 +634,10 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "number of positive and negative prompts must be equal");
         return 1;
     }
+    if (cparams.positive_prompts.empty()) {
+        fprintf(stderr, "must provide at least one prompt pair");
+        return 1;
+    }
 
     callback_data cb_data;
 
@@ -578,6 +656,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
+    int n_ctx = llama_n_ctx(ctx);
     int n_layers = llama_n_layer(model);
     int n_embd = llama_n_embd(model);
     cb_data.n_embd = n_embd;
@@ -596,10 +675,32 @@ int main(int argc, char ** argv) {
 
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
-    int token_ct = 0;
-    int n_ctx = llama_n_ctx(ctx);
+    /* TODO part of multithreading
+    std::vector<std::vector<tokens_pair>> & batched_prompts = batch_prompts(ctx, cparams, n_ctx, add_bos);
+    std::vector<std::thread> threads;
+    auto worker_function = [&](tokens_pair & tp) {
+        printf("Evaluating prompt: \"%s\" - \"%s\" (%ld tokens)\n", tp.positive.c_str(), tp.negative.c_str(), tp.max_seq_len);
+        // TODO so how do we deal with this?
+        // TODO we only have one cb_data object that everything gets passed to. so we need to be able to write to a different object per thread
+        // TODO but there's only one cb_eval function used as callback by the model... help wanted
+    };
+    printf("Batching prompts...\n");
+    for (int i = 0; i < batched_prompts.size(); ++i) {
+        for (int j = 0; j < batched_prompts[i].size(); ++j) {
+            threads.emplace_back(worker_function, batched_prompts[i][j]);
+        }
+        for (auto & th : threads) th.join();
+        
+        // reload model for next batch
+        llama_free(ctx);
+        llama_free_model(model);
+        std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    }
+    printf("Done with batching prompts.\n");
+    */
 
-    // TODO multithread this
+    int token_ct = 0;
+
     for(size_t i = 0; i < cparams.positive_entries.size(); ++i) {
         std::string positive_prompt = cparams.positive_entries[i];
         std::string negative_prompt = cparams.negative_entries[i];
