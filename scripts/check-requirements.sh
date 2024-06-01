@@ -166,7 +166,7 @@ if (( do_cleanup )); then
     rm -rf -- "$all_venv"
 fi
 
-check_convert_script convert.py
+check_convert_script examples/convert-legacy-llama.py
 for py in convert-*.py; do
     # skip convert-hf-to-gguf-update.py
     # TODO: the check is failing for some reason:

@@ -25,8 +25,6 @@ if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
 import gguf
 
-from convert import LlamaHfVocab
-
 logger = logging.getLogger("hf-to-gguf")
 
 
@@ -634,7 +632,7 @@ class Model:
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _set_vocab_llama_hf(self):
-        vocab = LlamaHfVocab(self.dir_model)
+        vocab = gguf.LlamaHfVocab(self.dir_model)
         tokens = []
         scores = []
         toktypes = []
@@ -2971,7 +2969,12 @@ def main() -> None:
     hparams = Model.load_hparams(dir_model)
 
     with torch.inference_mode():
-        model_class = Model.from_model_architecture(hparams["architectures"][0])
+        try:
+            model_class = Model.from_model_architecture(hparams["architectures"][0])
+        except NotImplementedError:
+            logger.error(f"Model {hparams['architectures'][0]} is not supported")
+            sys.exit(1)
+
         model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file, args.no_lazy)
 
         logger.info("Set model parameters")

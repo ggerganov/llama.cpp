@@ -421,6 +421,15 @@ ifdef LLAMA_CUBLAS
 	LLAMA_CUDA := 1
 endif
 
+OBJS_CUDA_TEMP_INST      = $(patsubst %.cu,%.o,$(wildcard ggml-cuda/template-instances/fattn-wmma*.cu))
+ifdef LLAMA_CUDA_FA_ALL_QUANTS
+	OBJS_CUDA_TEMP_INST += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/template-instances/fattn-vec*.cu))
+else
+	OBJS_CUDA_TEMP_INST += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu))
+	OBJS_CUDA_TEMP_INST += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu))
+	OBJS_CUDA_TEMP_INST += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/template-instances/fattn-vec*f16-f16.cu))
+endif # LLAMA_CUDA_FA_ALL_QUANTS
+
 ifdef LLAMA_CUDA
 	ifneq ('', '$(wildcard /opt/cuda)')
 		CUDA_PATH ?= /opt/cuda
@@ -431,6 +440,7 @@ ifdef LLAMA_CUDA
 	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
 	OBJS         += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
+	OBJS         += $(OBJS_CUDA_TEMP_INST)
 	MK_NVCCFLAGS += -use_fast_math
 ifdef LLAMA_FATAL_WARNINGS
 	MK_NVCCFLAGS += -Werror all-warnings
@@ -493,7 +503,10 @@ ifdef LLAMA_CUDA_NO_PEER_COPY
 endif # LLAMA_CUDA_NO_PEER_COPY
 ifdef LLAMA_CUDA_CCBIN
 	MK_NVCCFLAGS += -ccbin $(LLAMA_CUDA_CCBIN)
-endif
+endif # LLAMA_CUDA_CCBIN
+ifdef LLAMA_CUDA_FA_ALL_QUANTS
+	MK_NVCCFLAGS += -DGGML_CUDA_FA_ALL_QUANTS
+endif # LLAMA_CUDA_FA_ALL_QUANTS
 
 ifdef JETSON_EOL_MODULE_DETECT
 define NVCC_COMPILE
@@ -505,7 +518,7 @@ define NVCC_COMPILE
 endef # NVCC_COMPILE
 endif # JETSON_EOL_MODULE_DETECT
 
-ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
+ggml-cuda/%.o: ggml-cuda/%.cu ggml.h ggml-common.h ggml-cuda/common.cuh
 	$(NVCC_COMPILE)
 
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
@@ -571,6 +584,7 @@ ifdef LLAMA_HIP_UMA
 	MK_CPPFLAGS += -DGGML_HIP_UMA
 endif # LLAMA_HIP_UMA
 	MK_LDFLAGS  += -L$(ROCM_PATH)/lib -Wl,-rpath=$(ROCM_PATH)/lib
+	MK_LDFLAGS  += -L$(ROCM_PATH)/lib64 -Wl,-rpath=$(ROCM_PATH)/lib64
 	MK_LDFLAGS	+= -lhipblas -lamdhip64 -lrocblas
 	HIPFLAGS    += $(addprefix --offload-arch=,$(AMDGPU_TARGETS))
 	HIPFLAGS    += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
@@ -584,11 +598,12 @@ ifdef LLAMA_CUDA_NO_PEER_COPY
 endif # LLAMA_CUDA_NO_PEER_COPY
 	OBJS        += ggml-cuda.o
 	OBJS        += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
+	OBJS        += $(OBJS_CUDA_TEMP_INST)
 
 ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h ggml-common.h $(wildcard ggml-cuda/*.cuh)
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 
-ggml-cuda/%.o: ggml-cuda/%.cu ggml-cuda/%.cuh ggml.h ggml-common.h ggml-cuda/common.cuh
+ggml-cuda/%.o: ggml-cuda/%.cu ggml.h ggml-common.h ggml-cuda/common.cuh
 	$(HIPCC) $(CXXFLAGS) $(HIPFLAGS) -x hip -c -o $@ $<
 
 endif # LLAMA_HIPBLAS
@@ -748,6 +763,7 @@ libllama.a: llama.o ggml.o $(OBJS) $(COMMON_DEPS)
 clean:
 	rm -vrf *.o tests/*.o *.so *.a *.dll benchmark-matmult lookup-create lookup-merge lookup-stats common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
 	rm -vrf ggml-cuda/*.o
+	rm -vrf ggml-cuda/template-instances/*.o
 	find examples pocs -type f -name "*.o" -delete
 
 #

@@ -106,6 +106,7 @@ set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_CUDA_NO_PEER_COPY               "llama: do not use peer to peer copies"            OFF)
 option(LLAMA_CUDA_NO_VMM                     "llama: do not try to use CUDA VMM"                OFF)
+option(LLAMA_CUDA_FA_ALL_QUANTS              "llama: compile all quants for FlashAttention"     OFF)
 
 option(LLAMA_CURL                            "llama: use libcurl to download model from an URL" OFF)
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
@@ -402,6 +403,8 @@ if (LLAMA_CUDA)
 
         file(GLOB GGML_SOURCES_CUDA "ggml-cuda/*.cu")
         list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-wmma*.cu")
+        list(APPEND GGML_SOURCES_CUDA ${SRCS})
 
         add_compile_definitions(GGML_USE_CUDA)
         add_compile_definitions(GGML_CUDA_USE_GRAPHS)
@@ -426,6 +429,18 @@ if (LLAMA_CUDA)
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
         if (LLAMA_CUDA_NO_PEER_COPY)
             add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+        endif()
+        if (LLAMA_CUDA_FA_ALL_QUANTS)
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
+            add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
+        else()
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*f16-f16.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
         endif()
 
         if (LLAMA_STATIC)
@@ -571,6 +586,8 @@ if (LLAMA_HIPBLAS)
 
     file(GLOB GGML_SOURCES_ROCM "ggml-cuda/*.cu")
     list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
+    file(GLOB SRCS "ggml-cuda/template-instances/fattn-wmma*.cu")
+    list(APPEND GGML_SOURCES_ROCM ${SRCS})
 
     add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUDA)
 
@@ -588,6 +605,19 @@ if (LLAMA_HIPBLAS)
 
     if (LLAMA_CUDA_NO_PEER_COPY)
         add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+    endif()
+
+    if (LLAMA_CUDA_FA_ALL_QUANTS)
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
+        add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
+    else()
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*f16-f16.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
     endif()
 
     add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
@@ -626,6 +656,10 @@ if (LLAMA_SYCL)
 
     if (LLAMA_SYCL_F16)
         add_compile_definitions(GGML_SYCL_F16)
+    endif()
+
+    if (LLAMA_CUDA_FORCE_MMQ)
+        add_compile_definitions(GGML_SYCL_FORCE_MMQ)
     endif()
 
     add_compile_options(-I./) #include DPCT
@@ -1310,7 +1344,7 @@ set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
-    FILES convert.py
+    FILES convert-hf-to-gguf.py
     PERMISSIONS
         OWNER_READ
         OWNER_WRITE
