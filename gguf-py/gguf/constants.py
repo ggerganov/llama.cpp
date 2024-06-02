@@ -29,6 +29,7 @@ class GGUFMetadataKeys:
         SOURCE_URL           = "general.source.url"
         SOURCE_REPO          = "general.source.repository"
         FILE_TYPE            = "general.file_type"
+        ENDIANESS            = "general.endianess"
 
     class LLM:
         VOCAB_SIZE                 = "{arch}.vocab_size"
@@ -77,20 +78,20 @@ class GGUFMetadataKeys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
 
     class Tokenizer:
-        MODEL            = "tokenizer.model"  # STRING: e.g. llama, gpt2, etc...
-        TYPE             = "tokenizer.type"  # STRING: BPE, SPM, WPM, etc.
-        NORM             = "tokenizer.norm"  # OBJECT {"type": "ByteLevel", ...}
-        PRE              = "tokenizer.pre"  # OBJECT {"type": "ByteLevel", ...}
-        ADDED            = "tokenizer.added"  # ARRAY of OBJECTs: [{"id": 1, ...}, ...]
-        VOCAB            = "tokenizer.vocab"  # ARRAY of STRINGs: ["[BOS]", ...]
-        MERGES           = "tokenizer.merges"  # ARRAY of STRINGs: ["▁ t", ...]
-        TOKEN_TYPE       = "tokenizer.token_type"  # ARRAY of INT [2, ...]
-        TOKEN_TYPE_COUNT = "tokenizer.token_type_count"  # BERT token types
-        SCORES           = "tokenizer.scores"  # WPM only
+        MODEL            = "tokenizer.model"               # STRING: e.g. llama, gpt2, etc...
+        TYPE             = "tokenizer.type"                # STRING: BPE, SPM, WPM, etc.
+        NORM             = "tokenizer.norm"                # OBJECT {"type": "ByteLevel", ...}
+        PRE              = "tokenizer.pre"                 # OBJECT {"type": "ByteLevel", ...}
+        ADDED            = "tokenizer.added"               # ARRAY of OBJECTs: [{"id": 1, ...}, ...]
+        VOCAB            = "tokenizer.vocab"               # ARRAY of STRINGs: ["[BOS]", ...]
+        MERGES           = "tokenizer.merges"              # ARRAY of STRINGs: ["▁ t", ...]
+        TOKEN_TYPE       = "tokenizer.token_type"          # ARRAY of INT [2, ...]
+        TOKEN_TYPE_COUNT = "tokenizer.token_type_count"    # BERT token types
+        SCORES           = "tokenizer.scores"              # WPM only
         BOS_ID           = "tokenizer.bos_token_id"
         EOS_ID           = "tokenizer.eos_token_id"
         UNK_ID           = "tokenizer.unknown_token_id"
-        SEP_ID           = "tokenizer.seperator_token_id"
+        SEP_ID           = "tokenizer.separator_token_id"  # Fixed typo
         PAD_ID           = "tokenizer.padding_token_id"
         CLS_ID           = "tokenizer.cls_token_id"
         MASK_ID          = "tokenizer.mask_token_id"
@@ -1039,6 +1040,19 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
 
 
 #
+# Model File Types
+#
+class ModelFileExtension(Enum):
+    PT          = ".pt"           # torch
+    PTH         = ".pth"          # torch
+    BIN         = ".bin"          # torch
+    SAFETENSORS = ".safetensors"  # safetensors
+    JSON        = ".json"         # transformers/tokenizers
+    MODEL       = ".model"        # sentencepiece
+    GGUF        = ".gguf"         # ggml/llama.cpp
+
+
+#
 # Tokenizer Types
 #
 class GGUFTokenType(IntEnum):
@@ -1050,51 +1064,43 @@ class GGUFTokenType(IntEnum):
     BYTE         = 6
 
 
-class GGUFTokenizerType(Enum):
+class HFTokenizerType(Enum):
     SPM = "SPM"  # SentencePiece LLaMa tokenizer
     BPE = "BPE"  # BytePair GPT-2 tokenizer
     WPM = "WPM"  # WordPiece BERT tokenizer
 
 
 #
-# Model File Types
-#
-class GGUFFileExtension(Enum):
-    PT          = ".pt"           # torch
-    PTH         = ".pth"          # torch
-    BIN         = ".bin"          # torch
-    SAFETENSORS = ".safetensors"  # safetensors
-    JSON        = ".json"         # transformers/tokenizers
-    MODEL       = ".model"        # sentencepiece
-    GGUF        = ".gguf"         # ggml/llama.cpp
-
-
-#
 # Normalizer Types
 #
-class GGUFNormalizerType(Enum):
+class HFNormalizerType(Enum):
     SEQUENCE = "Sequence"
-    NFC = "NFC"
-    NFD = "NFD"
-    NFKC = "NFKC"
-    NFKD = "NFKD"
+    NFC      = "NFC"
+    NFD      = "NFD"
+    NFKC     = "NFKC"
+    NFKD     = "NFKD"
 
 
 #
 # Pre-tokenizer Types
 #
-class GGUFPreTokenizerType(Enum):
-    WHITESPACE = "Whitespace"
-    METASPACE = "Metaspace"
-    BYTE_LEVEL = "ByteLevel"
+class HFPreTokenizerType(Enum):
+    WHITESPACE         = "Whitespace"
+    METASPACE          = "Metaspace"
+    BYTE_LEVEL         = "ByteLevel"
     BERT_PRE_TOKENIZER = "BertPreTokenizer"
-    SEQUENCE = "Sequence"
+    SEQUENCE           = "Sequence"
 
 
 #
 # HF Vocab Files
 #
-HF_TOKENIZER_BPE_FILES: tuple[str, ...] = ("config.json", "tokenizer_config.json", "tokenizer.json",)
+HF_TOKENIZER_BPE_FILES = (
+    "config.json",
+    "tokenizer_config.json",
+    "tokenizer.json",
+)
+
 HF_TOKENIZER_SPM_FILES: tuple[str, ...] = HF_TOKENIZER_BPE_FILES + ("tokenizer.model",)
 
 #
@@ -1123,6 +1129,7 @@ KEY_GENERAL_LICENSE              = GGUFMetadataKeys.General.LICENSE
 KEY_GENERAL_SOURCE_URL           = GGUFMetadataKeys.General.SOURCE_URL
 KEY_GENERAL_SOURCE_REPO          = GGUFMetadataKeys.General.SOURCE_REPO
 KEY_GENERAL_FILE_TYPE            = GGUFMetadataKeys.General.FILE_TYPE
+KEY_GENERAL_ENDIANESS            = GGUFMetadataKeys.General.ENDIANESS
 
 # LLM
 KEY_VOCAB_SIZE                   = GGUFMetadataKeys.LLM.VOCAB_SIZE
