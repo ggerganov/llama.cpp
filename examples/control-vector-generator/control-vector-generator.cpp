@@ -2,6 +2,14 @@
 #include "llama.h"
 #include "ggml.h"
 
+#ifdef GGML_USE_CUDA
+#include "ggml-cuda.h"
+#endif
+
+#ifdef GGML_USE_METAL
+#include "ggml-metal.h"
+#endif
+
 #include <cstdio>
 #include <string>
 #include <tuple>
@@ -410,105 +418,224 @@ static void concatenate_diffs(callback_data & cb_data) {
     }
 }
 
-// BEGIN NON-GGML IMPLEMENTATION
+struct pca_model {
+    struct ggml_tensor * v_diff_original;
+    struct ggml_tensor * square;
+    struct ggml_tensor * eigenvector;
 
-// TODO translate to ggml
-// this probably doesn't want to be a separate function - put it into the compute graph as a step in processing each layer
-static float* square_diff(callback_data & cb_data, size_t idx) {
-    float* result = new float[cb_data.n_embd * cb_data.n_embd];
-    std::memset(result, 0, cb_data.n_embd * cb_data.n_embd * sizeof(float));
-    for (size_t i = 0; i < (size_t) cb_data.n_embd; i++) {
-        for (size_t j = 0; j < (size_t) cb_data.n_embd; j++) {
-            float sum = 0.0f;
-            // watch out for indexing - can't just use cb_data.n_tokens
-            for (size_t k = 0; k < cb_data.v_diff[idx].n_rows; k++) {
-                sum += cb_data.v_diff[idx].diff[i + cb_data.n_embd * k] * cb_data.v_diff[idx].diff[j + cb_data.n_embd * k];
-            }
-            result[i * cb_data.n_embd + j] = sum;
-        }
-    }
-    return result;
-}
+    ggml_backend_t backend = NULL;
+    ggml_backend_buffer_t buffer;
+    struct ggml_context * ctx;
+};
 
-// TODO translate to ggml (this is a built-in function in ggml)
-static void normalize_inplace(std::vector<float> & vec) {
-    // inefficient(?) norm computation
-    float norm = 0.0f;
-    for (const float& val : vec) {
-        norm += val * val;
+void load_pca_model(pca_model & model, struct ggml_tensor * v_diff_original, const int n_embd) {
+#ifdef GGML_USE_CUDA
+    fprintf(stderr, "%s: using CUDA backend\n", __func__);
+    model.backend = ggml_backend_cuda_init(0); // init device 0
+    if (!model.backend) {
+        fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
     }
-    if(norm == 0) throw std::runtime_error("norm is zero"); 
-    norm = std::sqrt(norm);
-    for (float& val : vec) {
-        val /= norm;
-    }
-}
+#endif
 
-// TODO translate to ggml (this is a built-in function in ggml)
-static std::vector<float> mul_mat(const float * mat, const std::vector<float> & vec, size_t dim) {
-    std::vector<float> result(dim, 0.0f);
-    for (size_t i = 0; i < dim; ++i) {
-        for (size_t j = 0; j < dim; ++j) {
-            result[i] += mat[i * dim + j] * vec[j];
-        }
+#ifdef GGML_USE_METAL
+    fprintf(stderr, "%s: using Metal backend\n", __func__);
+    ggml_backend_metal_log_set_callback(ggml_log_callback_default, nullptr);
+    model.backend = ggml_backend_metal_init();
+    if (!model.backend) {
+        fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
     }
-    return result;
-}
+#endif
 
-// TODO translate to ggml
-static std::vector<float> power_iteration(callback_data & cb_data, const float * matrix, int maxIterations = 1000, float tolerance = 1e-8) {
-    std::vector<float> b_tensor = std::vector<float>();
-    
-    // random vector gen/norm
+    // if there aren't GPU Backends fallback to CPU backend
+    if (!model.backend) {
+        model.backend = ggml_backend_cpu_init();
+    }
+
+    const int num_tensors = 3;
+
+    struct ggml_init_params params {
+            /*.mem_size   =*/ ggml_tensor_overhead() * num_tensors,
+            /*.mem_buffer =*/ NULL,
+            /*.no_alloc   =*/ true,
+    };
+
+    model.ctx = ggml_init(params);
+
+    model.v_diff_original = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, v_diff_original->ne[0], v_diff_original->ne[1]);
+    model.square = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_embd, n_embd);
+    model.eigenvector = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, n_embd);
+
+    model.buffer = ggml_backend_alloc_ctx_tensors(model.ctx, model.backend);
+
+    ggml_backend_tensor_set(model.v_diff_original, v_diff_original->data, 0, ggml_nbytes(v_diff_original));
+    // no need to load anything into square yet
+
+    // initialize model.eigenvector to random vector
+    std::vector<float> random_vec = std::vector<float>();
     std::default_random_engine generator(static_cast<unsigned int>(std::time(0)));
     std::uniform_real_distribution<float> distribution(0.0, 1.0);
-    for (int i = 0; i < cb_data.n_embd; ++i) {
-        b_tensor.push_back(distribution(generator));
+    for (int i = 0; i < n_embd; ++i) {
+        random_vec.push_back(distribution(generator));
     }
-    normalize_inplace(b_tensor);
+
+    // we don't normalize it at first but that shouldn't be a problem
+    ggml_backend_tensor_set(model.eigenvector, random_vec.data(), 0, ggml_nbytes(model.eigenvector));
+}
+
+struct ggml_cgraph * square_diff_graph(const pca_model & model) {
+    static size_t buf_size = ggml_tensor_overhead()*GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead();
+    static std::vector<uint8_t> buf(buf_size);
+
+    struct ggml_init_params params0 = {
+        /*.mem_size   =*/ buf_size,
+        /*.mem_buffer =*/ buf.data(),
+        /*.no_alloc   =*/ true, // the tensors will be allocated later by ggml_allocr_alloc_graph()
+    };
+    struct ggml_context * ctx0 = ggml_init(params0);
+    struct ggml_cgraph  * gf = ggml_new_graph(ctx0);
+
+    struct ggml_tensor * square = ggml_mul_mat(ctx0, model.v_diff_original, model.v_diff_original);
+
+    ggml_build_forward_expand(gf, square);
+
+    ggml_free(ctx0);
+    return gf;
+}
+
+struct ggml_tensor * compute_square(const pca_model & model, ggml_gallocr_t allocr, int n_threads) {
+    struct ggml_cgraph * gf = square_diff_graph(model);
+
+    ggml_gallocr_alloc_graph(allocr, gf);
+
+    if (ggml_backend_is_cpu(model.backend)) {
+        ggml_backend_cpu_set_n_threads(model.backend, n_threads);
+    }
+
+#ifdef GGML_USE_METAL
+    if (ggml_backend_is_metal(model.backend)) {
+        ggml_backend_metal_set_n_cb(model.backend, n_threads);
+    }
+#endif
+
+    ggml_backend_graph_compute(model.backend, gf);
+
+    return gf->nodes[gf->n_nodes - 1];
+}
+
+struct ggml_cgraph * power_iteration_graph(const pca_model & model, float tolerance) {
+    static size_t buf_size = ggml_tensor_overhead()*GGML_DEFAULT_GRAPH_SIZE + ggml_graph_overhead();
+    static std::vector<uint8_t> buf(buf_size);
+
+    struct ggml_init_params params0 = {
+        /*.mem_size   =*/ buf_size,
+        /*.mem_buffer =*/ buf.data(),
+        /*.no_alloc   =*/ true, // the tensors will be allocated later by ggml_allocr_alloc_graph()
+    };
+    struct ggml_context * ctx0 = ggml_init(params0);
+    struct ggml_cgraph  * gf = ggml_new_graph(ctx0);
+
+    struct ggml_tensor * b_tensor = ggml_mul_mat(ctx0, model.square, model.eigenvector);
+    // TODO difference between ggml_norm and ggml_norm_inplace?
+    // also is this the right way to do multi-step graphs?
+    b_tensor = ggml_norm_inplace(ctx0, b_tensor, tolerance);
+
+    ggml_build_forward_expand(gf, b_tensor);
+
+    ggml_free(ctx0);
+    return gf;
+}
+
+struct ggml_tensor * compute_piter(const pca_model & model, ggml_gallocr_t allocr, int n_threads, float tolerance) {
+    struct ggml_cgraph * gf = power_iteration_graph(model, tolerance);
+
+    ggml_gallocr_alloc_graph(allocr, gf);
+
+    if (ggml_backend_is_cpu(model.backend)) {
+        ggml_backend_cpu_set_n_threads(model.backend, n_threads);
+    }
+
+#ifdef GGML_USE_METAL
+    if (ggml_backend_is_metal(model.backend)) {
+        ggml_backend_metal_set_n_cb(model.backend, n_threads);
+    }
+#endif
+
+    ggml_backend_graph_compute(model.backend, gf);
+
+    return gf->nodes[gf->n_nodes - 1];
+}
+
+static void power_iteration(callback_data & cb_data, int idx, int n_threads, int maxIterations = 1000, float tolerance = 1e-8) {
+    pca_model model;
+    load_pca_model(model, cb_data.v_diff[idx], cb_data.n_embd);
+
+    ggml_gallocr_t allocr = NULL;
+
+    {
+        allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
+
+        // create the worst case graph for memory usage estimation
+        struct ggml_cgraph * gf = square_diff_graph(model);
+        ggml_gallocr_reserve(allocr, gf);
+        size_t mem_size = ggml_gallocr_get_buffer_size(allocr, 0);
+
+        fprintf(stderr, "%s: square diff, compute buffer size: %.4f KB\n", __func__, mem_size/1024.0);
+    }
+
+    struct ggml_tensor * square = compute_square(model, allocr, n_threads);
+    ggml_backend_tensor_get(square, model.square->data, 0, ggml_nbytes(square));
+
+    // yes?
+    ggml_gallocr_free(allocr);
 
     for (int iter = 0; iter < maxIterations; ++iter) {
 
-        // store the previous one so we can check for convergence
-        std::vector<float> b_prev_tensor = b_tensor;
+        // TODO do I need to reset it like this every time?
+        allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
 
-        // matrix multiplication and renormalize
-        b_tensor = mul_mat(matrix, b_tensor, cb_data.n_embd);
-        normalize_inplace(b_tensor);
+        struct ggml_tensor * host_new_eigenvector = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, cb_data.n_embd);
+        struct ggml_tensor * b_tensor = compute_piter(model, allocr, n_threads, tolerance);
+        ggml_backend_tensor_get(b_tensor, host_new_eigenvector->data, 0, ggml_nbytes(b_tensor));
 
         // convergence check
         float diff = 0.0;
         for (int i = 0; i < cb_data.n_embd; ++i) {
-            diff += std::pow(b_tensor[i] - b_prev_tensor[i], 2);
+            diff += std::pow(((float *)(host_new_eigenvector->data))[i] - ((float *)(model.eigenvector->data))[i], 2);
         }
-        if (std::sqrt(diff) < tolerance) {
+
+        // update eigenvector
+        ggml_backend_tensor_set(model.eigenvector, host_new_eigenvector->data, 0, ggml_nbytes(model.eigenvector));
+
+        try {
+            if (std::sqrt(diff) < tolerance) {
+                break;
+            }
+        }
+        catch (std::exception & e) {
+            // catch division by zero I guess
             break;
         }
     }
 
-    return b_tensor;
+    // push back v_final with eigenvector
+    ggml_backend_tensor_get(model.eigenvector, cb_data.v_final[idx]->data, 0, ggml_nbytes(model.eigenvector));
 }
 
-// TODO translate to ggml
 static void pca(callback_data & cb_data, int n_threads) {
-    int n_layers = cb_data.v_diff.size();
-    std::vector<std::thread> threads;
-    cb_data.v_final.reserve(n_layers);
-    auto worker_function = [&](int worker_id) {
-        for (int il = worker_id; il < n_layers; il += n_threads) {
-            float * matrix = square_diff(cb_data, il);
-            std::vector<float> eigenvector = power_iteration(cb_data, matrix);
-            cb_data.v_final[il] = (float *) malloc(eigenvector.size() * sizeof(float));
-            memcpy(cb_data.v_final[il], eigenvector.data(), eigenvector.size() * sizeof(float));
-            printf("Done with layer %d\n", il);
-            printf("il = %d | %f %f \n", il, cb_data.v_final[il][0], cb_data.v_final[il][1]);
-        }
-    };
     printf("Running PCA...\n");
-    for (int i = 0; i < n_threads; ++i) {
-        threads.emplace_back(worker_function, i);
+    for (int il = 0; il < cb_data.v_diff.size(); ++il) {
+        struct ggml_init_params params = {
+            /*.mem_size   =*/ cb_data.n_embd * sizeof(float),
+            /*.mem_buffer =*/ NULL,
+            /*.no_alloc   =*/ false,
+        };
+        struct ggml_context * ctx_data = ggml_init(params);
+        cb_data.v_final.push_back(ggml_new_tensor_1d(ctx_data, GGML_TYPE_F32, cb_data.n_embd));
+        power_iteration(cb_data, il, n_threads);
+        printf("Done with layer %d\n", il);
+        printf("il = %d | %f %f \n", il, ggml_get_f32_1d(cb_data.v_final[il], 0), ggml_get_f32_1d(cb_data.v_final[il], 1));
     }
-    for (auto & th : threads) th.join();
+    printf("Done with PCA.\n");
     printf("Done with PCA.\n");
 }
 
@@ -590,12 +717,6 @@ int main(int argc, char ** argv) {
     int n_embd = llama_n_embd(model);
     cb_data.n_embd = n_embd;
     int n_prompts = cparams.positive_prompts.size();
-    
-    // vector of finished vectors of size [n_embd], we have (n_layers - 1) vectors in total
-    std::vector<float *> v_final(n_layers - 1, NULL);
-    for (size_t i = 0; i < v_final.size(); ++i) {
-        v_final[i] = (float *) calloc(n_embd, sizeof(float));
-    }
 
     // create templated prompts
     for (int i = 0; i < n_prompts; ++i) {
@@ -653,7 +774,7 @@ int main(int argc, char ** argv) {
 
     concatenate_diffs(cb_data);
     pca(cb_data, cparams.n_threads);
-    printf("v_final %f %f \n", cb_data.v_final[0][0], cb_data.v_final[0][1]);
+    //printf("v_final %f %f \n", cb_data.v_final[0][0], cb_data.v_final[0][1]);
 
     llama_free(ctx);
     llama_free_model(model);
