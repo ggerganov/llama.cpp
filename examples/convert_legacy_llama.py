@@ -1260,10 +1260,12 @@ def main(args_in: list[str] | None = None) -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
+    dir_model = args.model
+
     metadata = gguf.Metadata.load(args.metadata)
 
     if args.get_outfile:
-        model_plus = load_some_model(args.model)
+        model_plus = load_some_model(dir_model)
         params = Params.load(model_plus)
         model = convert_model_names(model_plus.model, params, args.skip_unknown)
         model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
@@ -1275,14 +1277,14 @@ def main(args_in: list[str] | None = None) -> None:
         raise ValueError("--vocab-only does not make sense with --no-vocab")
 
     if args.dump_single:
-        model_plus = lazy_load_file(args.model)
+        model_plus = lazy_load_file(dir_model)
         do_dump_model(model_plus)
         return
 
     if not args.vocab_only:
-        model_plus = load_some_model(args.model)
+        model_plus = load_some_model(dir_model)
     else:
-        model_plus = ModelPlus(model = {}, paths = [args.model / 'dummy'], format = 'none', vocab = None)
+        model_plus = ModelPlus(model = {}, paths = [dir_model / 'dummy'], format = 'none', vocab = None)
 
     model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
     logger.info(f"model parameters count : {model_params_count} ({gguf.model_weight_count_rounded_notation(model_params_count)})")
@@ -1318,7 +1320,7 @@ def main(args_in: list[str] | None = None) -> None:
         logger.info(f"params = {params}")
 
     model_parent_path = model_plus.paths[0].parent
-    vocab_path = Path(args.vocab_dir or args.model or model_parent_path)
+    vocab_path = Path(args.vocab_dir or dir_model or model_parent_path)
     vocab_factory = VocabFactory(vocab_path)
     vocab_types = None if args.no_vocab else args.vocab_type.split(",")
     vocab, special_vocab = vocab_factory.load_vocab(vocab_types, model_parent_path)

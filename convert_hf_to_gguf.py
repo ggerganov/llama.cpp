@@ -57,7 +57,6 @@ class Model:
     lazy: bool
     part_names: list[str]
     is_safetensors: bool
-    model_card: dict[str, Any]
     hparams: dict[str, Any]
     block_count: int
     tensor_map: gguf.TensorNameMap
@@ -85,7 +84,6 @@ class Model:
         self.is_safetensors = len(self.part_names) > 0
         if not self.is_safetensors:
             self.part_names = Model.get_model_part_names(self.dir_model, "pytorch_model", ".bin")
-        self.model_card = Model.load_model_card(dir_model)
         self.hparams = Model.load_hparams(self.dir_model)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer", "num_layers"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
@@ -249,8 +247,8 @@ class Model:
                 self.gguf_writer.add_url(self.metadata.url)
             if self.metadata.description is not None:
                 self.gguf_writer.add_description(self.metadata.description)
-            if self.metadata.licence is not None:
-                self.gguf_writer.add_licence(self.metadata.licence)
+            if self.metadata.license is not None:
+                self.gguf_writer.add_license(self.metadata.license)
             if self.metadata.source_url is not None:
                 self.gguf_writer.add_source_url(self.metadata.source_url)
             if self.metadata.source_hf_repo is not None:
@@ -438,11 +436,6 @@ class Model:
         part_names.sort()
 
         return part_names
-
-    @staticmethod
-    def load_model_card(dir_model: Path):
-        with open(dir_model / "README.md", "r", encoding="utf-8") as f:
-            return frontmatter.load(f)
 
     @staticmethod
     def load_hparams(dir_model: Path):
@@ -3611,8 +3604,9 @@ def main() -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
-    metadata = gguf.Metadata.load(args.metadata)
     dir_model = args.model
+
+    metadata = gguf.Metadata.load(args.metadata, dir_model)
 
     if not dir_model.is_dir():
         logger.error(f'Error: {args.model} is not a directory')

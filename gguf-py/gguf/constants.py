@@ -31,6 +31,8 @@ class Keys:
         URL                  = "general.url"
         DESCRIPTION          = "general.description"
         LICENSE              = "general.license"
+        LICENSE_NAME         = "general.license.name"
+        LICENSE_LINK         = "general.license.link"
         SOURCE_URL           = "general.source.url"
         SOURCE_HF_REPO       = "general.source.huggingface.repository"
         FILE_TYPE            = "general.file_type"
