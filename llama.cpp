@@ -13393,7 +13393,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         }
 
                         if (vocab.add_space_prefix) {
-                            if (!output.size() || is_prev_special) {  // prefix with space if first token
+                            if (!output.size() && !is_prev_special) {  // prefix with space if first token
                                 raw_text = " " + raw_text;
                             }
                         }
