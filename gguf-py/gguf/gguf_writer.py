@@ -439,6 +439,9 @@ class GGUFWriter:
     def add_author(self, author: str) -> None:
         self.add_string(Keys.General.AUTHOR, author)
 
+    def add_organization(self, organization: str) -> None:
+        self.add_string(Keys.General.ORGANIZATION, organization)
+
     def add_version(self, version: str) -> None:
         self.add_string(Keys.General.VERSION, version)
 
@@ -479,7 +482,7 @@ class GGUFWriter:
         self.add_array(Keys.Tokenizer.TAGS, tags)
 
     def add_languages(self, languages: Sequence[str]) -> None:
-        self.add_array(Keys.Tokenizer.LANGUAGE, languages)
+        self.add_array(Keys.Tokenizer.LANGUAGES, languages)
 
     def add_datasets(self, datasets: Sequence[str]) -> None:
         self.add_array(Keys.Tokenizer.DATASETS, datasets)

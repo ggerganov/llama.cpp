@@ -15,6 +15,7 @@ class Metadata:
     basename: Optional[str] = None
     finetune: Optional[str] = None
     author: Optional[str] = None
+    organization: Optional[str] = None
     version: Optional[str] = None
     base_version: Optional[str] = None
     url: Optional[str] = None
@@ -26,7 +27,7 @@ class Metadata:
     source_hf_repo: Optional[str] = None
     parameter_size_class: Optional[str] = None
     tags: Optional[list[str]] = None
-    language: Optional[list[str]] = None
+    languages: Optional[list[str]] = None
     datasets: Optional[list[str]] = None
 
     @staticmethod
@@ -38,7 +39,7 @@ class Metadata:
         # Create a new Metadata instance
         metadata = Metadata()
 
-        # load model folder model card if available
+        # load huggingface model card if available
         # Reference Model Card Metadata: https://github.com/huggingface/hub-docs/blob/main/modelcard.md?plain=1
         model_card = Metadata.load_model_card(model_path)
         if metadata.name is None:
@@ -61,9 +62,9 @@ class Metadata:
         if metadata.tags is None:
             metadata.tags = model_card.get("tags", [])
         if metadata.languages is None:
-            metadata.languages = model_card.get("languages", [])
+            metadata.languages = model_card.get("language", model_card.get("languages", []))
         if metadata.datasets is None:
-            metadata.datasets = model_card.get("datasets", [])
+            metadata.datasets = model_card.get("datasets", model_card.get("dataset", []))
 
         # load huggingface parameters if available
         hf_params = Metadata.load_huggingface_parameters(model_path)
@@ -85,6 +86,7 @@ class Metadata:
         metadata.basename             = metadata_override.get(Keys.General.BASENAME            ,  metadata.basename            ) # noqa: E202
         metadata.finetune             = metadata_override.get(Keys.General.FINETUNE            ,  metadata.finetune            ) # noqa: E202
         metadata.author               = metadata_override.get(Keys.General.AUTHOR              ,  metadata.author              ) # noqa: E202
+        metadata.organization         = metadata_override.get(Keys.General.ORGANIZATION        ,  metadata.organization        ) # noqa: E202
         metadata.version              = metadata_override.get(Keys.General.VERSION             ,  metadata.version             ) # noqa: E202
         metadata.base_version         = metadata_override.get(Keys.General.BASE_VERSION        ,  metadata.base_version        ) # noqa: E202
         metadata.url                  = metadata_override.get(Keys.General.URL                 ,  metadata.url                 ) # noqa: E202
@@ -97,7 +99,7 @@ class Metadata:
         metadata.parameter_size_class = metadata_override.get(Keys.General.PARAMETER_SIZE_CLASS,  metadata.parameter_size_class) # noqa: E202
         metadata.tags                 = metadata_override.get(Keys.General.TAGS                ,  metadata.tags                ) # noqa: E202
         metadata.languages            = metadata_override.get(Keys.General.LANGUAGES           ,  metadata.languages           ) # noqa: E202
-        metadata.datasets             = metadata_override.get(Keys.General.datasets            ,  metadata.datasets            ) # noqa: E202
+        metadata.datasets             = metadata_override.get(Keys.General.DATASETS            ,  metadata.datasets            ) # noqa: E202
 
         # Direct Metadata Override (via direct cli argument)
         if model_name is not None:

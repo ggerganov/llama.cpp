@@ -27,6 +27,7 @@ class Keys:
         BASENAME             = "general.basename"
         FINETUNE             = "general.finetune"
         AUTHOR               = "general.author"
+        ORGANIZATION         = "general.organization"
         VERSION              = "general.version"
         BASE_VERSION         = "general.base_version"
         URL                  = "general.url"
@@ -39,7 +40,7 @@ class Keys:
         FILE_TYPE            = "general.file_type"
         PARAMETER_SIZE_CLASS = "general.parameter_size_class"
         TAGS                 = "general.tags"
-        LANGUAGE             = "general.language"
+        LANGUAGES            = "general.languages"
         DATASETS             = "general.datasets"
 
     class LLM:

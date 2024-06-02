@@ -244,6 +244,8 @@ class Model:
             self.gguf_writer.add_finetune(self.metadata.finetune)
         if self.metadata.author is not None:
             self.gguf_writer.add_author(self.metadata.author)
+        if self.metadata.organization is not None:
+            self.gguf_writer.add_organization(self.metadata.organization)
         if self.metadata.version is not None:
             self.gguf_writer.add_version(self.metadata.version)
         if self.metadata.base_version is not None:
