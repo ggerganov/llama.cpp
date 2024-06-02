@@ -901,7 +901,7 @@ struct server_context {
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
 
         // get prompt
-        if (!(task.infill || task.embedding)) {
+        if (!task.infill) {
             {
                 const auto & prompt = data.find("prompt");
                 if (prompt == data.end()) {
