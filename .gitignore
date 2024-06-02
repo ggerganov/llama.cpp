@@ -39,7 +39,6 @@ build*
 !build.zig
 cmake-build-*
 android-ndk-*
-ggml-qnn-test*
 out/
 tmp/
 
