@@ -1,7 +1,7 @@
 #include "rope.cuh"
 
 struct rope_corr_dims {
-    float v[4]; // TODO: is there any reson for this to be 4 instead of 2?
+    float v[2];
 };
 
 static __device__ float rope_yarn_ramp(const float low, const float high, const int i0) {
