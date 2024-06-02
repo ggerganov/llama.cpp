@@ -149,6 +149,9 @@ struct gpt_params {
     bool special           = false; // enable special token output
     bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
     bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
+    bool chaton            = false; // whether chaton is enabled or disabled
+    std::string chaton_meta_json = "";   // name of the json file containing the chaton templates
+    std::string chaton_template_id = ""; // the specific chat-handshake-template-standard to use
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
