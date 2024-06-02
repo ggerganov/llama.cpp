@@ -18,6 +18,7 @@ class Metadata:
     finetune: Optional[str] = None
     author: Optional[str] = None
     version: Optional[str] = None
+    base_version: Optional[str] = None
     url: Optional[str] = None
     description: Optional[str] = None
     license: Optional[str] = None
@@ -25,6 +26,7 @@ class Metadata:
     license_link: Optional[str] = None
     source_url: Optional[str] = None
     source_hf_repo: Optional[str] = None
+    tags: Optional[List[str]] = None
 
     @staticmethod
     def load(metadata_override_path: Path, model_path: Path) -> Metadata:
@@ -40,6 +42,8 @@ class Metadata:
         model_card = Metadata.load_model_card(model_path)
         if metadata.name is None:
             if "model-index" in model_card and len(model_card["model_name"]) == 1 and "name" in model_card["model_name"][0]:
+                # We check if there is only one model information in the model-index
+                # (This is a safe choice in case there is multiple models in one repo in the future)
                 metadata.name = model_card["model_name"][0].get("name")
             elif "model_name" in model_card:
                 # non huggingface model card standard but notice some model creator using it
@@ -50,6 +54,11 @@ class Metadata:
             metadata.license_name = model_card.get("license_name")
         if metadata.license_link is None:
             metadata.license_link = model_card.get("license_link")
+        if metadata.author is None:
+            # non huggingface model card standard but notice some model creator using it
+            metadata.author =  model_card.get("model_creator")
+        if metadata.tags is None:
+            metadata.tags = model_card.get("tags", [])
 
         # load huggingface parameters if available
         hf_params = Metadata.load_huggingface_parameters(model_path)
@@ -72,6 +81,7 @@ class Metadata:
         metadata.finetune       = metadata_override.get(Keys.General.FINETUNE      ,  metadata.finetune      ) # noqa: E202
         metadata.author         = metadata_override.get(Keys.General.AUTHOR        ,  metadata.author        ) # noqa: E202
         metadata.version        = metadata_override.get(Keys.General.VERSION       ,  metadata.version       ) # noqa: E202
+        metadata.base_version   = metadata_override.get(Keys.General.BASE_VERSION  ,  metadata.base_version  ) # noqa: E202
         metadata.url            = metadata_override.get(Keys.General.URL           ,  metadata.url           ) # noqa: E202
         metadata.description    = metadata_override.get(Keys.General.DESCRIPTION   ,  metadata.description   ) # noqa: E202
         metadata.license        = metadata_override.get(Keys.General.LICENSE       ,  metadata.license       ) # noqa: E202
@@ -79,6 +89,7 @@ class Metadata:
         metadata.license_link   = metadata_override.get(Keys.General.LICENSE_LINK  ,  metadata.license_link  ) # noqa: E202
         metadata.source_url     = metadata_override.get(Keys.General.SOURCE_URL    ,  metadata.source_url    ) # noqa: E202
         metadata.source_hf_repo = metadata_override.get(Keys.General.SOURCE_HF_REPO,  metadata.source_hf_repo) # noqa: E202
+        metadata.tags           = metadata_override.get(Keys.General.TAGS          ,  metadata.tags          ) # noqa: E202
 
         return metadata
 

@@ -792,6 +792,8 @@ class OutputFile:
                 self.gguf.add_author(metadata.author)
             if metadata.version is not None:
                 self.gguf.add_version(metadata.version)
+            if metadata.base_version is not None:
+                self.gguf.add_base_version(metadata.base_version)
             if metadata.url is not None:
                 self.gguf.add_url(metadata.url)
             if metadata.description is not None:
@@ -802,6 +804,8 @@ class OutputFile:
                 self.gguf.add_source_url(metadata.source_url)
             if metadata.source_hf_repo is not None:
                 self.gguf.add_source_hf_repo(metadata.source_hf_repo)
+            if metadata.tags is not None:
+                self.gguf_writer.add_tags(metadata.tags)
 
     def add_meta_arch(self, params: Params) -> None:
         # Metadata About The Neural Architecture Itself

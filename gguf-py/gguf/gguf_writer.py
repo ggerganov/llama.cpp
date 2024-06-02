@@ -442,6 +442,9 @@ class GGUFWriter:
     def add_version(self, version: str) -> None:
         self.add_string(Keys.General.VERSION, version)
 
+    def add_base_version(self, version: str) -> None:
+        self.add_string(Keys.General.BASE_VERSION, version)
+
     def add_tensor_data_layout(self, layout: str) -> None:
         self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
@@ -468,6 +471,9 @@ class GGUFWriter:
 
     def add_file_type(self, ftype: int) -> None:
         self.add_uint32(Keys.General.FILE_TYPE, ftype)
+
+    def add_tags(self, tags: Sequence[str]) -> None:
+        self.add_array(Keys.Tokenizer.TAGS, tags)
 
     def add_name(self, name: str) -> None:
         self.add_string(Keys.General.NAME, name)

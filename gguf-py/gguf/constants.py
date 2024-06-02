@@ -28,6 +28,7 @@ class Keys:
         FINETUNE             = "general.finetune"
         AUTHOR               = "general.author"
         VERSION              = "general.version"
+        BASE_VERSION         = "general.base_version"
         URL                  = "general.url"
         DESCRIPTION          = "general.description"
         LICENSE              = "general.license"
@@ -36,6 +37,7 @@ class Keys:
         SOURCE_URL           = "general.source.url"
         SOURCE_HF_REPO       = "general.source.huggingface.repository"
         FILE_TYPE            = "general.file_type"
+        TAGS                 = "general.tags"
 
     class LLM:
         VOCAB_SIZE                        = "{arch}.vocab_size"

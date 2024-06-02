@@ -243,6 +243,8 @@ class Model:
                 self.gguf_writer.add_author(self.metadata.author)
             if self.metadata.version is not None:
                 self.gguf_writer.add_version(self.metadata.version)
+            if self.metadata.base_version is not None:
+                self.gguf_writer.add_base_version(self.metadata.base_version)
             if self.metadata.url is not None:
                 self.gguf_writer.add_url(self.metadata.url)
             if self.metadata.description is not None:
@@ -253,6 +255,8 @@ class Model:
                 self.gguf_writer.add_source_url(self.metadata.source_url)
             if self.metadata.source_hf_repo is not None:
                 self.gguf_writer.add_source_hf_repo(self.metadata.source_hf_repo)
+            if self.metadata.tags is not None:
+                self.gguf_writer.add_tags(self.metadata.tags)
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_block_count(self.block_count)
