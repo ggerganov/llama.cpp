@@ -1371,6 +1371,13 @@ if (LLAMA_METAL)
     endif()
 endif()
 
+configure_file(cmake/llama.pc.in
+        "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
+        @ONLY)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
+        DESTINATION lib/pkgconfig)
+
 #
 # programs, examples and tests
 #
