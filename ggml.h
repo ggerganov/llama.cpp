@@ -678,6 +678,12 @@ extern "C" {
         GGML_TASK_TYPE_FINALIZE,
     };
 
+    struct ggml_once;
+    struct ggml_barrier;
+    int ggml_delay(int backoff);
+    void ggml_syncthreads(struct ggml_barrier * b, int nth);
+    void ggml_once(struct ggml_once * once, void init(void));
+
     struct ggml_compute_params {
         enum ggml_task_type type;
 
@@ -687,6 +693,8 @@ extern "C" {
         // work buffer for all threads
         size_t wsize;
         void * wdata;
+
+        struct ggml_barrier *barrier;
     };
 
     // numa strategies
