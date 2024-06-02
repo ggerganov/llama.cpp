@@ -17,9 +17,20 @@
 #include "json.hpp"
 
 // auto generated files (update with ./deps.sh)
+#include "colorthemes.css.hpp"
+#include "style.css.hpp"
+#include "theme-beeninorder.css.hpp"
+#include "theme-ketivah.css.hpp"
+#include "theme-mangotango.css.hpp"
+#include "theme-playground.css.hpp"
+#include "theme-polarnight.css.hpp"
+#include "theme-snowstorm.css.hpp"
 #include "index.html.hpp"
+#include "index-new.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
+#include "system-prompts.js.hpp"
+#include "prompt-formats.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
 
 #include <atomic>
@@ -3750,13 +3761,25 @@ int main(int argc, char ** argv) {
         // Set the base directory for serving static files
         svr->set_base_dir(sparams.public_path);
     }
-
     // using embedded static files
     svr->Get("/", handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
     svr->Get("/index.js", handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
     svr->Get("/completion.js", handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
     svr->Get("/json-schema-to-grammar.mjs", handle_static_file(
-        json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
+      json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
+
+    // add new-ui files
+    svr->Get("/colorthemes.css", handle_static_file(colorthemes_css, colorthemes_css_len, "text/css; charset=utf-8"));
+    svr->Get("/style.css", handle_static_file(style_css, style_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-beeninorder.css", handle_static_file(theme_beeninorder_css, theme_beeninorder_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-ketivah.css", handle_static_file(theme_ketivah_css, theme_ketivah_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-mangotango.css", handle_static_file(theme_mangotango_css, theme_mangotango_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-playground.css", handle_static_file(theme_playground_css, theme_playground_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-polarnight.css", handle_static_file(theme_polarnight_css, theme_polarnight_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-snowstorm.css", handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
+    svr->Get("/index-new.html", handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
+    svr->Get("/system-prompts.js", handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/prompt-formats.js", handle_static_file(prompt_formats_js, prompt_formats_js_len, "text/javascript; charset=utf-8"));
 
     // register API routes
     svr->Get ("/health",              handle_health);
