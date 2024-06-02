@@ -32,7 +32,7 @@ static __global__ void ssm_conv_f32(
     float * s = (float *) wdata_f32 + nc*dr*ith;
 
     for (int i3 = 0; i3 < n_s; ++i3) {
-        float * s0 = (float *) ((char *) src0 + ir0*src0_nb1) + i3*src0_nb2; // {d_conv, d_inner, n_s}
+        float * s0 = (float *) ((char *) src0 + ir0*src0_nb1 + i3*src0_nb2); // {d_conv, d_inner, n_s}
 
         // copy the state into working memory
         // can't use memcpy because (d_conv) != (d_conv - 1)
