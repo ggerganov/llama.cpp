@@ -1195,8 +1195,8 @@ class VocabFactory:
         return vocab, special_vocab
 
 
-def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> str:
-    name = metadata.name if metadata.name is not None else model_name
+def default_convention_outfile(file_type: GGMLFileType, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> str:
+    name = metadata.name if metadata.name is not None else None
     basename = metadata.basename if metadata.basename is not None else None
     finetune = metadata.finetune if metadata.finetune is not None else None
     version = metadata.version if metadata.version is not None else None
@@ -1210,8 +1210,8 @@ def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_c
     return gguf.naming_convention(name, basename, finetune, version, expert_count, model_params_count, output_type)
 
 
-def default_outfile(model_paths: list[Path], file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> Path:
-    default_filename = default_convention_outfile(file_type, model_name, expert_count, model_params_count, metadata)
+def default_outfile(model_paths: list[Path], file_type: GGMLFileType, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> Path:
+    default_filename = default_convention_outfile(file_type, expert_count, model_params_count, metadata)
     ret = model_paths[0].parent / f"{default_filename}.gguf"
     if ret in model_paths:
         logger.error(
@@ -1252,6 +1252,7 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
     parser.add_argument("--metadata",     type=Path,              help="Specify the path for a metadata file")
     parser.add_argument("--get-outfile",  action="store_true",    help="get calculated default outfile name")
+    parser.add_argument("--model-name",   type=str, default=None, help="name of the model")
 
     args = parser.parse_args(args_in)
 
@@ -1263,9 +1264,10 @@ def main(args_in: list[str] | None = None) -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
+    model_name = args.model_name
     dir_model = args.model
 
-    metadata = gguf.Metadata.load(args.metadata)
+    metadata = gguf.Metadata.load(args.metadata, dir_model, model_name)
 
     if args.get_outfile:
         model_plus = load_some_model(dir_model)
@@ -1273,7 +1275,11 @@ def main(args_in: list[str] | None = None) -> None:
         model = convert_model_names(model_plus.model, params, args.skip_unknown)
         model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
         ftype = pick_output_type(model, args.outtype)
-        print(f"{default_convention_outfile(ftype, params.path_model.name, params.n_experts, model_params_count, metadata)}") # noqa: NP100
+
+        if metadata.name is None:
+            metadata.name = params.path_model.name
+
+        print(f"{default_convention_outfile(ftype, params.n_experts, model_params_count, metadata)}") # noqa: NP100
         return
 
     if args.no_vocab and args.vocab_only:
@@ -1354,13 +1360,16 @@ def main(args_in: list[str] | None = None) -> None:
 
     assert params is not None
 
+    if metadata.name is None:
+        metadata.name = params.path_model.name
+
     logger.info(f"Vocab info: {vocab}")
     logger.info(f"Special vocab info: {special_vocab}")
     model   = model_plus.model
     model   = convert_model_names(model, params, args.skip_unknown)
     ftype   = pick_output_type(model, args.outtype)
     model   = convert_to_output_type(model, ftype)
-    outfile = args.outfile or default_outfile(model_plus.paths, ftype, params.path_model.name, params.n_experts, model_params_count, metadata)
+    outfile = args.outfile or default_outfile(model_plus.paths, ftype, params.n_experts, model_params_count, metadata=metadata)
 
     metadata.parameter_size_class = gguf.parameter_size_class(params.n_experts, model_params_count)
 

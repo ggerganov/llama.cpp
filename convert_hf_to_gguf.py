@@ -3624,9 +3624,10 @@ def main() -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
+    model_name = args.model_name
     dir_model = args.model
 
-    metadata = gguf.Metadata.load(args.metadata, dir_model)
+    metadata = gguf.Metadata.load(args.metadata, dir_model, model_name)
 
     if not dir_model.is_dir():
         logger.error(f'Error: {args.model} is not a directory')

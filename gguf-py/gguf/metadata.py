@@ -3,10 +3,8 @@ from __future__ import annotations
 import json
 import frontmatter
 from pathlib import Path
-
 from typing import Optional
 from dataclasses import dataclass
-
 from .constants import Keys
 
 
@@ -32,7 +30,7 @@ class Metadata:
     datasets: Optional[list[str]] = None
 
     @staticmethod
-    def load(metadata_override_path: Path, model_path: Path) -> Metadata:
+    def load(metadata_override_path: Optional[Path], model_path: Optional[Path], model_name: Optional[str]) -> Metadata:
         # This grabs as many contextual authorship metadata as possible from the model repository
         # making any conversion as required to match the gguf kv store metadata format
         # as well as giving users the ability to override any authorship metadata that may be incorrect
@@ -80,7 +78,7 @@ class Metadata:
             if model_path is not None and model_path.exists():
                 metadata.name = model_path.name
 
-        # Metadata Override
+        # Metadata Override File Provided
         # This is based on LLM_KV_NAMES mapping in llama.cpp
         metadata_override = Metadata.load_metadata_override(metadata_override_path)
         metadata.name                 = metadata_override.get(Keys.General.NAME                ,  metadata.name                ) # noqa: E202
@@ -101,10 +99,14 @@ class Metadata:
         metadata.languages            = metadata_override.get(Keys.General.LANGUAGES           ,  metadata.languages           ) # noqa: E202
         metadata.datasets             = metadata_override.get(Keys.General.datasets            ,  metadata.datasets            ) # noqa: E202
 
+        # Direct Metadata Override (via direct cli argument)
+        if model_name is not None:
+            metadata.name = model_name
+
         return metadata
 
     @staticmethod
-    def load_metadata_override(metadata_override_path: Path):
+    def load_metadata_override(metadata_override_path: Optional[Path]):
         if metadata_override_path is None or not metadata_override_path.exists():
             return {}
 
@@ -112,7 +114,7 @@ class Metadata:
             return json.load(f)
 
     @staticmethod
-    def load_model_card(model_path: Path):
+    def load_model_card(model_path: Optional[Path]):
         if model_path is None or not model_path.exists():
             return {}
 
@@ -125,7 +127,7 @@ class Metadata:
             return frontmatter.load(f)
 
     @staticmethod
-    def load_huggingface_parameters(model_path: Path):
+    def load_huggingface_parameters(model_path: Optional[Path]):
         if model_path is None or not model_path.exists():
             return {}
 
