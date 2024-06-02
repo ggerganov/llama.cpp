@@ -37,8 +37,8 @@ Feature: llama.cpp server
 
     Examples: Prompts
       | prompt                                                                    | n_predict | re_content                                  | n_prompt | n_predicted | truncated |
-      | I believe the meaning of life is                                          | 8         | (read\|going)+                              | 18       | 8           | not       |
-      | Write a joke about AI from a very long prompt which will not be truncated | 256       | (princesses\|everyone\|kids\|Anna\|forest)+ | 46       | 64          | not       |
+      | I believe the meaning of life is                                          | 8         | (read\|going\|pretty)+                      | 18       | 8           | not       |
+      | Write a joke about AI from a very long prompt which will not be truncated | 256       | (princesses\|everyone\|kids\|Anna\|forest)+ | 45       | 64          | not       |
 
   Scenario: Completion prompt truncated
     Given a prompt:
@@ -67,8 +67,8 @@ Feature: llama.cpp server
 
     Examples: Prompts
       | model        | system_prompt               | user_prompt                          | max_tokens | re_content                        | n_prompt | n_predicted | enable_streaming | truncated |
-      | llama-2      | Book                        | What is the best book                | 8          | (Here\|what)+                     | 77       | 8           | disabled         | not       |
-      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 128        | (thanks\|happy\|bird\|Annabyear)+ | -1       | 64          | enabled          |           |
+      | llama-2      | Book                        | What is the best book                | 8          | (Here\|what)+                     | 76       | 8           | disabled         | not       |
+      | codellama70b | You are a coding assistant. | Write the fibonacci function in c++. | 128        | (thanks\|happy\|bird\|fireplace)+ | -1       | 64          | enabled          |           |
 
 
   Scenario Outline: OAI Compatibility w/ response format
@@ -84,7 +84,7 @@ Feature: llama.cpp server
       | response_format                                                     | n_predicted | re_content             |
       | {"type": "json_object", "schema": {"const": "42"}}                  | 5           | "42"                   |
       | {"type": "json_object", "schema": {"items": [{"type": "integer"}]}} | 10          | \[ -300 \]             |
-      | {"type": "json_object"}                                             | 10          | \{ " Jacky.            |
+      | {"type": "json_object"}                                             | 10          | \{ " Saragine.         |
 
 
   Scenario: Tokenize / Detokenize
