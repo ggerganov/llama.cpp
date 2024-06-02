@@ -197,11 +197,6 @@ def generator_random_added_tokens(tokenizer, iterations=100) -> Iterator[str]:
         yield "".join(words)
 
 
-def generator_vocab_words(vocab: list[str]) -> Iterator[str]:
-    """Brute force check all vocab words"""
-    yield from vocab
-
-
 def generator_random_chars(iterations=100) -> Iterator[str]:
     """Brute force random text with simple characters"""
 
