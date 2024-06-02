@@ -478,6 +478,12 @@ class GGUFWriter:
     def add_tags(self, tags: Sequence[str]) -> None:
         self.add_array(Keys.Tokenizer.TAGS, tags)
 
+    def add_languages(self, languages: Sequence[str]) -> None:
+        self.add_array(Keys.Tokenizer.LANGUAGE, languages)
+
+    def add_datasets(self, datasets: Sequence[str]) -> None:
+        self.add_array(Keys.Tokenizer.DATASETS, datasets)
+
     def add_name(self, name: str) -> None:
         self.add_string(Keys.General.NAME, name)
 

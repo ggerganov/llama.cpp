@@ -39,6 +39,8 @@ class Keys:
         FILE_TYPE            = "general.file_type"
         PARAMETER_SIZE_CLASS = "general.parameter_size_class"
         TAGS                 = "general.tags"
+        LANGUAGE             = "general.language"
+        DATASETS             = "general.datasets"
 
     class LLM:
         VOCAB_SIZE                        = "{arch}.vocab_size"

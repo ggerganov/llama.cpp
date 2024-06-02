@@ -28,6 +28,8 @@ class Metadata:
     source_hf_repo: Optional[str] = None
     parameter_size_class: Optional[str] = None
     tags: Optional[list[str]] = None
+    language: Optional[list[str]] = None
+    datasets: Optional[list[str]] = None
 
     @staticmethod
     def load(metadata_override_path: Path, model_path: Path) -> Metadata:
@@ -60,6 +62,10 @@ class Metadata:
             metadata.author = model_card.get("model_creator")
         if metadata.tags is None:
             metadata.tags = model_card.get("tags", [])
+        if metadata.languages is None:
+            metadata.languages = model_card.get("languages", [])
+        if metadata.datasets is None:
+            metadata.datasets = model_card.get("datasets", [])
 
         # load huggingface parameters if available
         hf_params = Metadata.load_huggingface_parameters(model_path)
@@ -92,6 +98,8 @@ class Metadata:
         metadata.source_hf_repo       = metadata_override.get(Keys.General.SOURCE_HF_REPO      ,  metadata.source_hf_repo      ) # noqa: E202
         metadata.parameter_size_class = metadata_override.get(Keys.General.PARAMETER_SIZE_CLASS,  metadata.parameter_size_class) # noqa: E202
         metadata.tags                 = metadata_override.get(Keys.General.TAGS                ,  metadata.tags                ) # noqa: E202
+        metadata.languages            = metadata_override.get(Keys.General.LANGUAGES           ,  metadata.languages           ) # noqa: E202
+        metadata.datasets             = metadata_override.get(Keys.General.datasets            ,  metadata.datasets            ) # noqa: E202
 
         return metadata
 

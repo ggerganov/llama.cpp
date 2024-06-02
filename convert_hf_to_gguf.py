@@ -256,6 +256,10 @@ class Model:
                 self.gguf_writer.add_parameter_size_class(self.metadata.parameter_size_class)
             if self.metadata.tags is not None:
                 self.gguf_writer.add_tags(self.metadata.tags)
+            if self.metadata.languages is not None:
+                self.gguf_writer.add_languages(self.metadata.languages)
+            if self.metadata.datasets is not None:
+                self.gguf_writer.add_datasets(self.metadata.datasets)
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_block_count(self.block_count)
