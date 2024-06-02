@@ -18,10 +18,13 @@
 #include <iostream>
 #include <fstream>
 
+#define DEBUG_POS 2
+
 // TODO read everything over and make sure it makes sense because I'm dropping logic errors left and right - Christian
 
 struct callback_data {
     std::vector<uint8_t> data;
+    ggml_context * ctx_ggml;
 
     int n_tokens = 0;
     int n_embd = 0;
@@ -290,18 +293,11 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
     // v_pos and v_neg are being populated, but the values aren't correct - it writes the same values to all vectors, it looks like?
     // this leads ultimately to an error in calc_diff where diff becomes entirely zeroes and eventually a segfault several iterations into pca
     struct ggml_tensor * t_host;
-    if (!is_host) {
-        auto n_bytes = ggml_nbytes(t);
-        struct ggml_init_params params = {
-            /*.mem_size   =*/ n_bytes,
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ false,
-        };
-        struct ggml_context * ctx_data = ggml_init(params);
-        t_host = ggml_new_tensor_2d(ctx_data, t->type, t->ne[0], t->ne[1]);
-        ggml_backend_tensor_get(t, t_host->data, 0, n_bytes);
-    }
-    else t_host = t;
+    auto n_bytes = ggml_nbytes(t);
+    t_host = ggml_new_tensor_2d(cb_data->ctx_ggml, t->type, t->ne[0], t->ne[1]);
+    t_host->data = malloc(n_bytes); // TODO @ngxson : get rid of this malloc somehow
+    ggml_backend_tensor_get(t, t_host->data, 0, n_bytes);
+    printf("t_host [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(t_host, 0, DEBUG_POS, 0, 0));
 
     if (t_host->type == GGML_TYPE_F32) {
         if (cb_data->is_eval_pos) {
@@ -315,6 +311,7 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
 }
 
 static bool get_hidden_layers(llama_context * ctx, std::vector<llama_token> & tokens) {
+    llama_kv_cache_clear(ctx);
     if (llama_decode(ctx, llama_batch_get_one(tokens.data(), tokens.size(), 0, 0))) {
         fprintf(stderr, "%s : failed to eval\n", __func__);
         return false;
@@ -355,7 +352,8 @@ static void calc_diff(callback_data & cb_data) {
         };
         struct ggml_context * ctx_data = ggml_init(params);
 
-        printf("inp_pos [0][0]: %f\n", ggml_get_f32_nd(inp_pos, 0, 0, 0, 0));
+        printf("inp_pos [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_pos, 0, DEBUG_POS, 0, 0));
+        printf("inp_neg [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_neg, 0, DEBUG_POS, 0, 0));
 
         // TODO is this the best way to get dimension? i don't know which way n_embd/n_tokens go
         // for that matter can we get rid of n_embd/n_tokens fields in favor of ne[0]/ne[1]?
@@ -367,7 +365,7 @@ static void calc_diff(callback_data & cb_data) {
             }
         }
 
-        printf("dest [0][0]: %f\n", ggml_get_f32_nd(dest, 0, 0, 0, 0));
+        printf("dest [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(dest, 0, DEBUG_POS, 0, 0));
 
         // TODO can we make this faster? like check during the above operation rather than on a second pass?
 
@@ -415,6 +413,7 @@ static void calc_diff(callback_data & cb_data) {
 }
 
 static void concatenate_diffs(callback_data & cb_data) {
+    printf("concatenate_diffs\n");
     for (size_t i = 0; i < cb_data.v_diffs_wrapped.size(); ++i) {
         std::vector<struct ggml_tensor *> & vec = cb_data.v_diffs_wrapped[i];
         size_t n_rows_total = 0;
@@ -756,6 +755,14 @@ int main(int argc, char ** argv) {
     cb_data.n_embd = n_embd;
     int n_prompts = cparams.positive_prompts.size();
 
+    // init ctx_ggml
+    struct ggml_init_params params_ggml = {
+        /*.mem_size   =*/ ggml_tensor_overhead() * n_prompts * n_layers * 4u,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ true,
+    };
+    cb_data.ctx_ggml = ggml_init(params_ggml);
+
     // create templated prompts
     for (int i = 0; i < n_prompts; ++i) {
         populate_entries(cparams, cparams.positive_prompts[i], cparams.negative_prompts[i]);
@@ -804,12 +811,14 @@ int main(int argc, char ** argv) {
         calc_diff(cb_data);
 
         // reset for next iteration
-        // TODO there's no good way to do this is there? because you need to ggml_free the underlying ggml_context
-        //for (auto ptr : cb_data.v_pos) free(ptr->data);
-        //for (auto ptr : cb_data.v_neg) free(ptr->data);
+        // TODO @ngxson : find a more proper way to alloc / free tensors
+        for (auto ptr : cb_data.v_pos) free(ptr->data);
+        for (auto ptr : cb_data.v_neg) free(ptr->data);
         cb_data.v_pos.clear();
         cb_data.v_neg.clear();
     }
+
+    printf("Done evaluate prompts\n");
 
     concatenate_diffs(cb_data);
     pca(cb_data, cparams.n_threads);
