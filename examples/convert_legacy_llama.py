@@ -1363,6 +1363,8 @@ def main(args_in: list[str] | None = None) -> None:
     model   = convert_to_output_type(model, ftype)
     outfile = args.outfile or default_outfile(model_plus.paths, ftype, params.path_model.name, params.n_experts, model_params_count, metadata)
 
+    metadata.parameter_size_class = gguf.parameter_size_class(params.n_experts, model_params_count)
+
     params.ftype = ftype
     logger.info(f"Writing {outfile}, format {ftype}")
 

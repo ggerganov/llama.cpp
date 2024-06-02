@@ -10,7 +10,6 @@ import json
 import os
 import re
 import sys
-import frontmatter
 from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
@@ -90,11 +89,9 @@ class Model:
         self.tensor_names = None
         self.metadata = metadata
 
-        model_tensors = self.get_tensors()
-
         if self.ftype == gguf.LlamaFileType.GUESSED:
             # NOTE: can't use field "torch_dtype" in config.json, because some finetunes lie.
-            _, first_tensor = next(model_tensors)
+            _, first_tensor = next(self.get_tensors())
             if first_tensor.dtype == torch.float16:
                 logger.info(f"choosing --outtype f16 from first tensor type ({first_tensor.dtype})")
                 self.ftype = gguf.LlamaFileType.MOSTLY_F16
@@ -127,10 +124,10 @@ class Model:
         # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
         output_type = self.ftype.name.partition("_")[2]
 
-        # Get Expert Count From huggingface_parameters
+        # Update authorship metadata class with parameter size class (useful for leader boards)
         expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
-
-        weight_estimate = gguf.per_model_weight_count_estimation(model_tensors, expert_count)
+        weight_estimate = gguf.per_model_weight_count_estimation(self.get_tensors(), expert_count)
+        self.metadata.parameter_size_class = gguf.parameter_size_class(expert_count, weight_estimate)
 
         # Generate default filename based on model specification and available metadata
         self.fname_default = gguf.naming_convention(self.model_name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, output_type)
@@ -255,6 +252,8 @@ class Model:
                 self.gguf_writer.add_source_url(self.metadata.source_url)
             if self.metadata.source_hf_repo is not None:
                 self.gguf_writer.add_source_hf_repo(self.metadata.source_hf_repo)
+            if self.metadata.parameter_size_class is not None:
+                self.gguf_writer.add_parameter_size_class(self.metadata.parameter_size_class)
             if self.metadata.tags is not None:
                 self.gguf_writer.add_tags(self.metadata.tags)
 

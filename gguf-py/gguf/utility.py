@@ -65,6 +65,17 @@ def model_weight_count_rounded_notation(model_params_count: int) -> str:
     return f"{round(scaled_model_params)}{scale_suffix}"
 
 
+def parameter_size_class(expert_count_int:int, model_params_count: int) -> str:
+    per_model_rounded_weight_estimate = model_weight_count_rounded_notation(model_params_count)
+
+    if expert_count_int is not None and expert_count_int > 0:
+        size_class = f"{expert_count_int}x{per_model_rounded_weight_estimate}"
+    else:
+        size_class = f"{per_model_rounded_weight_estimate}"
+
+    return size_class
+
+
 def naming_convention(model_name: str, base_name: str, finetune_string:str, version_string:str, expert_count_int:int, model_params_count: int, output_type: str) -> str:
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
 

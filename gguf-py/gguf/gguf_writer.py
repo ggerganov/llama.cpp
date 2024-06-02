@@ -472,6 +472,9 @@ class GGUFWriter:
     def add_file_type(self, ftype: int) -> None:
         self.add_uint32(Keys.General.FILE_TYPE, ftype)
 
+    def add_parameter_size_class(self, parameter_size_class: str) -> None:
+        self.add_string(Keys.General.PARAMETER_SIZE_CLASS, parameter_size_class)
+
     def add_tags(self, tags: Sequence[str]) -> None:
         self.add_array(Keys.Tokenizer.TAGS, tags)
 

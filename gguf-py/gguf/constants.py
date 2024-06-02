@@ -37,6 +37,7 @@ class Keys:
         SOURCE_URL           = "general.source.url"
         SOURCE_HF_REPO       = "general.source.huggingface.repository"
         FILE_TYPE            = "general.file_type"
+        PARAMETER_SIZE_CLASS = "general.parameter_size_class"
         TAGS                 = "general.tags"
 
     class LLM:

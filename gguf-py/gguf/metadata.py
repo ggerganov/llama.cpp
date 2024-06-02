@@ -26,7 +26,8 @@ class Metadata:
     license_link: Optional[str] = None
     source_url: Optional[str] = None
     source_hf_repo: Optional[str] = None
-    tags: Optional[List[str]] = None
+    parameter_size_class: Optional[str] = None
+    tags: Optional[list[str]] = None
 
     @staticmethod
     def load(metadata_override_path: Path, model_path: Path) -> Metadata:
@@ -56,7 +57,7 @@ class Metadata:
             metadata.license_link = model_card.get("license_link")
         if metadata.author is None:
             # non huggingface model card standard but notice some model creator using it
-            metadata.author =  model_card.get("model_creator")
+            metadata.author = model_card.get("model_creator")
         if metadata.tags is None:
             metadata.tags = model_card.get("tags", [])
 
@@ -76,20 +77,21 @@ class Metadata:
         # Metadata Override
         # This is based on LLM_KV_NAMES mapping in llama.cpp
         metadata_override = Metadata.load_metadata_override(metadata_override_path)
-        metadata.name           = metadata_override.get(Keys.General.NAME          ,  metadata.name          ) # noqa: E202
-        metadata.basename       = metadata_override.get(Keys.General.BASENAME      ,  metadata.basename      ) # noqa: E202
-        metadata.finetune       = metadata_override.get(Keys.General.FINETUNE      ,  metadata.finetune      ) # noqa: E202
-        metadata.author         = metadata_override.get(Keys.General.AUTHOR        ,  metadata.author        ) # noqa: E202
-        metadata.version        = metadata_override.get(Keys.General.VERSION       ,  metadata.version       ) # noqa: E202
-        metadata.base_version   = metadata_override.get(Keys.General.BASE_VERSION  ,  metadata.base_version  ) # noqa: E202
-        metadata.url            = metadata_override.get(Keys.General.URL           ,  metadata.url           ) # noqa: E202
-        metadata.description    = metadata_override.get(Keys.General.DESCRIPTION   ,  metadata.description   ) # noqa: E202
-        metadata.license        = metadata_override.get(Keys.General.LICENSE       ,  metadata.license       ) # noqa: E202
-        metadata.license_name   = metadata_override.get(Keys.General.LICENSE_NAME  ,  metadata.license_name  ) # noqa: E202
-        metadata.license_link   = metadata_override.get(Keys.General.LICENSE_LINK  ,  metadata.license_link  ) # noqa: E202
-        metadata.source_url     = metadata_override.get(Keys.General.SOURCE_URL    ,  metadata.source_url    ) # noqa: E202
-        metadata.source_hf_repo = metadata_override.get(Keys.General.SOURCE_HF_REPO,  metadata.source_hf_repo) # noqa: E202
-        metadata.tags           = metadata_override.get(Keys.General.TAGS          ,  metadata.tags          ) # noqa: E202
+        metadata.name                 = metadata_override.get(Keys.General.NAME                ,  metadata.name                ) # noqa: E202
+        metadata.basename             = metadata_override.get(Keys.General.BASENAME            ,  metadata.basename            ) # noqa: E202
+        metadata.finetune             = metadata_override.get(Keys.General.FINETUNE            ,  metadata.finetune            ) # noqa: E202
+        metadata.author               = metadata_override.get(Keys.General.AUTHOR              ,  metadata.author              ) # noqa: E202
+        metadata.version              = metadata_override.get(Keys.General.VERSION             ,  metadata.version             ) # noqa: E202
+        metadata.base_version         = metadata_override.get(Keys.General.BASE_VERSION        ,  metadata.base_version        ) # noqa: E202
+        metadata.url                  = metadata_override.get(Keys.General.URL                 ,  metadata.url                 ) # noqa: E202
+        metadata.description          = metadata_override.get(Keys.General.DESCRIPTION         ,  metadata.description         ) # noqa: E202
+        metadata.license              = metadata_override.get(Keys.General.LICENSE             ,  metadata.license             ) # noqa: E202
+        metadata.license_name         = metadata_override.get(Keys.General.LICENSE_NAME        ,  metadata.license_name        ) # noqa: E202
+        metadata.license_link         = metadata_override.get(Keys.General.LICENSE_LINK        ,  metadata.license_link        ) # noqa: E202
+        metadata.source_url           = metadata_override.get(Keys.General.SOURCE_URL          ,  metadata.source_url          ) # noqa: E202
+        metadata.source_hf_repo       = metadata_override.get(Keys.General.SOURCE_HF_REPO      ,  metadata.source_hf_repo      ) # noqa: E202
+        metadata.parameter_size_class = metadata_override.get(Keys.General.PARAMETER_SIZE_CLASS,  metadata.parameter_size_class) # noqa: E202
+        metadata.tags                 = metadata_override.get(Keys.General.TAGS                ,  metadata.tags                ) # noqa: E202
 
         return metadata
 
