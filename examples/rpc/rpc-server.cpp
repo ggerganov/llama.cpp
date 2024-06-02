@@ -83,8 +83,6 @@ static ggml_backend_t create_backend() {
     if (!backend) {
         fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
     }
-#endif
-
 #elif GGML_USE_SYCL
     fprintf(stderr, "%s: using SYCL backend\n", __func__);
     backend = ggml_backend_sycl_init(0); // init device 0
