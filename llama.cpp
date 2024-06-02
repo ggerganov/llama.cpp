@@ -2147,16 +2147,15 @@ struct llama_control_vector {
 };
 
 struct llama_vocab {
-    using id      = int32_t;
-    using token   = std::string;
-    using ttype   = llama_token_type;
-    using tattrib = llama_token_attrib;
+    using id       = int32_t;
+    using token    = std::string;
+    using ttype    = llama_token_type;
+    using tattribs = llama_token_attribs;
 
     struct token_data {
-        token   text;
-        float   score;
-        ttype   type;
-        tattrib attribs;
+        token    text;
+        float    score;
+        tattribs attribs;
     };
 
     enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
@@ -4740,9 +4739,22 @@ static void llm_load_vocab(
         vocab.token_to_id[word] = i;
 
         auto & token_data = vocab.id_to_token[i];
-        token_data.text  = std::move(word);
-        token_data.score = scores ? scores[i] : 0.0f;
-        token_data.type  = toktypes ? (llama_token_type) toktypes[i] : LLAMA_TOKEN_TYPE_NORMAL;
+        token_data.text    = std::move(word);
+        token_data.score   = scores ? scores[i] : 0.0f;
+        token_data.attribs = LLAMA_TOKEN_ATTRIB_NORMAL;
+
+        if (toktypes) {  //TODO: remove, required until per token attribs are available from GGUF file
+            switch(toktypes[i]) {
+                case LLAMA_TOKEN_TYPE_UNKNOWN:      token_data.attribs = LLAMA_TOKEN_ATTRIB_UNKNOWN;      break;
+                case LLAMA_TOKEN_TYPE_UNUSED:       token_data.attribs = LLAMA_TOKEN_ATTRIB_UNUSED;       break;
+                case LLAMA_TOKEN_TYPE_NORMAL:       token_data.attribs = LLAMA_TOKEN_ATTRIB_NORMAL;       break;
+                case LLAMA_TOKEN_TYPE_CONTROL:      token_data.attribs = LLAMA_TOKEN_ATTRIB_CONTROL;      break;
+                case LLAMA_TOKEN_TYPE_USER_DEFINED: token_data.attribs = LLAMA_TOKEN_ATTRIB_USER_DEFINED; break;
+                case LLAMA_TOKEN_TYPE_BYTE:         token_data.attribs = LLAMA_TOKEN_ATTRIB_BYTE;         break;
+                case LLAMA_TOKEN_TYPE_UNDEFINED:    token_data.attribs = LLAMA_TOKEN_ATTRIB_UNDEFINED;    break;
+                default:                            token_data.attribs = LLAMA_TOKEN_ATTRIB_UNDEFINED;    break;
+            }
+        }
     }
     GGML_ASSERT(vocab.id_to_token.size() == vocab.token_to_id.size());
 
@@ -4833,7 +4845,7 @@ static void llm_load_vocab(
     // build special tokens cache
     {
         for (llama_vocab::id id = 0; id < (llama_vocab::id)n_vocab; ++id) {
-            if (vocab.id_to_token[id].type != LLAMA_TOKEN_TYPE_NORMAL) {
+            if (!(vocab.id_to_token[id].attribs & LLAMA_TOKEN_ATTRIB_NORMAL)) {
                 vocab.cache_special_tokens.push_back(id);
             }
         }
@@ -4871,7 +4883,6 @@ static void llm_load_vocab(
     // Handle per token attributes
     //NOTE: Each model customizes per token attributes.
     //NOTE: Per token attributes are missing from the GGUF file.
-    //TODO: Merge llama_token_type and llama_token_attrib.
     //TODO: Extract attribs from GGUF file.
     {
         auto _contains_any = [] (const std::string &str, const std::vector<std::string> &substrs) -> bool {
@@ -4883,27 +4894,15 @@ static void llm_load_vocab(
             return false;
         };
 
-        auto _set_tokenid_attrib = [&] (const llama_vocab::id id, llama_token_attrib attrib, bool value) {
+        auto _set_tokenid_attrib = [&] (const llama_vocab::id id, llama_token_attribs attrib, bool value) {
             uint32_t attribs = vocab.id_to_token.at(id).attribs;
             attribs = value ? (attribs | attrib) : (attribs & ~attrib);
-            vocab.id_to_token[id].attribs = (llama_token_attrib) attribs;
+            vocab.id_to_token[id].attribs = (llama_token_attribs) attribs;
         };
 
-        auto _set_token_attrib = [&] (const std::string & token, llama_token_attrib attrib, bool value) {
+        auto _set_token_attrib = [&] (const std::string & token, llama_token_attribs attrib, bool value) {
             _set_tokenid_attrib(vocab.token_to_id.at(token), attrib, value);
         };
-
-        // convert token type as an attribute
-        for (auto &data : vocab.id_to_token) {
-            uint32_t attrib = LLAMA_TOKEN_ATTRIB_UNDEFINED;
-            attrib |= LLAMA_TOKEN_ATTRIB_UNKNOWN      * (data.type == LLAMA_TOKEN_TYPE_UNKNOWN);
-            attrib |= LLAMA_TOKEN_ATTRIB_UNUSED       * (data.type == LLAMA_TOKEN_TYPE_UNUSED);
-            attrib |= LLAMA_TOKEN_ATTRIB_NORMAL       * (data.type == LLAMA_TOKEN_TYPE_NORMAL);
-            attrib |= LLAMA_TOKEN_ATTRIB_CONTROL      * (data.type == LLAMA_TOKEN_TYPE_CONTROL);
-            attrib |= LLAMA_TOKEN_ATTRIB_USER_DEFINED * (data.type == LLAMA_TOKEN_TYPE_USER_DEFINED);
-            attrib |= LLAMA_TOKEN_ATTRIB_BYTE         * (data.type == LLAMA_TOKEN_TYPE_BYTE);
-            data.attribs = (llama_token_attrib) attrib;
-        }
 
         std::string model_name;
         std::string tokenizer_pre;
@@ -12684,27 +12683,27 @@ static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
 
 static bool llama_is_normal_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_NORMAL;
+    return vocab.id_to_token[id].attribs & LLAMA_TOKEN_ATTRIB_NORMAL;
 }
 
 static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_UNKNOWN;
+    return vocab.id_to_token[id].attribs & LLAMA_TOKEN_ATTRIB_UNKNOWN;
 }
 
 static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_CONTROL;
+    return vocab.id_to_token[id].attribs & LLAMA_TOKEN_ATTRIB_CONTROL;
 }
 
 static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_BYTE;
+    return vocab.id_to_token[id].attribs & LLAMA_TOKEN_ATTRIB_BYTE;
 }
 
 static bool llama_is_user_defined_token(const llama_vocab& vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_USER_DEFINED;
+    return vocab.id_to_token[id].attribs & LLAMA_TOKEN_ATTRIB_USER_DEFINED;
 }
 
 static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
@@ -18277,9 +18276,9 @@ float llama_token_get_score(const struct llama_model * model, llama_token token)
     return model->vocab.id_to_token[token].score;
 }
 
-llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token) {
+llama_token_attribs llama_token_get_attribs(const struct llama_model * model, llama_token token) {
     GGML_ASSERT(model->vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return model->vocab.id_to_token[token].type;
+    return model->vocab.id_to_token[token].attribs;
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {

@@ -97,7 +97,7 @@ extern "C" {
         LLAMA_ROPE_TYPE_GLM  =  4,
     };
 
-    enum llama_token_type {
+    enum llama_token_type { //TODO: remove, required until per token attribs are available from GGUF file
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
         LLAMA_TOKEN_TYPE_UNKNOWN      = 2,
@@ -107,7 +107,7 @@ extern "C" {
         LLAMA_TOKEN_TYPE_BYTE         = 6,
     };
 
-    enum llama_token_attrib {
+    enum llama_token_attribs {
         LLAMA_TOKEN_ATTRIB_UNDEFINED    = 0,
         LLAMA_TOKEN_ATTRIB_UNKNOWN      = 1 <<  1,
         LLAMA_TOKEN_ATTRIB_UNUSED       = 1 <<  2,
@@ -835,7 +835,7 @@ extern "C" {
 
     LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
 
-    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
+    LLAMA_API enum llama_token_attribs llama_token_get_attribs(const struct llama_model * model, llama_token token);
 
     // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
     LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
