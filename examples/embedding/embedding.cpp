@@ -80,7 +80,7 @@ int main(int argc, char ** argv) {
 
     std::mt19937 rng(params.seed);
     if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
+        params.prompt = string_random_prompt(rng);
     }
 
     llama_backend_init();
@@ -107,7 +107,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     // split the prompt into lines
@@ -211,6 +211,7 @@ int main(int argc, char ** argv) {
 
     // clean up
     llama_print_timings(ctx);
+    llama_batch_free(batch);
     llama_free(ctx);
     llama_free_model(model);
     llama_backend_free();

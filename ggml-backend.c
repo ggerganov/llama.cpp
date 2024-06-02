@@ -1895,7 +1895,6 @@ void ggml_backend_view_init(ggml_backend_buffer_t buffer, struct ggml_tensor * t
 
     tensor->buffer = buffer;
     tensor->data = (char *)tensor->view_src->data + tensor->view_offs;
-    tensor->backend = tensor->view_src->backend;
     ggml_backend_buffer_init_tensor(buffer, tensor);
 }
 

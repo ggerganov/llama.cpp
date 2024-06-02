@@ -174,7 +174,7 @@ int main(int argc, char ** argv) {
         // debug
         if (dump_kv_cache) {
             llama_kv_cache_view_update(ctx, &kvc_view);
-            dump_kv_cache_view_seqs(kvc_view, 40);
+            llama_kv_cache_dump_view_seqs(kvc_view, 40);
         }
 
         // build the mask from https://lmsys.org/blog/2023-11-21-lookahead-decoding/
