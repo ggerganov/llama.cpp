@@ -105,6 +105,7 @@ examples/jeopardy/results.txt
 examples/server/*.html.hpp
 examples/server/*.js.hpp
 examples/server/*.mjs.hpp
+examples/server/*.css.hpp
 
 poetry.lock
 poetry.toml
