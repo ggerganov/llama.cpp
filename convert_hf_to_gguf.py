@@ -47,7 +47,6 @@ AnyModel = TypeVar("AnyModel", bound="type[Model]")
 class Model:
     _model_classes: dict[str, type[Model]] = {}
 
-    model_name: str
     dir_model: Path
     ftype: gguf.LlamaFileType
     is_big_endian: bool
@@ -72,6 +71,10 @@ class Model:
                  model_name: str | None, split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
+
+        if metadata is None:
+            raise TypeError("authorship metadata must be provided")
+
         self.dir_model = dir_model
         self.ftype = ftype
         self.is_big_endian = is_big_endian
@@ -121,16 +124,20 @@ class Model:
 
         self.model_name = Model.get_model_name(self.metadata, self.hparams, self.dir_model, self.model_arch)
 
+        # Fallback to model architecture name if metadata name is still missing
+        if self.metadata.name is None:
+            self.metadata.name = gguf.MODEL_ARCH_NAMES[self.model_arch]
+
         # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
         output_type = self.ftype.name.partition("_")[2]
 
         # Update authorship metadata class with parameter size class (useful for leader boards)
         expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
-        weight_estimate = gguf.per_model_weight_count_estimation(self.get_tensors(), expert_count)
+        weight_estimate = self.per_model_weight_count_estimation(self.get_tensors(), expert_count)
         self.metadata.parameter_size_class = gguf.parameter_size_class(expert_count, weight_estimate)
 
         # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.model_name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, output_type)
+        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, output_type)
 
         # Filename Output
         if fname_out is not None:
@@ -229,37 +236,36 @@ class Model:
         return new_name
 
     def set_gguf_meta_model(self):
-        self.gguf_writer.add_name(self.model_name)
+        self.gguf_writer.add_name(self.metadata.name)
 
-        if self.metadata is not None:
-            if self.metadata.basename is not None:
-                self.gguf_writer.add_basename(self.metadata.basename)
-            if self.metadata.finetune is not None:
-                self.gguf_writer.add_finetune(self.metadata.finetune)
-            if self.metadata.author is not None:
-                self.gguf_writer.add_author(self.metadata.author)
-            if self.metadata.version is not None:
-                self.gguf_writer.add_version(self.metadata.version)
-            if self.metadata.base_version is not None:
-                self.gguf_writer.add_base_version(self.metadata.base_version)
-            if self.metadata.url is not None:
-                self.gguf_writer.add_url(self.metadata.url)
-            if self.metadata.description is not None:
-                self.gguf_writer.add_description(self.metadata.description)
-            if self.metadata.license is not None:
-                self.gguf_writer.add_license(self.metadata.license)
-            if self.metadata.source_url is not None:
-                self.gguf_writer.add_source_url(self.metadata.source_url)
-            if self.metadata.source_hf_repo is not None:
-                self.gguf_writer.add_source_hf_repo(self.metadata.source_hf_repo)
-            if self.metadata.parameter_size_class is not None:
-                self.gguf_writer.add_parameter_size_class(self.metadata.parameter_size_class)
-            if self.metadata.tags is not None:
-                self.gguf_writer.add_tags(self.metadata.tags)
-            if self.metadata.languages is not None:
-                self.gguf_writer.add_languages(self.metadata.languages)
-            if self.metadata.datasets is not None:
-                self.gguf_writer.add_datasets(self.metadata.datasets)
+        if self.metadata.basename is not None:
+            self.gguf_writer.add_basename(self.metadata.basename)
+        if self.metadata.finetune is not None:
+            self.gguf_writer.add_finetune(self.metadata.finetune)
+        if self.metadata.author is not None:
+            self.gguf_writer.add_author(self.metadata.author)
+        if self.metadata.version is not None:
+            self.gguf_writer.add_version(self.metadata.version)
+        if self.metadata.base_version is not None:
+            self.gguf_writer.add_base_version(self.metadata.base_version)
+        if self.metadata.url is not None:
+            self.gguf_writer.add_url(self.metadata.url)
+        if self.metadata.description is not None:
+            self.gguf_writer.add_description(self.metadata.description)
+        if self.metadata.license is not None:
+            self.gguf_writer.add_license(self.metadata.license)
+        if self.metadata.source_url is not None:
+            self.gguf_writer.add_source_url(self.metadata.source_url)
+        if self.metadata.source_hf_repo is not None:
+            self.gguf_writer.add_source_hf_repo(self.metadata.source_hf_repo)
+        if self.metadata.parameter_size_class is not None:
+            self.gguf_writer.add_parameter_size_class(self.metadata.parameter_size_class)
+        if self.metadata.tags is not None:
+            self.gguf_writer.add_tags(self.metadata.tags)
+        if self.metadata.languages is not None:
+            self.gguf_writer.add_languages(self.metadata.languages)
+        if self.metadata.datasets is not None:
+            self.gguf_writer.add_datasets(self.metadata.datasets)
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_block_count(self.block_count)
@@ -415,23 +421,30 @@ class Model:
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
 
-    # Set model name based on latest metadata either provided or calculated from environment
-    @staticmethod
-    def get_model_name(metadata, huggingface_parameters, dir_model, model_arch):
-        if metadata is not None and metadata.name is not None:
-            # Explicit Metadata Was Provided By User
-            return metadata.name
-        elif huggingface_parameters is not None and "_name_or_path" in huggingface_parameters:
-            # Hugging Face Parameters Model Name or Model Folder Name is Provided
-            return huggingface_parameters["_name_or_path"]
-        elif huggingface_parameters is not None and "model_type" in huggingface_parameters:
-            # Hugging Face Parameters Model Type is Provided
-            return huggingface_parameters["model_type"]
-        elif dir_model is not None and dir_model.name is not None:
-            # Use directory folder name
-            return dir_model.name
-        else:
-            return gguf.MODEL_ARCH_NAMES[model_arch]
+    def per_model_weight_count_estimation(tensors: Iterator[tuple[str, Tensor]], expert_count: int) -> int:
+        # TODO: Ensure parameter count is accurate throughout various model type
+        #       May currently overestimate parameter count in Mamba model because
+        #       output weights is tied with token embeddings.
+        sum_weight_estimate = 0
+        for name, data_torch in tensors:
+            # Got A Tensor
+
+            # We don't need these
+            if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
+                continue
+
+            # Calculate Tensor Volume
+            sum_weights_in_tensor = 1
+            for dim in data_torch.shape:
+                sum_weights_in_tensor *= dim
+
+            # Add Tensor Volume To Running Count
+            sum_weight_estimate += sum_weights_in_tensor
+
+        # Calculate weight estimate per model
+        per_model_weight_estimate = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
+
+        return per_model_weight_estimate
 
     @staticmethod
     def get_model_part_names(dir_model: Path, prefix: str, suffix: str) -> list[str]:

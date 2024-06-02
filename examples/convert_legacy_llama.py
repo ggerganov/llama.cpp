@@ -773,7 +773,7 @@ class OutputFile:
     def add_meta_model(self, params: Params, metadata: gguf.Metadata | None) -> None:
         # Metadata About The Model And Its Provenence
         name = "LLaMA"
-        if metadata is not None and metadata.name is not None:
+        if metadata.name is not None:
             name = metadata.name
         elif params.path_model is not None:
             name = params.path_model.name
@@ -783,29 +783,28 @@ class OutputFile:
 
         self.gguf.add_name(name)
 
-        if metadata is not None:
-            if metadata.basename is not None:
-                self.gguf.add_basename(metadata.basename)
-            if metadata.finetune is not None:
-                self.gguf.add_finetune(metadata.finetune)
-            if metadata.author is not None:
-                self.gguf.add_author(metadata.author)
-            if metadata.version is not None:
-                self.gguf.add_version(metadata.version)
-            if metadata.base_version is not None:
-                self.gguf.add_base_version(metadata.base_version)
-            if metadata.url is not None:
-                self.gguf.add_url(metadata.url)
-            if metadata.description is not None:
-                self.gguf.add_description(metadata.description)
-            if metadata.license is not None:
-                self.gguf.add_license(metadata.license)
-            if metadata.source_url is not None:
-                self.gguf.add_source_url(metadata.source_url)
-            if metadata.source_hf_repo is not None:
-                self.gguf.add_source_hf_repo(metadata.source_hf_repo)
-            if metadata.tags is not None:
-                self.gguf_writer.add_tags(metadata.tags)
+        if metadata.basename is not None:
+            self.gguf.add_basename(metadata.basename)
+        if metadata.finetune is not None:
+            self.gguf.add_finetune(metadata.finetune)
+        if metadata.author is not None:
+            self.gguf.add_author(metadata.author)
+        if metadata.version is not None:
+            self.gguf.add_version(metadata.version)
+        if metadata.base_version is not None:
+            self.gguf.add_base_version(metadata.base_version)
+        if metadata.url is not None:
+            self.gguf.add_url(metadata.url)
+        if metadata.description is not None:
+            self.gguf.add_description(metadata.description)
+        if metadata.license is not None:
+            self.gguf.add_license(metadata.license)
+        if metadata.source_url is not None:
+            self.gguf.add_source_url(metadata.source_url)
+        if metadata.source_hf_repo is not None:
+            self.gguf.add_source_hf_repo(metadata.source_hf_repo)
+        if metadata.tags is not None:
+            self.gguf_writer.add_tags(metadata.tags)
 
     def add_meta_arch(self, params: Params) -> None:
         # Metadata About The Neural Architecture Itself
@@ -1197,10 +1196,10 @@ class VocabFactory:
 
 
 def default_convention_outfile(file_type: GGMLFileType, model_name:str, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> str:
-    name = metadata.name if metadata is not None and metadata.name is not None else model_name
-    basename = metadata.basename if metadata is not None and metadata.basename is not None else None
-    finetune = metadata.finetune if metadata is not None and metadata.finetune is not None else None
-    version = metadata.version if metadata is not None and metadata.version is not None else None
+    name = metadata.name if metadata.name is not None else model_name
+    basename = metadata.basename if metadata.basename is not None else None
+    finetune = metadata.finetune if metadata.finetune is not None else None
+    version = metadata.version if metadata.version is not None else None
 
     output_type = {
         GGMLFileType.AllF32:    "F32",
