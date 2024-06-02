@@ -551,9 +551,11 @@ if (LLAMA_HIPBLAS)
         else()
             set(ROCM_PATH /opt/rocm)
         endif()
+    else()
+        set(ROCM_PATH $ENV{ROCM_PATH})
     endif()
     list(APPEND CMAKE_PREFIX_PATH ${ROCM_PATH})
-    list(APPEND CMAKE_PREFIX_PATH "$ENV{ROCM_PATH}/lib64/cmake")
+    list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib64/cmake")
 
     # CMake on Windows doesn't support the HIP language yet
     if(WIN32)
