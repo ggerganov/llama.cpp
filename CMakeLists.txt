@@ -72,6 +72,7 @@ else()
     set(INS_ENB ON)
 endif()
 
+option(LLAMA_SVE                             "llama: enable SVE"                                OFF)
 option(LLAMA_AVX                             "llama: enable AVX"                                ${INS_ENB})
 option(LLAMA_AVX2                            "llama: enable AVX2"                               ${INS_ENB})
 option(LLAMA_AVX512                          "llama: enable AVX512"                             OFF)
@@ -105,6 +106,7 @@ set(LLAMA_CUDA_PEER_MAX_BATCH_SIZE "128" CACHE STRING
                                              "llama: max. batch size for using peer access")
 option(LLAMA_CUDA_NO_PEER_COPY               "llama: do not use peer to peer copies"            OFF)
 option(LLAMA_CUDA_NO_VMM                     "llama: do not try to use CUDA VMM"                OFF)
+option(LLAMA_CUDA_FA_ALL_QUANTS              "llama: compile all quants for FlashAttention"     OFF)
 
 option(LLAMA_CURL                            "llama: use libcurl to download model from an URL" OFF)
 option(LLAMA_HIPBLAS                         "llama: use hipBLAS"                               OFF)
@@ -124,7 +126,6 @@ set(LLAMA_METAL_MACOSX_VERSION_MIN "" CACHE STRING
 set(LLAMA_METAL_STD "" CACHE STRING          "llama: metal standard version (-std flag)")
 option(LLAMA_KOMPUTE                         "llama: use Kompute"                               OFF)
 option(LLAMA_RPC                             "llama: use RPC"                                   OFF)
-option(LLAMA_QKK_64                          "llama: use super-block size of 64 for k-quants"   OFF)
 option(LLAMA_SYCL                            "llama: use SYCL"                                  OFF)
 option(LLAMA_SYCL_F16                        "llama: use 16 bit floats for sycl calculations"   OFF)
 set(LLAMA_SYCL_TARGET   "INTEL" CACHE STRING "llama: sycl target device")
@@ -384,10 +385,6 @@ if (LLAMA_LLAMAFILE)
     set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
 endif()
 
-if (LLAMA_QKK_64)
-    add_compile_definitions(GGML_QKK_64)
-endif()
-
 if (LLAMA_CUBLAS)
     message(WARNING "LLAMA_CUBLAS is deprecated and will be removed in the future.\nUse LLAMA_CUDA instead")
     set(LLAMA_CUDA ON)
@@ -406,6 +403,8 @@ if (LLAMA_CUDA)
 
         file(GLOB GGML_SOURCES_CUDA "ggml-cuda/*.cu")
         list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-wmma*.cu")
+        list(APPEND GGML_SOURCES_CUDA ${SRCS})
 
         add_compile_definitions(GGML_USE_CUDA)
         add_compile_definitions(GGML_CUDA_USE_GRAPHS)
@@ -430,6 +429,18 @@ if (LLAMA_CUDA)
         add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${LLAMA_CUDA_PEER_MAX_BATCH_SIZE})
         if (LLAMA_CUDA_NO_PEER_COPY)
             add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+        endif()
+        if (LLAMA_CUDA_FA_ALL_QUANTS)
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
+            add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
+        else()
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
+            file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*f16-f16.cu")
+            list(APPEND GGML_SOURCES_CUDA ${SRCS})
         endif()
 
         if (LLAMA_STATIC)
@@ -575,6 +586,8 @@ if (LLAMA_HIPBLAS)
 
     file(GLOB GGML_SOURCES_ROCM "ggml-cuda/*.cu")
     list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
+    file(GLOB SRCS "ggml-cuda/template-instances/fattn-wmma*.cu")
+    list(APPEND GGML_SOURCES_ROCM ${SRCS})
 
     add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUDA)
 
@@ -592,6 +605,19 @@ if (LLAMA_HIPBLAS)
 
     if (LLAMA_CUDA_NO_PEER_COPY)
         add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+    endif()
+
+    if (LLAMA_CUDA_FA_ALL_QUANTS)
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
+        add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
+    else()
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*q8_0-q8_0.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
+        file(GLOB SRCS "ggml-cuda/template-instances/fattn-vec*f16-f16.cu")
+        list(APPEND GGML_SOURCES_ROCM ${SRCS})
     endif()
 
     add_compile_definitions(GGML_CUDA_DMMV_X=${LLAMA_CUDA_DMMV_X})
@@ -630,6 +656,10 @@ if (LLAMA_SYCL)
 
     if (LLAMA_SYCL_F16)
         add_compile_definitions(GGML_SYCL_F16)
+    endif()
+
+    if (LLAMA_CUDA_FORCE_MMQ)
+        add_compile_definitions(GGML_SYCL_FORCE_MMQ)
     endif()
 
     add_compile_options(-I./) #include DPCT
@@ -747,6 +777,7 @@ if (LLAMA_KOMPUTE)
             kompute-shaders/op_mul_mat_q4_0.comp
             kompute-shaders/op_mul_mat_q4_1.comp
             kompute-shaders/op_mul_mat_q6_k.comp
+            kompute-shaders/op_getrows_f32.comp
             kompute-shaders/op_getrows_f16.comp
             kompute-shaders/op_getrows_q4_0.comp
             kompute-shaders/op_getrows_q4_1.comp
@@ -779,6 +810,7 @@ if (LLAMA_KOMPUTE)
             shaderop_mul_mat_q4_0.h
             shaderop_mul_mat_q4_1.h
             shaderop_mul_mat_q6_k.h
+            shaderop_getrows_f32.h
             shaderop_getrows_f16.h
             shaderop_getrows_q4_0.h
             shaderop_getrows_q4_1.h
@@ -1044,6 +1076,9 @@ if (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR CMAKE_GENERATOR_PLATFORM_LWR STR
             # Android arm64-v8a
             # Raspberry Pi 3, 4, Zero 2 (32-bit)
             list(APPEND ARCH_FLAGS -mno-unaligned-access)
+        endif()
+        if (LLAMA_SVE)
+            list(APPEND ARCH_FLAGS -march=armv8.6-a+sve)
         endif()
     endif()
 elseif (CMAKE_OSX_ARCHITECTURES STREQUAL "x86_64" OR CMAKE_GENERATOR_PLATFORM_LWR MATCHES "^(x86_64|i686|amd64|x64|win32)$" OR
@@ -1311,7 +1346,7 @@ set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
-    FILES convert.py
+    FILES convert-hf-to-gguf.py
     PERMISSIONS
         OWNER_READ
         OWNER_WRITE
@@ -1337,6 +1372,13 @@ if (LLAMA_METAL)
         )
     endif()
 endif()
+
+configure_file(cmake/llama.pc.in
+        "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
+        @ONLY)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
+        DESTINATION lib/pkgconfig)
 
 #
 # programs, examples and tests
