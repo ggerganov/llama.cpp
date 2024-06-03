@@ -11,7 +11,7 @@ COPY . .
 
 ENV LLAMA_CURL=1
 
-RUN make
+RUN make -j$(nproc)
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
 

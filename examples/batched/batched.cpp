@@ -48,7 +48,7 @@ int main(int argc, char ** argv) {
         params.prompt = "Hello my name is";
     }
 
-    process_escapes(params.prompt);
+    string_process_escapes(params.prompt);
 
     // init LLM
 

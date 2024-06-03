@@ -371,7 +371,7 @@ static json oaicompat_completion_params_parse(
     llama_params["presence_penalty"]  = json_value(body,   "presence_penalty",  0.0);
     llama_params["seed"]              = json_value(body,   "seed",              LLAMA_DEFAULT_SEED);
     llama_params["stream"]            = json_value(body,   "stream",            false);
-    llama_params["temperature"]       = json_value(body,   "temperature",       0.0);
+    llama_params["temperature"]       = json_value(body,   "temperature",       1.0);
     llama_params["top_p"]             = json_value(body,   "top_p",             1.0);
 
     // Apply chat template to the list of messages

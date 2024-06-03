@@ -259,7 +259,7 @@ int main(int argc, char ** argv) {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--override-kv") == 0) {
-            if (arg_idx == argc-1 || !parse_kv_override(argv[++arg_idx], kv_overrides)) {
+            if (arg_idx == argc-1 || !string_parse_kv_override(argv[++arg_idx], kv_overrides)) {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
@@ -284,7 +284,7 @@ int main(int argc, char ** argv) {
             } else {
                 usage(argv[0]);
             }
-        } else if (strcmp(argv[arg_idx], "--keep-split")) {
+        } else if (strcmp(argv[arg_idx], "--keep-split") == 0) {
             params.keep_split = true;
         } else {
             usage(argv[0]);

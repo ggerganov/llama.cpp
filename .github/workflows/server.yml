@@ -32,10 +32,8 @@ jobs:
 
     strategy:
       matrix:
-        # TODO: temporary disabled due to linux kernel issues
-        #sanitizer: [ADDRESS, THREAD, UNDEFINED]
-        sanitizer: [UNDEFINED]
-        build_type: [Debug]
+        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        build_type: [RelWithDebInfo]
         include:
           - build_type: Release
             sanitizer: ""
@@ -102,10 +100,8 @@ jobs:
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
           cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target server
 
-
       - name: Tests
         id: server_integration_tests
-        if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
           PORT=8888 ./tests.sh
