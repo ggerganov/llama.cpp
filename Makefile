@@ -135,12 +135,16 @@ MK_NVCCFLAGS = -std=c++11
 ifdef LLAMA_FAST
 MK_CFLAGS     += -Ofast
 HOST_CXXFLAGS += -Ofast
+ifndef LLAMA_DEBUG
 MK_NVCCFLAGS  += -O3
+endif # LLAMA_DEBUG
 else
 MK_CFLAGS     += -O3
 MK_CXXFLAGS   += -O3
+ifndef LLAMA_DEBUG
 MK_NVCCFLAGS  += -O3
-endif
+endif # LLAMA_DEBUG
+endif # LLAMA_FAST
 
 ifndef LLAMA_NO_CCACHE
 CCACHE := $(shell which ccache)
@@ -201,9 +205,10 @@ ifdef LLAMA_SCHED_MAX_COPIES
 endif
 
 ifdef LLAMA_DEBUG
-	MK_CFLAGS   += -O0 -g
-	MK_CXXFLAGS += -O0 -g
-	MK_LDFLAGS  += -g
+	MK_CFLAGS    += -O0 -g
+	MK_CXXFLAGS  += -O0 -g
+	MK_LDFLAGS   += -g
+	MK_NVCCFLAGS += -O0 -g
 
 	ifeq ($(UNAME_S),Linux)
 		MK_CPPFLAGS += -D_GLIBCXX_ASSERTIONS
