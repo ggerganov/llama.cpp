@@ -69,6 +69,10 @@ ifeq ($(UNAME_S),Darwin)
 	endif
 endif
 
+ifdef LLAMA_RPC
+	BUILD_TARGETS += rpc-server
+endif
+
 default: $(BUILD_TARGETS)
 
 test: $(TEST_TARGETS)
@@ -429,6 +433,11 @@ ifdef LLAMA_BLIS
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
 
+ifdef LLAMA_RPC
+	MK_CPPFLAGS   += -DGGML_USE_RPC
+	OBJS          += ggml-rpc.o
+endif # LLAMA_RPC
+
 ifdef LLAMA_CUBLAS
 # LLAMA_CUBLAS is deprecated and will be removed in the future
 	LLAMA_CUDA := 1
@@ -654,10 +663,25 @@ ggml-metal-embed.o: ggml-metal.metal ggml-common.h
 endif
 endif # LLAMA_METAL
 
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
+COMMON_H_DEPS = common/common.h common/sampling.h common/log.h llama.h
+COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o json-schema-to-grammar.o
+
 ifndef LLAMA_NO_LLAMAFILE
 sgemm.o: sgemm.cpp sgemm.h ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif
+
+ifdef LLAMA_RPC
+ggml-rpc.o: ggml-rpc.cpp ggml-rpc.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+rpc-server.o: examples/rpc/rpc-server.cpp ggml-rpc.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+rpc-server: rpc-server.o ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+endif # LLAMA_RPC
 
 GF_CC := $(CC)
 include scripts/get-flags.mk
@@ -738,13 +762,8 @@ unicode.o: unicode.cpp unicode.h
 unicode-data.o: unicode-data.cpp unicode-data.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
-
 llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-COMMON_H_DEPS = common/common.h common/sampling.h common/log.h llama.h
-COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o json-schema-to-grammar.o
 
 common.o: common/common.cpp $(COMMON_H_DEPS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
