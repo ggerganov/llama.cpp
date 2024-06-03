@@ -439,6 +439,9 @@ class GGUFWriter:
     def add_author(self, author: str) -> None:
         self.add_string(Keys.General.AUTHOR, author)
 
+    def add_quantized_by(self, quantized: str) -> None:
+        self.add_string(Keys.General.QUANTIZED_BY, quantized)
+
     def add_organization(self, organization: str) -> None:
         self.add_string(Keys.General.ORGANIZATION, organization)
 
@@ -475,8 +478,8 @@ class GGUFWriter:
     def add_file_type(self, ftype: int) -> None:
         self.add_uint32(Keys.General.FILE_TYPE, ftype)
 
-    def add_parameter_size_class(self, parameter_size_class: str) -> None:
-        self.add_string(Keys.General.PARAMETER_SIZE_CLASS, parameter_size_class)
+    def add_parameter_weight_class(self, parameter_weight_class: str) -> None:
+        self.add_string(Keys.General.PARAMETER_WEIGHT_CLASS, parameter_weight_class)
 
     def add_tags(self, tags: Sequence[str]) -> None:
         self.add_array(Keys.Tokenizer.TAGS, tags)
