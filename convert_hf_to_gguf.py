@@ -3589,7 +3589,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--metadata", type=Path,
-        help="Specify the path for a metadata file"
+        help="Specify the path for an authorship metadata override file"
     )
     parser.add_argument(
         "--get-outfile", action="store_true",

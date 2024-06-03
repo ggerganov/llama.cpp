@@ -1256,7 +1256,7 @@ def main(args_in: list[str] | None = None) -> None:
     parser.add_argument("--pad-vocab",    action="store_true",    help="add pad tokens when model vocab expects more than tokenizer metadata provides")
     parser.add_argument("--skip-unknown", action="store_true",    help="skip unknown tensor names instead of failing")
     parser.add_argument("--verbose",      action="store_true",    help="increase output verbosity")
-    parser.add_argument("--metadata",     type=Path,              help="Specify the path for a metadata file")
+    parser.add_argument("--metadata",     type=Path,              help="Specify the path for an authorship metadata override file")
     parser.add_argument("--get-outfile",  action="store_true",    help="get calculated default outfile name")
     parser.add_argument("--model-name",   type=str, default=None, help="name of the model")
 
