@@ -18,7 +18,7 @@ CLI_ARGS_MAIN_PERPLEXITY = [
     "low-vram", "main-gpu", "memory-f32", "mirostat", "mirostat-ent", "mirostat-lr", "mlock",
     "model", "multiline-input", "n-gpu-layers", "n-predict", "no-mmap", "no-mul-mat-q",
     "np-penalize-nl", "numa", "ppl-output-type", "ppl-stride", "presence-penalty", "prompt",
-    "prompt-cache", "prompt-cache-all", "prompt-cache-ro", "random-prompt", "repeat-last-n",
+    "prompt-cache", "prompt-cache-all", "prompt-cache-ro", "repeat-last-n",
     "repeat-penalty", "reverse-prompt", "rope-freq-base", "rope-freq-scale", "rope-scale", "seed",
     "simple-io", "tensor-split", "threads", "temp", "tfs", "top-k", "top-p", "typical",
     "verbose-prompt"
