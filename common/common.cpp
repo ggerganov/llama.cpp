@@ -1373,17 +1373,23 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
             this->desc = buffer;
         }
 
+        option_info(const std::string & grp) : grp(grp) {}
+
         std::string tags;
         std::string args;
         std::string desc;
+        std::string grp;
     };
 
     std::vector<option_info> options;
 
     // TODO: filter by tags
 
+    options.push_back({ "general" });
     options.push_back({ "*",           "-h,    --help, --usage",        "print usage and exit" });
     options.push_back({ "*",           "       --version",              "show version and build info" });
+    options.push_back({ "*",           "       --verbose-prompt",       "print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false" });
+    options.push_back({ "*",           "       --no-display-prompt",    "don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false" });
     options.push_back({ "*",           "-co,   --color",                "colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false" });
     options.push_back({ "*",           "-s,    --seed SEED",            "RNG seed (default: %d, use random seed for < 0)", params.seed });
     options.push_back({ "*",           "-t,    --threads N",            "number of threads to use during generation (default: %d)", params.n_threads });
@@ -1393,13 +1399,15 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "number of threads to use during batch and prompt processing (default: same as --threads-draft)" });
     options.push_back({ "speculative", "       --draft N",              "number of tokens to draft for speculative decoding (default: %d)", params.n_draft });
     options.push_back({ "speculative", "-ps,   --p-split N",            "speculative decoding split probability (default: %.1f)", (double)params.p_split });
+    options.push_back({ "*",           "-lcs,  --lookup-cache-static FNAME",
+                                                                        "path to static lookup cache to use for lookup decoding (not updated by generation)" });
+    options.push_back({ "*",           "-lcd,  --lookup-cache-dynamic FNAME",
+                                                                        "path to dynamic lookup cache to use for lookup decoding (updated by generation)" });
+
     options.push_back({ "*",           "-c,    --ctx-size N",           "size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx });
     options.push_back({ "*",           "-n,    --n-predict N",          "number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict });
     options.push_back({ "*",           "-b,    --batch-size N",         "logical maximum batch size (default: %d)", params.n_batch });
     options.push_back({ "*",           "-ub,   --ubatch-size N",        "physical maximum batch size (default: %d)", params.n_ubatch });
-    options.push_back({ "*",           "       --ignore-eos",           "ignore end of stream token and continue generating (implies --logit-bias EOS-inf)" });
-    options.push_back({ "*",           "       --penalize-nl",          "penalize newline tokens (default: %s)", sparams.penalize_nl ? "true" : "false" });
-    options.push_back({ "*",           "       --temp N",               "temperature (default: %.1f)", (double)sparams.temp });
     options.push_back({ "*",           "       --keep N",               "number of tokens to keep from the initial prompt (default: %d, -1 = all)", params.n_keep });
     options.push_back({ "*",           "       --chunks N",             "max number of chunks to process (default: %d, -1 = all)", params.n_chunks });
     options.push_back({ "*",           "-fa,   --flash-attn",           "enable Flash Attention (default: %s)", params.flash_attn ? "enabled" : "disabled" });
@@ -1419,11 +1427,6 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "main",        "-cnv,  --conversation",         "run in conversation mode (does not print special tokens and suffix/prefix) (default: %s)", params.conversation ? "true" : "false" });
     options.push_back({ "main",        "-ins,  --instruct",             "run in instruction mode (use with Alpaca models) (default: %s)", params.instruct ? "true" : "false" });
     options.push_back({ "main",        "-cml,  --chatml",               "run in chatml mode (use with ChatML-compatible models) (default: %s)", params.chatml ? "true" : "false" });
-    options.push_back({ "main",        "       --cfg-negative-prompt PROMPT",
-                                                                        "negative prompt to use for guidance (default: '%s')", sparams.cfg_negative_prompt.c_str() });
-    options.push_back({ "main",        "       --cfg-negative-prompt-file FNAME",
-                                                                        "negative prompt file to use for guidance" });
-    options.push_back({ "main",        "       --cfg-scale N",          "strength of guidance (default: %.1f, 1.0 = disable)", (double)sparams.cfg_scale });
     options.push_back({ "main infill", "-i,    --interactive",          "run in interactive mode (default: %s)", params.interactive ? "true" : "false" });
     options.push_back({ "main infill", "-if,   --interactive-first",    "run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false" });
     options.push_back({ "main infill", "-mli,  --multiline-input",      "allows you to write or paste multiple lines without ending each in '\\'" });
@@ -1431,10 +1434,14 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "main infill", "       --in-prefix STRING",     "string to prefix user inputs with (default: empty)" });
     options.push_back({ "main infill", "       --in-suffix STRING",     "string to suffix after user inputs with (default: empty)" });
 
+    options.push_back({ "sampling" });
     options.push_back({ "*",           "       --samplers SAMPLERS",    "samplers that will be used for generation in the order, separated by \';\'\n"
                                                                         "(default: %s)", sampler_type_names.c_str() });
     options.push_back({ "*",           "       --sampling-seq SEQUENCE",
                                                                         "simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str() });
+    options.push_back({ "*",           "       --ignore-eos",           "ignore end of stream token and continue generating (implies --logit-bias EOS-inf)" });
+    options.push_back({ "*",           "       --penalize-nl",          "penalize newline tokens (default: %s)", sparams.penalize_nl ? "true" : "false" });
+    options.push_back({ "*",           "       --temp N",               "temperature (default: %.1f)", (double)sparams.temp });
     options.push_back({ "*",           "       --top-k N",              "top-k sampling (default: %d, 0 = disabled)", sparams.top_k });
     options.push_back({ "*",           "       --top-p N",              "top-p sampling (default: %.1f, 1.0 = disabled)", (double)sparams.top_p });
     options.push_back({ "*",           "       --min-p N",              "min-p sampling (default: %.1f, 0.0 = disabled)", (double)sparams.min_p });
@@ -1454,12 +1461,20 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       -l TOKEN_ID(+/-)BIAS",   "modifies the likelihood of token appearing in the completion,\n"
                                                                         "i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n"
                                                                         "or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'" });
+    options.push_back({ "main",        "       --cfg-negative-prompt PROMPT",
+                                                                        "negative prompt to use for guidance (default: '%s')", sparams.cfg_negative_prompt.c_str() });
+    options.push_back({ "main",        "       --cfg-negative-prompt-file FNAME",
+                                                                        "negative prompt file to use for guidance" });
+    options.push_back({ "main",        "       --cfg-scale N",          "strength of guidance (default: %.1f, 1.0 = disable)", (double)sparams.cfg_scale });
+
+    options.push_back({ "grammar" });
     options.push_back({ "*",           "       --grammar GRAMMAR",      "BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", sparams.grammar.c_str() });
     options.push_back({ "*",           "       --grammar-file FNAME",   "file to read grammar from" });
     options.push_back({ "*",           "-j,    --json-schema SCHEMA",
                                                                         "JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object\n"
                                                                         "For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead" });
 
+    options.push_back({ "context hacking" });
     options.push_back({ "*",           "       --rope-scaling {none,linear,yarn}",
                                                                         "RoPE frequency scaling method, defaults to linear unless specified by the model" });
     options.push_back({ "*",           "       --rope-scale N",         "RoPE context scaling factor, expands context by a factor of N" });
@@ -1470,10 +1485,17 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       --yarn-attn-factor N",   "YaRN: scale sqrt(t) or attention magnitude (default: %.1f)", (double)params.yarn_attn_factor });
     options.push_back({ "*",           "       --yarn-beta-slow N",     "YaRN: high correction dim or alpha (default: %.1f)", (double)params.yarn_beta_slow });
     options.push_back({ "*",           "       --yarn-beta-fast N",     "YaRN: low correction dim or beta (default: %.1f)", (double)params.yarn_beta_fast });
+    options.push_back({ "*",           "-gan,  --grp-attn-n N",         "group-attention factor (default: %d)", params.grp_attn_n });
+    options.push_back({ "*",           "-gaw,  --grp-attn-w N",         "group-attention width (default: %.1f)", (double)params.grp_attn_w });
+    options.push_back({ "*",           "-dkvc, --dump-kv-cache",        "verbose print of the KV cache" });
+    options.push_back({ "*",           "-nkvo, --no-kv-offload",        "disable KV offload" });
+    options.push_back({ "*",           "-ctk,  --cache-type-k TYPE",    "KV cache data type for K (default: %s)", params.cache_type_k.c_str() });
+    options.push_back({ "*",           "-ctv,  --cache-type-v TYPE",    "KV cache data type for V (default: %s)", params.cache_type_v.c_str() });
+
     options.push_back({ "embedding",   "       --pooling {none,mean,cls}",
                                                                         "pooling type for embeddings, use model default if unspecified" });
-    options.push_back({ "*",           "-dt,   --defrag-thold N",       "KV cache defragmentation threshold (default: %.1f, < 0 - disabled)", (double)params.defrag_thold });
 
+    options.push_back({ "perplexity" });
     options.push_back({ "perplexity",  "       --all-logits",           "return logits for all tokens in the batch (default: %s)", params.logits_all ? "true" : "false" });
     options.push_back({ "perplexity",  "       --hellaswag",            "compute HellaSwag score over random tasks from datafile supplied with -f" });
     options.push_back({ "perplexity",  "       --hellaswag-tasks N",    "number of tasks to use when computing the HellaSwag score (default: %zu)", params.hellaswag_tasks });
@@ -1484,13 +1506,18 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "number of tasks to use when computing the multiple choice score (default: %zu)", params.multiple_choice_tasks });
     options.push_back({ "perplexity",  "       --kl-divergence",        "computes KL-divergence to logits provided via --kl-divergence-base" });
 
+    options.push_back({ "parallel" });
+    options.push_back({ "*",           "-dt,   --defrag-thold N",       "KV cache defragmentation threshold (default: %.1f, < 0 - disabled)", (double)params.defrag_thold });
     options.push_back({ "*",           "-np,   --parallel N",           "number of parallel sequences to decode (default: %d)", params.n_parallel });
     options.push_back({ "*",           "-ns,   --sequences N",          "number of sequences to decode (default: %d)", params.n_sequences });
     options.push_back({ "*",           "-cb,   --cont-batching",        "enable continuous batching (a.k.a dynamic batching) (default: %s)", params.cont_batching ? "enabled" : "disabled" });
 
+    options.push_back({ "multi-modality" });
     options.push_back({ "*",           "       --mmproj FILE",          "path to a multimodal projector file for LLaVA. see examples/llava/README.md" });
     options.push_back({ "*",           "       --image FILE",           "path to an image file. use with multimodal models. Specify multiple times for batching" });
 
+    options.push_back({ "backend" });
+    options.push_back({ "*",           "       --rpc SERVERS",          "comma separated list of RPC servers" });
     if (llama_supports_mlock()) {
         options.push_back({ "*",           "       --mlock",                "force system to keep model in RAM rather than swapping or compressing" });
     }
@@ -1518,16 +1545,11 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu });
     }
 
-    options.push_back({ "*",           "       --rpc SERVERS",          "comma separated list of RPC servers" });
-    options.push_back({ "*",           "       --verbose-prompt",       "print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false" });
-    options.push_back({ "*",           "       --no-display-prompt",    "don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false" });
-    options.push_back({ "*",           "-gan,  --grp-attn-n N",         "group-attention factor (default: %d)", params.grp_attn_n });
-    options.push_back({ "*",           "-gaw,  --grp-attn-w N",         "group-attention width (default: %.1f)", (double)params.grp_attn_w });
-    options.push_back({ "*",           "-dkvc, --dump-kv-cache",        "verbose print of the KV cache" });
-    options.push_back({ "*",           "-nkvo, --no-kv-offload",        "disable KV offload" });
-    options.push_back({ "*",           "-ctk,  --cache-type-k TYPE",    "KV cache data type for K (default: %s)", params.cache_type_k.c_str() });
-    options.push_back({ "*",           "-ctv,  --cache-type-v TYPE",    "KV cache data type for V (default: %s)", params.cache_type_v.c_str() });
-    options.push_back({ "*",           "       --simple-io",            "use basic IO for better compatibility in subprocesses and limited consoles" });
+    options.push_back({ "model" });
+    options.push_back({ "*",           "       --check-tensors",        "check model tensor data for invalid values (default: %s)", params.check_tensors ? "true" : "false" });
+    options.push_back({ "*",           "       --override-kv KEY=TYPE:VALUE",
+                                                                        "advanced option to override model metadata by key. may be specified multiple times.\n"
+                                                                        "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false" });
     options.push_back({ "*",           "       --lora FNAME",           "apply LoRA adapter (implies --no-mmap)" });
     options.push_back({ "*",           "       --lora-scaled FNAME S",  "apply LoRA adapter with user defined scaling S (implies --no-mmap)" });
     options.push_back({ "*",           "       --lora-base FNAME",      "optional model to use as a base for the layers modified by the LoRA adapter" });
@@ -1536,33 +1558,38 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "add a control vector with user defined scaling SCALE" });
     options.push_back({ "*",           "       --control-vector-layer-range START END",
                                                                         "layer range to apply the control vector(s) to, start and end inclusive" });
-    options.push_back({ "*",           "-m,    --model FNAME",          "model path (default: models/$filename with filename from --hf-file or --model-url if set, otherwise %s)", DEFAULT_MODEL_PATH });
+    options.push_back({ "*",           "-m,    --model FNAME",          "model path (default: models/$filename with filename from --hf-file\n"
+                                                                        "or --model-url if set, otherwise %s)", DEFAULT_MODEL_PATH });
     options.push_back({ "*",           "-md,   --model-draft FNAME",    "draft model for speculative decoding (default: unused)" });
     options.push_back({ "*",           "-mu,   --model-url MODEL_URL",  "model download url (default: unused)" });
     options.push_back({ "*",           "-hfr,  --hf-repo REPO",         "Hugging Face model repository (default: unused)" });
     options.push_back({ "*",           "-hff,  --hf-file FILE",         "Hugging Face model file (default: unused)" });
+
+#ifndef LOG_DISABLE_LOGS
+    options.push_back({ "logging" });
+    options.push_back({ "*",           "       --simple-io",            "use basic IO for better compatibility in subprocesses and limited consoles" });
     options.push_back({ "*",           "-ld,   --logdir LOGDIR",        "path under which to save YAML logs (no logging if unset)" });
-    options.push_back({ "*",           "-lcs,  --lookup-cache-static FNAME",
-                                                                        "path to static lookup cache to use for lookup decoding (not updated by generation)" });
-    options.push_back({ "*",           "-lcd,  --lookup-cache-dynamic FNAME",
-                                                                        "path to dynamic lookup cache to use for lookup decoding (updated by generation)" });
-    options.push_back({ "*",           "       --override-kv KEY=TYPE:VALUE",
-                                                                        "advanced option to override model metadata by key. may be specified multiple times.\n"
-                                                                        "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false" });
-    options.push_back({ "*",           "       --check-tensors",        "check model tensor data for invalid values (default: %s)", params.check_tensors ? "true" : "false" });
+    options.push_back({ "logging",     "       --log-test",             "Run simple logging test" });
+    options.push_back({ "logging",     "       --log-disable",          "Disable trace logs" });
+    options.push_back({ "logging",     "       --log-enable",           "Enable trace logs" });
+    options.push_back({ "logging",     "       --log-file FNAME",       "Specify a log filename (without extension)" });
+    options.push_back({ "logging",     "       --log-new",              "Create a separate new log file on start. "
+                                                                        "Each log file will have unique name: \"<name>.<ID>.log\"" });
+    options.push_back({ "logging",     "       --log-append",           "Don't truncate the old log file." });
+#endif // LOG_DISABLE_LOGS
 
     printf("usage: %s [options]\n", argv[0]);
-    printf("\n");
-    printf("options:\n\n");
 
     for (const auto & o : options) {
+        if (!o.grp.empty()) {
+            printf("\n%s:\n\n", o.grp.c_str());
+            continue;
+        }
         printf("  %-32s", o.args.c_str());
         if (o.args.length() > 30) {
             printf("\n%34s", "");
         }
 
-        //printf("%s\n", o.desc.c_str());
-        // print line by line and pad with spaces
         const auto desc = o.desc;
         size_t start = 0;
         size_t end = desc.find('\n');
@@ -1575,10 +1602,6 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
         printf("%s\n", desc.substr(start).c_str());
     }
     printf("\n");
-
-#ifndef LOG_DISABLE_LOGS
-    log_print_usage();
-#endif // LOG_DISABLE_LOGS
 }
 
 std::string gpt_params_get_system_info(const gpt_params & params) {
