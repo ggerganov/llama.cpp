@@ -110,11 +110,27 @@ class Metadata:
 
         # load huggingface parameters if available
         hf_params = Metadata.load_huggingface_parameters(model_path)
+
         hf_name_or_path = hf_params.get("_name_or_path")
-        if metadata.name is None and hf_name_or_path is not None:
-            metadata.name = Path(hf_name_or_path).name
-        if metadata.source_hf_repo is None and hf_name_or_path is not None:
-            metadata.source_hf_repo = Path(hf_name_or_path).name
+        if hf_name_or_path is not None and Metadata.is_model_id(hf_name_or_path):
+            # Use _name_or_path only if its actually a model name and not some computer path
+            # e.g. 'meta-llama/Llama-2-7b-hf'
+            model_name_normal, organization_name, base_name, fine_tune, version_string, parameter_weight_class = Metadata.get_model_name_components(hf_name_or_path)
+            if metadata.name is None and model_name_normal is not None:
+                metadata.name = model_name_normal
+            if metadata.organization is None and organization_name is not None:
+                metadata.organization = organization_name
+            if metadata.basename is None and base_name is not None:
+                metadata.basename = base_name
+            if metadata.finetune is None and fine_tune is not None:
+                metadata.finetune = fine_tune
+            if metadata.version is None and version_string is not None:
+                metadata.version = version_string
+            if metadata.parameter_weight_class is None and parameter_weight_class is not None:
+                metadata.parameter_weight_class = parameter_weight_class
+            if metadata.source_hf_repo is None and not Metadata.is_model_name_only(hf_name_or_path):
+                # Can't just have the model name as the source hf repo as a link to the huggingface website needs the org name and the model name
+                metadata.source_hf_repo = "https://huggingface.co/{hf_name_or_path}"
 
         # Use Directory Folder Name As Fallback Name
         if metadata.name is None:
@@ -183,6 +199,22 @@ class Metadata:
 
         with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    @staticmethod
+    def is_model_id(name_or_path: Optional[str] = None) -> bool:
+        # Return True if the string has 1 or 0 slashes, indicating a model id
+        # Created specifically because of _name_or_path in hugging face parameter
+        if name_or_path is None:
+            return False
+        return name_or_path.count('/') <= 1
+
+    @staticmethod
+    def is_model_name_only(name_or_path: Optional[str] = None) -> bool:
+        # Return True if the string has 0 slashes, indicating a model name only model id
+        # Created specifically because of _name_or_path in hugging face parameter
+        if name_or_path is None:
+            return False
+        return name_or_path.count('/') == 0
 
     @staticmethod
     def get_model_name_components(model_identifier: Optional[str] = None) -> dict[str, object]:
