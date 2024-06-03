@@ -2827,11 +2827,13 @@ struct llama_rs_cache {
                             n_shared_tail_cells += 1;
                             n_seqs -= 1;
                         }
-                    } else if (rs_cell.is_empty()) {
-                        // from shared to unique
-                        n_seqs += 1;
-                        if (prev_cell.tail_rc == 1) {
-                            // it was the last tail of the previous cell
+                    } else {
+                        if (rs_cell.is_empty()) {
+                            // from shared to unique
+                            n_seqs += 1;
+                        }
+                        if (prev_cell.tail_rc == 1 && rs_cell.seq_nodes.size() == rs_cell.tail_rc) {
+                            // from last shared to fully tail
                             n_shared_tail_cells -= 1;
                         }
                     }
@@ -8683,6 +8685,18 @@ static struct ggml_tensor * llm_build_mamba(
     conv_states = ggml_reshape_3d(ctx, conv_states, d_conv - 1, d_inner, n_rs);
     ssm_states  = ggml_reshape_3d(ctx,  ssm_states,    d_state, d_inner, n_rs);
 
+    // copy states which won't be changed further (between n_seqs and n_rs)
+    ggml_build_forward_expand(graph,
+        ggml_cpy(ctx,
+            ggml_view_1d(ctx, conv_states, (d_conv - 1)*d_inner*(n_rs - n_seqs), n_seqs*(conv_states->nb[2])),
+            ggml_view_1d(ctx, conv_states_all, (d_conv - 1)*d_inner*(n_rs - n_seqs), (rs_head + n_seqs)*(d_conv - 1)*d_inner*ggml_element_size(conv_states_all))));
+
+    ggml_build_forward_expand(graph,
+        ggml_cpy(ctx,
+            ggml_view_1d(ctx, ssm_states, d_state*d_inner*(n_rs - n_seqs), n_seqs*(ssm_states->nb[2])),
+            ggml_view_1d(ctx, ssm_states_all, d_state*d_inner*(n_rs - n_seqs), (rs_head + n_seqs)*d_state*d_inner*ggml_element_size(ssm_states_all))));
+
+    // the part of the states that will be used and modified
     struct ggml_tensor * conv = ggml_view_3d(ctx, conv_states, d_conv - 1, d_inner, n_seqs, conv_states->nb[1], conv_states->nb[2], 0);
     struct ggml_tensor * ssm  = ggml_view_3d(ctx,  ssm_states,    d_state, d_inner, n_seqs,  ssm_states->nb[1],  ssm_states->nb[2], 0);
 
@@ -8698,28 +8712,43 @@ static struct ggml_tensor * llm_build_mamba(
 
     // conv
     {
-        // Custom operator, which is needed because self-overlapping views aren't yet well supported by ggml.
-        // And also because this uses much less memory for large batches (4 times less when d_conv is 4).
-        // The equivalent is to concatenate the columns of conv_states and x,
-        // then make a self-overlapping view of that over d_conv columns at each stride in the 3rd dimension,
-        // then element-wise multiply that with the conv1d weigth,
+        // => {d_conv - 1 + n_seq_tokens, d_inner, n_seqs}
+        struct ggml_tensor * conv_x = ggml_concat(ctx, conv, ggml_cont(ctx, ggml_transpose(ctx, x)), 0);
+
+        // copy last (d_conv - 1) columns back into the state cache
+        struct ggml_tensor * last_conv = ggml_view_3d(ctx, conv_x, d_conv - 1, d_inner, n_seqs, conv_x->nb[1], conv_x->nb[2], n_seq_tokens*(conv_x->nb[0]));
+
+        ggml_build_forward_expand(graph,
+            ggml_cpy(ctx, last_conv,
+                ggml_view_1d(ctx, conv_states_all,
+                    (d_conv - 1)*(d_inner)*(n_seqs),
+                    rs_head*(d_conv - 1)*(d_inner)*ggml_element_size(conv_states_all))));
+
+        // 1D convolution
+        // The equivalent is to make a self-overlapping view of conv_x
+        // over d_conv columns at each stride in the 3rd dimension,
+        // then element-wise multiply that with the conv1d weight,
         // then sum the elements of each row,
         // (the last two steps are a dot product over rows (also doable with mul_mat))
         // then permute away the ne[0] dimension,
         // and then you're left with the resulting x tensor.
-        // The new conv_states is the last (d_conv - 1) columns
-        // of the last 3rd dimensional "layer" of the self-overlapping view.
         // For simultaneous sequences, all sequences need to have the same length.
-        x = ggml_ssm_conv(ctx, conv, x, model.layers[il].ssm_conv1d);
 
-        // ensure conv is updated before copying into the recurrent state cache
-        ggml_build_forward_expand(graph, x);
+        // For some reason, im2col expects a F16 kernel, but doesn't even read from it.
+        // TODO: make im2col accept F32 kernels to directly pass ssm_conv1d to it.
+        // => { d_conv * d_inner, n_seq_tokens, n_seqs}
+        x = ggml_im2col(ctx,
+                ggml_new_tensor_2d(ctx, GGML_TYPE_F16, d_conv, d_inner),
+                conv_x, 1, 0, 0, 0, 1, 0, false, GGML_TYPE_F32);
 
-        ggml_build_forward_expand(graph,
-            ggml_cpy(ctx, conv_states,
-                ggml_view_1d(ctx, conv_states_all,
-                    (d_conv - 1)*(d_inner)*(n_rs),
-                    rs_head*(d_conv - 1)*(d_inner)*ggml_element_size(conv_states_all))));
+        x = ggml_reshape_4d(ctx, x, d_conv, 1, d_inner, n_seq_tokens * n_seqs);
+
+        // => {1, 1, d_inner, n_seq_tokens * n_seqs}
+        x = ggml_mul_mat(ctx, ggml_reshape_3d(ctx, model.layers[il].ssm_conv1d, d_conv, 1, d_inner), x);
+        x = ggml_reshape_3d(ctx, x, d_inner, n_seq_tokens, n_seqs);
+
+        // Alternatively, this does the same as the above
+        // x = ggml_ssm_conv(ctx, conv_x, model.layers[il].ssm_conv1d);
 
         // bias
         x = ggml_add(ctx, x, model.layers[il].ssm_conv1d_b);
@@ -8746,16 +8775,16 @@ static struct ggml_tensor * llm_build_mamba(
 
         // Custom operator to optimize the parallel associative scan
         // as described in the Annex D of the Mamba paper.
-        // => {d_inner, n_seq_tokens, n_seqs}
-        struct ggml_tensor * y = ggml_ssm_scan(ctx, ssm, x, dt, model.layers[il].ssm_a, B, C);
-
-        // The ssm scan also changes the state, ensure it's done before copying to the recurrent state cache
-        ggml_build_forward_expand(graph, y);
+        // => {d_inner, n_seq_tokens, n_seqs} and {d_state, d_inner, n_seqs}
+        struct ggml_tensor * y_ssm = ggml_ssm_scan(ctx, ssm, x, dt, model.layers[il].ssm_a, B, C);
 
         // store last states
         ggml_build_forward_expand(graph,
-            ggml_cpy(ctx, ssm_states,
-                ggml_view_1d(ctx, ssm_states_all, d_state*d_inner*n_rs, rs_head*d_state*d_inner*ggml_element_size(ssm_states_all))));
+            ggml_cpy(ctx,
+                ggml_view_1d(ctx, y_ssm, d_state*d_inner*n_seqs, x->nb[3]),
+                ggml_view_1d(ctx, ssm_states_all, d_state*d_inner*n_seqs, rs_head*d_state*d_inner*ggml_element_size(ssm_states_all))));
+
+        struct ggml_tensor * y = ggml_view_3d(ctx, y_ssm, d_inner, n_seq_tokens, n_seqs, x->nb[1], x->nb[2], 0);
 
         // TODO: skip computing output earlier for unused tokens
 

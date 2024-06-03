@@ -1803,8 +1803,7 @@ extern "C" {
 
     GGML_API struct ggml_tensor * ggml_ssm_conv(
             struct ggml_context * ctx,
-            struct ggml_tensor  * s,
-            struct ggml_tensor  * x,
+            struct ggml_tensor  * sx,
             struct ggml_tensor  * c);
 
     GGML_API struct ggml_tensor * ggml_ssm_scan(
