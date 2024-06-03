@@ -8713,7 +8713,7 @@ static struct ggml_tensor * llm_build_mamba(
     // conv
     {
         // => {d_conv - 1 + n_seq_tokens, d_inner, n_seqs}
-        struct ggml_tensor * conv_x = ggml_concat(ctx, conv, ggml_cont(ctx, ggml_transpose(ctx, x)), 0);
+        struct ggml_tensor * conv_x = ggml_concat(ctx, conv, ggml_transpose(ctx, x), 0);
 
         // copy last (d_conv - 1) columns back into the state cache
         struct ggml_tensor * last_conv = ggml_view_3d(ctx, conv_x, d_conv - 1, d_inner, n_seqs, conv_x->nb[1], conv_x->nb[2], n_seq_tokens*(conv_x->nb[0]));
@@ -8734,6 +8734,8 @@ static struct ggml_tensor * llm_build_mamba(
         // and then you're left with the resulting x tensor.
         // For simultaneous sequences, all sequences need to have the same length.
 
+        // TODO: remove unused implementations
+#if 0
         // For some reason, im2col expects a F16 kernel, but doesn't even read from it.
         // TODO: make im2col accept F32 kernels to directly pass ssm_conv1d to it.
         // => { d_conv * d_inner, n_seq_tokens, n_seqs}
@@ -8741,14 +8743,24 @@ static struct ggml_tensor * llm_build_mamba(
                 ggml_new_tensor_2d(ctx, GGML_TYPE_F16, d_conv, d_inner),
                 conv_x, 1, 0, 0, 0, 1, 0, false, GGML_TYPE_F32);
 
+    #if 0
+        // TODO: CUDA, SYCL, and Vulkan don't (yet) support broadcasting the ne[3] dimension on MUL_MAT
         x = ggml_reshape_4d(ctx, x, d_conv, 1, d_inner, n_seq_tokens * n_seqs);
 
         // => {1, 1, d_inner, n_seq_tokens * n_seqs}
         x = ggml_mul_mat(ctx, ggml_reshape_3d(ctx, model.layers[il].ssm_conv1d, d_conv, 1, d_inner), x);
-        x = ggml_reshape_3d(ctx, x, d_inner, n_seq_tokens, n_seqs);
+    #else
+        x = ggml_reshape_4d(ctx, x, d_conv, d_inner, n_seq_tokens, n_seqs);
 
-        // Alternatively, this does the same as the above
-        // x = ggml_ssm_conv(ctx, conv_x, model.layers[il].ssm_conv1d);
+        // NOTE: it seems this is very slighly more performant than MUL_MAT on CPU for small row sizes
+        // => {1, d_inner, n_seq_tokens, n_seqs}
+        x = ggml_sum_rows(ctx, ggml_mul(ctx, x, model.layers[il].ssm_conv1d));
+    #endif
+        x = ggml_reshape_3d(ctx, x, d_inner, n_seq_tokens, n_seqs);
+#else
+        // Alternatively, this does the same as the above, but faster
+        x = ggml_ssm_conv(ctx, conv_x, model.layers[il].ssm_conv1d);
+#endif
 
         // bias
         x = ggml_add(ctx, x, model.layers[il].ssm_conv1d_b);
