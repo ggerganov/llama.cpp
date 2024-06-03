@@ -1662,10 +1662,9 @@ struct test_ssm_conv : public test_case {
         : type(type), d_conv(d_conv), d_inner(d_inner), n_seq_tokens(n_seq_tokens), n_seqs(n_seqs) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
-        ggml_tensor * s = ggml_new_tensor_3d(ctx, type, d_conv - 1, d_inner, n_seqs);
-        ggml_tensor * x = ggml_new_tensor_3d(ctx, type, d_inner, n_seq_tokens, n_seqs);
+        ggml_tensor * sx = ggml_new_tensor_3d(ctx, type, d_conv - 1 + n_seq_tokens, d_inner, n_seqs);
         ggml_tensor * c = ggml_new_tensor_2d(ctx, type, d_conv, d_inner);
-        ggml_tensor * out = ggml_ssm_conv(ctx, s, x, c);
+        ggml_tensor * out = ggml_ssm_conv(ctx, sx, c);
         return out;
     }
 };

@@ -5,13 +5,12 @@ static __global__ void ssm_scan_f32(
     const float * src0, const float * src1, const float * src2, const float * src3,
     const float * src4, const float * src5,
     const int src0_nb1, const int src0_nb2,
-    const int src1_nb0, const int src1_nb1, const int src1_nb2,
+    const int src1_nb0, const int src1_nb1, const int src1_nb2, const int src1_nb3,
     const int src2_nb0, const int src2_nb1, const int src2_nb2,
     const int src3_nb1,
     const int src4_nb1, const int src4_nb2,
     const int src5_nb1, const int src5_nb2,
     float * dst,
-    const int dst_nb0, const int dst_nb1, const int dst_nb2,
     const int nc, const int nr, const int n_t, const int n_s) {
 
 //    const int row = blockIdx.x*blockDim.y + threadIdx.y;
@@ -30,13 +29,17 @@ static __global__ void ssm_scan_f32(
 
     for (int i3 = 0; i3 < n_s; ++i3) {
         for (int i2 = 0; i2 < n_t; ++i2) {
-            float * y  = (float *)   ((char *)  dst + ir0* dst_nb0 + i2* dst_nb1 + i3* dst_nb2); // {d_inner, n_t, n_s}
-            float * s  = (float *)   ((char *) src0 + ir0*src0_nb1 + i3*src0_nb2); // {d_state, d_inner, n_s}
-            float * x  = (float *)   ((char *) src1 + ir0*src1_nb0 + i2*src1_nb1 + i3*src1_nb2); // {d_inner, n_t, n_s}
-            float * dt = (float *)   ((char *) src2 + ir0*src2_nb0 + i2*src2_nb1 + i3*src2_nb2); // {d_inner, n_t, n_s}
-            float * A  = (float *)   ((char *) src3 + ir0*src3_nb1); // {d_state, d_inner}
-            float * B  = (float *)   ((char *) src4 +  i2*src4_nb1 + i3*src4_nb2); // {d_state, n_t, n_s}
-            float * C  = (float *)   ((char *) src5 +  i2*src5_nb1 + i3*src5_nb2); // {d_state, n_t, n_s}
+            const float * s0 = (const float *) ((const char *) src0 + ir0*src0_nb1 + i3*src0_nb2); // {d_state, d_inner, n_s}
+            const float * x  = (const float *) ((const char *) src1 + ir0*src1_nb0 + i2*src1_nb1 + i3*src1_nb2); // {d_inner, n_t, n_s}
+            const float * dt = (const float *) ((const char *) src2 + ir0*src2_nb0 + i2*src2_nb1 + i3*src2_nb2); // {d_inner, n_t, n_s}
+            const float * A  = (const float *) ((const char *) src3 + ir0*src3_nb1); // {d_state, d_inner}
+            const float * B  = (const float *) ((const char *) src4 +  i2*src4_nb1 + i3*src4_nb2); // {d_state, n_t, n_s}
+            const float * C  = (const float *) ((const char *) src5 +  i2*src5_nb1 + i3*src5_nb2); // {d_state, n_t, n_s}
+            float * y = (float *) ((char *) dst + ir0*src1_nb0 + i2*src1_nb1 + i3*src1_nb2); // {d_inner, n_t, n_s}
+            float * s = (float *) ((char *) dst + ir0*src0_nb1 + i3*src0_nb2 + src1_nb3); // {d_state, d_inner, n_s}
+
+            // use the output as the source for the next token-wise iterations
+            if (i2 > 0) { s0 = s; }
 
             // d_inner
             for (int i1 = 0; i1 < ir; ++i1) {
@@ -48,7 +51,7 @@ static __global__ void ssm_scan_f32(
                 for (int i0 = 0; i0 < nc; ++i0) {
                     int i = i0 + i1*nc;
                     // state = prev_state * dA + dB * x
-                    float state = (s[i] * expf(dt_soft_plus * A[i])) + (B[i0] * x_dt);
+                    float state = (s0[i] * expf(dt_soft_plus * A[i])) + (B[i0] * x_dt);
                     // y = rowwise_dotprod(state, C)
                     sumf += state * C[i0];
                     s[i] = state;
@@ -63,13 +66,12 @@ static void ssm_scan_f32_cuda(
     const float * src0, const float * src1, const float * src2, const float * src3,
     const float * src4, const float * src5,
     const int src0_nb1, const int src0_nb2,
-    const int src1_nb0, const int src1_nb1, const int src1_nb2,
+    const int src1_nb0, const int src1_nb1, const int src1_nb2, const int src1_nb3,
     const int src2_nb0, const int src2_nb1, const int src2_nb2,
     const int src3_nb1,
     const int src4_nb1, const int src4_nb2,
     const int src5_nb1, const int src5_nb2,
     float * dst,
-    const int dst_nb0, const int dst_nb1, const int dst_nb2,
     const int nc, const int nr, const int n_t, const int n_s,
     cudaStream_t stream) {
 
@@ -80,13 +82,12 @@ static void ssm_scan_f32_cuda(
         src0, src1, src2, src3,
         src4, src5,
         src0_nb1, src0_nb2,
-        src1_nb0, src1_nb1, src1_nb2,
+        src1_nb0, src1_nb1, src1_nb2, src1_nb3,
         src2_nb0, src2_nb1, src2_nb2,
         src3_nb1,
         src4_nb1, src4_nb2,
         src5_nb1, src5_nb2,
         dst,
-        dst_nb0, dst_nb1, dst_nb2,
         nc, nr, n_t, n_s);
 }
 
@@ -103,7 +104,7 @@ void ggml_cuda_op_ssm_scan(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const int64_t n_t = src1->ne[1]; // number of tokens per sequence
     const int64_t n_s = src0->ne[2]; // number of sequences in the batch
 
-    GGML_ASSERT(ggml_nelements(src1) == ggml_nelements(dst));
+    GGML_ASSERT(ggml_nelements(src1) + ggml_nelements(src0) == ggml_nelements(dst));
     GGML_ASSERT(src0->nb[0] == sizeof(float));
     GGML_ASSERT(src1->nb[0] == sizeof(float));
     GGML_ASSERT(src2->nb[0] == sizeof(float));
@@ -112,6 +113,10 @@ void ggml_cuda_op_ssm_scan(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     GGML_ASSERT(src5->nb[0] == sizeof(float));
     // required for the dot product between s and C
     GGML_ASSERT(src0->nb[1] == src0->ne[0]*sizeof(float));
+    // required for per-sequence offsets for states
+    GGML_ASSERT(src0->nb[2] == src0->ne[0]*src0->ne[1]*sizeof(float));
+    // required to get correct offset for state destination (i.e. src1->nb[3])
+    GGML_ASSERT(src1->nb[3] == src1->ne[0]*src1->ne[1]*src1->ne[2]*sizeof(float));
 
     const float * src0_d = (const float *)src0->data;
     const float * src1_d = (const float *)src1->data;
@@ -129,13 +134,12 @@ void ggml_cuda_op_ssm_scan(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         src0_d, src1_d, src2_d, src3_d,
         src4_d, src5_d,
         src0->nb[1], src0->nb[2],
-        src1->nb[0], src1->nb[1], src1->nb[2],
+        src1->nb[0], src1->nb[1], src1->nb[2], src1->nb[3],
         src2->nb[0], src2->nb[1], src2->nb[2],
         src3->nb[1],
         src4->nb[1], src4->nb[2],
         src5->nb[1], src5->nb[2],
         dst_d,
-        dst->nb[0], dst->nb[1], dst->nb[2],
         nc, nr, n_t, n_s,
         stream);
 }
