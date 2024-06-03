@@ -57,6 +57,8 @@ ifeq ($(UNAME_S),Darwin)
 		LLAMA_METAL := 1
 	endif
 
+	LLAMA_NO_OPENMP := 1
+
 	ifneq ($(UNAME_P),arm)
 		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
 		ifeq ($(SYSCTL_M),1)
@@ -404,6 +406,12 @@ ifndef LLAMA_NO_ACCELERATE
 		MK_LDFLAGS  += -framework Accelerate
 	endif
 endif # LLAMA_NO_ACCELERATE
+
+ifndef LLAMA_NO_OPENMP
+	MK_CPPFLAGS += -DGGML_USE_OPENMP
+	MK_CFLAGS   += -fopenmp
+	MK_CXXFLAGS += -fopenmp
+endif # LLAMA_NO_OPENMP
 
 ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
