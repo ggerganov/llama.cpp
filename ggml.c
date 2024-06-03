@@ -19666,7 +19666,7 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
     return cplan;
 }
 
-static enum ggml_status ggml_graph_compute_parallel(struct ggml_compute_state * workers, int n_threads){
+static enum ggml_status ggml_graph_compute_parallel(struct ggml_compute_state * workers, int n_threads) {
     enum ggml_status compute_status = GGML_STATUS_SUCCESS;
 
 #ifdef GGML_USE_OPENMP
