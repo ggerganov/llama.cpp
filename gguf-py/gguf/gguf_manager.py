@@ -37,7 +37,7 @@ LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count"
 
 SplitTensorsPerFile: TypeAlias = deque[tuple[os.PathLike[str], deque[tuple[str, Any]], GGUFWriter]] # [(outfile name, [(tensor name, tensor data)] for each tensor in file, filewriter)]
 KVTempData: TypeAlias = dict[str, tuple[Any, GGUFValueType]] # {key: (value, type)}
-TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any]] # (tensor name, tensor data), aka LazyModel
+TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any], GGMLQuantizationType] # (tensor name, tensor data, tensor dtype), aka LazyModel
 
 
 class SplitStyle(IntEnum):
@@ -157,6 +157,7 @@ class GGUFManager:
     tensors: deque[TensorTempData]
     split_arguments: SplitArguments
     split_strategy: SplitStrategy
+    dtype: GGMLQuantizationType
 
     def __init__(self, path: os.PathLike[str] | str, arch: str, split_arguments: SplitArguments,
                  use_temp_file: bool = True, endianess: GGUFEndian = GGUFEndian.LITTLE
@@ -243,10 +244,10 @@ class GGUFManager:
             if tensors:
                 while True:
                     try:
-                        (name, tensor) = tensors.popleft()
+                        (name, tensor, dtype) = tensors.popleft()
                     except IndexError:
                         break
-                    writer.add_tensor(name, tensor)
+                    writer.add_tensor(name, tensor, raw_dtype=dtype)
 
                 print(f"Writing to shard {ct + 1}/{self.total_shards} with {shard_num_tensors}/{running_total} remaining tensors (of {self.total_tensors} total)")
                 running_total -= shard_num_tensors
@@ -313,7 +314,7 @@ class GGUFManager:
         #    fp.seek(0)
         #    self.temp_file = fp
 
-        self.tensors.append((name, tensor))
+        self.tensors.append((name, tensor, raw_dtype))
 
         #if self.temp_file is None:
         #    self.tensors.append(tensor)
