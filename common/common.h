@@ -165,6 +165,7 @@ struct gpt_params {
     bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
+    bool verbose           = false;
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool display_prompt    = true;  // print prompt before generation
     bool infill            = false; // use infill mode
@@ -179,6 +180,29 @@ struct gpt_params {
     // multimodal models (see examples/llava)
     std::string mmproj = "";        // path to multimodal projector
     std::vector<std::string> image; // path to image file(s)
+
+    // server params
+    int32_t port           = 8080;
+    int32_t timeout_read   = 600;
+    int32_t timeout_write  = timeout_read;
+    int32_t n_threads_http = -1;
+
+    std::string hostname      = "127.0.0.1";
+    std::string public_path   = "";
+    std::string chat_template = "";
+    std::string system_prompt = "";
+
+    std::vector<std::string> api_keys;
+
+    std::string ssl_file_key  = "";
+    std::string ssl_file_cert = "";
+
+    bool endpoint_slots   = true;
+    bool endpoint_metrics = false;
+
+    bool log_json = false;
+
+    std::string slot_save_path;
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
@@ -279,6 +303,13 @@ std::string llama_detokenize_bpe(
 // Uses the value from the model metadata if possible, otherwise
 // defaults to true when model type is SPM, otherwise false.
 bool llama_should_add_bos_token(const llama_model * model);
+
+//
+// Chat template utils
+//
+
+// Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
+bool llama_chat_verify_template(const std::string & tmpl);
 
 //
 // KV cache utils

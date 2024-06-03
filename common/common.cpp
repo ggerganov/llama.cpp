@@ -905,7 +905,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.special = true;
         return true;
     }
-    if (arg == "--embedding") {
+    if (arg == "--embedding" || arg == "--embeddings") {
         params.embedding = true;
         return true;
     }
@@ -1082,6 +1082,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
         else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
         else { invalid_param = true; }
+        return true;
+    }
+    if (arg == "-v" || arg == "--verbose") {
+        params.verbose = true;
         return true;
     }
     if (arg == "--verbose-prompt") {
@@ -1314,6 +1318,152 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         }
         return true;
     }
+    if (arg == "--host") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.hostname = argv[i];
+        return true;
+    }
+    if (arg == "--port") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.port = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--path") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.public_path = argv[i];
+        return true;
+    }
+    if (arg == "--api-key") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.api_keys.push_back(argv[i]);
+        return true;
+    }
+    if (arg == "--api-key-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream key_file(argv[i]);
+        if (!key_file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        std::string key;
+        while (std::getline(key_file, key)) {
+            if (!key.empty()) {
+                params.api_keys.push_back(key);
+            }
+        }
+        key_file.close();
+        return true;
+    }
+    if (arg == "--ssl-key-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.ssl_file_key = argv[i];
+        return true;
+    }
+    if (arg == "--ssl-cert-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.ssl_file_cert = argv[i];
+        return true;
+    }
+    if (arg == "--timeout" || arg == "-to") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.timeout_read  = std::stoi(argv[i]);
+        params.timeout_write = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "-spf" || arg == "--system-prompt-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream file(argv[i]);
+        if (!file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        std::string system_prompt;
+        std::copy(
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>(),
+                std::back_inserter(system_prompt)
+                );
+        params.system_prompt = system_prompt;
+        return true;
+    }
+    if (arg == "--log-format") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        if (std::strcmp(argv[i], "json") == 0) {
+            params.log_json = true;
+        } else if (std::strcmp(argv[i], "text") == 0) {
+            params.log_json = false;
+        } else {
+            invalid_param = true;
+            return true;
+        }
+        return true;
+    }
+    if (arg == "--no-slots") {
+        params.endpoint_slots = false;
+        return true;
+    }
+    if (arg == "--metrics") {
+        params.endpoint_metrics = true;
+        return true;
+    }
+    if (arg == "--slot-save-path") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.slot_save_path = argv[i];
+        // if doesn't end with DIRECTORY_SEPARATOR, add it
+        if (!params.slot_save_path.empty() && params.slot_save_path[params.slot_save_path.size() - 1] != DIRECTORY_SEPARATOR) {
+            params.slot_save_path += DIRECTORY_SEPARATOR;
+        }
+        return true;
+    }
+    if (arg == "--chat-template") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        if (!llama_chat_verify_template(argv[i])) {
+            fprintf(stderr, "error: the supplied chat template is not supported: %s\n", argv[i]);
+            fprintf(stderr, "note: llama.cpp does not use jinja parser, we only support commonly used templates\n");
+            invalid_param = true;
+            return true;
+        }
+        params.chat_template = argv[i];
+        return true;
+    }
 #ifndef LOG_DISABLE_LOGS
     // Parse args for logging parameters
     if (log_param_single_parse(argv[i])) {
@@ -1388,6 +1538,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "general" });
     options.push_back({ "*",           "-h,    --help, --usage",        "print usage and exit" });
     options.push_back({ "*",           "       --version",              "show version and build info" });
+    options.push_back({ "*",           "-v,    --verbose",              "print verbose information" });
     options.push_back({ "*",           "       --verbose-prompt",       "print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false" });
     options.push_back({ "*",           "       --no-display-prompt",    "don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false" });
     options.push_back({ "*",           "-co,   --color",                "colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false" });
@@ -1564,6 +1715,28 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-mu,   --model-url MODEL_URL",  "model download url (default: unused)" });
     options.push_back({ "*",           "-hfr,  --hf-repo REPO",         "Hugging Face model repository (default: unused)" });
     options.push_back({ "*",           "-hff,  --hf-file FILE",         "Hugging Face model file (default: unused)" });
+
+    options.push_back({ "server" });
+    options.push_back({ "server",      "       --host HOST",            "ip address to listen (default: %s)", params.hostname.c_str() });
+    options.push_back({ "server",      "       --port PORT",            "port to listen (default: %d)", params.port });
+    options.push_back({ "server",      "       --path PATH",            "path to serve static files from (default: %s)", params.public_path.c_str() });
+    options.push_back({ "server",      "       --embedding(s)",         "enable embedding endpoint (default: %s)", params.embedding ? "enabled" : "disabled" });
+    options.push_back({ "server",      "       --api-key KEY",          "API key to use for authentication (default: none)" });
+    options.push_back({ "server",      "       --api-key-file FNAME",   "path to file containing API keys (default: none)" });
+    options.push_back({ "server",      "       --ssl-key-file FNAME",   "path to file a PEM-encoded SSL private key" });
+    options.push_back({ "server",      "       --ssl-cert-file FNAME",  "path to file a PEM-encoded SSL certificate" });
+    options.push_back({ "server",      "       --timeout N",            "server read/write timeout in seconds (default: %d)", params.timeout_read });
+    options.push_back({ "server",      "       --system-prompt-file FNAME",
+                                                                        "set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications" });
+    options.push_back({ "server",      "       --log-format {text,json}",
+                                                                        "log output format: json or text (default: json)" });
+    options.push_back({ "server",      "       --metrics",              "enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled" });
+    options.push_back({ "server",      "       --no-slots",             "disables slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled" });
+    options.push_back({ "server",      "       --slot-save-path PATH",  "path to save slot kv cache (default: disabled)" });
+    options.push_back({ "server",      "       --chat-template JINJA_TEMPLATE",
+                                                                        "set custom jinja chat template (default: template taken from model's metadata)\n"
+                                                                        "only commonly used templates are accepted:\n"
+                                                                        "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
 
 #ifndef LOG_DISABLE_LOGS
     options.push_back({ "logging" });
@@ -2534,6 +2707,12 @@ bool llama_should_add_bos_token(const llama_model * model) {
     const int add_bos = llama_add_bos_token(model);
 
     return add_bos != -1 ? bool(add_bos) : (llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
+}
+
+bool llama_chat_verify_template(const std::string & tmpl) {
+    llama_chat_message chat[] = {{"user", "test"}};
+    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
+    return res >= 0;
 }
 
 //
