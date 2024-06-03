@@ -1124,7 +1124,7 @@ static __global__ void mul_mat_q(
         for (int i0 = 0; i0 < mmq_y; i0 += WARP_SIZE) {
             const int i = blockIdx.x*mmq_y + i0 + threadIdx.x;
 
-            if (need_check && i > ne0) {
+            if (need_check && i >= ne0) {
                 continue;
             }
 
