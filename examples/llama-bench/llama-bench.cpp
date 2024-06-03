@@ -1382,6 +1382,7 @@ int main(int argc, char ** argv) {
         }
 
         p->print_test(t);
+        fflush(p->fout);
 
         llama_print_timings(ctx);
 
