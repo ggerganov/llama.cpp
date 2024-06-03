@@ -51,8 +51,6 @@ class Metadata:
             metadata.name = model_card.get("model_name")
 
         if "base_model" in model_card:
-            # Not part of huggingface model card standard but notice some model creator using it
-            # such as TheBloke who would encode 'mistralai/Mixtral-8x7B-Instruct-v0.1' into base_model
             model_id = model_card.get("base_model")
             model_name_normal, organization_name, base_name, fine_tune, version_string, parameter_weight_class = Metadata.get_model_name_components(model_id)
 
