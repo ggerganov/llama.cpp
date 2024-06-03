@@ -27,8 +27,6 @@ import importlib
 gguf = importlib.import_module("gguf-py.gguf")
 # import gguf
 
-from convert import LlamaHfVocab
-
 logger = logging.getLogger("hf-to-gguf")
 
 
