@@ -912,21 +912,18 @@ struct server_context {
 
         // get prompt
         if (!task.infill) {
-            {
-                const auto & prompt = data.find("prompt");
-                if (prompt == data.end()) {
-                    send_error(task, "Either \"prompt\" or \"messages\" must be provided", ERROR_TYPE_INVALID_REQUEST);
-                    return false;
-                } else {
-                    slot.prompt = *prompt;
-                }
-                if (slot.prompt.is_array() && slot.prompt.size() == 0) {
-                    send_error(task, "\"prompt\" cannot be an empty array", ERROR_TYPE_INVALID_REQUEST);
-                    return false;
-                }
+            const auto & prompt = data.find("prompt");
+            if (prompt == data.end()) {
+                send_error(task, "Either \"prompt\" or \"messages\" must be provided", ERROR_TYPE_INVALID_REQUEST);
+                return false;
+            } else {
+                slot.prompt = *prompt;
+            }
+            if (slot.prompt.is_array() && slot.prompt.size() == 0) {
+                send_error(task, "\"prompt\" cannot be an empty array", ERROR_TYPE_INVALID_REQUEST);
+                return false;
             }
         }
-        
 
         // penalize user-provided tokens
         {
