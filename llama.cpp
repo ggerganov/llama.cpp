@@ -5120,18 +5120,16 @@ static bool llm_load_tensors(
             case LLM_ARCH_MINICPM:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                    model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, false);
+                    // if output is NULL, init from the input tok embed
+                    if (model.output == NULL) {
+                        model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                        ml.n_created--; // artificial tensor
+                        ml.size_data += ggml_nbytes(model.output);
+                    }
 
                     // output
-                    {
-                        model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        if (model.arch != LLM_ARCH_MINICPM){
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                            // if output is NULL, init from the input tok embed
-                            if (model.output == NULL) {
-                                model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
-                            }
-                        }
-                    }
+                    model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -10096,7 +10094,9 @@ struct llm_build_context {
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
 
         // scale the input embeddings
-        inpL = ggml_scale(ctx0, inpL, scale_embd);
+        if (batch.token) {
+            inpL = ggml_scale(ctx0, inpL, scale_embd);
+        }
         cb(inpL, "inp_scaled", -1);
 
         // inp_pos - contains the positions
@@ -10212,7 +10212,7 @@ struct llm_build_context {
         cb(cur, "lmhead_scaling", -1);
 
         // lm_head
-        cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
+        cur = ggml_mul_mat(ctx0, model.output, cur);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
