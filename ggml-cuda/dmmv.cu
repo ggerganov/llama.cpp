@@ -434,8 +434,8 @@ static constexpr __device__ dequantize_kernel_t get_dequantize_kernel(ggml_type 
 
 template <ggml_type type>
 static __global__ void dequantize_mul_mat_vec(const void * __restrict__ vx, const dfloat * __restrict__ y, float * __restrict__ dst, const int ncols, const int nrows) {
-    constexpr int qk = ggml_blck_size_device(type); // quantized weights per x block
-    constexpr int qr = get_qr_device(type); // number of quantized weights per data value in x block
+    constexpr int qk = ggml_cuda_type_traits<type>::qk; // quantized weights per x block
+    constexpr int qr = ggml_cuda_type_traits<type>::qr; // number of quantized weights per data value in x block
     constexpr dequantize_kernel_t dequantize_kernel = get_dequantize_kernel(type);
 
     const int64_t row = (int64_t)blockIdx.x*blockDim.y + threadIdx.y;

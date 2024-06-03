@@ -1033,10 +1033,10 @@ static __global__ void mul_mat_q(
         return;
     }
 
+    constexpr int  qk       = ggml_cuda_type_traits<type>::qk;
+    constexpr int  qr       = ggml_cuda_type_traits<type>::qr;
+    constexpr int  qi       = ggml_cuda_type_traits<type>::qi;
     constexpr int  mmq_y    = get_mmq_y_device(mmq_x);
-    constexpr int  qk       = ggml_blck_size_device(type);
-    constexpr int  qr       = get_qr_device(type);
-    constexpr int  qi       = get_qi_device(type);
     constexpr bool need_sum = get_need_sum(type);
     constexpr int  vdr      = get_vdr_mmq(type);
 
