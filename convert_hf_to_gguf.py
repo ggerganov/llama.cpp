@@ -426,7 +426,7 @@ class Model:
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
 
-    def per_model_weight_count_estimation(tensors: Iterator[tuple[str, Tensor]], expert_count: int) -> int:
+    def per_model_weight_count_estimation(self, tensors: Iterator[tuple[str, Tensor]], expert_count: int) -> int:
         # TODO: Ensure parameter count is accurate throughout various model type
         #       May currently overestimate parameter count in Mamba model because
         #       output weights is tied with token embeddings.
