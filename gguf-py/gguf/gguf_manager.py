@@ -305,19 +305,9 @@ class GGUFManager:
             tensor.byteswap(inplace=True)
 
         # TODO reimplement temp file
-        #if self.use_temp_file and self.temp_file is None:
-        #    fp = tempfile.SpooledTemporaryFile(mode="w+b", max_size=256 * 1024 * 1024)
-        #    fp.seek(0)
-        #    self.temp_file = fp
+        # I'm pretty sure it gets handled per shard?
 
         self.tensors.append((name, tensor, raw_dtype))
-
-        #if self.temp_file is None:
-        #    self.tensors.append(tensor)
-        #    return
-
-        #tensor.tofile(self.temp_file)
-        #self.write_padding(self.temp_file, tensor.nbytes)
 
     def close(self) -> None:
         for _, _, writer in self.split_strategy:

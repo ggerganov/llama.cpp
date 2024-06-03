@@ -56,11 +56,11 @@ class Model:
     part_names: list[str]
     is_safetensors: bool
     hparams: dict[str, Any]
-    gguf_writer: gguf.GGUFManager
     block_count: int
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
     fname_out: Path
+    gguf_writer: gguf.GGUFManager
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
