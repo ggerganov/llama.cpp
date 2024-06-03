@@ -3034,7 +3034,7 @@ int main(int argc, char ** argv) {
             LOG_ERROR("unable to load model", {{"error", "Load model failed"}});
             state.store(SERVER_STATE_ERROR);
             return 1;
-        }        
+        }
         // Initialize the server context if the model is loaded successfully
         ctx_server.init();
         state.store(SERVER_STATE_READY);
