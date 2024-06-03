@@ -44,6 +44,7 @@ def parameter_weight_class(expert_count_int:int, model_params_count: int) -> str
 
     return size_class
 
+
 def naming_convention(model_name: str, base_name: str, finetune_string:str, version_string:str, parameter_weight_class: str, output_type: str) -> str:
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
 

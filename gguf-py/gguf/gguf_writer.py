@@ -482,13 +482,13 @@ class GGUFWriter:
         self.add_string(Keys.General.PARAMETER_WEIGHT_CLASS, parameter_weight_class)
 
     def add_tags(self, tags: Sequence[str]) -> None:
-        self.add_array(Keys.Tokenizer.TAGS, tags)
+        self.add_array(Keys.General.TAGS, tags)
 
     def add_languages(self, languages: Sequence[str]) -> None:
-        self.add_array(Keys.Tokenizer.LANGUAGES, languages)
+        self.add_array(Keys.General.LANGUAGES, languages)
 
     def add_datasets(self, datasets: Sequence[str]) -> None:
-        self.add_array(Keys.Tokenizer.DATASETS, datasets)
+        self.add_array(Keys.General.DATASETS, datasets)
 
     def add_name(self, name: str) -> None:
         self.add_string(Keys.General.NAME, name)

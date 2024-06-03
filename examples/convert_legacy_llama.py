@@ -806,11 +806,11 @@ class OutputFile:
         if metadata.source_hf_repo is not None:
             self.gguf.add_source_hf_repo(metadata.source_hf_repo)
         if metadata.tags is not None:
-            self.gguf_writer.add_tags(metadata.tags)
+            self.gguf.add_tags(metadata.tags)
         if metadata.languages is not None:
-            self.gguf_writer.add_languages(metadata.languages)
+            self.gguf.add_languages(metadata.languages)
         if metadata.datasets is not None:
-            self.gguf_writer.add_datasets(metadata.datasets)
+            self.gguf.add_datasets(metadata.datasets)
 
     def add_meta_arch(self, params: Params) -> None:
         # Metadata About The Neural Architecture Itself
@@ -961,6 +961,8 @@ class OutputFile:
 
         of = OutputFile(fname_out, endianess=endianess)
 
+        print(metadata)
+
         # meta data
         of.add_meta_model(params, metadata)
         of.add_meta_arch(params)
@@ -1017,7 +1019,7 @@ def per_model_weight_count_estimation(tensors: dict[str, LazyTensor], expert_cou
         sum_weight_estimate += sum_weights_in_tensor
 
     # Calculate weight estimate per model
-    per_model_weight_estimate = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
+    per_model_weight_estimate = (sum_weight_estimate / expert_count) if expert_count is not None and (expert_count > 0) else sum_weight_estimate
 
     return per_model_weight_estimate
 
@@ -1302,9 +1304,6 @@ def main(args_in: list[str] | None = None) -> None:
     else:
         model_plus = ModelPlus(model = {}, paths = [dir_model / 'dummy'], format = 'none', vocab = None)
 
-    model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
-    logger.info(f"model parameters count : {model_params_count} ({gguf.model_weight_count_rounded_notation(model_params_count)})")
-
     if args.dump:
         do_dump_model(model_plus)
         return
@@ -1369,6 +1368,9 @@ def main(args_in: list[str] | None = None) -> None:
 
     if metadata.name is None:
         metadata.name = params.path_model.name
+
+    model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
+    logger.info(f"model parameters count : {model_params_count} ({gguf.model_weight_count_rounded_notation(model_params_count)})")
 
     logger.info(f"Vocab info: {vocab}")
     logger.info(f"Special vocab info: {special_vocab}")

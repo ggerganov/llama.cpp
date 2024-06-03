@@ -146,7 +146,7 @@ class Model:
             self.fname_out = fname_out.parent / gguf.fill_templated_filename(fname_out.name, output_type)
         else:
             # output in the same directory as the model by default
-            self.fname_out = dir_model.parent / self.fname_default
+            self.fname_out = dir_model / f"{self.fname_default}.gguf"
 
         # Configure GGUF Writer
         self.gguf_writer = gguf.GGUFWriter(self.fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
@@ -447,7 +447,7 @@ class Model:
             sum_weight_estimate += sum_weights_in_tensor
 
         # Calculate weight estimate per model
-        per_model_weight_estimate = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
+        per_model_weight_estimate = (sum_weight_estimate / expert_count) if expert_count is not None and (expert_count > 0) else sum_weight_estimate
 
         return per_model_weight_estimate
 

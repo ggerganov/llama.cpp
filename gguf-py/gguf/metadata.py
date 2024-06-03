@@ -51,21 +51,28 @@ class Metadata:
             metadata.name = model_card.get("model_name")
 
         if "base_model" in model_card:
+            # Example: stabilityai/stable-diffusion-xl-base-1.0. Can also be a list (for merges)
             model_id = model_card.get("base_model")
-            model_name_normal, organization_name, base_name, fine_tune, version_string, parameter_weight_class = Metadata.get_model_name_components(model_id)
 
-            if metadata.name is None and model_name_normal is not None:
-                metadata.name = model_name_normal
-            if metadata.organization is None and organization_name is not None:
-                metadata.organization = organization_name
-            if metadata.basename is None and base_name is not None:
-                metadata.basename = base_name
-            if metadata.finetune is None and fine_tune is not None:
-                metadata.finetune = fine_tune
-            if metadata.version is None and version_string is not None:
-                metadata.version = version_string
-            if metadata.parameter_weight_class is None and parameter_weight_class is not None:
-                metadata.parameter_weight_class = parameter_weight_class
+            # Check if string. We cannot handle lists as that is too ambagious
+            if isinstance(model_id, str):
+                model_name_normal, organization_name, base_name, fine_tune, version_string, parameter_weight_class = Metadata.get_model_name_components(model_id)
+                if metadata.name is None and model_name_normal is not None:
+                    metadata.name = model_name_normal
+                if metadata.organization is None and organization_name is not None:
+                    metadata.organization = organization_name
+                if metadata.basename is None and base_name is not None:
+                    metadata.basename = base_name
+                if metadata.finetune is None and fine_tune is not None:
+                    metadata.finetune = fine_tune
+                if metadata.version is None and version_string is not None:
+                    metadata.version = version_string
+                if metadata.parameter_weight_class is None and parameter_weight_class is not None:
+                    metadata.parameter_weight_class = parameter_weight_class
+                if metadata.source_url is None:
+                    metadata.source_url = f"https://huggingface.co/{model_id}"
+                if metadata.source_hf_repo is None:
+                    metadata.source_hf_repo = model_id
 
         if "model-index" in model_card and len(model_card["model_name"]) == 1 and "name" in model_card["model_name"][0]:
             # This is a model index which has model id that can be extracted into organization and model name
@@ -100,11 +107,11 @@ class Metadata:
             # non huggingface model card standard but notice some model creator using it
             metadata.author = model_card.get("model_creator")
         if metadata.tags is None:
-            metadata.tags = model_card.get("tags", [])
+            metadata.tags = model_card.get("tags", None)
         if metadata.languages is None:
-            metadata.languages = model_card.get("language", model_card.get("languages", []))
+            metadata.languages = model_card.get("language", model_card.get("languages", None))
         if metadata.datasets is None:
-            metadata.datasets = model_card.get("datasets", model_card.get("dataset", []))
+            metadata.datasets = model_card.get("datasets", model_card.get("dataset", None))
 
         # load huggingface parameters if available
         hf_params = Metadata.load_huggingface_parameters(model_path)
@@ -126,14 +133,28 @@ class Metadata:
                 metadata.version = version_string
             if metadata.parameter_weight_class is None and parameter_weight_class is not None:
                 metadata.parameter_weight_class = parameter_weight_class
-            if metadata.source_hf_repo is None and not Metadata.is_model_name_only(hf_name_or_path):
+            if not Metadata.is_model_name_only(hf_name_or_path):
                 # Can't just have the model name as the source hf repo as a link to the huggingface website needs the org name and the model name
-                metadata.source_hf_repo = "https://huggingface.co/{hf_name_or_path}"
+                if metadata.source_url is None:
+                    metadata.source_url = f"https://huggingface.co/{hf_name_or_path}"
+                if metadata.source_hf_repo is None:
+                    metadata.source_hf_repo = hf_name_or_path
 
         # Use Directory Folder Name As Fallback Name
-        if metadata.name is None:
-            if model_path is not None and model_path.exists():
-                metadata.name = model_path.name
+        if model_path is not None and model_path.exists():
+            model_name_normal, organization_name, base_name, fine_tune, version_string, parameter_weight_class = Metadata.get_model_name_components(model_path.name)
+            if metadata.name is None and model_name_normal is not None:
+                metadata.name = model_name_normal
+            if metadata.organization is None and organization_name is not None:
+                metadata.organization = organization_name
+            if metadata.basename is None and base_name is not None:
+                metadata.basename = base_name
+            if metadata.finetune is None and fine_tune is not None:
+                metadata.finetune = fine_tune
+            if metadata.version is None and version_string is not None:
+                metadata.version = version_string
+            if metadata.parameter_weight_class is None and parameter_weight_class is not None:
+                metadata.parameter_weight_class = parameter_weight_class
 
         # Metadata Override File Provided
         # This is based on LLM_KV_NAMES mapping in llama.cpp
