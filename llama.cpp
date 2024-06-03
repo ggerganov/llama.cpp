@@ -2574,7 +2574,7 @@ struct llama_rs_cache {
     std::vector<llama_rs_seq_node>::iterator remove_seq_node_from_cell(llama_rs_cell & rs_cell, std::vector<llama_rs_seq_node>::iterator node_iter) {
         GGML_ASSERT(&rs_cell >= cells.data() && &rs_cell < cells.data() + cells.size());
         // The iterator needs to point inside the correct vector
-        GGML_ASSERT(node_iter.base() >= rs_cell.seq_nodes.data() && node_iter.base() < rs_cell.seq_nodes.data() + rs_cell.seq_nodes.size());
+        GGML_ASSERT(&(*node_iter) >= rs_cell.seq_nodes.data() && &(*node_iter) < rs_cell.seq_nodes.data() + rs_cell.seq_nodes.size());
         if (node_iter != rs_cell.seq_nodes.end()) {
             // update the tree
             llama_rs_seq_node node = *node_iter;
