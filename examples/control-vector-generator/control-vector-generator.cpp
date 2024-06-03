@@ -22,30 +22,50 @@
 
 // TODO read everything over and make sure it makes sense because I'm dropping logic errors left and right - Christian
 
+// to reduce the amount of stuff that gets sent to cb_eval I separated it somewhat - Christian
 struct callback_data {
     std::vector<uint8_t> data;
-    ggml_context * ctx_ggml;
+    ggml_context * ctx_ggml;   // holds v_pos, v_neg
 
     int n_tokens = 0;
-    int n_embd = 0;
     bool is_eval_pos = true;
 
     // each element of the vector correspond to one layer
-    std::vector<struct ggml_tensor *> v_pos;       // vector of matrices of size [n_embd, n_tokens]
-    std::vector<struct ggml_tensor *> v_neg;       // vector of matrices of size [n_embd, n_tokens]
-    std::vector<struct ggml_tensor *> v_final;     // vector of finished vectors of size [n_embd]
-    std::vector<struct ggml_tensor *> v_diff; // vector of matrices of size [n_embd, m] where m ~ n_tokens * n_completions
+    std::vector<struct ggml_tensor *> v_pos;   // vector of matrices of size [n_embd, n_tokens]
+    std::vector<struct ggml_tensor *> v_neg;   // vector of matrices of size [n_embd, n_tokens]
 
-    // each element of the outer vector correspond to one layer, each element of the inner vector correspond to one prompt pass
-    std::vector<std::vector<struct ggml_tensor *>> v_diffs_wrapped; // vector of compiled diff matrices to be concatenated
-
-    // TODO ggml destructor?
     ~callback_data() {
         for (auto ptr : v_pos) free(ptr);
         for (auto ptr : v_neg) free(ptr);
+        ggml_free(ctx_ggml);
+    }
+};
+
+// I prefer having the different contexts so we can free each immediately after we're done using it
+// e.g. we don't need the diffs_wrapped once we strip zero rows + concatenate them so we can ggml_free it, etc.
+// @ngxson let me know what you think - @christianazinn
+struct diff_ctx {
+    int n_embd = 0;
+    int n_threads = 8;
+
+    ggml_context * ctx_diffs_wrapped; // holds v_diffs_wrapped
+    ggml_context * ctx_diff;          // holds v_diff
+    ggml_context * ctx_final;         // holds v_final
+    
+    // each element of the vector correspond to one layer
+    std::vector<struct ggml_tensor *> v_diff;  // vector of matrices of size [n_embd, m] where m ~ n_tokens * n_completions
+    std::vector<struct ggml_tensor *> v_final; // vector of vectors of size [n_embd] to be written to file
+
+    // each element of the outer vector correspond to one layer, each element of the inner vector correspond to one prompt pass
+    std::vector<std::vector<struct ggml_tensor *>> v_diffs_wrapped; // vector of compiled diff matrices of size [n_embd, n_tokens] to be concatenated
+
+    ~diff_ctx() {
         for (auto ptr : v_diff) free(ptr);
         for (auto ptr : v_final) free(ptr);
         for (auto & vec : v_diffs_wrapped) for (auto ptr : vec) free(ptr);
+        ggml_free(ctx_diffs_wrapped);
+        ggml_free(ctx_diff);
+        ggml_free(ctx_final);
     }
 };
 
@@ -289,9 +309,6 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
     // copy the data from the GPU memory if needed
     const bool is_host = ggml_backend_buffer_is_host(t->buffer);
 
-    // FIXME something is very wrong here
-    // v_pos and v_neg are being populated, but the values aren't correct - it writes the same values to all vectors, it looks like?
-    // this leads ultimately to an error in calc_diff where diff becomes entirely zeroes and eventually a segfault several iterations into pca
     struct ggml_tensor * t_host;
     auto n_bytes = ggml_nbytes(t);
     t_host = ggml_new_tensor_2d(cb_data->ctx_ggml, t->type, t->ne[0], t->ne[1]);
@@ -328,6 +345,40 @@ static void padding_seq(llama_context * ctx, std::vector<llama_token> & tokens, 
     }
 }
 
+static void calc_diff(callback_data & cb_data, diff_ctx & dctx) {
+    // TODO: assert cb_data.v_pos.size() == cb_data.v_neg.size()
+    dctx.v_diffs_wrapped.resize(cb_data.v_pos.size());
+    for (size_t il = 0; il < cb_data.v_pos.size(); il++) {
+        std::cout << "il: " << il << " of " << cb_data.v_pos.size()-1 << std::endl;
+
+        auto & inp_pos = cb_data.v_pos[il];
+        auto & inp_neg = cb_data.v_neg[il];
+        auto n_bytes = ggml_nbytes(inp_pos);
+
+        printf("inp_pos [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_pos, 0, DEBUG_POS, 0, 0));
+        printf("inp_neg [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_neg, 0, DEBUG_POS, 0, 0));
+
+        // TODO is this the best way to get dimension? i don't know which way n_embd/n_tokens go
+        // for that matter can we get rid of n_embd/n_tokens fields in favor of ne[0]/ne[1]?
+        // TODO assert inp_pos->ne[0] == inp_neg->ne[0] && inp_pos->ne[1] == inp_neg->ne[1]
+        struct ggml_tensor * dest = ggml_new_tensor_2d(dctx.ctx_diffs_wrapped, GGML_TYPE_F32, inp_pos->ne[0], inp_pos->ne[1]);
+        dest->data = malloc(n_bytes); // TODO @ngxson get rid of this malloc somehow
+    
+        for (size_t i = 0; i < inp_pos->ne[0]; i++) {
+            for (size_t j = 0; j < inp_pos->ne[1]; j++) {
+                ggml_set_f32_nd(dest, i, j, 0, 0, ggml_get_f32_nd(inp_pos, i, j, 0, 0) - ggml_get_f32_nd(inp_neg, i, j, 0, 0));
+            }
+        }
+
+        printf("dest [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(dest, 0, DEBUG_POS, 0, 0));
+
+        dctx.v_diffs_wrapped[il].push_back(dest);
+    }
+}
+
+// TODO nomenclature is probably wrong! this should be cols
+// row/col mixup has been giving me a headache this entire time because apparently ggml accesses 2d as [col][row] - @christianazinn
+// TODO check row/col because that's probably where the logic error is
 static bool is_row_all_zeros(struct ggml_tensor * diff, int row, int cols, float eps = 1e-6) {
     for (int i = 0; i < cols; ++i) {
         if (ggml_get_f32_nd(diff, i, row, 0, 0) > eps) {
@@ -337,114 +388,61 @@ static bool is_row_all_zeros(struct ggml_tensor * diff, int row, int cols, float
     return true;
 }
 
-static void calc_diff(callback_data & cb_data) {
-    // TODO: assert cb_data.v_pos.size() == cb_data.v_neg.size()
-    cb_data.v_diffs_wrapped.resize(cb_data.v_pos.size());
-    for (size_t il = 0; il < cb_data.v_pos.size(); il++) {
-        auto & inp_pos = cb_data.v_pos[il];
-        auto & inp_neg = cb_data.v_neg[il];
-        auto n_bytes = ggml_nbytes(inp_pos);
+static void concatenate_diffs(diff_ctx & dctx) {
+    // TODO can you do this inplace?
+    // TODO assert each tensor has the same ->ne[0] and it equals dctx.n_embd
+    printf("concatenate_diffs\n");
+    for (size_t il = 0; il < dctx.v_diffs_wrapped.size(); ++il) {
+        printf("il: %zu of %zu\n", il, dctx.v_diffs_wrapped.size()-1);
+        std::vector<struct ggml_tensor *> & vec = dctx.v_diffs_wrapped[il];
 
-        struct ggml_init_params params = {
-            /*.mem_size   =*/ n_bytes + ggml_tensor_overhead(),
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ false,
-        };
-        struct ggml_context * ctx_data = ggml_init(params);
-
-        printf("inp_pos [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_pos, 0, DEBUG_POS, 0, 0));
-        printf("inp_neg [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_neg, 0, DEBUG_POS, 0, 0));
-
-        // TODO is this the best way to get dimension? i don't know which way n_embd/n_tokens go
-        // for that matter can we get rid of n_embd/n_tokens fields in favor of ne[0]/ne[1]?
-        struct ggml_tensor * dest = ggml_new_tensor_2d(ctx_data, GGML_TYPE_F32, inp_pos->ne[0], inp_pos->ne[1]);
-    
-        for (size_t i = 0; i < cb_data.n_embd; i++) {
-            for (size_t j = 0; j < cb_data.n_tokens; j++) {
-                ggml_set_f32_nd(dest, i, j, 0, 0, ggml_get_f32_nd(inp_pos, i, j, 0, 0) - ggml_get_f32_nd(inp_neg, i, j, 0, 0));
-            }
-        }
-
-        printf("dest [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(dest, 0, DEBUG_POS, 0, 0));
-
-        // TODO can we make this faster? like check during the above operation rather than on a second pass?
+        std::cout << "vec size: " << vec.size() << std::endl;
 
         // strip zero rows
-        std::vector<int> nonzero_rows;
-        for (int i = 0; i < cb_data.n_tokens; ++i) {
-            if (!is_row_all_zeros(dest, i, cb_data.n_embd)) {
-                nonzero_rows.push_back(i);
+        int n_nonzero_rows = 0;
+        std::vector<std::vector<int>> nonzero_rows; // outer vector is tensor idx, inner vector is row in tensor
+        nonzero_rows.resize(vec.size());
+        for (int i = 0; i < vec.size(); ++i) {
+            for (int j = 0; j < vec[i]->ne[1]; ++j) {
+                if (!is_row_all_zeros(vec[i], j, vec[i]->ne[0])) {
+                    nonzero_rows[i].push_back(j);
+                    n_nonzero_rows++;
+                }
             }
         }
 
-        /* debug
-        if(cb_data.n_tokens != nonzero_rows.size()) {
-            std::cout << "original n_tokens: " << cb_data.n_tokens << std::endl;
-            std::cout << "zero rows in layer " << il << ": " << cb_data.n_tokens - nonzero_rows.size() << std::endl;
-        } */
+        std::cout << "n_nonzero_rows: " << n_nonzero_rows << std::endl;
 
-        struct ggml_init_params params2 = {
-            /*.mem_size   =*/ inp_pos->ne[0] * nonzero_rows.size() * sizeof(float) + ggml_tensor_overhead(),
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ false,
-        };
-        struct ggml_context * ctx_data2 = ggml_init(params);
+        // we transpose it here because ggml mul_mat is really weird
+        struct ggml_tensor * diff = ggml_new_tensor_2d(dctx.ctx_diff, GGML_TYPE_F32, n_nonzero_rows, dctx.n_embd);
 
-        struct ggml_tensor * diff = ggml_new_tensor_2d(ctx_data2, GGML_TYPE_F32, inp_pos->ne[0], nonzero_rows.size());
+        diff->data = malloc(dctx.n_embd * n_nonzero_rows * sizeof(float) + ggml_tensor_overhead()); // @ngxson get rid of this malloc somehow
 
-        //size_t offset = 0;
         for (size_t i = 0; i < nonzero_rows.size(); ++i) {
-            // probably eschew this in favor of the iterative method?
-            //float * origin = (float *)(dest->data) + nonzero_rows[i] * cb_data.n_embd;
-            //memcpy((float *)(diff->data) + offset, origin, cb_data.n_embd * sizeof(float));
-            //offset += cb_data.n_embd;
-
-            for (size_t j = 0; j < cb_data.n_embd; j++) {
-                ggml_set_f32_nd(diff, j, i, 0, 0, ggml_get_f32_nd(dest, j, nonzero_rows[i], 0, 0));
+            for (size_t j : nonzero_rows[i]) {
+                for (size_t k = 0; k < vec[i]->ne[0]; k++) {
+                    //std::cout << ggml_get_f32_nd(vec[i], k, j, 0, 0) << std::endl;
+                    ggml_set_f32_nd(diff, i, k, 0, 0, ggml_get_f32_nd(vec[i], k, j, 0, 0));
+                }
             }
         }
 
-        // FIXME ggml_nbytes(diff) is 0
+        printf("diff[0][1]: %f\n", ggml_get_f32_nd(diff, 0, 1, 0, 0));
 
-        cb_data.v_diffs_wrapped[il].push_back(diff);
-        ggml_free(ctx_data);
-        ggml_free(ctx_data2);
+        // TODO assert row == n_nonzero_rows
+
+        dctx.v_diff.push_back(diff);
     }
+    ggml_free(dctx.ctx_diffs_wrapped);
 }
 
-static void concatenate_diffs(callback_data & cb_data) {
-    printf("concatenate_diffs\n");
-    for (size_t i = 0; i < cb_data.v_diffs_wrapped.size(); ++i) {
-        std::vector<struct ggml_tensor *> & vec = cb_data.v_diffs_wrapped[i];
-        size_t n_rows_total = 0;
-        for (size_t j = 0; j < vec.size(); ++j) {
-            n_rows_total += vec[j]->ne[1];
-        }
-
-        struct ggml_init_params params = {
-            /*.mem_size   =*/ cb_data.n_embd * n_rows_total * sizeof(float) + ggml_tensor_overhead(),
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ false,
-        };
-        struct ggml_context * ctx_data = ggml_init(params);
-
-        // std::cout << "n_rows_total: " << n_rows_total << std::endl;
-        struct ggml_tensor * diff = ggml_new_tensor_2d(ctx_data, GGML_TYPE_F32, cb_data.n_embd, n_rows_total);
-
-        size_t offset = 0;
-        for (size_t j = 0; j < vec.size(); ++j) {
-            float * origin = (float *)(vec[j]->data);
-            memcpy((float *)(diff->data) + offset, origin, vec[j]->ne[1] * cb_data.n_embd * sizeof(float));
-            offset += vec[j]->ne[0] * cb_data.n_embd;
-        }
-
-        cb_data.v_diff.push_back(diff);
-    }
-}
+// TODO translate everything below this
+// TODO make sure to free everything in a timely manner
 
 struct pca_model {
     struct ggml_tensor * v_diff_original;
     struct ggml_tensor * square;
+    struct ggml_tensor * square_transpose;
     struct ggml_tensor * eigenvector;
 
     ggml_backend_t backend = NULL;
@@ -452,7 +450,7 @@ struct pca_model {
     struct ggml_context * ctx;
 };
 
-void load_pca_model(pca_model & model, struct ggml_tensor * v_diff_original, const int n_embd) {
+void load_pca_model(pca_model & model, struct ggml_tensor * v_diff_original) {
 #ifdef GGML_USE_CUDA
     fprintf(stderr, "%s: using CUDA backend\n", __func__);
     model.backend = ggml_backend_cuda_init(0); // init device 0
@@ -474,8 +472,10 @@ void load_pca_model(pca_model & model, struct ggml_tensor * v_diff_original, con
     if (!model.backend) {
         model.backend = ggml_backend_cpu_init();
     }
+    
+    printf("v_diff_original[0][1]: %f\n", ggml_get_f32_nd(v_diff_original, 0, 1, 0, 0));
 
-    const int num_tensors = 3;
+    const int num_tensors = 4;
 
     struct ggml_init_params params {
             /*.mem_size   =*/ ggml_tensor_overhead() * num_tensors,
@@ -486,19 +486,21 @@ void load_pca_model(pca_model & model, struct ggml_tensor * v_diff_original, con
     model.ctx = ggml_init(params);
 
     model.v_diff_original = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, v_diff_original->ne[0], v_diff_original->ne[1]);
-    model.square = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_embd, n_embd);
-    model.eigenvector = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, n_embd);
+    model.square = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, v_diff_original->ne[1], v_diff_original->ne[1]);
+    model.square_transpose = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, v_diff_original->ne[1], v_diff_original->ne[1]);
+    model.eigenvector = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, v_diff_original->ne[1]);
 
     model.buffer = ggml_backend_alloc_ctx_tensors(model.ctx, model.backend);
 
     ggml_backend_tensor_set(model.v_diff_original, v_diff_original->data, 0, ggml_nbytes(v_diff_original));
-    // no need to load anything into square yet
+
+    // no need to load anything into square or square_transpose yet
 
     // initialize model.eigenvector to random vector
-    std::vector<float> random_vec = std::vector<float>();
+    std::vector<float> random_vec;
     std::default_random_engine generator(static_cast<unsigned int>(std::time(0)));
     std::uniform_real_distribution<float> distribution(0.0, 1.0);
-    for (int i = 0; i < n_embd; ++i) {
+    for (int i = 0; i < v_diff_original->ne[1]; ++i) {
         random_vec.push_back(distribution(generator));
     }
 
@@ -519,6 +521,7 @@ struct ggml_cgraph * square_diff_graph(const pca_model & model) {
     struct ggml_cgraph  * gf = ggml_new_graph(ctx0);
 
     struct ggml_tensor * square = ggml_mul_mat(ctx0, model.v_diff_original, model.v_diff_original);
+    //struct ggml_tensor * square_transpose = ggml_transpose(ctx0, square);
 
     ggml_build_forward_expand(gf, square);
 
@@ -526,6 +529,7 @@ struct ggml_cgraph * square_diff_graph(const pca_model & model) {
     return gf;
 }
 
+// TODO do this before pca so the pca_model is easier to malloc?
 struct ggml_tensor * compute_square(const pca_model & model, ggml_gallocr_t allocr, int n_threads) {
     struct ggml_cgraph * gf = square_diff_graph(model);
 
@@ -589,51 +593,44 @@ struct ggml_tensor * compute_piter(const pca_model & model, ggml_gallocr_t alloc
     return gf->nodes[gf->n_nodes - 1];
 }
 
-static void power_iteration(callback_data & cb_data, int idx, int n_threads, int maxIterations = 1000, float tolerance = 1e-7) {
+static void power_iteration(diff_ctx & dctx, int idx, int maxIterations = 1000, float tolerance = 1e-7) {
     printf("in power iteration\n");
+
     pca_model model;
-    load_pca_model(model, cb_data.v_diff[idx], cb_data.n_embd);
+    load_pca_model(model, dctx.v_diff[idx]);
+    std::cout << "model.v_diff_original->ne[0]: " << model.v_diff_original->ne[0] << std::endl;
 
     ggml_gallocr_t allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
 
-    // FIXME ggml_nbytes(square) is 0 because everything going back to diff in calc_diff is 0
-    struct ggml_tensor * square = compute_square(model, allocr, n_threads);
-    ggml_backend_tensor_set(model.square, square->data, 0, ggml_nbytes(square));
+    struct ggml_tensor * square = compute_square(model, allocr, dctx.n_threads);
+    ggml_backend_tensor_set(model.square, square->data, 0, ggml_nbytes(model.square));
 
     // yes?
     ggml_gallocr_free(allocr);
+
+    struct ggml_init_params host_params = {
+        /*.mem_size   =*/ (dctx.n_embd * sizeof(float) + ggml_tensor_overhead()) * 2u,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ false,
+    };
+    struct ggml_context * host_ctx = ggml_init(host_params);
+
+    struct ggml_tensor * host_old_eigenvector = ggml_new_tensor_1d(host_ctx, GGML_TYPE_F32, dctx.n_embd);
+    struct ggml_tensor * host_new_eigenvector = ggml_new_tensor_1d(host_ctx, GGML_TYPE_F32, dctx.n_embd);
 
     for (int iter = 0; iter < maxIterations; ++iter) {
 
         // TODO do I need to reset it like this every time?
         allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
 
-        // i have no idea how ggml_contexts work so i'm making a different one for the original and the old one
-        struct ggml_init_params hov_params = {
-            /*.mem_size   =*/ cb_data.n_embd * sizeof(float) + ggml_tensor_overhead(),
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ false,
-        };
-        struct ggml_context * hov_ctx = ggml_init(hov_params);
-
-        struct ggml_init_params hnv_params = {
-            /*.mem_size   =*/ cb_data.n_embd * sizeof(float) + ggml_tensor_overhead(),
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ false,
-        };
-        struct ggml_context * hnv_ctx = ggml_init(hnv_params);
-
-        struct ggml_tensor * host_old_eigenvector = ggml_new_tensor_1d(hov_ctx, GGML_TYPE_F32, cb_data.n_embd);
-        struct ggml_tensor * host_new_eigenvector = ggml_new_tensor_1d(hnv_ctx, GGML_TYPE_F32, cb_data.n_embd);
-
-        struct ggml_tensor * b_tensor = compute_piter(model, allocr, n_threads, tolerance);
+        struct ggml_tensor * b_tensor = compute_piter(model, allocr, dctx.n_threads, tolerance);
 
         ggml_backend_tensor_get(b_tensor, host_new_eigenvector->data, 0, ggml_nbytes(b_tensor));
         ggml_backend_tensor_get(model.eigenvector, host_old_eigenvector->data, 0, ggml_nbytes(model.eigenvector));
 
         // convergence check
         float diff = 0.0;
-        for (int i = 0; i < cb_data.n_embd; ++i) {
+        for (int i = 0; i < dctx.n_embd; ++i) {
             diff += std::pow((ggml_get_f32_1d(host_new_eigenvector, i) - ggml_get_f32_1d(host_old_eigenvector, i)), 2);
         }
 
@@ -649,36 +646,29 @@ static void power_iteration(callback_data & cb_data, int idx, int n_threads, int
             // catch division by zero I guess
             break;
         }
-
-        ggml_free(hnv_ctx);
     }
 
-    ggml_backend_tensor_get(model.eigenvector, cb_data.v_final[idx]->data, 0, ggml_nbytes(model.eigenvector));
+    ggml_backend_tensor_get(model.eigenvector, dctx.v_final[idx]->data, 0, ggml_nbytes(model.eigenvector));
 
     ggml_gallocr_free(allocr);
+    ggml_free(host_ctx);
     ggml_free(model.ctx);
     ggml_backend_buffer_free(model.buffer);
     ggml_backend_free(model.backend);
 }
 
-static void pca(callback_data & cb_data, int n_threads) {
+static void pca(diff_ctx & dctx) {
     printf("Running PCA...\n");
-    for (int il = 0; il < cb_data.v_diff.size(); ++il) {
-        struct ggml_init_params params = {
-            /*.mem_size   =*/ cb_data.n_embd * sizeof(float) + ggml_tensor_overhead(),
-            /*.mem_buffer =*/ NULL,
-            /*.no_alloc   =*/ false,
-        };
-        struct ggml_context * ctx_data = ggml_init(params);
-        cb_data.v_final.push_back(ggml_new_tensor_1d(ctx_data, GGML_TYPE_F32, cb_data.n_embd));
-        power_iteration(cb_data, il, n_threads);
+    for (int il = 0; il < dctx.v_diff.size(); ++il) {
+        dctx.v_final.push_back(ggml_new_tensor_1d(dctx.ctx_final, GGML_TYPE_F32, dctx.n_embd));
+        power_iteration(dctx, il);
         printf("Done with layer %d\n", il);
-        printf("il = %d | %f %f \n", il, ggml_get_f32_1d(cb_data.v_final[il], 0), ggml_get_f32_1d(cb_data.v_final[il], 1));
+        printf("il = %d | %f %f \n", il, ggml_get_f32_1d(dctx.v_final[il], 0), ggml_get_f32_1d(dctx.v_final[il], 1));
     }
     printf("Done with PCA.\n");
 }
 
-static void export_gguf(callback_data & cb_data, int n_layers, const std::string fname, const std::string model_hint) {
+static void export_gguf(diff_ctx & dctx, int n_layers, const std::string fname, const std::string model_hint) {
     struct gguf_context * ctx = gguf_init_empty();
 
     size_t v_final_size_eff = n_layers - 1;
@@ -693,9 +683,11 @@ static void export_gguf(callback_data & cb_data, int n_layers, const std::string
         // i'm pretty sure it's right now
         const std::string name = "direction." + to_string(i+1);
 
-        ggml_set_name(cb_data.v_final[i], name.c_str());
+        std::cout << "dctx.v_final[i][0][1]: " << ggml_get_f32_nd(dctx.v_final[i], 0, 1, 0, 0) << std::endl;
 
-        gguf_add_tensor(ctx, cb_data.v_final[i]);
+        ggml_set_name(dctx.v_final[i], name.c_str());
+
+        gguf_add_tensor(ctx, dctx.v_final[i]);
         printf("Added tensor %zu\n", i);
     }
 
@@ -752,16 +744,46 @@ int main(int argc, char ** argv) {
     int n_ctx = llama_n_ctx(ctx);
     int n_layers = llama_n_layer(model);
     int n_embd = llama_n_embd(model);
-    cb_data.n_embd = n_embd;
     int n_prompts = cparams.positive_prompts.size();
 
     // init ctx_ggml
     struct ggml_init_params params_ggml = {
-        /*.mem_size   =*/ ggml_tensor_overhead() * n_prompts * n_layers * 4u,
+        /*.mem_size   =*/ ggml_tensor_overhead() * n_layers * 2u,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ true,
     };
     cb_data.ctx_ggml = ggml_init(params_ggml);
+
+    // init diff_ctx
+    diff_ctx dctx;
+
+    // FIXME FIXME FIXME we are running out of memory here
+    // n_prompts should really be n_tokens damnit - remove the 2u and adapt
+    // we will either have to pretokenize everything so we know how much memory to allocate
+    // or allocate the tensor overhead as we go
+    struct ggml_init_params params_diffs_wrapped = {
+        /*.mem_size   =*/ ggml_tensor_overhead() * n_prompts * n_layers * 16u,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ true,
+    };
+    // this we know how much overhead to allocate in advance
+    struct ggml_init_params params_diff = {
+        /*.mem_size   =*/ ggml_tensor_overhead() * n_layers,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ true,
+    };
+    // and this we know exactly how much memory to allocate in advance without malloc() hacks
+    struct ggml_init_params params_final = {
+        /*.mem_size   =*/ n_embd * sizeof(float) * n_layers
+                            + ggml_tensor_overhead() * n_layers,
+        /*.mem_buffer =*/ NULL,
+        /*.no_alloc   =*/ false,
+    };
+    dctx.n_embd = n_embd;
+    dctx.n_threads = cparams.n_threads;
+    dctx.ctx_diffs_wrapped = ggml_init(params_diffs_wrapped);
+    dctx.ctx_diff = ggml_init(params_diff);
+    dctx.ctx_final = ggml_init(params_final);
 
     // create templated prompts
     for (int i = 0; i < n_prompts; ++i) {
@@ -804,24 +826,33 @@ int main(int argc, char ** argv) {
         cb_data.is_eval_pos = false;
         get_hidden_layers(ctx, tokens_neg);
 
-        // TODO check whether the same tokens correspond to zero rows because we don't seem to be getting many zero rows anymore
-        // we get a lot of zero rows for the first few prompts and then they drop off
-        // likewise most of the zero rows are in the first few layers for each prompt
-
-        calc_diff(cb_data);
+        calc_diff(cb_data, dctx);
 
         // reset for next iteration
         // TODO @ngxson : find a more proper way to alloc / free tensors
-        for (auto ptr : cb_data.v_pos) free(ptr->data);
-        for (auto ptr : cb_data.v_neg) free(ptr->data);
+        ggml_free(cb_data.ctx_ggml);
+        // TODO move this to the top of the loop and remove the ggml_free() outside
+        cb_data.ctx_ggml = ggml_init(params_ggml);
         cb_data.v_pos.clear();
         cb_data.v_neg.clear();
     }
 
+    // TODO we can actually delete cb_data here
+    //ggml_free(cb_data.ctx_ggml);
+
+    printf("dctx.v_diffs_wrapped[0][0][2]: %f\n", ggml_get_f32_nd(dctx.v_diffs_wrapped[0][0], 0, 2, 0, 0));
+
     printf("Done evaluate prompts\n");
 
-    concatenate_diffs(cb_data);
-    pca(cb_data, cparams.n_threads);
+    concatenate_diffs(dctx);
+
+    printf("dctx.v_diff[0][0][1]: %f\n", ggml_get_f32_nd(dctx.v_diff[0], 0, 1, 0, 0));
+
+    printf("Done concatenate diffs\n");
+
+    // code is known to work up to here
+
+    pca(dctx);
     //printf("v_final %f %f \n", cb_data.v_final[0][0], cb_data.v_final[0][1]);
 
     llama_free(ctx);
@@ -831,9 +862,14 @@ int main(int argc, char ** argv) {
     // we need get_arch_name() from llama.cpp
     // TODO also has support been implemeneted for arches other than llama yet? see #5970
     std::string model_hint = "llama";
-    export_gguf(cb_data, n_layers, cparams.outfile, model_hint);
+    export_gguf(dctx, n_layers, cparams.outfile, model_hint);
 
     llama_backend_free();
+    std::cout << "okay which of you is failing" << std::endl;
+
+    // TODO free(): invalid pointer after the entire program is done????????
+    // probably because destructors free after you've already manually freed
+    // TODO fix destructor/ggml_free positioning
 
     return 0;
 }
