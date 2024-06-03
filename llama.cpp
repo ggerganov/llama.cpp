@@ -16430,15 +16430,16 @@ struct llama_context * llama_new_context_with_model(
         }
 #endif
 #if defined(GGML_USE_RPC)
-        for (int i = 0; i < (int)model->rpc_servers.size(); i++) {
-            const char * endpoint = model->rpc_servers[i].c_str();
-            ggml_backend_t backend = ggml_backend_rpc_init(endpoint);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint);
-                llama_free(ctx);
-                return nullptr;
+        if (model->n_gpu_layers > 0) {
+            for (const auto & endpoint : model->rpc_servers) {
+                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
             }
-            ctx->backends.push_back(backend);
         }
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
