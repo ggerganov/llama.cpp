@@ -128,16 +128,17 @@ class Model:
         if self.metadata.name is None:
             self.metadata.name = gguf.MODEL_ARCH_NAMES[self.model_arch]
 
+        # Generate parameter weight class (useful for leader boards) if not yet determined
+        if self.metadata.parameter_weight_class is None:
+            expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
+            weight_estimate = self.per_model_weight_count_estimation(self.get_tensors(), expert_count)
+            self.metadata.parameter_weight_class = gguf.parameter_weight_class(expert_count, weight_estimate)
+
         # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
         output_type = self.ftype.name.partition("_")[2]
 
-        # Update authorship metadata class with parameter size class (useful for leader boards)
-        expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
-        weight_estimate = self.per_model_weight_count_estimation(self.get_tensors(), expert_count)
-        self.metadata.parameter_weight_class = gguf.parameter_weight_class(expert_count, weight_estimate)
-
         # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, expert_count, weight_estimate, output_type)
+        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.parameter_weight_class, output_type)
 
         # Filename Output
         if fname_out is not None:

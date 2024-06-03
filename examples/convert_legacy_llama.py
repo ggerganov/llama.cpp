@@ -1206,6 +1206,7 @@ def default_convention_outfile(file_type: GGMLFileType, expert_count:int, model_
     basename = metadata.basename if metadata.basename is not None else None
     finetune = metadata.finetune if metadata.finetune is not None else None
     version = metadata.version if metadata.version is not None else None
+    parameter_weight_class = metadata.parameter_weight_class if metadata.parameter_weight_class is not None else gguf.parameter_weight_class(expert_count, model_params_count)
 
     output_type = {
         GGMLFileType.AllF32:    "F32",
@@ -1213,7 +1214,7 @@ def default_convention_outfile(file_type: GGMLFileType, expert_count:int, model_
         GGMLFileType.MostlyQ8_0: "Q8_0",
     }[file_type]
 
-    return gguf.naming_convention(name, basename, finetune, version, expert_count, model_params_count, output_type)
+    return gguf.naming_convention(name, basename, finetune, version, parameter_weight_class, output_type)
 
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> Path:
