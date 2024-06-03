@@ -97,7 +97,7 @@ extern "C" {
         LLAMA_ROPE_TYPE_GLM  =  4,
     };
 
-    enum llama_token_type { //TODO: remove, required until per token attribs are available from GGUF file
+    enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
         LLAMA_TOKEN_TYPE_UNKNOWN      = 2,
@@ -107,18 +107,18 @@ extern "C" {
         LLAMA_TOKEN_TYPE_BYTE         = 6,
     };
 
-    enum llama_token_attribs {
-        LLAMA_TOKEN_ATTRIB_UNDEFINED    = 0,
-        LLAMA_TOKEN_ATTRIB_UNKNOWN      = 1 <<  1,
-        LLAMA_TOKEN_ATTRIB_UNUSED       = 1 <<  2,
-        LLAMA_TOKEN_ATTRIB_NORMAL       = 1 <<  3,
-        LLAMA_TOKEN_ATTRIB_CONTROL      = 1 <<  4,  // SPECIAL?
-        LLAMA_TOKEN_ATTRIB_USER_DEFINED = 1 <<  5,
-        LLAMA_TOKEN_ATTRIB_BYTE         = 1 <<  6,
-        LLAMA_TOKEN_ATTRIB_NORMALIZED   = 1 <<  7,
-        LLAMA_TOKEN_ATTRIB_LSTRIP       = 1 <<  8,
-        LLAMA_TOKEN_ATTRIB_RSTRIP       = 1 <<  9,
-        LLAMA_TOKEN_ATTRIB_SINGLE_WORD  = 1 << 10,
+    enum llama_token_attr {
+        LLAMA_TOKEN_ATTR_UNDEFINED    = 0,
+        LLAMA_TOKEN_ATTR_UNKNOWN      = 1 <<  1,
+        LLAMA_TOKEN_ATTR_UNUSED       = 1 <<  2,
+        LLAMA_TOKEN_ATTR_NORMAL       = 1 <<  3,
+        LLAMA_TOKEN_ATTR_CONTROL      = 1 <<  4,  // SPECIAL?
+        LLAMA_TOKEN_ATTR_USER_DEFINED = 1 <<  5,
+        LLAMA_TOKEN_ATTR_BYTE         = 1 <<  6,
+        LLAMA_TOKEN_ATTR_NORMALIZED   = 1 <<  7,
+        LLAMA_TOKEN_ATTR_LSTRIP       = 1 <<  8,
+        LLAMA_TOKEN_ATTR_RSTRIP       = 1 <<  9,
+        LLAMA_TOKEN_ATTR_SINGLE_WORD  = 1 << 10,
     };
 
     // model file types
@@ -835,7 +835,7 @@ extern "C" {
 
     LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
 
-    LLAMA_API enum llama_token_attribs llama_token_get_attribs(const struct llama_model * model, llama_token token);
+    LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token);
 
     // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
     LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
