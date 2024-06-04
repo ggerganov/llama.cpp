@@ -298,7 +298,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake .. -DLLAMA_CURL=ON -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Build (no OpenMP)
@@ -307,7 +307,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLAMA_OPENMP=OFF
+          cmake .. -DLLAMA_CURL=ON -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DLLAMA_OPENMP=OFF
           cmake --build . --config ${{ matrix.build_type }} -j $(nproc)
 
       - name: Test
@@ -337,7 +337,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DLLAMA_RPC=ON ..
+          cmake -DLLAMA_RPC=ON -DLLAMA_CURL=ON ..
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
@@ -365,7 +365,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake -DLLAMA_VULKAN=ON ..
+          cmake -DLLAMA_VULKAN=ON -DLLAMA_CURL=ON ..
           cmake --build . --config Release -j $(nproc)
 
   ubuntu-22-cmake-hip:
@@ -392,7 +392,7 @@ jobs:
       - name: Build with legacy HIP support
         id: cmake_build_legacy_hip
         run: |
-          cmake -B build2 -S . -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc -DLLAMA_HIPBLAS=ON
+          cmake -B build2 -S . -DLLAMA_CURL=ON -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc -DLLAMA_HIPBLAS=ON
           cmake --build build2 --config Release -j $(nproc)
 
   ubuntu-22-cmake-sycl:
@@ -433,7 +433,7 @@ jobs:
           source /opt/intel/oneapi/setvars.sh
           mkdir build
           cd build
-          cmake -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx ..
+          cmake -DLLAMA_CURL=ON -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx ..
           cmake --build . --config Release -j $(nproc)
 
   ubuntu-22-cmake-sycl-fp16:
@@ -474,7 +474,7 @@ jobs:
           source /opt/intel/oneapi/setvars.sh
           mkdir build
           cd build
-          cmake -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON ..
+          cmake -DLLAMA_CURL=ON -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON ..
           cmake --build . --config Release -j $(nproc)
 
   # TODO: build with LLAMA_NO_METAL because test-backend-ops fail on "Apple Paravirtual device" and I don't know
@@ -499,7 +499,7 @@ jobs:
         env:
             LLAMA_FATAL_WARNINGS: 1
         run: |
-          LLAMA_NO_METAL=1 make -j $(sysctl -n hw.logicalcpu)
+          LLAMA_NO_METAL=1 LLAMA_CURL=1 make -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: make_test
@@ -531,7 +531,7 @@ jobs:
           sysctl -a
           mkdir build
           cd build
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL=OFF ..
+          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON -DLLAMA_METAL=OFF ..
           cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
@@ -562,6 +562,7 @@ jobs:
           cd build
           cmake -G Xcode .. \
             -DLLAMA_METAL_EMBED_LIBRARY=ON \
+            -DLLAMA_CURL=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
@@ -591,6 +592,7 @@ jobs:
           cd build
           cmake -G Xcode .. \
             -DLLAMA_METAL_EMBED_LIBRARY=ON \
+            -DLLAMA_CURL=ON \
             -DLLAMA_BUILD_EXAMPLES=OFF \
             -DLLAMA_BUILD_TESTS=OFF \
             -DLLAMA_BUILD_SERVER=OFF \
@@ -697,27 +699,27 @@ jobs:
       matrix:
         include:
           - build: 'rpc-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_RPC=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_RPC=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'noavx-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX=OFF -DLLAMA_AVX2=OFF -DLLAMA_FMA=OFF -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'avx2-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'avx-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX2=OFF -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'avx512-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_AVX512=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'clblast-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast"'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_CLBLAST=ON -DBUILD_SHARED_LIBS=ON -DCMAKE_PREFIX_PATH="$env:RUNNER_TEMP/clblast" -DLLAMA_CURL=ON'
           - build: 'openblas-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib"'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_BLAS=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS -DBLAS_INCLUDE_DIRS="$env:RUNNER_TEMP/openblas/include" -DBLAS_LIBRARIES="$env:RUNNER_TEMP/openblas/lib/openblas.lib" -DLLAMA_CURL=ON'
           - build: 'kompute-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_KOMPUTE=ON -DKOMPUTE_OPT_DISABLE_VULKAN_VERSION_CHECK=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'vulkan-x64'
-            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_VULKAN=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DLLAMA_VULKAN=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'llvm-arm64'
-            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
           - build: 'msvc-arm64'
-            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-msvc.cmake -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON'
+            defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-msvc.cmake -DLLAMA_NATIVE=OFF -DLLAMA_BUILD_SERVER=ON -DBUILD_SHARED_LIBS=ON -DLLAMA_CURL=ON'
 
     steps:
       - name: Clone
@@ -1020,7 +1022,7 @@ jobs:
         run: |
           $env:HIP_PATH=$(Resolve-Path 'C:\Program Files\AMD\ROCm\*\bin\clang.exe' | split-path | split-path)
           $env:CMAKE_PREFIX_PATH="${env:HIP_PATH}"
-          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DLLAMA_HIPBLAS=ON
+          cmake -G "Unix Makefiles" -B build -S . -DCMAKE_C_COMPILER="${env:HIP_PATH}\bin\clang.exe" -DCMAKE_CXX_COMPILER="${env:HIP_PATH}\bin\clang++.exe" -DLLAMA_HIPBLAS=ON -DLLAMA_CURL=ON
           cmake --build build --config Release
 
   ios-xcode-build:
