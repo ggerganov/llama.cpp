@@ -353,6 +353,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.escape = true;
         return true;
     }
+    if (arg == "--no-escape") {
+        params.escape = false;
+        return true;
+    }
     if (arg == "--prompt-cache") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1629,7 +1633,8 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-p,    --prompt PROMPT",        "prompt to start generation with (default: '%s')", params.prompt.c_str() });
     options.push_back({ "*",           "-f,    --file FNAME",           "a file containing the prompt (default: none)" });
     options.push_back({ "*",           "-bf,   --binary-file FNAME",    "binary file containing the prompt (default: none)" });
-    options.push_back({ "*",           "-e,    --escape",               "process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)" });
+    options.push_back({ "*",           "-e,    --escape",               "process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\) (default: %s)", params.escape ? "true" : "false" });
+    options.push_back({ "*",           "       --no-escape",            "do not process escape sequences" });
     options.push_back({ "main",        "-ptc,  --print-token-count N",  "print token count every N tokens (default: %d)", params.n_print });
     options.push_back({ "main",        "       --prompt-cache FNAME",   "file to cache prompt state for faster startup (default: none)" });
     options.push_back({ "main",        "       --prompt-cache-all",     "if specified, saves user input and generations to cache as well\n"

@@ -1964,12 +1964,13 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
+    params.n_ctx = 512;
+    params.logits_all = true;
+
     if (!gpt_params_parse(argc, argv, params)) {
         gpt_params_print_usage(argc, argv, params);
         return 1;
     }
-
-    params.logits_all = true;
 
     const int32_t n_ctx = params.n_ctx;
 
@@ -2025,6 +2026,7 @@ int main(int argc, char ** argv) {
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
+
     if (params.n_ctx > n_ctx_train) {
         fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
                 __func__, n_ctx_train, params.n_ctx);
