@@ -3086,6 +3086,7 @@ int main(int argc, char ** argv) {
             "/props",
             "/completion",
             "/completions",
+            "/v1/completion",
             "/v1/completions",
             "/chat/completions",
             "/v1/chat/completions",
@@ -3789,6 +3790,7 @@ int main(int argc, char ** argv) {
     svr->Get ("/v1/models",           handle_models);
     svr->Post("/completion",          handle_completions); // legacy
     svr->Post("/completions",         handle_completions);
+    svr->Post("/v1/completion",       handle_completions);
     svr->Post("/v1/completions",      handle_completions);
     svr->Post("/chat/completions",    handle_chat_completions);
     svr->Post("/v1/chat/completions", handle_chat_completions);
