@@ -805,6 +805,8 @@ class OutputFile:
             self.gguf.add_source_url(metadata.source_url)
         if metadata.source_hf_repo is not None:
             self.gguf.add_source_hf_repo(metadata.source_hf_repo)
+        if metadata.parameter_class_attribute is not None:
+            self.gguf.add_parameter_class_attribute(metadata.parameter_class_attribute)
         if metadata.tags is not None:
             self.gguf.add_tags(metadata.tags)
         if metadata.languages is not None:
@@ -960,8 +962,6 @@ class OutputFile:
         check_vocab_size(params, vocab, pad_vocab=pad_vocab)
 
         of = OutputFile(fname_out, endianess=endianess)
-
-        print(metadata)
 
         # meta data
         of.add_meta_model(params, metadata)
@@ -1208,7 +1208,7 @@ def default_convention_outfile(file_type: GGMLFileType, expert_count:int, model_
     basename = metadata.basename if metadata.basename is not None else None
     finetune = metadata.finetune if metadata.finetune is not None else None
     version = metadata.version if metadata.version is not None else None
-    parameter_weight_class = metadata.parameter_weight_class if metadata.parameter_weight_class is not None else gguf.parameter_weight_class(expert_count, model_params_count)
+    parameter_class_attribute = metadata.parameter_class_attribute if metadata.parameter_class_attribute is not None else gguf.parameter_class_attribute(expert_count, model_params_count)
 
     output_type = {
         GGMLFileType.AllF32:    "F32",
@@ -1216,7 +1216,7 @@ def default_convention_outfile(file_type: GGMLFileType, expert_count:int, model_
         GGMLFileType.MostlyQ8_0: "Q8_0",
     }[file_type]
 
-    return gguf.naming_convention(name, basename, finetune, version, parameter_weight_class, output_type)
+    return gguf.naming_convention(name, basename, finetune, version, parameter_class_attribute, output_type)
 
 
 def default_outfile(model_paths: list[Path], file_type: GGMLFileType, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> Path:
@@ -1380,7 +1380,7 @@ def main(args_in: list[str] | None = None) -> None:
     model   = convert_to_output_type(model, ftype)
     outfile = args.outfile or default_outfile(model_plus.paths, ftype, params.n_experts, model_params_count, metadata=metadata)
 
-    metadata.parameter_weight_class = gguf.parameter_weight_class(params.n_experts, model_params_count)
+    metadata.parameter_class_attribute = gguf.parameter_class_attribute(params.n_experts, model_params_count)
 
     params.ftype = ftype
     logger.info(f"Writing {outfile}, format {ftype}")

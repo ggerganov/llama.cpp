@@ -129,16 +129,16 @@ class Model:
             self.metadata.name = gguf.MODEL_ARCH_NAMES[self.model_arch]
 
         # Generate parameter weight class (useful for leader boards) if not yet determined
-        if self.metadata.parameter_weight_class is None:
+        if self.metadata.parameter_class_attribute is None:
             expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
             weight_estimate = self.per_model_weight_count_estimation(self.get_tensors(), expert_count)
-            self.metadata.parameter_weight_class = gguf.parameter_weight_class(expert_count, weight_estimate)
+            self.metadata.parameter_class_attribute = gguf.parameter_class_attribute(expert_count, weight_estimate)
 
         # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
         output_type = self.ftype.name.partition("_")[2]
 
         # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.parameter_weight_class, output_type)
+        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.parameter_class_attribute, output_type)
 
         # Filename Output
         if fname_out is not None:
@@ -263,8 +263,8 @@ class Model:
             self.gguf_writer.add_source_url(self.metadata.source_url)
         if self.metadata.source_hf_repo is not None:
             self.gguf_writer.add_source_hf_repo(self.metadata.source_hf_repo)
-        if self.metadata.parameter_weight_class is not None:
-            self.gguf_writer.add_parameter_weight_class(self.metadata.parameter_weight_class)
+        if self.metadata.parameter_class_attribute is not None:
+            self.gguf_writer.add_parameter_class_attribute(self.metadata.parameter_class_attribute)
         if self.metadata.tags is not None:
             self.gguf_writer.add_tags(self.metadata.tags)
         if self.metadata.languages is not None:
