@@ -547,23 +547,6 @@ ggml-cuda.o: ggml-cuda.cu ggml-cuda.h ggml.h ggml-backend.h ggml-backend-impl.h 
 	$(NVCC_COMPILE)
 endif # LLAMA_CUDA
 
-ifdef LLAMA_CLBLAST
-	MK_CPPFLAGS += -DGGML_USE_CLBLAST $(shell pkg-config --cflags-only-I clblast OpenCL)
-	MK_CFLAGS   += $(shell pkg-config --cflags-only-other clblast OpenCL)
-	MK_CXXFLAGS += $(shell pkg-config --cflags-only-other clblast OpenCL)
-
-	# Mac provides OpenCL as a framework
-	ifeq ($(UNAME_S),Darwin)
-		MK_LDFLAGS += -lclblast -framework OpenCL
-	else
-		MK_LDFLAGS += $(shell pkg-config --libs clblast OpenCL)
-	endif
-	OBJS    += ggml-opencl.o
-
-ggml-opencl.o: ggml-opencl.cpp ggml-opencl.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-endif # LLAMA_CLBLAST
-
 ifdef LLAMA_VULKAN
 	MK_CPPFLAGS  += -DGGML_USE_VULKAN
 	MK_LDFLAGS += -lvulkan
