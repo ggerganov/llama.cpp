@@ -1498,6 +1498,36 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.n_pl.insert(params.n_pl.end(), p.begin(), p.end());
         return true;
     }
+    if (arg == "--context-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream file(argv[i], std::ios::binary);
+        if (!file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        params.context_files.push_back(argv[i]);
+        return true;
+    }
+    if (arg == "--chunk-size") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.chunk_size = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--chunk-separator") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.chunk_separator = argv[i];
+        return true;
+    }
 #ifndef LOG_DISABLE_LOGS
     // Parse args for logging parameters
     if (log_param_single_parse(argv[i])) {
@@ -1753,6 +1783,12 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-mu,   --model-url MODEL_URL",  "model download url (default: unused)" });
     options.push_back({ "*",           "-hfr,  --hf-repo REPO",         "Hugging Face model repository (default: unused)" });
     options.push_back({ "*",           "-hff,  --hf-file FILE",         "Hugging Face model file (default: unused)" });
+
+    options.push_back({ "retrieval" });
+    options.push_back({ "retrieval",   "       --context-file FNAME",   "file to load context from (repeat to specify multiple files)" });
+    options.push_back({ "retrieval",   "       --chunk-size N",         "minimum length of embedded text chunks (default: %d)", params.chunk_size });
+    options.push_back({ "retrieval",   "       --chunk-separator STRING",
+                                                                        "separator between chunks (default: '%s')", params.chunk_separator.c_str() });
 
     options.push_back({ "bench" });
     options.push_back({ "bench",       "-pps",                          "is the prompt shared across parallel sequences (default: %s)", params.is_pp_shared ? "true" : "false" });

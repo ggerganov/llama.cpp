@@ -1238,7 +1238,7 @@ struct server_context {
     }
 
     json get_formated_generation(const server_slot & slot) const {
-        const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
+        const auto eos_bias   =             slot.sparams.logit_bias.find(llama_token_eos(model));
         const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() && eos_bias->second < 0.0f && std::isinf(eos_bias->second);
 
         std::vector<std::string> samplers_sequence;

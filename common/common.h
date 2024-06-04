@@ -210,6 +210,13 @@ struct gpt_params {
     std::vector<int32_t> n_pp;
     std::vector<int32_t> n_tg;
     std::vector<int32_t> n_pl;
+
+    // retrieval params
+    std::vector<std::string> context_files; // context files to embed
+
+    int32_t chunk_size = 64; // chunk size for context embedding
+
+    std::string chunk_separator = "\n"; // chunk separator for context embedding
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
