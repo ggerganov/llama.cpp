@@ -1088,7 +1088,7 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m 
 
 - Contributors can open PRs
 - Collaborators can push to branches in the `llama.cpp` repo and merge PRs into the `master` branch
-- Collaborators should follow the PR template when adding a PR
+- Collaborators should follow the [PR template](.github/PULL_REQUEST_TEMPLATE/pull_request_template.md) when adding a PR
 - Collaborators will be invited based on contributions
 - Any help with managing issues and PRs is very appreciated!
 - Make sure to read this: [Inference at the edge](https://github.com/ggerganov/llama.cpp/discussions/205)
