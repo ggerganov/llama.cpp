@@ -1382,6 +1382,13 @@ struct ggml_backend_sched_split {
     struct ggml_cgraph graph;
 };
 
+// Object to facilitate GML graph caching
+struct ggml_cached_graph {
+    bool is_active;
+    ggml_backend_t input_backend;
+    struct ggml_tensor * input_cpy[GGML_SCHED_MAX_SPLIT_INPUTS];
+};
+
 struct ggml_backend_sched {
     bool is_reset; // true if the scheduler has been reset since the last graph split
     bool is_alloc;
@@ -1427,6 +1434,8 @@ struct ggml_backend_sched {
     size_t context_buffer_size;
 
     bool debug;
+
+    struct ggml_cached_graph cached_graph;
 };
 
 #define hash_id(tensor) ggml_hash_find_or_insert(&sched->hash_set, tensor)
@@ -2113,6 +2122,14 @@ static enum ggml_status ggml_backend_sched_compute_splits(ggml_backend_sched_t s
             struct ggml_tensor * input = split->inputs[j];
             struct ggml_tensor * input_cpy = tensor_copy(input, split_backend_id, sched->cur_copy);
 
+            if (!sched->cached_graph.is_active) {
+                sched->cached_graph.input_backend = input_backend;
+                sched->cached_graph.input_cpy[j] = input_cpy;
+            }
+            else {
+                input_backend = sched->cached_graph.input_backend;
+                input_cpy = sched->cached_graph.input_cpy[j];
+            }
             if (input->flags & GGML_TENSOR_FLAG_INPUT) {
                 // inputs from the user must be copied immediately to prevent the user overwriting the data before the copy is done
                 if (sched->events[split_backend_id][sched->cur_copy] != NULL) {
@@ -2245,6 +2262,8 @@ ggml_backend_sched_t ggml_backend_sched_new(
 
     ggml_backend_sched_reset(sched);
 
+    sched->cached_graph.is_active = false;
+
     return sched;
 }
 
@@ -2321,6 +2340,9 @@ enum ggml_status ggml_backend_sched_graph_compute(ggml_backend_sched_t sched, st
 }
 
 enum ggml_status ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sched, struct ggml_cgraph * graph) {
+
+    if(!sched->cached_graph.is_active)
+    {
     if (!sched->is_reset && !sched->is_alloc) {
         ggml_backend_sched_reset(sched);
     }
@@ -2330,7 +2352,7 @@ enum ggml_status ggml_backend_sched_graph_compute_async(ggml_backend_sched_t sch
             return GGML_STATUS_ALLOC_FAILED;
         }
     }
-
+    }
     return ggml_backend_sched_compute_splits(sched);
 }
 
@@ -2595,3 +2617,12 @@ bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t 
 
     return true;
 }
+
+bool ggml_use_cached_graph(ggml_backend_sched_t sched) {
+    return sched->cached_graph.is_active;
+}
+
+void ggml_set_cached_graph(ggml_backend_sched_t sched, bool set_value) {
+    sched->cached_graph.is_active = set_value;
+}
+
