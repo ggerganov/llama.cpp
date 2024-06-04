@@ -815,6 +815,15 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.hf_file = argv[i];
         return true;
     }
+    if (arg == "-hft" || arg == "--hf-token") {
+        params.hf_token = NULL;
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.hf_token = argv[i];
+        return true;
+    }
     if (arg == "--lora") {
         if (++i >= argc) {
             invalid_param = true;
@@ -2280,6 +2289,11 @@ struct llama_model * llama_load_model_from_url(
         return NULL;
     }
 
+    if(params.hf_token!=NULL){
+        struct curl_slist * headers = curl_slist_append(NULL, "Authorization: Bearer " + params.hf_token);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    }
+  
     if (!llama_download_file(model_url, path_model)) {
         return NULL;
     }

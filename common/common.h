@@ -105,6 +105,7 @@ struct gpt_params {
     std::string model_url            = "";  // model url to download
     std::string hf_repo              = "";  // HF repo
     std::string hf_file              = "";  // HF file
+    std::string hf_token             = "";  // HF token
     std::string prompt               = "";
     std::string prompt_file          = "";  // store the external prompt file name
     std::string path_prompt_cache    = "";  // path to file for saving/loading prompt eval state
