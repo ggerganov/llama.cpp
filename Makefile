@@ -57,6 +57,8 @@ ifeq ($(UNAME_S),Darwin)
 		LLAMA_METAL := 1
 	endif
 
+	LLAMA_NO_OPENMP := 1
+
 	ifneq ($(UNAME_P),arm)
 		SYSCTL_M := $(shell sysctl -n hw.optional.arm64 2>/dev/null)
 		ifeq ($(SYSCTL_M),1)
@@ -65,6 +67,10 @@ ifeq ($(UNAME_S),Darwin)
 			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
 		endif
 	endif
+endif
+
+ifdef LLAMA_RPC
+	BUILD_TARGETS += rpc-server
 endif
 
 default: $(BUILD_TARGETS)
@@ -135,12 +141,16 @@ MK_NVCCFLAGS = -std=c++11
 ifdef LLAMA_FAST
 MK_CFLAGS     += -Ofast
 HOST_CXXFLAGS += -Ofast
+ifndef LLAMA_DEBUG
 MK_NVCCFLAGS  += -O3
+endif # LLAMA_DEBUG
 else
 MK_CFLAGS     += -O3
 MK_CXXFLAGS   += -O3
+ifndef LLAMA_DEBUG
 MK_NVCCFLAGS  += -O3
-endif
+endif # LLAMA_DEBUG
+endif # LLAMA_FAST
 
 ifndef LLAMA_NO_CCACHE
 CCACHE := $(shell which ccache)
@@ -201,9 +211,10 @@ ifdef LLAMA_SCHED_MAX_COPIES
 endif
 
 ifdef LLAMA_DEBUG
-	MK_CFLAGS   += -O0 -g
-	MK_CXXFLAGS += -O0 -g
-	MK_LDFLAGS  += -g
+	MK_CFLAGS    += -O0 -g
+	MK_CXXFLAGS  += -O0 -g
+	MK_LDFLAGS   += -g
+	MK_NVCCFLAGS += -O0 -g
 
 	ifeq ($(UNAME_S),Linux)
 		MK_CPPFLAGS += -D_GLIBCXX_ASSERTIONS
@@ -400,6 +411,12 @@ ifndef LLAMA_NO_ACCELERATE
 	endif
 endif # LLAMA_NO_ACCELERATE
 
+ifndef LLAMA_NO_OPENMP
+	MK_CPPFLAGS += -DGGML_USE_OPENMP
+	MK_CFLAGS   += -fopenmp
+	MK_CXXFLAGS += -fopenmp
+endif # LLAMA_NO_OPENMP
+
 ifdef LLAMA_OPENBLAS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
@@ -415,6 +432,11 @@ ifdef LLAMA_BLIS
 	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
 endif # LLAMA_BLIS
+
+ifdef LLAMA_RPC
+	MK_CPPFLAGS   += -DGGML_USE_RPC
+	OBJS          += ggml-rpc.o
+endif # LLAMA_RPC
 
 ifdef LLAMA_CUBLAS
 # LLAMA_CUBLAS is deprecated and will be removed in the future
@@ -641,10 +663,25 @@ ggml-metal-embed.o: ggml-metal.metal ggml-common.h
 endif
 endif # LLAMA_METAL
 
+OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
+COMMON_H_DEPS = common/common.h common/sampling.h common/log.h llama.h
+COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o json-schema-to-grammar.o
+
 ifndef LLAMA_NO_LLAMAFILE
 sgemm.o: sgemm.cpp sgemm.h ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif
+
+ifdef LLAMA_RPC
+ggml-rpc.o: ggml-rpc.cpp ggml-rpc.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+rpc-server.o: examples/rpc/rpc-server.cpp ggml-rpc.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+rpc-server: rpc-server.o ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+endif # LLAMA_RPC
 
 GF_CC := $(CC)
 include scripts/get-flags.mk
@@ -725,13 +762,8 @@ unicode.o: unicode.cpp unicode.h
 unicode-data.o: unicode-data.cpp unicode-data.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-OBJS += ggml-alloc.o ggml-backend.o ggml-quants.o unicode.o unicode-data.o
-
 llama.o: llama.cpp unicode.h ggml.h ggml-alloc.h ggml-backend.h ggml-cuda.h ggml-metal.h llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-COMMON_H_DEPS = common/common.h common/sampling.h common/log.h llama.h
-COMMON_DEPS   = common.o sampling.o grammar-parser.o build-info.o json-schema-to-grammar.o
 
 common.o: common/common.cpp $(COMMON_H_DEPS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -832,7 +864,7 @@ save-load-state: examples/save-load-state/save-load-state.cpp ggml.o llama.o $(C
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-server: examples/server/server.cpp examples/server/utils.hpp examples/server/httplib.h common/json.hpp examples/server/index.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp examples/server/json-schema-to-grammar.mjs.hpp common/stb_image.h ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
+server: examples/server/server.cpp examples/server/utils.hpp examples/server/httplib.h common/json.hpp examples/server/colorthemes.css.hpp examples/server/style.css.hpp examples/server/theme-beeninorder.css.hpp examples/server/theme-ketivah.css.hpp examples/server/theme-mangotango.css.hpp examples/server/theme-playground.css.hpp examples/server/theme-polarnight.css.hpp examples/server/theme-snowstorm.css.hpp examples/server/index.html.hpp examples/server/index-new.html.hpp examples/server/index.js.hpp examples/server/completion.js.hpp examples/server/system-prompts.js.hpp examples/server/prompt-formats.js.hpp examples/server/json-schema-to-grammar.mjs.hpp common/stb_image.h ggml.o llama.o $(COMMON_DEPS) grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
 

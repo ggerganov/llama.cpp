@@ -150,6 +150,8 @@ Typically finetunes of the base models below are supported as well.
 
 [llama.cpp web server](./examples/server) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
+[simplechat](./examples/server/public_simplechat) is a simple chat client, which can be used to chat with the model exposed using above web server (use --path to point to simplechat), from a local web browser.
+
 **Bindings:**
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
@@ -361,17 +363,6 @@ In order to build llama.cpp you have four different options.
       cmake -B build -G "Xcode"
       cmake --build build --config Debug
       ```
-
-- Using `Zig` (version 0.11 or later):
-
-    Building for optimization levels and CPU features can be accomplished using standard build arguments, for example AVX2, FMA, F16C,
-    it's also possible to cross compile for other operating systems and architectures:
-
-    ```bash
-    zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dcpu=x86_64+avx2+fma+f16c
-    ```
-
-    The `zig targets` command will give you valid options to use.
 
 -   Using `gmake` (FreeBSD):
 

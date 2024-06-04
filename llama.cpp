@@ -2164,8 +2164,7 @@ struct llama_vocab {
     std::vector<token_data>       id_to_token;
 
     std::vector<id>    cache_special_tokens;
-    std::vector<token> cache_token_to_piece;         // llama_token_to_piece(special = false);
-    std::vector<token> cache_token_to_piece_special; // llama_token_to_piece(special = true);
+    std::vector<token> cache_token_to_piece; // llama_token_to_piece(special = true);
 
     std::map<std::pair<std::string, std::string>, int> bpe_ranks;
 
@@ -2372,13 +2371,34 @@ struct llama_context {
     struct llama_control_vector cvec;
 };
 
+static size_t llama_get_device_count(const llama_model & model) {
+    size_t count = 1;
+#if defined(GGML_USE_CUDA)
+    count = ggml_backend_cuda_get_device_count();
+#elif defined(GGML_USE_SYCL)
+    count = ggml_backend_sycl_get_device_count();
+#elif defined(GGML_USE_VULKAN)
+    count = ggml_backend_vk_get_device_count();
+#endif
+#if defined(GGML_USE_RPC)
+    count += model.rpc_servers.size();
+#endif
+    return count;
+    GGML_UNUSED(model);
+}
+
 static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int gpu) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#ifdef GGML_USE_RPC
-    std::string endpoint = model.rpc_servers[gpu];
-    buft = ggml_backend_rpc_buffer_type(endpoint.c_str());
-#elif defined(GGML_USE_METAL)
+#if defined(GGML_USE_RPC)
+    int dev_count = (int)llama_get_device_count(model);
+    int rpc_count = (int)model.rpc_servers.size();
+    if (gpu >= dev_count - rpc_count) {
+        const char * endpoint = model.rpc_servers[gpu - dev_count + rpc_count].c_str();
+        return ggml_backend_rpc_buffer_type(endpoint);
+    }
+#endif
+#if defined(GGML_USE_METAL)
     buft = ggml_backend_metal_buffer_type();
 #elif defined(GGML_USE_CUDA)
     buft = ggml_backend_cuda_buffer_type(gpu);
@@ -2426,29 +2446,19 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
     GGML_UNUSED(tensor_split);
 }
 
-static size_t llama_get_device_count(const llama_model & model) {
-#if defined(GGML_USE_RPC)
-    return model.rpc_servers.size();
-#elif defined(GGML_USE_CUDA)
-    return ggml_backend_cuda_get_device_count();
-#elif defined(GGML_USE_SYCL)
-    return ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
-    return ggml_backend_vk_get_device_count();
-#else
-    return 1;
-#endif
-    GGML_UNUSED(model);
-}
-
 static size_t llama_get_device_memory(const llama_model & model, int device) {
 #if defined(GGML_USE_RPC)
-    size_t total;
-    size_t free;
-    std::string endpoint = model.rpc_servers[device];
-    ggml_backend_rpc_get_device_memory(endpoint.c_str(), &free, &total);
-    return free;
-#elif defined(GGML_USE_CUDA)
+    int dev_count = (int)llama_get_device_count(model);
+    int rpc_count = (int)model.rpc_servers.size();
+    if (device >= dev_count - rpc_count) {
+        size_t total;
+        size_t free;
+        const char * endpoint = model.rpc_servers[device - dev_count + rpc_count].c_str();
+        ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
+        return free;
+    }
+#endif
+#if defined(GGML_USE_CUDA)
     size_t total;
     size_t free;
     ggml_backend_cuda_get_device_memory(device, &free, &total);
@@ -4858,23 +4868,19 @@ static void llm_load_vocab(
         LLAMA_LOG_INFO("%s: special tokens cache size = %u\n", __func__, (uint32_t)vocab.cache_special_tokens.size());
     }
 
-    // build token to piece caches
+    // build token to piece cache
     {
         size_t size_cache = 0;
 
-        std::vector<llama_vocab::token> cache_token_to_piece        (n_vocab);
-        std::vector<llama_vocab::token> cache_token_to_piece_special(n_vocab);
+        std::vector<llama_vocab::token> cache_token_to_piece(n_vocab);
 
         for (uint32_t id = 0; id < n_vocab; ++id) {
-            cache_token_to_piece[id]         = llama_token_to_piece(&model, id, false);
-            cache_token_to_piece_special[id] = llama_token_to_piece(&model, id, true);
+            cache_token_to_piece[id] = llama_token_to_piece(&model, id, true);
 
             size_cache += cache_token_to_piece[id].size();
-            size_cache += cache_token_to_piece_special[id].size();
         }
 
-        std::swap(vocab.cache_token_to_piece,         cache_token_to_piece);
-        std::swap(vocab.cache_token_to_piece_special, cache_token_to_piece_special);
+        std::swap(vocab.cache_token_to_piece, cache_token_to_piece);
 
         LLAMA_LOG_INFO("%s: token to piece cache size = %.4f MB\n", __func__, size_cache / 1024.0 / 1024.0);
     }
@@ -5195,12 +5201,10 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        if (model.arch != LLM_ARCH_MINICPM){
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                            // if output is NULL, init from the input tok embed
-                            if (model.output == NULL) {
-                                model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
-                            }
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        // if output is NULL, init from the input tok embed
+                        if (model.output == NULL) {
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -10283,7 +10287,7 @@ struct llm_build_context {
         cb(cur, "lmhead_scaling", -1);
 
         // lm_head
-        cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
+        cur = ggml_mul_mat(ctx0, model.output, cur);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
@@ -16228,7 +16232,7 @@ struct llama_model * llama_load_model_from_file(
             return true;
         };
     }
-    if (params.rpc_servers != nullptr) {
+    if (params.rpc_servers != nullptr && params.rpc_servers[0] != '\0') {
         // split the servers set them into model->rpc_servers
         std::string servers(params.rpc_servers);
         size_t pos = 0;
@@ -16391,17 +16395,7 @@ struct llama_context * llama_new_context_with_model(
 
     if (!hparams.vocab_only) {
         // initialize backends
-#if defined(GGML_USE_RPC)
-        for (auto & server : model->rpc_servers) {
-            ggml_backend_t backend = ggml_backend_rpc_init(server.c_str());
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to connect RPC backend to %s\n", __func__, server.c_str());
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        }
-#elif defined(GGML_USE_METAL)
+#if defined(GGML_USE_METAL)
         if (model->n_gpu_layers > 0) {
             ctx->backend_metal = ggml_backend_metal_init();
             if (ctx->backend_metal == nullptr) {
@@ -16440,7 +16434,7 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(0);
+            ggml_backend_t backend = ggml_backend_vk_init(model->main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
                 llama_free(ctx);
@@ -16492,6 +16486,19 @@ struct llama_context * llama_new_context_with_model(
                 return nullptr;
             }
             ctx->backends.push_back(backend);
+        }
+#endif
+#if defined(GGML_USE_RPC)
+        if (model->n_gpu_layers > 0) {
+            for (const auto & endpoint : model->rpc_servers) {
+                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
         }
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
@@ -18379,9 +18386,14 @@ static std::string llama_decode_text(const std::string & text) {
 
 // does not write null-terminator to buf
 int32_t llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int32_t length, bool special) {
+    // ref: https://github.com/ggerganov/llama.cpp/pull/7587#discussion_r1620983843
+    if (!special && llama_is_control_token(model->vocab, token)) {
+        return 0;
+    }
+
     // if we have a cache - use it
     {
-        const auto & cache = special ? model->vocab.cache_token_to_piece_special : model->vocab.cache_token_to_piece;
+        const auto & cache = model->vocab.cache_token_to_piece;
 
         if (!cache.empty()) {
             const auto & res = cache.at(token);

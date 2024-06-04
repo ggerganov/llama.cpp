@@ -140,16 +140,34 @@ static std::string get_gpu_info() {
 }
 
 // command line params
-enum output_formats {CSV, JSON, MARKDOWN, SQL};
+enum output_formats {NONE, CSV, JSON, MARKDOWN, SQL};
 
 static const char * output_format_str(output_formats format) {
     switch (format) {
+        case NONE:     return "none";
         case CSV:      return "csv";
         case JSON:     return "json";
         case MARKDOWN: return "md";
         case SQL:      return "sql";
         default: GGML_ASSERT(!"invalid output format");
     }
+}
+
+static bool output_format_from_str(const std::string & s, output_formats & format) {
+    if (s == "none") {
+        format = NONE;
+    } else if (s == "csv") {
+        format = CSV;
+    } else if (s == "json") {
+        format = JSON;
+    } else if (s == "md") {
+        format = MARKDOWN;
+    } else if (s == "sql") {
+        format = SQL;
+    } else {
+        return false;
+    }
+    return true;
 }
 
 static const char * split_mode_str(llama_split_mode mode) {
@@ -190,31 +208,33 @@ struct cmd_params {
     int reps;
     bool verbose;
     output_formats output_format;
+    output_formats output_format_stderr;
 };
 
 static const cmd_params cmd_params_defaults = {
-    /* model         */ {"models/7B/ggml-model-q4_0.gguf"},
-    /* n_prompt      */ {512},
-    /* n_gen         */ {128},
-    /* n_pg          */ {},
-    /* n_batch       */ {2048},
-    /* n_ubatch      */ {512},
-    /* type_k        */ {GGML_TYPE_F16},
-    /* type_v        */ {GGML_TYPE_F16},
-    /* n_threads     */ {cpu_get_num_math()},
-    /* n_gpu_layers  */ {99},
-    /* rpc_servers   */ {""},
-    /* split_mode    */ {LLAMA_SPLIT_MODE_LAYER},
-    /* main_gpu      */ {0},
-    /* no_kv_offload */ {false},
-    /* flash_attn    */ {false},
-    /* tensor_split  */ {std::vector<float>(llama_max_devices(), 0.0f)},
-    /* use_mmap      */ {true},
-    /* embeddings    */ {false},
-    /* numa          */ GGML_NUMA_STRATEGY_DISABLED,
-    /* reps          */ 5,
-    /* verbose       */ false,
-    /* output_format */ MARKDOWN
+    /* model                */ {"models/7B/ggml-model-q4_0.gguf"},
+    /* n_prompt             */ {512},
+    /* n_gen                */ {128},
+    /* n_pg                 */ {},
+    /* n_batch              */ {2048},
+    /* n_ubatch             */ {512},
+    /* type_k               */ {GGML_TYPE_F16},
+    /* type_v               */ {GGML_TYPE_F16},
+    /* n_threads            */ {cpu_get_num_math()},
+    /* n_gpu_layers         */ {99},
+    /* rpc_servers          */ {""},
+    /* split_mode           */ {LLAMA_SPLIT_MODE_LAYER},
+    /* main_gpu             */ {0},
+    /* no_kv_offload        */ {false},
+    /* flash_attn           */ {false},
+    /* tensor_split         */ {std::vector<float>(llama_max_devices(), 0.0f)},
+    /* use_mmap             */ {true},
+    /* embeddings           */ {false},
+    /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
+    /* reps                 */ 5,
+    /* verbose              */ false,
+    /* output_format        */ MARKDOWN,
+    /* output_format_stderr */ NONE,
 };
 
 static void print_usage(int /* argc */, char ** argv) {
@@ -243,6 +263,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -ts, --tensor-split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
     printf("  -o, --output <csv|json|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
+    printf("  -oe, --output-err <csv|json|md|sql> (default: %s)\n", output_format_str(cmd_params_defaults.output_format_stderr));
     printf("  -v, --verbose                       (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
     printf("\n");
     printf("Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
@@ -284,6 +305,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
 
     params.verbose = cmd_params_defaults.verbose;
     params.output_format = cmd_params_defaults.output_format;
+    params.output_format_stderr = cmd_params_defaults.output_format_stderr;
     params.reps = cmd_params_defaults.reps;
 
     for (int i = 1; i < argc; i++) {
@@ -493,18 +515,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            if (argv[i] == std::string("csv")) {
-                params.output_format = CSV;
-            } else if (argv[i] == std::string("json")) {
-                params.output_format = JSON;
-            } else if (argv[i] == std::string("md")) {
-                params.output_format = MARKDOWN;
-            } else if (argv[i] == std::string("sql")) {
-                params.output_format = SQL;
-            } else {
+            invalid_param = !output_format_from_str(argv[i], params.output_format);
+        } else if (arg == "-oe" || arg == "--output-err") {
+            if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
+            invalid_param = !output_format_from_str(argv[i], params.output_format_stderr);
         } else if (arg == "-v" || arg == "--verbose") {
             params.verbose = true;
         } else {
@@ -1278,6 +1295,22 @@ static void llama_null_log_callback(enum ggml_log_level level, const char * text
     (void) user_data;
 }
 
+static std::unique_ptr<printer> create_printer(output_formats format) {
+    switch (format) {
+        case NONE:
+            return nullptr;
+        case CSV:
+            return std::unique_ptr<printer>(new csv_printer());
+        case JSON:
+            return std::unique_ptr<printer>(new json_printer());
+        case MARKDOWN:
+            return std::unique_ptr<printer>(new markdown_printer());
+        case SQL:
+            return std::unique_ptr<printer>(new sql_printer());
+    }
+    GGML_ASSERT(false);
+}
+
 int main(int argc, char ** argv) {
     // try to set locale for unicode characters in markdown
     setlocale(LC_CTYPE, ".UTF-8");
@@ -1304,26 +1337,18 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // initialize printer
-    std::unique_ptr<printer> p;
-    switch (params.output_format) {
-        case CSV:
-            p.reset(new csv_printer());
-            break;
-        case JSON:
-            p.reset(new json_printer());
-            break;
-        case MARKDOWN:
-            p.reset(new markdown_printer());
-            break;
-        case SQL:
-            p.reset(new sql_printer());
-            break;
-        default:
-            assert(false);
-            exit(1);
+    std::unique_ptr<printer> p = create_printer(params.output_format);
+    std::unique_ptr<printer> p_err = create_printer(params.output_format_stderr);
+
+    if (p) {
+        p->fout = stdout;
+        p->print_header(params);
     }
-    p->fout = stdout;
-    p->print_header(params);
+
+    if (p_err) {
+        p_err->fout = stderr;
+        p_err->print_header(params);
+    }
 
     std::vector<cmd_params_instance> params_instances = get_cmd_params_instances(params);
 
@@ -1381,7 +1406,15 @@ int main(int argc, char ** argv) {
             t.samples_ns.push_back(t_ns);
         }
 
-        p->print_test(t);
+        if (p) {
+            p->print_test(t);
+            fflush(p->fout);
+        }
+
+        if (p_err) {
+            p_err->print_test(t);
+            fflush(p_err->fout);
+        }
 
         llama_print_timings(ctx);
 
@@ -1390,7 +1423,13 @@ int main(int argc, char ** argv) {
 
     llama_free_model(lmodel);
 
-    p->print_footer();
+    if (p) {
+        p->print_footer();
+    }
+
+    if (p_err) {
+        p_err->print_footer();
+    }
 
     llama_backend_free();
 

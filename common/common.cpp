@@ -1002,9 +1002,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.main_gpu = std::stoi(argv[i]);
-#ifndef GGML_USE_CUDA_SYCL
-        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL. Setting the main GPU has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL
+#ifndef GGML_USE_CUDA_SYCL_VULKAN
+        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the main GPU has no effect.\n");
+#endif // GGML_USE_CUDA_SYCL_VULKAN
         return true;
     }
     if (arg == "--split-mode" || arg == "-sm") {
@@ -1030,9 +1030,9 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             invalid_param = true;
             return true;
         }
-#ifndef GGML_USE_CUDA_SYCL
-        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL
+#ifndef GGML_USE_CUDA_SYCL_VULKAN
+        fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the split mode has no effect.\n");
+#endif // GGML_USE_CUDA_SYCL_VULKAN
         return true;
     }
     if (arg == "--tensor-split" || arg == "-ts") {
