@@ -215,6 +215,10 @@ struct gpt_params {
     int32_t chunk_size = 64; // chunk size for context embedding
 
     std::string chunk_separator = "\n"; // chunk separator for context embedding
+
+    // passkey params
+    int32_t n_junk = 250; // number of times to repeat the junk text
+    int32_t i_pos  = -1;  // position of the passkey in the junk text
 };
 
 void gpt_params_handle_model_default(gpt_params & params);

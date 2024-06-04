@@ -408,7 +408,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         }
         return true;
     }
-    if (arg == "-n" || arg == "--n-predict") {
+    if (arg == "-n" || arg == "--predict" || arg == "--n-predict") {
         if (++i >= argc) {
             invalid_param = true;
             return true;
@@ -965,26 +965,26 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.use_mlock = true;
         return true;
     }
-    if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
+    if (arg == "-ngl" || arg == "--gpu-layers" || arg == "--n-gpu-layers") {
         if (++i >= argc) {
             invalid_param = true;
             return true;
         }
         params.n_gpu_layers = std::stoi(argv[i]);
         if (!llama_supports_gpu_offload()) {
-            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers option will be ignored\n");
+            fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers option will be ignored\n");
             fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
         }
         return true;
     }
-    if (arg == "--gpu-layers-draft" || arg == "-ngld" || arg == "--n-gpu-layers-draft") {
+    if (arg == "-ngld" || arg == "--gpu-layers-draft" || arg == "--gpu-layers-draft") {
         if (++i >= argc) {
             invalid_param = true;
             return true;
         }
         params.n_gpu_layers_draft = std::stoi(argv[i]);
         if (!llama_supports_gpu_offload()) {
-            fprintf(stderr, "warning: not compiled with GPU offload support, --n-gpu-layers-draft option will be ignored\n");
+            fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers-draft option will be ignored\n");
             fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
         }
         return true;
@@ -1521,6 +1521,22 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.chunk_separator = argv[i];
         return true;
     }
+    if (arg == "--junk") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_junk = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--pos") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.i_pos = std::stoi(argv[i]);
+        return true;
+    }
 #ifndef LOG_DISABLE_LOGS
     // Parse args for logging parameters
     if (log_param_single_parse(argv[i])) {
@@ -1613,7 +1629,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "path to dynamic lookup cache to use for lookup decoding (updated by generation)" });
 
     options.push_back({ "*",           "-c,    --ctx-size N",           "size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx });
-    options.push_back({ "*",           "-n,    --n-predict N",          "number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict });
+    options.push_back({ "*",           "-n,    --predict N",            "number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict });
     options.push_back({ "*",           "-b,    --batch-size N",         "logical maximum batch size (default: %d)", params.n_batch });
     options.push_back({ "*",           "-ub,   --ubatch-size N",        "physical maximum batch size (default: %d)", params.n_ubatch });
     options.push_back({ "*",           "       --keep N",               "number of tokens to keep from the initial prompt (default: %d, -1 = all)", params.n_keep });
@@ -1743,8 +1759,10 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "see https://github.com/ggerganov/llama.cpp/issues/1437" });
 
     if (llama_supports_gpu_offload()) {
-        options.push_back({ "*",           "-ngl,  --n-gpu-layers N",       "number of layers to store in VRAM" });
-        options.push_back({ "*",           "-ngld, --n-gpu-layers-draft N", "number of layers to store in VRAM for the draft model" });
+        options.push_back({ "*",           "-ngl,  --gpu-layers N",
+                                                                        "number of layers to store in VRAM" });
+        options.push_back({ "*",           "-ngld, --gpu-layers-draft N",
+                                                                        "number of layers to store in VRAM for the draft model" });
         options.push_back({ "*",           "-sm,   --split-mode SPLIT_MODE",
                                                                         "how to split the model across multiple GPUs, one of:\n"
                                                                         "  - none: use one GPU only\n"
@@ -1781,6 +1799,10 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "retrieval",   "       --chunk-size N",         "minimum length of embedded text chunks (default: %d)", params.chunk_size });
     options.push_back({ "retrieval",   "       --chunk-separator STRING",
                                                                         "separator between chunks (default: '%s')", params.chunk_separator.c_str() });
+
+    options.push_back({ "passkey" });
+    options.push_back({ "passkey",     "       --junk N",               "number of times to repeat the junk text (default: %d)", params.n_junk });
+    options.push_back({ "passkey",     "       --pos N",                "position of the passkey in the junk text (default: %d)", params.i_pos });
 
     options.push_back({ "bench" });
     options.push_back({ "bench",       "-pps",                          "is the prompt shared across parallel sequences (default: %s)", params.is_pp_shared ? "true" : "false" });
