@@ -364,6 +364,13 @@ In order to build llama.cpp you have four different options.
       cmake --build build --config Debug
       ```
 
+    **Note**: (MSVC only) for Windows on ARM builds target preceding armv8.0, e.g. snapdragon 835 (ms8998):
+
+    ```bash
+    cmake -B build -DLLAMA_LSE_ATOMICS=OFF
+    cmake --build build --config Release
+    ```
+
 - Using `Zig` (version 0.11 or later):
 
     Building for optimization levels and CPU features can be accomplished using standard build arguments, for example AVX2, FMA, F16C,

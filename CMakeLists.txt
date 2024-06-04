@@ -72,6 +72,7 @@ else()
     set(INS_ENB ON)
 endif()
 
+option(LLAMA_LSE_ATOMICS                     "llama: enable LSE atomics"                        ON)
 option(LLAMA_SVE                             "llama: enable SVE"                                OFF)
 option(LLAMA_AVX                             "llama: enable AVX"                                ${INS_ENB})
 option(LLAMA_AVX2                            "llama: enable AVX2"                               ${INS_ENB})
@@ -1049,6 +1050,10 @@ if (CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR CMAKE_GENERATOR_PLATFORM_LWR STR
         add_compile_definitions(__aarch64__) # MSVC defines _M_ARM64 instead
         add_compile_definitions(__ARM_NEON)
         add_compile_definitions(__ARM_FEATURE_FMA)
+
+        if (LLAMA_LSE_ATOMICS)
+            list(APPEND ARCH_FLAGS /arch:armv8.1)
+        endif()
 
         set(CMAKE_REQUIRED_FLAGS_PREV ${CMAKE_REQUIRED_FLAGS})
         string(JOIN " " CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS} "/arch:armv8.2")
