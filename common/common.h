@@ -148,7 +148,6 @@ struct gpt_params {
     bool interactive       = false; // interactive mode
     bool interactive_first = false; // wait for user input immediately
     bool conversation      = false; // conversation mode (does not print special tokens and suffix/prefix)
-    bool chatml            = false; // chatml mode (used for models trained on chatml syntax)
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
@@ -161,7 +160,6 @@ struct gpt_params {
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool ignore_eos        = false; // ignore generated EOS tokens
-    bool instruct          = false; // instruction mode (used for Alpaca models)
     bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory

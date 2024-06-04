@@ -13,7 +13,7 @@ logger = logging.getLogger("run-with-preset")
 CLI_ARGS_MAIN_PERPLEXITY = [
     "batch-size", "cfg-negative-prompt", "cfg-scale", "chunks", "color", "ctx-size", "escape",
     "export", "file", "frequency-penalty", "grammar", "grammar-file", "hellaswag",
-    "hellaswag-tasks", "ignore-eos", "in-prefix", "in-prefix-bos", "in-suffix", "instruct",
+    "hellaswag-tasks", "ignore-eos", "in-prefix", "in-prefix-bos", "in-suffix",
     "interactive", "interactive-first", "keep", "logdir", "logit-bias", "lora", "lora-base",
     "low-vram", "main-gpu", "memory-f32", "mirostat", "mirostat-ent", "mirostat-lr", "mlock",
     "model", "multiline-input", "n-gpu-layers", "n-predict", "no-mmap", "no-mul-mat-q",
