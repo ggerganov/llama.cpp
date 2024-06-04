@@ -41,20 +41,6 @@ static std::string join(const std::vector<T> & values, const std::string & delim
     return str.str();
 }
 
-template<class T>
-static std::vector<T> split(const std::string & str, char delim) {
-    std::vector<T> values;
-    std::istringstream str_stream(str);
-    std::string token;
-    while (std::getline(str_stream, token, delim)) {
-        T value;
-        std::istringstream token_stream(token);
-        token_stream >> value;
-        values.push_back(value);
-    }
-    return values;
-}
-
 template<typename T, typename F>
 static std::vector<std::string> transform_to_str(const std::vector<T> & values, F f) {
     std::vector<std::string> str_values;
@@ -300,28 +286,28 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<std::string>(argv[i], split_delim);
+            auto p = string_split<std::string>(argv[i], split_delim);
             params.model.insert(params.model.end(), p.begin(), p.end());
         } else if (arg == "-p" || arg == "--n-prompt") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<int>(argv[i], split_delim);
+            auto p = string_split<int>(argv[i], split_delim);
             params.n_prompt.insert(params.n_prompt.end(), p.begin(), p.end());
         } else if (arg == "-n" || arg == "--n-gen") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<int>(argv[i], split_delim);
+            auto p = string_split<int>(argv[i], split_delim);
             params.n_gen.insert(params.n_gen.end(), p.begin(), p.end());
         } else if (arg == "-pg") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<std::string>(argv[i], ',');
+            auto p = string_split<std::string>(argv[i], ',');
             if (p.size() != 2) {
                 invalid_param = true;
                 break;
@@ -332,21 +318,21 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<int>(argv[i], split_delim);
+            auto p = string_split<int>(argv[i], split_delim);
             params.n_batch.insert(params.n_batch.end(), p.begin(), p.end());
         } else if (arg == "-ub" || arg == "--ubatch-size") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<int>(argv[i], split_delim);
+            auto p = string_split<int>(argv[i], split_delim);
             params.n_ubatch.insert(params.n_ubatch.end(), p.begin(), p.end());
         } else if (arg == "-ctk" || arg == "--cache-type-k") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<std::string>(argv[i], split_delim);
+            auto p = string_split<std::string>(argv[i], split_delim);
             std::vector<ggml_type> types;
             for (const auto & t : p) {
                 ggml_type gt = ggml_type_from_name(t);
@@ -362,7 +348,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<std::string>(argv[i], split_delim);
+            auto p = string_split<std::string>(argv[i], split_delim);
             std::vector<ggml_type> types;
             for (const auto & t : p) {
                 ggml_type gt = ggml_type_from_name(t);
@@ -378,14 +364,14 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<int>(argv[i], split_delim);
+            auto p = string_split<int>(argv[i], split_delim);
             params.n_threads.insert(params.n_threads.end(), p.begin(), p.end());
         } else if (arg == "-ngl" || arg == "--n-gpu-layers") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<int>(argv[i], split_delim);
+            auto p = string_split<int>(argv[i], split_delim);
             params.n_gpu_layers.insert(params.n_gpu_layers.end(), p.begin(), p.end());
         } else if (arg == "-rpc" || arg == "--rpc") {
             if (++i >= argc) {
@@ -398,7 +384,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<std::string>(argv[i], split_delim);
+            auto p = string_split<std::string>(argv[i], split_delim);
             std::vector<llama_split_mode> modes;
             for (const auto & m : p) {
                 llama_split_mode mode;
@@ -420,13 +406,13 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            params.main_gpu = split<int>(argv[i], split_delim);
+            params.main_gpu = string_split<int>(argv[i], split_delim);
         } else if (arg == "-nkvo" || arg == "--no-kv-offload") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<bool>(argv[i], split_delim);
+            auto p = string_split<bool>(argv[i], split_delim);
             params.no_kv_offload.insert(params.no_kv_offload.end(), p.begin(), p.end());
         } else if (arg == "--numa") {
             if (++i >= argc) {
@@ -444,28 +430,28 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<bool>(argv[i], split_delim);
+            auto p = string_split<bool>(argv[i], split_delim);
             params.flash_attn.insert(params.flash_attn.end(), p.begin(), p.end());
         } else if (arg == "-mmp" || arg == "--mmap") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<bool>(argv[i], split_delim);
+            auto p = string_split<bool>(argv[i], split_delim);
             params.use_mmap.insert(params.use_mmap.end(), p.begin(), p.end());
         } else if (arg == "-embd" || arg == "--embeddings") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            auto p = split<bool>(argv[i], split_delim);
+            auto p = string_split<bool>(argv[i], split_delim);
             params.embeddings.insert(params.embeddings.end(), p.begin(), p.end());
         } else if (arg == "-ts" || arg == "--tensor-split") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
-            for (auto ts : split<std::string>(argv[i], split_delim)) {
+            for (auto ts : string_split<std::string>(argv[i], split_delim)) {
                 // split string by ; and /
                 const std::regex regex{R"([;/]+)"};
                 std::sregex_token_iterator it{ts.begin(), ts.end(), regex, -1};

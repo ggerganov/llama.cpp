@@ -127,8 +127,8 @@ struct gpt_params {
     int32_t control_vector_layer_start = -1; // layer range for control vector
     int32_t control_vector_layer_end   = -1; // layer range for control vector
 
-    int  ppl_stride        = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
-    int  ppl_output_type   = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
+    int32_t ppl_stride      = 0;    // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
+    int32_t ppl_output_type = 0;    // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
                                     //                                       (which is more convenient to use for plotting)
                                     //
     bool   hellaswag       = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
@@ -203,6 +203,13 @@ struct gpt_params {
     bool log_json = false;
 
     std::string slot_save_path;
+
+    // batched-bench params
+    bool is_pp_shared = false;
+
+    std::vector<int32_t> n_pp;
+    std::vector<int32_t> n_tg;
+    std::vector<int32_t> n_pl;
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
@@ -222,6 +229,20 @@ std::vector<std::string> string_split(std::string input, char separator);
 
 std::string string_strip(const std::string & str);
 std::string string_get_sortable_timestamp();
+
+template<class T>
+static std::vector<T> string_split(const std::string & str, char delim) {
+    std::vector<T> values;
+    std::istringstream str_stream(str);
+    std::string token;
+    while (std::getline(str_stream, token, delim)) {
+        T value;
+        std::istringstream token_stream(token);
+        token_stream >> value;
+        values.push_back(value);
+    }
+    return values;
+}
 
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);

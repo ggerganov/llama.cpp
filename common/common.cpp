@@ -283,6 +283,8 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
 }
 
 bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param) {
+    const char split_delim = ',';
+
     llama_sampling_params & sparams = params.sparams;
 
     if (arg == "-s" || arg == "--seed") {
@@ -1153,6 +1155,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.ppl_stride = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "--ppl-output-type") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.ppl_output_type = std::stoi(argv[i]);
+        return true;
+    }
     if (arg == "-ptc" || arg == "--print-token-count") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1163,14 +1173,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--check-tensors") {
         params.check_tensors = true;
-        return true;
-    }
-    if (arg == "--ppl-output-type") {
-        if (++i >= argc) {
-            invalid_param = true;
-            return true;
-        }
-        params.ppl_output_type = std::stoi(argv[i]);
         return true;
     }
     if (arg == "--hellaswag") {
@@ -1465,6 +1467,37 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.chat_template = argv[i];
         return true;
     }
+    if (arg == "-pps") {
+        params.is_pp_shared = true;
+        return true;
+    }
+    if (arg == "-npp") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        auto p = string_split<int>(argv[i], split_delim);
+        params.n_pp.insert(params.n_pp.end(), p.begin(), p.end());
+        return true;
+    }
+    if (arg == "-ntg") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        auto p = string_split<int>(argv[i], split_delim);
+        params.n_tg.insert(params.n_tg.end(), p.begin(), p.end());
+        return true;
+    }
+    if (arg == "-npl") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        auto p = string_split<int>(argv[i], split_delim);
+        params.n_pl.insert(params.n_pl.end(), p.begin(), p.end());
+        return true;
+    }
 #ifndef LOG_DISABLE_LOGS
     // Parse args for logging parameters
     if (log_param_single_parse(argv[i])) {
@@ -1658,6 +1691,9 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "perplexity",  "       --multiple-choice-tasks N",
                                                                         "number of tasks to use when computing the multiple choice score (default: %zu)", params.multiple_choice_tasks });
     options.push_back({ "perplexity",  "       --kl-divergence",        "computes KL-divergence to logits provided via --kl-divergence-base" });
+    options.push_back({ "perplexity",  "       --ppl-stride N",         "stride for perplexity calculation (default: %d)", params.ppl_stride });
+    options.push_back({ "perplexity",  "       --ppl-output-type {0,1}",
+                                                                        "output type for perplexity calculation (default: %d)", params.ppl_output_type });
 
     options.push_back({ "parallel" });
     options.push_back({ "*",           "-dt,   --defrag-thold N",       "KV cache defragmentation threshold (default: %.1f, < 0 - disabled)", (double)params.defrag_thold });
@@ -1717,6 +1753,12 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-mu,   --model-url MODEL_URL",  "model download url (default: unused)" });
     options.push_back({ "*",           "-hfr,  --hf-repo REPO",         "Hugging Face model repository (default: unused)" });
     options.push_back({ "*",           "-hff,  --hf-file FILE",         "Hugging Face model file (default: unused)" });
+
+    options.push_back({ "bench" });
+    options.push_back({ "bench",       "-pps",                          "is the prompt shared across parallel sequences (default: %s)", params.is_pp_shared ? "true" : "false" });
+    options.push_back({ "bench",       "-npp n0,n1,...",                "number of prompt tokens" });
+    options.push_back({ "bench",       "-ntg n0,n1,...",                "number of text generation tokens" });
+    options.push_back({ "bench",       "-npl n0,n1,...",                "number of parallel prompts" });
 
     options.push_back({ "server" });
     options.push_back({ "server",      "       --host HOST",            "ip address to listen (default: %s)", params.hostname.c_str() });
