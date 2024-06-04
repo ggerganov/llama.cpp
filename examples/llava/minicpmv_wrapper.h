@@ -3,7 +3,7 @@
 
 #include "common.h"
 #include "clip.h"
-#include "minicpmv.h"
+#include "llava.h"
 #include "llama.h"
 
 #ifdef LLAMA_SHARED

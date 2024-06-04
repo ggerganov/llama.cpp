@@ -2,7 +2,7 @@
 #include "log.h"
 #include "common.h"
 #include "clip.h"
-#include "minicpmv.h"
+#include "llava.h"
 #include "minicpmv_wrapper.h"
 #include "llama.h"
 

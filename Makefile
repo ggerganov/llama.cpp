@@ -910,12 +910,12 @@ llava-cli: examples/llava/llava-cli.cpp examples/llava/clip.h examples/llava/cli
 	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) -o $@ $(LDFLAGS)
 
-minicpmv-cli: examples/minicpmv/minicpmv-cli.cpp examples/minicpmv/clip.h examples/minicpmv/clip.cpp examples/minicpmv/minicpmv.h examples/minicpmv/minicpmv.cpp examples/minicpmv/minicpmv_wrapper.h examples/minicpmv/minicpmv_wrapper.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+minicpmv-cli: examples/llava/minicpmv-cli.cpp examples/llava/clip.h examples/llava/clip.cpp examples/llava/llava.h examples/llava/llava.cpp examples/llava/minicpmv_wrapper.h examples/llava/minicpmv_wrapper.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) -c examples/minicpmv/clip.cpp  -o $(call GET_OBJ_FILE, examples/minicpmv/clip.cpp) -Wno-cast-qual
-	$(CXX) $(CXXFLAGS) -c examples/minicpmv/minicpmv.cpp -o $(call GET_OBJ_FILE, examples/minicpmv/minicpmv.cpp)
-	$(CXX) $(CXXFLAGS) -c examples/minicpmv/minicpmv_wrapper.cpp  -o $(call GET_OBJ_FILE, examples/minicpmv/minicpmv_wrapper.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/minicpmv/clip.cpp examples/minicpmv/minicpmv.cpp examples/minicpmv/minicpmv_wrapper.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/minicpmv/clip.cpp) $(call GET_OBJ_FILE, examples/minicpmv/minicpmv.cpp) $(call GET_OBJ_FILE, examples/minicpmv/minicpmv_wrapper.cpp) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c examples/llava/clip.cpp  -o $(call GET_OBJ_FILE, examples/llava/clip.cpp) -Wno-cast-qual
+	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
+	$(CXX) $(CXXFLAGS) -c examples/llava/minicpmv_wrapper.cpp  -o $(call GET_OBJ_FILE, examples/llava/minicpmv_wrapper.cpp)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp examples/llava/minicpmv_wrapper.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) $(call GET_OBJ_FILE, examples/llava/minicpmv_wrapper.cpp) -o $@ $(LDFLAGS)
 	
 baby-llama: examples/baby-llama/baby-llama.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
