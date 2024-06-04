@@ -32,18 +32,20 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [N_KV_MAX] [N_BATCH] [N_UBATCH] [FATTN] [IS_PP_SHARED] [NGL] <PP> <TG> <PL>\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [N_KV_MAX] [N_BATCH] [N_UBATCH] [FATTN] [IS_PP_SHARED] [NGL] [NT] [NTB] <PP> <TG> <PL>\n", argv[0]);
         printf("  <PP>, <TG> and PL are comma-separated lists of numbers without spaces\n\n");
-        printf("  example: %s ggml-model-f16.gguf 2048 2048 512 0 999 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
+        printf("  example: %s ggml-model-f16.gguf 16384 2048 512 0 0 999 8 8 128,256,512 128,256 1,2,4,8,16,32\n\n", argv[0]);
         return 1 ;
     }
 
-    int n_kv_max     = 2048;
-    int n_batch      = 2048;
-    int n_ubatch     = 512;
-    bool flash_attn  = false;
-    int is_pp_shared = 0;
-    int n_gpu_layers = 0;
+    int n_kv_max        = 16384;
+    int n_batch         = 2048;
+    int n_ubatch        = 512;
+    bool flash_attn     = false;
+    int is_pp_shared    = 0;
+    int n_gpu_layers    = 0;
+    int n_threads       = cpu_get_num_math();
+    int n_threads_batch = -1;
 
     std::vector<int> n_pp = { 128, 256, 512, 1024, 2048, 3584, 7680, };
     std::vector<int> n_tg = { 128, 256, };
@@ -79,15 +81,23 @@ int main(int argc, char ** argv) {
     }
 
     if (argc >= 9) {
-        n_pp = parse_list(argv[8]);
+        n_threads = std::atoi(argv[8]);
     }
 
     if (argc >= 10) {
-        n_tg = parse_list(argv[9]);
+        n_threads_batch = std::atoi(argv[9]);
     }
 
     if (argc >= 11) {
-        n_pl = parse_list(argv[10]);
+        n_pp = parse_list(argv[10]);
+    }
+
+    if (argc >= 12) {
+        n_tg = parse_list(argv[11]);
+    }
+
+    if (argc >= 13) {
+        n_pl = parse_list(argv[12]);
     }
 
     // init LLM
@@ -113,14 +123,13 @@ int main(int argc, char ** argv) {
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    ctx_params.seed       = 1234;
-    ctx_params.n_ctx      = n_kv_max;
-    ctx_params.n_batch    = n_batch;
-    ctx_params.n_ubatch   = n_ubatch;
-    ctx_params.flash_attn = flash_attn;
-
-    ctx_params.n_threads       = params.n_threads;
-    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.seed            = 1234;
+    ctx_params.n_ctx           = n_kv_max;
+    ctx_params.n_batch         = n_batch;
+    ctx_params.n_ubatch        = n_ubatch;
+    ctx_params.flash_attn      = flash_attn;
+    ctx_params.n_threads       = n_threads;
+    ctx_params.n_threads_batch = n_threads_batch == -1 ? n_threads : n_threads_batch;
 
     // ensure enough sequences are available
     ctx_params.n_seq_max = *std::max_element(n_pl.begin(), n_pl.end());
@@ -175,7 +184,8 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("\n");
-    LOG_TEE("%s: n_kv_max = %d, n_batch = %d, n_ubatch = %d, flash_attn = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n", __func__, n_kv_max, n_batch, n_ubatch, flash_attn, is_pp_shared, n_gpu_layers, ctx_params.n_threads, ctx_params.n_threads_batch);
+    LOG_TEE("%s: n_kv_max = %d, n_batch = %d, n_ubatch = %d, flash_attn = %d, is_pp_shared = %d, n_gpu_layers = %d, n_threads = %u, n_threads_batch = %u\n",
+            __func__, n_kv_max, n_batch, n_ubatch, flash_attn, is_pp_shared, n_gpu_layers, n_threads, ctx_params.n_threads_batch);
     LOG_TEE("\n");
 
     LOG_TEE("|%6s | %6s | %4s | %6s | %8s | %8s | %8s | %8s | %8s | %8s |\n", "PP",     "TG",     "B",    "N_KV",     "T_PP s",   "S_PP t/s", "T_TG s",   "S_TG t/s", "T s",      "S t/s");

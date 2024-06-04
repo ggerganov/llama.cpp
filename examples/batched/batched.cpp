@@ -11,7 +11,7 @@ int main(int argc, char ** argv) {
     gpt_params params;
 
     if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL] [LEN] [NGL]\n" , argv[0]);
+        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL] [LEN] [NGL] [NT] [NTB]\n", argv[0]);
         return 1 ;
     }
 
@@ -23,6 +23,12 @@ int main(int argc, char ** argv) {
 
     // number of layers to offload to the GPU
     int n_gpu_layers = 0;
+
+    // number of threads to use for generation
+    int n_threads = cpu_get_num_math();
+
+    // number of threads to use for batch processing
+    int n_threads_batch = -1;
 
     if (argc >= 2) {
         params.model = argv[1];
@@ -42,6 +48,14 @@ int main(int argc, char ** argv) {
 
     if (argc >= 6) {
         n_gpu_layers = std::atoi(argv[5]);
+    }
+
+    if (argc >= 7) {
+        n_threads = std::atoi(argv[6]);
+    }
+
+    if (argc >= 8) {
+        n_threads_batch = std::atoi(argv[7]);
     }
 
     if (params.prompt.empty()) {
@@ -79,12 +93,12 @@ int main(int argc, char ** argv) {
 
     llama_context_params ctx_params = llama_context_default_params();
 
-    ctx_params.seed  = 1234;
-    ctx_params.n_ctx   = n_kv_req;
-    ctx_params.n_batch = std::max(n_len, n_parallel);
+    ctx_params.seed            = 1234;
+    ctx_params.n_ctx           = n_kv_req;
+    ctx_params.n_batch         = std::max(n_len, n_parallel);
     ctx_params.n_seq_max       = n_parallel;
-    ctx_params.n_threads       = params.n_threads;
-    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.n_threads       = n_threads;
+    ctx_params.n_threads_batch = n_threads_batch == -1 ? n_threads : n_threads_batch;
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
@@ -95,7 +109,8 @@ int main(int argc, char ** argv) {
 
     const int n_ctx    = llama_n_ctx(ctx);
 
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_batch = %u, n_parallel = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, ctx_params.n_batch, n_parallel, n_kv_req);
+    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_batch = %u, n_parallel = %d, n_kv_req = %d, n_threads = %u, n_threads_batch = %u\n",
+            __func__, n_len, n_ctx, ctx_params.n_batch, n_parallel, n_kv_req, n_threads, ctx_params.n_threads_batch);
 
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if (n_kv_req > n_ctx) {
