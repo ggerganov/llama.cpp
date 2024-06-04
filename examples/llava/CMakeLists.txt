@@ -35,3 +35,8 @@ add_executable(llava-cli llava-cli.cpp)
 install(TARGETS llava-cli RUNTIME)
 target_link_libraries(llava-cli PRIVATE common llava ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(llava PRIVATE cxx_std_11)
+
+add_library(minicpmv_wrapper OBJECT
+        minicpmv_wrapper.cpp
+)
+target_link_libraries(minicpmv_wrapper PRIVATE llava ${CMAKE_THREAD_LIBS_INIT})
