@@ -22,7 +22,7 @@
 
 // TODO read everything over and make sure it makes sense because I'm dropping logic errors left and right - Christian
 
-// to reduce the amount of stuff that gets sent to cb_eval I separated it somewhat - Christian
+// to reduce the amount of stuff that gets sent to cb_eval this is only what cb_eval actually needs
 struct callback_data {
     std::vector<uint8_t> data;
     ggml_context * ctx_ggml;   // holds v_pos, v_neg
@@ -34,11 +34,13 @@ struct callback_data {
     std::vector<struct ggml_tensor *> v_pos;   // vector of matrices of size [n_embd, n_tokens]
     std::vector<struct ggml_tensor *> v_neg;   // vector of matrices of size [n_embd, n_tokens]
 
+    // TODO I free everything as soon as it's unnecessary, rather than letting this live until the end of main() - is this undesirable?
+    /*
     ~callback_data() {
         for (auto ptr : v_pos) free(ptr);
         for (auto ptr : v_neg) free(ptr);
         ggml_free(ctx_ggml);
-    }
+    }*/
 };
 
 // I prefer having the different contexts so we can free each immediately after we're done using it
@@ -51,7 +53,7 @@ struct diff_ctx {
     ggml_context * ctx_diffs_wrapped; // holds v_diffs_wrapped
     ggml_context * ctx_diff;          // holds v_diff
     ggml_context * ctx_final;         // holds v_final
-    
+
     // each element of the vector correspond to one layer
     std::vector<struct ggml_tensor *> v_diff;  // vector of matrices of size [n_embd, m] where m ~ n_tokens * n_completions
     std::vector<struct ggml_tensor *> v_final; // vector of vectors of size [n_embd] to be written to file
@@ -62,10 +64,9 @@ struct diff_ctx {
     ~diff_ctx() {
         for (auto ptr : v_diff) free(ptr);
         for (auto ptr : v_final) free(ptr);
-        for (auto & vec : v_diffs_wrapped) for (auto ptr : vec) free(ptr);
-        ggml_free(ctx_diffs_wrapped);
         ggml_free(ctx_diff);
         ggml_free(ctx_final);
+        // ctx_diffs_wrapped is freed in concatenate_diffs as soon as we're done with it - see above. undesirable?
     }
 };
 
@@ -396,8 +397,6 @@ static void concatenate_diffs(diff_ctx & dctx) {
         printf("il: %zu of %zu\n", il, dctx.v_diffs_wrapped.size()-1);
         std::vector<struct ggml_tensor *> & vec = dctx.v_diffs_wrapped[il];
 
-        std::cout << "vec size: " << vec.size() << std::endl;
-
         // strip zero rows
         int n_nonzero_rows = 0;
         std::vector<std::vector<int>> nonzero_rows; // outer vector is tensor idx, inner vector is row in tensor
@@ -411,7 +410,7 @@ static void concatenate_diffs(diff_ctx & dctx) {
             }
         }
 
-        std::cout << "n_nonzero_rows: " << n_nonzero_rows << std::endl;
+        printf("n_nonzero_rows: %d\n", n_nonzero_rows);
 
         // we transpose it here because ggml mul_mat is really weird
         struct ggml_tensor * diff = ggml_new_tensor_2d(dctx.ctx_diff, GGML_TYPE_F32, n_nonzero_rows, dctx.n_embd);
@@ -427,13 +426,14 @@ static void concatenate_diffs(diff_ctx & dctx) {
             }
         }
 
-        printf("diff[0][1]: %f\n", ggml_get_f32_nd(diff, 0, 1, 0, 0));
+        printf("diff[0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(diff, 0, DEBUG_POS, 0, 0));
 
         // TODO assert row == n_nonzero_rows
 
         dctx.v_diff.push_back(diff);
     }
-    ggml_free(dctx.ctx_diffs_wrapped);
+        //for (auto & vec : dctx.v_diffs_wrapped) for (auto ptr : vec) free(ptr);
+        ggml_free(dctx.ctx_diffs_wrapped);
 }
 
 // TODO translate everything below this
@@ -473,7 +473,7 @@ void load_pca_model(pca_model & model, struct ggml_tensor * v_diff_original) {
         model.backend = ggml_backend_cpu_init();
     }
     
-    printf("v_diff_original[0][1]: %f\n", ggml_get_f32_nd(v_diff_original, 0, 1, 0, 0));
+    printf("v_diff_original[0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(v_diff_original, 0, DEBUG_POS, 0, 0));
 
     const int num_tensors = 4;
 
@@ -529,7 +529,6 @@ struct ggml_cgraph * square_diff_graph(const pca_model & model) {
     return gf;
 }
 
-// TODO do this before pca so the pca_model is easier to malloc?
 struct ggml_tensor * compute_square(const pca_model & model, ggml_gallocr_t allocr, int n_threads) {
     struct ggml_cgraph * gf = square_diff_graph(model);
 
@@ -598,14 +597,12 @@ static void power_iteration(diff_ctx & dctx, int idx, int maxIterations = 1000, 
 
     pca_model model;
     load_pca_model(model, dctx.v_diff[idx]);
-    std::cout << "model.v_diff_original->ne[0]: " << model.v_diff_original->ne[0] << std::endl;
 
     ggml_gallocr_t allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
 
     struct ggml_tensor * square = compute_square(model, allocr, dctx.n_threads);
     ggml_backend_tensor_set(model.square, square->data, 0, ggml_nbytes(model.square));
 
-    // yes?
     ggml_gallocr_free(allocr);
 
     struct ggml_init_params host_params = {
@@ -683,7 +680,7 @@ static void export_gguf(diff_ctx & dctx, int n_layers, const std::string fname, 
         // i'm pretty sure it's right now
         const std::string name = "direction." + to_string(i+1);
 
-        std::cout << "dctx.v_final[i][0][1]: " << ggml_get_f32_nd(dctx.v_final[i], 0, 1, 0, 0) << std::endl;
+        printf("dctx.v_final[i][%d]: %f\n", DEBUG_POS, ggml_get_f32_1d(dctx.v_final[i], DEBUG_POS));
 
         ggml_set_name(dctx.v_final[i], name.c_str());
 
@@ -838,15 +835,14 @@ int main(int argc, char ** argv) {
     }
 
     // TODO we can actually delete cb_data here
-    //ggml_free(cb_data.ctx_ggml);
 
-    printf("dctx.v_diffs_wrapped[0][0][2]: %f\n", ggml_get_f32_nd(dctx.v_diffs_wrapped[0][0], 0, 2, 0, 0));
+    printf("dctx.v_diffs_wrapped[0][0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(dctx.v_diffs_wrapped[0][0], 0, DEBUG_POS, 0, 0));
 
     printf("Done evaluate prompts\n");
 
     concatenate_diffs(dctx);
 
-    printf("dctx.v_diff[0][0][1]: %f\n", ggml_get_f32_nd(dctx.v_diff[0], 0, 1, 0, 0));
+    printf("dctx.v_diff[0][0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(dctx.v_diff[0], 0, DEBUG_POS, 0, 0));
 
     printf("Done concatenate diffs\n");
 
