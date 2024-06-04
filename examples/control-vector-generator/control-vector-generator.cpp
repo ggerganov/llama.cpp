@@ -367,8 +367,6 @@ static void calc_diff(callback_data & cb_data, diff_ctx & dctx) {
         printf("inp_pos [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_pos, 0, DEBUG_POS, 0, 0));
         printf("inp_neg [0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(inp_neg, 0, DEBUG_POS, 0, 0));
 
-        // TODO is this the best way to get dimension? i don't know which way n_embd/n_tokens go
-        // for that matter can we get rid of n_embd/n_tokens fields in favor of ne[0]/ne[1]?
         // TODO assert inp_pos->ne[0] == inp_neg->ne[0] && inp_pos->ne[1] == inp_neg->ne[1]
         struct ggml_tensor * dest = ggml_new_tensor_2d(dctx.ctx_diffs_wrapped, GGML_TYPE_F32, inp_pos->ne[0], inp_pos->ne[1]);
         dest->data = malloc(n_bytes); // TODO @ngxson get rid of this malloc somehow
@@ -385,9 +383,7 @@ static void calc_diff(callback_data & cb_data, diff_ctx & dctx) {
     }
 }
 
-// TODO nomenclature is probably wrong! this should be cols
-// row/col mixup has been giving me a headache this entire time because apparently ggml accesses 2d as [col][row] - @christianazinn
-// TODO check row/col because that's probably where the logic error is
+// 50/50 chance this should be cols but it works and I don't want to touch it - @christianazinn
 static bool is_row_all_zeros(struct ggml_tensor * diff, int row, int cols, float eps = 1e-6) {
     for (int i = 0; i < cols; ++i) {
         if (ggml_get_f32_nd(diff, i, row, 0, 0) > eps) {
@@ -443,9 +439,6 @@ static void concatenate_diffs(diff_ctx & dctx) {
         //for (auto & vec : dctx.v_diffs_wrapped) for (auto ptr : vec) free(ptr);
         ggml_free(dctx.ctx_diffs_wrapped);
 }
-
-// TODO translate everything below this
-// TODO make sure to free everything in a timely manner
 
 struct pca_model {
     struct ggml_tensor * v_diff_original;
@@ -785,10 +778,6 @@ int main(int argc, char ** argv) {
     // init diff_ctx
     diff_ctx dctx;
 
-    // FIXME FIXME FIXME we are running out of memory here
-    // n_prompts should really be n_tokens damnit - remove the 2u and adapt
-    // we will either have to pretokenize everything so we know how much memory to allocate
-    // or allocate the tensor overhead as we go
     struct ggml_init_params params_diffs_wrapped = {
         /*.mem_size   =*/ ggml_tensor_overhead() * n_total_tokens,
         /*.mem_buffer =*/ NULL,
@@ -854,7 +843,7 @@ int main(int argc, char ** argv) {
         cb_data.v_neg.clear();
     }
 
-    // TODO we can actually delete cb_data here
+    // TODO we can actually delete cb_data here but do we want to?
 
     printf("dctx.v_diffs_wrapped[0][0][%d]: %f\n", DEBUG_POS, ggml_get_f32_nd(dctx.v_diffs_wrapped[0][0], 0, DEBUG_POS, 0, 0));
 
