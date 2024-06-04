@@ -21,6 +21,17 @@
 .role-user {
     background-color: lightgray;
 }
+.role-trim {
+    background-color: lightpink;
+}
+
+.gridx2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    border-bottom-style: dotted;
+    border-bottom-width: thin;
+    border-bottom-color: lightblue;
+}
 
 .flex-grow {
     flex-grow: 1;
