@@ -91,6 +91,14 @@ struct ctrl_params {
     std::vector<std::string> negative_entries;
 };
 
+struct tokenized_prompt {
+    std::string positive;
+    std::string negative;
+    std::vector<llama_token> tokens_pos;
+    std::vector<llama_token> tokens_neg;
+    size_t max_seq_len;
+};
+
 template <typename T>
 static std::string to_string(const T & val) {
     std::stringstream ss;
@@ -713,11 +721,11 @@ int main(int argc, char ** argv) {
     cparams.positive_prompts = ctrlvec_load_prompt_file(cparams.positive_prompts_file);
     cparams.negative_prompts = ctrlvec_load_prompt_file(cparams.negative_prompts_file);
     if (cparams.positive_prompts.size() != cparams.negative_prompts.size()) {
-        fprintf(stderr, "number of positive and negative prompts must be equal");
+        fprintf(stderr, "number of positive and negative prompts must be equal\n");
         return 1;
     }
     if (cparams.positive_prompts.empty()) {
-        fprintf(stderr, "must provide at least one prompt pair");
+        fprintf(stderr, "must provide at least one prompt pair\n");
         return 1;
     }
 
@@ -751,6 +759,29 @@ int main(int argc, char ** argv) {
     };
     cb_data.ctx_ggml = ggml_init(params_ggml);
 
+    // create templated prompts
+    for (int i = 0; i < n_prompts; ++i) {
+        populate_entries(cparams, cparams.positive_prompts[i], cparams.negative_prompts[i]);
+    }
+
+    // we have to pretokenize everything because otherwise we don't know how much overhead to allocate ctx_diffs_wrapped
+    std::vector<tokenized_prompt> tokenized_prompts;
+    size_t n_total_tokens = 0;
+    for (size_t i = 0; i < cparams.positive_entries.size(); ++i) {
+        tokenized_prompt t;
+        t.positive = cparams.positive_entries[i];
+        t.negative = cparams.negative_entries[i];
+        t.tokens_pos = ::llama_tokenize(ctx, t.positive, false);
+        t.tokens_neg = ::llama_tokenize(ctx, t.negative, false);
+        t.max_seq_len = std::max(t.tokens_pos.size(), t.tokens_neg.size());
+        padding_seq(ctx, t.tokens_pos, t.max_seq_len);
+        padding_seq(ctx, t.tokens_neg, t.max_seq_len);
+        n_total_tokens += 2 * t.max_seq_len;
+        tokenized_prompts.push_back(t);
+    }
+
+    std::cout << "n_total_tokens: " << n_total_tokens << std::endl;
+
     // init diff_ctx
     diff_ctx dctx;
 
@@ -759,7 +790,7 @@ int main(int argc, char ** argv) {
     // we will either have to pretokenize everything so we know how much memory to allocate
     // or allocate the tensor overhead as we go
     struct ggml_init_params params_diffs_wrapped = {
-        /*.mem_size   =*/ ggml_tensor_overhead() * n_prompts * n_layers * 16u,
+        /*.mem_size   =*/ ggml_tensor_overhead() * n_total_tokens,
         /*.mem_buffer =*/ NULL,
         /*.no_alloc   =*/ true,
     };
@@ -782,46 +813,35 @@ int main(int argc, char ** argv) {
     dctx.ctx_diff = ggml_init(params_diff);
     dctx.ctx_final = ggml_init(params_final);
 
-    // create templated prompts
-    for (int i = 0; i < n_prompts; ++i) {
-        populate_entries(cparams, cparams.positive_prompts[i], cparams.negative_prompts[i]);
-    }
-
     const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
 
     int token_ct = 0;
 
     for(size_t i = 0; i < cparams.positive_entries.size(); ++i) {
-        std::string positive_prompt = cparams.positive_entries[i];
-        std::string negative_prompt = cparams.negative_entries[i];
-        std::vector<llama_token> tokens_pos = ::llama_tokenize(ctx, positive_prompt, add_bos);
-        std::vector<llama_token> tokens_neg = ::llama_tokenize(ctx, negative_prompt, add_bos);
-        size_t max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
-        padding_seq(ctx, tokens_pos, max_seq_len);
-        padding_seq(ctx, tokens_neg, max_seq_len);
-        cb_data.n_tokens = max_seq_len;
+        tokenized_prompt t = tokenized_prompts[i];
+        cb_data.n_tokens = t.max_seq_len;
 
         // need to reload the model so it doesn't run out of context
         // this should scale with -c option passed by main
-        token_ct += 2 * max_seq_len;
+        token_ct += 2 * t.max_seq_len;
         if (token_ct > n_ctx || cparams.always_reload) {
             //break;
             llama_free(ctx);
             llama_free_model(model);
             std::tie(model, ctx) = llama_init_from_gpt_params(params);
-            token_ct = 2 * max_seq_len;
+            token_ct = 2 * t.max_seq_len;
         }
         if (token_ct > n_ctx) {
             fprintf(stderr, "context size exceeded on iteration %zu\n", i);
             break;
         }
 
-        printf("Evaluating prompt: \"%s\" - \"%s\" (%ld tokens)\n", positive_prompt.c_str(), negative_prompt.c_str(), max_seq_len);
+        printf("Evaluating prompt: \"%s\" - \"%s\" (%ld tokens)\n", t.positive.c_str(), t.negative.c_str(), t.max_seq_len);
 
         cb_data.is_eval_pos = true;
-        get_hidden_layers(ctx, tokens_pos);
+        get_hidden_layers(ctx, t.tokens_pos);
         cb_data.is_eval_pos = false;
-        get_hidden_layers(ctx, tokens_neg);
+        get_hidden_layers(ctx, t.tokens_neg);
 
         calc_diff(cb_data, dctx);
 
@@ -861,7 +881,8 @@ int main(int argc, char ** argv) {
     export_gguf(dctx, n_layers, cparams.outfile, model_hint);
 
     llama_backend_free();
-    std::cout << "okay which of you is failing" << std::endl;
+
+    printf("confirm we got here\n");
 
     // TODO free(): invalid pointer after the entire program is done????????
     // probably because destructors free after you've already manually freed
