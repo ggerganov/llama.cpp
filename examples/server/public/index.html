@@ -12,6 +12,18 @@
       font-size: 90%;
     }
 
+    .grid-container {
+      display: grid;
+      grid-template-columns: auto auto auto;
+      padding: 10px;
+    }
+
+    .grid-item {
+      padding: 5px;
+      /* font-size: 30px; */
+      text-align: center;
+    }
+
     #container {
       margin: 0em auto;
       display: flex;
@@ -33,6 +45,67 @@
       border: 1px solid #ccc;
       border-radius: 5px;
       padding: 0.5em;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    .customlink:link {
+      color: white;
+      background-color: #007aff;
+      font-weight: 600;
+      text-decoration: none;
+      float: right;
+      margin-top: 30px;
+      display: flex;
+      flex-direction: row;
+      gap: 0.5em;
+      justify-content: flex-end;
+      border-radius: 4px;
+      padding: 8px;
+    }
+
+    .customlink:visited {
+      color: white;
+      background-color: #007aff;
+      font-weight: 600;
+      text-decoration: none;
+      float: right;
+      margin-top: 30px;
+      display: flex;
+      flex-direction: row;
+      gap: 0.5em;
+      justify-content: flex-end;
+      padding: 8px;
+    }
+
+    .customlink:hover {
+      color: white;
+      background-color: #0070ee;
+      font-weight: 600;
+      text-decoration: none;
+      float: right;
+      margin-top: 30px;
+      display: flex;
+      flex-direction: row;
+      gap: 0.5em;
+      justify-content: flex-end;
+      padding: 8px;
+    }
+
+    .customlink:active {
+      color: #0070ee;
+      background-color: #80b3ef;
+      font-weight: 600;
+      text-decoration: none;
+      float: right;
+      margin-top: 30px;
+      display: flex;
+      flex-direction: row;
+      gap: 0.5em;
+      justify-content: flex-end;
+      padding: 8px;
     }
 
     body {
@@ -594,7 +667,7 @@
           message = html`<${Probabilities} data=${data} />`
         } else {
           const text = isArrayMessage ?
-            data.map(msg => msg.content).join('').replace(/^\s+/, '') :
+            data.map(msg => msg.content).join('') :
             data;
           message = isCompletionMode ?
             text :
@@ -877,19 +950,30 @@
 
     // poor mans markdown replacement
     const Markdownish = (params) => {
-      const md = params.text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/(^|\n)#{1,6} ([^\n]*)(?=([^`]*`[^`]*`)*[^`]*$)/g, '$1<h3>$2</h3>')
-        .replace(/\*\*(.*?)\*\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
-        .replace(/__(.*?)__(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
-        .replace(/_(.*?)_(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
-        .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/gim, '<br />');
-      return html`<span dangerouslySetInnerHTML=${{ __html: md }} />`;
+      const chunks = params.text.split('```');
+
+      for (let i = 0; i < chunks.length; i++) {
+        if (i % 2 === 0) { // outside code block
+          chunks[i] = chunks[i]
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/(^|\n)#{1,6} ([^\n]*)(?=([^`]*`[^`]*`)*[^`]*$)/g, '$1<h3>$2</h3>')
+          .replace(/\*\*(.*?)\*\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
+          .replace(/__(.*?)__(?=([^`]*`[^`]*`)*[^`]*$)/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
+          .replace(/_(.*?)_(?=([^`]*`[^`]*`)*[^`]*$)/g, '<em>$1</em>')
+          .replace(/```.*?\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+          .replace(/`(.*?)`/g, '<code>$1</code>')
+          .replace(/\n/gim, '<br />');
+        } else { // inside code block
+          chunks[i] = `<pre><code>${chunks[i]}</code></pre>`;
+        }
+      }
+
+      const restoredText = chunks.join('');
+
+      return html`<span dangerouslySetInnerHTML=${{ __html: restoredText }} />`;
     };
 
     const ModelGenerationInfo = (params) => {
@@ -902,6 +986,7 @@
         </span>
       `
     }
+
 
     // simple popover impl
     const Popover = (props) => {
@@ -1023,7 +1108,11 @@
       return html`
         <div class="mode-${session.value.type}">
           <header>
-            <h1>llama.cpp</h1>
+            <div class="grid-container">
+              <div class="grid-item"></div>
+              <div class="grid-item"><h1>llama.cpp</h1></div>
+              <div class="grid-item"><a class="customlink" href="index-new.html">New UI</a></div>
+            </div>
           </header>
 
           <main id="content">
@@ -1054,4 +1143,3 @@
 </body>
 
 </html>
-

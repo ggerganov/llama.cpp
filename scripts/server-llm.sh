@@ -3,7 +3,7 @@
 # Helper script for deploying llama.cpp server with a single Bash command
 #
 # - Works on Linux and macOS
-# - Supports: CPU, CUDA, Metal, OpenCL
+# - Supports: CPU, CUDA, Metal
 # - Can run all GGUF models from HuggingFace
 # - Can serve requests in parallel
 # - Always builds latest llama.cpp from GitHub
@@ -19,7 +19,7 @@
 #   --port:            port number, default is 8888
 #   --repo:            path to a repo containing GGUF model files
 #   --wtype:           weights type (f16, q8_0, q4_0, q4_1), default is user-input
-#   --backend:         cpu, cuda, metal, opencl, depends on the OS
+#   --backend:         cpu, cuda, metal, depends on the OS
 #   --gpu-id:          gpu id, default is 0
 #   --n-parallel:      number of parallel requests, default is 8
 #   --n-kv:            KV cache size, default is 4096
@@ -72,7 +72,7 @@ function print_usage {
     printf "  --port:             port number, default is 8888\n"
     printf "  --repo:             path to a repo containing GGUF model files\n"
     printf "  --wtype:            weights type (f16, q8_0, q4_0, q4_1), default is user-input\n"
-    printf "  --backend:          cpu, cuda, metal, opencl, depends on the OS\n"
+    printf "  --backend:          cpu, cuda, metal, depends on the OS\n"
     printf "  --gpu-id:           gpu id, default is 0\n"
     printf "  --n-parallel:       number of parallel requests, default is 8\n"
     printf "  --n-kv:             KV cache size, default is 4096\n"
@@ -387,9 +387,6 @@ elif [[ "$backend" == "cpu" ]]; then
 elif [[ "$backend" == "metal" ]]; then
     printf "[+] Building with Metal backend\n"
     make -j server $log
-elif [[ "$backend" == "opencl" ]]; then
-    printf "[+] Building with OpenCL backend\n"
-    LLAMA_CLBLAST=1 make -j server $log
 else
     printf "[-] Unknown backend: %s\n" "$backend"
     exit 1
@@ -406,8 +403,6 @@ if [[ "$backend" == "cuda" ]]; then
 elif [[ "$backend" == "cpu" ]]; then
     args="-ngl 0"
 elif [[ "$backend" == "metal" ]]; then
-    args="-ngl 999"
-elif [[ "$backend" == "opencl" ]]; then
     args="-ngl 999"
 else
     printf "[-] Unknown backend: %s\n" "$backend"
