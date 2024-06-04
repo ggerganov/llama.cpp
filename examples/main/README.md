@@ -53,13 +53,13 @@ The following command generates "infinite" text from a starting prompt (you can 
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin --ignore-eos -n -1 --random-prompt
+./main -m models/7B/ggml-model.bin --ignore-eos -n -1
 ```
 
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin --ignore-eos -n -1 --random-prompt
+main.exe -m models\7B\ggml-model.bin --ignore-eos -n -1
 ```
 
 ## Common Options
@@ -80,7 +80,6 @@ The `main` program provides several ways to interact with the LLaMA models using
 -   `--prompt PROMPT`: Provide a prompt directly as a command-line option.
 -   `--file FNAME`: Provide a file containing a prompt or multiple prompts.
 -   `--interactive-first`: Run the program in interactive mode and wait for input right away. (More on this below.)
--   `--random-prompt`: Start with a randomized prompt.
 
 ## Interaction
 
