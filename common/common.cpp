@@ -1563,7 +1563,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       --keep N",               "number of tokens to keep from the initial prompt (default: %d, -1 = all)", params.n_keep });
     options.push_back({ "*",           "       --chunks N",             "max number of chunks to process (default: %d, -1 = all)", params.n_chunks });
     options.push_back({ "*",           "-fa,   --flash-attn",           "enable Flash Attention (default: %s)", params.flash_attn ? "enabled" : "disabled" });
-    options.push_back({ "*",           "-p,    --prompt PROMPT",        "prompt to start generation with (default: empty)" });
+    options.push_back({ "*",           "-p,    --prompt PROMPT",        "prompt to start generation with (default: '%s')", params.prompt.c_str() });
     options.push_back({ "*",           "-f,    --file FNAME",           "a file containing the prompt (default: none)" });
     options.push_back({ "*",           "-bf,   --binary-file FNAME",    "binary file containing the prompt (default: none)" });
     options.push_back({ "*",           "-e,    --escape",               "process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)" });
@@ -1626,6 +1626,10 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object\n"
                                                                         "For schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead" });
 
+    options.push_back({ "embedding" });
+    options.push_back({ "embedding",   "       --pooling {none,mean,cls}",
+                                                                        "pooling type for embeddings, use model default if unspecified" });
+
     options.push_back({ "context hacking" });
     options.push_back({ "*",           "       --rope-scaling {none,linear,yarn}",
                                                                         "RoPE frequency scaling method, defaults to linear unless specified by the model" });
@@ -1643,9 +1647,6 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-nkvo, --no-kv-offload",        "disable KV offload" });
     options.push_back({ "*",           "-ctk,  --cache-type-k TYPE",    "KV cache data type for K (default: %s)", params.cache_type_k.c_str() });
     options.push_back({ "*",           "-ctv,  --cache-type-v TYPE",    "KV cache data type for V (default: %s)", params.cache_type_v.c_str() });
-
-    options.push_back({ "embedding",   "       --pooling {none,mean,cls}",
-                                                                        "pooling type for embeddings, use model default if unspecified" });
 
     options.push_back({ "perplexity" });
     options.push_back({ "perplexity",  "       --all-logits",           "return logits for all tokens in the batch (default: %s)", params.logits_all ? "true" : "false" });
