@@ -11513,15 +11513,10 @@ static void ggml_sycl_mul_mat_batched_sycl(ggml_backend_sycl_context & ctx,
                            main_stream->get_backend() == sycl::backend::ext_oneapi_hip;
 
 
-    ggml_tensor_extra_gpu * src0_extra = (ggml_tensor_extra_gpu *) src0->extra;
-    void * src0_ddq = src0_extra->data_device[ctx.device];
+    void * src0_ddq = src0->data;
     sycl::half *src0_as_f16 = (sycl::half *)src0_ddq;
-
-    ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu *) src1->extra;
-    float * src1_ddf = (float *) src1_extra->data_device[ctx.device];
-
-    ggml_tensor_extra_gpu * dst_extra = (ggml_tensor_extra_gpu *) dst->extra;
-    float * dst_ddf = (float *) dst_extra->data_device[ctx.device];
+    float * src1_ddf = (float *) src1->data;
+    float * dst_ddf = (float *) dst->data;
 
     // convert src1 to fp16
     ggml_sycl_pool_alloc<sycl::half> src1_f16_alloc(ctx.pool());
