@@ -69,7 +69,6 @@ In this section, we cover the most commonly used options for running the `main` 
 -   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`; inferred from `--model-url` if set).
 -   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf).
 -   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
--   `-ins, --instruct`: Run the program in instruction mode, which is particularly useful when working with Alpaca models.
 -   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.
 -   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
 
@@ -83,7 +82,7 @@ The `main` program provides several ways to interact with the LLaMA models using
 
 ## Interaction
 
-The `main` program offers a seamless way to interact with LLaMA models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive`, `--interactive-first`, and `--instruct`.
+The `main` program offers a seamless way to interact with LLaMA models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive` and `--interactive-first`.
 
 In interactive mode, users can participate in text generation by injecting their input during the process. Users can press `Ctrl+C` at any time to interject and type their input, followed by pressing `Return` to submit it to the LLaMA model. To submit additional lines without finalizing input, users can end the current line with a backslash (`\`) and continue typing.
 
@@ -91,7 +90,6 @@ In interactive mode, users can participate in text generation by injecting their
 
 -   `-i, --interactive`: Run the program in interactive mode, allowing users to engage in real-time conversations or provide specific instructions to the model.
 -   `--interactive-first`: Run the program in interactive mode and immediately wait for user input before starting the text generation.
--   `-ins, --instruct`: Run the program in instruction mode, which is specifically designed to work with Alpaca models that excel in completing tasks based on user instructions.
 -   `--color`: Enable colorized output to differentiate visually distinguishing between prompts, user input, and generated text.
 
 By understanding and utilizing these interaction options, you can create engaging and dynamic experiences with the LLaMA models, tailoring the text generation process to your specific needs.
@@ -119,16 +117,6 @@ The `--in-suffix` flag is used to add a suffix after your input. This is useful 
 ```sh
 ./main -r "User:" --in-prefix " " --in-suffix "Assistant:"
 ```
-
-### Instruction Mode
-
-Instruction mode is particularly useful when working with Alpaca models, which are designed to follow user instructions for specific tasks:
-
--   `-ins, --instruct`: Enable instruction mode to leverage the capabilities of Alpaca models in completing tasks based on user-provided instructions.
-
-Technical detail: the user's input is internally prefixed with the reverse prompt (or `### Instruction:` as the default), and followed by `### Response:` (except if you just press Return without any input, to keep generating a longer response).
-
-By understanding and utilizing these interaction options, you can create engaging and dynamic experiences with the LLaMA models, tailoring the text generation process to your specific needs.
 
 ## Context Management
 
