@@ -127,11 +127,12 @@ python examples/llava/llava-surgery-v2.py -C -m phi3-fun/phi3-vision/
 4) Copy the llava.clip file into a subdirectory (like vit), rename it to pytorch_model.bin and add a fitting vit configuration to the directory:
 ```console
 // under phi3-fun/phi-vision dir
-mkdir vit 
+mkdir vit
 cp llava.clip vit/pytorch_model.bin
 cp llava.projector vit/
 curl -s -q https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json -o vit/config.json
 ```
+set `mm_projector_type` ->  `mlp_phi` in `config.json`
 
 5) Create the visual gguf model:
 ```console
@@ -151,7 +152,6 @@ python convert-hf-to-gguf.py phi3-fun/phi3-base
 ```
 
 8) Invoke
-(recompile llama.cpp first)
 ```console
 ./llava-cli -m phi3-fun/phi3-base/ggml-model-f16.gguf --mmproj phi3-fun/phi3-vision/vit/mmproj-model-f16.gguf --image IMAGE -c 4096  --temp .1 -p "PROMPT"
 ```

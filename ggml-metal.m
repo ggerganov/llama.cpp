@@ -779,7 +779,7 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
         case GGML_OP_LEAKY_RELU:
             return true;
         case GGML_OP_FLASH_ATTN_EXT:
-if (op->src[1]->type != GGML_TYPE_F16) {
+            if (op->src[1]->type != GGML_TYPE_F16) {
                 return false;
             }
             if (op->src[2]->type != GGML_TYPE_F16) {
@@ -1523,10 +1523,10 @@ static enum ggml_status ggml_metal_graph_compute(
                     } break;
                 case GGML_OP_MUL_MAT:
                     {
-                        // GGML_ASSERT(ne00 == ne10);
+                        GGML_ASSERT(ne00 == ne10);
 
-                        // GGML_ASSERT(ne12 % ne02 == 0);
-                        // GGML_ASSERT(ne13 % ne03 == 0);
+                        GGML_ASSERT(ne12 % ne02 == 0);
+                        GGML_ASSERT(ne13 % ne03 == 0);
 
                         const uint r2 = ne12/ne02;
                         const uint r3 = ne13/ne03;
