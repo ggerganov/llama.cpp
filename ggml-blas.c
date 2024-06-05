@@ -5,7 +5,7 @@
 
 #if defined(GGML_USE_ACCELERATE)
 #   include <Accelerate/Accelerate.h>
-#elif defined(GGML_USE_OPENBLAS)
+#elif defined(GGML_USE_BLAS)
 #   if defined(GGML_BLAS_USE_MKL)
 #       include <mkl.h>
 #   else
@@ -24,9 +24,6 @@ struct ggml_backend_blas_context {
 static bool ggml_compute_forward_mul_mat_use_blas(const struct ggml_tensor * dst) {
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
-
-    //const int64_t ne00 = src0->ne[0];
-    //const int64_t ne01 = src0->ne[1];
 
     const int64_t ne10 = src1->ne[0];
 

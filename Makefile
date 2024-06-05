@@ -419,21 +419,21 @@ ifndef LLAMA_NO_OPENMP
 endif # LLAMA_NO_OPENMP
 
 ifdef LLAMA_OPENBLAS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
+	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
 	OBJS        += ggml-blas.o
 endif # LLAMA_OPENBLAS
 
 ifdef LLAMA_OPENBLAS64
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas64)
+	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas64)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas64)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas64)
 	OBJS        += ggml-blas.o
 endif # LLAMA_OPENBLAS64
 
 ifdef LLAMA_BLIS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
+	MK_CPPFLAGS += -DGGML_USE_BLAS -I/usr/local/include/blis -I/usr/include/blis
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
 	OBJS        += ggml-blas.o
 endif # LLAMA_BLIS

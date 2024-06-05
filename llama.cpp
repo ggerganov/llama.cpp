@@ -21,7 +21,7 @@
 #   include "ggml-kompute.h"
 #endif
 
-#if defined(GGML_USE_OPENBLAS) || defined(GGML_USE_ACCELERATE)
+#if defined(GGML_USE_BLAS) || defined(GGML_USE_ACCELERATE)
 #  include "ggml-blas.h"
 #endif
 
@@ -2303,7 +2303,7 @@ struct llama_context {
 #ifdef GGML_USE_METAL
     ggml_backend_t backend_metal = nullptr;
 #endif
-#if defined(GGML_USE_OPENBLAS) || defined(GGML_USE_ACCELERATE)
+#if defined(GGML_USE_BLAS) || defined(GGML_USE_ACCELERATE)
     ggml_backend_t backend_blas = nullptr;
 #endif
     ggml_backend_t backend_cpu = nullptr;
@@ -12025,7 +12025,7 @@ static void llama_graph_compute(
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
-#if defined(GGML_USE_OPENBLAS) || defined(GGML_USE_ACCELERATE)
+#if defined(GGML_USE_BLAS) || defined(GGML_USE_ACCELERATE)
     if (lctx.backend_blas != nullptr) {
         ggml_backend_blas_set_n_threads(lctx.backend_blas, n_threads);
     }
@@ -16240,7 +16240,7 @@ struct llama_context * llama_new_context_with_model(
         }
 #endif
 
-#if defined(GGML_USE_OPENBLAS) || defined(GGML_USE_ACCELERATE)
+#if defined(GGML_USE_BLAS) || defined(GGML_USE_ACCELERATE)
         ctx->backend_blas = ggml_backend_blas_init();
         if (ctx->backend_blas == nullptr) {
             LLAMA_LOG_WARN("%s: failed to initialize BLAS backend\n", __func__);

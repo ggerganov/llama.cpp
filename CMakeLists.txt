@@ -374,7 +374,7 @@ if (LLAMA_BLAS)
 
         add_compile_options(${BLAS_LINKER_FLAGS})
 
-        add_compile_definitions(GGML_USE_OPENBLAS)
+        add_compile_definitions(GGML_USE_BLAS)
 
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${LLAMA_BLAS_VENDOR} MATCHES "Generic" OR ${LLAMA_BLAS_VENDOR} MATCHES "Intel"))
             add_compile_definitions(GGML_BLAS_USE_MKL)
