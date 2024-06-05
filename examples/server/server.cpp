@@ -821,12 +821,12 @@ struct server_context {
                 if (!slot.available()) {
                     continue;
                 }
- 
+
                 // skip the slot if it does not contains prompt
                 if (!slot.prompt.is_string()) {
                     continue;
                 }
- 
+
                 // current slot's prompt
                 std::string slot_prompt = slot.prompt.get<std::string>();
 
@@ -1586,7 +1586,7 @@ struct server_context {
                     std::string prompt = json_value(task.data, "prompt", std::string());
 
                     server_slot * slot;
-                    
+
                     if (id_slot != -1) {
                         slot = get_slot_by_id(id_slot);
                     } else {
