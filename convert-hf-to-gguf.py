@@ -327,6 +327,7 @@ class Model:
 
     def write(self):
         self.write_tensors()
+        self.gguf_writer.init_shards()
         self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
@@ -335,6 +336,7 @@ class Model:
     def write_vocab(self):
         if self.gguf_writer.split_arguments.split:
             raise ValueError('Splitting the vocabulary is not supported')
+        self.gguf_writer.init_shards()
         self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
@@ -2816,8 +2818,8 @@ def parse_args() -> argparse.Namespace:
         help="only print out a split plan and exit, without writing any new files"
     )
     parser.add_argument(
-        "--large-first-shard", action="store_true",
-        help="include tensors in the first shard when splitting (default: metadata only)"
+        "--small-first-shard", action="store_true",
+        help="do not add tensors to the first shard (disabled by default)"
     )
 
     return parser.parse_args()
@@ -2853,7 +2855,7 @@ def main() -> None:
     if args.split_max_tensors and args.split_max_size:
         raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
 
-    split_arguments = gguf.SplitArguments(args=args) if args.split else gguf.SplitArguments()
+    split_arguments = gguf.SplitArguments(args)
 
     ftype_map = {
         "f32": gguf.LlamaFileType.ALL_F32,

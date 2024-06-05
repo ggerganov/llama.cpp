@@ -57,7 +57,7 @@ class GGUFWriter:
 
     def __init__(
         self, path: os.PathLike[str] | str, arch: str, use_temp_file: bool = True,
-        endianess: GGUFEndian = GGUFEndian.LITTLE,
+        endianess: GGUFEndian = GGUFEndian.LITTLE, dont_add_architecture: bool = False
     ):
         self.fout = open(path, "wb")
         self.arch = arch
@@ -77,7 +77,8 @@ class GGUFWriter:
         ))
         self.state = WriterState.EMPTY
 
-        self.add_architecture()
+        if not dont_add_architecture:
+            self.add_architecture()
 
     def write_header_to_file(self) -> None:
         if self.state is not WriterState.EMPTY:
