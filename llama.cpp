@@ -6833,8 +6833,6 @@ static struct ggml_tensor * llm_build_qbitlinear(
         struct ggml_tensor  * cur)
     {
         return ggml_bitlinear_quant(ctx, cur);
-
-        return cur;
     }
 
 static struct ggml_tensor * llm_build_ffn(

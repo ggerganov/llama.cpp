@@ -1407,9 +1407,20 @@ class BitnetModel(Model):
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
 
-    # def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-            
-    #     return [(self.map_tensor_name(name), data_torch)]
+    def weight_quant(self, weight):
+        dtype = weight.dtype
+        weight = weight.float()
+        s =  1 / weight.abs().mean().clamp(min=1e-5)
+        result = (weight * s).round().clamp(-1, 1) / s
+        return result.type(dtype)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        if name.endswith(("q_proj.weight", "k_proj.weight", "v_proj.weight", 
+                          "down_proj.weight", "up_proj.weight", "gate_proj.weight",
+                          "o_proj.weight")):
+            data_torch = data_torch + (self.weight_quant(data_torch) - data_torch).detach()
+
+        return [(self.map_tensor_name(name), data_torch)]
 
 @Model.register("GrokForCausalLM")
 class GrokModel(Model):
