@@ -422,7 +422,7 @@ class Model:
         #       don't edit the hashes manually!
         if chkhsh == "0ef9807a4087ebef797fc749390439009c3b9eda9ad1a097abbe738f486c01e5":
             # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
-            res = "llama-bpe"         
+            res = "llama-bpe"
         if chkhsh == "049ecf7629871e3041641907f3de7c733e4dbfdc736f57d882ba0b0845599754":
             # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-base
             res = "deepseek-llm"
