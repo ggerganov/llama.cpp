@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 # This script downloads the tokenizer models of the specified models from Huggingface and
 # generates the get_vocab_base_pre() function for convert-hf-to-gguf.py
