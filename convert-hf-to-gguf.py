@@ -77,10 +77,8 @@ class Model:
         self.lazy = not eager
         self.part_names = Model.get_model_part_names(self.dir_model, ".safetensors")
         self.is_safetensors = len(self.part_names) > 0
-        
         if not self.is_safetensors:
             self.part_names = Model.get_model_part_names(self.dir_model, ".bin")
-            
         self.hparams = Model.load_hparams(self.dir_model)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
@@ -331,7 +329,7 @@ class Model:
         self.write_tensors()
         self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
-        self.gguf_writer.write_tensors_to_file()
+        self.gguf_writer.write_tensors_to_file(progress=True)
         self.gguf_writer.close()
 
     def write_vocab(self):
@@ -1567,6 +1565,7 @@ class MiniCPMModel(Model):
             data_torch = self._reverse_hf_permute(data_torch, n_head, n_kv_head)
 
         return [(self.map_tensor_name(name), data_torch)]
+
 
 @Model.register("QWenLMHeadModel")
 class QwenModel(Model):

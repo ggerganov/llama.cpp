@@ -125,6 +125,7 @@ class SplitStrategy(deque):
             num /= 1024.0
         return f"{num:.1f}T - over 1TB, --split recommended"
 
+
 class GGUFManager(GGUFWriter):
     kv_data: KVTempData
     tensors: list[TensorTempData]
@@ -204,7 +205,7 @@ class GGUFManager(GGUFWriter):
 
         self.state = WriterState.KV_DATA
 
-    def write_tensors_to_file(self) -> None:
+    def write_tensors_to_file(self, progress: bool = False) -> None:
         if self.split_arguments.dry_run:
             return
 
@@ -227,7 +228,7 @@ class GGUFManager(GGUFWriter):
             # need to write everything down here
             writer.write_header_to_file()
             writer.write_kv_data_to_file()
-            writer.write_tensors_to_file(progress=True)
+            writer.write_tensors_to_file(progress=progress)
             del tensors
 
         self.state = WriterState.TI_DATA
