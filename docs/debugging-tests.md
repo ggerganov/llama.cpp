@@ -1,6 +1,6 @@
 # Debugging Tests Tips
 
-## How to run & debug a specific test without anything else to keep the feedback loop short?
+## How to run & execute or debug a specific test without anything else to keep the feedback loop short?
 
 There is a script called debug-test.sh in the scripts folder whose parameter takes a REGEX and an optional test number.
 
@@ -10,11 +10,25 @@ For example, running the following command will output an interactive list from 
 
 It will then build & run in the debugger for you.
 
+To just execute a test and get back a PASS or FAIL message run:
+
 ```bash
 ./scripts/debug-test.sh test-tokenizer
+```
+
+To test in GDB use the `-g` flag to enable gdb test mode.
+
+```bash
+./scripts/debug-test.sh -g test-tokenizer
 
 # Once in the debugger, i.e. at the chevrons prompt, setting a breakpoint could be as follows:
 >>> b main
+```
+
+To speed up the testing loop, if you know your test number you can just run it similar to below:
+
+```bash
+./scripts/debug-test.sh test 23
 ```
 
 For further reference use `debug-test.sh -h` to print help.
@@ -41,7 +55,7 @@ cmake -DCMAKE_BUILD_TYPE=Debug -DLLAMA_CUDA=1 -DLLAMA_FATAL_WARNINGS=ON ..
 make -j
 ```
 
-#### Step 3.1: Identify Test Command for Debugging
+#### Step 3: Find all tests available that matches REGEX
 
 The output of this command will give you the command & arguments needed to run GDB.
 
@@ -69,11 +83,13 @@ Labels: main
 ...
 ```
 
-So for test #1 we can tell these two pieces of relevant information:
+#### Step 4: Identify Test Command for Debugging
+
+So for test #1 above we can tell these two pieces of relevant information:
 * Test Binary: `~/llama.cpp/build-ci-debug/bin/test-tokenizer-0`
 * Test GGUF Model: `~/llama.cpp/tests/../models/ggml-vocab-llama-spm.gguf`
 
-#### Step 3.2: Run GDB on test command
+#### Step 5: Run GDB on test command
 
 Based on the ctest 'test command' report above we can then run a gdb session via this command below:
 

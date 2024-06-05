@@ -88,7 +88,6 @@ static struct clip_image_grid_shape get_anyres_image_grid_shape(const std::pair<
 // Take the image segments in a grid configuration and return the embeddings and the number of embeddings into preallocated memory (image_embd_out)
 static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> & image_embd_v, struct clip_image_grid_shape grid_shape, float * image_embd_out, int * n_img_pos_out) {
     struct {
-        struct ggml_tensor * newline;
         struct ggml_context * ctx;
     } model;
 
@@ -149,20 +148,6 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     */
 
     model.ctx = ggml_init(params);
-
-    ggml_tensor * newline_tmp = clip_get_newline_tensor(ctx_clip);
-    model.newline = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, newline_tmp->ne[0]);
-    if (newline_tmp->backend != GGML_BACKEND_TYPE_CPU) {
-        if (newline_tmp->buffer == NULL) {
-            LOG_TEE("newline_tmp tensor buffer is NULL\n");
-        }
-        ggml_backend_tensor_get(newline_tmp, model.newline->data, 0, ggml_nbytes(newline_tmp));
-    } else {
-        model.newline->data = newline_tmp->data;
-        if (model.newline->data == NULL) {
-            LOG_TEE("newline_tmp tensor data is NULL\n");
-        }
-    }
 
     struct ggml_tensor * image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, clip_n_mmproj_embd(ctx_clip), clip_n_patches(ctx_clip), num_images - 1); // example: 4096 x 576 x 4
     // ggml_tensor_printf(image_features,"image_features",__LINE__,false,false);

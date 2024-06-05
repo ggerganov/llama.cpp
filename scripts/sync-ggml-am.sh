@@ -106,12 +106,10 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-kompute.h          -> ggml-kompute.h
     # src/ggml-metal.h            -> ggml-metal.h
     # src/ggml-metal.m            -> ggml-metal.m
-    # src/ggml-mpi.h              -> ggml-mpi.h
-    # src/ggml-mpi.c              -> ggml-mpi.c
-    # src/ggml-opencl.cpp         -> ggml-opencl.cpp
-    # src/ggml-opencl.h           -> ggml-opencl.h
     # src/ggml-quants.c           -> ggml-quants.c
     # src/ggml-quants.h           -> ggml-quants.h
+    # src/ggml-rpc.cpp            -> ggml-rpc.cpp
+    # src/ggml-rpc.h              -> ggml-rpc.h
     # src/ggml-sycl.cpp           -> ggml-sycl.cpp
     # src/ggml-sycl.h             -> ggml-sycl.h
     # src/ggml-vulkan.cpp         -> ggml-vulkan.cpp
@@ -143,12 +141,10 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/src\/ggml-kompute\.h/ggml-kompute.h/g' \
         -e 's/src\/ggml-metal\.h/ggml-metal.h/g' \
         -e 's/src\/ggml-metal\.m/ggml-metal.m/g' \
-        -e 's/src\/ggml-mpi\.h/ggml-mpi.h/g' \
-        -e 's/src\/ggml-mpi\.c/ggml-mpi.c/g' \
-        -e 's/src\/ggml-opencl\.cpp/ggml-opencl.cpp/g' \
-        -e 's/src\/ggml-opencl\.h/ggml-opencl.h/g' \
         -e 's/src\/ggml-quants\.c/ggml-quants.c/g' \
         -e 's/src\/ggml-quants\.h/ggml-quants.h/g' \
+        -e 's/src\/ggml-rpc\.cpp/ggml-rpc.cpp/g' \
+        -e 's/src\/ggml-rpc\.h/ggml-rpc.h/g' \
         -e 's/src\/ggml-sycl\.cpp/ggml-sycl.cpp/g' \
         -e 's/src\/ggml-sycl\.h/ggml-sycl.h/g' \
         -e 's/src\/ggml-vulkan\.cpp/ggml-vulkan.cpp/g' \

@@ -81,10 +81,12 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_GPT2           = 7,
         LLAMA_VOCAB_PRE_TYPE_REFACT         = 8,
         LLAMA_VOCAB_PRE_TYPE_COMMAND_R      = 9,
-        LLAMA_VOCAB_PRE_TYPE_QWEN2          = 10,
-        LLAMA_VOCAB_PRE_TYPE_OLMO           = 11,
-        LLAMA_VOCAB_PRE_TYPE_DBRX           = 12,
-        LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH     = 13,
+        LLAMA_VOCAB_PRE_TYPE_STABLELM2      = 10,
+        LLAMA_VOCAB_PRE_TYPE_QWEN2          = 11,
+        LLAMA_VOCAB_PRE_TYPE_OLMO           = 12,
+        LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
+        LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
+        LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH     = 15,
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -96,7 +98,7 @@ extern "C" {
         LLAMA_ROPE_TYPE_GLM  =  4,
     };
 
-    enum llama_token_type {
+    enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
         LLAMA_TOKEN_TYPE_UNKNOWN      = 2,
@@ -104,6 +106,20 @@ extern "C" {
         LLAMA_TOKEN_TYPE_USER_DEFINED = 4,
         LLAMA_TOKEN_TYPE_UNUSED       = 5,
         LLAMA_TOKEN_TYPE_BYTE         = 6,
+    };
+
+    enum llama_token_attr {
+        LLAMA_TOKEN_ATTR_UNDEFINED    = 0,
+        LLAMA_TOKEN_ATTR_UNKNOWN      = 1 << 0,
+        LLAMA_TOKEN_ATTR_UNUSED       = 1 << 1,
+        LLAMA_TOKEN_ATTR_NORMAL       = 1 << 2,
+        LLAMA_TOKEN_ATTR_CONTROL      = 1 << 3,  // SPECIAL?
+        LLAMA_TOKEN_ATTR_USER_DEFINED = 1 << 4,
+        LLAMA_TOKEN_ATTR_BYTE         = 1 << 5,
+        LLAMA_TOKEN_ATTR_NORMALIZED   = 1 << 6,
+        LLAMA_TOKEN_ATTR_LSTRIP       = 1 << 7,
+        LLAMA_TOKEN_ATTR_RSTRIP       = 1 << 8,
+        LLAMA_TOKEN_ATTR_SINGLE_WORD  = 1 << 9,
     };
 
     // model file types
@@ -243,6 +259,9 @@ extern "C" {
         // proportion of the model (layers or rows) to offload to each GPU, size: llama_max_devices()
         const float * tensor_split;
 
+        // comma separated list of RPC servers to use for offloading
+        const char * rpc_servers;
+
         // Called with a progress value between 0.0 and 1.0. Pass NULL to disable.
         // If the provided progress_callback returns true, model loading continues.
         // If it returns false, model loading is immediately aborted.
@@ -261,6 +280,8 @@ extern "C" {
         bool check_tensors; // validate model tensor data
     };
 
+    // NOTE: changing the default values of parameters marked as [EXPERIMENTAL] may cause crashes or incorrect results in certain configurations
+    //       https://github.com/ggerganov/llama.cpp/pull/7544
     struct llama_context_params {
         uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
@@ -287,14 +308,14 @@ extern "C" {
         ggml_backend_sched_eval_callback cb_eval;
         void * cb_eval_user_data;
 
-        enum ggml_type type_k; // data type for K cache
-        enum ggml_type type_v; // data type for V cache
+        enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
+        enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
-        bool flash_attn;  // whether to use flash attention
+        bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
@@ -418,8 +439,8 @@ extern "C" {
 
     LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
 
-    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model   * model);
-    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model   * model);
+    LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
+    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
@@ -756,6 +777,12 @@ extern "C" {
     // n_threads_batch is the number of threads used for prompt and batch processing (multiple tokens)
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch);
 
+    // Get the number of threads used for generation of a single token.
+    LLAMA_API uint32_t llama_n_threads(struct llama_context * ctx);
+
+    // Get the number of threads used for prompt and batch processing (multiple token).
+    LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
+
     // Set whether to use causal attention or not
     // If set to true, the model will only attend to the past tokens
     LLAMA_API void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn);
@@ -809,10 +836,13 @@ extern "C" {
 
     LLAMA_API float llama_token_get_score(const struct llama_model * model, llama_token token);
 
-    LLAMA_API enum llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token);
+    LLAMA_API enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token);
 
     // Check if the token is supposed to end generation (end-of-generation, eg. EOS, EOT, etc.)
     LLAMA_API bool llama_token_is_eog(const struct llama_model * model, llama_token token);
+
+    // Identify if Token Id is a control token or a render-able token
+    LLAMA_API bool llama_token_is_control(const struct llama_model * model, llama_token token);
 
     // Special tokens
     LLAMA_API llama_token llama_token_bos(const struct llama_model * model); // beginning-of-sentence
@@ -1027,48 +1057,8 @@ extern "C" {
                      llama_token   token);
 
     //
-    // Beam search
+    // Model split
     //
-
-    struct llama_beam_view {
-        const llama_token * tokens;
-
-        size_t n_tokens;
-        float  p;        // Cumulative beam probability (renormalized relative to all beams)
-        bool   eob;      // Callback should set this to true when a beam is at end-of-beam.
-    };
-
-    // Passed to beam_search_callback function.
-    // Whenever 0 < common_prefix_length, this number of tokens should be copied from any of the beams
-    // (e.g. beams[0]) as they will be removed (shifted) from all beams in all subsequent callbacks.
-    // These pointers are valid only during the synchronous callback, so should not be saved.
-    struct llama_beams_state {
-        struct llama_beam_view * beam_views;
-
-        size_t n_beams;               // Number of elements in beam_views[].
-        size_t common_prefix_length;  // Current max length of prefix tokens shared by all beams.
-        bool   last_call;             // True iff this is the last callback invocation.
-    };
-
-    // Type of pointer to the beam_search_callback function.
-    // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
-    // passed back to beam_search_callback. This avoids having to use global variables in the callback.
-    typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, struct llama_beams_state);
-
-    /// @details Deterministically returns entire sentence constructed by a beam search.
-    /// @param ctx Pointer to the llama_context.
-    /// @param callback Invoked for each iteration of the beam_search loop, passing in beams_state.
-    /// @param callback_data A pointer that is simply passed back to callback.
-    /// @param n_beams Number of beams to use.
-    /// @param n_past Number of tokens already evaluated.
-    /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
-    LLAMA_API void llama_beam_search(
-                   struct llama_context * ctx,
-        llama_beam_search_callback_fn_t   callback,
-                                   void * callback_data,
-                                 size_t   n_beams,
-                                int32_t   n_past,
-                                int32_t   n_predict);
 
     /// @details Build a split GGUF final path for this chunk.
     ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"

@@ -533,7 +533,6 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params, bool
 }
 
 int main(int argc, char ** argv) {
-
     StatParams sparams;
     std::string prev_result_file;
     std::string combine_files;
@@ -581,7 +580,9 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
     params.n_batch = 512;
-    if (!gpt_params_parse(args.size(), args.data(), params)) {
+
+    if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
 
@@ -597,9 +598,6 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
-    }
 
     sparams.dataset = params.prompt_file;
     g_collector.set_parameters(std::move(sparams));
@@ -667,7 +665,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     bool OK = compute_imatrix(ctx, params, compute_ppl, from_chunk);
