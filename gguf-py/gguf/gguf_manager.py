@@ -16,11 +16,7 @@ if TYPE_CHECKING:
 from .constants import (
     GGMLQuantizationType,
     GGUFEndian,
-    GGUFValueType,
-    Keys,
-    RopeScalingType,
-    PoolingType,
-    TokenType,
+    GGUFValueType
 )
 from .gguf_writer import GGUFWriter
 
@@ -33,7 +29,7 @@ LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count"
 
 SplitTensorsPerFile: TypeAlias = deque[tuple[os.PathLike[str], deque[tuple[str, Any]], GGUFWriter]] # [(outfile name, [(tensor name, tensor data)] for each tensor in file, filewriter)]
 KVTempData: TypeAlias = dict[str, tuple[Any, GGUFValueType]] # {key: (value, type)}
-TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any], GGMLQuantizationType] # (tensor name, tensor data, tensor dtype), aka LazyModel
+TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any], GGMLQuantizationType] # (tensor name, tensor data, tensor dtype)
 
 
 class SplitStyle(IntEnum):
@@ -43,13 +39,6 @@ class SplitStyle(IntEnum):
 
 
 class SplitArguments:
-    split: bool
-    dry_run: bool
-    small_first_shard: bool
-    split_max_tensors: int
-    split_max_size: int
-    split_style: SplitStyle
-
     def __init__(self, args: Namespace = None) -> None:
         self.split = args.split if args else False
         self.split_max_tensors = args.split_max_tensors if args else 0
@@ -107,7 +96,7 @@ class SplitStrategy(deque):
 
             for i, shard in enumerate(shards):
                 outname = fname_out.with_name(SHARD_NAME_FORMAT.format(fname_out.stem, i + shard_offset, total_shards))
-                self.append((outname, deque(shard), GGUFWriter(outname, arch, use_temp_file=use_temp_file, endianess=endianess)))
+                self.append((outname, shard, GGUFWriter(outname, arch, use_temp_file=use_temp_file, endianess=endianess)))
 
     @staticmethod
     def get_tensor_size(tensor) -> int:
@@ -146,35 +135,34 @@ class SplitStrategy(deque):
             num /= 1024.0
         return f"{num:.1f}T - over 1TB, --split recommended"
 
-
-# ideally this has most of the same signatures as GGUFWriter so it's nearly a drop-in replacement
-class GGUFManager:
+# TODO fall back to normal GGUFWriter in convert-hf-to-gguf.py if no --split
+class GGUFManager(GGUFWriter):
     kv_data: KVTempData
-    tensors: deque[TensorTempData]
+    tensors: list[TensorTempData]
     split_arguments: SplitArguments
     split_strategy: SplitStrategy
-    dtype: GGMLQuantizationType
 
     def __init__(self, path: os.PathLike[str] | str, arch: str, split_arguments: SplitArguments,
                  use_temp_file: bool = True, endianess: GGUFEndian = GGUFEndian.LITTLE
         ) -> None:
+        # TODO be able to use superclass constructor
+        # super().__init__(path, arch, use_temp_file=use_temp_file, endianess=endianess)
         self.arch = arch
         self.path = path
         self.endianess = endianess
         self.offset_tensor = 0
         self.kv_data = {}
-        self.tensors = deque()
+        self.tensors = []
+        # TODO how many of these do you need
         self.split_strategy = None
         self.total_shards = None
         self.total_tensors = None
         self.use_temp_file = use_temp_file
         self.split_arguments = split_arguments
-
+        self.recent_key = None
         self.add_architecture()
 
-    # have to consolidate because we need to know kv data count and tensor count before we can write the header
-    # and we need to write tensor info before we can write metadata
-    # these all kinda show up around the same places anyway so it's not a huge deal?
+    # TODO split back into write_header_to_file, write_kv_data_to_file, write_ti_data_to_file
     def write_to_file(self, meta_only: bool = False) -> None:
 
         # here is the first place you can assume you have all tensors written and you can establish the size of the file - so logic goes here
@@ -232,11 +220,12 @@ class GGUFManager:
         while True:
             try:
                 (_, tensors, writer) = self.split_strategy.popleft()
+                tensors = deque(tensors) if tensors else None
             except IndexError:
                 break
 
             shard_num_tensors = len(tensors) if tensors else 0
-            
+
             if tensors:
                 while True:
                     try:
@@ -254,44 +243,16 @@ class GGUFManager:
             ct = ct + 1
             del tensors
 
-    def add_uint8(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.UINT8)
+    # override add_key, add_val to handle kv data separately
+    def add_key(self, key: str) -> None:
+        self.recent_key = key
+    
+    def add_val(self, val: Any, vtype: GGUFValueType | None = None, add_vtype: bool = True) -> None:
+        if self.recent_key is None:
+            raise ValueError("No key set for value")
+        self.kv_data[self.recent_key] = (val, vtype)
 
-    def add_int8(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.INT8)
-
-    def add_uint16(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.UINT16)
-
-    def add_int16(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.INT16)
-
-    def add_uint32(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.UINT32)
-
-    def add_int32(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.INT32)
-
-    def add_float32(self, key: str, val: float) -> None:
-        self.kv_data[key] = (val, GGUFValueType.FLOAT32)
-
-    def add_uint64(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.UINT64)
-
-    def add_int64(self, key: str, val: int) -> None:
-        self.kv_data[key] = (val, GGUFValueType.INT64)
-
-    def add_float64(self, key: str, val: float) -> None:
-        self.kv_data[key] = (val, GGUFValueType.FLOAT64)
-
-    def add_bool(self, key: str, val: bool) -> None:
-        self.kv_data[key] = (val, GGUFValueType.BOOL)
-
-    def add_string(self, key: str, val: str) -> None:
-        if not val:
-            return
-        self.kv_data[key] = (val, GGUFValueType.STRING)
-
+    # need to handle arrays separately
     def add_array(self, key: str, val: Sequence[Any]) -> None:
         if not isinstance(val, Sequence):
             raise ValueError(f'Expected a sequence for {key}, got {type(val)}')
@@ -303,231 +264,8 @@ class GGUFManager:
     ) -> None:
         if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
-
-        # TODO reimplement temp file
-        # I'm pretty sure it gets handled per shard?
-
         self.tensors.append((name, tensor, raw_dtype))
 
     def close(self) -> None:
         for _, _, writer in self.split_strategy:
             writer.close()
-
-    def add_architecture(self) -> None:
-        self.add_string(Keys.General.ARCHITECTURE, self.arch)
-
-    def add_author(self, author: str) -> None:
-        self.add_string(Keys.General.AUTHOR, author)
-
-    def add_version(self, version: str) -> None:
-        self.add_string(Keys.General.VERSION, version)
-
-    def add_tensor_data_layout(self, layout: str) -> None:
-        self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
-
-    def add_url(self, url: str) -> None:
-        self.add_string(Keys.General.URL, url)
-
-    def add_description(self, description: str) -> None:
-        self.add_string(Keys.General.DESCRIPTION, description)
-
-    def add_licence(self, licence: str) -> None:
-        self.add_string(Keys.General.LICENSE, licence)
-
-    def add_source_url(self, url: str) -> None:
-        self.add_string(Keys.General.SOURCE_URL, url)
-
-    def add_source_hf_repo(self, repo: str) -> None:
-        self.add_string(Keys.General.SOURCE_HF_REPO, repo)
-
-    def add_file_type(self, ftype: int) -> None:
-        self.add_uint32(Keys.General.FILE_TYPE, ftype)
-
-    def add_name(self, name: str) -> None:
-        self.add_string(Keys.General.NAME, name)
-
-    def add_quantization_version(self, quantization_version: GGMLQuantizationType) -> None:
-        self.add_uint32(Keys.General.QUANTIZATION_VERSION, quantization_version)
-
-    def add_custom_alignment(self, alignment: int) -> None:
-        self.data_alignment = alignment
-        self.add_uint32(Keys.General.ALIGNMENT, alignment)
-
-    def add_vocab_size(self, size: int) -> None:
-        self.add_uint32(Keys.LLM.VOCAB_SIZE.format(arch=self.arch), size)
-
-    def add_context_length(self, length: int) -> None:
-        self.add_uint32(Keys.LLM.CONTEXT_LENGTH.format(arch=self.arch), length)
-
-    def add_embedding_length(self, length: int) -> None:
-        self.add_uint32(Keys.LLM.EMBEDDING_LENGTH.format(arch=self.arch), length)
-
-    def add_block_count(self, length: int) -> None:
-        self.add_uint32(Keys.LLM.BLOCK_COUNT.format(arch=self.arch), length)
-
-    def add_feed_forward_length(self, length: int) -> None:
-        self.add_uint32(Keys.LLM.FEED_FORWARD_LENGTH.format(arch=self.arch), length)
-
-    def add_parallel_residual(self, use: bool) -> None:
-        self.add_bool(Keys.LLM.USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
-
-    def add_head_count(self, count: int) -> None:
-        self.add_uint32(Keys.Attention.HEAD_COUNT.format(arch=self.arch), count)
-
-    def add_head_count_kv(self, count: int) -> None:
-        self.add_uint32(Keys.Attention.HEAD_COUNT_KV.format(arch=self.arch), count)
-
-    def add_key_length(self, length: int) -> None:
-        self.add_uint32(Keys.Attention.KEY_LENGTH.format(arch=self.arch), length)
-
-    def add_value_length(self, length: int) -> None:
-        self.add_uint32(Keys.Attention.VALUE_LENGTH.format(arch=self.arch), length)
-
-    def add_max_alibi_bias(self, bias: float) -> None:
-        self.add_float32(Keys.Attention.MAX_ALIBI_BIAS.format(arch=self.arch), bias)
-
-    def add_clamp_kqv(self, value: float) -> None:
-        self.add_float32(Keys.Attention.CLAMP_KQV.format(arch=self.arch), value)
-
-    def add_logit_scale(self, value: float) -> None:
-        self.add_float32(Keys.LLM.LOGIT_SCALE.format(arch=self.arch), value)
-
-    def add_expert_count(self, count: int) -> None:
-        self.add_uint32(Keys.LLM.EXPERT_COUNT.format(arch=self.arch), count)
-
-    def add_expert_used_count(self, count: int) -> None:
-        self.add_uint32(Keys.LLM.EXPERT_USED_COUNT.format(arch=self.arch), count)
-
-    def add_layer_norm_eps(self, value: float) -> None:
-        self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
-
-    def add_layer_norm_rms_eps(self, value: float) -> None:
-        self.add_float32(Keys.Attention.LAYERNORM_RMS_EPS.format(arch=self.arch), value)
-
-    def add_causal_attention(self, value: bool) -> None:
-        self.add_bool(Keys.Attention.CAUSAL.format(arch=self.arch), value)
-
-    def add_pooling_type(self, value: PoolingType) -> None:
-        self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
-
-    def add_rope_dimension_count(self, count: int) -> None:
-        self.add_uint32(Keys.Rope.DIMENSION_COUNT.format(arch=self.arch), count)
-
-    def add_rope_freq_base(self, value: float) -> None:
-        self.add_float32(Keys.Rope.FREQ_BASE.format(arch=self.arch), value)
-
-    def add_rope_scaling_type(self, value: RopeScalingType) -> None:
-        self.add_string(Keys.Rope.SCALING_TYPE.format(arch=self.arch), value.value)
-
-    def add_rope_scaling_factor(self, value: float) -> None:
-        self.add_float32(Keys.Rope.SCALING_FACTOR.format(arch=self.arch), value)
-
-    def add_rope_scaling_orig_ctx_len(self, value: int) -> None:
-        self.add_uint32(Keys.Rope.SCALING_ORIG_CTX_LEN.format(arch=self.arch), value)
-
-    def add_rope_scaling_finetuned(self, value: bool) -> None:
-        self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
-
-    def add_ssm_conv_kernel(self, value: int) -> None:
-        self.add_uint32(Keys.SSM.CONV_KERNEL.format(arch=self.arch), value)
-
-    def add_ssm_inner_size(self, value: int) -> None:
-        self.add_uint32(Keys.SSM.INNER_SIZE.format(arch=self.arch), value)
-
-    def add_ssm_state_size(self, value: int) -> None:
-        self.add_uint32(Keys.SSM.STATE_SIZE.format(arch=self.arch), value)
-
-    def add_ssm_time_step_rank(self, value: int) -> None:
-        self.add_uint32(Keys.SSM.TIME_STEP_RANK.format(arch=self.arch), value)
-
-    def add_tokenizer_model(self, model: str) -> None:
-        self.add_string(Keys.Tokenizer.MODEL, model)
-
-    def add_tokenizer_pre(self, pre: str) -> None:
-        self.add_string(Keys.Tokenizer.PRE, pre)
-
-    def add_token_list(self, tokens: Sequence[str] | Sequence[bytes] | Sequence[bytearray]) -> None:
-        self.add_array(Keys.Tokenizer.LIST, tokens)
-
-    def add_token_merges(self, merges: Sequence[str] | Sequence[bytes] | Sequence[bytearray]) -> None:
-        self.add_array(Keys.Tokenizer.MERGES, merges)
-
-    def add_token_types(self, types: Sequence[TokenType] | Sequence[int]) -> None:
-        self.add_array(Keys.Tokenizer.TOKEN_TYPE, types)
-
-    def add_token_type_count(self, value: int) -> None:
-        self.add_uint32(Keys.Tokenizer.TOKEN_TYPE_COUNT, value)
-
-    def add_token_scores(self, scores: Sequence[float]) -> None:
-        self.add_array(Keys.Tokenizer.SCORES, scores)
-
-    def add_bos_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.BOS_ID, id)
-
-    def add_eos_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.EOS_ID, id)
-
-    def add_unk_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.UNK_ID, id)
-
-    def add_sep_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.SEP_ID, id)
-
-    def add_pad_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.PAD_ID, id)
-
-    def add_cls_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.CLS_ID, id)
-
-    def add_mask_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.MASK_ID, id)
-
-    def add_add_bos_token(self, value: bool) -> None:
-        self.add_bool(Keys.Tokenizer.ADD_BOS, value)
-
-    def add_add_eos_token(self, value: bool) -> None:
-        self.add_bool(Keys.Tokenizer.ADD_EOS, value)
-
-    def add_add_space_prefix(self, value: bool) -> None:
-        self.add_bool(Keys.Tokenizer.ADD_PREFIX, value)
-
-    def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
-        if isinstance(value, list):
-            template_default = None
-            template_names = set()
-
-            for choice in value:
-                name = choice.get('name', '')
-                template = choice.get('template')
-
-                # Allowing non-alphanumerical characters in template name is probably not a good idea, so filter it
-                name = ''.join((c if c in ascii_letters + digits else '_' for c in name))
-
-                if name and template is not None:
-                    if name == 'default':
-                        template_default = template
-                    else:
-                        template_names.add(name)
-                        self.add_string(Keys.Tokenizer.CHAT_TEMPLATE_N.format(name=name), template)
-
-            if template_names:
-                self.add_array(Keys.Tokenizer.CHAT_TEMPLATES, list(template_names))
-
-            if template_default is None:
-                return
-
-            value = template_default
-
-        self.add_string(Keys.Tokenizer.CHAT_TEMPLATE, value)
-
-    def add_prefix_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.PREFIX_ID, id)
-
-    def add_suffix_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.SUFFIX_ID, id)
-
-    def add_middle_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.MIDDLE_ID, id)
-
-    def add_eot_token_id(self, id: int) -> None:
-        self.add_uint32(Keys.Tokenizer.EOT_ID, id)
