@@ -77,7 +77,7 @@ variety of hardware - locally and in the cloud.
 - AVX, AVX2 and AVX512 support for x86 architectures
 - 1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
 - Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP)
-- Vulkan, SYCL, and (partial) OpenCL backend support
+- Vulkan and SYCL backend support
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 
 Since its [inception](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022), the project has
@@ -364,17 +364,6 @@ In order to build llama.cpp you have four different options.
       cmake --build build --config Debug
       ```
 
-- Using `Zig` (version 0.11 or later):
-
-    Building for optimization levels and CPU features can be accomplished using standard build arguments, for example AVX2, FMA, F16C,
-    it's also possible to cross compile for other operating systems and architectures:
-
-    ```bash
-    zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dcpu=x86_64+avx2+fma+f16c
-    ```
-
-    The `zig targets` command will give you valid options to use.
-
 -   Using `gmake` (FreeBSD):
 
     1. Install and activate [DRM in FreeBSD](https://wiki.freebsd.org/Graphics)
@@ -382,15 +371,10 @@ In order to build llama.cpp you have four different options.
     3. Install compilation dependencies.
 
         ```bash
-        sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
-            opencl clblast openblas
+        sudo pkg install gmake automake autoconf pkgconf llvm15 openblas
 
         gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
         ```
-
-    **Notes:** With this packages you can build llama.cpp with OPENBLAS and
-    CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
-    the instructions for use and activate this options in this document below.
 
 ### Homebrew
 
@@ -410,7 +394,7 @@ argument.
 
 ### BLAS Build
 
-Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS and CLBlast. There are currently several different BLAS implementations available for build and use:
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS. There are currently several different BLAS implementations available for build and use:
 
 - #### Accelerate Framework:
 
@@ -563,111 +547,6 @@ Building the program with BLAS support may lead to some performance improvements
   | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 | 32      | Number of values in x direction processed by the HIP dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
   | LLAMA_CUDA_MMV_Y        | Positive integer       | 1       | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants.                                                                       |
   | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
-
-- #### CLBlast
-
-  OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
-
-  You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
-    - For Ubuntu, Debian, and Fedora the packages `opencl-headers`, `ocl-icd` may be needed.
-
-    - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
-
-    - <details>
-        <summary>Installing the OpenCL SDK from source</summary>
-
-        ```sh
-        git clone --recurse-submodules https://github.com/KhronosGroup/OpenCL-SDK.git
-        cd OpenCL-SDK
-        cmake -B build -DBUILD_DOCS=OFF \
-          -DBUILD_EXAMPLES=OFF \
-          -DBUILD_TESTING=OFF \
-          -DOPENCL_SDK_BUILD_SAMPLES=OFF \
-          -DOPENCL_SDK_TEST_SAMPLES=OFF
-        cmake --build build
-        cmake --install build --prefix /some/path
-        ```
-      </details>
-
-  ##### Installing CLBlast
-
-  Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
-
-  Linux packaging:
-  Fedora Linux:
-  ```bash
-  sudo dnf install clblast
-  ```
-
-  Alternatively, they may be built from source.
-
-  - <details>
-    <summary>Windows:</summary>
-
-      ```cmd
-      set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
-      git clone https://github.com/CNugteren/CLBlast.git
-      cd CLBlast
-      cmake -B build -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
-      cmake --build build --config Release
-      cmake --install build --prefix C:/CLBlast
-      ```
-
-      (note: `--config Release` at build time is the default and only relevant for Visual Studio builds - or multi-config Ninja builds)
-
-  - <details>
-    <summary>Unix:</summary>
-
-      ```sh
-      git clone https://github.com/CNugteren/CLBlast.git
-      cd CLBlast
-      cmake -B build -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
-      cmake --build build --config Release
-      cmake --install build --prefix /some/path
-      ```
-
-      Where `/some/path` is where the built library will be installed (default is `/usr/local`).
-    </details>
-
-  ##### Building Llama with CLBlast
-
-  - Build with make:
-    ```sh
-    make LLAMA_CLBLAST=1
-    ```
-  - CMake (Unix):
-    ```sh
-    cmake -B build -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
-    cmake --build build --config Release
-    ```
-  - CMake (Windows):
-    ```cmd
-    set CL_BLAST_CMAKE_PKG="C:/CLBlast/lib/cmake/CLBlast"
-    git clone https://github.com/ggerganov/llama.cpp
-    cd llama.cpp
-    cmake -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
-    cmake --build build --config Release
-    cmake --install build --prefix C:/LlamaCPP
-    ```
-
-  ##### Running Llama with CLBlast
-
-  The CLBlast build supports `--gpu-layers|-ngl` like the CUDA version does.
-
-  To select the correct platform (driver) and device (GPU), you can use the environment variables `GGML_OPENCL_PLATFORM` and `GGML_OPENCL_DEVICE`.
-  The selection can be a number (starting from 0) or a text string to search:
-
-  ```sh
-  GGML_OPENCL_PLATFORM=1 ./main ...
-  GGML_OPENCL_DEVICE=2 ./main ...
-  GGML_OPENCL_PLATFORM=Intel ./main ...
-  GGML_OPENCL_PLATFORM=AMD GGML_OPENCL_DEVICE=1 ./main ...
-  ```
-
-  The default behavior is to find the first GPU device, but when it is an integrated GPU on a laptop, for instance, the selectors are useful.
-  Using the variables it is possible to select a CPU-based driver as well, if so desired.
-
-  You can get a list of platforms and devices from the `clinfo -l` command, etc.
 
 - #### Vulkan
 
