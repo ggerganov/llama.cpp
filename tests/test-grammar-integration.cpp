@@ -205,6 +205,33 @@ static void test_complex_grammar() {
     );
 }
 
+static void test_special_chars() {
+    // A collection of tests to exercise special characters such as "."
+    test_grammar(
+        "special characters",
+        // Grammar
+        R"""(
+            root ::= ... "abc" ...
+            )""",
+        // Passing strings
+        {
+            "abcabcabc",
+            "aaaabcccc",
+            // NOTE: Also ensures that multi-byte characters still count as a single character
+            "🔵🟠✅abc❌🟠🔵"
+        },
+        // Failing strings
+        {
+            "aaabcccc",
+            "aaaaabcccc",
+            "aaaabccc",
+            "aaaabccccc",
+            "🔵🟠✅❌abc❌✅🟠🔵"
+            "🔵🟠abc🟠🔵"
+        }
+    );
+}
+
 static void test_quantifiers() {
     // A collection of tests to exercise * + and ? quantifiers
 
@@ -445,6 +472,7 @@ int main() {
     fprintf(stdout, "Running grammar integration tests...\n");
     test_simple_grammar();
     test_complex_grammar();
+    test_special_chars();
     test_quantifiers();
     test_failure_missing_root();
     test_failure_missing_reference();
