@@ -81,14 +81,7 @@ models = [
     {"name": "jina-v2-en",     "tokt": TOKENIZER_TYPE.WPM, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-en", }, # WPM!
     {"name": "jina-v2-es",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-es", },
     {"name": "jina-v2-de",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-de", },
-<<<<<<< Updated upstream
     {"name": "smaug-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct", },
-=======
-    {"name": "bloom",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/bigscience/bloom-7b1", },
-    {"name": "gptbigcode",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/bigcode/gpt_bigcode-santacoder", },
-    {"name": "phi2",        "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/microsoft/phi-2", },
-    {"name": "codeshell",  "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/WisdomShell/CodeShell-7B-Chat", },
->>>>>>> Stashed changes
 ]
 
 

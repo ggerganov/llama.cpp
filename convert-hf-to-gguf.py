@@ -60,7 +60,7 @@ class Model:
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
     fname_out: Path
-    gguf_writer: gguf.GGUFManager
+    gguf_writer: gguf.GGUFWriter
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
@@ -329,11 +329,16 @@ class Model:
 
     def write(self):
         self.write_tensors()
-        self.gguf_writer.write_to_file()
+        self.gguf_writer.write_header_to_file()
+        self.gguf_writer.write_kv_data_to_file()
+        self.gguf_writer.write_ti_data_to_file()
         self.gguf_writer.close()
 
     def write_vocab(self):
-        self.gguf_writer.write_to_file(meta_only=True)
+        if self.gguf_writer.split_arguments.split:
+            raise ValueError('Splitting the vocabulary is not supported')
+        self.gguf_writer.write_header_to_file()
+        self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
 
     @staticmethod
@@ -1563,7 +1568,6 @@ class MiniCPMModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-# TODO what the hell is this?
 @Model.register("QWenLMHeadModel")
 class QwenModel(Model):
     model_arch = gguf.MODEL_ARCH.QWEN
