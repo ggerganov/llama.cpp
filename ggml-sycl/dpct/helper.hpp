@@ -939,7 +939,7 @@ namespace dpct
             sycl::backend backend2 = device2.get_backend();
             // levelzero backends always come first
             if(backend1 == sycl::backend::ext_oneapi_level_zero && backend2 != sycl::backend::ext_oneapi_level_zero) return true;
-            if(backend1 != sycl::backend::ext_oneapi_level_zero && backend2 == sycl::backend::ext_oneapi_level_zero) return false;   
+            if(backend1 != sycl::backend::ext_oneapi_level_zero && backend2 == sycl::backend::ext_oneapi_level_zero) return false;
             dpct::device_info prop1;
             dpct::get_device_info(prop1, device1);
             dpct::device_info prop2;

@@ -224,7 +224,7 @@ struct ggml_sycl_pool_alloc {
 
     // size is in number of elements
     T * alloc(size_t size) {
-        GGML_ASSERT(pool != nullptr);      
+        GGML_ASSERT(pool != nullptr);
         GGML_ASSERT(ptr == nullptr);
         ptr = (T *) pool->alloc(size * sizeof(T), &this->actual_size);
         return ptr;

@@ -11427,7 +11427,7 @@ static void ggml_sycl_mul_mat_vec_nc(ggml_backend_sycl_context & ctx, const ggml
 
     SYCL_CHECK(ggml_sycl_set_device(ctx.device));
     queue_ptr main_stream = ctx.stream();
-    
+
     void  * src0_ddq = src0->data;
     float * src1_ddf = (float *) src1->data;
     float * dst_ddf  = (float *) dst->data;
