@@ -13,8 +13,6 @@
 
 #ifdef GGML_USE_CUDA
 #  include "ggml-cuda.h"
-#elif defined(GGML_USE_CLBLAST)
-#  include "ggml-opencl.h"
 #elif defined(GGML_USE_VULKAN)
 #  include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
@@ -110,7 +108,7 @@
 //
 
 LLAMA_ATTRIBUTE_FORMAT(2, 3)
-static void llama_log_internal        (ggml_log_level level, const char* format, ...);
+static void llama_log_internal        (ggml_log_level level, const char * format, ...);
 static void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data);
 
 #define LLAMA_LOG_INFO(...)  llama_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
@@ -2149,12 +2147,12 @@ struct llama_control_vector {
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
-    using ttype = llama_token_type;
+    using tattr = llama_token_attr;
 
     struct token_data {
         token text;
         float score;
-        ttype type;
+        tattr attr;
     };
 
     enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
@@ -2406,8 +2404,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
     buft = ggml_backend_vk_buffer_type(gpu);
 #elif defined(GGML_USE_SYCL)
     buft = ggml_backend_sycl_buffer_type(gpu);
-#elif defined(GGML_USE_CLBLAST)
-    buft = ggml_backend_opencl_buffer_type();
 #elif defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(gpu);
     if (buft == nullptr) {
@@ -2529,10 +2525,6 @@ static bool llama_kv_cache_init(
             cache.cells[i].src = i;
         }
     }
-
-#ifdef GGML_USE_CLBLAST
-    offload = false;
-#endif
 
     // count used buffer types
     std::map<ggml_backend_buffer_type_t, int> buft_layer_count;
@@ -4750,7 +4742,20 @@ static void llm_load_vocab(
         auto & token_data = vocab.id_to_token[i];
         token_data.text  = std::move(word);
         token_data.score = scores ? scores[i] : 0.0f;
-        token_data.type  = toktypes ? (llama_token_type) toktypes[i] : LLAMA_TOKEN_TYPE_NORMAL;
+        token_data.attr  = LLAMA_TOKEN_ATTR_NORMAL;
+
+        if (toktypes) {  //TODO: remove, required until per token attributes are available from GGUF file
+            switch(toktypes[i]) {
+                case LLAMA_TOKEN_TYPE_UNKNOWN:      token_data.attr = LLAMA_TOKEN_ATTR_UNKNOWN;      break;
+                case LLAMA_TOKEN_TYPE_UNUSED:       token_data.attr = LLAMA_TOKEN_ATTR_UNUSED;       break;
+                case LLAMA_TOKEN_TYPE_NORMAL:       token_data.attr = LLAMA_TOKEN_ATTR_NORMAL;       break;
+                case LLAMA_TOKEN_TYPE_CONTROL:      token_data.attr = LLAMA_TOKEN_ATTR_CONTROL;      break;
+                case LLAMA_TOKEN_TYPE_USER_DEFINED: token_data.attr = LLAMA_TOKEN_ATTR_USER_DEFINED; break;
+                case LLAMA_TOKEN_TYPE_BYTE:         token_data.attr = LLAMA_TOKEN_ATTR_BYTE;         break;
+                case LLAMA_TOKEN_TYPE_UNDEFINED:    token_data.attr = LLAMA_TOKEN_ATTR_UNDEFINED;    break;
+                default:                            token_data.attr = LLAMA_TOKEN_ATTR_UNDEFINED;    break;
+            }
+        }
     }
     GGML_ASSERT(vocab.id_to_token.size() == vocab.token_to_id.size());
 
@@ -4841,7 +4846,7 @@ static void llm_load_vocab(
     // build special tokens cache
     {
         for (llama_vocab::id id = 0; id < (llama_vocab::id)n_vocab; ++id) {
-            if (vocab.id_to_token[id].type != LLAMA_TOKEN_TYPE_NORMAL) {
+            if (!(vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_NORMAL)) {
                 vocab.cache_special_tokens.push_back(id);
             }
         }
@@ -4870,6 +4875,59 @@ static void llm_load_vocab(
         std::swap(vocab.cache_token_to_piece, cache_token_to_piece);
 
         LLAMA_LOG_INFO("%s: token to piece cache size = %.4f MB\n", __func__, size_cache / 1024.0 / 1024.0);
+    }
+
+    // Handle per token attributes
+    //NOTE: Each model customizes per token attributes.
+    //NOTE: Per token attributes are missing from the GGUF file.
+    //TODO: Extract attributes from GGUF file.
+    {
+        auto _contains_any = [] (const std::string &str, const std::vector<std::string> &substrs) -> bool {
+            for (auto substr : substrs) {
+                if (str.find(substr) < std::string::npos) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        auto _set_tokenid_attr = [&] (const llama_vocab::id id, llama_token_attr attr, bool value) {
+            uint32_t current = vocab.id_to_token.at(id).attr;
+            current = value ? (current | attr) : (current & ~attr);
+            vocab.id_to_token[id].attr = (llama_token_attr) current;
+        };
+
+        auto _set_token_attr = [&] (const std::string & token, llama_token_attr attr, bool value) {
+            _set_tokenid_attr(vocab.token_to_id.at(token), attr, value);
+        };
+
+        std::string model_name;
+        std::string tokenizer_pre;
+
+        ml.get_key(LLM_KV_GENERAL_NAME, model_name, false);
+        ml.get_key(LLM_KV_TOKENIZER_PRE, tokenizer_pre, false);
+
+        // model name to lowercase
+        std::transform(model_name.begin(), model_name.end(), model_name.begin(),
+            [] (const std::string::value_type x) {
+                return std::tolower(x);
+            }
+        );
+
+        // set attributes by model/tokenizer name
+        if (_contains_any(tokenizer_pre, {"jina-v2-es", "jina-v2-de"})) {
+            _set_token_attr("<mask>", LLAMA_TOKEN_ATTR_LSTRIP, true);
+        } else if (_contains_any(model_name, {"phi-3", "phi3"})) {
+            for (auto id : vocab.cache_special_tokens) {
+                _set_tokenid_attr(id, LLAMA_TOKEN_ATTR_RSTRIP, true);
+            }
+            for (auto token : {"</s>"}) {
+                _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, true);
+            }
+            for (auto token : {"<unk>", "<s>", "<|endoftext|>"}) {
+                _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, false);
+            }
+        }
     }
 }
 
@@ -12620,27 +12678,27 @@ static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
 
 static bool llama_is_normal_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_NORMAL;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_NORMAL;
 }
 
 static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_UNKNOWN;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_UNKNOWN;
 }
 
 static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_CONTROL;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_CONTROL;
 }
 
 static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_BYTE;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_BYTE;
 }
 
 static bool llama_is_user_defined_token(const llama_vocab& vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_USER_DEFINED;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_USER_DEFINED;
 }
 
 static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
@@ -13258,7 +13316,8 @@ struct fragment_buffer_variant {
 static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer) {
     // for each special token
     for (const llama_vocab::id special_id : vocab.cache_special_tokens) {
-        const auto & special_token = vocab.id_to_token[special_id].text;
+        const auto & data = vocab.id_to_token[special_id];
+        const auto & special_token = data.text;
 
         // for each text fragment
         std::forward_list<fragment_buffer_variant>::iterator it = buffer.begin();
@@ -13295,13 +13354,22 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     if (match > raw_text_base_offset) {
                         // left
                         const int64_t left_reminder_offset = raw_text_base_offset + 0;
-                        const int64_t left_reminder_length = match - raw_text_base_offset;
-                        buffer.emplace_after(it, raw_text, left_reminder_offset, left_reminder_length);
+                        int64_t left_reminder_length = match - raw_text_base_offset;
+
+                        if (data.attr & LLAMA_TOKEN_ATTR_LSTRIP) {
+                            while (left_reminder_length > 0 && isspace(raw_text[left_reminder_offset + left_reminder_length - 1])) {
+                                left_reminder_length--;
+                            }
+                        }
+
+                        if (left_reminder_length > 0) {
+                            buffer.emplace_after(it, raw_text, left_reminder_offset, left_reminder_length);
+                            it++;
+                        }
 
 #ifdef PRETOKENIZERDEBUG
                         LLAMA_LOG_WARN("FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
 #endif
-                        it++;
                     }
 
                     // special token
@@ -13310,15 +13378,24 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
 
                     // right
                     if (match + special_token.length() < raw_text_base_offset + raw_text_base_length) {
-                        const int64_t right_reminder_offset = match + special_token.length();
-                        const int64_t right_reminder_length = raw_text_base_length - ((match - raw_text_base_offset) + special_token.length());
-                        buffer.emplace_after(it, raw_text, right_reminder_offset, right_reminder_length);
+                        int64_t right_reminder_offset = match + special_token.length();
+                        int64_t right_reminder_length = raw_text_base_length - ((match - raw_text_base_offset) + special_token.length());
+
+                        if (data.attr & LLAMA_TOKEN_ATTR_RSTRIP) {
+                            while (right_reminder_length > 0 && isspace(raw_text[right_reminder_offset])) {
+                                right_reminder_offset++;
+                                right_reminder_length--;
+                            }
+                        }
+
+                        if (right_reminder_length > 0) {
+                            buffer.emplace_after(it, raw_text, right_reminder_offset, right_reminder_length);
+                            it++;
+                        }
 
 #ifdef PRETOKENIZERDEBUG
                         LLAMA_LOG_WARN("FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
 #endif
-
-                        it++;
 
                         if (source == 0) {
                             buffer.erase_after(buffer.before_begin());
@@ -13365,9 +13442,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 // tokenizer.encode('', add_special_tokens=True)  returns [1]
                 // tokenizer.encode('', add_special_tokens=False) returns []
 
-                static const bool rtrim = true;  //TODO: as param
                 bool is_prev_special = false;
-                bool special_token_rtrim = false;
 
                 if (add_special && vocab.special_add_bos != 0) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
@@ -13377,24 +13452,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                        // without adding this leading whitespace, we do not get the same results as the original tokenizer
-
-                        // TODO: It's likely possible to get rid of this string copy entirely
-                        //  by modifying llm_tokenizer_x to operate with string offsets like pre-tokenizer
-                        //  and passing 'add space prefix' as bool argument
-                        //
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
-
-                        if (special_token_rtrim) {
-                            size_t num_whitespaces = 0;
-                            while (isspace(raw_text[num_whitespaces])) {
-                                num_whitespaces++;
-                            }
-                            if (num_whitespaces == raw_text.size()) {
-                                continue; // skip if all whitespaces
-                            }
-                            raw_text = raw_text.substr(num_whitespaces);
-                        }
 
                         if (vocab.add_space_prefix) {
                             if (!output.size() || is_prev_special) {  // prefix with space if first token
@@ -13411,11 +13469,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                         is_prev_special = true;
-                        // phi-3 special tokens without rtrim, works fine for llama-spm too
-                        special_token_rtrim = rtrim
-                            && fragment.token != vocab.special_bos_id
-                            && fragment.token != vocab.special_unk_id
-                            && fragment.token != vocab.special_eos_id;
                     }
                 }
 
@@ -14651,260 +14704,6 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
 }
 
 //
-// Beam search
-//
-
-struct llama_beam {
-    std::vector<llama_token> tokens;
-    float p;  // Cumulative beam probability (renormalized relative to all beams)
-    bool eob; // Initialize end-of-beam to false. Callback sets this to true.
-    // Sort beams by probability. In case of ties, prefer beams at eob.
-    bool operator<(const llama_beam & rhs) const {
-        return std::make_pair(p, eob) < std::make_pair(rhs.p, rhs.eob);
-    }
-    // Shift off first n tokens and discard them.
-    void shift_tokens(const size_t n) {
-        if (n) {
-            std::copy(tokens.begin() + n, tokens.end(), tokens.begin());
-            tokens.resize(tokens.size() - n);
-        }
-    }
-    llama_beam_view view() const { return {tokens.data(), tokens.size(), p, eob}; }
-};
-
-// A struct for calculating logit-related info.
-struct llama_logit_info {
-    const float * const logits;
-    const int n_vocab;
-    const float max_l;
-    const float normalizer;
-    struct sum_exp {
-        float max_l;
-        float operator()(float sum, float l) const { return sum + std::exp(l - max_l); }
-    };
-    llama_logit_info(llama_context * ctx)
-      : logits(llama_get_logits(ctx))
-      , n_vocab(llama_n_vocab(llama_get_model(ctx)))
-      , max_l(*std::max_element(logits, logits + n_vocab))
-      , normalizer(1.0f / std::accumulate(logits, logits + n_vocab, 0.0f, sum_exp{max_l}))
-      { }
-    llama_token_data get_token_data(const llama_token token_id) const {
-        constexpr auto p = std::numeric_limits<float>::quiet_NaN();  // never used
-        return {token_id, logits[token_id], p};
-    }
-    // Return top k token_data by logit.
-    std::vector<llama_token_data> top_k(size_t k) {
-        std::vector<llama_token_data> min_heap;  // min-heap by logit
-        const llama_token k_min = std::min(static_cast<llama_token>(k), n_vocab);
-        min_heap.reserve(k_min);
-        for (llama_token token_id = 0 ; token_id < k_min ; ++token_id) {
-            min_heap.push_back(get_token_data(token_id));
-        }
-        auto comp = [](const llama_token_data & a, const llama_token_data & b) { return a.logit > b.logit; };
-        std::make_heap(min_heap.begin(), min_heap.end(), comp);
-        for (llama_token token_id = k_min ; token_id < n_vocab ; ++token_id) {
-            if (min_heap.front().logit < logits[token_id]) {
-                std::pop_heap(min_heap.begin(), min_heap.end(), comp);
-                min_heap.back().id = token_id;
-                min_heap.back().logit = logits[token_id];
-                std::push_heap(min_heap.begin(), min_heap.end(), comp);
-            }
-        }
-        return min_heap;
-    }
-    float probability_from_logit(float logit) const {
-        return normalizer * std::exp(logit - max_l);
-    }
-};
-
-struct llama_beam_search_data {
-    llama_context * ctx;
-    size_t n_beams;
-    int n_past;
-    int n_predict;
-    std::vector<llama_beam> beams;
-    std::vector<llama_beam> next_beams;
-
-    // Re-calculated on each loop iteration
-    size_t common_prefix_length;
-
-    // Used to communicate to/from callback on beams state.
-    std::vector<llama_beam_view> beam_views;
-
-    llama_beam_search_data(llama_context * ctx, size_t n_beams, int n_past, int n_predict)
-      : ctx(ctx)
-      , n_beams(n_beams)
-      , n_past(n_past)
-      , n_predict(n_predict)
-      , beam_views(n_beams) {
-        beams.reserve(n_beams);
-        next_beams.reserve(n_beams);
-    }
-
-    // Collapse beams to a single beam given by index.
-    void collapse_beams(const size_t beam_idx) {
-        if (0u < beam_idx) {
-            std::swap(beams[0], beams[beam_idx]);
-        }
-        beams.resize(1);
-    }
-
-    // Min-heaps are used to efficiently collect the top-k elements (k=n_beams).
-    // The repetitive patterns below reflect the 2 stages of heaps:
-    //  * Gather elements until the vector is full, then call std::make_heap() on it.
-    //  * If the heap is full and a new element is found that should be included, pop the
-    //    least element to the back(), replace it with the new, then push it into the heap.
-    void fill_next_beams_by_top_probabilities(llama_beam & beam) {
-        // Min-heaps use a greater-than comparator.
-        const auto comp = [](const llama_beam & a, const llama_beam & b) { return a.p > b.p; };
-        if (beam.eob) {
-            // beam is at end-of-sentence, so just copy it to next_beams if its probability is high enough.
-            if (next_beams.size() < n_beams) {
-                next_beams.push_back(std::move(beam));
-                if (next_beams.size() == n_beams) {
-                    std::make_heap(next_beams.begin(), next_beams.end(), comp);
-                }
-            } else if (next_beams.front().p < beam.p) {
-                std::pop_heap(next_beams.begin(), next_beams.end(), comp);
-                next_beams.back() = std::move(beam);
-                std::push_heap(next_beams.begin(), next_beams.end(), comp);
-            }
-        } else {
-            // beam is not at end-of-sentence, so branch with next top_k tokens.
-            if (!beam.tokens.empty()) {
-                llama_decode(ctx, llama_batch_get_one(beam.tokens.data(), beam.tokens.size(), n_past, 0));
-            }
-            llama_logit_info logit_info(ctx);
-            std::vector<llama_token_data> next_tokens = logit_info.top_k(n_beams);
-
-            // Clear the kv slot so that other beams may try different tokens at this position. The llama_decode()
-            // call in loop() will conclusively fill in the kv slot once the beams converge at this position.
-            llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
-
-            size_t i=0;
-            if (next_beams.size() < n_beams) {
-                for (; next_beams.size() < n_beams ; ++i) {
-                    llama_beam next_beam = beam;
-                    next_beam.tokens.push_back(next_tokens[i].id);
-                    next_beam.p *= logit_info.probability_from_logit(next_tokens[i].logit);
-                    next_beams.push_back(std::move(next_beam));
-                }
-                std::make_heap(next_beams.begin(), next_beams.end(), comp);
-            } else {
-                for (; next_beams.front().p == 0.0f ; ++i) {
-                    std::pop_heap(next_beams.begin(), next_beams.end(), comp);
-                    next_beams.back() = beam;
-                    next_beams.back().tokens.push_back(next_tokens[i].id);
-                    next_beams.back().p *= logit_info.probability_from_logit(next_tokens[i].logit);
-                    std::push_heap(next_beams.begin(), next_beams.end(), comp);
-                }
-            }
-            for (; i < n_beams ; ++i) {
-                const float next_p = beam.p * logit_info.probability_from_logit(next_tokens[i].logit);
-                if (next_beams.front().p < next_p) {
-                    std::pop_heap(next_beams.begin(), next_beams.end(), comp);
-                    next_beams.back() = beam;
-                    next_beams.back().tokens.push_back(next_tokens[i].id);
-                    next_beams.back().p = next_p;
-                    std::push_heap(next_beams.begin(), next_beams.end(), comp);
-                }
-            }
-        }
-    }
-
-    // Find common_prefix_length based on beams.
-    // Requires beams is not empty.
-    size_t find_common_prefix_length() {
-        size_t common_prefix_length = beams[0].tokens.size();
-        for (size_t i = 1 ; i < beams.size() ; ++i) {
-            common_prefix_length = std::min(common_prefix_length, beams[i].tokens.size());
-            for (size_t j = 0 ; j < common_prefix_length ; ++j) {
-                if (beams[0].tokens[j] != beams[i].tokens[j]) {
-                    common_prefix_length = j;
-                    break;
-                }
-            }
-        }
-        return common_prefix_length;
-    }
-
-    // Construct beams_state to send back to caller via the callback function.
-    // Side effect: set common_prefix_length = find_common_prefix_length();
-    llama_beams_state get_beams_state(const bool last_call) {
-        for (size_t i = 0 ; i < beams.size() ; ++i) {
-            beam_views[i] = beams[i].view();
-        }
-        common_prefix_length = find_common_prefix_length();
-        return {beam_views.data(), beams.size(), common_prefix_length, last_call};
-    }
-
-    // Loop:
-    //  * while i < n_predict, AND
-    //  * any of the beams have not yet reached end-of-beam (eob), AND
-    //  * the highest probability beam(s) (plural in case of ties) are not at end-of-sentence
-    //    (since all other beam probabilities can only decrease)
-    void loop(const llama_beam_search_callback_fn_t callback, void * const callback_data) {
-        beams.push_back({{}, 1.0f, false});  // Start with one empty beam w/ probability = 1.0 and !eob.
-        const auto not_eob = [](const llama_beam & beam) { return !beam.eob; };
-        for (int i = 0 ; i < n_predict && std::any_of(beams.begin(),beams.end(),not_eob) &&
-                       !beams[top_beam_index()].eob ; ++i) {
-            callback(callback_data, get_beams_state(false));  // Sets common_prefix_length
-            update_beams_from_beam_views();   // Update values (p,eob) that callback may have changed.
-            if (common_prefix_length) {
-                llama_decode(ctx, llama_batch_get_one(beams[0].tokens.data(), common_prefix_length, n_past, 0));
-                n_past += common_prefix_length;
-            }
-            // Zero-out next_beam probabilities to place them last in following min-heap.
-            std::for_each(next_beams.begin(), next_beams.end(), [](llama_beam & beam) { beam.p = 0.0f; });
-            for (llama_beam & beam : beams) {
-                beam.shift_tokens(common_prefix_length);
-                fill_next_beams_by_top_probabilities(beam);
-            }
-            // next_beams become the beams of next/final iteration. Swap them to re-use memory.
-            beams.swap(next_beams);
-            renormalize_beam_probabilities(beams);
-        }
-        collapse_beams(top_beam_index());
-        callback(callback_data, get_beams_state(true));
-    }
-
-    // As beams grow, the cumulative probabilities decrease.
-    // Renormalize them to avoid floating point underflow.
-    static void renormalize_beam_probabilities(std::vector<llama_beam> & beams) {
-        const auto sum_p = [](float sum, llama_beam & beam) { return sum + beam.p; };
-        const float inv_sum = 1.0f / std::accumulate(beams.begin(), beams.end(), 0.0f, sum_p);
-        std::for_each(beams.begin(), beams.end(), [=](llama_beam & beam) { beam.p *= inv_sum; });
-    }
-
-    // Assumes beams is non-empty.  Uses llama_beam::operator<() for ordering.
-    size_t top_beam_index() {
-        return std::max_element(beams.begin(), beams.end()) - beams.begin();
-    }
-
-    // Copy (p,eob) for each beam which may have been changed by the callback.
-    void update_beams_from_beam_views() {
-        for (size_t i = 0 ; i < beams.size() ; ++i) {
-            beams[i].p = beam_views[i].p;
-            beams[i].eob = beam_views[i].eob;
-        }
-    }
-};
-
-void llama_beam_search(llama_context * ctx,
-                       llama_beam_search_callback_fn_t callback, void * callback_data,
-                       size_t n_beams, int n_past, int n_predict) {
-    assert(ctx);
-    const int64_t t_start_sample_us = ggml_time_us();
-
-    llama_beam_search_data beam_search_data(ctx, n_beams, n_past, n_predict);
-
-    beam_search_data.loop(callback, callback_data);
-
-    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-    ctx->n_sample++;
-}
-
-//
 // quantization
 //
 
@@ -16114,7 +15913,7 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_CUDA) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_VULKAN) || \
+#if defined(GGML_USE_CUDA) || defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
     defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
@@ -18221,9 +18020,9 @@ float llama_token_get_score(const struct llama_model * model, llama_token token)
     return model->vocab.id_to_token[token].score;
 }
 
-llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token) {
+llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token) {
     GGML_ASSERT(model->vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return model->vocab.id_to_token[token].type;
+    return model->vocab.id_to_token[token].attr;
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {

@@ -19,17 +19,17 @@ logger = logging.getLogger("compare-llama-bench")
 
 # Properties by which to differentiate results per commit:
 KEY_PROPERTIES = [
-    "cpu_info", "gpu_info", "n_gpu_layers", "cuda", "opencl", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas",
+    "cpu_info", "gpu_info", "n_gpu_layers", "cuda", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas",
     "blas", "model_filename", "model_type", "model_size", "model_n_params", "n_batch", "n_ubatch", "embeddings", "n_threads",
     "type_k", "type_v", "use_mmap", "no_kv_offload", "split_mode", "main_gpu", "tensor_split", "flash_attn", "n_prompt", "n_gen"
 ]
 
 # Properties that are boolean and are converted to Yes/No for the table:
-BOOL_PROPERTIES = ["cuda", "opencl", "vulkan", "kompute", "metal", "sycl", "gpu_blas", "blas", "embeddings", "use_mmap", "no_kv_offload", "flash_attn"]
+BOOL_PROPERTIES = ["cuda", "vulkan", "kompute", "metal", "sycl", "gpu_blas", "blas", "embeddings", "use_mmap", "no_kv_offload", "flash_attn"]
 
 # Header names for the table:
 PRETTY_NAMES = {
-    "cuda": "CUDA", "opencl": "OpenCL", "vulkan": "Vulkan", "kompute": "Kompute", "metal": "Metal", "sycl": "SYCL", "rpc": "RPC",
+    "cuda": "CUDA", "vulkan": "Vulkan", "kompute": "Kompute", "metal": "Metal", "sycl": "SYCL", "rpc": "RPC",
     "gpu_blas": "GPU BLAS", "blas": "BLAS", "cpu_info": "CPU", "gpu_info": "GPU", "model_filename": "File", "model_type": "Model",
     "model_size": "Model Size [GiB]", "model_n_params": "Num. of Par.", "n_batch": "Batch size", "n_ubatch": "Microbatch size",
     "n_threads": "Threads", "type_k": "K type", "type_v": "V type", "n_gpu_layers": "GPU layers", "split_mode": "Split mode",

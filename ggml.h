@@ -2425,7 +2425,6 @@ extern "C" {
     GGML_API int ggml_cpu_has_wasm_simd  (void);
     GGML_API int ggml_cpu_has_blas       (void);
     GGML_API int ggml_cpu_has_cuda       (void);
-    GGML_API int ggml_cpu_has_clblast    (void);
     GGML_API int ggml_cpu_has_vulkan     (void);
     GGML_API int ggml_cpu_has_kompute    (void);
     GGML_API int ggml_cpu_has_gpublas    (void);
