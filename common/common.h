@@ -224,8 +224,9 @@ struct gpt_params {
     // imatrix params
     std::string out_file = "imatrix.dat"; // save the resulting imatrix to this file
 
-    int32_t n_out_freq = 10; // output the imatrix every n_out_freq iterations
-    int32_t i_chunk    = 0;  // start processing from this chunk
+    int32_t n_out_freq  = 10; // output the imatrix every n_out_freq iterations
+    int32_t n_save_freq =  0; // save the imatrix every n_save_freq iterations
+    int32_t i_chunk     =  0; // start processing from this chunk
 
     bool process_output = false; // collect data for the output tensor
     bool compute_ppl    = true;  // whether to compute perplexity

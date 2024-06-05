@@ -22,8 +22,8 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
 
     LOG_TEE("\nexample usage:\n");
     LOG_TEE("\n    %s \\\n"
-            "       -m model.gguf -f some-text.txt -o imatrix.dat --verbosity 1 \\\n"
-            "       [--process-output] [--no-ppl] [--chunk 123] [--output-frequency 10] \\\n"
+            "       -m model.gguf -f some-text.txt [-o imatrix.dat] [--process-output] [--verbosity 1] \\\n"
+            "       [--no-ppl] [--chunk 123] [--output-frequency 10] [--save-frequency 0] \\\n"
             "       [--in-file imatrix-prev-0.dat --in-file imatrix-prev-1.dat ...]\n" , argv[0]);
     LOG_TEE("\n");
 }
@@ -39,7 +39,7 @@ public:
     IMatrixCollector() = default;
     void set_params(gpt_params params) { m_params = std::move(params); }
     bool collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data);
-    void save_imatrix() const;
+    void save_imatrix(int ncall = -1) const;
     bool load_imatrix(const char * file_name);
 private:
     std::unordered_map<std::string, Stats> m_stats;
@@ -48,9 +48,6 @@ private:
     int                                    m_last_call = 0;
     std::vector<float>                     m_src1_data;
     std::vector<char>                      m_ids; // the expert ids from ggml_mul_mat_id
-                                                  //
-    void save_imatrix(const char * file_name, const char * dataset) const;
-    void keep_imatrix(int ncall) const;
 };
 
 // remove any prefix and suffixes from the name
@@ -162,8 +159,8 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
                 if (m_last_call % m_params.n_out_freq == 0) {
                     save_imatrix();
                 }
-                if (m_params.n_keep > 0 && m_last_call%m_params.n_keep == 0) {
-                    keep_imatrix(m_last_call);
+                if (m_params.n_save_freq > 0 && m_last_call%m_params.n_save_freq == 0) {
+                    save_imatrix(m_last_call);
                 }
             }
         }
@@ -193,8 +190,8 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             if (m_last_call % m_params.n_out_freq == 0) {
                 save_imatrix();
             }
-            if (m_params.n_keep > 0 && m_last_call%m_params.n_keep == 0) {
-                keep_imatrix(m_last_call);
+            if (m_params.n_save_freq > 0 && m_last_call%m_params.n_save_freq == 0) {
+                save_imatrix(m_last_call);
             }
         }
     }
@@ -202,19 +199,17 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
     return true;
 }
 
-void IMatrixCollector::save_imatrix() const {
-    save_imatrix(m_params.out_file.empty() ? "imatrix.dat" : m_params.out_file.c_str(), m_params.prompt_file.c_str());
-}
+void IMatrixCollector::save_imatrix(int ncall) const {
+    auto fname = m_params.out_file;
+    if (fname.empty()) {
+        fname = "imatrix.dat";
+    }
 
-void IMatrixCollector::keep_imatrix(int ncall) const {
-    auto file_name = m_params.out_file;
-    if (file_name.empty()) file_name = "imatrix.dat";
-    file_name += ".at_";
-    file_name += std::to_string(ncall);
-    save_imatrix(file_name.c_str(), m_params.prompt_file.c_str());
-}
+    if (ncall > 0) {
+        fname += ".at_";
+        fname += std::to_string(ncall);
+    }
 
-void IMatrixCollector::save_imatrix(const char * fname, const char * dataset) const {
     std::ofstream out(fname, std::ios::binary);
     int n_entries = m_stats.size();
     out.write((const char *) &n_entries, sizeof(n_entries));
@@ -237,13 +232,15 @@ void IMatrixCollector::save_imatrix(const char * fname, const char * dataset) co
     // Write the number of call the matrix was computed with
     out.write((const char *) &m_last_call, sizeof(m_last_call));
 
-    // Write the dataset name at the end of the file to later on specify it in quantize
-    int n_dataset = strlen(dataset);
-    out.write((const char *) &n_dataset, sizeof(n_dataset));
-    out.write(dataset, n_dataset);
+    // Write the input filename at the end of the file to later on specify it in quantize
+    {
+        int len = m_params.prompt_file.size();
+        out.write((const char *) &len, sizeof(len));
+        out.write(m_params.prompt_file.c_str(), len);
+    }
 
     if (m_params.verbosity > 0) {
-        fprintf(stderr, "\n%s: stored collected data after %d chunks in %s\n", __func__, m_last_call, fname);
+        fprintf(stderr, "\n%s: stored collected data after %d chunks in %s\n", __func__, m_last_call, fname.c_str());
     }
 }
 

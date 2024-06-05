@@ -1576,6 +1576,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.n_out_freq = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "--save-frequency") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_save_freq = std::stoi(argv[i]);
+        return true;
+    }
     if (arg == "--process-output") {
         params.process_output = true;
         return true;
@@ -1863,7 +1871,8 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
 
     options.push_back({ "imatrix" });
     options.push_back({ "imatrix",     "-o,    --output FNAME",         "output file (default: '%s')", params.out_file.c_str() });
-    options.push_back({ "imatrix",     "       --output-frequency N",   "output every N iterations (default: %d)", params.n_out_freq });
+    options.push_back({ "imatrix",     "       --output-frequency N",   "output the imatrix every N iterations (default: %d)", params.n_out_freq });
+    options.push_back({ "imatrix",     "       --save-frequency N",     "save an imatrix copy every N iterations (default: %d)", params.n_save_freq });
     options.push_back({ "imatrix",     "       --process-output",       "collect data for the output tensor (default: %s)", params.process_output ? "true" : "false" });
     options.push_back({ "imatrix",     "       --no-ppl",               "do not compute perplexity (default: %s)", params.compute_ppl ? "true" : "false" });
     options.push_back({ "imatrix",     "       --chunk N",              "start processing the input from chunk N (default: %d)", params.i_chunk });
