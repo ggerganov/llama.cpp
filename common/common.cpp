@@ -1839,6 +1839,8 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "set custom jinja chat template (default: template taken from model's metadata)\n"
                                                                         "only commonly used templates are accepted:\n"
                                                                         "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
+    options.push_back({ "server",      "       --lcs-similarity SIMILARITY",
+                                                                        "how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f)\n", params.lcs_similarity });
 
 #ifndef LOG_DISABLE_LOGS
     options.push_back({ "logging" });
