@@ -21,7 +21,7 @@ set(SOURCE_FILES
         ../../ggml-backend.c
         ../../ggml-quants.c
         ../../ggml-qnn.cpp
-        test-qnn-ops.cpp
+        ggml-qnn-ut.cpp
 )
 
 
