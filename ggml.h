@@ -506,6 +506,8 @@ extern "C" {
         GGML_OP_CROSS_ENTROPY_LOSS,
         GGML_OP_CROSS_ENTROPY_LOSS_BACK,
 
+        GGML_OP_BITLINEAR_QUANT,
+
         GGML_OP_COUNT,
     };
 
@@ -990,6 +992,11 @@ extern "C" {
 
     // mean along rows
     GGML_API struct ggml_tensor * ggml_mean(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a);
+
+    // for bitnet
+    GGML_API struct ggml_tensor * ggml_bitlinear_quant(
             struct ggml_context * ctx,
             struct ggml_tensor  * a);
 

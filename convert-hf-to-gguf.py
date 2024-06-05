@@ -1390,6 +1390,26 @@ class LlamaModel(Model):
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
 
+@Model.register("BitnetForCausalLM")
+class BitnetModel(Model):
+    model_arch = gguf.MODEL_ARCH.BITNET
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+        
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        hparams = self.hparams
+        self.gguf_writer.add_vocab_size(hparams["vocab_size"])
+        self.gguf_writer.add_rope_dimension_count(hparams["hidden_size"] // hparams["num_attention_heads"])
+
+        if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
+            if self.hparams["rope_scaling"].get("type") == "linear":
+                self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+                self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
+
+    # def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+            
+    #     return [(self.map_tensor_name(name), data_torch)]
 
 @Model.register("GrokForCausalLM")
 class GrokModel(Model):
