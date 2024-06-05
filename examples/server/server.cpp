@@ -2360,7 +2360,7 @@ int main(int argc, char ** argv) {
 
     // TODO: not great to use extern vars
     server_log_json = params.log_json;
-    server_verbose = params.verbose;
+    server_verbose = params.verbosity > 0;
 
     // struct that contains llama context and inference
     server_context ctx_server;
