@@ -50,6 +50,9 @@
 
 #include "ggml-backend-impl.h"
 
+#if (defined __ANDROID__) || (defined ANDROID)
+#include <android/log.h>
+#endif
 
 // =================================================================================================
 //
@@ -58,11 +61,6 @@
 // =================================================================================================
 class qnn_instance;
 
-
-#if (defined __ANDROID__) || (defined ANDROID)
-extern "C" int __android_log_print(int prio, const char * tag, const char * fmt, ...)
-__attribute__((__format__(printf, 3, 4)));
-#endif
 static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const char * func, int line, const char * format, ...);
 
 
