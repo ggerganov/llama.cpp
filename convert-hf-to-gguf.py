@@ -331,7 +331,7 @@ class Model:
         self.write_tensors()
         self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
-        self.gguf_writer.write_ti_data_to_file()
+        self.gguf_writer.write_tensors_to_file()
         self.gguf_writer.close()
 
     def write_vocab(self):
