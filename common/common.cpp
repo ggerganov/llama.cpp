@@ -1589,7 +1589,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "--no-ppl") {
-        params.compute_ppl = true;
+        params.compute_ppl = false;
         return true;
     }
     if (arg == "--chunk" || arg == "--from-chunk") {
