@@ -546,17 +546,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         else { invalid_param = true; }
         return true;
     }
-    if (arg == "--attention") {
-        if (++i >= argc) {
-            invalid_param = true;
-            return true;
-        }
-        std::string value(argv[i]);
-        /**/ if (value == "causal") { params.attention_type = LLAMA_ATTENTION_TYPE_CAUSAL; }
-        else if (value == "non-causal") { params.attention_type = LLAMA_ATTENTION_TYPE_NONCAUSAL; }
-        else { invalid_param = true; }
-        return true;
-    }
     if (arg == "--defrag-thold" || arg == "-dt") {
         if (++i >= argc) {
             invalid_param = true;
@@ -2460,7 +2449,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.yarn_beta_slow    = params.yarn_beta_slow;
     cparams.yarn_orig_ctx     = params.yarn_orig_ctx;
     cparams.pooling_type      = params.pooling_type;
-    cparams.attention_type    = params.attention_type;
     cparams.defrag_thold      = params.defrag_thold;
     cparams.cb_eval           = params.cb_eval;
     cparams.cb_eval_user_data = params.cb_eval_user_data;

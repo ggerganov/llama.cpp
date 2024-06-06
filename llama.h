@@ -177,12 +177,6 @@ extern "C" {
         LLAMA_POOLING_TYPE_LAST = 3,
     };
 
-    enum llama_attention_type {
-        LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1,
-        LLAMA_ATTENTION_TYPE_CAUSAL      = 0,
-        LLAMA_ATTENTION_TYPE_NONCAUSAL  = 1,
-    };
-
     enum llama_split_mode {
         LLAMA_SPLIT_MODE_NONE    = 0, // single GPU
         LLAMA_SPLIT_MODE_LAYER   = 1, // split layers and KV across GPUs
@@ -300,7 +294,6 @@ extern "C" {
 
         enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
         enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
-        enum llama_attention_type    attention_type;    // causal, non-causal, or unspecified
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -792,6 +785,10 @@ extern "C" {
 
     // Get the number of threads used for prompt and batch processing (multiple token).
     LLAMA_API uint32_t llama_n_threads_batch(struct llama_context * ctx);
+
+    // Set whether the model is in embeddings model or not
+    // If true, embeddings will be returned but logits will not
+    LLAMA_API void llama_set_embeddings(struct llama_context * ctx, bool embeddings);
 
     // Set whether to use causal attention or not
     // If set to true, the model will only attend to the past tokens

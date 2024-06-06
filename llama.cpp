@@ -15931,7 +15931,6 @@ struct llama_context_params llama_context_default_params() {
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
         /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
-        /*.attention_type              =*/ LLAMA_ATTENTION_TYPE_UNSPECIFIED,
         /*.rope_freq_base              =*/ 0.0f,
         /*.rope_freq_scale             =*/ 0.0f,
         /*.yarn_ext_factor             =*/ -1.0f,
@@ -16173,12 +16172,7 @@ struct llama_context * llama_new_context_with_model(
     }
 
     cparams.yarn_attn_factor *= hparams.rope_attn_factor;
-
-    if (params.attention_type == LLAMA_ATTENTION_TYPE_UNSPECIFIED) {
-        cparams.causal_attn = hparams.causal_attn;
-    } else {
-        cparams.causal_attn = params.attention_type == LLAMA_ATTENTION_TYPE_CAUSAL;
-    }
+    cparams.causal_attn = hparams.causal_attn;
 
     if (cparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
         if (hparams.pooling_type == LLAMA_POOLING_TYPE_UNSPECIFIED) {
@@ -17912,6 +17906,10 @@ uint32_t llama_n_threads_batch(struct llama_context * ctx) {
 void llama_set_abort_callback(struct llama_context * ctx, bool (*abort_callback)(void * data), void * abort_callback_data) {
     ctx->abort_callback      = abort_callback;
     ctx->abort_callback_data = abort_callback_data;
+}
+
+void llama_set_embeddings(struct llama_context * ctx, bool embeddings) {
+    ctx->cparams.embeddings = embeddings;
 }
 
 void llama_set_causal_attn(struct llama_context * ctx, bool causal_attn) {
