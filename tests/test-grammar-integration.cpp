@@ -102,7 +102,7 @@ static void test_grammar(const std::string & test_desc, const std::string & gram
                 fclose(string_file);
             }
 
-            fprintf(stderr, "    Analyze in detail by running: `./gbnf-validator test-grammar-integration.grammar.gbnf test-grammar-integration.string.txt`\n");
+            fprintf(stderr, "\n NOTE: Debug grammar file generated. To analyze this failure in detail, run the following command:     ./gbnf-validator test-grammar-integration.grammar.gbnf test-grammar-integration.string.txt\n\n");
         } else {
             fprintf(stdout, "✅︎\n");
         }
@@ -837,9 +837,9 @@ static void test_json_schema() {
             R"""({})""",
             // "By default, providing additional properties is valid"
             // TODO: The following should pass, but currently FAILS. Additional properties should be permitted by default.
-            // R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue", "direction":"NW"})""",
+            R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue", "direction":"NW"})""",
             // TODO: Spaces should be permitted around enum values, but currently they fail to pass.
-            // R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" })""",
+            R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" })""",
         },
         // Failing strings
         {
@@ -872,17 +872,20 @@ static void test_json_schema() {
             )),
         // Passing strings
         {
-            //R"""({"number":1600,"street_name":"Pennsylvania","street_type":"Avenue"})""",
+            // TODO: Following line should pass and doesn't
+            R"""({"number":1600,"street_name":"Pennsylvania","street_type":"Avenue"})""",
             // "By default, leaving out properties is valid"
-            //R"""({ "street_name": "Pennsylvania" })""",
-            //R"""({ "number": 1600, "street_name": "Pennsylvania" })""",
+            // TODO: Following line should pass and doesn't
+            R"""({ "street_name": "Pennsylvania" })""",
+            // TODO: Following line should pass and doesn't
+            R"""({ "number": 1600, "street_name": "Pennsylvania" })""",
             // "By extension, even an empty object is valid"
             R"""({})""",
             // "By default, providing additional properties is valid"
             // TODO: The following should pass, but currently FAILS. Additional properties should be permitted by default.
-            //R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue", "direction":"NW"})""",
+            R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue", "direction":"NW"})""",
             // TODO: Spaces should be permitted around enum values, but currently they fail to pass.
-            // R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" })""",
+            R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" })""",
         },
         // Failing strings
         {
