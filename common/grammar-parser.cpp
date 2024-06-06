@@ -46,8 +46,12 @@ namespace grammar_parser {
         state.rules[rule_id] = rule;
     }
 
+    static bool is_digit_char(char c) {
+        return '0' <= c && c <= '9';
+    }
+
     static bool is_word_char(char c) {
-        return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || ('0' <= c && c <= '9');
+        return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || c == '-' || is_digit_char(c);
     }
 
     static std::pair<uint32_t, const char *> parse_hex(const char * src, int size) {
@@ -99,6 +103,17 @@ namespace grammar_parser {
         return pos;
     }
 
+    static const char * parse_int(const char * src) {
+        const char * pos = src;
+        while (is_digit_char(*pos)) {
+            pos++;
+        }
+        if (pos == src) {
+            throw std::runtime_error(std::string("expecting integer at ") + src);
+        }
+        return pos;
+    }
+
     static std::pair<uint32_t, const char *> parse_char(const char * src) {
         if (*src == '\\') {
             switch (src[1]) {
@@ -137,6 +152,60 @@ namespace grammar_parser {
             bool                                 is_nested) {
         size_t last_sym_start = out_elements.size();
         const char * pos = src;
+
+        auto handle_repetitions = [&](int min_times, int max_times) {
+
+            if (last_sym_start == out_elements.size()) {
+                throw std::runtime_error(std::string("expecting preceding item to */+/?/{ at ") + pos);
+            }
+
+            // apply transformation to previous symbol (last_sym_start to end) according to
+            // the following rewrite rules:
+            // S{m,n} --> S S S (m times) S'(n-m)
+            //            S'(x)   ::= S S'(x-1) |
+            //            (... n-m definitions of these S' rules ...)
+            //            S'(1)   ::= S |
+            // S{m,} -->  S S S (m times) S'
+            //            S'     ::= S S' |
+            // S*     --> S{0,}
+            //        --> S'     ::= S S' |
+            // S+     --> S{1,}
+            //        --> S S'
+            //            S'     ::= S S' |
+            // S?     --> S{0,1}
+            //        --> S'
+            //            S'     ::= S |
+
+            std::vector<llama_grammar_element> previous_elements(out_elements.begin() + last_sym_start, out_elements.end());
+            if (min_times == 0) {
+                out_elements.resize(last_sym_start);
+            } else {
+                // Repeat the previous elements (min_times - 1) times
+                for (int i = 1; i < min_times; i++) {
+                    out_elements.insert(out_elements.end(), previous_elements.begin(), previous_elements.end());
+                }
+            }
+
+            uint32_t last_rec_rule_id = 0;
+            auto n_opt = max_times < 0 ? 1 : max_times - min_times;
+
+            std::vector<llama_grammar_element> rec_rule(previous_elements);
+            for (int i = 0; i < n_opt; i++) {
+                rec_rule.resize(previous_elements.size());
+                uint32_t rec_rule_id = generate_symbol_id(state, rule_name);
+                if (i > 0 || max_times < 0) {
+                    rec_rule.push_back({LLAMA_GRETYPE_RULE_REF, max_times < 0 ? rec_rule_id : last_rec_rule_id});
+                }
+                rec_rule.push_back({LLAMA_GRETYPE_ALT, 0});
+                rec_rule.push_back({LLAMA_GRETYPE_END, 0});
+                add_rule(state, rec_rule_id, rec_rule);
+                last_rec_rule_id = rec_rule_id;
+            }
+            if (n_opt > 0) {
+                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, last_rec_rule_id});
+            }
+        };
+
         while (*pos) {
             if (*pos == '"') { // literal string
                 pos++;
@@ -197,40 +266,47 @@ namespace grammar_parser {
                     throw std::runtime_error(std::string("expecting ')' at ") + pos);
                 }
                 pos = parse_space(pos + 1, is_nested);
-            } else if (*pos == '*' || *pos == '+' || *pos == '?') { // repetition operator
-                if (last_sym_start == out_elements.size()) {
-                    throw std::runtime_error(std::string("expecting preceding item to */+/? at ") + pos);
-                }
-
-                // apply transformation to previous symbol (last_sym_start to end) according to
-                // rewrite rules:
-                // S* --> S' ::= S S' |
-                // S+ --> S' ::= S S' | S
-                // S? --> S' ::= S |
-                uint32_t sub_rule_id = generate_symbol_id(state, rule_name);
-                std::vector<llama_grammar_element> sub_rule;
-                // add preceding symbol to generated rule
-                sub_rule.insert(
-                    sub_rule.end(), out_elements.begin() + last_sym_start, out_elements.end());
-                if (*pos == '*' || *pos == '+') {
-                    // cause generated rule to recurse
-                    sub_rule.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
-                }
-                // mark start of alternate def
-                sub_rule.push_back({LLAMA_GRETYPE_ALT, 0});
-                if (*pos == '+') {
-                    // add preceding symbol as alternate only for '+' (otherwise empty)
-                    sub_rule.insert(
-                        sub_rule.end(), out_elements.begin() + last_sym_start, out_elements.end());
-                }
-                sub_rule.push_back({LLAMA_GRETYPE_END, 0});
-                add_rule(state, sub_rule_id, sub_rule);
-
-                // in original rule, replace previous symbol with reference to generated rule
-                out_elements.resize(last_sym_start);
-                out_elements.push_back({LLAMA_GRETYPE_RULE_REF, sub_rule_id});
-
+            } else if (*pos == '*') {
                 pos = parse_space(pos + 1, is_nested);
+                handle_repetitions(0, -1);
+            } else if (*pos == '+') {
+                pos = parse_space(pos + 1, is_nested);
+                handle_repetitions(1, -1);
+            } else if (*pos == '?') {
+                pos = parse_space(pos + 1, is_nested);
+                handle_repetitions(0, 1);
+            } else if (*pos == '{') {
+                pos = parse_space(pos + 1, is_nested);
+
+                if (!is_digit_char(*pos)) {
+                    throw std::runtime_error(std::string("expecting an int at ") + pos);
+                }
+                const char * int_end = parse_int(pos);
+                int min_times = std::stoul(std::string(pos, int_end - pos));
+                pos = parse_space(int_end, is_nested);
+
+                int max_times = -1;
+
+                if (*pos == '}') {
+                    max_times = min_times;
+                    pos = parse_space(pos + 1, is_nested);
+                } else if (*pos == ',') {
+                    pos = parse_space(pos + 1, is_nested);
+
+                    if (is_digit_char(*pos)) {
+                        const char * int_end = parse_int(pos);
+                        max_times = std::stoul(std::string(pos, int_end - pos));
+                        pos = parse_space(int_end, is_nested);
+                    }
+
+                    if (*pos != '}') {
+                        throw std::runtime_error(std::string("expecting '}' at ") + pos);
+                    }
+                    pos = parse_space(pos + 1, is_nested);
+                } else {
+                    throw std::runtime_error(std::string("expecting ',' at ") + pos);
+                }
+                handle_repetitions(min_times, max_times);
             } else {
                 break;
             }
