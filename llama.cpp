@@ -13038,13 +13038,17 @@ struct llm_tokenizer_bpe {
                         });
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH:
-                        //TODO: Apply GPT2 + lowercasing
+                        //TODO: Apply lowercase + whitespace pretokenization
                         {
                             std::string lowercase_text = text;
                             std::transform(lowercase_text.begin(), lowercase_text.end(), lowercase_text.begin(), [](unsigned char c){ return std::tolower(c); });
-                            word_collection = unicode_regex_split(lowercase_text, {
-                                "",
-                            });
+                            std::regex regexPattern("\\w+|[^\\w\\s]+");
+                            std::sregex_token_iterator it(lowercase_text.begin(), lowercase_text.end(), regexPattern);
+                            std::sregex_token_iterator end;
+
+                            while (it != end) {
+                                word_collection.push_back(*it++);
+                            }
                         }
                         break;
                     default:
@@ -13153,10 +13157,9 @@ struct llm_tokenizer_bpe {
                     for (auto j = str.begin(); j != str.end(); ++j) {
                         std::string byte_str(1, *j);
                         auto token_multibyte = vocab.token_to_id.find(byte_str);
-                        if (token_multibyte == vocab.token_to_id.end()) {
-                            throw std::runtime_error("ERROR: byte not found in vocab");
+                        if (token_multibyte != vocab.token_to_id.end()) {
+                            output.push_back((*token_multibyte).second);
                         }
-                        output.push_back((*token_multibyte).second);
                     }
                 } else {
                     output.push_back((*token).second);
