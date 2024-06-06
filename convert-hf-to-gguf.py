@@ -2857,7 +2857,7 @@ def main() -> None:
 
     split_arguments = gguf.SplitArguments(args)
 
-    ftype_map = {
+    ftype_map: dict[str, gguf.LlamaFileType] = {
         "f32": gguf.LlamaFileType.ALL_F32,
         "f16": gguf.LlamaFileType.MOSTLY_F16,
         "bf16": gguf.LlamaFileType.MOSTLY_BF16,
