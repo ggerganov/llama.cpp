@@ -12,7 +12,7 @@ build*/
 
 models/*
 
-/main
+/llama
 /quantize
 
 arm_neon.h

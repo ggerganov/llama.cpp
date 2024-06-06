@@ -27,7 +27,7 @@ RUN if [ "${LLAMA_SYCL_F16}" = "ON" ]; then \
 
 FROM intel/oneapi-basekit:$ONEAPI_VERSION as runtime
 
-COPY --from=build /app/build/bin/main /main
+COPY --from=build /app/build/bin/llama /llama
 
 ENV LC_ALL=C.utf8
 

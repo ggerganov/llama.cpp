@@ -18,7 +18,7 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
         --use-checkpointing
 
 # predict
-./bin/main -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
+./bin/llama -m open-llama-3b-v2-q8_0.gguf --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin
 ```
 
 **Only llama based models are supported!** The output files will be saved every N iterations (config with `--save-every N`).
@@ -45,7 +45,7 @@ In `main` you can also load multiple LORA adapters, which will then be mixed tog
 For example if you have two LORA adapters `lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin` and `lora-open-llama-3b-v2-q8_0-bible-LATEST.bin`, you can mix them together like this:
 
 ```bash
-./bin/main -m open-llama-3b-v2-q8_0.gguf \
+./bin/llama -m open-llama-3b-v2-q8_0.gguf \
   --lora lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin \
   --lora lora-open-llama-3b-v2-q8_0-bible-LATEST.bin
 ```
@@ -55,7 +55,7 @@ You can change how strong each LORA adapter is applied to the base model by usin
 For example to apply 40% of the 'shakespeare' LORA adapter, 80% of the 'bible' LORA adapter and 100% of yet another one:
 
 ```bash
-./bin/main -m open-llama-3b-v2-q8_0.gguf \
+./bin/llama -m open-llama-3b-v2-q8_0.gguf \
   --lora-scaled lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin 0.4 \
   --lora-scaled lora-open-llama-3b-v2-q8_0-bible-LATEST.bin 0.8 \
   --lora lora-open-llama-3b-v2-q8_0-yet-another-one-LATEST.bin

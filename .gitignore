@@ -67,7 +67,7 @@ models-mnt
 /lookup-create
 /lookup-merge
 /lookup-stats
-/main
+/llama
 /metal
 /passkey
 /perplexity

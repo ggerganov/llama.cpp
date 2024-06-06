@@ -797,7 +797,7 @@ llama: examples/main/main.cpp                                  ggml.o llama.o $(
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 	@echo
-	@echo '====  Run ./main -h for help.  ===='
+	@echo '====  Run ./llama -h for help.  ===='
 	@echo
 
 infill: examples/infill/infill.cpp                            ggml.o llama.o $(COMMON_DEPS) console.o grammar-parser.o $(OBJS)

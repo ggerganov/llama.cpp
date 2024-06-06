@@ -218,7 +218,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
 
 ```
-$ make -j && ./main -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
+$ make -j && ./llama -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
 I llama.cpp build info:
 I UNAME_S:  Darwin
 I UNAME_P:  arm
@@ -585,7 +585,7 @@ Building the program with BLAS support may lead to some performance improvements
   cmake -B build -DLLAMA_VULKAN=1
   cmake --build build --config Release
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
-  ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
+  ./bin/llama -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
 
   # You should see in the output, ggml_vulkan detected your GPU. For example:
   # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
@@ -632,7 +632,7 @@ python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
 
 ```bash
 # start inference on a gguf model
-./main -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
+./llama -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -731,7 +731,7 @@ Here is an example of a few-shot interaction, invoked with the command
 ./examples/chat-13B.sh
 
 # custom arguments using a 13B model
-./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
+./llama -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
 Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
@@ -762,7 +762,7 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
 `llama.cpp` supports grammars to constrain model output. For example, you can force the model to output JSON only:
 
 ```bash
-./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
+./llama -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
 ```
 
 The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
@@ -869,7 +869,7 @@ $mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/ho
 Now, you can start chatting:
 ```
 $cd /data/data/com.termux/files/home/bin
-$./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+$./llama -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
 ```
 
 Here's a demo of an interactive session running on Pixel 5 phone:

@@ -30,6 +30,6 @@ FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 RUN apt-get update && \
     apt-get install -y libgomp1
 
-COPY --from=build /app/main /main
+COPY --from=build /app/llama /llama
 
 ENTRYPOINT [ "/main" ]

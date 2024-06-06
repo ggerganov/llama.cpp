@@ -19,7 +19,7 @@ RUN cmake -B build -DLLAMA_VULKAN=1 && \
 
 # Clean up
 WORKDIR /
-RUN cp /app/build/bin/main /main && \
+RUN cp /app/build/bin/llama /llama && \
     rm -rf /app
 
 ENV LC_ALL=C.utf8

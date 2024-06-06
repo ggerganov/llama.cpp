@@ -7,7 +7,7 @@
 cd `dirname $0`
 cd ..
 
-./main -m models/available/Llama2/13B/llama-2-13b.ggmlv3.q4_0.bin \
+./llama -m models/available/Llama2/13B/llama-2-13b.ggmlv3.q4_0.bin \
        --color \
        --ctx_size 2048 \
        -n -1 \

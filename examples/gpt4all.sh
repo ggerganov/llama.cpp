@@ -7,7 +7,7 @@
 cd `dirname $0`
 cd ..
 
-./main --color --instruct --threads 4 \
+./llama --color --instruct --threads 4 \
        --model ./models/gpt4all-7B/gpt4all-lora-quantized.bin \
        --file ./prompts/alpaca.txt \
        --batch_size 8 --ctx_size 2048 -n -1 \

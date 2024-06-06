@@ -1,4 +1,4 @@
-# llama.cpp/example/main
+# llama.cpp/examples/main
 
 This example program allows you to use various LLaMA language models in an easy and efficient way. It is specifically designed to work with the [llama.cpp](https://github.com/ggerganov/llama.cpp) project, which provides a plain C/C++ implementation with optional 4-bit quantization support for faster, lower memory inference, and is optimized for desktop CPUs. This program can be used to perform various inference tasks with LLaMA models, including generating text based on user-provided prompts and chat-like interactions with reverse prompts.
 
@@ -20,13 +20,13 @@ To get started right away, run the following command, making sure to use the cor
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin --prompt "Once upon a time"
+./llama -m models/7B/ggml-model.bin --prompt "Once upon a time"
 ```
 
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin --prompt "Once upon a time"
+llama.exe -m models\7B\ggml-model.bin --prompt "Once upon a time"
 ```
 
 For an interactive experience, try this command:
@@ -34,7 +34,7 @@ For an interactive experience, try this command:
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
+./llama -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
 'User: Hi
 AI: Hello. I am an AI chatbot. Would you like to talk?
 User: Sure!
@@ -45,7 +45,7 @@ User:'
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
+llama.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
 ```
 
 The following command generates "infinite" text from a starting prompt (you can use `Ctrl-C` to stop it):
@@ -53,13 +53,13 @@ The following command generates "infinite" text from a starting prompt (you can 
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin --ignore-eos -n -1
+./llama -m models/7B/ggml-model.bin --ignore-eos -n -1
 ```
 
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin --ignore-eos -n -1
+llama.exe -m models\7B\ggml-model.bin --ignore-eos -n -1
 ```
 
 ## Common Options
@@ -107,7 +107,7 @@ To overcome this limitation, you can use the `--in-prefix` flag to add a space o
 The `--in-prefix` flag is used to add a prefix to your input, primarily, this is used to insert a space after the reverse prompt. Here's an example of how to use the `--in-prefix` flag in conjunction with the `--reverse-prompt` flag:
 
 ```sh
-./main -r "User:" --in-prefix " "
+./llama -r "User:" --in-prefix " "
 ```
 
 ### In-Suffix
@@ -115,7 +115,7 @@ The `--in-prefix` flag is used to add a prefix to your input, primarily, this is
 The `--in-suffix` flag is used to add a suffix after your input. This is useful for adding an "Assistant:" prompt after the user's input. It's added after the new-line character (`\n`) that's automatically added to the end of the user's input. Here's an example of how to use the `--in-suffix` flag in conjunction with the `--reverse-prompt` flag:
 
 ```sh
-./main -r "User:" --in-prefix " " --in-suffix "Assistant:"
+./llama -r "User:" --in-prefix " " --in-suffix "Assistant:"
 ```
 
 ## Context Management
