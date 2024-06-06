@@ -255,9 +255,9 @@ class GGUFManager(GGUFWriter):
     def format_n_bytes_to_str(num: int) -> str:
         if num == METADATA_ONLY_INDICATOR:
             return "negligible - metadata only"
-        num = float(num)
+        fnum = float(num)
         for unit in ("", "K", "M", "G"):
-            if abs(num) < 1024.0:
-                return f"{num:3.1f}{unit}"
-            num /= 1024.0
-        return f"{num:.1f}T - over 1TB, --split recommended"
+            if abs(fnum) < 1024.0:
+                return f"{fnum:3.1f}{unit}"
+            fnum /= 1024.0
+        return f"{fnum:.1f}T - over 1TB, --split recommended"
