@@ -25,13 +25,13 @@ ENV LLAMA_CUDA=1
 # Enable cURL
 ENV LLAMA_CURL=1
 
-RUN make -j$(nproc) server
+RUN make -j$(nproc) llama-server
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev libgomp1
 
-COPY --from=build /app/server /server
+COPY --from=build /app/llama-server /llama-server
 
-ENTRYPOINT [ "/server" ]
+ENTRYPOINT [ "/llama-server" ]

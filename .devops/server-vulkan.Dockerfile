@@ -23,9 +23,9 @@ RUN cmake -B build -DLLAMA_VULKAN=1 -DLLAMA_CURL=1 && \
 
 # Clean up
 WORKDIR /
-RUN cp /app/build/bin/server /server && \
+RUN cp /app/build/bin/llama-server /llama-server && \
     rm -rf /app
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/server" ]
+ENTRYPOINT [ "/llama-server" ]

@@ -76,7 +76,7 @@ models-mnt
 /quantize-stats
 /result
 /save-load-state
-/server
+/llama-server
 /simple
 /batched
 /batched-bench

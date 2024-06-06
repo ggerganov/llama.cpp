@@ -80,26 +80,26 @@ The project is under active development, and we are [looking for feedback and co
 
 ## Build
 
-`server` is built alongside everything else from the root of the project
+`llama-server` is built alongside everything else from the root of the project
 
 - Using `make`:
 
   ```bash
-  make server
+  make llama-server
   ```
 
 - Using `CMake`:
 
   ```bash
   cmake -B build
-  cmake --build build --config Release -t server
+  cmake --build build --config Release -t llama-server
   ```
 
-  Binary is at `./build/bin/server`
+  Binary is at `./build/bin/llama-server`
 
 ## Build with SSL
 
-`server` can also be built with SSL support using OpenSSL 3
+`llama-server` can also be built with SSL support using OpenSSL 3
 
 - Using `make`:
 
@@ -107,14 +107,14 @@ The project is under active development, and we are [looking for feedback and co
   # NOTE: For non-system openssl, use the following:
   #   CXXFLAGS="-I /path/to/openssl/include"
   #   LDFLAGS="-L /path/to/openssl/lib"
-  make LLAMA_SERVER_SSL=true server
+  make LLAMA_SERVER_SSL=true llama-server
   ```
 
 - Using `CMake`:
 
   ```bash
   cmake -B build -DLLAMA_SERVER_SSL=ON
-  cmake --build build --config Release -t server
+  cmake --build build --config Release -t llama-server
   ```
 
 ## Quick Start
@@ -124,13 +124,13 @@ To get started right away, run the following command, making sure to use the cor
 ### Unix-based systems (Linux, macOS, etc.)
 
 ```bash
-./server -m models/7B/ggml-model.gguf -c 2048
+./llama-server -m models/7B/ggml-model.gguf -c 2048
 ```
 
 ### Windows
 
 ```powershell
-server.exe -m models\7B\ggml-model.gguf -c 2048
+llama-server.exe -m models\7B\ggml-model.gguf -c 2048
 ```
 
 The above command will start a server that by default listens on `127.0.0.1:8080`.
@@ -629,11 +629,11 @@ bash chat.sh
 
 ### OAI-like API
 
-The HTTP `server` supports an OAI-like API: https://github.com/openai/openai-openapi
+The HTTP `llama-server` supports an OAI-like API: https://github.com/openai/openai-openapi
 
 ### API errors
 
-`server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
+`llama-server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
 
 Example of an error:
 

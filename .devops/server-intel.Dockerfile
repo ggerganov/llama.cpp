@@ -38,8 +38,8 @@ RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRO
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev
 
-COPY --from=build /app/build/bin/server /server
+COPY --from=build /app/build/bin/llama-server /llama-server
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/server" ]
+ENTRYPOINT [ "/llama-server" ]
