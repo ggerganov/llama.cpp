@@ -25,7 +25,7 @@ ENV LLAMA_CUDA=1
 # Enable cURL
 ENV LLAMA_CURL=1
 
-RUN make -j$(nproc)
+RUN make -j$(nproc) server
 
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
