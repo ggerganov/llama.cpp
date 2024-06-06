@@ -184,7 +184,7 @@ struct gpt_params {
     int32_t port           = 8080;         // server listens on this network port
     int32_t timeout_read   = 600;          // http read timeout in seconds
     int32_t timeout_write  = timeout_read; // http write timeout in seconds
-    int32_t n_threads_http = -1;           // number of threads to use for http server (-1 = use n_threads)
+    int32_t n_threads_http = -1;           // number of threads to process HTTP requests
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";
