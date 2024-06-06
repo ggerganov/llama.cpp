@@ -1414,6 +1414,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.timeout_write = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "--threads-http") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_threads_http = std::stoi(argv[i]);
+        return true;
+    }
     if (arg == "-spf" || arg == "--system-prompt-file") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1893,6 +1901,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "server",      "       --ssl-key-file FNAME",   "path to file a PEM-encoded SSL private key" });
     options.push_back({ "server",      "       --ssl-cert-file FNAME",  "path to file a PEM-encoded SSL certificate" });
     options.push_back({ "server",      "       --timeout N",            "server read/write timeout in seconds (default: %d)", params.timeout_read });
+    options.push_back({ "server",      "       --threads-http N",       "number of threads used to process HTTP requests (default: %d)", params.n_threads_http });
     options.push_back({ "server",      "       --system-prompt-file FNAME",
                                                                         "set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications" });
     options.push_back({ "server",      "       --log-format {text,json}",
