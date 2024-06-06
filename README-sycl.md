@@ -427,7 +427,7 @@ Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former in
 
 *Notes:*
 
-- By default, calling `make` will build all target binary files. In case of a minimal experimental setup, the user can build the inference executable only through `make main`.
+- By default, calling `make` will build all target binary files. In case of a minimal experimental setup, the user can build the inference executable only through `make llama`.
 
 ### III. Run the inference
 

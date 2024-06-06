@@ -38,8 +38,8 @@ make -j
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p main %{buildroot}%{_bindir}/llama
-cp -p server %{buildroot}%{_bindir}/llamaserver
+cp -p llama %{buildroot}%{_bindir}/llama
+cp -p llama-server %{buildroot}%{_bindir}/llamaserver
 cp -p simple %{buildroot}%{_bindir}/llamasimple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system

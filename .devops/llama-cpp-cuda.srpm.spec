@@ -36,8 +36,8 @@ make -j LLAMA_CUDA=1
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p main %{buildroot}%{_bindir}/llamacppcuda
-cp -p server %{buildroot}%{_bindir}/llamacppcudaserver
+cp -p llama %{buildroot}%{_bindir}/llamacppcuda
+cp -p llama-server %{buildroot}%{_bindir}/llamacppcudaserver
 cp -p simple %{buildroot}%{_bindir}/llamacppcudasimple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system

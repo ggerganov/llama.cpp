@@ -36,8 +36,8 @@ make -j LLAMA_CLBLAST=1
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p main %{buildroot}%{_bindir}/llamaclblast
-cp -p server %{buildroot}%{_bindir}/llamaclblastserver
+cp -p llama %{buildroot}%{_bindir}/llamaclblast
+cp -p llama-server %{buildroot}%{_bindir}/llamaclblastserver
 cp -p simple %{buildroot}%{_bindir}/llamaclblastsimple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system

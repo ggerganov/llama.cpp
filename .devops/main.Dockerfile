@@ -9,7 +9,7 @@ WORKDIR /app
 
 COPY . .
 
-RUN make -j$(nproc) main
+RUN make -j$(nproc) llama
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
 
