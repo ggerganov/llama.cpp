@@ -381,7 +381,7 @@ if (LLAMA_BLAS)
         endif()
 
         set(GGML_HEADERS_BLAS ggml-blas.h)
-        set(GGML_SOURCES_BLAS ggml-blas.c)
+        set(GGML_SOURCES_BLAS ggml-blas.cpp)
 
         set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${BLAS_LIBRARIES})
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})

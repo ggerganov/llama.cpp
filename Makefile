@@ -448,9 +448,6 @@ ifdef LLAMA_RPC
 	OBJS          += ggml-rpc.o
 endif # LLAMA_RPC
 
-ggml-blas.o: ggml-blas.c ggml-blas.h
-	$(CC) $(CFLAGS) -c $< -o $@
-
 ifdef LLAMA_CUBLAS
 # LLAMA_CUBLAS is deprecated and will be removed in the future
 	LLAMA_CUDA := 1
@@ -751,6 +748,9 @@ ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 
 ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
+
+ggml-blas.o: ggml-blas.cpp ggml-blas.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 unicode.o: unicode.cpp unicode.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@

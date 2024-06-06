@@ -1,7 +1,8 @@
 #include "ggml-blas.h"
 #include "ggml-backend-impl.h"
 
-#include <stdlib.h>
+#include <future>
+#include <vector>
 
 #if defined(GGML_USE_ACCELERATE)
 #   include <Accelerate/Accelerate.h>
@@ -13,7 +14,7 @@
 
 struct ggml_backend_blas_context {
     int n_threads;
-    void * work_data;
+    char * work_data;
     size_t work_size;
 };
 
@@ -41,7 +42,7 @@ static bool ggml_backend_blas_use_blas(const struct ggml_tensor * dst) {
     return false;
 }
 
-static void ggml_backend_blas_mul_mat(struct ggml_backend_blas_context * ctx, struct ggml_tensor * dst) {
+static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct ggml_tensor * dst) {
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
 
@@ -74,15 +75,15 @@ static void ggml_backend_blas_mul_mat(struct ggml_backend_blas_context * ctx, st
     const size_t  desired_wsize = type == GGML_TYPE_F32 ? 0 : ne03*ne02*ne_plane*sizeof(float);
 
     if (ctx->work_size < desired_wsize) {
-        free(ctx->work_data);
-        ctx->work_data = malloc(desired_wsize);
-        GGML_ASSERT(ctx->work_data != NULL);
+        delete[] ctx->work_data;
+        ctx->work_data = new char[desired_wsize];
         ctx->work_size = desired_wsize;
     }
     void * wdata = ctx->work_data;
 
     // convert src0 to float
     if (type != GGML_TYPE_F32) {
+        std::vector<std::future<void>> tasks;
         ggml_to_float_t const to_float = type_traits.to_float;
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -92,11 +93,25 @@ static void ggml_backend_blas_mul_mat(struct ggml_backend_blas_context * ctx, st
 
 #ifdef GGML_USE_OPENMP
                 #pragma omp parallel for num_threads(ctx->n_threads)
-#endif
                 for (int64_t i01 = 0; i01 < ne01; i01++) {
                     to_float((const char *) x + i01*nb01, wplane + i01*ne00, ne00);
                 }
+#else
+                for (int i = 0; i < ctx->n_threads; i++) {
+                    tasks.push_back(std::async(std::launch::async, [=]() {
+                        const int64_t start = i*ne01/ctx->n_threads;
+                        const int64_t end   = (i + 1)*ne01/ctx->n_threads;
+                        for (int64_t i01 = start; i01 < end; i01++) {
+                            to_float((const char *) x + i01*nb01, wplane + i01*ne00, ne00);
+                        }
+                    }));
+                }
+#endif
             }
+        }
+        // wait for all tasks to finish
+        for (auto & task : tasks) {
+            task.get();
         }
     }
 
@@ -105,7 +120,7 @@ static void ggml_backend_blas_mul_mat(struct ggml_backend_blas_context * ctx, st
             const int64_t i03 = i13/r3;
             const int64_t i02 = i12/r2;
 
-            const void  * x = (char *)            src0->data + i02*nb02 + i03*nb03;
+            const float * x = (float *) ((char *) src0->data + i02*nb02 + i03*nb03);
             const float * y = (float *) ((char *) src1->data + i12*nb12 + i13*nb13);
                   float * d = (float *) ((char *)  dst->data + i12*nb2  + i13*nb3);
 
@@ -122,7 +137,7 @@ static void ggml_backend_blas_mul_mat(struct ggml_backend_blas_context * ctx, st
     }
 }
 
-static void ggml_backend_blas_out_prod(struct ggml_backend_blas_context * ctx, struct ggml_tensor * dst) {
+static void ggml_backend_blas_out_prod(ggml_backend_blas_context * ctx, struct ggml_tensor * dst) {
     const struct ggml_tensor * src0 = dst->src[0];
     const struct ggml_tensor * src1 = dst->src[1];
 
@@ -163,7 +178,7 @@ static void ggml_backend_blas_out_prod(struct ggml_backend_blas_context * ctx, s
     int k = src0->ne[1];
     int m = src1->ne[0];
 
-    int transposeA;
+    CBLAS_TRANSPOSE transposeA;
     int lda;
 
     if (!ggml_is_transposed(src1)) {
@@ -192,10 +207,10 @@ GGML_CALL static const char * ggml_backend_blas_name(ggml_backend_t backend) {
 }
 
 GGML_CALL static void ggml_backend_blas_free(ggml_backend_t backend) {
-    struct ggml_backend_blas_context * ctx = (struct ggml_backend_blas_context *)backend->context;
-    free(ctx->work_data);
-    free(ctx);
-    free(backend);
+    ggml_backend_blas_context * ctx = (ggml_backend_blas_context *)backend->context;
+    delete[] ctx->work_data;
+    delete ctx;
+    delete backend;
 }
 
 GGML_CALL static ggml_backend_buffer_type_t ggml_backend_blas_get_default_buffer_type(ggml_backend_t backend) {
@@ -205,7 +220,7 @@ GGML_CALL static ggml_backend_buffer_type_t ggml_backend_blas_get_default_buffer
 }
 
 GGML_CALL static enum ggml_status ggml_backend_blas_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    struct ggml_backend_blas_context * ctx = (struct ggml_backend_blas_context *)backend->context;
+    ggml_backend_blas_context * ctx = (ggml_backend_blas_context *)backend->context;
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
         struct ggml_tensor * node = cgraph->nodes[i];
@@ -287,20 +302,13 @@ static ggml_guid_t ggml_backend_blas_guid(void) {
 }
 
 ggml_backend_t ggml_backend_blas_init(void) {
-    ggml_backend_t backend = malloc(sizeof(struct ggml_backend));
-    if (backend == NULL) {
-        return NULL;
-    }
-    struct ggml_backend_blas_context * ctx = malloc(sizeof(struct ggml_backend_blas_context));
-    if (ctx == NULL) {
-        return NULL;
-    }
+    ggml_backend_blas_context * ctx = new ggml_backend_blas_context{
+        /* .n_threads = */ GGML_DEFAULT_N_THREADS,
+        /* .work_data = */ NULL,
+        /* .work_size = */ 0,
+    };
 
-    ctx->n_threads = GGML_DEFAULT_N_THREADS;
-    ctx->work_data = NULL;
-    ctx->work_size = 0;
-
-    *backend = (struct ggml_backend) {
+    ggml_backend_t backend = new ggml_backend {
         /* .guid      = */ ggml_backend_blas_guid(),
         /* .interface = */ blas_backend_i,
         /* .context   = */ ctx,
@@ -316,6 +324,6 @@ GGML_CALL bool ggml_backend_is_blas(ggml_backend_t backend) {
 void ggml_backend_blas_set_n_threads(ggml_backend_t backend_blas, int n_threads) {
     GGML_ASSERT(ggml_backend_is_blas(backend_blas));
 
-    struct ggml_backend_blas_context * ctx = (struct ggml_backend_blas_context *)backend_blas->context;
+    ggml_backend_blas_context * ctx = (ggml_backend_blas_context *)backend_blas->context;
     ctx->n_threads = n_threads;
 }
