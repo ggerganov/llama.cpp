@@ -16,7 +16,7 @@ RUN make -j$(nproc)
 FROM ubuntu:$UBUNTU_VERSION as runtime
 
 RUN apt-get update && \
-    apt-get install -y libcurl4-openssl-dev
+    apt-get install -y libcurl4-openssl-dev libgomp1
 
 COPY --from=build /app/server /server
 
