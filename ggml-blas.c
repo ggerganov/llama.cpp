@@ -144,9 +144,6 @@ static void ggml_backend_blas_out_prod(struct ggml_backend_blas_context * ctx, s
     // GGML_ASSERT(nb1 <= nb2);
     // GGML_ASSERT(nb2 <= nb3);
 
-    // nb01 >= nb00 - src0 is not transposed
-    //   compute by src0 rows
-
     // Arguments to ggml_compute_forward_out_prod (expressed as major,minor)
     // src0: (k,n)
     // src1: (k,m)

@@ -386,8 +386,19 @@ ggml_gallocr_t ggml_gallocr_new_n(ggml_backend_buffer_type_t * bufts, int n_bufs
     for (int i = 0; i < n_bufs; i++) {
         galloc->bufts[i] = bufts[i];
         galloc->buffers[i] = NULL;
-        size_t alignment = ggml_backend_buft_get_alignment(bufts[i]);
-        galloc->buf_tallocs[i] = ggml_dyn_tallocr_new(alignment);
+
+        // check if the same buffer type is used multiple times and reuse the same allocator
+        for (int j = 0; j < i; j++) {
+            if (bufts[i] == bufts[j]) {
+                galloc->buf_tallocs[i] = galloc->buf_tallocs[j];
+                break;
+            }
+        }
+
+        if (galloc->buf_tallocs[i] == NULL) {
+            size_t alignment = ggml_backend_buft_get_alignment(bufts[i]);
+            galloc->buf_tallocs[i] = ggml_dyn_tallocr_new(alignment);
+        }
     }
     galloc->n_buffers = n_bufs;
 
@@ -405,10 +416,30 @@ void ggml_gallocr_free(ggml_gallocr_t galloc) {
 
     for (int i = 0; i < galloc->n_buffers; i++) {
         if (galloc->buffers != NULL) {
-            ggml_backend_buffer_free(galloc->buffers[i]);
+            // skip if already freed
+            bool freed = false;
+            for (int j = 0; j < i; j++) {
+                if (galloc->buffers[j] == galloc->buffers[i]) {
+                    freed = true;
+                    break;
+                }
+            }
+            if (!freed) {
+                ggml_backend_buffer_free(galloc->buffers[i]);
+            }
         }
         if (galloc->buf_tallocs != NULL) {
-            ggml_dyn_tallocr_free(galloc->buf_tallocs[i]);
+            // skip if already freed
+            bool freed = false;
+            for (int j = 0; j < i; j++) {
+                if (galloc->buf_tallocs[j] == galloc->buf_tallocs[i]) {
+                    freed = true;
+                    break;
+                }
+            }
+            if (!freed) {
+                ggml_dyn_tallocr_free(galloc->buf_tallocs[i]);
+            }
         }
     }
 
@@ -723,6 +754,14 @@ bool ggml_gallocr_reserve_n(ggml_gallocr_t galloc, struct ggml_cgraph * graph, c
 
     // reallocate buffers if needed
     for (int i = 0; i < galloc->n_buffers; i++) {
+        // if the buffer type is used multiple times, we reuse the same buffer
+        for (int j = 0; j < i; j++) {
+            if (galloc->buf_tallocs[j] == galloc->buf_tallocs[i]) {
+                galloc->buffers[i] = galloc->buffers[j];
+                break;
+            }
+        }
+
         size_t cur_size = galloc->buffers[i] ? ggml_backend_buffer_get_size(galloc->buffers[i]) : 0;
         size_t new_size = ggml_dyn_tallocr_max_size(galloc->buf_tallocs[i]);
 
@@ -731,6 +770,7 @@ bool ggml_gallocr_reserve_n(ggml_gallocr_t galloc, struct ggml_cgraph * graph, c
 #ifndef NDEBUG
             fprintf(stderr, "%s: reallocating %s buffer from size %.02f MiB to %.02f MiB\n", __func__, ggml_backend_buft_name(galloc->bufts[i]), cur_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
 #endif
+
             ggml_backend_buffer_free(galloc->buffers[i]);
             galloc->buffers[i] = ggml_backend_buft_alloc_buffer(galloc->bufts[i], new_size);
             if (galloc->buffers[i] == NULL) {
@@ -879,6 +919,15 @@ size_t ggml_gallocr_get_buffer_size(ggml_gallocr_t galloc, int buffer_id) {
     if (galloc->buffers[buffer_id] == NULL) {
         return 0;
     }
+
+    for (int i = 0; i < buffer_id; i++) {
+        if (galloc->buffers[i] == galloc->buffers[buffer_id]) {
+            // this buffer is the same as a previous one due to the same buffer type being used multiple times
+            // only return the buffer size the first time it appears to avoid double counting
+            return 0;
+        }
+    }
+
     return ggml_backend_buffer_get_size(galloc->buffers[buffer_id]);
 }
 
