@@ -7,6 +7,7 @@
 #include "ggml.h"
 #include "llama.h"
 #include "grammar-parser.h"
+#include "json-schema-to-grammar.h"
 #include "unicode.h"
 #include <cassert>
 #include <string>
@@ -468,6 +469,31 @@ empty ::= "blah" | )""";
     fprintf(stderr, "  ✅︎ Passed\n");
 }
 
+static void test_json_schema() {
+    // Note that this is similar to the regular grammar tests,
+    //  but we convert each json schema to a grammar before parsing.
+    // Otherwise, this test structure is the same.
+
+    test_grammar(
+        "empty schema",
+        // Grammar
+        json_schema_to_grammar(nlohmann::ordered_json::parse(
+            R"""(
+{}
+            )"""
+            )),
+        // Passing strings
+        {
+            "{}",
+            "{\"foo\": \"bar\"}",
+        },
+        // Failing strings
+        {
+            "",
+        }
+    );
+}
+
 int main() {
     fprintf(stdout, "Running grammar integration tests...\n");
     test_simple_grammar();
@@ -477,6 +503,7 @@ int main() {
     test_failure_missing_root();
     test_failure_missing_reference();
     test_failure_left_recursion();
+    test_json_schema();
     fprintf(stdout, "All tests passed.\n");
     return 0;
 }
