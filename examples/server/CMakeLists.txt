@@ -34,6 +34,7 @@ foreach(asset ${PUBLIC_ASSETS})
         COMMAND "${CMAKE_COMMAND}" "-DINPUT=${input}" "-DOUTPUT=${output}" -P "${PROJECT_SOURCE_DIR}/scripts/xxd.cmake"
     )
 endforeach()
+set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME llama-server)
 add_executable(${TARGET} ${TARGET_SRCS})
 install(TARGETS ${TARGET} RUNTIME)
 target_compile_definitions(${TARGET} PRIVATE
