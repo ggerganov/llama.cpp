@@ -1773,7 +1773,7 @@ static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
         const char* GGML_VK_FORCE_MAX_ALLOCATION_SIZE = getenv("GGML_VK_FORCE_MAX_ALLOCATION_SIZE");
 
         if (GGML_VK_FORCE_MAX_ALLOCATION_SIZE != nullptr) {
-            ctx->device->max_memory_allocation_size = std::stoi(GGML_VK_FORCE_MAX_ALLOCATION_SIZE);
+            ctx->device->max_memory_allocation_size = std::stol(GGML_VK_FORCE_MAX_ALLOCATION_SIZE);
         } else if (maintenance4_support) {
             ctx->device->max_memory_allocation_size = std::min(props3.maxMemoryAllocationSize, props4.maxBufferSize);
         } else {
