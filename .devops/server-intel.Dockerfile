@@ -23,7 +23,7 @@ RUN if [ "${LLAMA_SYCL_F16}" = "ON" ]; then \
         export OPT_SYCL_F16="-DLLAMA_SYCL_F16=ON"; \
     fi && \
     cmake -B build -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_CURL=ON ${OPT_SYCL_F16} && \
-    cmake --build build --config Release --target server
+    cmake --build build --config Release --target llama-server
 
 FROM intel/oneapi-basekit:$ONEAPI_VERSION as runtime
 

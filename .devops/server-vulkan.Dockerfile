@@ -19,7 +19,7 @@ RUN apt-get update && \
 WORKDIR /app
 COPY . .
 RUN cmake -B build -DLLAMA_VULKAN=1 -DLLAMA_CURL=1 && \
-    cmake --build build --config Release --target server
+    cmake --build build --config Release --target llama-server
 
 # Clean up
 WORKDIR /

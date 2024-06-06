@@ -1,4 +1,4 @@
-set(TARGET server)
+set(TARGET llama-server)
 option(LLAMA_SERVER_VERBOSE "Build verbose logging option for Server" ON)
 option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
@@ -34,7 +34,6 @@ foreach(asset ${PUBLIC_ASSETS})
         COMMAND "${CMAKE_COMMAND}" "-DINPUT=${input}" "-DOUTPUT=${output}" -P "${PROJECT_SOURCE_DIR}/scripts/xxd.cmake"
     )
 endforeach()
-set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME llama-server)
 add_executable(${TARGET} ${TARGET_SRCS})
 install(TARGETS ${TARGET} RUNTIME)
 target_compile_definitions(${TARGET} PRIVATE

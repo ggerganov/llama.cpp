@@ -30,7 +30,7 @@ cd ../../..
 mkdir build
 cd build
 cmake -DLLAMA_CURL=ON ../
-cmake --build . --target server
+cmake --build . --target llama-server
 ```
 
 2. Start the test: `./tests.sh`
