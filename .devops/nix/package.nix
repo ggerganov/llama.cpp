@@ -243,8 +243,6 @@ effectiveStdenv.mkDerivation (
     # TODO(SomeoneSerge): It's better to add proper install targets at the CMake level,
     # if they haven't been added yet.
     postInstall = ''
-      mv $out/bin/main${executableSuffix} $out/bin/llama${executableSuffix}
-      mv $out/bin/server${executableSuffix} $out/bin/llama-server${executableSuffix}
       mkdir -p $out/include
       cp $src/llama.h $out/include/
     '';
