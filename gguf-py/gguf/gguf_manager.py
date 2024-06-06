@@ -18,14 +18,11 @@ from .constants import (
     GGUFValueType
 )
 from .gguf_writer import GGUFWriter, WriterState
+from .constants import Keys
 
 
 SHARD_NAME_FORMAT = "{:s}-{:05d}-of-{:05d}.gguf"
 METADATA_ONLY_INDICATOR = -1
-
-LLM_KV_SPLIT_NO = "split.no"
-LLM_KV_SPLIT_COUNT = "split.count"
-LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count"
 
 KVTempData: TypeAlias = dict[str, tuple[Any, GGUFValueType]] # {key: (value, type)}
 TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any], GGMLQuantizationType] # (tensor name, tensor data, tensor dtype)
@@ -132,9 +129,9 @@ class GGUFManager(GGUFWriter):
 
             # add split metadata unless it's one file - small first shard splits even with SplitStyle.NONE
             if self.split_arguments.split_style != SplitStyle.NONE or self.split_arguments.small_first_shard:
-                writer.add_uint16(LLM_KV_SPLIT_NO, i)
-                writer.add_uint16(LLM_KV_SPLIT_COUNT, len(self.shards))
-                writer.add_int32(LLM_KV_SPLIT_TENSORS_COUNT, self.total_tensors)
+                writer.add_uint16(Keys.Split.LLM_KV_SPLIT_NO, i)
+                writer.add_uint16(Keys.Split.LLM_KV_SPLIT_COUNT, len(self.shards))
+                writer.add_int32(Keys.Split.LLM_KV_SPLIT_TENSORS_COUNT, self.total_tensors)
 
             # add tensors, deque popleft() ensures references to eager tensors are not kept
             while True:
