@@ -232,11 +232,11 @@ class GGUFManager(GGUFWriter):
     @staticmethod
     def split_str_to_n_bytes(split_str: str) -> int:
         if split_str.endswith("K"):
-            n = int(split_str[:-1]) * 1024
+            n = int(split_str[:-1]) * 1000
         elif split_str.endswith("M"):
-            n = int(split_str[:-1]) * 1024 * 1024
+            n = int(split_str[:-1]) * 1000 * 1000
         elif split_str.endswith("G"):
-            n = int(split_str[:-1]) * 1024 * 1024 * 1024
+            n = int(split_str[:-1]) * 1000 * 1000 * 1000
         elif split_str.isnumeric():
             n = int(split_str)
         else:
@@ -253,7 +253,7 @@ class GGUFManager(GGUFWriter):
             return "negligible - metadata only"
         fnum = float(num)
         for unit in ("", "K", "M", "G"):
-            if abs(fnum) < 1024.0:
+            if abs(fnum) < 1000.0:
                 return f"{fnum:3.1f}{unit}"
-            fnum /= 1024.0
+            fnum /= 1000.0
         return f"{fnum:.1f}T - over 1TB, --split recommended"
