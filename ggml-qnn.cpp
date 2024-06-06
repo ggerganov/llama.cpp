@@ -54,12 +54,14 @@
 #include <android/log.h>
 #endif
 
+
 // =================================================================================================
 //
 //  forward/external/helper declaration
 //
 // =================================================================================================
 class qnn_instance;
+
 
 static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const char * func, int line, const char * format, ...);
 
@@ -74,7 +76,7 @@ static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const
 
 #define GGML_QNN_LOGBUF_LEN                             4096
 
-#define GGML_QNN_DEBUG                                  1  //for troubleshooting QNN backend
+#define GGML_QNN_DEBUG                                  0  //for troubleshooting QNN backend
 
 #define QNN_LOG_ERROR(...) ggml_qnn_log_internal(GGML_LOG_LEVEL_DEBUG,  __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
 #define QNN_LOG_WARN(...)  ggml_qnn_log_internal(GGML_LOG_LEVEL_DEBUG , __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
@@ -85,6 +87,8 @@ static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const
 #else
 #define QNN_LOG_DEBUG(...)
 #endif
+
+#define QNN_VER_PTR(x)                                  (&((x).v1))
 
 
 #define VALIDATE(value, status)                         \
@@ -98,34 +102,6 @@ static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const
 
 #define VALIDATE_TENSOR_VERSION(tensor, err)            VALIDATE(validate_tensor_version(tensor), err)
 
-#define VALIDATE_OP_CONFIG_VERSION(op, err)             VALIDATE(validate_op_config_version(op), err)
-
-#define QNN_VER_PTR(x)                                  (&((x).v1))
-#define QNN_OP_CFG_VALID(op_config)                      ((op_config).version == QNN_OPCONFIG_VERSION_1)
-
-#define QNN_OP_CFG_GET_NAME(op_config)                   get_qnn_oponfig_name(op_config)
-#define QNN_OP_CFG_GET_PACKAGE_NAME(op_config)           get_qnn_op_config_packagename(op_config)
-#define QNN_OP_CFG_GET_TYPE_NAME(op_config)              get_qnn_op_config_typename(op_config)
-#define QNN_OP_CFG_GET_NUM_PARAMS(op_config)             get_qnn_op_config_numparams(op_config)
-#define QNN_OP_CFG_GET_PARAMS(op_config)                 get_qnn_op_config_params(op_config)
-#define QNN_OP_CFG_GET_NUM_INPUTS(op_config)             get_qnn_op_config_numinputs(op_config)
-#define QNN_OP_CFG_GET_INPUTS(op_config)                 get_qnn_op_config_inputs(op_config)
-#define QNN_OP_CFG_GET_NUM_OUTPUTS(op_config)            get_qnn_op_config_numoutputs(op_config)
-#define QNN_OP_CFG_GET_OUTPUTS(op_config)                get_qnn_op_config_outputs(op_config)
-
-#define QNN_OP_CFG_SET_NAME(op_config, value)            set_qnn_op_config_name(op_config, value)
-#define QNN_OP_CFG_SET_PACKAGE_NAME(op_config, value)    set_qnn_op_config_packagename(op_config, value)
-#define QNN_OP_CFG_SET_TYPE_NAME(op_config, value)       set_qnn_op_config_typename(op_config, value)
-
-#define QNN_OP_CFG_SET_PARAMS(op_config, num_of_params, params) \
-  set_qnn_op_config_params(op_config, num_of_params, params)
-
-#define QNN_OP_CFG_SET_INPUTS(op_config, num_of_inputs, inputTensors) \
-  set_qnn_op_config_inputs(op_config, num_of_inputs, inputTensors)
-
-#define QNN_OP_CFG_SET_OUTPUTS(op_config, num_of_outputs, output_tensors) \
-  set_qnn_op_config_outputs(op_config, num_of_outputs, output_tensors)
-
 #define QNN_TENSOR_GET_ID(tensor)                       get_qnn_tensorid(tensor)
 #define QNN_TENSOR_GET_NAME(tensor)                     get_qnn_tensorname(tensor)
 #define QNN_TENSOR_GET_TYPE(tensor)                     get_qnn_tensortype(tensor)
@@ -135,8 +111,6 @@ static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const
 #define QNN_TENSOR_GET_RANK(tensor)                     get_qnn_tensor_rank(tensor)
 #define QNN_TENSOR_GET_DIMENSIONS(tensor)               get_qnn_tensor_dimensions(tensor)
 #define QNN_TENSOR_GET_MEM_TYPE(tensor)                 get_qnn_tensor_memtype(tensor)
-#define QNN_TENSOR_GET_CLIENT_BUF(tensor)               get_qnn_tensor_clientbuf(tensor)
-#define QNN_TENSOR_GET_MEM_HANDLE(tensor)               get_qnn_tensor_memhandle(tensor)
 
 #define QNN_TENSOR_SET_ID(tensor, value)                set_qnn_tensor_id(tensor, value)
 #define QNN_TENSOR_SET_NAME(tensor, value)              set_qnn_tensor_name(tensor, value)
@@ -149,7 +123,6 @@ static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const
 #define QNN_TENSOR_SET_MEM_TYPE(tensor, value)          set_qnn_tensor_memtype(tensor, value)
 #define QNN_TENSOR_SET_CLIENT_BUF(tensor, value)        set_qnn_tensor_clientbuf(tensor, value)
 #define QNN_TENSOR_SET_MEM_HANDLE(tensor, value)        set_qnn_tensor_memhandle(tensor, value)
-
 
 using pfn_rpc_mem_init                                  = void (*)(void);
 using pfn_rpc_mem_deinit                                = void (*)(void);
@@ -204,6 +177,7 @@ static int g_current_device         = QNN_BACKEND_GGML;
 //Qualcomm CPU: Qualcomm Kryo   CPU
 //Qualcomm GPU: Qualcomm Adreno GPU
 //Qualcomm NPU: aka HTP(Hexagon Tensor Processor), ~= cDSP(Compute DSP) + HMX(Hexagon Matrix eXtensions)/HTA(Hexagon Tensor Accelerator)
+
 static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
         [QNN_BACKEND_CPU]   = {.device = 0, .threads = 1, .name =   "qnn-cpu", .lib = "libQnnCpu.so", .instance = nullptr, .backend = nullptr, .raw_interface = {}, .raw_system_interface = {}},
         [QNN_BACKEND_GPU]   = {.device = 1, .threads = 1, .name =   "qnn-gpu", .lib = "libQnnGpu.so", .instance = nullptr, .backend = nullptr, .raw_interface = {}, .raw_system_interface = {}},
@@ -227,232 +201,12 @@ static inline int validate_tensor_version(Qnn_Tensor_t tensor) {
 }
 
 
-[[maybe_unused]] static inline int validate_op_config_version(Qnn_OpConfig_t op_config) {
-    if (op_config.version != QNN_OPCONFIG_VERSION_1) {
-        QNN_LOG_WARN("validate_op_config_version() op %s, got unsupported version %d\n",
-              op_config.v1.name,
-              op_config.version);
-        return 1;
-    }
-    return 0;
-}
-
-
-static inline const char * get_qnn_oponfig_name(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.name;
-    }
-    return nullptr;
-}
-
-
-[[maybe_unused]] static inline const char * get_qnn_oponfig_name(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_oponfig_name(*op_config);
-}
-
-
-static inline const char * get_qnn_op_config_packagename(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.packageName;
-    }
-    return nullptr;
-}
-
-
-[[maybe_unused]] static inline const char * get_qnn_op_config_packagename(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_packagename(*op_config);
-}
-
-
-static inline const char * get_qnn_op_config_typename(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.typeName;
-    }
-    return nullptr;
-}
-
-
-[[maybe_unused]] static inline const char * get_qnn_op_config_typename(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_typename(*op_config);
-}
-
-
-static inline uint32_t get_qnn_op_config_numparams(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.numOfParams;
-    }
-    return 0u;
-}
-
-
-[[maybe_unused]] static inline uint32_t get_qnn_op_config_numparams(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_numparams(*op_config);
-}
-
-
-static inline const Qnn_Param_t * get_qnn_op_config_params(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.params;
-    }
-    return nullptr;
-}
-
-
-[[maybe_unused]] static inline const Qnn_Param_t * get_qnn_op_config_params(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_params(*op_config);
-}
-
-
-static inline uint32_t get_qnn_op_config_numinputs(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.numOfInputs;
-    }
-    return 0u;
-}
-
-
-[[maybe_unused]] static inline uint32_t get_qnn_op_config_numinputs(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_numinputs(*op_config);
-}
-
-
-static inline const Qnn_Tensor_t * get_qnn_op_config_inputs(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.inputTensors;
-    }
-    return nullptr;
-}
-
-
-[[maybe_unused]] static inline const Qnn_Tensor_t * get_qnn_op_config_inputs(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_inputs(*op_config);
-}
-
-
-static inline uint32_t get_qnn_op_config_numoutputs(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.numOfOutputs;
-    }
-    return 0u;
-}
-
-
-[[maybe_unused]] static inline uint32_t get_qnn_op_config_numoutputs(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_numoutputs(*op_config);
-}
-
-
-static inline const Qnn_Tensor_t * get_qnn_op_config_outputs(const Qnn_OpConfig_t & op_config) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        return op_config.v1.outputTensors;
-    }
-    return nullptr;
-}
-
-
-[[maybe_unused]] static inline const Qnn_Tensor_t * get_qnn_op_config_outputs(const Qnn_OpConfig_t * op_config) {
-    return get_qnn_op_config_outputs(*op_config);
-}
-
-
-static inline void set_qnn_op_config_name(Qnn_OpConfig_t & op_config, const char * name) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        op_config.v1.name = name;
-    }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_op_config_name(Qnn_OpConfig_t * op_config, const char * name) {
-    set_qnn_op_config_name(*op_config, name);
-}
-
-
-static inline void set_qnn_op_config_packagename(Qnn_OpConfig_t & op_config, const char * package_name) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        op_config.v1.packageName = package_name;
-    }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_op_config_packagename(Qnn_OpConfig_t * op_config, const char * package_name) {
-    set_qnn_op_config_packagename(*op_config, package_name);
-}
-
-
-static inline void set_qnn_op_config_typename(Qnn_OpConfig_t & op_config, const char * type_name) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        op_config.v1.typeName = type_name;
-    }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_op_config_typename(Qnn_OpConfig_t * op_config, const char * type_name) {
-    set_qnn_op_config_typename(*op_config, type_name);
-}
-
-
-static inline void set_qnn_op_config_params(Qnn_OpConfig_t & op_config,
-                                 uint32_t num_of_params,
-                                 Qnn_Param_t * params) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        op_config.v1.numOfParams = num_of_params;
-        op_config.v1.params      = params;
-    }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_op_config_params(Qnn_OpConfig_t * op_config,
-                                 uint32_t num_of_params,
-                                 Qnn_Param_t * params) {
-    set_qnn_op_config_params(*op_config, num_of_params, params);
-}
-
-
-static inline void set_qnn_op_config_inputs(Qnn_OpConfig_t & op_config,
-                                 uint32_t num_of_inputs,
-                                 Qnn_Tensor_t * input_tensors) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        op_config.v1.numOfInputs  = num_of_inputs;
-        op_config.v1.inputTensors = input_tensors;
-    }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_op_config_inputs(Qnn_OpConfig_t * op_config,
-                                 uint32_t num_of_inputs,
-                                 Qnn_Tensor_t * input_tensors) {
-    set_qnn_op_config_inputs(*op_config, num_of_inputs, input_tensors);
-}
-
-
-static inline void set_qnn_op_config_outputs(Qnn_OpConfig_t & op_config,
-                                  uint32_t num_of_outputs,
-                                  Qnn_Tensor_t * output_tensors) {
-    if (op_config.version == QNN_OPCONFIG_VERSION_1) {
-        op_config.v1.numOfOutputs  = num_of_outputs;
-        op_config.v1.outputTensors = output_tensors;
-    }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_op_config_outputs(Qnn_OpConfig_t * op_config,
-                                  uint32_t num_of_outputs,
-                                  Qnn_Tensor_t * output_tensors) {
-    set_qnn_op_config_outputs(*op_config, num_of_outputs, output_tensors);
-}
-
-
 static inline uint32_t get_qnn_tensorid(const Qnn_Tensor_t & tensor) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         return tensor.v1.id;
     }
 
     return 0u;
-}
-
-
-[[maybe_unused]] static inline uint32_t get_qnn_tensorid(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensorid(*tensor);
 }
 
 
@@ -464,21 +218,12 @@ static inline const char * get_qnn_tensorname(const Qnn_Tensor_t & tensor) {
 }
 
 
-static inline const char * get_qnn_tensorname(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensorname(*tensor);
-}
-
 
 static inline Qnn_TensorType_t get_qnn_tensortype(const Qnn_Tensor_t & tensor) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         return tensor.v1.type;
     }
     return QNN_TENSOR_TYPE_UNDEFINED;
-}
-
-
-[[maybe_unused]] static inline Qnn_TensorType_t get_qnn_tensortype(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensortype(*tensor);
 }
 
 
@@ -490,21 +235,11 @@ static inline Qnn_TensorDataFormat_t get_qnn_tensor_dataformat(const Qnn_Tensor_
 }
 
 
-[[maybe_unused]] static inline Qnn_TensorDataFormat_t get_qnn_tensor_dataformat(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_dataformat(*tensor);
-}
-
-
 static inline Qnn_DataType_t get_qnn_tensor_datatype(const Qnn_Tensor_t & tensor) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         return tensor.v1.dataType;
     }
     return QNN_DATATYPE_UNDEFINED;
-}
-
-
-[[maybe_unused]] static inline Qnn_DataType_t get_qnn_tensor_datatype(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_datatype(*tensor);
 }
 
 
@@ -516,21 +251,11 @@ static inline Qnn_QuantizeParams_t get_qnn_tensor_quantparams(const Qnn_Tensor_t
 }
 
 
-[[maybe_unused]] static inline Qnn_QuantizeParams_t get_qnn_tensor_quantparams(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_quantparams(*tensor);
-}
-
-
 static inline uint32_t get_qnn_tensor_rank(const Qnn_Tensor_t & tensor) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         return tensor.v1.rank;
     }
     return 0u;
-}
-
-
-[[maybe_unused]] static inline uint32_t get_qnn_tensor_rank(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_rank(*tensor);
 }
 
 
@@ -542,47 +267,11 @@ static inline uint32_t * get_qnn_tensor_dimensions(const Qnn_Tensor_t & tensor) 
 }
 
 
-[[maybe_unused]] static inline uint32_t * get_qnn_tensor_dimensions(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_dimensions(*tensor);
-}
-
-
 static inline Qnn_TensorMemType_t get_qnn_tensor_memtype(const Qnn_Tensor_t & tensor) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         return tensor.v1.memType;
     }
     return QNN_TENSORMEMTYPE_UNDEFINED;
-}
-
-
-[[maybe_unused]] static inline Qnn_TensorMemType_t get_qnn_tensor_memtype(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_memtype(*tensor);
-}
-
-
-static inline Qnn_ClientBuffer_t get_qnn_tensor_clientbuf(const Qnn_Tensor_t & tensor) {
-    if (tensor.version == QNN_TENSOR_VERSION_1) {
-        return tensor.v1.clientBuf;
-    }
-    return QNN_CLIENT_BUFFER_INIT;
-}
-
-
-[[maybe_unused]] static inline Qnn_ClientBuffer_t get_qnn_tensor_clientbuf(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_clientbuf(*tensor);
-}
-
-
-static inline Qnn_MemHandle_t get_qnn_tensor_memhandle(const Qnn_Tensor_t & tensor) {
-    if (tensor.version == QNN_TENSOR_VERSION_1) {
-        return tensor.v1.memHandle;
-    }
-    return nullptr;
-}
-
-
-[[maybe_unused]] static inline Qnn_MemHandle_t get_qnn_tensor_memhandle(const Qnn_Tensor_t * tensor) {
-    return get_qnn_tensor_memhandle(*tensor);
 }
 
 
@@ -593,20 +282,10 @@ static inline void set_qnn_tensor_id(Qnn_Tensor_t & tensor, uint32_t id) {
 }
 
 
-[[maybe_unused]] static inline void set_qnn_tensor_id(Qnn_Tensor_t * tensor, uint32_t id) {
-    set_qnn_tensor_id(*tensor, id);
-}
-
-
 static inline void set_qnn_tensor_name(Qnn_Tensor_t & tensor, const char * name) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         tensor.v1.name = name;
     }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_tensor_name(Qnn_Tensor_t * tensor, const char * name) {
-    set_qnn_tensor_name(*tensor, name);
 }
 
 
@@ -617,20 +296,10 @@ static inline void set_qnn_tensor_type(Qnn_Tensor_t & tensor, Qnn_TensorType_t t
 }
 
 
-[[maybe_unused]] static inline void set_qnn_tensor_type(Qnn_Tensor_t * tensor, Qnn_TensorType_t type) {
-    set_qnn_tensor_type(*tensor, type);
-}
-
-
 static inline void set_qnn_tensor_dataformat(Qnn_Tensor_t & tensor, Qnn_TensorDataFormat_t format) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         tensor.v1.dataFormat = format;
     }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_tensor_dataformat(Qnn_Tensor_t * tensor, Qnn_TensorDataFormat_t format) {
-    set_qnn_tensor_dataformat(*tensor, format);
 }
 
 
@@ -641,20 +310,10 @@ static inline void set_qnn_tensor_datatype(Qnn_Tensor_t & tensor, Qnn_DataType_t
 }
 
 
-[[maybe_unused]] static inline void set_qnn_tensor_datatype(Qnn_Tensor_t * tensor, Qnn_DataType_t dataType) {
-    set_qnn_tensor_datatype(*tensor, dataType);
-}
-
-
 static inline void set_qnn_tensor_quantparams(Qnn_Tensor_t & tensor, Qnn_QuantizeParams_t params) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         tensor.v1.quantizeParams = params;
     }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_tensor_quantparams(Qnn_Tensor_t * tensor, Qnn_QuantizeParams_t params) {
-    set_qnn_tensor_quantparams(*tensor, params);
 }
 
 
@@ -665,20 +324,10 @@ static inline void set_qnn_tensor_rank(Qnn_Tensor_t & tensor, uint32_t rank) {
 }
 
 
-[[maybe_unused]] static inline void set_qnn_tensor_rank(Qnn_Tensor_t * tensor, uint32_t rank) {
-    set_qnn_tensor_rank(*tensor, rank);
-}
-
-
 static inline void set_qnn_tensor_dimensions(Qnn_Tensor_t & tensor, uint32_t * dims) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         tensor.v1.dimensions = dims;
     }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_tensor_dimensions(Qnn_Tensor_t * tensor, uint32_t * dims) {
-    set_qnn_tensor_dimensions(*tensor, dims);
 }
 
 
@@ -689,11 +338,6 @@ static inline void set_qnn_tensor_memtype(Qnn_Tensor_t & tensor, Qnn_TensorMemTy
 }
 
 
-[[maybe_unused]] static inline void set_qnn_tensor_memtype(Qnn_Tensor_t * tensor, Qnn_TensorMemType_t memType) {
-    set_qnn_tensor_memtype(*tensor, memType);
-}
-
-
 static inline void set_qnn_tensor_clientbuf(Qnn_Tensor_t & tensor, Qnn_ClientBuffer_t clientBuf) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         tensor.v1.clientBuf = clientBuf;
@@ -701,20 +345,10 @@ static inline void set_qnn_tensor_clientbuf(Qnn_Tensor_t & tensor, Qnn_ClientBuf
 }
 
 
-[[maybe_unused]] static inline void set_qnn_tensor_clientbuf(Qnn_Tensor_t * tensor, Qnn_ClientBuffer_t clientBuf) {
-    set_qnn_tensor_clientbuf(*tensor, clientBuf);
-}
-
-
 static inline void set_qnn_tensor_memhandle(Qnn_Tensor_t & tensor, Qnn_MemHandle_t handle) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         tensor.v1.memHandle = handle;
     }
-}
-
-
-[[maybe_unused]] static inline void set_qnn_tensor_memhandle(Qnn_Tensor_t * tensor, Qnn_MemHandle_t handle) {
-    set_qnn_tensor_memhandle(*tensor, handle);
 }
 
 
@@ -819,19 +453,6 @@ static int free_qnn_tensor(Qnn_Tensor_t & tensor) {
 
     free((void *) QNN_TENSOR_GET_NAME(tensor));
     free(QNN_TENSOR_GET_DIMENSIONS(tensor));
-
-    return err;
-}
-
-
-[[maybe_unused]] static int free_qnn_tensors(Qnn_Tensor_t *& tensors, uint32_t num_tensors) {
-    int err = 0;
-
-    // free all pointer allocations in struct
-    for (size_t i = 0; i < num_tensors; i++) {
-        free_qnn_tensor(tensors[i]);
-    }
-    free(tensors);
 
     return err;
 }
@@ -3137,7 +2758,7 @@ static const char * ggml_backend_qnn_buffer_get_name(ggml_backend_buffer_t buffe
 }
 
 
-[[maybe_unused]] GGML_CALL static bool ggml_backend_buffer_is_qnn(ggml_backend_buffer_t buffer) {
+GGML_CALL static bool ggml_backend_buffer_is_qnn(ggml_backend_buffer_t buffer) {
     return buffer->iface.get_name == ggml_backend_qnn_buffer_get_name;
 }
 
@@ -3233,15 +2854,6 @@ GGML_CALL static void ggml_backend_qnn_buffer_clear(ggml_backend_buffer_t buffer
     ggml_backend_qnn_buffer_context * ctx = (ggml_backend_qnn_buffer_context *) buffer->context;
 
     memset(ctx->buffer, value, ctx->buffer_size);
-}
-
-
-[[maybe_unused]] GGML_CALL static void ggml_backend_qnn_buffer_reset(ggml_backend_buffer_t buffer) {
-    ggml_backend_qnn_buffer_context * ctx = (ggml_backend_qnn_buffer_context *) buffer->context;
-    for (auto * sub_buffer : ctx->sub_buffers) {
-        free(sub_buffer);
-    }
-    ctx->sub_buffers.clear();
 }
 
 
@@ -3402,7 +3014,7 @@ GGML_CALL static bool ggml_backend_qnn_supports_op(ggml_backend_t backend, const
 
 //note: this function be used with proposal/refined ggml backend subsystem in this PR:
 // https://github.com/ggerganov/llama.cpp/pull/7641
-// any ggml backend(only using system memory: ggml_backend_xxx_buffer_is_host return true)
+// new ggml backend(only using system memory: ggml_backend_xxx_buffer_is_host return true)
 // can following this style for mixed inference between CPU&GPU / CPU&NPU very easily
 GGML_CALL static bool ggml_backend_qnn_offload_op(ggml_backend_t backend, const ggml_tensor * tensor) {
     GGML_UNUSED(backend);
