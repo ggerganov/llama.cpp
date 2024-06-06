@@ -155,7 +155,7 @@ class GGUFManager(GGUFWriter):
 
         self.state = WriterState.KV_DATA
 
-    def write_tensors_to_file(self, progress: bool = False) -> None:
+    def write_tensors_to_file(self, *, progress: bool = False) -> None:
         if self.state is not WriterState.KV_DATA:
             raise ValueError(f'Expected GGUFManager state to be KV_DATA, got {self.state}')
 
