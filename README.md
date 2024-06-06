@@ -577,7 +577,9 @@ Building the program with BLAS support may lead to some performance improvements
   vulkaninfo
   ```
 
-  Alternatively your package manager might be able to provide the appropiate libraries. For example for Ubuntu 22.04 you can install `libvulkan-dev` instead.
+  Alternatively your package manager might be able to provide the appropriate libraries.
+  For example for Ubuntu 22.04 you can install `libvulkan-dev` instead.
+  For Fedora 40, you can install `vulkan-devel`, `glslc` and `glslang` packages.
 
   Then, build llama.cpp using the cmake command below:
 
