@@ -39,8 +39,12 @@ endif()
 
 if (APPLE)
     set(LLAMA_METAL_DEFAULT ON)
+    set(LLAMA_BLAS_DEFAULT ON)
+    set(LLAMA_BLAS_VENDOR_DEFAULT "Apple")
 else()
     set(LLAMA_METAL_DEFAULT OFF)
+    set(LLAMA_BLAS_DEFAULT OFF)
+    set(LLAMA_BLAS_VENDOR_DEFAULT "Generic")
 endif()
 
 set(LLAMA_LLAMAFILE_DEFAULT ON)
@@ -91,8 +95,9 @@ endif()
 
 # 3rd party libs
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
-option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
-set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
+option(LLAMA_BLAS                            "llama: use BLAS"                                  ${LLAMA_BLAS_DEFAULT})
+set(LLAMA_BLAS_VENDOR ${LLAMA_BLAS_VENDOR_DEFAULT} CACHE STRING
+                                             "llama: BLAS library vendor")
 option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"                       ${LLAMA_LLAMAFILE_DEFAULT})
 option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
 option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
@@ -321,7 +326,7 @@ if (LLAMA_BLAS)
     if (BLAS_FOUND)
         message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
-        if ("${BLAS_INCLUDE_DIRS}" STREQUAL "")
+        if (("${BLAS_INCLUDE_DIRS}" STREQUAL "") AND NOT (${LLAMA_BLAS_VENDOR} MATCHES "Apple"))
             # BLAS_INCLUDE_DIRS is missing in FindBLAS.cmake.
             # see https://gitlab.kitware.com/cmake/cmake/-/issues/20268
             find_package(PkgConfig REQUIRED)

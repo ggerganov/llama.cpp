@@ -404,7 +404,7 @@ ifndef LLAMA_NO_ACCELERATE
 	# Mac OS - include Accelerate framework.
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
-		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
+		MK_CPPFLAGS += -DGGML_USE_ACCELERATE -DGGML_USE_BLAS
 		MK_CPPFLAGS += -DACCELERATE_NEW_LAPACK
 		MK_CPPFLAGS += -DACCELERATE_LAPACK_ILP64
 		MK_LDFLAGS  += -framework Accelerate

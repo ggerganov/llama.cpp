@@ -706,7 +706,6 @@ bool ggml_gallocr_reserve_n(ggml_gallocr_t galloc, struct ggml_cgraph * graph, c
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
         struct node_alloc * node_alloc = &galloc->node_allocs[i];
-        //node_alloc->buffer_id = get_node_buffer_id(node_buffer_ids, i);
         if (node->view_src || node->data) {
             node_alloc->dst.buffer_id = -1;
             node_alloc->dst.offset = SIZE_MAX;

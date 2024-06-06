@@ -16,6 +16,7 @@ struct ggml_backend_blas_context {
     int n_threads;
     char * work_data;
     size_t work_size;
+    std::vector<std::future<void>> tasks;
 };
 
 // helper function to determine if it is better to use BLAS or not
@@ -33,7 +34,7 @@ static bool ggml_backend_blas_use_blas(const struct ggml_tensor * dst) {
     if (ggml_is_contiguous(src0) &&
         ggml_is_contiguous(src1) &&
         src1->type == GGML_TYPE_F32 &&
-        ((src0->type == GGML_TYPE_F32) || (ne0 >= 32 && ne1 >= 32 && ne10 >= 32))) {
+        (ne0 >= 32 && ne1 >= 32 && ne10 >= 32)) {
 
         /*printf("BLAS: %d %d %d %d %d\n", ne0, ne1, ne10, ne00, ne01);*/
         return true;
@@ -83,7 +84,6 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
 
     // convert src0 to float
     if (type != GGML_TYPE_F32) {
-        std::vector<std::future<void>> tasks;
         ggml_to_float_t const to_float = type_traits.to_float;
 
         for (int64_t i03 = 0; i03 < ne03; i03++) {
@@ -98,7 +98,7 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
                 }
 #else
                 for (int i = 0; i < ctx->n_threads; i++) {
-                    tasks.push_back(std::async(std::launch::async, [=]() {
+                    ctx->tasks.push_back(std::async(std::launch::async, [=]() {
                         const int64_t start = i*ne01/ctx->n_threads;
                         const int64_t end   = (i + 1)*ne01/ctx->n_threads;
                         for (int64_t i01 = start; i01 < end; i01++) {
@@ -109,10 +109,14 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
 #endif
             }
         }
+
+#ifndef GGML_USE_OPENMP
         // wait for all tasks to finish
-        for (auto & task : tasks) {
+        for (auto & task : ctx->tasks) {
             task.get();
         }
+        ctx->tasks.clear();
+#endif
     }
 
     for (int64_t i13 = 0; i13 < ne13; i13++) {
