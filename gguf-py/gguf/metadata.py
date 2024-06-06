@@ -26,15 +26,20 @@ class Metadata:
     quantized_by: Optional[str] = None
     organization: Optional[str] = None
     version: Optional[str] = None
-    base_version: Optional[str] = None
     url: Optional[str] = None
+    doi: Optional[str] = None
+    uuid: Optional[str] = None
+    hf_repo: Optional[str] = None
     description: Optional[str] = None
     license: Optional[str] = None
     license_name: Optional[str] = None
     license_link: Optional[str] = None
     source_url: Optional[str] = None
+    source_doi: Optional[str] = None
+    source_uuid: Optional[str] = None
     source_hf_repo: Optional[str] = None
     parameter_class_attribute: Optional[str] = None
+    parents: Optional[list[dict]] = None
     tags: Optional[list[str]] = None
     languages: Optional[list[str]] = None
     datasets: Optional[list[str]] = None
@@ -57,25 +62,37 @@ class Metadata:
         # Metadata Override File Provided
         # This is based on LLM_KV_NAMES mapping in llama.cpp
         metadata_override = Metadata.load_metadata_override(metadata_override_path)
-        metadata.name                   = metadata_override.get(Keys.General.NAME                  ,  metadata.name                  ) # noqa: E202
-        metadata.basename               = metadata_override.get(Keys.General.BASENAME              ,  metadata.basename              ) # noqa: E202
-        metadata.finetune               = metadata_override.get(Keys.General.FINETUNE              ,  metadata.finetune              ) # noqa: E202
-        metadata.author                 = metadata_override.get(Keys.General.AUTHOR                ,  metadata.author                ) # noqa: E202
-        metadata.quantized_by           = metadata_override.get(Keys.General.QUANTIZED_BY          ,  metadata.quantized_by          ) # noqa: E202
-        metadata.organization           = metadata_override.get(Keys.General.ORGANIZATION          ,  metadata.organization          ) # noqa: E202
-        metadata.version                = metadata_override.get(Keys.General.VERSION               ,  metadata.version               ) # noqa: E202
-        metadata.base_version           = metadata_override.get(Keys.General.BASE_VERSION          ,  metadata.base_version          ) # noqa: E202
-        metadata.url                    = metadata_override.get(Keys.General.URL                   ,  metadata.url                   ) # noqa: E202
-        metadata.description            = metadata_override.get(Keys.General.DESCRIPTION           ,  metadata.description           ) # noqa: E202
-        metadata.license                = metadata_override.get(Keys.General.LICENSE               ,  metadata.license               ) # noqa: E202
-        metadata.license_name           = metadata_override.get(Keys.General.LICENSE_NAME          ,  metadata.license_name          ) # noqa: E202
-        metadata.license_link           = metadata_override.get(Keys.General.LICENSE_LINK          ,  metadata.license_link          ) # noqa: E202
-        metadata.source_url             = metadata_override.get(Keys.General.SOURCE_URL            ,  metadata.source_url            ) # noqa: E202
-        metadata.source_hf_repo         = metadata_override.get(Keys.General.SOURCE_HF_REPO        ,  metadata.source_hf_repo        ) # noqa: E202
+
+        metadata.name                      = metadata_override.get(Keys.General.NAME                     ,  metadata.name                     ) # noqa: E202
+        metadata.author                    = metadata_override.get(Keys.General.AUTHOR                   ,  metadata.author                   ) # noqa: E202
+        metadata.version                   = metadata_override.get(Keys.General.VERSION                  ,  metadata.version                  ) # noqa: E202
+        metadata.organization              = metadata_override.get(Keys.General.ORGANIZATION             ,  metadata.organization             ) # noqa: E202
+
+        metadata.basename                  = metadata_override.get(Keys.General.BASENAME                 ,  metadata.basename                 ) # noqa: E202
+        metadata.finetune                  = metadata_override.get(Keys.General.FINETUNE                 ,  metadata.finetune                 ) # noqa: E202
+        metadata.description               = metadata_override.get(Keys.General.DESCRIPTION              ,  metadata.description              ) # noqa: E202
+        metadata.quantized_by              = metadata_override.get(Keys.General.QUANTIZED_BY             ,  metadata.quantized_by             ) # noqa: E202
         metadata.parameter_class_attribute = metadata_override.get(Keys.General.PARAMETER_CLASS_ATTRIBUTE,  metadata.parameter_class_attribute) # noqa: E202
-        metadata.tags                   = metadata_override.get(Keys.General.TAGS                  ,  metadata.tags                  ) # noqa: E202
-        metadata.languages              = metadata_override.get(Keys.General.LANGUAGES             ,  metadata.languages             ) # noqa: E202
-        metadata.datasets               = metadata_override.get(Keys.General.DATASETS              ,  metadata.datasets              ) # noqa: E202
+
+        metadata.license                   = metadata_override.get(Keys.General.LICENSE                  ,  metadata.license                  ) # noqa: E202
+        metadata.license_name              = metadata_override.get(Keys.General.LICENSE_NAME             ,  metadata.license_name             ) # noqa: E202
+        metadata.license_link              = metadata_override.get(Keys.General.LICENSE_LINK             ,  metadata.license_link             ) # noqa: E202
+
+        metadata.url                       = metadata_override.get(Keys.General.URL                      ,  metadata.url                      ) # noqa: E202
+        metadata.doi                       = metadata_override.get(Keys.General.DOI                      ,  metadata.doi                      ) # noqa: E202
+        metadata.uuid                      = metadata_override.get(Keys.General.UUID                     ,  metadata.uuid                     ) # noqa: E202
+        metadata.hf_repo                   = metadata_override.get(Keys.General.HF_REPO                  ,  metadata.hf_repo                  ) # noqa: E202
+
+        metadata.source_url                = metadata_override.get(Keys.General.SOURCE_URL               ,  metadata.source_url               ) # noqa: E202
+        metadata.source_doi                = metadata_override.get(Keys.General.SOURCE_DOI               ,  metadata.source_doi               ) # noqa: E202
+        metadata.source_uuid               = metadata_override.get(Keys.General.SOURCE_UUID              ,  metadata.source_uuid              ) # noqa: E202
+        metadata.source_hf_repo            = metadata_override.get(Keys.General.SOURCE_HF_REPO           ,  metadata.source_hf_repo           ) # noqa: E202
+
+        metadata.parent_count              = metadata_override.get("general.parents"                     ,  metadata.parent_count             ) # noqa: E202
+
+        metadata.tags                      = metadata_override.get(Keys.General.TAGS                     ,  metadata.tags                     ) # noqa: E202
+        metadata.languages                 = metadata_override.get(Keys.General.LANGUAGES                ,  metadata.languages                ) # noqa: E202
+        metadata.datasets                  = metadata_override.get(Keys.General.DATASETS                 ,  metadata.datasets                 ) # noqa: E202
 
         # Direct Metadata Override (via direct cli argument)
         if model_name is not None:
@@ -169,7 +186,7 @@ class Metadata:
     @staticmethod
     def apply_metadata_heuristic(metadata: Metadata, model_card: Optional[dict] = None, hf_params: Optional[dict] = None, model_path: Optional[Path] = None) -> Metadata:
         # Reference Model Card Metadata: https://github.com/huggingface/hub-docs/blob/main/modelcard.md?plain=1
-        found_model_name = False
+        found_base_model = False
 
         # Model Card Heuristics
         ########################
@@ -180,32 +197,7 @@ class Metadata:
                 # such as TheBloke who would encode 'Mixtral 8X7B Instruct v0.1' into model_name
                 metadata.name = model_card.get("model_name")
 
-            if "model-index" in model_card and len(model_card["model-index"]) == 1 and "name" in model_card["model-index"][0]:
-                # This is a model index which has model id that can be extracted into organization and model name
-                # if so then we can safely extract organization and name
-                # (This is a safe choice in case there is multiple models in one repo in the future)
-                model_id = model_card["model-index"][0]["name"]
-                model_full_name_component, org_component, basename, finetune, version, parameter_class_attribute = Metadata.get_model_id_components(model_id)
-                if metadata.name is None and model_full_name_component is not None:
-                    metadata.name = Metadata.id_to_title(model_full_name_component)
-                if metadata.organization is None and org_component is not None:
-                    metadata.organization = Metadata.id_to_title(org_component)
-                if metadata.basename is None and basename is not None:
-                    metadata.basename = basename
-                if metadata.finetune is None and finetune is not None:
-                    metadata.finetune = finetune
-                if metadata.version is None and version is not None:
-                    metadata.version = version
-                if metadata.parameter_class_attribute is None and parameter_class_attribute is not None:
-                    metadata.parameter_class_attribute = parameter_class_attribute
-                if metadata.source_url is None and org_component is not None and model_full_name_component is not None:
-                    metadata.source_url = f"https://huggingface.co/{org_component}/{model_full_name_component}"
-                if metadata.source_hf_repo is None and org_component is not None and model_full_name_component is not None:
-                    metadata.source_hf_repo = f"{org_component}/{model_full_name_component}"
-
-                found_model_name = True
-
-            if "base_model" in model_card and isinstance(model_card["base_model"], str) and not found_model_name:
+            if "base_model" in model_card and isinstance(model_card["base_model"], str) and not found_base_model:
                 # Check if string. We cannot handle lists as that is too ambagious
                 # Example: stabilityai/stable-diffusion-xl-base-1.0. Can also be a list (for merges)
                 model_id = model_card.get("base_model")
@@ -227,7 +219,7 @@ class Metadata:
                 if metadata.source_hf_repo is None and org_component is not None and model_full_name_component is not None:
                     metadata.source_hf_repo = f"{org_component}/{model_full_name_component}"
 
-                found_model_name = True
+                found_base_model = True
 
             if metadata.quantized_by is None:
                 # Not part of hugging face model card standard, but is used by TheBloke to credit them self for quantizing 3rd party models
@@ -254,7 +246,7 @@ class Metadata:
         if hf_params is not None:
             hf_name_or_path = hf_params.get("_name_or_path")
 
-            if hf_name_or_path is not None and hf_name_or_path.count('/') <= 1 and not found_model_name:
+            if hf_name_or_path is not None and hf_name_or_path.count('/') <= 1 and not found_base_model:
                 # Use _name_or_path only if its actually a model name and not some computer path
                 # e.g. 'meta-llama/Llama-2-7b-hf'
                 model_id = hf_name_or_path
@@ -333,7 +325,7 @@ class TestStringMethods(unittest.TestCase):
             'datasets': ['teknium/OpenHermes-2.5'],
             'widget': [{'example_title': 'Hermes 2 Pro', 'messages': [{'role': 'system', 'content': 'You are a sentient, superintelligent artificial general intelligence, here to teach and assist me.'}, {'role': 'user', 'content': 'Write a short story about Goku discovering kirby has teamed up with Majin Buu to destroy the world.'}]}]
         }
-        expected = Metadata(name='Hermes 2 Pro Llama 3 8B', basename='Hermes-2-Pro-Llama-3', finetune=None, author=None, quantized_by=None, organization=None, version=None, base_version=None, url=None, description=None, license=None, license_name=None, license_link=None, source_url=None, source_hf_repo=None, parameter_class_attribute='8B', tags=['Llama-3', 'instruct', 'finetune', 'chatml', 'DPO', 'RLHF', 'gpt4', 'synthetic data', 'distillation', 'function calling', 'json mode', 'axolotl'], languages=['en'], datasets=['teknium/OpenHermes-2.5'])
+        expected = Metadata(name='Meta Llama 3 8B', basename='Meta-Llama-3', finetune=None, author=None, quantized_by=None, organization='NousResearch', version=None, url=None, doi=None, uuid=None, hf_repo=None, description=None, license=None, license_name=None, license_link=None, source_url='https://huggingface.co/NousResearch/Meta-Llama-3-8B', source_doi=None, source_uuid=None, source_hf_repo='NousResearch/Meta-Llama-3-8B', parameter_class_attribute='8B', parents=None, tags=['Llama-3', 'instruct', 'finetune', 'chatml', 'DPO', 'RLHF', 'gpt4', 'synthetic data', 'distillation', 'function calling', 'json mode', 'axolotl'], languages=['en'], datasets=['teknium/OpenHermes-2.5'])
 
         got = Metadata.apply_metadata_heuristic(Metadata(), model_card, None, None)
 
@@ -342,21 +334,15 @@ class TestStringMethods(unittest.TestCase):
     def test_apply_metadata_heuristic_from_hf_parameters(self):
         # Source: https://huggingface.co/NousResearch/Hermes-2-Pro-Llama-3-8B/blob/main/config.json
         hf_params = {"_name_or_path": "./hermes-2-pro-llama-3-8b-DPO"}
-
-        expected = Metadata(name='Hermes 2 Pro Llama 3 8B DPO', basename='hermes-2-pro-llama-3', finetune='DPO', author=None, quantized_by=None, organization=None, version=None, base_version=None, url=None, description=None, license=None, license_name=None, license_link=None, source_url=None, source_hf_repo=None, parameter_class_attribute='8b', tags=None, languages=None, datasets=None)
-
+        expected = Metadata(name='Hermes 2 Pro Llama 3 8B DPO', basename='hermes-2-pro-llama-3', finetune='DPO', author=None, quantized_by=None, organization=None, version=None, url=None, doi=None, uuid=None, hf_repo=None, description=None, license=None, license_name=None, license_link=None, source_url=None, source_doi=None, source_uuid=None, source_hf_repo=None, parameter_class_attribute='8b', parents=None, tags=None, languages=None, datasets=None)
         got = Metadata.apply_metadata_heuristic(Metadata(), None, hf_params, None)
-
         self.assertEqual(got, expected)
 
     def test_apply_metadata_heuristic_from_model_dir(self):
         # Source: https://huggingface.co/NousResearch/Hermes-2-Pro-Llama-3-8B/blob/main/config.json
         model_dir_path = Path("./hermes-2-pro-llama-3-8b-DPO")
-
-        expected = Metadata(name='Hermes 2 Pro Llama 3 8B DPO', basename='hermes-2-pro-llama-3', finetune='DPO', author=None, quantized_by=None, organization=None, version=None, base_version=None, url=None, description=None, license=None, license_name=None, license_link=None, source_url=None, source_hf_repo=None, parameter_class_attribute='8b', tags=None, languages=None, datasets=None)
-
+        expected = Metadata(name='Hermes 2 Pro Llama 3 8B DPO', basename='hermes-2-pro-llama-3', finetune='DPO', author=None, quantized_by=None, organization=None, version=None, url=None, doi=None, uuid=None, hf_repo=None, description=None, license=None, license_name=None, license_link=None, source_url=None, source_doi=None, source_uuid=None, source_hf_repo=None, parameter_class_attribute='8b', parents=None, tags=None, languages=None, datasets=None)
         got = Metadata.apply_metadata_heuristic(Metadata(), None, None, model_dir_path)
-
         self.assertEqual(got, expected)
 
 

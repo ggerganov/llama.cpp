@@ -793,20 +793,47 @@ class OutputFile:
             self.add_organization(metadata.organization)
         if metadata.version is not None:
             self.gguf.add_version(metadata.version)
-        if metadata.base_version is not None:
-            self.gguf.add_base_version(metadata.base_version)
         if metadata.url is not None:
             self.gguf.add_url(metadata.url)
+        if metadata.doi is not None:
+            self.gguf.add_doi(metadata.doi)
+        if metadata.uuid is not None:
+            self.gguf.add_uuid(metadata.uuid)
+        if metadata.hf_repo is not None:
+            self.gguf.add_hf_repo(metadata.hf_repo)
         if metadata.description is not None:
             self.gguf.add_description(metadata.description)
         if metadata.license is not None:
             self.gguf.add_license(metadata.license)
+        if metadata.license_name is not None:
+            self.gguf.add_license_name(metadata.license_name)
+        if metadata.license_link is not None:
+            self.gguf.add_license_link(metadata.license_link)
         if metadata.source_url is not None:
             self.gguf.add_source_url(metadata.source_url)
         if metadata.source_hf_repo is not None:
             self.gguf.add_source_hf_repo(metadata.source_hf_repo)
         if metadata.parameter_class_attribute is not None:
             self.gguf.add_parameter_class_attribute(metadata.parameter_class_attribute)
+        if metadata.parents is not None:
+            metadata.parent_count = len(metadata.parents)
+            for key, parent_entry in metadata.parents:
+                if "name" in parent_entry:
+                    self.gguf.add_parent_name(key, parent_entry.get("name"))
+                if "author" in parent_entry:
+                    self.gguf.add_parent_author(key, parent_entry.get("author"))
+                if "version" in parent_entry:
+                    self.gguf.add_parent_version(key, parent_entry.get("version"))
+                if "organization" in parent_entry:
+                    self.gguf.add_parent_organization(key, parent_entry.get("organization"))
+                if "url" in parent_entry:
+                    self.gguf.add_parent_url(key, parent_entry.get("url"))
+                if "doi" in parent_entry:
+                    self.gguf.add_parent_doi(key, parent_entry.get("doi"))
+                if "uuid" in parent_entry:
+                    self.gguf.add_parent_uuid(key, parent_entry.get("uuid"))
+                if "hf_repo" in parent_entry:
+                    self.gguf.add_parent_hf_repo(key, parent_entry.get("hf_repo"))
         if metadata.tags is not None:
             self.gguf.add_tags(metadata.tags)
         if metadata.languages is not None:

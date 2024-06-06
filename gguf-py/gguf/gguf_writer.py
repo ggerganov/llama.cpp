@@ -448,14 +448,20 @@ class GGUFWriter:
     def add_version(self, version: str) -> None:
         self.add_string(Keys.General.VERSION, version)
 
-    def add_base_version(self, version: str) -> None:
-        self.add_string(Keys.General.BASE_VERSION, version)
-
     def add_tensor_data_layout(self, layout: str) -> None:
         self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
 
     def add_url(self, url: str) -> None:
         self.add_string(Keys.General.URL, url)
+
+    def add_doi(self, doi: str) -> None:
+        self.add_string(Keys.General.DOI, doi)
+
+    def add_uuid(self, uuid: str) -> None:
+        self.add_string(Keys.General.UUID, uuid)
+
+    def add_hf_repo(self, hf_repo: str) -> None:
+        self.add_string(Keys.General.HF_REPO, hf_repo)
 
     def add_description(self, description: str) -> None:
         self.add_string(Keys.General.DESCRIPTION, description)
@@ -480,6 +486,33 @@ class GGUFWriter:
 
     def add_parameter_class_attribute(self, parameter_class_attribute: str) -> None:
         self.add_string(Keys.General.PARAMETER_CLASS_ATTRIBUTE, parameter_class_attribute)
+
+    def add_parent_count(self, parent_count: int) -> None:
+        self.add_uint32(Keys.General.PARENTS_COUNT, parent_count)
+
+    def add_parent_name(self, parent_id: int, name: str) -> None:
+        self.add_string(Keys.General.PARENTS_NAME.format(id=self.parent_id), name)
+
+    def add_parent_author(self, parent_id: int, author: str) -> None:
+        self.add_string(Keys.General.PARENTS_AUTHOR.format(id=self.parent_id), author)
+
+    def add_parent_version(self, parent_id: int, version: str) -> None:
+        self.add_string(Keys.General.PARENTS_VERSION.format(id=self.parent_id), version)
+
+    def add_parent_organization(self, parent_id: int, organization: str) -> None:
+        self.add_string(Keys.General.PARENTS_ORGANIZATION.format(id=self.parent_id), organization)
+
+    def add_parent_url(self, parent_id: int, url: str) -> None:
+        self.add_string(Keys.General.PARENTS_URL.format(id=self.parent_id), url)
+
+    def add_parent_doi(self, parent_id: int, doi: str) -> None:
+        self.add_string(Keys.General.PARENTS_DOI.format(id=self.parent_id), doi)
+
+    def add_parent_uuid(self, parent_id: int, uuid: str) -> None:
+        self.add_string(Keys.General.PARENTS_UUID.format(id=self.parent_id), uuid)
+
+    def add_parent_hf_repo(self, parent_id: int, hf_repo: str) -> None:
+        self.add_string(Keys.General.PARENTS_HF_REPO.format(id=self.parent_id), hf_repo)
 
     def add_tags(self, tags: Sequence[str]) -> None:
         self.add_array(Keys.General.TAGS, tags)

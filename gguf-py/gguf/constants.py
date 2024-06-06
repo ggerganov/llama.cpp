@@ -23,23 +23,53 @@ class Keys:
         ARCHITECTURE               = "general.architecture"
         QUANTIZATION_VERSION       = "general.quantization_version"
         ALIGNMENT                  = "general.alignment"
+        FILE_TYPE                  = "general.file_type"
+
+        # Authorship Metadata
         NAME                       = "general.name"
+        AUTHOR                     = "general.author"
+        VERSION                    = "general.version"
+        ORGANIZATION               = "general.organization"
+
         BASENAME                   = "general.basename"
         FINETUNE                   = "general.finetune"
-        AUTHOR                     = "general.author"
-        QUANTIZED_BY               = "general.quantized_by"
-        ORGANIZATION               = "general.organization"
-        VERSION                    = "general.version"
-        BASE_VERSION               = "general.base_version"
-        URL                        = "general.url"
         DESCRIPTION                = "general.description"
+        QUANTIZED_BY               = "general.quantized_by"
+        PARAMETER_CLASS_ATTRIBUTE  = "general.parameter_class_attribute"
+
+        # Licensing details
         LICENSE                    = "general.license"
         LICENSE_NAME               = "general.license.name"
         LICENSE_LINK               = "general.license.link"
+
+        # Typically represents the converted GGUF repo (Unless native)
+        URL                        = "general.url"
+        DOI                        = "general.doi"
+        UUID                       = "general.uuid"
+        HF_URL                     = "general.huggingface.repository"
+
+        # Typically represents the original source repository (e.g. safetensors)
+        # that this was
         SOURCE_URL                 = "general.source.url"
+        SOURCE_DOI                 = "general.source.doi"
+        SOURCE_UUID                = "general.source.uuid"
         SOURCE_HF_REPO             = "general.source.huggingface.repository"
-        FILE_TYPE                  = "general.file_type"
-        PARAMETER_CLASS_ATTRIBUTE  = "general.parameter_class_attribute"
+
+        # This represents the parent model that the converted/source model was
+        # derived from on allowing users to trace the linage of a model.
+        # E.g. A finetune model would have the base model as the parent
+        # (A model can have multiple parent, especially if it's a merged model)
+        PARENTS_COUNT               = "general.parents.count"
+        PARENTS_NAME                = "general.parents.{id}.name"
+        PARENTS_AUTHOR              = "general.parents.{id}.author"
+        PARENTS_VERSION             = "general.parents.{id}.version"
+        PARENTS_ORGANIZATION        = "general.parents.{id}.organization"
+        PARENTS_URL                 = "general.parents.{id}.url"
+        PARENTS_DOI                 = "general.parents.{id}.doi"
+        PARENTS_UUID                = "general.parents.{id}.uuid"
+        PARENTS_HF_REPO             = "general.parents.{id}.huggingface.repository"
+
+        # Array based KV stores
         TAGS                       = "general.tags"
         LANGUAGES                  = "general.languages"
         DATASETS                   = "general.datasets"
