@@ -87,7 +87,7 @@ static const char * get_qnn_backend_name(int n_backend_type) {
         case 1:
             return "QNN-GPU";
         case 2:
-            return "QNN-NPU(HTP/DSP)";
+            return "QNN-NPU";
         case 3:
             return "ggml";
         default:
@@ -131,9 +131,54 @@ static bool ggml_graph_compute_helper(
 }
 
 
-static void tensor_dump_elements(const ggml_tensor * tensor) {
+#define QK8_0 32
+typedef struct {
+    uint16_t d;       // delta
+    int8_t  qs[QK8_0]; // quants
+} block_q8_0;
+
+
+static inline float ggml_compute_fp16_to_fp32(uint16_t h) {
+    __fp16 tmp;
+    memcpy(&tmp, &h, sizeof(uint16_t));
+    return (float)tmp;
+}
+#define GGML_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
+
+static void tensor_dump(const ggml_tensor * tensor, const char * name) {
+    QNN_LOG_DEBUG("dump ggml tensor %s(%s): type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+          name, tensor->name,
+          tensor->type, ggml_type_name(tensor->type),
+          tensor->ne[0], tensor->ne[1], tensor->ne[2],
+          tensor->nb[0], tensor->nb[1], tensor->nb[2]);
+
     float value = 0;
     std::ostringstream tmposs;
+    if (nullptr == tensor) {
+        QNN_LOG_WARN("tensor is null");
+        return;
+    }
+    if (tensor->type == GGML_TYPE_I8) {
+        for (int h = 0; h < tensor->ne[3]; h++) {
+            for (int i = 0; i < tensor->ne[2]; i++) {
+                for (int j = 0; j < tensor->ne[1]; j++) {
+                    for (int k = 0; k < tensor->ne[0]; k++) {
+                        value = ((int8_t *) tensor->data)[h * tensor->ne[2] + i * tensor->ne[1] +
+                                                         j * tensor->ne[0] + k];
+                        tmposs << std::setw(8) << std::fixed << std::setprecision(2) << value
+                               << " ";
+                    }
+                    tmposs << "\n";
+                }
+            }
+        }
+        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+            tmposs.clear();
+            tmposs.str("");
+        }
+    }
+
     if (tensor->type == GGML_TYPE_F32) {
         for (int h = 0; h < tensor->ne[3]; h++) {
             for (int i = 0; i < tensor->ne[2]; i++) {
@@ -144,31 +189,59 @@ static void tensor_dump_elements(const ggml_tensor * tensor) {
                         tmposs << std::setw(8) << std::fixed << std::setprecision(2) << value
                                << " ";
                     }
-                    if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
-                        QNN_LOG_DEBUG("%s", tmposs.str().c_str());
-                    }
-                    tmposs.clear();
-                    tmposs.str("");
-                    //QNN_LOG_DEBUG("\n");
+                    tmposs << "\n";
                 }
             }
         }
+        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+            tmposs.clear();
+            tmposs.str("");
+        }
     }
 
-    //QNN_LOG_DEBUG("\n");
-}
+    if (tensor->type == GGML_TYPE_F16) {
+        for (int h = 0; h < tensor->ne[3]; h++) {
+            for (int i = 0; i < tensor->ne[2]; i++) {
+                for (int j = 0; j < tensor->ne[1]; j++) {
+                    for (int k = 0; k < tensor->ne[0]; k++) {
+                        unsigned short tmpvalue = ((unsigned short *) tensor->data)[h * tensor->ne[2] + i * tensor->ne[1] +
+                                                         j * tensor->ne[0] + k];
+                        value = GGML_FP16_TO_FP32(tmpvalue);
+                        tmposs << std::setw(8) << std::fixed << std::setprecision(2) << value
+                               << " ";
+                    }
+                    tmposs << "\n";
+                }
+            }
+        }
+        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+            tmposs.clear();
+            tmposs.str("");
+        }
+    }
 
-
-static void tensor_dump(const ggml_tensor * tensor, const char * name) {
-    QNN_LOG_DEBUG("dump ggml tensor %s(%s)", name, tensor->name);
-    QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)",
-          name,
-          tensor->type, ggml_type_name(tensor->type),
-          tensor->ne[0], tensor->ne[1], tensor->ne[2],
-          tensor->nb[0], tensor->nb[1], tensor->nb[2]);
-    tensor_dump_elements(tensor);
-
-    QNN_LOG_DEBUG("\n");
+    if (tensor->type == GGML_TYPE_Q8_0) {
+          block_q8_0 * tmp = ((block_q8_0 *)tensor->data);
+          for (int j = 0; j < tensor->ne[1]; j++) {
+            int n = tensor->ne[0] / QK8_0; //blocks per row
+            for (int z = 0; z < n; z++) {
+                const float d = GGML_FP16_TO_FP32(tmp[ j * n + z ].d);
+                for (int k = 0; k < QK8_0; k++) {
+                    value = tmp[j * n + z].qs[k] * d;
+                    tmposs << std::setw(8) << std::fixed << std::setprecision(2) << value
+                               << " ";
+                }
+            }
+            tmposs << "\n";
+        }
+        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+            tmposs.clear();
+            tmposs.str("");
+        }
+    }
 }
 
 
@@ -231,7 +304,8 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         t.join();
     }
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
-        ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
+        //ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
+        memcpy((char*)tensor->data, data.data(), size * sizeof(float));
     } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16 || tensor->type == GGML_TYPE_BF16) {
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
@@ -246,10 +320,12 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         }
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], im);
         GGML_ASSERT(ggml_validate_row_data(tensor->type, dataq.data(), dataq.size()));
-        ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
+        //ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
+        memcpy((char*)tensor->data, dataq.data(), dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
-        ggml_backend_tensor_set(tensor, data.data(), 0, ggml_nbytes(tensor));
+        //ggml_backend_tensor_set(tensor, data.data(), 0, ggml_nbytes(tensor));
+        memcpy((char*)tensor->data, data.data(), ggml_nbytes(tensor));
     } else {
         GGML_ASSERT(false);
     }
@@ -276,16 +352,13 @@ static void show_usage() {
 }
 
 
-int main(int argc, char * argv[]) {
+static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     int64_t n_begin_time        = 0LL;
     int64_t n_end_time          = 0LL;
     int64_t n_duration          = 0LL;
     size_t  ctx_size            = 0;
     int     sizey               = 4;
     int     sizex               = 4;
-    int num_threads             = 4;
-    int n_backend_type          = QNN_BACKEND_CPU;
-    int n_ggml_op_type          = GGML_OP_ADD;
 
     struct ggml_context * ctx   = nullptr;
     struct ggml_cgraph  * gf    = nullptr;
@@ -294,8 +367,150 @@ int main(int argc, char * argv[]) {
     struct ggml_tensor  * dst   = nullptr;
     ggml_backend_t backend      = nullptr;
     ggml_backend_buffer_t buffer= nullptr;
-    ggml_type qtype             = GGML_TYPE_F32;
+
+    ggml_type qtype             = GGML_TYPE_I8;
+    qtype             = GGML_TYPE_F32;
+    qtype             = GGML_TYPE_F16;
+    qtype             = GGML_TYPE_Q8_0;
+
     std::vector<uint8_t> work_buffer;
+    QNN_LOG_DEBUG("enter qnn_ggml_op\n");
+    QNN_LOG_DEBUG("ggml op:%d(%s)\n", n_ggml_op_type, ggml_op_name((enum ggml_op) n_ggml_op_type));
+
+
+    n_begin_time = ggml_time_us();
+    srand(time(NULL));
+
+    ctx_size += 1024 * 1024 * 32;
+    QNN_LOG_DEBUG("Allocating Memory of size %zi bytes, %zi MB\n", ctx_size,
+                  (ctx_size / 1024 / 1024));
+
+    struct ggml_init_params params = {
+            /*.mem_size   =*/ ctx_size,
+            /*.mem_buffer =*/ NULL,
+            /* no_alloc   =*/ 0
+    };
+
+    if (n_backend_type != QNN_BACKEND_GGML) {
+        params.no_alloc = true;
+        backend = ggml_backend_qnn_init(n_backend_type, "/data/local/tmp/");
+        if (nullptr == backend) {
+            QNN_LOG_ERROR("create qnn backend %d(%s) failed\n", n_backend_type, get_qnn_backend_name(n_backend_type));
+            return 1;
+        }
+    }
+
+    ctx = ggml_init(params);
+    if (!ctx) {
+        QNN_LOG_ERROR("%s: ggml_init() failed\n");
+        return 2;
+    }
+
+    QNN_LOG_DEBUG("creating new tensors\n");
+    QNN_LOG_DEBUG("ggml_blck_size(%s) %d\n", ggml_type_name(qtype), ggml_blck_size(qtype));
+    QNN_LOG_DEBUG("ggml_type_size(%s) %d\n", ggml_type_name(qtype), ggml_type_size(qtype));
+    if (ggml_is_quantized(qtype)) {
+        sizex = ggml_blck_size(qtype);
+
+        if (n_ggml_op_type == GGML_OP_MUL_MAT) {
+            sizex = ggml_blck_size(qtype) * 2;
+        }
+    }
+    QNN_LOG_DEBUG("sizex %d\n", sizex);
+
+    if (n_ggml_op_type == GGML_OP_MUL) {
+        src0 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
+        src1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
+    } else {
+        src0 = ggml_new_tensor_2d(ctx, qtype, sizex, sizey);
+        src1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
+    }
+    ggml_set_input(src0);
+    ggml_set_input(src1);
+
+    switch (n_ggml_op_type) {
+        case GGML_OP_ADD:
+            dst = ggml_add(ctx, src0, src1);
+            break;
+        case GGML_OP_MUL:
+            dst = ggml_mul(ctx, src0, src1);
+            break;
+        case GGML_OP_MUL_MAT:
+            dst = ggml_mul_mat(ctx, src0, src1);
+            break;
+        default:
+            QNN_LOG_WARN("ggml op %d(%s) not supported", n_ggml_op_type,
+                         ggml_op_name((enum ggml_op) n_ggml_op_type));
+            ggml_free(ctx);
+            ggml_backend_free(backend);
+            return 3;
+    }
+
+    ggml_set_output(dst);
+#ifdef GGML_USE_QNN
+    if (n_backend_type != QNN_BACKEND_GGML) {
+        buffer = ggml_backend_alloc_ctx_tensors(ctx, backend);
+        if (!buffer) {
+            QNN_LOG_ERROR("%s: failed to allocate backend buffer\n", __func__);
+            ggml_free(ctx);
+            ggml_backend_free(backend);
+            return 4;
+        }
+    }
+#endif
+
+    QNN_LOG_DEBUG("creating compute graph\n");
+    gf = ggml_new_graph(ctx);
+    ggml_build_forward_expand(gf, dst);
+
+    if (n_backend_type != QNN_BACKEND_GGML) {
+        initialize_tensors(ctx);
+    } else {
+        if (qtype == GGML_TYPE_F32) {
+            ggml_set_f32(src0, (rand() % 100 + 1));
+        } else {
+            initialize_tensors(ctx);
+        }
+        ggml_set_f32(src1, (rand() % 100 + 1));
+        //ggml_set_f32(dst, 0.0f);
+    }
+
+    ggml_graph_compute_helper(backend, gf, work_buffer, num_threads, nullptr, nullptr);
+
+    if (get_tensor_data_size(dst) < (32 * 32)) {
+        QNN_LOG_DEBUG("dump tensors:\n");
+        TENSOR_DUMP(src0);
+        TENSOR_DUMP(src1);
+        TENSOR_DUMP(dst);
+    } else {
+        QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+                      src0->name,
+                      src0->type, ggml_type_name(src0->type), src0->ne[0], src0->ne[1], src0->ne[2],
+                      src0->nb[0], src0->nb[1], src0->nb[2]);
+        QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+                      src1->name,
+                      src1->type, ggml_type_name(src1->type), src1->ne[0], src1->ne[1], src1->ne[2],
+                      src1->nb[0], src1->nb[1], src1->nb[2]);
+        QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+                      dst->name,
+                      dst->type, ggml_type_name(dst->type), dst->ne[0], dst->ne[1], dst->ne[2], dst->nb[0],
+                      dst->nb[1], dst->nb[2]);
+    }
+
+    ggml_free(ctx);
+    ggml_backend_buffer_free(buffer);
+    ggml_backend_free(backend);
+    n_end_time = ggml_time_us();
+    n_duration = (n_end_time - n_begin_time) / 1000;
+    QNN_LOG_DEBUG("duration of ut GGML_OP_%s using QNN backend %s: %lld milliseconds\n", ggml_op_name((enum ggml_op)n_ggml_op_type), get_qnn_backend_name(n_backend_type), n_duration);
+    return 0;
+}
+
+
+int main(int argc, char * argv[]) {
+    int num_threads             = 4;
+    int n_backend_type          = QNN_BACKEND_CPU;
+    int n_ggml_op_type          = GGML_OP_ADD;
 
     for (int i = 1; i < argc; i++) {
         if (0 == strcmp(argv[i], "-t")) {
@@ -330,121 +545,8 @@ int main(int argc, char * argv[]) {
     }
 
     QNN_LOG_DEBUG("enter qnn_ggml_op\n");
-    QNN_LOG_DEBUG("ggml op:%d(%s)", n_ggml_op_type, ggml_op_name((enum ggml_op) n_ggml_op_type));
-
-    n_begin_time = ggml_time_us();
-    srand(time(NULL));
-
-    ctx_size += 1024 * 1024 * 32;
-    QNN_LOG_DEBUG("Allocating Memory of size %zi bytes, %zi MB\n", ctx_size,
-                    (ctx_size / 1024 / 1024));
-
-    struct ggml_init_params params = {
-            /*.mem_size   =*/ ctx_size,
-            /*.mem_buffer =*/ NULL,
-            /* no_alloc   =*/ 0
-    };
-
-    if (n_backend_type != QNN_BACKEND_GGML) {
-        params.no_alloc = true;
-        backend = ggml_backend_qnn_init(n_backend_type, "/data/local/tmp/");
-        if (nullptr == backend) {
-            QNN_LOG_ERROR("create qnn backend %d(%s) failed", n_backend_type, get_qnn_backend_name(n_backend_type));
-            return 1;
-        }
-    }
-
-    ctx = ggml_init(params);
-    if (!ctx) {
-        QNN_LOG_ERROR("%s: ggml_init() failed\n");
-        return 2;
-    }
-
-    QNN_LOG_DEBUG("creating new tensors\n");
-    QNN_LOG_DEBUG("ggml_blck_size(%s) %d", ggml_type_name(qtype), ggml_blck_size(qtype));
-    QNN_LOG_DEBUG("ggml_type_size(%s) %d", ggml_type_name(qtype), ggml_type_size(qtype));
-    if (qtype != GGML_TYPE_F32) {
-        sizex = ggml_blck_size(qtype);
-    }
-
-    src0 = ggml_new_tensor_2d(ctx, qtype, sizex, sizey);
-    ggml_set_input(src0);
-    src1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
-    ggml_set_input(src1);
-
-    switch (n_ggml_op_type) {
-        case GGML_OP_ADD:
-            dst = ggml_add(ctx, src0, src1);
-            break;
-        case GGML_OP_MUL:
-            dst = ggml_mul(ctx, src0, src1);
-            break;
-        case GGML_OP_MUL_MAT:
-            dst = ggml_mul_mat(ctx, src0, src1);
-            break;
-        default:
-            QNN_LOG_WARN("ggml op %d(%s) not supported", n_ggml_op_type,
-                  ggml_op_name((enum ggml_op) n_ggml_op_type));
-            ggml_free(ctx);
-            ggml_backend_free(backend);
-            return 3;
-    }
-
-    ggml_set_output(dst);
-#ifdef GGML_USE_QNN
-    if (n_backend_type != QNN_BACKEND_GGML) {
-        buffer = ggml_backend_alloc_ctx_tensors(ctx, backend);
-        if (!buffer) {
-            QNN_LOG_ERROR("%s: failed to allocate backend buffer\n", __func__);
-            ggml_free(ctx);
-            ggml_backend_free(backend);
-            return 4;
-        }
-    }
-#endif
-
-    QNN_LOG_DEBUG("creating compute graph\n");
-    gf = ggml_new_graph(ctx);
-    ggml_build_forward_expand(gf, dst);
-
-#if 0
-    ggml_set_f32(src0, (rand() % 100 + 1));
-    ggml_set_f32(src1, (rand() % 100 + 1));
-    ggml_set_f32(dst, 0.0f);
-#else
-    if (n_backend_type != QNN_BACKEND_GGML) {
-        initialize_tensors(ctx);
-    }
-#endif
-
-    ggml_graph_compute_helper(backend, gf, work_buffer, num_threads, nullptr, nullptr);
-    if (get_tensor_data_size(dst) < (32 * 32)) {
-        QNN_LOG_DEBUG("dump tensors:\n");
-        TENSOR_DUMP(src0);
-        TENSOR_DUMP(src1);
-        TENSOR_DUMP(dst);
-    } else {
-        QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
-              src0->name,
-              src0->type, ggml_type_name(src0->type), src0->ne[0], src0->ne[1], src0->ne[2],
-              src0->nb[0], src0->nb[1], src0->nb[2]);
-        QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
-              src1->name,
-              src1->type, ggml_type_name(src1->type), src1->ne[0], src1->ne[1], src1->ne[2],
-              src1->nb[0], src1->nb[1], src1->nb[2]);
-        QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
-              dst->name,
-              dst->type, ggml_type_name(dst->type), dst->ne[0], dst->ne[1], dst->ne[2], dst->nb[0],
-              dst->nb[1], dst->nb[2]);
-    }
-
-    ggml_free(ctx);
-    ggml_backend_buffer_free(buffer);
-    ggml_backend_free(backend);
-
-    n_end_time = ggml_time_us();
-    n_duration = (n_end_time - n_begin_time) / 1000;
-    QNN_LOG_DEBUG("duration of ut GGML_OP_%s using QNN backend %s: %lld milliseconds\n", ggml_op_name((enum ggml_op)n_ggml_op_type), get_qnn_backend_name(n_backend_type), n_duration);
+    QNN_LOG_DEBUG("backend %d, ggml op:%d(%s)", n_backend_type, n_ggml_op_type, ggml_op_name((enum ggml_op) n_ggml_op_type));
+    qnn_op_ut(num_threads, n_backend_type, n_ggml_op_type);
 
     return 0;
 }

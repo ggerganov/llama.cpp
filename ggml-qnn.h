@@ -10,19 +10,18 @@ extern "C" {
 
 #define GGML_QNN_MAX_DEVICES    3
 
-//QNN cDSP and HTA backend would not be used currently, just focus on QNN CPU/GPU/NPU(aka HTP/DSP) backend currently
 enum QNNBackend {
     QNN_BACKEND_CPU,
     QNN_BACKEND_GPU,
     QNN_BACKEND_NPU,
-    QNN_BACKEND_GGML, //"fake" QNN backend just for compare performance between QNN and original GGML
+    QNN_BACKEND_GGML, //"fake" QNN backend, used for compare performance between QNN and original GGML
 };
 
 GGML_API int            ggml_backend_qnn_reg_devices(void);
 
 /**
  *
- * @param device            0: QNN_BACKEND_CPU 1: QNN_BACKEND_GPU 2: QNN_BACKEND_NPU(aka HTP/DSP)
+ * @param device            0: QNN_BACKEND_CPU 1: QNN_BACKEND_GPU 2: QNN_BACKEND_NPU
  * @param qnn_lib_path      qnn library path, such as "/data/local/tmp/" on Android or specified in JNI layer
  * @return
  */
