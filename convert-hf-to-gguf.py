@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 from __future__ import annotations
 
@@ -480,6 +481,7 @@ class Model:
         if chkhsh == "c7699093ba4255a91e702aa38a596aa81669f3525dae06c2953267dde580f448":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-zh
             res = "jina-v2-zh"
+
         if res is None:
             logger.warning("\n")
             logger.warning("**************************************************************************************")

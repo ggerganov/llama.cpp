@@ -3,7 +3,7 @@ ARG UBUNTU_VERSION=jammy
 FROM ubuntu:$UBUNTU_VERSION as build
 
 # Install build tools
-RUN apt update && apt install -y git build-essential cmake wget
+RUN apt update && apt install -y git build-essential cmake wget libgomp1
 
 # Install Vulkan SDK
 RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key add - && \
