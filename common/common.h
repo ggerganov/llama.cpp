@@ -287,7 +287,7 @@ struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_param
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const struct llama_model_params & params);
-struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const struct llama_model_params & params);
+static std::string llama_get_hf_model_url(std::string & repo, std::string & custom_file_path);
 
 // Batch utils
 
