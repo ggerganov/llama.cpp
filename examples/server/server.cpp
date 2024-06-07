@@ -647,8 +647,8 @@ struct server_context {
 
     server_metrics metrics;
 
-    // Longest Common Prefix similarity for slot selection
-    float lcp_similarity = 0.0f;
+    // Necessary similarity of prompt for slot selection
+    float slot_prompt_similarity = 0.0f;
 
     ~server_context() {
         if (ctx) {
@@ -812,7 +812,7 @@ struct server_context {
         server_slot * ret = nullptr;
 
         // find the slot that has at least n% prompt similarity
-        if (ret == nullptr && lcp_similarity != 0.0f && !prompt.empty()) {
+        if (ret == nullptr && slot_prompt_similarity != 0.0f && !prompt.empty()) {
             int max_lcp_len = 0;
             float similarity = 0;
 
@@ -840,7 +840,7 @@ struct server_context {
                 similarity = static_cast<float>(lcp_len) / slot_prompt_len;
 
                 // select the current slot if the criteria match
-                if (lcp_len > max_lcp_len && similarity > lcp_similarity) {
+                if (lcp_len > max_lcp_len && similarity > slot_prompt_similarity) {
                     max_lcp_len = lcp_len;
                     ret = &slot;
                 }
@@ -2568,8 +2568,8 @@ int main(int argc, char ** argv) {
         log_data["api_key"] = "api_key: " + std::to_string(params.api_keys.size()) + " keys loaded";
     }
 
-    // Longest Common Prefix similarity for slot selection
-    ctx_server.lcp_similarity = params.lcp_similarity;
+    // Necessary similarity of prompt for slot selection
+    ctx_server.slot_prompt_similarity = params.slot_prompt_similarity;
 
     // load the model
     if (!ctx_server.load_model(params)) {
