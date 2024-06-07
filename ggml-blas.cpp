@@ -98,14 +98,22 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
                     to_float((const char *) x + i01*nb01, wplane + i01*ne00, ne00);
                 }
 #else
-                for (int i = 0; i < ctx->n_threads; i++) {
+                for (int i = 0; i < ctx->n_threads - 1; i++) {
                     ctx->tasks.push_back(std::async(std::launch::async, [=]() {
-                        const int64_t start = i*ne01/ctx->n_threads;
+                        const int64_t start =       i*ne01/ctx->n_threads;
                         const int64_t end   = (i + 1)*ne01/ctx->n_threads;
                         for (int64_t i01 = start; i01 < end; i01++) {
                             to_float((const char *) x + i01*nb01, wplane + i01*ne00, ne00);
                         }
                     }));
+                }
+                {
+                    // reuse the current thread for the last task
+                    const int64_t start = (ctx->n_threads - 1)*ne01/ctx->n_threads;
+                    const int64_t end   = ne01;
+                    for (int64_t i01 = start; i01 < end; i01++) {
+                        to_float((const char *) x + i01*nb01, wplane + i01*ne00, ne00);
+                    }
                 }
 #endif
             }
