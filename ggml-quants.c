@@ -3726,6 +3726,28 @@ static inline __m128i get_scale_shuffle(int i) {
 }
 #endif
 
+//====================================== I2 ===============================================
+
+void ggml_vec_dot_i2_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
+
+    const uint8_t *    restrict x = vx;
+    const int8_t  *    restrict y = vy;
+
+    int sumi = 0;
+
+    for (int i = 0; i < n / 4; i++) {
+        int8_t* weight = (const int8_t *)(i2_q8 + x[i]);
+        sumi += (int)y[i*4+0] * weight[0];
+        sumi += (int)y[i*4+1] * weight[1];
+        sumi += (int)y[i*4+2] * weight[2];
+        sumi += (int)y[i*4+3] * weight[3];
+    }
+    *s = (float)(sumi);
+
+}
+
 void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     const int qk = QK8_0;
     const int nb = n / qk;

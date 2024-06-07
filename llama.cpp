@@ -3192,8 +3192,9 @@ struct llama_model_loader {
 
         llama_tensor_weight(const llama_file * file, uint16_t idx, const char * name, const struct gguf_context * gguf_ctx, ggml_tensor * tensor) : idx(idx), tensor(tensor) {
             const int tensor_idx = gguf_find_tensor(gguf_ctx, name);
+            printf("name:%s\n", name);
             offs = gguf_get_data_offset(gguf_ctx) + gguf_get_tensor_offset(gguf_ctx, tensor_idx);
-
+            printf("offs:%ld\n", offs + ggml_nbytes(tensor));
             if (offs + ggml_nbytes(tensor) < offs || offs + ggml_nbytes(tensor) > file->size) {
                 throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", name));
             }
@@ -7140,7 +7141,7 @@ static struct ggml_tensor * llm_build_kqv(
         cb(cur, "attn_sub_norm", il);
 
         // B2 for wo
-        cur = llm_build_qbitlinear(ctx, cur);
+        // cur = llm_build_qbitlinear(ctx, cur);
     }
 
     ggml_build_forward_expand(graph, cur);
@@ -11563,7 +11564,7 @@ struct llm_build_context {
             {
                 // compute Q and K and RoPE them
                 // B1.Q
-                cur = llm_build_qbitlinear(ctx0, cur);
+                // cur = llm_build_qbitlinear(ctx0, cur);
                 struct ggml_tensor * Qcur = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
                 cb(Qcur, "Qcur", il);
                 if (model.layers[il].bq) {
@@ -11635,7 +11636,7 @@ struct llm_build_context {
                 // cb(cur, "ffn_out", il);
     
     
-                cur = llm_build_qbitlinear(ctx0, cur);
+                // cur = llm_build_qbitlinear(ctx0, cur);
 
                 struct ggml_tensor *tmp = ggml_mul_mat(ctx0, model.layers[il].ffn_up, cur);
     
@@ -11658,7 +11659,7 @@ struct llm_build_context {
                 cb(cur, "ffn_sub_norm", il);
 
                 // B4 for w2
-                cur = llm_build_qbitlinear(ctx0, cur);
+                // cur = llm_build_qbitlinear(ctx0, cur);
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].ffn_down, cur);
                 cb(cur, "ffn_down", il);
@@ -15684,6 +15685,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_IQ4_XS:  default_type = GGML_TYPE_IQ4_XS;  break;
         case LLAMA_FTYPE_MOSTLY_IQ3_S:   default_type = GGML_TYPE_IQ3_S;   break;
         case LLAMA_FTYPE_MOSTLY_IQ3_M:   default_type = GGML_TYPE_IQ3_S;   break;
+        case LLAMA_FTYPE_MOSTLY_I2  :    default_type = GGML_TYPE_I2;      break;
 
         default: throw std::runtime_error(format("invalid output file type %d\n", ftype));
     }
@@ -15921,7 +15923,10 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             if (params->output_tensor_type < GGML_TYPE_COUNT && strcmp(tensor->name, "output.weight") == 0) {
                 new_type = params->output_tensor_type;
             }
-
+            if (tensor->type == 31) {
+                // no need quantize for i2
+                new_type = tensor->type;
+            }
             // If we've decided to quantize to the same type the tensor is already
             // in then there's nothing to do.
             quantize = tensor->type != new_type;
