@@ -697,9 +697,9 @@ public:
     }
 
 private:
-    const QnnInterface_t *_qnn_interface = nullptr;
+    const QnnInterface_t * _qnn_interface = nullptr;
 
-    const QnnSystemInterface_t *_qnn_sys_interface = nullptr;
+    const QnnSystemInterface_t * _qnn_sys_interface = nullptr;
 };
 
 
@@ -848,7 +848,7 @@ public:
         return 0;
     }
 
-    std::string &get_qnn_graph_name() { return _graph_name; }
+    std::string & get_qnn_graph_name() { return _graph_name; }
 
     bool is_rpcmem_initialized() {
         return _rpcmem_initialized;
@@ -911,7 +911,7 @@ private:
 
     qnn_interface _qnn_interface;
 
-    void *_system_lib_handle = nullptr;
+    void * _system_lib_handle = nullptr;
 
     Qnn_GraphHandle_t _qnn_graph_handle = nullptr;
 
@@ -927,7 +927,7 @@ private:
 
     QnnSystemContext_Handle_t _qnn_system_handle = nullptr;
 
-    QnnHtpDevice_PerfInfrastructure_t *_qnn_htp_perfinfra = nullptr;
+    QnnHtpDevice_PerfInfrastructure_t * _qnn_htp_perfinfra = nullptr;
     uint32_t _qnn_power_configid = 1;
     uint32_t _qnn_rpc_pollingtime = 9999; // 0-10000 us for high performing
 
@@ -936,12 +936,12 @@ private:
 
     std::unordered_set<Qnn_MemHandle_t> _qnn_mem_set;
 
-    static std::mutex _init_mutex;
-    static std::unordered_map<BackendIdType, void *> _loaded_lib_handle;
-    static std::unordered_map<std::string, BackendIdType> _lib_path_to_backend_id;
-    static std::unordered_map<BackendIdType, const QnnInterface_t *> _loaded_backend;
+    std::mutex _init_mutex;
+    std::unordered_map<BackendIdType, void *> _loaded_lib_handle;
+    std::unordered_map<std::string, BackendIdType> _lib_path_to_backend_id;
+    std::unordered_map<BackendIdType, const QnnInterface_t *> _loaded_backend;
 
-    void *_rpc_lib_handle = nullptr;
+    void * _rpc_lib_handle = nullptr;
     std::atomic_bool _rpcmem_initialized{false};
     pfn_rpc_mem_alloc _pfn_rpc_mem_alloc;
     pfn_rpc_mem_free _pfn_rpc_mem_free;
@@ -950,10 +950,8 @@ private:
     pfn_rpc_mem_deinit _pfn_rpc_mem_deinit;
     std::unordered_map<void *, void *> _rpcmem_store_map;
 
-
     std::string _graph_name;
 };
-
 
 
 // =================================================================================================
@@ -961,15 +959,6 @@ private:
 //  implementation of wrapper class
 //
 // =================================================================================================
-std::mutex qnn_instance::_init_mutex;
-
-std::unordered_map<qnn_instance::BackendIdType, void *> qnn_instance::_loaded_lib_handle;
-
-std::unordered_map<std::string, qnn_instance::BackendIdType> qnn_instance::_lib_path_to_backend_id;
-
-std::unordered_map<qnn_instance::BackendIdType, const QnnInterface_t *> qnn_instance::_loaded_backend;
-
-
 void * qnn_instance::alloc_rpcmem(size_t bytes, size_t alignment) {
     if (!_rpcmem_initialized) {
         QNN_LOG_WARN("rpc memory not initialized\n");
@@ -977,14 +966,13 @@ void * qnn_instance::alloc_rpcmem(size_t bytes, size_t alignment) {
     }
 
     auto allocate_bytes = static_cast<int32_t>(bytes + alignment);
-    void *buf = _pfn_rpc_mem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, allocate_bytes);
+    void * buf = _pfn_rpc_mem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, allocate_bytes);
     if (buf == nullptr) {
         QNN_LOG_WARN("failed to allocate rpc memory\n");
         return nullptr;
     }
 
-    auto aligned_buf = reinterpret_cast<void *>(align_to(alignment,
-                                                         reinterpret_cast<intptr_t>(buf)));
+    auto aligned_buf = reinterpret_cast<void *>(align_to(alignment,reinterpret_cast<intptr_t>(buf)));
     bool status = _rpcmem_store_map.insert(std::pair<void *, void *>(aligned_buf, buf)).second;
     if (!status) {
         QNN_LOG_WARN("failed to allocate rpc memory\n");
@@ -1097,7 +1085,7 @@ int qnn_instance::load_backend(std::string & lib_path, const QnnSaver_Config_t *
     Qnn_ErrorHandle_t error = QNN_SUCCESS;
     QNN_LOG_DEBUG("lib_path:%s\n", lib_path.c_str());
 
-    void *lib_handle = dlopen(lib_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+    void * lib_handle = dlopen(lib_path.c_str(), RTLD_NOW | RTLD_GLOBAL);
     if (nullptr == lib_handle) {
         QNN_LOG_WARN("can not open QNN library %s, with error: %s", lib_path.c_str(), dlerror());
         return 1;
@@ -1113,7 +1101,7 @@ int qnn_instance::load_backend(std::string & lib_path, const QnnSaver_Config_t *
 
     // get QnnInterface Providers
     std::uint32_t num_providers = 0;
-    const QnnInterface_t **provider_list = nullptr;
+    const QnnInterface_t ** provider_list = nullptr;
     error = get_providers(&provider_list, &num_providers);
     if (error != QNN_SUCCESS) {
         QNN_LOG_WARN("failed to get providers, error %d", QNN_GET_ERROR_CODE(error));
