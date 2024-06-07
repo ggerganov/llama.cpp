@@ -647,8 +647,8 @@ struct server_context {
 
     server_metrics metrics;
 
-    // Longest Common Substring similarity for slot selection
-    float lcs_similarity = 0.0f;
+    // Longest Common Prefix similarity for slot selection
+    float lcp_similarity = 0.0f;
 
     ~server_context() {
         if (ctx) {
@@ -812,8 +812,8 @@ struct server_context {
         server_slot * ret = nullptr;
 
         // find the slot that has at least n% prompt similarity
-        if (ret == nullptr && lcs_similarity != 0.0f && !prompt.empty()) {
-            int max_lcs_len = 0;
+        if (ret == nullptr && lcp_similarity != 0.0f && !prompt.empty()) {
+            int max_lcp_len = 0;
             float similarity = 0;
 
             for (server_slot & slot : slots) {
@@ -833,23 +833,23 @@ struct server_context {
                 // length of the current slot's prompt
                 int slot_prompt_len = slot_prompt.size();
 
-                // length of the longest common substring between the current slot's prompt and the input prompt
-                int lcs_len = lcs_length(slot_prompt, prompt);
+                // length of the Longest Common Prefix between the current slot's prompt and the input prompt
+                int lcp_len = common_part(slot_prompt, prompt);
 
                 // fraction of the common substring length compared to the current slot's prompt length
-                similarity = static_cast<float>(lcs_len) / slot_prompt_len;
+                similarity = static_cast<float>(lcp_len) / slot_prompt_len;
 
                 // select the current slot if the criteria match
-                if (lcs_len > max_lcs_len && similarity > lcs_similarity) {
-                    max_lcs_len = lcs_len;
+                if (lcp_len > max_lcp_len && similarity > lcp_similarity) {
+                    max_lcp_len = lcp_len;
                     ret = &slot;
                 }
             }
 
             if (ret != nullptr) {
-                LOG_VERBOSE("selected slot by lcs similarity", {
+                LOG_VERBOSE("selected slot by lcp similarity", {
                     {"id_slot", ret->id},
-                    {"max_lcs_len", max_lcs_len},
+                    {"max_lcp_len", max_lcp_len},
                     {"similarity", similarity},
                 });
             }
@@ -2568,8 +2568,8 @@ int main(int argc, char ** argv) {
         log_data["api_key"] = "api_key: " + std::to_string(params.api_keys.size()) + " keys loaded";
     }
 
-    // Longest Common Substring similarity for slot selection
-    ctx_server.lcs_similarity = params.lcs_similarity;
+    // Longest Common Prefix similarity for slot selection
+    ctx_server.lcp_similarity = params.lcp_similarity;
 
     // load the model
     if (!ctx_server.load_model(params)) {
