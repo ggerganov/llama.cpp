@@ -9108,6 +9108,7 @@ static void soft_max_f32(const float * x, const float * mask, float * dst, const
     // find the sum of exps in the block
     tmp = warp_reduce_sum(tmp, item_ct1);
     if (block_size > WARP_SIZE) {
+        item_ct1.barrier(sycl::access::fence_space::local_space);
         if (warp_id == 0) {
             buf[lane_id] = 0.f;
         }
