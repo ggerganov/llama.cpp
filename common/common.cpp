@@ -273,6 +273,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
         }
     } catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
+        params = params_org;
         return false;
     }
 
@@ -406,6 +407,20 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         if (!params.prompt.empty() && params.prompt.back() == '\n') {
             params.prompt.pop_back();
         }
+        return true;
+    }
+    if (arg == "--in-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::ifstream file(argv[i]);
+        if (!file) {
+            fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
+            invalid_param = true;
+            return true;
+        }
+        params.in_files.push_back(argv[i]);
         return true;
     }
     if (arg == "-n" || arg == "--predict" || arg == "--n-predict") {
@@ -1081,7 +1096,15 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "-v" || arg == "--verbose") {
-        params.verbose = true;
+        params.verbosity = 1;
+        return true;
+    }
+    if (arg == "--verbosity") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.verbosity = std::stoi(argv[i]);
         return true;
     }
     if (arg == "--verbose-prompt") {
@@ -1391,6 +1414,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.timeout_write = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "--threads-http") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_threads_http = std::stoi(argv[i]);
+        return true;
+    }
     if (arg == "-spf" || arg == "--system-prompt-file") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1537,6 +1568,46 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.i_pos = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "-o" || arg == "--output" || arg == "--output-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.out_file = argv[i];
+        return true;
+    }
+    if (arg == "-ofreq" || arg == "--output-frequency") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_out_freq = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--save-frequency") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_save_freq = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--process-output") {
+        params.process_output = true;
+        return true;
+    }
+    if (arg == "--no-ppl") {
+        params.compute_ppl = false;
+        return true;
+    }
+    if (arg == "--chunk" || arg == "--from-chunk") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.i_chunk = std::stoi(argv[i]);
+        return true;
+    }
 #ifndef LOG_DISABLE_LOGS
     // Parse args for logging parameters
     if (log_param_single_parse(argv[i])) {
@@ -1612,6 +1683,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-h,    --help, --usage",        "print usage and exit" });
     options.push_back({ "*",           "       --version",              "show version and build info" });
     options.push_back({ "*",           "-v,    --verbose",              "print verbose information" });
+    options.push_back({ "*",           "       --verbosity N",          "set specific verbosity level (default: %d)", params.verbosity });
     options.push_back({ "*",           "       --verbose-prompt",       "print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false" });
     options.push_back({ "*",           "       --no-display-prompt",    "don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false" });
     options.push_back({ "*",           "-co,   --color",                "colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false" });
@@ -1637,6 +1709,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-fa,   --flash-attn",           "enable Flash Attention (default: %s)", params.flash_attn ? "enabled" : "disabled" });
     options.push_back({ "*",           "-p,    --prompt PROMPT",        "prompt to start generation with (default: '%s')", params.prompt.c_str() });
     options.push_back({ "*",           "-f,    --file FNAME",           "a file containing the prompt (default: none)" });
+    options.push_back({ "*",           "       --in-file FNAME",        "an input file (repeat to specify multiple files)" });
     options.push_back({ "*",           "-bf,   --binary-file FNAME",    "binary file containing the prompt (default: none)" });
     options.push_back({ "*",           "-e,    --escape",               "process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\) (default: %s)", params.escape ? "true" : "false" });
     options.push_back({ "*",           "       --no-escape",            "do not process escape sequences" });
@@ -1804,6 +1877,14 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "passkey",     "       --junk N",               "number of times to repeat the junk text (default: %d)", params.n_junk });
     options.push_back({ "passkey",     "       --pos N",                "position of the passkey in the junk text (default: %d)", params.i_pos });
 
+    options.push_back({ "imatrix" });
+    options.push_back({ "imatrix",     "-o,    --output FNAME",         "output file (default: '%s')", params.out_file.c_str() });
+    options.push_back({ "imatrix",     "       --output-frequency N",   "output the imatrix every N iterations (default: %d)", params.n_out_freq });
+    options.push_back({ "imatrix",     "       --save-frequency N",     "save an imatrix copy every N iterations (default: %d)", params.n_save_freq });
+    options.push_back({ "imatrix",     "       --process-output",       "collect data for the output tensor (default: %s)", params.process_output ? "true" : "false" });
+    options.push_back({ "imatrix",     "       --no-ppl",               "do not compute perplexity (default: %s)", params.compute_ppl ? "true" : "false" });
+    options.push_back({ "imatrix",     "       --chunk N",              "start processing the input from chunk N (default: %d)", params.i_chunk });
+
     options.push_back({ "bench" });
     options.push_back({ "bench",       "-pps",                          "is the prompt shared across parallel sequences (default: %s)", params.is_pp_shared ? "true" : "false" });
     options.push_back({ "bench",       "-npp n0,n1,...",                "number of prompt tokens" });
@@ -1820,6 +1901,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "server",      "       --ssl-key-file FNAME",   "path to file a PEM-encoded SSL private key" });
     options.push_back({ "server",      "       --ssl-cert-file FNAME",  "path to file a PEM-encoded SSL certificate" });
     options.push_back({ "server",      "       --timeout N",            "server read/write timeout in seconds (default: %d)", params.timeout_read });
+    options.push_back({ "server",      "       --threads-http N",       "number of threads used to process HTTP requests (default: %d)", params.n_threads_http });
     options.push_back({ "server",      "       --system-prompt-file FNAME",
                                                                         "set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications" });
     options.push_back({ "server",      "       --log-format {text,json}",

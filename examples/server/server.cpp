@@ -888,7 +888,7 @@ struct server_context {
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
 
         // get prompt
-        {
+        if (!task.infill) {
             const auto & prompt = data.find("prompt");
             if (prompt == data.end()) {
                 send_error(task, "Either \"prompt\" or \"messages\" must be provided", ERROR_TYPE_INVALID_REQUEST);
@@ -2360,7 +2360,7 @@ int main(int argc, char ** argv) {
 
     // TODO: not great to use extern vars
     server_log_json = params.log_json;
-    server_verbose = params.verbose;
+    server_verbose = params.verbosity > 0;
 
     // struct that contains llama context and inference
     server_context ctx_server;

@@ -59,9 +59,13 @@ Parentheses `()` can be used to group sequences, which allows for embedding alte
 
 ## Repetition and Optional Symbols
 
-- `*` after a symbol or sequence means that it can be repeated zero or more times.
-- `+` denotes that the symbol or sequence should appear one or more times.
-- `?` makes the preceding symbol or sequence optional.
+- `*` after a symbol or sequence means that it can be repeated zero or more times (equivalent to `{0,}`).
+- `+` denotes that the symbol or sequence should appear one or more times (equivalent to `{1,}`).
+- `?` makes the preceding symbol or sequence optional (equivalent to `{0,1}`).
+- `{m}` repeats the precedent symbol or sequence exactly `m` times
+- `{m,}` repeats the precedent symbol or sequence at least `m` times
+- `{m,n}` repeats the precedent symbol or sequence at between `m` and `n` times (included)
+- `{0,n}` repeats the precedent symbol or sequence at most `n` times (included)
 
 ## Comments and newlines
 
@@ -98,4 +102,4 @@ Grammars currently have performance gotchas (see https://github.com/ggerganov/ll
 
 A common pattern is to allow repetitions of a pattern `x` up to N times.
 
-While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) will result in extremely slow inference. Instead, you can write `(x (x (x ... (x)?...)?)?)?` (w/ N-deep nesting)
+While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) may result in extremely slow sampling. Instead, you can write `x{0,N}` (or `(x (x (x ... (x)?...)?)?)?` w/ N-deep nesting in earlier llama.cpp versions).

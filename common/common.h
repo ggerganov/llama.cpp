@@ -56,43 +56,42 @@ struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
     int32_t n_threads             = cpu_get_num_math();
-    int32_t n_threads_draft       = -1;
-    int32_t n_threads_batch       = -1;    // number of threads to use for batch processing (-1 = use n_threads)
-    int32_t n_threads_batch_draft = -1;
-    int32_t n_predict             = -1;    // new tokens to predict
-    int32_t n_ctx                 = 0;     // context size
-    int32_t n_batch               = 2048;  // logical batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_ubatch              = 512;   // physical batch size for prompt processing (must be >=32 to use BLAS)
-    int32_t n_keep                = 0;     // number of tokens to keep from initial prompt
-    int32_t n_draft               = 5;     // number of tokens to draft during speculative decoding
-    int32_t n_chunks              = -1;    // max number of chunks to process (-1 = unlimited)
-    int32_t n_parallel            = 1;     // number of parallel sequences to decode
-    int32_t n_sequences           = 1;     // number of sequences to decode
-    float   p_split               = 0.1f;  // speculative decoding split probability
-    int32_t n_gpu_layers          = -1;    // number of layers to store in VRAM (-1 - use default)
-    int32_t n_gpu_layers_draft    = -1;    // number of layers to store in VRAM for the draft model (-1 - use default)
-    llama_split_mode split_mode   = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
-    int32_t main_gpu              = 0;     // the GPU that is used for scratch and small tensors
-    float   tensor_split[128]     = {0};   // how split tensors should be distributed across GPUs
-    int32_t n_beams               = 0;     // if non-zero then use beam search of given width.
-    int32_t grp_attn_n            = 1;     // group-attention factor
-    int32_t grp_attn_w            = 512;   // group-attention width
-    int32_t n_print               = -1;    // print token count every n tokens (-1 = disabled)
-    float   rope_freq_base        = 0.0f;  // RoPE base frequency
-    float   rope_freq_scale       = 0.0f;  // RoPE frequency scaling factor
+    int32_t n_threads_draft       =    -1;
+    int32_t n_threads_batch       =    -1; // number of threads to use for batch processing (-1 = use n_threads)
+    int32_t n_threads_batch_draft =    -1;
+    int32_t n_predict             =    -1; // new tokens to predict
+    int32_t n_ctx                 =     0; // context size
+    int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_ubatch              =   512; // physical batch size for prompt processing (must be >=32 to use BLAS)
+    int32_t n_keep                =     0; // number of tokens to keep from initial prompt
+    int32_t n_draft               =     5; // number of tokens to draft during speculative decoding
+    int32_t n_chunks              =    -1; // max number of chunks to process (-1 = unlimited)
+    int32_t n_parallel            =     1; // number of parallel sequences to decode
+    int32_t n_sequences           =     1; // number of sequences to decode
+    float   p_split               =  0.1f; // speculative decoding split probability
+    int32_t n_gpu_layers          =    -1; // number of layers to store in VRAM (-1 - use default)
+    int32_t n_gpu_layers_draft    =    -1; // number of layers to store in VRAM for the draft model (-1 - use default)
+    int32_t main_gpu              =     0; // the GPU that is used for scratch and small tensors
+    float   tensor_split[128]     =   {0}; // how split tensors should be distributed across GPUs
+    int32_t n_beams               =     0; // if non-zero then use beam search of given width.
+    int32_t grp_attn_n            =     1; // group-attention factor
+    int32_t grp_attn_w            =   512; // group-attention width
+    int32_t n_print               =    -1; // print token count every n tokens (-1 = disabled)
+    float   rope_freq_base        =  0.0f; // RoPE base frequency
+    float   rope_freq_scale       =  0.0f; // RoPE frequency scaling factor
     float   yarn_ext_factor       = -1.0f; // YaRN extrapolation mix factor
-    float   yarn_attn_factor      = 1.0f;  // YaRN magnitude scaling factor
+    float   yarn_attn_factor      =  1.0f; // YaRN magnitude scaling factor
     float   yarn_beta_fast        = 32.0f; // YaRN low correction dim
-    float   yarn_beta_slow        = 1.0f;  // YaRN high correction dim
-    int32_t yarn_orig_ctx         = 0;     // YaRN original context length
+    float   yarn_beta_slow        =  1.0f; // YaRN high correction dim
+    int32_t yarn_orig_ctx         =     0; // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
-    std::string rpc_servers       = "";    // comma separated list of RPC servers
 
     ggml_backend_sched_eval_callback cb_eval = nullptr;
     void * cb_eval_user_data                 = nullptr;
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 
+    enum llama_split_mode        split_mode        = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
 
@@ -114,7 +113,9 @@ struct gpt_params {
     std::string lookup_cache_static  = ""; // path of static ngram cache file for lookup decoding
     std::string lookup_cache_dynamic = ""; // path of dynamic ngram cache file for lookup decoding
     std::string logits_file          = ""; // file for saving *all* logits
+    std::string rpc_servers          = ""; // comma separated list of RPC servers
 
+    std::vector<std::string> in_files;   // all input files
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
 
@@ -124,23 +125,24 @@ struct gpt_params {
 
     std::vector<llama_control_vector_load_info> control_vectors; // control vector with user defined scale
 
+    int32_t verbosity                  = 0;
     int32_t control_vector_layer_start = -1; // layer range for control vector
     int32_t control_vector_layer_end   = -1; // layer range for control vector
 
-    int32_t ppl_stride      = 0;    // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
-    int32_t ppl_output_type = 0;    // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
-                                    //                                       (which is more convenient to use for plotting)
-                                    //
-    bool   hellaswag       = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
-    size_t hellaswag_tasks = 400;   // number of tasks to use when computing the HellaSwag score
+    int32_t ppl_stride      = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
+    int32_t ppl_output_type = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
+                                     //                                       (which is more convenient to use for plotting)
+                                     //
+    bool   hellaswag        = false; // compute HellaSwag score over random tasks from datafile supplied in prompt
+    size_t hellaswag_tasks  = 400;   // number of tasks to use when computing the HellaSwag score
 
-    bool   winogrande      = false; // compute Winogrande score over random tasks from datafile supplied in prompt
-    size_t winogrande_tasks= 0;     // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
+    bool   winogrande       = false; // compute Winogrande score over random tasks from datafile supplied in prompt
+    size_t winogrande_tasks = 0;     // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
 
-    bool   multiple_choice = false; // compute TruthfulQA score over random tasks from datafile supplied in prompt
-    size_t multiple_choice_tasks = 0;     // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
+    bool   multiple_choice  = false;  // compute TruthfulQA score over random tasks from datafile supplied in prompt
+    size_t multiple_choice_tasks = 0; // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
 
-    bool   kl_divergence   = false; // compute KL divergence
+    bool   kl_divergence    = false; // compute KL divergence
 
     bool usage             = false; // print usage
     bool use_color         = false; // use color to distinguish generations and inputs
@@ -163,7 +165,6 @@ struct gpt_params {
     bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
-    bool verbose           = false;
     bool verbose_prompt    = false; // print prompt tokens before generation
     bool display_prompt    = true;  // print prompt before generation
     bool infill            = false; // use infill mode
@@ -180,10 +181,10 @@ struct gpt_params {
     std::vector<std::string> image; // path to image file(s)
 
     // server params
-    int32_t port           = 8080;
-    int32_t timeout_read   = 600;
-    int32_t timeout_write  = timeout_read;
-    int32_t n_threads_http = -1;
+    int32_t port           = 8080;         // server listens on this network port
+    int32_t timeout_read   = 600;          // http read timeout in seconds
+    int32_t timeout_write  = timeout_read; // http write timeout in seconds
+    int32_t n_threads_http = -1;           // number of threads to process HTTP requests
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";
@@ -219,6 +220,16 @@ struct gpt_params {
     // passkey params
     int32_t n_junk = 250; // number of times to repeat the junk text
     int32_t i_pos  = -1;  // position of the passkey in the junk text
+
+    // imatrix params
+    std::string out_file = "imatrix.dat"; // save the resulting imatrix to this file
+
+    int32_t n_out_freq  = 10; // output the imatrix every n_out_freq iterations
+    int32_t n_save_freq =  0; // save the imatrix every n_save_freq iterations
+    int32_t i_chunk     =  0; // start processing from this chunk
+
+    bool process_output = false; // collect data for the output tensor
+    bool compute_ppl    = true;  // whether to compute perplexity
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
