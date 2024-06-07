@@ -133,7 +133,7 @@ static bool ggml_graph_compute_helper(
 
 #define QK8_0 32
 typedef struct {
-    uint16_t d;       // delta
+    uint16_t d;        // delta
     int8_t  qs[QK8_0]; // quants
 } block_q8_0;
 
@@ -158,6 +158,7 @@ static void tensor_dump(const ggml_tensor * tensor, const char * name) {
         QNN_LOG_WARN("tensor is null");
         return;
     }
+
     if (tensor->type == GGML_TYPE_I8) {
         for (int h = 0; h < tensor->ne[3]; h++) {
             for (int i = 0; i < tensor->ne[2]; i++) {
