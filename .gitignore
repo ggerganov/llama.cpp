@@ -60,14 +60,15 @@ models-mnt
 /imatrix
 /infill
 /libllama.so
+/llama
 /llama-bench
 /llava-cli
+/llama-server
 /lookahead
 /lookup
 /lookup-create
 /lookup-merge
 /lookup-stats
-/llama
 /metal
 /passkey
 /perplexity
@@ -76,7 +77,6 @@ models-mnt
 /quantize-stats
 /result
 /save-load-state
-/llama-server
 /simple
 /batched
 /batched-bench
