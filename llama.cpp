@@ -13039,8 +13039,7 @@ struct llm_tokenizer_bpe {
                     case LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH:
                         //TODO: Apply lowercase + whitespace pretokenization
                         {
-                            std::string lowercase_text = text;
-                            std::transform(lowercase_text.begin(), lowercase_text.end(), lowercase_text.begin(), [](unsigned char c){ return std::tolower(c); });
+                            std::string lowercase_text = lowercase(text);
                             std::regex regexPattern("\\w+|[^\\w\\s]+");
                             std::sregex_token_iterator it(lowercase_text.begin(), lowercase_text.end(), regexPattern);
                             std::sregex_token_iterator end;
