@@ -13516,13 +13516,13 @@ static void ggml_compute_forward_soft_max_f32(
             } else {
                 for (int i = 0; i < nc; ++i) {
                     wp[i] += slope*mp_f32[i];
+
                 }
             }
         }
 
 #ifndef NDEBUG
         for (int i = 0; i < nc; ++i) {
-            //printf("p[%d] = %f\n", i, p[i]);
             assert(!isnan(wp[i]));
         }
 #endif

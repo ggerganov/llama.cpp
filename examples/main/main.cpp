@@ -733,7 +733,6 @@ int main(int argc, char ** argv) {
 
                 // Console/Stream Output
                 fprintf(stdout, "%s", token_str.c_str());
-
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
                 if (embd.size() > 1) {

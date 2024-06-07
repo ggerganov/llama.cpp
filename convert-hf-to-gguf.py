@@ -427,9 +427,6 @@ class Model:
         # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script
         #       or pull the latest version of the model from Huggingface
         #       don't edit the hashes manually!
-        if chkhsh == "0ef9807a4087ebef797fc749390439009c3b9eda9ad1a097abbe738f486c01e5":
-            # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
-            res = "llama-bpe"
         if chkhsh == "049ecf7629871e3041641907f3de7c733e4dbfdc736f57d882ba0b0845599754":
             # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-base
             res = "deepseek-llm"
@@ -457,18 +454,12 @@ class Model:
         if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
             # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
             res = "refact"
-        if chkhsh == "9c2227e4dd922002fb81bde4fc02b0483ca4f12911410dee2255e4987644e3f8":
-            # ref: https://huggingface.co/CohereForAI/c4ai-command-r-v01
-            res = "command-r"
         if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
             # ref: https://huggingface.co/Qwen/Qwen1.5-7B
             res = "qwen2"
         if chkhsh == "b6dc8df998e1cfbdc4eac8243701a65afe638679230920b50d6f17d81c098166":
             # ref: https://huggingface.co/allenai/OLMo-1.7-7B-hf
             res = "olmo"
-        if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
-            # ref: https://huggingface.co/databricks/dbrx-base
-            res = "dbrx"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
             res = "jina-v2-en"
@@ -490,6 +481,9 @@ class Model:
         if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
             # ref: https://huggingface.co/LumiOpen/Viking-7B
             res = "viking"
+        if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
+            # ref: https://huggingface.co/core42/jais-13b
+            res = "jais"
 
         if res is None:
             logger.warning("\n")
@@ -2816,6 +2810,79 @@ class DeepseekV2Model(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
+
+@Model.register("JAISLMHeadModel")
+class JaisModel(Model):
+    model_arch = gguf.MODEL_ARCH.JAIS
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # SwigLU activation
+        assert self.hparams["activation_function"] == "swiglu"
+        # ALiBi position embedding
+        assert self.hparams["position_embedding_type"] == "alibi"
+
+        # Embeddings scale
+        self.embeddings_scale = 1.0
+        # note: For some JAIS flavors, output is tied to (same as) wte in original model
+        self.output_is_wte = False
+        if  'mup_embeddings_scale' in self.hparams:
+            self.output_is_wte = True   # Hack (?)
+            self.embeddings_scale = self.hparams['mup_embeddings_scale']
+        elif 'embeddings_scale' in self.hparams:
+            self.embeddings_scale = self.hparams['embeddings_scale']
+        else:
+            assert False
+
+        self.width_scale = 1.0
+        if  'mup_output_alpha' in self.hparams:
+            assert 'mup_width_scale' in self.hparams
+            self.width_scale = self.hparams['mup_output_alpha'] * self.hparams['mup_width_scale']
+        elif 'width_scale' in self.hparams:
+            self.width_scale = self.hparams['width_scale']
+        else:
+            assert False
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_inner"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        tensors: list[tuple[str, Tensor]] = []
+
+        # we don't need these
+        if name.endswith((".attn.bias", "relative_pe.slopes")):
+            return tensors
+
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_fc2.weight")):
+            data_torch = data_torch.transpose(1, 0)
+
+        new_name = self.map_tensor_name(name)
+
+        if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
+            tensors.append((new_name, data_torch * self.embeddings_scale))
+            if self.output_is_wte:
+                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch * self.width_scale))
+        elif new_name == self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT):
+            assert not self.output_is_wte
+            tensors.append((new_name, data_torch * self.width_scale))
+        else:
+            tensors.append((new_name, data_torch))
+
+        return tensors
+
 
 
 @Model.register("T5ForConditionalGeneration")
