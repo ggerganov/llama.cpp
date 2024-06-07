@@ -96,7 +96,7 @@ class Model:
         ftype_lw: str = ftype_up.lower()
         # allow templating the file name with the output ftype, useful with the "auto" ftype
         self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
-        self.gguf_writer = gguf.GGUFManager(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], split_arguments,
+        self.gguf_writer = gguf.GGUFWriterSplit(fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], split_arguments,
                                             endianess=self.endianess, use_temp_file=self.use_temp_file)
 
     @classmethod
