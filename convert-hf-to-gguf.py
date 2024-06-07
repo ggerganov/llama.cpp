@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 from __future__ import annotations
 
@@ -474,6 +475,9 @@ class Model:
         if chkhsh == "c136ed14d01c2745d4f60a9596ae66800e2b61fa45643e72436041855ad4089d":
             # ref: https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct
             res = "smaug-bpe"
+        if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
+            # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
+            res = "jina-v2-code"
 
         if res is None:
             logger.warning("\n")
@@ -2451,11 +2455,13 @@ class JinaBertV2Model(BertModel):
 
     def get_tensors(self):
         for name, data in super().get_tensors():
-            if 'gated_layers' in name:
+            if 'gated_layer' in name:
                 d1 = data[:self.intermediate_size, :]
                 name1 = name.replace('gated_layers', 'gated_layers_w')
+                name1 = name1.replace('up_gated_layer', 'gated_layers_v')
                 d2 = data[self.intermediate_size:, :]
                 name2 = name.replace('gated_layers', 'gated_layers_v')
+                name2 = name2.replace('up_gated_layer', 'gated_layers_w')
                 yield name1, d1
                 yield name2, d2
                 continue
@@ -2840,7 +2846,12 @@ def main() -> None:
     hparams = Model.load_hparams(dir_model)
 
     with torch.inference_mode():
-        model_class = Model.from_model_architecture(hparams["architectures"][0])
+        try:
+            model_class = Model.from_model_architecture(hparams["architectures"][0])
+        except NotImplementedError:
+            logger.error(f"Model {hparams['architectures'][0]} is not supported")
+            sys.exit(1)
+
         model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file, args.no_lazy)
 
         logger.info("Set model parameters")

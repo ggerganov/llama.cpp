@@ -7,48 +7,31 @@
 #include <string>
 #include <vector>
 
+static void print_usage(int argc, char ** argv, const gpt_params & params) {
+    gpt_params_print_usage(argc, argv, params);
+
+    LOG_TEE("\nexample usage:\n");
+    LOG_TEE("\n    %s -m model.gguf -p \"Hello my name is\" -n 32 -np 4\n", argv[0]);
+    LOG_TEE("\n");
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (argc == 1 || argv[1][0] == '-') {
-        printf("usage: %s MODEL_PATH [PROMPT] [PARALLEL] [LEN] [NGL]\n" , argv[0]);
-        return 1 ;
+    params.prompt = "Hello my name is";
+    params.n_predict = 32;
+
+    if (!gpt_params_parse(argc, argv, params)) {
+        print_usage(argc, argv, params);
+        return 1;
     }
+
 
     // number of parallel batches
-    int n_parallel = 1;
+    int n_parallel = params.n_parallel;
 
     // total length of the sequences including the prompt
-    int n_len = 32;
-
-    // number of layers to offload to the GPU
-    int n_gpu_layers = 0;
-
-    if (argc >= 2) {
-        params.model = argv[1];
-    }
-
-    if (argc >= 3) {
-        params.prompt = argv[2];
-    }
-
-    if (argc >= 4) {
-        n_parallel = std::atoi(argv[3]);
-    }
-
-    if (argc >= 5) {
-        n_len = std::atoi(argv[4]);
-    }
-
-    if (argc >= 6) {
-        n_gpu_layers = std::atoi(argv[5]);
-    }
-
-    if (params.prompt.empty()) {
-        params.prompt = "Hello my name is";
-    }
-
-    string_process_escapes(params.prompt);
+    int n_predict = 32;
 
     // init LLM
 
@@ -57,9 +40,7 @@ int main(int argc, char ** argv) {
 
     // initialize the model
 
-    llama_model_params model_params = llama_model_default_params();
-
-    model_params.n_gpu_layers = n_gpu_layers;
+    llama_model_params model_params = llama_model_params_from_gpt_params(params);
 
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
@@ -73,18 +54,14 @@ int main(int argc, char ** argv) {
     std::vector<llama_token> tokens_list;
     tokens_list = ::llama_tokenize(model, params.prompt, true);
 
-    const int n_kv_req = tokens_list.size() + (n_len - tokens_list.size())*n_parallel;
+    const int n_kv_req = tokens_list.size() + (n_predict - tokens_list.size())*n_parallel;
 
     // initialize the context
 
-    llama_context_params ctx_params = llama_context_default_params();
+    llama_context_params ctx_params = llama_context_params_from_gpt_params(params);
 
-    ctx_params.seed  = 1234;
     ctx_params.n_ctx   = n_kv_req;
-    ctx_params.n_batch = std::max(n_len, n_parallel);
-    ctx_params.n_seq_max       = n_parallel;
-    ctx_params.n_threads       = params.n_threads;
-    ctx_params.n_threads_batch = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    ctx_params.n_batch = std::max(n_predict, n_parallel);
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
@@ -93,9 +70,9 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int n_ctx    = llama_n_ctx(ctx);
+    const int n_ctx = llama_n_ctx(ctx);
 
-    LOG_TEE("\n%s: n_len = %d, n_ctx = %d, n_batch = %u, n_parallel = %d, n_kv_req = %d\n", __func__, n_len, n_ctx, ctx_params.n_batch, n_parallel, n_kv_req);
+    LOG_TEE("\n%s: n_predict = %d, n_ctx = %d, n_batch = %u, n_parallel = %d, n_kv_req = %d\n", __func__, n_predict, n_ctx, ctx_params.n_batch, n_parallel, n_kv_req);
 
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if (n_kv_req > n_ctx) {
@@ -156,7 +133,7 @@ int main(int argc, char ** argv) {
 
     const auto t_main_start = ggml_time_us();
 
-    while (n_cur <= n_len) {
+    while (n_cur <= n_predict) {
         // prepare the next batch
         llama_batch_clear(batch);
 
@@ -192,7 +169,7 @@ int main(int argc, char ** argv) {
             //const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
             // is it an end of generation? -> mark the stream as finished
-            if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
+            if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {
                 i_batch[i] = -1;
                 LOG_TEE("\n");
                 if (n_parallel > 1) {
