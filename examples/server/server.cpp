@@ -888,7 +888,7 @@ struct server_context {
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
 
         // get prompt
-        {
+        if (!task.infill) {
             const auto & prompt = data.find("prompt");
             if (prompt == data.end()) {
                 send_error(task, "Either \"prompt\" or \"messages\" must be provided", ERROR_TYPE_INVALID_REQUEST);
