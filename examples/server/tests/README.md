@@ -27,10 +27,8 @@ To mitigate it, you can increase values in `n_predict`, `kv_size`.
 
 ```shell
 cd ../../..
-mkdir build
-cd build
-cmake -DLLAMA_CURL=ON ../
-cmake --build . --target llama-server
+cmake -B build -DLLAMA_CURL=ON
+cmake --build build --target llama-server
 ```
 
 2. Start the test: `./tests.sh`
