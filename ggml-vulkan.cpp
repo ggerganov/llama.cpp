@@ -345,15 +345,12 @@ struct vk_context {
 };
 
 struct ggml_tensor_extra_gpu {
-    bool ready;
-
     size_t ctx_idx;
 
     vk_buffer_ref buffer_gpu;
     uint64_t offset;
 
     void reset() {
-        ready = false;
         ctx_idx = 0;
         buffer_gpu.reset();
         offset = 0;
@@ -5569,6 +5566,13 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     const ggml_tensor * src2 = node->src[2];
 
     switch (node->op) {
+    // Return on empty ops to avoid generating a compute_ctx and setting exit_tensor
+    case GGML_OP_RESHAPE:
+    case GGML_OP_VIEW:
+    case GGML_OP_PERMUTE:
+    case GGML_OP_TRANSPOSE:
+    case GGML_OP_NONE:
+        return;
     case GGML_OP_UNARY:
         switch (ggml_get_unary_op(node)) {
         case GGML_UNARY_OP_SILU:
@@ -5590,10 +5594,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_CPY:
     case GGML_OP_CONT:
     case GGML_OP_DUP:
-    case GGML_OP_RESHAPE:
-    case GGML_OP_VIEW:
-    case GGML_OP_PERMUTE:
-    case GGML_OP_TRANSPOSE:
     case GGML_OP_NORM:
     case GGML_OP_RMS_NORM:
     case GGML_OP_DIAG_MASK_INF:
@@ -5601,7 +5601,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_ROPE:
     case GGML_OP_MUL_MAT:
     case GGML_OP_MUL_MAT_ID:
-    case GGML_OP_NONE:
     case GGML_OP_ARGSORT:
     case GGML_OP_SUM_ROWS:
         break;
@@ -5655,12 +5654,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         ggml_vk_cpy(ctx, ctx->compute_ctx, src0, node);
 
         break;
-    case GGML_OP_RESHAPE:
-    case GGML_OP_VIEW:
-    case GGML_OP_PERMUTE:
-    case GGML_OP_TRANSPOSE:
-    case GGML_OP_NONE:
-        break;
     case GGML_OP_NORM:
         ggml_vk_norm(ctx, ctx->compute_ctx, src0, node);
 
@@ -5712,7 +5705,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         return;
     }
 
-    extra->ready = true;
     extra->ctx_idx = ctx->compute_ctx->idx;
 
 #ifdef GGML_VULKAN_CHECK_RESULTS
@@ -5796,8 +5788,6 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_compute_
     ggml_vk_check_results_0(ctx, params, tensor);
 #endif
 
-    GGML_ASSERT(extra->ready);
-
     vk_context& subctx = ctx->gc.contexts[extra->ctx_idx];
 
     // Only run if ctx hasn't been submitted yet
@@ -5821,8 +5811,6 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_compute_
         subctx.in_memcpys.clear();
         subctx.out_memcpys.clear();
     }
-
-    extra->ready = false;
 
     return true;
 }
@@ -5943,7 +5931,9 @@ struct ggml_backend_vk_buffer_context {
 
     ~ggml_backend_vk_buffer_context() {
         ggml_vk_destroy_buffer(dev_buffer);
-        delete[] temp_tensor_extras;
+        if (temp_tensor_extras != nullptr) {
+            delete[] temp_tensor_extras;
+        }
     }
 
     ggml_tensor_extra_gpu * ggml_vk_alloc_temp_tensor_extra() {
@@ -6476,11 +6466,7 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
         //         return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
         //     } break;
         case GGML_OP_ROPE:
-            {
-                const int mode = ((const int32_t *) op->op_params)[2];
-
-                return true;
-            } break;
+            return true;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
