@@ -838,7 +838,7 @@ eval-callback: examples/eval-callback/eval-callback.cpp ggml.o llama.o $(COMMON_
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-control-vector-generator: examples/control-vector-generator/control-vector-generator.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+control-vector-generator: examples/control-vector-generator/control-vector-generator.cpp examples/control-vector-generator/pca.hpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
