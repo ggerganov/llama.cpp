@@ -25,8 +25,8 @@ from .constants import Keys
 SHARD_NAME_FORMAT = "{:s}-{:05d}-of-{:05d}.gguf"
 METADATA_ONLY_INDICATOR = -1
 
-KVTempData: TypeAlias = dict[str, tuple[Any, GGUFValueType]] # {key: (value, type)}
-TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any], GGMLQuantizationType] # (tensor name, tensor data, tensor dtype)
+KVTempData: TypeAlias = dict[str, tuple[Any, GGUFValueType | None]] # {key: (value, type)}
+TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any], GGMLQuantizationType | None] # (tensor name, tensor data, tensor dtype)
 
 
 @dataclass
