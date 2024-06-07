@@ -2,7 +2,9 @@
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT) [![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Server](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml/badge.svg?branch=master&event=schedule)](https://github.com/ggerganov/llama.cpp/actions/workflows/server.yml)
+[![Conan Center](https://shields.io/conan/v/llama-cpp)](https://conan.io/center/llama-cpp)
 
 [Roadmap](https://github.com/users/ggerganov/projects/7) / [Project status](https://github.com/ggerganov/llama.cpp/discussions/3471) / [Manifesto](https://github.com/ggerganov/llama.cpp/discussions/205) / [ggml](https://github.com/ggerganov/ggml)
 
@@ -20,7 +22,8 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Hot topics
 
-- **Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021**
+- **`convert.py` has been deprecated and moved to `examples/convert-legacy-llama.py`, please use `convert-hf-to-gguf.py`** https://github.com/ggerganov/llama.cpp/pull/7430
+- Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021
 - BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
 - MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
 - Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
@@ -74,7 +77,7 @@ variety of hardware - locally and in the cloud.
 - AVX, AVX2 and AVX512 support for x86 architectures
 - 1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
 - Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP)
-- Vulkan, SYCL, and (partial) OpenCL backend support
+- Vulkan and SYCL backend support
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 
 Since its [inception](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022), the project has
@@ -147,6 +150,8 @@ Typically finetunes of the base models below are supported as well.
 
 [llama.cpp web server](./examples/server) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
 
+[simplechat](./examples/server/public_simplechat) is a simple chat client, which can be used to chat with the model exposed using above web server (use --path to point to simplechat), from a local web browser.
+
 **Bindings:**
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
@@ -200,6 +205,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
 - [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
+- [AIKit](https://github.com/sozercan/aikit) (MIT)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
@@ -315,8 +321,6 @@ In order to build llama.cpp you have four different options.
       make
       ```
 
-      **Note**: for `Debug` builds, run `make LLAMA_DEBUG=1`
-
   - On Windows:
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
@@ -328,39 +332,37 @@ In order to build llama.cpp you have four different options.
         make
         ```
 
+  - Notes:
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, run `make LLAMA_DEBUG=1`
+
 - Using `CMake`:
 
-    ```bash
-    cmake -B build
-    cmake --build build --config Release
-    ```
+  ```bash
+  cmake -B build
+  cmake --build build --config Release
+  ```
 
-    **Note**: for `Debug` builds, there are two cases:
+  **Notes**:
 
-    - Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
+    - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
+    - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For debug builds, there are two cases:
+
+      1. Single-config generators (e.g. default = `Unix Makefiles`; note that they just ignore the `--config` flag):
 
       ```bash
       cmake -B build -DCMAKE_BUILD_TYPE=Debug
       cmake --build build
       ```
 
-    - Multi-config generators (`-G` param set to Visual Studio, XCode...):
+      2. Multi-config generators (`-G` param set to Visual Studio, XCode...):
 
       ```bash
       cmake -B build -G "Xcode"
       cmake --build build --config Debug
       ```
-
-- Using `Zig` (version 0.11 or later):
-
-    Building for optimization levels and CPU features can be accomplished using standard build arguments, for example AVX2, FMA, F16C,
-    it's also possible to cross compile for other operating systems and architectures:
-
-    ```bash
-    zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dcpu=x86_64+avx2+fma+f16c
-    ```
-
-    The `zig targets` command will give you valid options to use.
 
 -   Using `gmake` (FreeBSD):
 
@@ -369,15 +371,18 @@ In order to build llama.cpp you have four different options.
     3. Install compilation dependencies.
 
         ```bash
-        sudo pkg install gmake automake autoconf pkgconf llvm15 clinfo clover \
-            opencl clblast openblas
+        sudo pkg install gmake automake autoconf pkgconf llvm15 openblas
 
         gmake CC=/usr/local/bin/clang15 CXX=/usr/local/bin/clang++15 -j4
         ```
 
-    **Notes:** With this packages you can build llama.cpp with OPENBLAS and
-    CLBLAST support for use OpenCL GPU acceleration in FreeBSD. Please read
-    the instructions for use and activate this options in this document below.
+### Homebrew
+
+On Mac and Linux, the homebrew package manager can be used via
+```
+brew install llama.cpp
+```
+The formula is automatically updated with new `llama.cpp` releases. More info: https://github.com/ggerganov/llama.cpp/discussions/7668
 
 ### Metal Build
 
@@ -389,7 +394,7 @@ argument.
 
 ### BLAS Build
 
-Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS and CLBlast. There are currently several different BLAS implementations available for build and use:
+Building the program with BLAS support may lead to some performance improvements in prompt processing using batch sizes higher than 32 (the default is 512). Support with CPU-only BLAS implementations doesn't affect the normal generation performance. We may see generation performance improvements with GPU-involved BLAS implementations, e.g. cuBLAS, hipBLAS. There are currently several different BLAS implementations available for build and use:
 
 - #### Accelerate Framework:
 
@@ -477,10 +482,12 @@ Building the program with BLAS support may lead to some performance improvements
   |--------------------------------|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
   | LLAMA_CUDA_FORCE_DMMV          | Boolean                | false   | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
   | LLAMA_CUDA_DMMV_X              | Positive integer >= 32 | 32      | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants.                                         |
-  | LLAMA_CUDA_MMV_Y               | Positive integer       | 1       | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended.                                                                                                                                         |
+  | LLAMA_CUDA_MMV_Y               | Positive integer       | 1       | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended.                                               |
+  | LLAMA_CUDA_FORCE_MMQ           | Boolean                | false   | Force the use of dequantization + matrix multiplication kernels instead of leveraging Math libraries. |                                                                                                                                         |
   | LLAMA_CUDA_F16                 | Boolean                | false   | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs.                                                           |
   | LLAMA_CUDA_KQUANTS_ITER        | 1 or 2                 | 2       | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                                                                     |
   | LLAMA_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       | 128     | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial.                                                                         |
+  | LLAMA_CUDA_FA_ALL_QUANTS       | Boolean                | false   | Compile support for all KV cache quantization type (combinations) for the FlashAttention CUDA kernels. More fine-grained control over KV cache size but compilation takes much longer.                                                                                                  |
 
 - #### hipBLAS
 
@@ -541,111 +548,6 @@ Building the program with BLAS support may lead to some performance improvements
   | LLAMA_CUDA_MMV_Y        | Positive integer       | 1       | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants.                                                                       |
   | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
 
-- #### CLBlast
-
-  OpenCL acceleration is provided by the matrix multiplication kernels from the [CLBlast](https://github.com/CNugteren/CLBlast) project and custom kernels for ggml that can generate tokens on the GPU.
-
-  You will need the [OpenCL SDK](https://github.com/KhronosGroup/OpenCL-SDK).
-    - For Ubuntu, Debian, and Fedora the packages `opencl-headers`, `ocl-icd` may be needed.
-
-    - For Windows, a pre-built SDK is available on the [OpenCL Releases](https://github.com/KhronosGroup/OpenCL-SDK/releases) page.
-
-    - <details>
-        <summary>Installing the OpenCL SDK from source</summary>
-
-        ```sh
-        git clone --recurse-submodules https://github.com/KhronosGroup/OpenCL-SDK.git
-        cd OpenCL-SDK
-        cmake -B build -DBUILD_DOCS=OFF \
-          -DBUILD_EXAMPLES=OFF \
-          -DBUILD_TESTING=OFF \
-          -DOPENCL_SDK_BUILD_SAMPLES=OFF \
-          -DOPENCL_SDK_TEST_SAMPLES=OFF
-        cmake --build build
-        cmake --install build --prefix /some/path
-        ```
-      </details>
-
-  ##### Installing CLBlast
-
-  Pre-built CLBlast binaries may be found on the [CLBlast Releases](https://github.com/CNugteren/CLBlast/releases) page. For Unix variants, it may also be found in your operating system's packages.
-
-  Linux packaging:
-  Fedora Linux:
-  ```bash
-  sudo dnf install clblast
-  ```
-
-  Alternatively, they may be built from source.
-
-  - <details>
-    <summary>Windows:</summary>
-
-      ```cmd
-      set OPENCL_SDK_ROOT="C:/OpenCL-SDK-v2023.04.17-Win-x64"
-      git clone https://github.com/CNugteren/CLBlast.git
-      cd CLBlast
-      cmake -B build -DBUILD_SHARED_LIBS=OFF -DOVERRIDE_MSVC_FLAGS_TO_MT=OFF -DTUNERS=OFF -DOPENCL_ROOT=%OPENCL_SDK_ROOT% -G "Visual Studio 17 2022" -A x64
-      cmake --build build --config Release
-      cmake --install build --prefix C:/CLBlast
-      ```
-
-      (note: `--config Release` at build time is the default and only relevant for Visual Studio builds - or multi-config Ninja builds)
-
-  - <details>
-    <summary>Unix:</summary>
-
-      ```sh
-      git clone https://github.com/CNugteren/CLBlast.git
-      cd CLBlast
-      cmake -B build -DBUILD_SHARED_LIBS=OFF -DTUNERS=OFF
-      cmake --build build --config Release
-      cmake --install build --prefix /some/path
-      ```
-
-      Where `/some/path` is where the built library will be installed (default is `/usr/local`).
-    </details>
-
-  ##### Building Llama with CLBlast
-
-  - Build with make:
-    ```sh
-    make LLAMA_CLBLAST=1
-    ```
-  - CMake (Unix):
-    ```sh
-    cmake -B build -DLLAMA_CLBLAST=ON -DCLBlast_DIR=/some/path
-    cmake --build build --config Release
-    ```
-  - CMake (Windows):
-    ```cmd
-    set CL_BLAST_CMAKE_PKG="C:/CLBlast/lib/cmake/CLBlast"
-    git clone https://github.com/ggerganov/llama.cpp
-    cd llama.cpp
-    cmake -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CLBLAST=ON -DCMAKE_PREFIX_PATH=%CL_BLAST_CMAKE_PKG% -G "Visual Studio 17 2022" -A x64
-    cmake --build build --config Release
-    cmake --install build --prefix C:/LlamaCPP
-    ```
-
-  ##### Running Llama with CLBlast
-
-  The CLBlast build supports `--gpu-layers|-ngl` like the CUDA version does.
-
-  To select the correct platform (driver) and device (GPU), you can use the environment variables `GGML_OPENCL_PLATFORM` and `GGML_OPENCL_DEVICE`.
-  The selection can be a number (starting from 0) or a text string to search:
-
-  ```sh
-  GGML_OPENCL_PLATFORM=1 ./main ...
-  GGML_OPENCL_DEVICE=2 ./main ...
-  GGML_OPENCL_PLATFORM=Intel ./main ...
-  GGML_OPENCL_PLATFORM=AMD GGML_OPENCL_DEVICE=1 ./main ...
-  ```
-
-  The default behavior is to find the first GPU device, but when it is an integrated GPU on a laptop, for instance, the selectors are useful.
-  Using the variables it is possible to select a CPU-based driver as well, if so desired.
-
-  You can get a list of platforms and devices from the `clinfo -l` command, etc.
-
 - #### Vulkan
 
   **With docker**:
@@ -696,7 +598,8 @@ Building the program with BLAS support may lead to some performance improvements
 
 To obtain the official LLaMA 2 weights please see the <a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a> section. There is also a large selection of pre-quantized `gguf` models available on Hugging Face.
 
-Note: `convert.py` does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
+Note: `convert.py` has been moved to `examples/convert-legacy-llama.py` and shouldn't be used for anything other than `Llama/Llama2/Mistral` models and their derivatives.
+It does not support LLaMA 3, you can use `convert-hf-to-gguf.py` with LLaMA 3 downloaded from Hugging Face.
 
 ```bash
 # obtain the official LLaMA model weights and place them in ./models
@@ -713,10 +616,10 @@ ls ./models
 python3 -m pip install -r requirements.txt
 
 # convert the model to ggml FP16 format
-python3 convert.py models/mymodel/
+python3 convert-hf-to-gguf.py models/mymodel/
 
 # [Optional] for models using BPE tokenizers
-python convert.py models/mymodel/ --vocab-type bpe
+python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
 
 # quantize the model to 4-bits (using Q4_K_M method)
 ./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M

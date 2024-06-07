@@ -1,4 +1,4 @@
-name: Enhancement template
+name: Enhancement
 description: Used to request enhancements for llama.cpp
 title: "Feature Request: "
 labels: ["enhancement"]

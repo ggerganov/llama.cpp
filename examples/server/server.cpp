@@ -17,9 +17,20 @@
 #include "json.hpp"
 
 // auto generated files (update with ./deps.sh)
+#include "colorthemes.css.hpp"
+#include "style.css.hpp"
+#include "theme-beeninorder.css.hpp"
+#include "theme-ketivah.css.hpp"
+#include "theme-mangotango.css.hpp"
+#include "theme-playground.css.hpp"
+#include "theme-polarnight.css.hpp"
+#include "theme-snowstorm.css.hpp"
 #include "index.html.hpp"
+#include "index-new.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
+#include "system-prompts.js.hpp"
+#include "prompt-formats.js.hpp"
 #include "json-schema-to-grammar.mjs.hpp"
 
 #include <atomic>
@@ -110,29 +121,6 @@ struct slot_params {
 
     json input_prefix;
     json input_suffix;
-};
-
-struct server_params {
-    int32_t port           = 8080;
-    int32_t read_timeout   = 600;
-    int32_t write_timeout  = 600;
-    int32_t n_threads_http = -1;
-
-    std::string hostname      = "127.0.0.1";
-    std::string public_path   = "";
-    std::string chat_template = "";
-    std::string system_prompt = "";
-
-    std::vector<std::string> api_keys;
-
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-    std::string ssl_key_file = "";
-    std::string ssl_cert_file = "";
-#endif
-
-    bool slots_endpoint   = true;
-    bool metrics_endpoint = false;
-    std::string slot_save_path;
 };
 
 struct server_slot {
@@ -1250,7 +1238,7 @@ struct server_context {
     }
 
     json get_formated_generation(const server_slot & slot) const {
-        const auto eos_bias = slot.sparams.logit_bias.find(llama_token_eos(model));
+        const auto eos_bias   =             slot.sparams.logit_bias.find(llama_token_eos(model));
         const bool ignore_eos = eos_bias != slot.sparams.logit_bias.end() && eos_bias->second < 0.0f && std::isinf(eos_bias->second);
 
         std::vector<std::string> samplers_sequence;
@@ -2323,561 +2311,6 @@ struct server_context {
     }
 };
 
-static void server_print_usage(const char * argv0, const gpt_params & params, const server_params & sparams) {
-    printf("usage: %s [options]\n", argv0);
-    printf("\n");
-    printf("options:\n");
-    printf("  -h, --help                show this help message and exit\n");
-    printf("  -v, --verbose             verbose output (default: %s)\n", server_verbose ? "enabled" : "disabled");
-    printf("  -t N, --threads N         number of threads to use during computation (default: %d)\n", params.n_threads);
-    printf("  -tb N, --threads-batch N  number of threads to use during batch and prompt processing (default: same as --threads)\n");
-    printf("  --threads-http N          number of threads in the http server pool to process requests (default: max(hardware concurrency - 1, --parallel N + 2))\n");
-    printf("  -c N, --ctx-size N        size of the prompt context (default: %d)\n", params.n_ctx);
-    printf("  --rope-scaling {none,linear,yarn}\n");
-    printf("                            RoPE frequency scaling method, defaults to linear unless specified by the model\n");
-    printf("  --rope-freq-base N        RoPE base frequency (default: loaded from model)\n");
-    printf("  --rope-freq-scale N       RoPE frequency scaling factor, expands context by a factor of 1/N\n");
-    printf("  --yarn-ext-factor N       YaRN: extrapolation mix factor (default: 1.0, 0.0 = full interpolation)\n");
-    printf("  --yarn-attn-factor N      YaRN: scale sqrt(t) or attention magnitude (default: 1.0)\n");
-    printf("  --yarn-beta-slow N        YaRN: high correction dim or alpha (default: %.1f)\n", params.yarn_beta_slow);
-    printf("  --yarn-beta-fast N        YaRN: low correction dim or beta (default: %.1f)\n", params.yarn_beta_fast);
-    printf("  --pooling {none,mean,cls} pooling type for embeddings, use model default if unspecified\n");
-    printf("  -dt N, --defrag-thold N\n");
-    printf("                            KV cache defragmentation threshold (default: %.1f, < 0 - disabled)\n", params.defrag_thold);
-    printf("  -b N, --batch-size N      logical maximum batch size (default: %d)\n", params.n_batch);
-    printf("  -ub N, --ubatch-size N    physical maximum batch size (default: %d)\n", params.n_ubatch);
-    if (llama_supports_mlock()) {
-        printf("  --mlock                   force system to keep model in RAM rather than swapping or compressing\n");
-    }
-    if (llama_supports_mmap()) {
-        printf("  --no-mmap                 do not memory-map model (slower load but may reduce pageouts if not using mlock)\n");
-    }
-    printf("  --numa TYPE               attempt optimizations that help on some NUMA systems\n");
-    printf("                              - distribute: spread execution evenly over all nodes\n");
-    printf("                              - isolate: only spawn threads on CPUs on the node that execution started on\n");
-    printf("                              - numactl: use the CPU map provided my numactl\n");
-    if (llama_supports_gpu_offload()) {
-        printf("  -ngl N, --n-gpu-layers N\n");
-        printf("                            number of layers to store in VRAM\n");
-        printf("  -sm SPLIT_MODE, --split-mode SPLIT_MODE\n");
-        printf("                            how to split the model across multiple GPUs, one of:\n");
-        printf("                              - none: use one GPU only\n");
-        printf("                              - layer (default): split layers and KV across GPUs\n");
-        printf("                              - row: split rows across GPUs\n");
-        printf("  -ts SPLIT --tensor-split SPLIT\n");
-        printf("                            fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1\n");
-        printf("  -mg i, --main-gpu i       the GPU to use for the model (with split-mode = none),\n");
-        printf("                            or for intermediate results and KV (with split-mode = row)\n");
-        printf("  -nkvo, --no-kv-offload\n");
-        printf("                            disable KV offload\n");
-    }
-    printf("  -m FNAME, --model FNAME\n");
-    printf("                            model path (default: models/$filename with filename from --hf-file or --model-url if set, otherwise %s)\n", DEFAULT_MODEL_PATH);
-    printf("  -mu MODEL_URL, --model-url MODEL_URL\n");
-    printf("                            model download url (default: unused)\n");
-    printf("  -hfr REPO, --hf-repo REPO\n");
-    printf("                            Hugging Face model repository (default: unused)\n");
-    printf("  -hff FILE, --hf-file FILE\n");
-    printf("                            Hugging Face model file (default: unused)\n");
-    printf("  -a ALIAS, --alias ALIAS\n");
-    printf("                            set an alias for the model, will be added as `model` field in completion response\n");
-    printf("  --lora FNAME              apply LoRA adapter (implies --no-mmap)\n");
-    printf("  --lora-base FNAME         optional model to use as a base for the layers modified by the LoRA adapter\n");
-    printf("  --host                    ip address to listen (default  (default: %s)\n", sparams.hostname.c_str());
-    printf("  --port PORT               port to listen (default  (default: %d)\n", sparams.port);
-    printf("  --rpc SERVERS             comma separated list of RPC servers\n");
-    printf("  --path PUBLIC_PATH        path from which to serve static files (default: disabled)\n");
-    printf("  --api-key API_KEY         optional api key to enhance server security. If set, requests must include this key for access.\n");
-    printf("  --api-key-file FNAME      path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access.\n");
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-    printf("  --ssl-key-file FNAME      path to file a PEM-encoded SSL private key\n");
-    printf("  --ssl-cert-file FNAME     path to file a PEM-encoded SSL certificate\n");
-#endif
-    printf("  -to N, --timeout N        server read/write timeout in seconds (default: %d)\n", sparams.read_timeout);
-    printf("  --embeddings              enable embedding vector output (default: %s)\n", params.embedding ? "enabled" : "disabled");
-    printf("  -np N, --parallel N       number of slots for process requests (default: %d)\n", params.n_parallel);
-    printf("  -cb, --cont-batching      enable continuous batching (a.k.a dynamic batching) (default: enabled)\n");
-    printf("  -fa, --flash-attn         enable Flash Attention (default: %s)\n", params.flash_attn ? "enabled" : "disabled");
-    printf("  -spf FNAME, --system-prompt-file FNAME\n");
-    printf("                            set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications.\n");
-    printf("  -ctk TYPE, --cache-type-k TYPE\n");
-    printf("                            KV cache data type for K (default: f16)\n");
-    printf("  -ctv TYPE, --cache-type-v TYPE\n");
-    printf("                            KV cache data type for V (default: f16)\n");
-    printf("  --log-format              log output format: json or text (default: json)\n");
-    printf("  --log-disable             disables logging to a file.\n");
-    printf("  --slots-endpoint-disable  disables slots monitoring endpoint.\n");
-    printf("  --metrics                 enable prometheus compatible metrics endpoint (default: %s).\n", sparams.metrics_endpoint ? "enabled" : "disabled");
-    printf("  --slot-save-path PATH     path to save slot kv cache (default: disabled)\n");
-    printf("\n");
-    printf("  -n, --n-predict           maximum tokens to predict (default: %d)\n", params.n_predict);
-    printf("  --override-kv KEY=TYPE:VALUE\n");
-    printf("                            advanced option to override model metadata by key. may be specified multiple times.\n");
-    printf("                            types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false\n");
-    printf("  -gan N, --grp-attn-n N    set the group attention factor to extend context size through self-extend(default: 1=disabled), used together with group attention width `--grp-attn-w`\n");
-    printf("  -gaw N, --grp-attn-w N    set the group attention width to extend context size through self-extend(default: 512), used together with group attention factor `--grp-attn-n`\n");
-    printf("  --chat-template JINJA_TEMPLATE\n");
-    printf("                            set custom jinja chat template (default: template taken from model's metadata)\n");
-    printf("                            only commonly used templates are accepted:\n");
-    printf("                            https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template\n");
-    printf("\n");
-}
-
-static void server_params_parse(int argc, char ** argv, server_params & sparams, gpt_params & params) {
-    gpt_params    default_params;
-    server_params default_sparams;
-
-    std::string arg;
-    bool invalid_param = false;
-
-    for (int i = 1; i < argc; i++) {
-        arg = argv[i];
-        if (arg == "--port") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.port = std::stoi(argv[i]);
-        } else if (arg == "--rpc") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rpc_servers = argv[i];
-        } else if (arg == "--host") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.hostname = argv[i];
-        } else if (arg == "--path") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.public_path = argv[i];
-        } else if (arg == "--api-key") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.api_keys.push_back(argv[i]);
-        } else if (arg == "--api-key-file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream key_file(argv[i]);
-            if (!key_file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            std::string key;
-            while (std::getline(key_file, key)) {
-               if (key.size() > 0) {
-                   sparams.api_keys.push_back(key);
-               }
-            }
-            key_file.close();
-
-        }
-#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-        else if (arg == "--ssl-key-file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.ssl_key_file = argv[i];
-        } else if (arg == "--ssl-cert-file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.ssl_cert_file = argv[i];
-        }
-#endif
-        else if (arg == "--timeout" || arg == "-to") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.read_timeout = std::stoi(argv[i]);
-            sparams.write_timeout = std::stoi(argv[i]);
-        } else if (arg == "-m" || arg == "--model") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model = argv[i];
-        } else if (arg == "-mu" || arg == "--model-url") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model_url = argv[i];
-        } else if (arg == "-hfr" || arg == "--hf-repo") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.hf_repo = argv[i];
-        } else if (arg == "-hff" || arg == "--hf-file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.hf_file = argv[i];
-        } else if (arg == "-a" || arg == "--alias") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.model_alias = argv[i];
-        } else if (arg == "-h" || arg == "--help") {
-            server_print_usage(argv[0], default_params, default_sparams);
-            exit(0);
-        } else if (arg == "-c" || arg == "--ctx-size" || arg == "--ctx_size") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_ctx = std::stoi(argv[i]);
-        } else if (arg == "--rope-scaling") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string value(argv[i]);
-            /**/ if (value == "none")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_NONE; }
-            else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_LINEAR; }
-            else if (value == "yarn")   { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
-            else { invalid_param = true; break; }
-        } else if (arg == "--rope-freq-base") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rope_freq_base = std::stof(argv[i]);
-        } else if (arg == "--rope-freq-scale") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.rope_freq_scale = std::stof(argv[i]);
-        } else if (arg == "--yarn-ext-factor") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_ext_factor = std::stof(argv[i]);
-        }
-        else if (arg == "--yarn-attn-factor") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_attn_factor = std::stof(argv[i]);
-        } else if (arg == "--yarn-beta-fast") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_beta_fast = std::stof(argv[i]);
-        } else if (arg == "--yarn-beta-slow") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.yarn_beta_slow = std::stof(argv[i]);
-        } else if (arg == "--pooling") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string value(argv[i]);
-            /**/ if (value == "none") { params.pooling_type = LLAMA_POOLING_TYPE_NONE; }
-            else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
-            else if (value == "cls")  { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
-            else { invalid_param = true; break; }
-        } else if (arg == "--defrag-thold" || arg == "-dt") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.defrag_thold = std::stof(argv[i]);
-        } else if (arg == "--threads" || arg == "-t") {
-            if (++i >= argc)
-            {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads = std::stoi(argv[i]);
-        } else if (arg == "--grp-attn-n" || arg == "-gan") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-
-            params.grp_attn_n = std::stoi(argv[i]);
-        } else if (arg == "--grp-attn-w" || arg == "-gaw") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-
-            params.grp_attn_w = std::stoi(argv[i]);
-        } else if (arg == "--threads-batch" || arg == "-tb") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_threads_batch = std::stoi(argv[i]);
-        } else if (arg == "--threads-http") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.n_threads_http = std::stoi(argv[i]);
-        } else if (arg == "-b" || arg == "--batch-size") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_batch = std::stoi(argv[i]);
-        } else if (arg == "-ub" || arg == "--ubatch-size") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_ubatch = std::stoi(argv[i]);
-        } else if (arg == "--gpu-layers" || arg == "-ngl" || arg == "--n-gpu-layers") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            if (llama_supports_gpu_offload()) {
-                params.n_gpu_layers = std::stoi(argv[i]);
-            } else {
-                LOG_WARNING(
-                    "Not compiled with GPU offload support, --n-gpu-layers option will be ignored. "
-                    "See main README.md for information on enabling GPU BLAS support",
-                    {{"n_gpu_layers", params.n_gpu_layers}});
-            }
-        } else if (arg == "-nkvo" || arg == "--no-kv-offload") {
-            params.no_kv_offload = true;
-        } else if (arg == "--split-mode" || arg == "-sm") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::string arg_next = argv[i];
-            if (arg_next == "none") {
-                params.split_mode = LLAMA_SPLIT_MODE_NONE;
-            } else if (arg_next == "layer") {
-                params.split_mode = LLAMA_SPLIT_MODE_LAYER;
-            } else if (arg_next == "row") {
-                params.split_mode = LLAMA_SPLIT_MODE_ROW;
-            } else {
-                invalid_param = true;
-                break;
-            }
-#ifndef GGML_USE_CUDA
-            fprintf(stderr, "warning: llama.cpp was compiled without CUDA. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUDA
-        } else if (arg == "--tensor-split" || arg == "-ts") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-#if defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL)
-            std::string arg_next = argv[i];
-
-            // split string by , and /
-            const std::regex regex{R"([,/]+)"};
-            std::sregex_token_iterator it{arg_next.begin(), arg_next.end(), regex, -1};
-            std::vector<std::string> split_arg{it, {}};
-            GGML_ASSERT(split_arg.size() <= llama_max_devices());
-
-            for (size_t i_device = 0; i_device < llama_max_devices(); ++i_device) {
-                if (i_device < split_arg.size()) {
-                    params.tensor_split[i_device] = std::stof(split_arg[i_device]);
-                } else {
-                    params.tensor_split[i_device] = 0.0f;
-                }
-            }
-#else
-            LOG_WARNING("llama.cpp was compiled without CUDA. It is not possible to set a tensor split.\n", {});
-#endif // GGML_USE_CUDA
-        } else if (arg == "--main-gpu" || arg == "-mg") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-#if defined(GGML_USE_CUDA) || defined(GGML_USE_SYCL)
-            params.main_gpu = std::stoi(argv[i]);
-#else
-            LOG_WARNING("llama.cpp was compiled without CUDA. It is not possible to set a main GPU.", {});
-#endif
-        } else if (arg == "--lora") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_adapter.emplace_back(argv[i], 1.0f);
-            params.use_mmap = false;
-        } else if (arg == "--lora-scaled") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            const char * lora_adapter = argv[i];
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
-            params.use_mmap = false;
-        } else if (arg == "--lora-base") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.lora_base = argv[i];
-        } else if (arg == "-v" || arg == "--verbose") {
-#if SERVER_VERBOSE != 1
-            LOG_WARNING("server.cpp is not built with verbose logging.", {});
-#else
-            server_verbose = true;
-#endif
-        } else if (arg == "--mlock") {
-            params.use_mlock = true;
-        } else if (arg == "--no-mmap") {
-            params.use_mmap = false;
-        } else if (arg == "--numa") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            } else {
-                std::string value(argv[i]);
-                /**/ if (value == "distribute" || value == "" ) { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
-                else if (value == "isolate")                    { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
-                else if (value == "numactl")                    { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
-                else { invalid_param = true; break; }
-            }
-        } else if (arg == "--embedding" || arg == "--embeddings") {
-            params.embedding = true;
-        } else if (arg == "-cb" || arg == "--cont-batching") {
-            params.cont_batching = true;
-        } else if (arg == "-fa" || arg == "--flash-attn") {
-            params.flash_attn = true;
-        } else if (arg == "-np" || arg == "--parallel") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_parallel = std::stoi(argv[i]);
-        } else if (arg == "-n" || arg == "--n-predict") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.n_predict = std::stoi(argv[i]);
-        } else if (arg == "-spf" || arg == "--system-prompt-file") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            std::ifstream file(argv[i]);
-            if (!file) {
-                fprintf(stderr, "error: failed to open file '%s'\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-            std::string system_prompt;
-            std::copy(
-                std::istreambuf_iterator<char>(file),
-                std::istreambuf_iterator<char>(),
-                std::back_inserter(system_prompt)
-            );
-            sparams.system_prompt = system_prompt;
-        } else if (arg == "-ctk" || arg == "--cache-type-k") {
-            params.cache_type_k = argv[++i];
-        } else if (arg == "-ctv" || arg == "--cache-type-v") {
-            params.cache_type_v = argv[++i];
-        } else if (arg == "--log-format") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            if (std::strcmp(argv[i], "json") == 0) {
-                server_log_json = true;
-            } else if (std::strcmp(argv[i], "text") == 0) {
-                server_log_json = false;
-            } else {
-                invalid_param = true;
-                break;
-            }
-        } else if (arg == "--log-disable") {
-            log_set_target(stdout);
-            LOG_INFO("logging to file is disabled.", {});
-        } else if (arg == "--slots-endpoint-disable") {
-            sparams.slots_endpoint = false;
-        } else if (arg == "--metrics") {
-            sparams.metrics_endpoint = true;
-        } else if (arg == "--slot-save-path") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            sparams.slot_save_path = argv[i];
-            // if doesn't end with DIRECTORY_SEPARATOR, add it
-            if (!sparams.slot_save_path.empty() && sparams.slot_save_path[sparams.slot_save_path.size() - 1] != DIRECTORY_SEPARATOR) {
-                sparams.slot_save_path += DIRECTORY_SEPARATOR;
-            }
-        } else if (arg == "--chat-template") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            if (!verify_custom_template(argv[i])) {
-                fprintf(stderr, "error: the supplied chat template is not supported: %s\n", argv[i]);
-                fprintf(stderr, "note: llama.cpp does not use jinja parser, we only support commonly used templates\n");
-                invalid_param = true;
-                break;
-            }
-            sparams.chat_template = argv[i];
-        } else if (arg == "--override-kv") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            if (!string_parse_kv_override(argv[i], params.kv_overrides)) {
-                fprintf(stderr, "error: Invalid type for KV override: %s\n", argv[i]);
-                invalid_param = true;
-                break;
-            }
-        } else {
-            fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
-            server_print_usage(argv[0], default_params, default_sparams);
-            exit(1);
-        }
-    }
-
-    gpt_params_handle_model_default(params);
-
-    if (!params.kv_overrides.empty()) {
-        params.kv_overrides.emplace_back();
-        params.kv_overrides.back().key[0] = 0;
-    }
-
-    if (invalid_param) {
-        fprintf(stderr, "error: invalid parameter for argument: %s\n", arg.c_str());
-        server_print_usage(argv[0], default_params, default_sparams);
-        exit(1);
-    }
-}
-
 static void log_server_request(const httplib::Request & req, const httplib::Response & res) {
     // skip GH copilot requests when using default port
     if (req.path == "/v1/health" || req.path == "/v1/completions") {
@@ -2918,16 +2351,22 @@ int main(int argc, char ** argv) {
     log_disable();
 #endif
     // own arguments required by this example
-    gpt_params    params;
-    server_params sparams;
+    gpt_params params;
+
+    if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
+        return 1;
+    }
+
+    // TODO: not great to use extern vars
+    server_log_json = params.log_json;
+    server_verbose = params.verbosity > 0;
 
     // struct that contains llama context and inference
     server_context ctx_server;
 
-    server_params_parse(argc, argv, sparams, params);
-
-    if (!sparams.system_prompt.empty()) {
-        ctx_server.system_prompt_set(sparams.system_prompt);
+    if (!params.system_prompt.empty()) {
+        ctx_server.system_prompt_set(params.system_prompt);
     }
 
     if (params.model_alias == "unknown") {
@@ -2951,10 +2390,10 @@ int main(int argc, char ** argv) {
 
     std::unique_ptr<httplib::Server> svr;
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
-    if (sparams.ssl_key_file != "" && sparams.ssl_cert_file != "") {
-        LOG_INFO("Running with SSL", {{"key", sparams.ssl_key_file}, {"cert", sparams.ssl_cert_file}});
+    if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
+        LOG_INFO("Running with SSL", {{"key", params.ssl_file_key}, {"cert", params.ssl_file_cert}});
         svr.reset(
-            new httplib::SSLServer(sparams.ssl_cert_file.c_str(), sparams.ssl_key_file.c_str())
+            new httplib::SSLServer(params.ssl_file_cert.c_str(), params.ssl_file_key.c_str())
         );
     } else {
         LOG_INFO("Running without SSL", {});
@@ -3008,24 +2447,24 @@ int main(int argc, char ** argv) {
     });
 
     // set timeouts and change hostname and port
-    svr->set_read_timeout (sparams.read_timeout);
-    svr->set_write_timeout(sparams.write_timeout);
+    svr->set_read_timeout (params.timeout_read);
+    svr->set_write_timeout(params.timeout_write);
 
-    if (!svr->bind_to_port(sparams.hostname, sparams.port)) {
-        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", sparams.hostname.c_str(), sparams.port);
+    if (!svr->bind_to_port(params.hostname, params.port)) {
+        fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", params.hostname.c_str(), params.port);
         return 1;
     }
 
     std::unordered_map<std::string, std::string> log_data;
 
-    log_data["hostname"] = sparams.hostname;
-    log_data["port"]     = std::to_string(sparams.port);
+    log_data["hostname"] = params.hostname;
+    log_data["port"]     = std::to_string(params.port);
 
-    if (sparams.api_keys.size() == 1) {
-        auto key = sparams.api_keys[0];
+    if (params.api_keys.size() == 1) {
+        auto key = params.api_keys[0];
         log_data["api_key"] = "api_key: ****" + key.substr(std::max((int)(key.length() - 4), 0));
-    } else if (sparams.api_keys.size() > 1) {
-        log_data["api_key"] = "api_key: " + std::to_string(sparams.api_keys.size()) + " keys loaded";
+    } else if (params.api_keys.size() > 1) {
+        log_data["api_key"] = "api_key: " + std::to_string(params.api_keys.size()) + " keys loaded";
     }
 
     // load the model
@@ -3042,10 +2481,10 @@ int main(int argc, char ** argv) {
     const auto model_meta = ctx_server.model_meta();
 
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
-    if (sparams.chat_template.empty()) {
+    if (params.chat_template.empty()) {
         if (!ctx_server.validate_model_chat_template()) {
             LOG_ERROR("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
-            sparams.chat_template = "chatml";
+            params.chat_template = "chatml";
         }
     }
 
@@ -3057,11 +2496,11 @@ int main(int argc, char ** argv) {
         chat.push_back({{"role", "assistant"}, {"content", "Hi there"}});
         chat.push_back({{"role", "user"},      {"content", "How are you?"}});
 
-        const std::string chat_example = format_chat(ctx_server.model, sparams.chat_template, chat);
+        const std::string chat_example = format_chat(ctx_server.model, params.chat_template, chat);
 
         LOG_INFO("chat template", {
             {"chat_example", chat_example},
-            {"built_in", sparams.chat_template.empty()},
+            {"built_in", params.chat_template.empty()},
         });
     }
 
@@ -3069,7 +2508,7 @@ int main(int argc, char ** argv) {
     // Middlewares
     //
 
-    auto middleware_validate_api_key = [&sparams, &res_error](const httplib::Request & req, httplib::Response & res) {
+    auto middleware_validate_api_key = [&params, &res_error](const httplib::Request & req, httplib::Response & res) {
         // TODO: should we apply API key to all endpoints, including "/health" and "/models"?
         static const std::set<std::string> protected_endpoints = {
             "/props",
@@ -3087,7 +2526,7 @@ int main(int argc, char ** argv) {
         };
 
         // If API key is not set, skip validation
-        if (sparams.api_keys.empty()) {
+        if (params.api_keys.empty()) {
             return true;
         }
 
@@ -3102,7 +2541,7 @@ int main(int argc, char ** argv) {
         std::string prefix = "Bearer ";
         if (auth_header.substr(0, prefix.size()) == prefix) {
             std::string received_api_key = auth_header.substr(prefix.size());
-            if (std::find(sparams.api_keys.begin(), sparams.api_keys.end(), received_api_key) != sparams.api_keys.end()) {
+            if (std::find(params.api_keys.begin(), params.api_keys.end(), received_api_key) != params.api_keys.end()) {
                 return true; // API key is valid
             }
         }
@@ -3157,7 +2596,7 @@ int main(int argc, char ** argv) {
                     };
 
                     res.status = 200; // HTTP OK
-                    if (sparams.slots_endpoint && req.has_param("include_slots")) {
+                    if (params.endpoint_slots && req.has_param("include_slots")) {
                         health["slots"] = result.data.at("slots");
                     }
 
@@ -3183,7 +2622,7 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_slots = [&](const httplib::Request &, httplib::Response & res) {
-        if (!sparams.slots_endpoint) {
+        if (!params.endpoint_slots) {
             res_error(res, format_error_response("This server does not support slots endpoint.", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
@@ -3207,7 +2646,7 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_metrics = [&](const httplib::Request &, httplib::Response & res) {
-        if (!sparams.metrics_endpoint) {
+        if (!params.endpoint_metrics) {
             res_error(res, format_error_response("This server does not support metrics endpoint.", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
@@ -3307,14 +2746,14 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
-    const auto handle_slots_save = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
+    const auto handle_slots_save = [&ctx_server, &res_error, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
         if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
-        std::string filepath = sparams.slot_save_path + filename;
+        std::string filepath = params.slot_save_path + filename;
 
         server_task task;
         task.type = SERVER_TASK_TYPE_SLOT_SAVE;
@@ -3337,14 +2776,14 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_slots_restore = [&ctx_server, &res_error, &sparams](const httplib::Request & req, httplib::Response & res, int id_slot) {
+    const auto handle_slots_restore = [&ctx_server, &res_error, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
         if (!fs_validate_filename(filename)) {
             res_error(res, format_error_response("Invalid filename", ERROR_TYPE_INVALID_REQUEST));
             return;
         }
-        std::string filepath = sparams.slot_save_path + filename;
+        std::string filepath = params.slot_save_path + filename;
 
         server_task task;
         task.type = SERVER_TASK_TYPE_SLOT_RESTORE;
@@ -3519,9 +2958,9 @@ int main(int argc, char ** argv) {
         res.set_content(models.dump(), "application/json; charset=utf-8");
     };
 
-    const auto handle_chat_completions = [&ctx_server, &sparams, &res_error](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_chat_completions = [&ctx_server, &params, &res_error](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), sparams.chat_template);
+        json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
 
         const int id_task = ctx_server.queue_tasks.get_new_id();
 
@@ -3746,17 +3185,29 @@ int main(int argc, char ** argv) {
     //
 
     // register static assets routes
-    if (!sparams.public_path.empty()) {
+    if (!params.public_path.empty()) {
         // Set the base directory for serving static files
-        svr->set_base_dir(sparams.public_path);
+        svr->set_base_dir(params.public_path);
     }
 
     // using embedded static files
-    svr->Get("/", handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
-    svr->Get("/index.js", handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
-    svr->Get("/completion.js", handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
-    svr->Get("/json-schema-to-grammar.mjs", handle_static_file(
-        json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
+    svr->Get("/",                           handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
+    svr->Get("/index.js",                   handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/completion.js",              handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/json-schema-to-grammar.mjs", handle_static_file(json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
+
+    // add new-ui files
+    svr->Get("/colorthemes.css",       handle_static_file(colorthemes_css, colorthemes_css_len, "text/css; charset=utf-8"));
+    svr->Get("/style.css",             handle_static_file(style_css, style_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-beeninorder.css", handle_static_file(theme_beeninorder_css, theme_beeninorder_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-ketivah.css",     handle_static_file(theme_ketivah_css, theme_ketivah_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-mangotango.css",  handle_static_file(theme_mangotango_css, theme_mangotango_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-playground.css",  handle_static_file(theme_playground_css, theme_playground_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-polarnight.css",  handle_static_file(theme_polarnight_css, theme_polarnight_css_len, "text/css; charset=utf-8"));
+    svr->Get("/theme-snowstorm.css",   handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
+    svr->Get("/index-new.html",        handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
+    svr->Get("/system-prompts.js",     handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
+    svr->Get("/prompt-formats.js",     handle_static_file(prompt_formats_js, prompt_formats_js_len, "text/javascript; charset=utf-8"));
 
     // register API routes
     svr->Get ("/health",              handle_health);
@@ -3775,7 +3226,7 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/embeddings",       handle_embeddings);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
-    if (!sparams.slot_save_path.empty()) {
+    if (!params.slot_save_path.empty()) {
         // only enable slot endpoints if slot_save_path is set
         svr->Post("/slots/:id_slot",  handle_slots_action);
     }
@@ -3783,12 +3234,12 @@ int main(int argc, char ** argv) {
     //
     // Start the server
     //
-    if (sparams.n_threads_http < 1) {
+    if (params.n_threads_http < 1) {
         // +2 threads for monitoring endpoints
-        sparams.n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
+        params.n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
     }
-    log_data["n_threads_http"] =  std::to_string(sparams.n_threads_http);
-    svr->new_task_queue = [&sparams] { return new httplib::ThreadPool(sparams.n_threads_http); };
+    log_data["n_threads_http"] =  std::to_string(params.n_threads_http);
+    svr->new_task_queue = [&params] { return new httplib::ThreadPool(params.n_threads_http); };
 
     LOG_INFO("HTTP server listening", log_data);
 
