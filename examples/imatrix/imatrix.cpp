@@ -151,6 +151,10 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
                     for (int j = 0; j < (int)src1->ne[0]; ++j) {
                         e.values[e_start + j] += x[j]*x[j];
                         e.counts[e_start + j]++;
+                        if (!std::isfinite(e.values[e_start + j])) {
+                            fprintf(stderr, "%f detected in %s\n", e.values[e_start + j], wname.c_str());
+                            exit(1);
+                        }
                     }
                 }
             }
@@ -183,6 +187,10 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             for (int j = 0; j < (int)src1->ne[0]; ++j) {
                 e.values[j] += x[j]*x[j];
                 e.counts[j]++;
+                if (!std::isfinite(e.values[j])) {
+                    fprintf(stderr, "%f detected in %s\n", e.values[j], wname.c_str());
+                    exit(1);
+                }
             }
         }
         if (e.ncall > m_last_call) {
