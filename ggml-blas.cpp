@@ -13,10 +13,12 @@
 #endif
 
 struct ggml_backend_blas_context {
-    int n_threads;
-    char * work_data;
-    size_t work_size;
+    int n_threads = GGML_DEFAULT_N_THREADS;
+    std::unique_ptr<char[]> work_data;
+    size_t work_size = 0;
+#ifndef GGML_USE_OPENMP
     std::vector<std::future<void>> tasks;
+#endif
 };
 
 // helper function to determine if it is better to use BLAS or not
@@ -76,11 +78,10 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
     const size_t  desired_wsize = type == GGML_TYPE_F32 ? 0 : ne03*ne02*ne_plane*sizeof(float);
 
     if (ctx->work_size < desired_wsize) {
-        delete[] ctx->work_data;
-        ctx->work_data = new char[desired_wsize];
+        ctx->work_data.reset(new char[desired_wsize]);
         ctx->work_size = desired_wsize;
     }
-    void * wdata = ctx->work_data;
+    void * wdata = ctx->work_data.get();
 
     // convert src0 to float
     if (type != GGML_TYPE_F32) {
@@ -212,7 +213,6 @@ GGML_CALL static const char * ggml_backend_blas_name(ggml_backend_t backend) {
 
 GGML_CALL static void ggml_backend_blas_free(ggml_backend_t backend) {
     ggml_backend_blas_context * ctx = (ggml_backend_blas_context *)backend->context;
-    delete[] ctx->work_data;
     delete ctx;
     delete backend;
 }
@@ -306,11 +306,7 @@ static ggml_guid_t ggml_backend_blas_guid(void) {
 }
 
 ggml_backend_t ggml_backend_blas_init(void) {
-    ggml_backend_blas_context * ctx = new ggml_backend_blas_context{
-        /* .n_threads = */ GGML_DEFAULT_N_THREADS,
-        /* .work_data = */ NULL,
-        /* .work_size = */ 0,
-    };
+    ggml_backend_blas_context * ctx = new ggml_backend_blas_context;
 
     ggml_backend_t backend = new ggml_backend {
         /* .guid      = */ ggml_backend_blas_guid(),
