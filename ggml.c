@@ -1814,7 +1814,6 @@ inline static void ggml_vec_cpy_f32 (const int n, float * y, const float * x)   
 inline static void ggml_vec_neg_f32 (const int n, float * y, const float * x)                  { for (int i = 0; i < n; ++i) y[i]  = -x[i];       }
 inline static void ggml_vec_mul_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]*y[i];   }
 inline static void ggml_vec_div_f32 (const int n, float * z, const float * x, const float * y) { for (int i = 0; i < n; ++i) z[i]  = x[i]/y[i];   }
-inline static void ggml_vec_mul_f32_bitnet (const int n, float * y, const float x) { for (int i = 0; i < n; ++i) y[i]  = y[i] * x;   }
 
 static void ggml_vec_dot_f32(int n, float * restrict s, size_t bs, const float * restrict x, size_t bx, const float * restrict y, size_t by, int nrc) {
    assert(nrc == 1);
@@ -12434,7 +12433,7 @@ static void ggml_compute_forward_mul_mat_one_chunk(
         return;
     }
 
-    const void * wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
+    void * wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
     size_t row_size = ggml_row_size(vec_dot_type, ne10);
     if (src0->type == 31) {
         row_size = ne10;
@@ -12454,7 +12453,17 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     float tmp[32];
     uint8_t *i_weight = (uint8_t*) (src0->data);
     float * scale = (float * )((i_weight) + (ne00 * ne01 / 4));
-    float* act_scales = (float*) ((char *) wdata + ((ne11*nb11) / 4));
+    float * act_scales = (float*) ((char *) wdata + ((ne11*nb11) / 4));
+        // printf("src0->name:%s\n", src0->name);
+        // printf("src1->name:%s\n", src1->name);
+        // printf("ne03:%ld\n", ne03);
+        // printf("ne02:%ld\n", ne02);
+        // printf("ne01:%ld\n", ne01);
+        // printf("ne00:%ld\n", ne00);
+        // printf("ne13:%ld\n", ne13);
+        // printf("ne12:%ld\n", ne12);
+        // printf("ne11:%ld\n", ne11);
+        // printf("ne10:%ld\n", ne10);
 
     for (int64_t iir1 = ir1_start; iir1 < ir1_end; iir1 += blck_1) {
         for (int64_t iir0 = ir0_start; iir0 < ir0_end; iir0 += blck_0) {
@@ -12472,7 +12481,9 @@ static void ggml_compute_forward_mul_mat_one_chunk(
                 const int64_t i3 = i13;
 
                 const char * src0_row = (const char*)src0->data + (0 + i02 * nb02 + i03 * nb03);
-
+                // if (src0->type == 31) {
+                // printf("src0->%ld\n", (0 + i02 * nb02 + i03 * nb03));
+                // }
                 // desc: when src1 is not a contiguous memory block we have to calculate the offset using the strides
                 //       if it is, then we have either copied the data to params->wdata and made it contiguous or we are using
                 //       the original src1 data pointer, so we should index using the indices directly
@@ -12481,22 +12492,29 @@ static void ggml_compute_forward_mul_mat_one_chunk(
                     (src1_cont || src1->type != vec_dot_type
                         ? (i11 + i12 * ne11 + i13 * ne12 * ne11) * row_size
                         : (i11 * nb11 + i12 * nb12 + i13 * nb13));
+                // if (src0->type == 31) {
+                // printf("src1->%ld\n", (i11 + i12 * ne11 + i13 * ne12 * ne11) * row_size);
+                // }
                 float * dst_col = (float*)((char*)dst->data + (i1 * nb1 + i2 * nb2 + i3 * nb3));
 
                 //for (int64_t ir0 = iir0; ir0 < iir0 + blck_0 && ir0 < ir0_end; ++ir0) {
                 //    vec_dot(ne00, &dst_col[ir0], src0_row + ir0*nb01, src1_col);
                 //}
-
+                // if (src0->type == 31) {
+                // printf("dst->%ld\n", (i1 * nb1 + i2 * nb2 + i3 * nb3));
+                // }
                 for (int64_t ir0 = iir0; ir0 < iir0 + blck_0 && ir0 < ir0_end; ir0 += num_rows_per_vec_dot) {
                 if (src0->type == 31) {
+                    // printf("row->%ld\n", (ir0 * nb01 / 4));
                     vec_dot(ne00, &tmp[ir0 - iir0], (num_rows_per_vec_dot > 1 ? 16 : 0), src0_row + ir0 * nb01 / 4, (num_rows_per_vec_dot > 1 ? nb01 : 0), src1_col, (num_rows_per_vec_dot > 1 ? src1_col_stride : 0), num_rows_per_vec_dot);
-                    tmp[ir0 - iir0] = tmp[ir0 - iir0] * (*scale) * (act_scales[i11]);
-                }else {
+                    tmp[ir0 - iir0] = tmp[ir0 - iir0] / (act_scales[i11]) * (*scale);
+                } else {
                     vec_dot(ne00, &tmp[ir0 - iir0], (num_rows_per_vec_dot > 1 ? 16 : 0), src0_row + ir0 * nb01, (num_rows_per_vec_dot > 1 ? nb01 : 0), src1_col, (num_rows_per_vec_dot > 1 ? src1_col_stride : 0), num_rows_per_vec_dot);
                 }
 
                 }
-
+                // printf("num_rows_per_vec_dot->%ld\n", num_rows_per_vec_dot);
+                // printf("iir0->%ld\n", iir0);
                 for (int cn = 0; cn < num_rows_per_vec_dot; ++cn) {
                     memcpy(&dst_col[iir0 + cn * nb1 / nb0], tmp + (cn * 16), (MIN(iir0 + blck_0, ir0_end) - iir0) * sizeof(float));
                 }
@@ -12552,23 +12570,23 @@ static void ggml_compute_forward_bitnet_mul_mat(
         if (ith != 0) {
             return;
         }
-    atomic_store(&state->shared->current_chunk, nth);
-    char * wdata = params->wdata;
-    float* act_scales = (float*) ((char *) wdata + ((ne11*nb11) / 4));
-    for (int64_t i13 = 0; i13 < ne13; i13++) {
-        for (int64_t i12 = 0; i12 < ne12; i12++) {
-            for (int64_t i11 = 0; i11 < ne11; i11++) {
-                float rowmax = 0.00001;
-                ggml_vec_absmaxclamp_f32(ne10, &rowmax, (float *) ((char *) src1->data + i11*nb11 + i12*nb12 + i13*nb13), 0.00001);
-                float s = 127 / rowmax;
-                act_scales[i11] = 1/s;
-                ggml_vec_scaleroundclamp_f32_v2(ne10,
+        atomic_store(&state->shared->current_chunk, nth);
+        char * wdata = params->wdata;
+        float* act_scales = (float*) ((char *) wdata + ((ne11*nb11) / 4));
+        for (int64_t i13 = 0; i13 < ne13; i13++) {
+            for (int64_t i12 = 0; i12 < ne12; i12++) {
+                for (int64_t i11 = 0; i11 < ne11; i11++) {
+                    float rowmax = 0.00001;
+                    ggml_vec_absmaxclamp_f32(ne10, &rowmax, (float *) ((char *) src1->data + i11*nb11 + i12*nb12 + i13*nb13), 0.00001);
+                    float s = 127 / rowmax;
+                    act_scales[i11] = s;
+                    ggml_vec_scaleroundclamp_f32_v2(ne10,
                         (float *) ((char *) src1->data + i11*nb11 + i12*nb12 + i13*nb13),
                         (int8_t*) ((char *) wdata + ((i11*nb11 + i12*nb12 + i13*nb13) / 4)),
                         s, -128, 127);
+                }
             }
         }
-    }
         // Every thread starts at ith, so the first unprocessed chunk is nth.  This save a bit of coordination right at the start.
         // atomic_store(&state->shared->current_chunk, nth);
         //     // char * wdata = params->wdata;
