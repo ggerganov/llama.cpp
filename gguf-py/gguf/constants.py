@@ -73,8 +73,8 @@ class Keys:
         SCALING_YARN_LOG_MUL    = "{arch}.rope.scaling.yarn_log_multiplier"
 
     class Split:
-        LLM_KV_SPLIT_NO = "split.no"
-        LLM_KV_SPLIT_COUNT = "split.count"
+        LLM_KV_SPLIT_NO            = "split.no"
+        LLM_KV_SPLIT_COUNT         = "split.count"
         LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count"
 
     class SSM:
