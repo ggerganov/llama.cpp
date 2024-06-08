@@ -173,7 +173,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
         }
         out << "]";
     };
-    auto more_digits = [&](int min_digits, int max_digits) {//} = std::numeric_limits<int>::max()) {
+    auto more_digits = [&](int min_digits, int max_digits) {
         out << "[0-9]";
         if (min_digits == max_digits && min_digits == 1) {
             return;
@@ -862,6 +862,11 @@ public:
         } else if ((schema_type.is_null() || schema_type == "string") && STRING_FORMAT_RULES.find(schema_format + "-string") != STRING_FORMAT_RULES.end()) {
             auto prim_name = schema_format + "-string";
             return _add_rule(rule_name, _add_primitive(prim_name, STRING_FORMAT_RULES.at(prim_name)));
+        } else if (schema_type == "string" && (schema.contains("minLength") || schema.contains("maxLength"))) {
+            std::string char_rule = _add_primitive("char", PRIMITIVE_RULES.at("char"));
+            int min_len = schema.contains("minLength") ? schema["minLength"].get<int>() : 0;
+            int max_len = schema.contains("maxLength") ? schema["maxLength"].get<int>() : std::numeric_limits<int>::max();
+            return _add_rule(rule_name, "\"\\\"\" " + build_repetition(char_rule, min_len, max_len) + " \"\\\"\" space");
         } else if (schema_type == "integer" && (schema.contains("minimum") || schema.contains("exclusiveMinimum") || schema.contains("maximum") || schema.contains("exclusiveMaximum"))) {
             int min_value = std::numeric_limits<int>::min();
             int max_value = std::numeric_limits<int>::max();
@@ -880,11 +885,6 @@ public:
             _generate_min_max_int(min_value, max_value, out);
             out << ") space";
             return _add_rule(rule_name, out.str());
-        } else if (schema_type == "string" && (schema.contains("minLength") || schema.contains("maxLength"))) {
-            std::string char_rule = _add_primitive("char", PRIMITIVE_RULES.at("char"));
-            int min_len = schema.contains("minLength") ? schema["minLength"].get<int>() : 0;
-            int max_len = schema.contains("maxLength") ? schema["maxLength"].get<int>() : std::numeric_limits<int>::max();
-            return _add_rule(rule_name, "\"\\\"\" " + build_repetition(char_rule, min_len, max_len) + " \"\\\"\" space");
         } else if (schema.empty() || schema_type == "object") {
             return _add_rule(rule_name, _add_primitive("object", PRIMITIVE_RULES.at("object")));
         } else {
