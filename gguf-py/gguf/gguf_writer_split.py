@@ -66,7 +66,7 @@ class GGUFWriterSplit(GGUFWriter):
 
     def __init__(self, path: os.PathLike[str] | str, arch: str, split_arguments: SplitArguments,
                  use_temp_file: bool = True, endianess: GGUFEndian = GGUFEndian.LITTLE
-                ) -> None:
+    ) -> None:
         # we intentionally don't call superclass constructor
         self.arch = arch
         self.path = Path(path)
@@ -257,4 +257,3 @@ class GGUFWriterSplit(GGUFWriter):
                 return f"{fnum:3.1f}{unit}"
             fnum /= 1000.0
         return f"{fnum:.1f}T - over 1TB, --split recommended"
-
