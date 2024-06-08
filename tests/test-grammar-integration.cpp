@@ -205,6 +205,33 @@ static void test_complex_grammar() {
     );
 }
 
+static void test_special_chars() {
+    // A collection of tests to exercise special characters such as "."
+    test_grammar(
+        "special characters",
+        // Grammar
+        R"""(
+            root ::= ... "abc" ...
+            )""",
+        // Passing strings
+        {
+            "abcabcabc",
+            "aaaabcccc",
+            // NOTE: Also ensures that multi-byte characters still count as a single character
+            "🔵🟠✅abc❌🟠🔵"
+        },
+        // Failing strings
+        {
+            "aaabcccc",
+            "aaaaabcccc",
+            "aaaabccc",
+            "aaaabccccc",
+            "🔵🟠✅❌abc❌✅🟠🔵"
+            "🔵🟠abc🟠🔵"
+        }
+    );
+}
+
 static void test_quantifiers() {
     // A collection of tests to exercise * + and ? quantifiers
 
@@ -292,6 +319,82 @@ static void test_quantifiers() {
             "catyyy",
         }
     );
+    test_grammar(
+        "simple exact repetition",
+        // Grammar
+        R"""(
+            root ::= [ab]{4}
+        )""",
+        // Passing strings
+        {
+            "aaaa",
+            "bbbb",
+            "abab",
+        },
+        // Failing strings
+        {
+            "a",
+            "b",
+            "aaaaa",
+        }
+    );
+    test_grammar(
+        "simple min repetition",
+        // Grammar
+        R"""(
+            root ::= [ab]{4,}
+        )""",
+        // Passing strings
+        {
+            "aaaa",
+            "aaaaab",
+            "bbbb",
+            "ababab",
+        },
+        // Failing strings
+        {
+            "",
+            "aba",
+        }
+    );
+    test_grammar(
+        "simple max repetition",
+        // Grammar
+        R"""(
+            root ::= [ab]{0,4}
+        )""",
+        // Passing strings
+        {
+            "",
+            "a",
+            "aa",
+            "aaa",
+            "aaab",
+        },
+        // Failing strings
+        {
+            "aaaaa",
+        }
+    );
+    test_grammar(
+        "min / max repetition",
+        // Grammar
+        R"""(
+            root ::= ("0x" [A-F0-9]{2} " "?){3,5}
+        )""",
+        // Passing strings
+        {
+            "0xFF 0x12 0xAB",
+            "0xFF 0x12 0xAB 0x00 0x00",
+        },
+        // Failing strings
+        {
+            "",
+            "0xFF",
+            "0xFF 0x12",
+            "0xFF 0x12 0xAB 0x00 0x00 0x00",
+        }
+    );
 }
 
 static void test_failure_missing_root() {
@@ -369,6 +472,7 @@ int main() {
     fprintf(stdout, "Running grammar integration tests...\n");
     test_simple_grammar();
     test_complex_grammar();
+    test_special_chars();
     test_quantifiers();
     test_failure_missing_root();
     test_failure_missing_reference();
