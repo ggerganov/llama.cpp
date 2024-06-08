@@ -1349,6 +1349,10 @@ static __device__ __forceinline__ void mmq_write_back_mma(const float * __restri
 
             const int i = blockIdx.x*mmq_y + i0 + mma_C::get_i(l);
 
+            if (need_check && i >= ne0) {
+                continue;
+            }
+
             dst[j*ne0 + i] = sum[(j0/mma_C::J)*mma_C::ne + l];
         }
     }
