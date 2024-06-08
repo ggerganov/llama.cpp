@@ -66,7 +66,7 @@ class GGUFWriterSplit(GGUFWriter):
 
     def __init__(self, path: os.PathLike[str] | str, arch: str, split_arguments: SplitArguments,
                  use_temp_file: bool = True, endianess: GGUFEndian = GGUFEndian.LITTLE
-    ) -> None:
+                 ) -> None:
         # we intentionally don't call superclass constructor
         self.arch = arch
         self.path = Path(path)
