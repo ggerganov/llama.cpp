@@ -239,63 +239,71 @@ class Model:
     def set_gguf_meta_model(self):
         self.gguf_writer.add_name(self.metadata.name)
 
-        if self.metadata.basename is not None:
-            self.gguf_writer.add_basename(self.metadata.basename)
-        if self.metadata.finetune is not None:
-            self.gguf_writer.add_finetune(self.metadata.finetune)
         if self.metadata.author is not None:
             self.gguf_writer.add_author(self.metadata.author)
-        if self.metadata.quantized_by is not None:
-            self.gguf_writer.add_quantized_by(self.metadata.quantized_by)
-        if self.metadata.organization is not None:
-            self.gguf_writer.add_organization(self.metadata.organization)
         if self.metadata.version is not None:
             self.gguf_writer.add_version(self.metadata.version)
-        if self.metadata.url is not None:
-            self.gguf_writer.add_url(self.metadata.url)
-        if self.metadata.doi is not None:
-            self.gguf_writer.add_doi(self.metadata.doi)
-        if self.metadata.uuid is not None:
-            self.gguf_writer.add_uuid(self.metadata.uuid)
-        if self.metadata.hf_repo is not None:
-            self.gguf_writer.add_hf_repo(self.metadata.hf_repo)
+        if self.metadata.organization is not None:
+            self.gguf_writer.add_organization(self.metadata.organization)
+
+        if self.metadata.finetune is not None:
+            self.gguf_writer.add_finetune(self.metadata.finetune)
+        if self.metadata.basename is not None:
+            self.gguf_writer.add_basename(self.metadata.basename)
+
         if self.metadata.description is not None:
             self.gguf_writer.add_description(self.metadata.description)
+        if self.metadata.quantized_by is not None:
+            self.gguf_writer.add_quantized_by(self.metadata.quantized_by)
+
+        if self.metadata.parameter_class_attribute is not None:
+            self.gguf_writer.add_parameter_class_attribute(self.metadata.parameter_class_attribute)
+
         if self.metadata.license is not None:
             self.gguf_writer.add_license(self.metadata.license)
         if self.metadata.license_name is not None:
             self.gguf_writer.add_license_name(self.metadata.license_name)
         if self.metadata.license_link is not None:
             self.gguf_writer.add_license_link(self.metadata.license_link)
+
+        if self.metadata.url is not None:
+            self.gguf_writer.add_url(self.metadata.url)
+        if self.metadata.doi is not None:
+            self.gguf_writer.add_doi(self.metadata.doi)
+        if self.metadata.uuid is not None:
+            self.gguf_writer.add_uuid(self.metadata.uuid)
+        if self.metadata.repo_url is not None:
+            self.gguf_writer.add_repo_url(self.metadata.repo_url)
+
         if self.metadata.source_url is not None:
             self.gguf_writer.add_source_url(self.metadata.source_url)
         if self.metadata.source_doi is not None:
             self.gguf_writer.add_source_doi(self.metadata.source_doi)
         if self.metadata.source_uuid is not None:
             self.gguf_writer.add_source_uuid(self.metadata.source_uuid)
-        if self.metadata.source_hf_repo is not None:
-            self.gguf_writer.add_source_hf_repo(self.metadata.source_hf_repo)
-        if self.metadata.parameter_class_attribute is not None:
-            self.gguf_writer.add_parameter_class_attribute(self.metadata.parameter_class_attribute)
-        if self.metadata.parents is not None:
-            metadata.parent_count = len(self.metadata.parents)
-            for key, parent_entry in self.metadata.parents:
-                if "name" in parent_entry:
-                    self.gguf_writer.add_parent_name(key, parent_entry.get("name"))
-                if "author" in parent_entry:
-                    self.gguf_writer.add_parent_author(key, parent_entry.get("author"))
-                if "version" in parent_entry:
-                    self.gguf_writer.add_parent_version(key, parent_entry.get("version"))
-                if "organization" in parent_entry:
-                    self.gguf_writer.add_parent_organization(key, parent_entry.get("organization"))
-                if "url" in parent_entry:
-                    self.gguf_writer.add_parent_url(key, parent_entry.get("url"))
-                if "doi" in parent_entry:
-                    self.gguf_writer.add_parent_doi(key, parent_entry.get("doi"))
-                if "uuid" in parent_entry:
-                    self.gguf_writer.add_parent_uuid(key, parent_entry.get("uuid"))
-                if "hf_repo" in parent_entry:
-                    self.gguf_writer.add_parent_hf_repo(key, parent_entry.get("hf_repo"))
+        if self.metadata.source_repo_url is not None:
+            self.gguf_writer.add_source_repo_url(self.metadata.source_repo_url)
+
+        if self.metadata.base_models is not None:
+            self.gguf_writer.add_base_model_count(len(self.metadata.base_models))
+            for key, base_model_entry in enumerate(self.metadata.base_models):
+                if "name" in base_model_entry:
+                    self.gguf_writer.add_base_model_name(key, base_model_entry["name"])
+                if "author" in base_model_entry:
+                    self.gguf_writer.add_base_model_author(key, base_model_entry["author"])
+                if "version" in base_model_entry:
+                    self.gguf_writer.add_base_model_version(key, base_model_entry["version"])
+                if "organization" in base_model_entry:
+                    self.gguf_writer.add_base_model_organization(key, base_model_entry["organization"])
+                if "url" in base_model_entry:
+                    self.gguf_writer.add_base_model_url(key, base_model_entry["url"])
+                if "doi" in base_model_entry:
+                    self.gguf_writer.add_base_model_doi(key, base_model_entry["doi"])
+                if "uuid" in base_model_entry:
+                    self.gguf_writer.add_base_model_uuid(key, base_model_entry["uuid"])
+                if "repo_url" in base_model_entry:
+                    self.gguf_writer.add_base_model_repo_url(key, base_model_entry["repo_url"])
+
         if self.metadata.tags is not None:
             self.gguf_writer.add_tags(self.metadata.tags)
         if self.metadata.languages is not None:

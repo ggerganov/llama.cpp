@@ -31,10 +31,12 @@ class Keys:
         VERSION                    = "general.version"
         ORGANIZATION               = "general.organization"
 
-        BASENAME                   = "general.basename"
         FINETUNE                   = "general.finetune"
+        BASENAME                   = "general.basename"
+
         DESCRIPTION                = "general.description"
         QUANTIZED_BY               = "general.quantized_by"
+
         PARAMETER_CLASS_ATTRIBUTE  = "general.parameter_class_attribute"
 
         # Licensing details
@@ -43,31 +45,29 @@ class Keys:
         LICENSE_LINK               = "general.license.link"
 
         # Typically represents the converted GGUF repo (Unless native)
-        URL                        = "general.url"
+        URL                        = "general.url" # Model Website/Paper
         DOI                        = "general.doi"
         UUID                       = "general.uuid"
-        HF_URL                     = "general.huggingface.repository"
+        REPO_URL                   = "general.repo_url" # Model Source Repository (git/svn/etc...)
 
-        # Typically represents the original source repository (e.g. safetensors)
-        # that this was
-        SOURCE_URL                 = "general.source.url"
+        # Model Source during conversion
+        SOURCE_URL                 = "general.source.url" # Model Website/Paper
         SOURCE_DOI                 = "general.source.doi"
         SOURCE_UUID                = "general.source.uuid"
-        SOURCE_HF_REPO             = "general.source.huggingface.repository"
+        SOURCE_REPO_URL            = "general.source.repo_url" # Model Source Repository (git/svn/etc...)
 
-        # This represents the parent model that the converted/source model was
-        # derived from on allowing users to trace the linage of a model.
-        # E.g. A finetune model would have the base model as the parent
-        # (A model can have multiple parent, especially if it's a merged model)
-        PARENTS_COUNT               = "general.parents.count"
-        PARENTS_NAME                = "general.parents.{id}.name"
-        PARENTS_AUTHOR              = "general.parents.{id}.author"
-        PARENTS_VERSION             = "general.parents.{id}.version"
-        PARENTS_ORGANIZATION        = "general.parents.{id}.organization"
-        PARENTS_URL                 = "general.parents.{id}.url"
-        PARENTS_DOI                 = "general.parents.{id}.doi"
-        PARENTS_UUID                = "general.parents.{id}.uuid"
-        PARENTS_HF_REPO             = "general.parents.{id}.huggingface.repository"
+        # Base Model Source. There can be more than one source if it's a merged
+        # model like with 'Mistral-7B-Merge-14-v0.1'. This will assist in
+        # tracing linage of models as it is finetuned or merged over time.
+        BASE_MODEL_COUNT           = "general.base_model.count"
+        BASE_MODEL_NAME            = "general.base_model.{id}.name"
+        BASE_MODEL_AUTHOR          = "general.base_model.{id}.author"
+        BASE_MODEL_VERSION         = "general.base_model.{id}.version"
+        BASE_MODEL_ORGANIZATION    = "general.base_model.{id}.organization"
+        BASE_MODEL_URL             = "general.base_model.{id}.url" # Model Website/Paper
+        BASE_MODEL_DOI             = "general.base_model.{id}.doi"
+        BASE_MODEL_UUID            = "general.base_model.{id}.uuid"
+        BASE_MODEL_REPO_URL        = "general.base_model.{id}.repo_url" # Model Source Repository (git/svn/etc...)
 
         # Array based KV stores
         TAGS                       = "general.tags"
@@ -1273,8 +1273,6 @@ KEY_GENERAL_AUTHOR               = Keys.General.AUTHOR
 KEY_GENERAL_URL                  = Keys.General.URL
 KEY_GENERAL_DESCRIPTION          = Keys.General.DESCRIPTION
 KEY_GENERAL_LICENSE              = Keys.General.LICENSE
-KEY_GENERAL_SOURCE_URL           = Keys.General.SOURCE_URL
-KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
 KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
