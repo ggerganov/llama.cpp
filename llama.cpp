@@ -2877,7 +2877,7 @@ struct llama_rs_cache {
     }
 };
 
-struct llama_cache {
+struct llama_past {
     // key + value cache for self attention
     llama_kv_cache kv;
 
@@ -2896,7 +2896,7 @@ struct llama_cache {
         return size;
     }
 
-    ~llama_cache() {
+    ~llama_past() {
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
         }
@@ -3426,7 +3426,7 @@ struct llama_context {
     const llama_model & model;
 
     // key + value cache for self-attention, and/or recurrent state cache
-    struct llama_cache cache;
+    struct llama_past cache;
 
     // sequence-length-aware batch splitting
     llama_sbatch sbatch;
@@ -3604,8 +3604,8 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
 // kv and rs cache helpers
 //
 
-static bool llama_cache_init(
-                struct llama_cache & cache,
+static bool llama_past_init(
+                 struct llama_past & cache,
                const llama_context * ctx,
                          ggml_type   type_k,
                          ggml_type   type_v,
@@ -3713,11 +3713,11 @@ static bool llama_cache_init(
                 // no buffer was needed, so this is fine
                 return true;
             }
-            LLAMA_LOG_ERROR("%s: failed to allocate buffer for kv cache\n", __func__);
+            LLAMA_LOG_ERROR("%s: failed to allocate buffer for past cache\n", __func__);
             return false;
         }
         ggml_backend_buffer_clear(buf, 0);
-        LLAMA_LOG_INFO("%s: %10s cache buf size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
+        LLAMA_LOG_INFO("%s: %10s past cache size = %8.2f MiB\n", __func__, ggml_backend_buffer_name(buf), ggml_backend_buffer_get_size(buf)/1024.0/1024.0);
         cache.bufs.push_back(buf);
     }
 
@@ -3728,8 +3728,8 @@ static bool llama_cache_init(
 // updates the cache head
 // Note: On success, it's important that cache.head points
 // to the first cell of the slot.
-static bool llama_cache_find_slot(
-               struct llama_cache & cache,
+static bool llama_past_find_slot(
+                struct llama_past & cache,
         const struct llama_ubatch & batch) {
     const uint32_t kv_size  = cache.kv.size;
     const uint32_t rs_size  = cache.rs.size;
@@ -4001,7 +4001,7 @@ static uint32_t llama_rs_cache_cell_max(const struct llama_rs_cache & cache) {
     return 0;
 }
 
-static void llama_cache_clear(struct llama_cache & cache) {
+static void llama_past_clear(struct llama_past & cache) {
     if (cache.kv.size > 0) {
         for (uint32_t i = 0; i < cache.kv.size; ++i) {
             llama_kv_cell & kv_cell = cache.kv.cells[i];
@@ -4035,8 +4035,8 @@ static void llama_cache_clear(struct llama_cache & cache) {
     }
 }
 
-static llama_pos llama_cache_seq_rm(
-        struct llama_cache & cache,
+static llama_pos llama_past_seq_rm(
+         struct llama_past & cache,
               llama_seq_id   seq_id,
                  llama_pos   p0,
                  llama_pos   p1) {
@@ -4134,8 +4134,8 @@ static llama_pos llama_cache_seq_rm(
     return n_past;
 }
 
-static llama_pos llama_cache_seq_cp(
-        struct llama_cache & cache,
+static llama_pos llama_past_seq_cp(
+         struct llama_past & cache,
               llama_seq_id   seq_id_src,
               llama_seq_id   seq_id_dst,
                  llama_pos   p0,
@@ -4199,7 +4199,7 @@ static llama_pos llama_cache_seq_cp(
     return n_past;
 }
 
-static void llama_cache_seq_keep(struct llama_cache & cache, llama_seq_id seq_id) {
+static void llama_past_seq_keep(struct llama_past & cache, llama_seq_id seq_id) {
     if (cache.rs.size > 0) {
         uint32_t new_head = cache.rs.size;
 
@@ -4249,8 +4249,8 @@ static void llama_cache_seq_keep(struct llama_cache & cache, llama_seq_id seq_id
     }
 }
 
-static void llama_cache_seq_add(
-        struct llama_cache & cache,
+static void llama_past_seq_add(
+         struct llama_past & cache,
               llama_seq_id   seq_id,
                  llama_pos   p0,
                  llama_pos   p1,
@@ -4317,8 +4317,8 @@ static void llama_cache_seq_add(
     }
 }
 
-static void llama_cache_seq_div(
-        struct llama_cache & cache,
+static void llama_past_seq_div(
+         struct llama_past & cache,
               llama_seq_id   seq_id,
                  llama_pos   p0,
                  llama_pos   p1,
@@ -4358,7 +4358,7 @@ static void llama_cache_seq_div(
     }
 }
 
-static llama_pos llama_cache_seq_pos_max(struct llama_cache & cache, llama_seq_id seq_id) {
+static llama_pos llama_past_seq_pos_max(struct llama_past & cache, llama_seq_id seq_id) {
     llama_pos result = -1;
 
     if (cache.rs.size > 0) {
@@ -13911,7 +13911,7 @@ static int llama_decode_internal(
         if (hparams.causal_attn) {
             llama_kv_cache_update(&lctx);
 
-            if (!llama_cache_find_slot(lctx.cache, u_batch)) {
+            if (!llama_past_find_slot(lctx.cache, u_batch)) {
                 return 1;
             }
 
@@ -17981,7 +17981,7 @@ struct llama_context * llama_new_context_with_model(
         }
         ctx->backends.push_back(ctx->backend_cpu);
 
-        if (!llama_cache_init(ctx->cache, ctx, type_k, type_v, cparams.offload_kqv)) {
+        if (!llama_past_init(ctx->cache, ctx, type_k, type_v, cparams.offload_kqv)) {
             LLAMA_LOG_ERROR("%s: llama_kv_cache_init() failed for self-attention cache\n", __func__);
             llama_free(ctx);
             return nullptr;
@@ -18515,85 +18515,85 @@ int32_t llama_get_rs_cache_used_cells(const struct llama_context * ctx) {
     return ctx->cache.rs.used;
 }
 
-void llama_cache_clear(struct llama_context * ctx) {
-    llama_cache_clear(ctx->cache);
+void llama_past_clear(struct llama_context * ctx) {
+    llama_past_clear(ctx->cache);
 }
 
 // deprecated
 void llama_kv_cache_clear(struct llama_context * ctx) {
-    llama_cache_clear(ctx);
+    llama_past_clear(ctx);
 }
 
-llama_pos llama_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
+llama_pos llama_past_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
     if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return 0; }
-    return llama_cache_seq_rm(ctx->cache, seq_id, p0, p1);
+    return llama_past_seq_rm(ctx->cache, seq_id, p0, p1);
 }
 
 // deprecated
 bool llama_kv_cache_seq_rm(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1) {
-    llama_pos n_past = llama_cache_seq_rm(ctx, seq_id, p0, p1);
+    llama_pos n_past = llama_past_seq_rm(ctx, seq_id, p0, p1);
     return n_past >= p0;
 }
 
 
-llama_pos llama_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
+llama_pos llama_past_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
     uint32_t n_seq_max = llama_n_seq_max(ctx);
     if (seq_id_src < 0 || seq_id_dst < 0 || (uint32_t) seq_id_src >= n_seq_max || (uint32_t) seq_id_dst >= n_seq_max) {
         return 0;
     }
     if (seq_id_src == seq_id_dst) {
-        return llama_cache_seq_pos_max(ctx->cache, seq_id_dst) + 1;
+        return llama_past_seq_pos_max(ctx->cache, seq_id_dst) + 1;
     }
-    return llama_cache_seq_cp(ctx->cache, seq_id_src, seq_id_dst, p0, p1);
+    return llama_past_seq_cp(ctx->cache, seq_id_src, seq_id_dst, p0, p1);
 }
 
 // deprecated
 void llama_kv_cache_seq_cp(struct llama_context * ctx, llama_seq_id seq_id_src, llama_seq_id seq_id_dst, llama_pos p0, llama_pos p1) {
-    llama_cache_seq_cp(ctx, seq_id_src, seq_id_dst, p0, p1);
+    llama_past_seq_cp(ctx, seq_id_src, seq_id_dst, p0, p1);
 }
 
-void llama_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
+void llama_past_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
     if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return; }
-    llama_cache_seq_keep(ctx->cache, seq_id);
+    llama_past_seq_keep(ctx->cache, seq_id);
 }
 
 // deprecated
 void llama_kv_cache_seq_keep(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_cache_seq_keep(ctx, seq_id);
+    llama_past_seq_keep(ctx, seq_id);
 }
 
-void llama_cache_seq_add(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
+void llama_past_seq_add(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
     if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return; }
     if (delta == 0) { return; }
 
-    llama_cache_seq_add(ctx->cache, seq_id, p0, p1, delta);
+    llama_past_seq_add(ctx->cache, seq_id, p0, p1, delta);
 }
 
 // deprecated
 void llama_kv_cache_seq_add(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, llama_pos delta) {
-    llama_cache_seq_add(ctx, seq_id, p0, p1, delta);
+    llama_past_seq_add(ctx, seq_id, p0, p1, delta);
 }
 
-void llama_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
+void llama_past_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
     if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return; }
     if (d == 1) { return; }
 
-    llama_cache_seq_div(ctx->cache, seq_id, p0, p1, d);
+    llama_past_seq_div(ctx->cache, seq_id, p0, p1, d);
 }
 
 // deprecated
 void llama_kv_cache_seq_div(struct llama_context * ctx, llama_seq_id seq_id, llama_pos p0, llama_pos p1, int d) {
-    llama_cache_seq_div(ctx, seq_id, p0, p1, d);
+    llama_past_seq_div(ctx, seq_id, p0, p1, d);
 }
 
-llama_pos llama_cache_seq_pos_max(struct llama_context * ctx, llama_seq_id seq_id) {
+llama_pos llama_past_seq_pos_max(struct llama_context * ctx, llama_seq_id seq_id) {
     if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) { return -1; }
-    return llama_cache_seq_pos_max(ctx->cache, seq_id);
+    return llama_past_seq_pos_max(ctx->cache, seq_id);
 }
 
 // deprecated
 llama_pos llama_kv_cache_seq_pos_max(struct llama_context * ctx, llama_seq_id seq_id) {
-    llama_pos max_pos = llama_cache_seq_pos_max(ctx, seq_id);
+    llama_pos max_pos = llama_past_seq_pos_max(ctx, seq_id);
     return max_pos < 0 ? 0 : max_pos;
 }
 
@@ -19345,7 +19345,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
     GGML_ASSERT(cache.rs.size == 0); // not implemented
 
     // Wipe the slot
-    llama_cache_seq_rm(cache, dest_seq_id, -1, -1);
+    llama_past_seq_rm(cache, dest_seq_id, -1, -1);
 
     const uint8_t * inp = src;
 
@@ -19402,7 +19402,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
         }
         batch.n_seq_id[0] = 1;
         batch.seq_id[0] = &dest_seq_id;
-        if (!llama_cache_find_slot(cache, batch)) {
+        if (!llama_past_find_slot(cache, batch)) {
             LLAMA_LOG_ERROR("%s: failed to find available cells in kv cache\n", __func__);
             return 0;
         }
@@ -19427,7 +19427,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
         inp += sizeof(k_type_i_ref);
         const int32_t k_type_i = (int32_t)kv_self.k_l[il]->type;
         if (k_type_i != k_type_i_ref) {
-            llama_cache_seq_rm(cache, dest_seq_id, -1, -1);
+            llama_past_seq_rm(cache, dest_seq_id, -1, -1);
             LLAMA_LOG_ERROR("%s: mismatched key type (%d != %d, layer %d)\n", __func__, k_type_i, k_type_i_ref, il);
             return 0;
         }
@@ -19438,7 +19438,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
         inp += sizeof(k_size_row_ref);
         const size_t k_size_row = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa);
         if (k_size_row != k_size_row_ref) {
-            llama_cache_seq_rm(cache, dest_seq_id, -1, -1);
+            llama_past_seq_rm(cache, dest_seq_id, -1, -1);
             LLAMA_LOG_ERROR("%s: mismatched key row size (%zu != %zu, layer %d)\n", __func__, k_size_row, k_size_row_ref, il);
             return 0;
         }
@@ -19459,7 +19459,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
             inp += sizeof(v_type_i_ref);
             const int32_t v_type_i = (int32_t)kv_self.v_l[il]->type;
             if (v_type_i != v_type_i_ref) {
-                llama_cache_seq_rm(cache, dest_seq_id, -1, -1);
+                llama_past_seq_rm(cache, dest_seq_id, -1, -1);
                 LLAMA_LOG_ERROR("%s: mismatched value type (%d != %d, layer %d)\n", __func__, v_type_i, v_type_i_ref, il);
                 return 0;
             }
@@ -19470,7 +19470,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
             inp += sizeof(v_size_row_ref);
             const size_t v_size_row = ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa);
             if (v_size_row != v_size_row_ref) {
-                llama_cache_seq_rm(cache, dest_seq_id, -1, -1);
+                llama_past_seq_rm(cache, dest_seq_id, -1, -1);
                 LLAMA_LOG_ERROR("%s: mismatched value row size (%zu != %zu, layer %d)\n", __func__, v_size_row, v_size_row_ref, il);
                 return 0;
             }
@@ -19490,7 +19490,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
             inp += sizeof(v_type_i_ref);
             const int32_t v_type_i = (int32_t)kv_self.v_l[il]->type;
             if (v_type_i != v_type_i_ref) {
-                llama_cache_seq_rm(cache, dest_seq_id, -1, -1);
+                llama_past_seq_rm(cache, dest_seq_id, -1, -1);
                 LLAMA_LOG_ERROR("%s: mismatched value type (%d != %d, layer %d)\n", __func__, v_type_i, v_type_i_ref, il);
                 return 0;
             }
@@ -19501,7 +19501,7 @@ size_t llama_state_seq_set_data(struct llama_context * ctx, const uint8_t * src,
             inp += sizeof(v_size_el_ref);
             const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
             if (v_size_el != v_size_el_ref) {
-                llama_cache_seq_rm(cache, dest_seq_id, -1, -1);
+                llama_past_seq_rm(cache, dest_seq_id, -1, -1);
                 LLAMA_LOG_ERROR("%s: mismatched value element size (%zu != %zu, layer %d)\n", __func__, v_size_el, v_size_el_ref, il);
                 return 0;
             }
