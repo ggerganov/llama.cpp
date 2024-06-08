@@ -191,15 +191,6 @@ int32_t cpu_get_num_math() {
 // CLI argument parsing
 //
 
-static std::string get_cached_file(const std::string & path) {
-    std::string cache_directory = fs_get_cache_directory();
-    const bool success = fs_create_directory_with_parents(cache_directory);
-    if (!success) {
-        throw std::runtime_error("failed to create cache directory: " + cache_directory);
-    }
-    return cache_directory + string_split(path, '/').back();
-}
-
 void gpt_params_handle_model_default(gpt_params & params) {
     if (!params.hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
@@ -209,13 +200,13 @@ void gpt_params_handle_model_default(gpt_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = get_cached_file(params.hf_file);
+            params.model = fs_get_cache_file_path(params.hf_file);
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
             auto f = string_split(params.model_url, '#').front();
             f = string_split(f, '?').front();
-            params.model = get_cached_file(f);
+            params.model = fs_get_cache_file_path(f);
         }
     } else if (params.model.empty()) {
         params.model = DEFAULT_MODEL_PATH;
@@ -2280,6 +2271,15 @@ std::string fs_get_cache_directory() {
         cache_directory += "llama.cpp";
     }
     return ensure_trailing_slash(cache_directory);
+}
+
+std::string fs_get_cache_file_path(const std::string & path) {
+    std::string cache_directory = fs_get_cache_directory();
+    const bool success = fs_create_directory_with_parents(cache_directory);
+    if (!success) {
+        throw std::runtime_error("failed to create cache directory: " + cache_directory);
+    }
+    return cache_directory + string_split(path, '/').back();
 }
 
 
