@@ -1,4 +1,4 @@
-set(TARGET eval-callback)
+set(TARGET llama-eval-callback)
 add_executable(${TARGET} eval-callback.cpp)
 install(TARGETS ${TARGET} RUNTIME)
 target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})

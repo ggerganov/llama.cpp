@@ -7,7 +7,7 @@ Basic usage instructions:
 wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/shakespeare.txt
 
 # finetune LORA adapter
-./bin/finetune \
+./bin/llama-finetune \
         --model-base open-llama-3b-v2-q8_0.gguf \
         --checkpoint-in  chk-lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.gguf \
         --checkpoint-out chk-lora-open-llama-3b-v2-q8_0-shakespeare-ITERATION.gguf \

@@ -32,6 +32,7 @@ endif()
 
 set(TARGET llava-cli)
 add_executable(llava-cli llava-cli.cpp)
+set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME llama-llava)
 install(TARGETS llava-cli RUNTIME)
 target_link_libraries(llava-cli PRIVATE common llava ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(llava PRIVATE cxx_std_11)

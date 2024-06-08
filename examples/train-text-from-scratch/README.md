@@ -7,7 +7,7 @@ Basic usage instructions:
 wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/shakespeare.txt
 
 # train
-./bin/train-text-from-scratch \
+./bin/llama-train-text-from-scratch \
         --vocab-model ../models/ggml-vocab-llama.gguf \
         --ctx 64 --embd 256 --head 8 --layer 16 \
         --checkpoint-in  chk-shakespeare-256x16-LATEST.gguf \

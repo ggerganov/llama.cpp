@@ -10,11 +10,11 @@ shift
 if [[ "$arg1" == '--convert' || "$arg1" == '-c' ]]; then
     python3 ./convert-hf-to-gguf.py "$@"
 elif [[ "$arg1" == '--quantize' || "$arg1" == '-q' ]]; then
-    ./quantize "$@"
+    ./llama-quantize "$@"
 elif [[ "$arg1" == '--run' || "$arg1" == '-r' ]]; then
     ./llama "$@"
 elif [[ "$arg1" == '--finetune' || "$arg1" == '-f' ]]; then
-    ./finetune "$@"
+    ./llama-finetune "$@"
 elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
     echo "Converting PTH to GGML..."
     for i in `ls $1/$2/ggml-model-f16.bin*`; do
@@ -22,7 +22,7 @@ elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
             echo "Skip model quantization, it already exists: ${i/f16/q4_0}"
         else
             echo "Converting PTH to GGML: $i into ${i/f16/q4_0}..."
-            ./quantize "$i" "${i/f16/q4_0}" q4_0
+            ./llama-quantize "$i" "${i/f16/q4_0}" q4_0
         fi
     done
 elif [[ "$arg1" == '--server' || "$arg1" == '-s' ]]; then

@@ -9,13 +9,13 @@ To get started right away, run the following command, making sure to use the cor
 ### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./embedding -m ./path/to/model --log-disable -p "Hello World!" 2>/dev/null
+./llama-embedding -m ./path/to/model --log-disable -p "Hello World!" 2>/dev/null
 ```
 
 ### Windows:
 
 ```powershell
-embedding.exe -m ./path/to/model --log-disable -p "Hello World!" 2>$null
+llama-embedding.exe -m ./path/to/model --log-disable -p "Hello World!" 2>$null
 ```
 
 The above command will output space-separated float values.

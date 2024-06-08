@@ -622,10 +622,10 @@ python3 convert-hf-to-gguf.py models/mymodel/
 python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
 
 # quantize the model to 4-bits (using Q4_K_M method)
-./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
+./llama-quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
 
 # update the gguf filetype to current version if older version is now unsupported
-./quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
+./llama-quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
 ```
 
 ### Run the quantized model
@@ -707,7 +707,7 @@ The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 thread
 #### How to run
 
 1. Download/extract: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-2. Run `./perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
+2. Run `./llama-perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
 3. Output:
 ```
 perplexity : calculating perplexity over 655 chunks
@@ -740,7 +740,7 @@ Note the use of `--color` to distinguish between user input and generated text. 
 
 ### Persistent Interaction
 
-The prompt, user inputs, and model generations can be saved and resumed across calls to `./main` by leveraging `--prompt-cache` and `--prompt-cache-all`. The `./examples/chat-persistent.sh` script demonstrates this with support for long-running, resumable chat sessions. To use this example, you must provide a file to cache the initial chat prompt and a directory to save the chat session, and may optionally provide the same variables as `chat-13B.sh`. The same prompt cache can be reused for new chat sessions. Note that both prompt cache and chat directory are tied to the initial prompt (`PROMPT_TEMPLATE`) and the model file.
+The prompt, user inputs, and model generations can be saved and resumed across calls to `./llama` by leveraging `--prompt-cache` and `--prompt-cache-all`. The `./examples/chat-persistent.sh` script demonstrates this with support for long-running, resumable chat sessions. To use this example, you must provide a file to cache the initial chat prompt and a directory to save the chat session, and may optionally provide the same variables as `chat-13B.sh`. The same prompt cache can be reused for new chat sessions. Note that both prompt cache and chat directory are tied to the initial prompt (`PROMPT_TEMPLATE`) and the model file.
 
 ```bash
 # Start a new chat

@@ -17,7 +17,7 @@ options:
 For example:
 
 ```bash
-./bin/export-lora \
+./bin/llama-export-lora \
     -m open-llama-3b-v2-q8_0.gguf \
     -o open-llama-3b-v2-q8_0-english2tokipona-chat.gguf \
     -l lora-open-llama-3b-v2-q8_0-english2tokipona-chat-LATEST.bin

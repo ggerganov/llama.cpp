@@ -8,7 +8,7 @@ To convert the model first download the models from the [llama2.c](https://githu
 
 After successful compilation, following usage options are available:
 ```
-usage: ./convert-llama2c-to-ggml [options]
+usage: ./llama-convert-llama2c-to-ggml [options]
 
 options:
   -h, --help                       show this help message and exit
@@ -19,7 +19,7 @@ options:
 
 An example command using a model from [karpathy/tinyllamas](https://huggingface.co/karpathy/tinyllamas) is as follows:
 
-`$ ./convert-llama2c-to-ggml --copy-vocab-from-model llama-2-7b-chat.gguf.q2_K.bin --llama2c-model stories42M.bin --llama2c-output-model stories42M.gguf.bin`
+`$ ./llama-convert-llama2c-to-ggml --copy-vocab-from-model llama-2-7b-chat.gguf.q2_K.bin --llama2c-model stories42M.bin --llama2c-output-model stories42M.gguf.bin`
 
 Note: The vocabulary for `stories260K.bin` should be its own tokenizer `tok512.bin` found in [karpathy/tinyllamas/stories260K](https://huggingface.co/karpathy/tinyllamas/tree/main/stories260K).
 
