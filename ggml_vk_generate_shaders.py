@@ -2565,8 +2565,6 @@ void main() {
 argsort_src = """
 #version 450
 
-#extension GL_EXT_shader_16bit_storage : require
-
 #define BLOCK_SIZE 1024
 #define ASC 0
 
