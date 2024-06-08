@@ -1431,7 +1431,7 @@ class BitnetModel(Model):
             if x[i] != 0:
                 scale = x[i]
                 break
-        x = np.divide(x, scale)
+        x = np.where(x * scale > 0, 1, np.where(x * scale < 0, -1, x))
         x = x.astype(np.uint8)
         x = np.reshape(x, [x.shape[0] // 4, 4])
         keep_bit = {0:192, 1:48, 2:12, 3:3}

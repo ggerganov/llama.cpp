@@ -6827,13 +6827,6 @@ static struct ggml_tensor * llm_build_norm(
     return cur;
 }
 
-static struct ggml_tensor * llm_build_qbitlinear(
-        struct ggml_context * ctx,
-        struct ggml_tensor  * cur)
-    {
-        return ggml_bitlinear_quant(ctx, cur);
-    }
-
 static struct ggml_tensor * llm_build_ffn(
         struct ggml_context * ctx,
          struct ggml_tensor * cur,
@@ -7137,9 +7130,7 @@ static struct ggml_tensor * llm_build_kqv(
                         attn_sub_norm, NULL,
                         LLM_NORM_RMS, cb, il);
         cb(cur, "attn_sub_norm", il);
-
-        // B2 for wo
-        // cur = llm_build_qbitlinear(ctx, cur);
+        
     }
 
     ggml_build_forward_expand(graph, cur);
@@ -11561,8 +11552,6 @@ struct llm_build_context {
             // self-attention
             {
                 // compute Q and K and RoPE them
-                // B1.Q
-                // cur = llm_build_qbitlinear(ctx0, cur);
                 struct ggml_tensor * Qcur = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
                 cb(Qcur, "Qcur", il);
                 if (model.layers[il].bq) {
@@ -11625,17 +11614,6 @@ struct llm_build_context {
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
 
-                // cur = llm_build_ffn(ctx0, cur,
-                //         model.layers[il].ffn_up,   NULL,
-                //         model.layers[il].ffn_gate, NULL,
-                //         model.layers[il].ffn_down, NULL,
-                //         NULL,
-                //         LLM_FFN_SILU, LLM_FFN_PAR, cb, il, hparams, model.layers[il].ffn_sub_norm, isbitnet);
-                // cb(cur, "ffn_out", il);
-    
-    
-                // cur = llm_build_qbitlinear(ctx0, cur);
-
                 struct ggml_tensor *tmp = ggml_mul_mat(ctx0, model.layers[il].ffn_up, cur);
     
                 cb(tmp, "ffn_up", il);
@@ -11655,9 +11633,6 @@ struct llm_build_context {
                                 model.layers[il].ffn_sub_norm, NULL,
                                 LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_sub_norm", il);
-
-                // B4 for w2
-                // cur = llm_build_qbitlinear(ctx0, cur);
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].ffn_down, cur);
                 cb(cur, "ffn_down", il);

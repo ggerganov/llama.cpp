@@ -3741,7 +3741,7 @@ void ggml_vec_dot_i2_q8_0(int n, float * restrict s, size_t bs, const void * res
         sumi += (int)y[i*4+2] * weight[2];
         sumi += (int)y[i*4+3] * weight[3];
     }
-    *s = (float)(sumi);
+    *s = (float)sumi;
 
 }
 
