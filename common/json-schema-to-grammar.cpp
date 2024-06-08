@@ -333,7 +333,7 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
             _generate_min_max_int(0, max_value, out, decimals_left, /* top_level= */ true);
         } else {
             out << "\"-\" (";
-            _generate_min_max_int(std::numeric_limits<int>::min(), -max_value, out, decimals_left, /* top_level= */ false);
+            _generate_min_max_int(-max_value, std::numeric_limits<int>::max(), out, decimals_left, /* top_level= */ false);
             out << ")";
         }
         return;

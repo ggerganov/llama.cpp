@@ -180,6 +180,18 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" [0-5] | [0] | [1-9] [0-9]{0,15}) space
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "max -5",
+        R"""({
+            "type": "integer",
+            "maximum": -5
+        })""",
+        R"""(
+            root ::= ("-" ([0-4] [0-9]{1,15} | [5-9] [0-9]{0,15})) space
             space ::= " "?
         )"""
     });
