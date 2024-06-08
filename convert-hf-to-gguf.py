@@ -23,9 +23,7 @@ if TYPE_CHECKING:
 
 if 'NO_LOCAL_GGUF' not in os.environ:
     sys.path.insert(1, str(Path(__file__).parent / 'gguf-py'))
-import importlib
-gguf = importlib.import_module("gguf-py.gguf")
-# import gguf
+import gguf
 
 logger = logging.getLogger("hf-to-gguf")
 
@@ -60,7 +58,7 @@ class Model:
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
     fname_out: Path
-    gguf_writer: gguf.GGUFWriter
+    gguf_writer: gguf.GGUFWriterSplit
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
