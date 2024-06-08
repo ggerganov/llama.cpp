@@ -276,9 +276,9 @@ static void _generate_min_max_int(int min_value, int max_value, std::stringstrea
 
     if (has_min) {
         if (min_value < 0) {
-            out << "\"-\" ";
+            out << "\"-\" (";
             _generate_min_max_int(std::numeric_limits<int>::min(), -min_value, out, decimals_left, /* top_level= */ false);
-            out << " | [0] | [1-9] ";
+            out << ") | [0] | [1-9] ";
             more_digits(0, decimals_left - 1);
         } else if (min_value == 0) {
             if (top_level) {

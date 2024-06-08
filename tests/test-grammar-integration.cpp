@@ -199,6 +199,30 @@ static void test_simple_grammar() {
             "123",
         }
     );
+    test_schema(
+        "simple min -123",
+        R"""({
+            "type": "integer",
+            "minimum": -123
+        })""",
+        // Passing strings
+        {
+            "-123",
+            "-122",
+            "-11",
+            "-1",
+            "0",
+            "1",
+            "123",
+            "1234",
+            "2345",
+        },
+        // Failing strings
+        {
+            "-1234",
+            "-124",
+        }
+    );
 
     // Test case for a simple grammar
     test_grammar(

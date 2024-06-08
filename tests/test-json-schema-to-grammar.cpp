@@ -179,7 +179,21 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "minimum": -5
         })""",
         R"""(
-            root ::= ("-" [0-5] | [0] | [1-9] [0-9]{0,15}) space
+            root ::= ("-" ([0-5]) | [0] | [1-9] [0-9]{0,15}) space
+            space ::= " "?
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "min -123",
+        R"""({
+            "type": "integer",
+            "minimum": -123
+        })""",
+        R"""(
+            root ::= ("-" ([0-9] | ([1-8] [0-9] | [9] [0-9]) | "1" ([0-1] [0-9] | [2] [0-3])) | [0] | [1-9] [0-9]{0,15}) space
+            space ::= " "?
         )"""
     });
 
