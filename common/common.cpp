@@ -200,13 +200,13 @@ void gpt_params_handle_model_default(gpt_params & params) {
             }
             params.hf_file = params.model;
         } else if (params.model.empty()) {
-            params.model = fs_get_cache_file_path(params.hf_file);
+            params.model = fs_get_cache_file(string_split(params.hf_file, '/').back());
         }
     } else if (!params.model_url.empty()) {
         if (params.model.empty()) {
             auto f = string_split(params.model_url, '#').front();
             f = string_split(f, '?').front();
-            params.model = fs_get_cache_file_path(f);
+            params.model = fs_get_cache_file(string_split(f, '/').back());
         }
     } else if (params.model.empty()) {
         params.model = DEFAULT_MODEL_PATH;
@@ -2273,13 +2273,14 @@ std::string fs_get_cache_directory() {
     return ensure_trailing_slash(cache_directory);
 }
 
-std::string fs_get_cache_file_path(const std::string & path) {
+std::string fs_get_cache_file(const std::string & filename) {
+    GGML_ASSERT(filename.find(DIRECTORY_SEPARATOR) == std::string::npos);
     std::string cache_directory = fs_get_cache_directory();
     const bool success = fs_create_directory_with_parents(cache_directory);
     if (!success) {
         throw std::runtime_error("failed to create cache directory: " + cache_directory);
     }
-    return cache_directory + string_split(path, '/').back();
+    return cache_directory + filename;
 }
 
 

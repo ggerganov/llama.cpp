@@ -277,7 +277,7 @@ bool fs_validate_filename(const std::string & filename);
 bool fs_create_directory_with_parents(const std::string & path);
 
 std::string fs_get_cache_directory();
-std::string fs_get_cache_file_path(const std::string & path);
+std::string fs_get_cache_file(const std::string & filename);
 
 //
 // Model utils
