@@ -253,6 +253,13 @@ static size_t common_part(const std::vector<llama_token> & a, const std::vector<
     return i;
 }
 
+static size_t common_part(const std::string & a, const std::string & b) {
+    size_t i;
+    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
+
+    return i;
+}
+
 static bool ends_with(const std::string & str, const std::string & suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
