@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, Sequence
 from argparse import Namespace
@@ -20,6 +21,8 @@ from .constants import (
 )
 from .gguf_writer import GGUFWriter, WriterState
 from .constants import Keys
+
+logger = logging.getLogger(__name__)
 
 
 SHARD_NAME_FORMAT = "{:s}-{:05d}-of-{:05d}.gguf"
@@ -63,7 +66,7 @@ class GGUFWriterSplit(GGUFWriter):
 
     def __init__(self, path: os.PathLike[str] | str, arch: str, split_arguments: SplitArguments,
                  use_temp_file: bool = True, endianess: GGUFEndian = GGUFEndian.LITTLE
-        ) -> None:
+                ) -> None:
         # we intentionally don't call superclass constructor
         self.arch = arch
         self.path = Path(path)
@@ -86,11 +89,11 @@ class GGUFWriterSplit(GGUFWriter):
 
         # check if we need to split
         if self.split_arguments.split_max_tensors and self.total_tensors < self.split_arguments.split_max_tensors:
-            print("Model has fewer tensors than the split threshold, not splitting")
+            logger.warning("Model has fewer tensors than the split threshold, not splitting")
             self.split_style = SplitStyle.NONE
 
         if self.split_arguments.split_max_size and total_size < self.split_arguments.split_max_size:
-            print("Model has smaller size than the split threshold, not splitting")
+            logger.warning("Model has smaller size than the split threshold, not splitting")
             self.split_style = SplitStyle.NONE
 
         # no shards are created when writing vocab so make one
@@ -105,13 +108,12 @@ class GGUFWriterSplit(GGUFWriter):
                 self.shards[i].path = self.path.with_name(SHARD_NAME_FORMAT.format(self.path.stem, i + 1, len(self.shards)))
 
         # print shard info
-        print("\nWriting the following files:")
+        logger.info("Writing the following files:")
         for shard in self.shards:
-            print(f"  {shard.path}: n_tensors = {shard.tensor_count}, total_size = {GGUFWriterSplit.format_n_bytes_to_str(shard.size)}")
-        print()
+            logger.info(f"  {shard.path}: n_tensors = {shard.tensor_count}, total_size = {GGUFWriterSplit.format_n_bytes_to_str(shard.size)}")
 
         if self.split_arguments.dry_run:
-            print("\nDry run, not writing files")
+            logger.info("Dry run, not writing files")
             exit()
 
         # we don't want to initialize GGUFWriters until now because they create files
@@ -137,7 +139,7 @@ class GGUFWriterSplit(GGUFWriter):
                 try:
                     (name, tensor, dtype) = shard.tensors.popleft()
                     writer.add_tensor(name, tensor, raw_dtype=dtype)
-                except:
+                except IndexError:
                     break
 
             self.shard_writers.append(writer)
@@ -154,7 +156,7 @@ class GGUFWriterSplit(GGUFWriter):
     def write_kv_data_to_file(self) -> None:
         if self.state is not WriterState.HEADER:
             raise ValueError(f'Expected GGUFWriterSplit state to be HEADER, got {self.state}')
-        
+
         for writer in self.shard_writers:
             writer.write_kv_data_to_file()
 
@@ -169,9 +171,9 @@ class GGUFWriterSplit(GGUFWriter):
             writer = self.shard_writers[i]
             is_metadata = writer.ti_data_count == 0
             if is_metadata:
-                print(f"Writing to shard {i + 1}/{len(self.shards)} with metadata only")
+                logger.info(f"Writing to shard {i + 1}/{len(self.shards)} with metadata only")
             else:
-                print(f"Writing to shard {i + 1}/{len(self.shards)} with {writer.ti_data_count}/{running_total} remaining tensors (of {self.total_tensors} total)")
+                logger.info(f"Writing to shard {i + 1}/{len(self.shards)} with {writer.ti_data_count}/{running_total} remaining tensors (of {self.total_tensors} total)")
             running_total -= writer.ti_data_count
             writer.write_tensors_to_file(progress=(progress and not is_metadata))
             del writer
@@ -181,7 +183,7 @@ class GGUFWriterSplit(GGUFWriter):
     # override add_key, add_val to handle kv data separately
     def add_key(self, key: str) -> None:
         self.recent_key = key
-    
+
     def add_val(self, val: Any, vtype: GGUFValueType | None = None, add_vtype: bool = True) -> None:
         if self.recent_key is None:
             raise ValueError("No key set for value")
@@ -226,9 +228,7 @@ class GGUFWriterSplit(GGUFWriter):
             return tensor.data_type.elements_to_bytes(np.prod(tensor.shape))
         except AttributeError: # numpy ndarray[Any, Any]
             return tensor.nbytes
-        except: # this should never happen
-            raise ValueError(f"Invalid tensor type: {type(tensor)}")
-    
+
     @staticmethod
     def split_str_to_n_bytes(split_str: str) -> int:
         if split_str.endswith("K"):
@@ -257,3 +257,4 @@ class GGUFWriterSplit(GGUFWriter):
                 return f"{fnum:3.1f}{unit}"
             fnum /= 1000.0
         return f"{fnum:.1f}T - over 1TB, --split recommended"
+
