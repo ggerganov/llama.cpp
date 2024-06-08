@@ -203,6 +203,8 @@ struct gpt_params {
 
     std::string slot_save_path;
 
+    float slot_prompt_similarity = 0.5f;
+
     // batched-bench params
     bool is_pp_shared = false;
 
