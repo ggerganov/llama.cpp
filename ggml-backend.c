@@ -1232,7 +1232,7 @@ static void ggml_backend_sched_print_assignments(ggml_backend_sched_t sched, str
 static int ggml_backend_sched_set_if_supports(ggml_backend_sched_t sched, struct ggml_tensor * node, int cur_backend_id, int * node_backend_id) {
     if (ggml_backend_supports_op(sched->backends[cur_backend_id], node)) {
         *node_backend_id = cur_backend_id;
-        SET_CAUSE(node, "2.2");
+        SET_CAUSE(node, "2.1");
     } else {
         for (int b = 0; b < sched->n_backends; b++) {
             if (b == cur_backend_id) {
@@ -1326,7 +1326,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
     // thus, cpu will never be used unless weights are on cpu, or there are no gpu ops between cpu ops
 
 
-    // pass 2.2 expand gpu down
+    // expand gpu down
     {
         int cur_backend_id = -1;
         for (int i = 0; i < graph->n_nodes; i++) {
@@ -1352,7 +1352,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             }
         }
     }
-    // pass 2.1 expand gpu up
+    // expand gpu up
     {
         int cur_backend_id = -1;
         for (int i = graph->n_nodes - 1; i >= 0; i--) {
@@ -1377,7 +1377,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             }
         }
     }
-    // pass 2.4 expand rest down
+    // expand rest down
     {
         int cur_backend_id = -1;
         for (int i = 0; i < graph->n_nodes; i++) {
@@ -1393,7 +1393,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
             }
         }
     }
-    // pass 2.3 expand rest up
+    // expand rest up
     {
         int cur_backend_id = -1;
         for (int i = graph->n_nodes - 1; i >= 0; i--) {
@@ -1410,13 +1410,48 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
         }
     }
 
-    // pass 3: assign backends to remaining src from dst and view_src
+    // pass 3
+    // upgrade nodes to higher prio backends with compatible buffer types
+    // if the tensor is already in the same buffer type (*) as another higher priority backend, we should move it there
+    // however, we also need to verify that the sources are in compatible buffer types
+    // (*) the actual requirement is more relaxed, the buffer type of the backend should be supported by all the users of this tensor further down the graph
+    // however, this is slow to verify, so we have a more strict requirement that the buffer type is the same
+    // this is not uncommon since multiple backends can use host memory, with the same buffer type (eg. BLAS and CPU)
+    for (int i = 0; i < graph->n_nodes; i++) {
+        struct ggml_tensor * node = graph->nodes[i];
+        if (ggml_is_view_op(node->op)) {
+            continue;
+        }
+        int * node_backend_id = &tensor_backend_id(node);
+        for (int b = 0; b < *node_backend_id; b++) {
+            if (sched->bufts[b] == sched->bufts[*node_backend_id] && ggml_backend_supports_op(sched->backends[b], node)) {
+                bool supported = true;
+                for (int j = 0; j < GGML_MAX_SRC; j++) {
+                    struct ggml_tensor * src = node->src[j];
+                    if (src == NULL) {
+                        continue;
+                    }
+                    if (!ggml_backend_sched_buffer_supported(sched, src, b)) {
+                        supported = false;
+                        break;
+                    }
+                }
+                if (supported) {
+                    *node_backend_id = b;
+                    SET_CAUSE(node, "3.upg");
+                    break;
+                }
+            }
+        }
+    }
+
+    // pass 4: assign backends to remaining src from dst and view_src
     for (int i = 0; i < graph->n_nodes; i++) {
         struct ggml_tensor * node = graph->nodes[i];
         int * cur_backend_id = &tensor_backend_id(node);
         if (node->view_src != NULL && *cur_backend_id == -1) {
             *cur_backend_id = tensor_backend_id(node->view_src);
-            SET_CAUSE(node, "3.vsrc");
+            SET_CAUSE(node, "4.vsrc");
         }
         for (int j = 0; j < GGML_MAX_SRC; j++) {
             struct ggml_tensor * src = node->src[j];
@@ -1428,10 +1463,10 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
                 if (src->view_src != NULL) {
                     // views are always on the same backend as the source
                     *src_backend_id = tensor_backend_id(src->view_src);
-                    SET_CAUSE(src, "3.vsrc");
+                    SET_CAUSE(src, "4.vsrc");
                 } else {
                     *src_backend_id = *cur_backend_id;
-                    SET_CAUSE(src, "3.cur");
+                    SET_CAUSE(src, "4.cur");
                 }
             }
         }
@@ -1848,6 +1883,8 @@ void ggml_backend_sched_free(ggml_backend_sched_t sched) {
     free(sched->tensor_copies);
     free(sched->node_backend_ids);
     free(sched->leaf_backend_ids);
+    free(sched->prev_node_backend_ids);
+    free(sched->prev_leaf_backend_ids);
     free(sched);
 }
 
@@ -1944,6 +1981,7 @@ void ggml_backend_sched_set_tensor_backend(ggml_backend_sched_t sched, struct gg
     int backend_index = ggml_backend_sched_backend_id(sched, backend);
     GGML_ASSERT(backend_index >= 0 && backend_index < sched->n_backends);
     tensor_backend_id(node) = backend_index;
+    SET_CAUSE(node, "usr");
 }
 
 ggml_backend_t ggml_backend_sched_get_tensor_backend(ggml_backend_sched_t sched, struct ggml_tensor * node) {

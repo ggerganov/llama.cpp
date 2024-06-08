@@ -18749,6 +18749,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
     switch (node->op) {
         case GGML_OP_CPY:
         case GGML_OP_DUP:
+        case GGML_OP_CONT:
         case GGML_OP_ADD:
         case GGML_OP_ADD1:
         case GGML_OP_ACC:
@@ -18833,7 +18834,6 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
             } break;
         case GGML_OP_SCALE:
         case GGML_OP_SET:
-        case GGML_OP_CONT:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
         case GGML_OP_PERMUTE:
@@ -18993,8 +18993,11 @@ static void ggml_graph_compute_thread_sync_node(int * node_n, struct ggml_comput
             sched_yield();
         }
 
-        * node_n = atomic_load(&state->shared->node_n);
-        if (* node_n != last_node_n) break;
+        *node_n = atomic_load(&state->shared->node_n);
+        if (*node_n != last_node_n) {
+            break;
+        }
+
 #if defined(__SSE3__)
         // Tell the processor we're spinning.  It's a processor hint for spinlocks.
         _mm_pause();
@@ -19004,15 +19007,18 @@ static void ggml_graph_compute_thread_sync_node(int * node_n, struct ggml_comput
 
 static void ggml_graph_compute_thread_sync_task(int * task_phase, struct ggml_compute_state * state, const bool do_yield) {
     // wait for other threads to finish
-    const int last_task_phase = * task_phase;
+    const int last_task_phase = *task_phase;
 
     while (true) {
         if (do_yield) {
             sched_yield();
         }
 
-        * task_phase = atomic_load(&state->shared->node_task);
-        if (* task_phase != last_task_phase) break;
+        *task_phase = atomic_load(&state->shared->node_task);
+        if (*task_phase != last_task_phase) {
+            break;
+        }
+
 #if defined(__SSE3__)
         // Tell the processor we're spinning.  It's a processor hint for spinlocks.
         _mm_pause();
