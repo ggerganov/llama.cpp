@@ -65,6 +65,7 @@ models-mnt
 /llama-gritlm
 /llama-imatrix
 /llama-infill
+/llama-llava
 /llama-lookahead
 /llama-lookup
 /llama-lookup-create
@@ -84,7 +85,6 @@ models-mnt
 /llama-tokenize
 /llama-train-text-from-scratch
 /llama-vdot
-/llava
 llama-batched-swift
 /common/build-info.cpp
 arm_neon.h
