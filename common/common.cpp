@@ -1491,6 +1491,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.chat_template = argv[i];
         return true;
     }
+    if (arg == "--slot-prompt-similarity" || arg == "-sps") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.slot_prompt_similarity = std::stof(argv[i]);
+        return true;
+    }
     if (arg == "-pps") {
         params.is_pp_shared = true;
         return true;
@@ -1913,6 +1921,8 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "set custom jinja chat template (default: template taken from model's metadata)\n"
                                                                         "only commonly used templates are accepted:\n"
                                                                         "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
+    options.push_back({ "server",      "-sps,  --slot-prompt-similarity SIMILARITY",
+                                                                        "how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity });
 
 #ifndef LOG_DISABLE_LOGS
     options.push_back({ "logging" });
