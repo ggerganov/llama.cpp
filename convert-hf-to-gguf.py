@@ -2801,23 +2801,23 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--split", action="store_true",
-        help="split the converted model into multiple files"
+        help="split the converted model into multiple files",
     )
     parser.add_argument(
         "--split-max-tensors", type=int,
-        help="max tensors in each split"
+        help="max tensors in each split",
     )
     parser.add_argument(
         "--split-max-size", type=str,
-        help="max size per split N(M|G)"
+        help="max size per split N(M|G)",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
-        help="only print out a split plan and exit, without writing any new files"
+        help="only print out a split plan and exit, without writing any new files",
     )
     parser.add_argument(
         "--small-first-shard", action="store_true",
-        help="do not add tensors to the first shard (disabled by default)"
+        help="do not add tensors to the first shard (disabled by default)",
     )
 
     return parser.parse_args()
