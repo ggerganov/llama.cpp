@@ -61,10 +61,10 @@ static size_t split_str_to_n_bytes(std::string str) {
     int n;
     if (str.back() == 'M') {
         sscanf(str.c_str(), "%d", &n);
-        n_bytes = (size_t)n * 1024 * 1024; // megabytes
+        n_bytes = (size_t)n * 1000 * 1000; // megabytes
     } else if (str.back() == 'G') {
         sscanf(str.c_str(), "%d", &n);
-        n_bytes = (size_t)n * 1024 * 1024 * 1024; // gigabytes
+        n_bytes = (size_t)n * 1000 * 1000 * 1000; // gigabytes
     } else {
         throw std::invalid_argument("error: supported units are M (megabytes) or G (gigabytes), but got: " + std::string(1, str.back()));
     }
@@ -284,7 +284,7 @@ struct split_strategy {
                 struct ggml_tensor * t = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_out, i));
                 total_size += ggml_nbytes(t);
             }
-            total_size = total_size / 1024 / 1024; // convert to megabytes
+            total_size = total_size / 1000 / 1000; // convert to megabytes
             printf("split %05d: n_tensors = %d, total_size = %ldM\n", i_split + 1, gguf_get_n_tensors(ctx_out), total_size);
             i_split++;
         }
