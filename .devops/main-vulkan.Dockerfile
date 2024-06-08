@@ -15,7 +15,7 @@ RUN wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | apt-key 
 WORKDIR /app
 COPY . .
 RUN cmake -B build -DLLAMA_VULKAN=1 && \
-    cmake --build build --config Release --target llama-bin
+    cmake --build build --config Release --target llama-cli
 
 # Clean up
 WORKDIR /

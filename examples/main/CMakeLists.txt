@@ -1,4 +1,4 @@
-set(TARGET llama-bin)
+set(TARGET llama-cli)
 add_executable(${TARGET} main.cpp)
 set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME llama)
 install(TARGETS ${TARGET} RUNTIME)
