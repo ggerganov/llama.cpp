@@ -20,7 +20,7 @@ cmake --build build --config Release
 cmake --install build --prefix C:/LlamaCPP
 ```
 
-### Build main-cmake-pkg
+### Build llama-cmake-pkg
 
 
 ```cmd
