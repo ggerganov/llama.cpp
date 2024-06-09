@@ -95,7 +95,7 @@ class GGUFWriter:
     fout: list[BufferedWriter | None] | None
     path: os.PathLike[str] | str | None
     temp_file: tempfile.SpooledTemporaryFile[bytes] | None
-    tensors: list[dict[str, TensorInfo]]
+    tensors: list[dict[str, TensorInfo | np.ndarray[Any, Any]]]
     kv_data: list[dict[str, GGUFValue]]
     state: WriterState
     _simple_value_packing = {
@@ -182,7 +182,7 @@ class GGUFWriter:
     def print_plan(self) -> None:
         logger.info("Writing the following files:")
         for i in range(len(self.fout)):
-            logger.info(f"  {self.fout[i].name}: n_tensors = {len(self.tensors[i])}, total_size = {GGUFWriter.format_n_bytes_to_str(GGUFWriter.get_tensors_total_size(self.tensors[i].values()))}")
+            logger.info(f"{self.fout[i].name}: n_tensors = {len(self.tensors[i])}, total_size = {GGUFWriter.format_n_bytes_to_str(GGUFWriter.get_tensors_total_size(self.tensors[i].values()))}")
 
         if self.split_arguments.dry_run:
             logger.info("Dry run, not writing files")
@@ -327,8 +327,9 @@ class GGUFWriter:
         if self.state is not WriterState.NO_FILE:
             raise ValueError(f'Expected output file to be not yet opened, got {self.state}')
 
-        if name in self.tensors:
-            raise ValueError(f'Duplicated tensor name {name!r}')
+        for i in range(len(self.tensors)):
+            if name in self.tensors[i]:
+                raise ValueError(f'Duplicated tensor name {name!r}')
 
         if raw_dtype is None:
             if tensor_dtype == np.float16:
