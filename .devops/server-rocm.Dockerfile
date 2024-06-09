@@ -45,6 +45,6 @@ ENV LLAMA_CURL=1
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev
 
-RUN make
+RUN make -j$(nproc)
 
 ENTRYPOINT [ "/app/server" ]

@@ -36,6 +36,9 @@ static __global__ void flash_attn_tile_ext_f32(
         const int nb11,
         const int nb12,
         const int nb13,
+        const int nb21,
+        const int nb22,
+        const int nb23,
         const int ne0,
         const int ne1,
         const int ne2,
@@ -272,13 +275,13 @@ void launch_fattn_tile_f32_64_128(ggml_backend_cuda_context & ctx, ggml_tensor *
             constexpr int      D = 64;
             constexpr int nwarps = 8;
             fattn_kernel_t fattn_kernel = flash_attn_tile_ext_f32<D, cols_per_block, nwarps, parallel_blocks>;
-            launch_fattn<D, parallel_blocks>(ctx, dst, fattn_kernel, nwarps, cols_per_block);
+            launch_fattn<D, parallel_blocks>(ctx, dst, fattn_kernel, nwarps, cols_per_block, true, true);
         } break;
         case 128: {
             constexpr int      D = 128;
             constexpr int nwarps = 8;
             fattn_kernel_t fattn_kernel = flash_attn_tile_ext_f32<D, cols_per_block, nwarps, parallel_blocks>;
-            launch_fattn<D, parallel_blocks>(ctx, dst, fattn_kernel, nwarps, cols_per_block);
+            launch_fattn<D, parallel_blocks>(ctx, dst, fattn_kernel, nwarps, cols_per_block, true, true);
         } break;
         default: {
             GGML_ASSERT(false && "FlashAttention without tensor cores only supports head sizes 64 and 128.");
