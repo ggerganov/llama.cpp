@@ -3802,9 +3802,9 @@ void ggml_vec_dot_i2_i8_s(int n, float * restrict s, size_t bs, const void * res
     UNUSED(by);
     UNUSED(nrc);
 
-#if defined(__AVX2__)
-    // TODO
-#else
+// #if defined(__AVX2__)
+//     // TODO
+// #else
 
     int sumi = 0;
 
@@ -3816,7 +3816,7 @@ void ggml_vec_dot_i2_i8_s(int n, float * restrict s, size_t bs, const void * res
         sumi += (int)y[i*4+3] * weight[3];
     }
     *s = (float)sumi;
-#endif
+// #endif
 }
 
 void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
