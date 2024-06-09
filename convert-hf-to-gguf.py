@@ -1390,12 +1390,14 @@ class LlamaModel(Model):
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
 
+
 @Model.register("BitnetForCausalLM")
 class BitnetModel(Model):
     model_arch = gguf.MODEL_ARCH.BITNET
+
     def set_vocab(self):
         self._set_vocab_sentencepiece()
-        
+
     def set_gguf_parameters(self):
         super().set_gguf_parameters()
         self.gguf_writer.add_name("Bitnet")
@@ -1407,9 +1409,7 @@ class BitnetModel(Model):
         self.gguf_writer.add_head_count(self.hparams["num_attention_heads"])
         self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"])
         self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
-
         self.gguf_writer.add_vocab_size(self.hparams["vocab_size"])
-
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
         self.gguf_writer.add_rope_scaling_factor(1.0)
         self.gguf_writer.add_rope_freq_base(self.hparams["rope_theta"])
@@ -1429,6 +1429,7 @@ class BitnetModel(Model):
             data_torch = data_torch + (self.weight_quant(data_torch) - data_torch).detach()
 
         return [(self.map_tensor_name(name), data_torch)]
+
 
 @Model.register("GrokForCausalLM")
 class GrokModel(Model):

@@ -12349,7 +12349,7 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     // attempt to reduce false-sharing (does not seem to make a difference)
     // 16 * 2, accounting for mmla kernels
     float tmp[32];
-    float * scale = (float * )((uint8_t*) (src0->data) + (ne00 * ne01 / 4));
+    const float * scale      = (float * )((uint8_t*) (src0->data) + (ne00 * ne01 / 4));
     const float * act_scales = (const float*) ((const char *) wdata + (ne11 * ne10));
 
     for (int64_t iir1 = ir1_start; iir1 < ir1_end; iir1 += blck_1) {
