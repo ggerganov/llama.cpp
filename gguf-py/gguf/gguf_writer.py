@@ -194,7 +194,8 @@ class GGUFWriter:
         
         total_tensors = sum(len(t) for t in self.tensors)
         for i in range(len(self.fout)):
-            try: # TODO better way to do this
+            # just see whether it exists
+            try:
                 self.kv_data[i]
             except IndexError:
                 self.kv_data.append(dict())
@@ -217,7 +218,6 @@ class GGUFWriter:
 
         for i in range(len(self.fout)):
             fout = self.fout[i]
-            #print(f"writing header: GGUF_VERSION={GGUF_VERSION}, GGUF_MAGIC={GGUF_MAGIC}, n_tensors={len(self.tensors[i])}, n_kv_data={len(self.kv_data[i])}")
             self._write_packed(fout, "<I", GGUF_MAGIC, skip_pack_prefix = True)
             self._write_packed(fout, "I", GGUF_VERSION)
             self._write_packed(fout, "Q", len(self.tensors[i]))
@@ -256,8 +256,8 @@ class GGUFWriter:
                 ti_data += self._pack_val(name, GGUFValueType.STRING, add_vtype=False)
                 n_dims = len(ti.shape)
                 ti_data += self._pack("I", n_dims)
-                for i in range(n_dims):
-                    ti_data += self._pack("Q", ti.shape[n_dims - 1 - i])
+                for j in range(n_dims):
+                    ti_data += self._pack("Q", ti.shape[n_dims - 1 - j])
                 ti_data += self._pack("I", ti.dtype)
                 ti_data += self._pack("Q", offset_tensor)
                 offset_tensor += GGUFWriter.ggml_pad(ti.nbytes, self.data_alignment)
