@@ -152,6 +152,28 @@ enum class ggml_qnn_profile_level {
     profile_detail = 2
 };
 
+enum qcom_htp_arch {
+    NONE = 0,
+    V68 = 68,
+    V69 = 69,
+    V73 = 73,
+    V75 = 75,
+};
+
+enum qcom_chipset {
+    UNKNOWN_SM = 0,
+    SM8450 = 36,  // v69
+    SM8475 = 42,  // v69
+    SM8550 = 43,  // v73
+    SM8650 = 57,  // v75
+};
+
+struct qcom_socinfo {
+    int soc_model;
+    int htp_arch;
+    int vtcm_size_in_mb;
+};
+
 struct ggml_backend_qnn_context {
     int                           device;
     int                           threads;
@@ -214,6 +236,29 @@ static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
                          .backend              = nullptr,
                          .raw_interface        = {},
                          .raw_system_interface = {}},
+};
+
+static struct qcom_socinfo g_qnn_soc_info_table[] = {
+    /* Qualcomm SnapDragon 8 Gen 1 */
+    [SM8450] = {.soc_model         = SM8450,
+                .htp_arch          = V69,
+                .vtcm_size_in_mb   = 8},
+
+    /* Qualcomm SnapDragon 8 Gen 1+ */
+    [SM8475] = {.soc_model         = SM8475,
+                .htp_arch          = V69,
+                .vtcm_size_in_mb   = 8},
+
+    /* Qualcomm SnapDragon 8 Gen 2 */
+    [SM8550] = {.soc_model         = SM8550,
+                .htp_arch          = V73,
+                .vtcm_size_in_mb   = 8},
+
+    /* Qualcomm SnapDragon 8 Gen 3 */
+    [SM8650] = {.soc_model         = SM8650,
+                .htp_arch          = V75,
+                .vtcm_size_in_mb   = 8},
+
 };
 
 // =================================================================================================
@@ -485,6 +530,8 @@ static Qnn_DataType_t qnn_datatype_from_ggml_datatype(enum ggml_type ggmltype) {
         return QNN_DATATYPE_INT_8;
     case GGML_TYPE_Q8_0:
         return QNN_DATATYPE_SFIXED_POINT_8;
+    case GGML_TYPE_Q4_0:
+        return QNN_DATATYPE_SFIXED_POINT_4;
     default:
         break;
     }
@@ -527,16 +574,31 @@ Fn load_qnn_functionpointers(void * handle, const char * function_name) {
 
 static const char * get_qnn_backend_name(int n_backend_type) {
     switch (n_backend_type) {
-    case 0:
+    case QNN_BACKEND_CPU:
         return "QNN-CPU";
-    case 1:
+    case QNN_BACKEND_GPU:
         return "QNN-GPU";
-    case 2:
+    case QNN_BACKEND_NPU:
         return "QNN-NPU";
-    case 3:
+    case QNN_BACKEND_GGML:
         return "ggml"; //"fake" QNN backend, used for compare performance between QNN backend and original GGML
     default:
         return "unknown";
+    }
+}
+
+static const char * qnn_get_chipset_desc(uint32_t chipset_id) {
+    switch (chipset_id) {
+        case SM8450:
+            return "SM8450";
+        case SM8475:
+            return "SM8475";
+        case SM8550:
+            return "SM8550";
+        case SM8650:
+            return "SM8650";
+        default:
+            return "unknown";
     }
 }
 
@@ -875,7 +937,7 @@ class qnn_instance {
         return 0;
     }
 
-    std::string &get_qnn_graph_name() { return _graph_name; }
+    std::string & get_qnn_graph_name() { return _graph_name; }
 
     bool is_rpcmem_initialized() { return _rpcmem_initialized; }
 
@@ -892,6 +954,8 @@ class qnn_instance {
     void * alloc_rpcmem(size_t bytes, size_t alignment);
 
     void free_rpcmem(void * buf);
+
+    size_t get_rpcmem_capacity() { return _rpcmem_capacity; }
 
     bool is_rpcmem_allocated(void * buf);
 
@@ -977,6 +1041,7 @@ class qnn_instance {
     pfn_rpc_mem_init                   _pfn_rpc_mem_init;
     pfn_rpc_mem_deinit                 _pfn_rpc_mem_deinit;
     std::unordered_map<void *, void *> _rpcmem_store_map;
+    size_t                             _rpcmem_capacity = 512;
 
     std::string _graph_name;
 };
@@ -1493,6 +1558,46 @@ int qnn_instance::qnn_init(const QnnSaver_Config_t ** saver_config) {
         QNN_LOG_DEBUG("initialize qnn context successfully\n");
     }
 
+    if (_backend_name.find("Htp") != std::variant_npos) {
+        const QnnDevice_PlatformInfo_t * p_info = nullptr;
+        _qnn_raw_interface.deviceGetPlatformInfo(nullptr, &p_info);
+        QNN_LOG_INFO("device counts %d", p_info->v1.numHwDevices);
+        QnnDevice_HardwareDeviceInfo_t * infos = p_info->v1.hwDevices;
+        for (int i = 0; i < p_info->v1.numHwDevices; i++) {
+            QNN_LOG_INFO("deviceID:%d, deviceType:%d, numCores %d", infos[i].v1.deviceId,
+                         infos[i].v1.deviceType, infos[i].v1.numCores);
+            QnnDevice_DeviceInfoExtension_t devinfo = infos[i].v1.deviceInfoExtension;
+            QnnHtpDevice_OnChipDeviceInfoExtension_t chipinfo = devinfo->onChipDevice;
+            QnnHtpDevice_Arch_t chiparch = chipinfo.arch;
+            QNN_LOG_INFO("htp_type:%d(%s)", devinfo->devType, (devinfo->devType == QNN_HTP_DEVICE_TYPE_ON_CHIP) ? "ON_CHIP" : "");
+            QNN_LOG_INFO("qualcomm soc_model:%d(%s), htp_arch:%d, vtcm_size_in_mb:%d MB", chipinfo.socModel,
+                         qnn_get_chipset_desc(chipinfo.socModel), chiparch, chipinfo.vtcmSize);
+        }
+        _qnn_raw_interface.deviceFreePlatformInfo(nullptr, p_info);
+
+
+        //TODO: faster approach to probe the accurate capacity of rpc ion memory
+        size_t candidate_size = 0;
+        uint8_t * rpc_buffer = nullptr;
+        const int SIZE_IN_MB = (1 << 20);
+        size_t probe_slots[] = {1024, 1536, 2048 - 48, 2048};
+        size_t probe_counts  = sizeof(probe_slots) / sizeof(size_t);
+        for (size_t idx = 0; idx < probe_counts; idx++) {
+            rpc_buffer = static_cast<uint8_t *>(alloc_rpcmem(probe_slots[idx] * SIZE_IN_MB, 4));
+            if (nullptr == rpc_buffer) {
+                QNN_LOG_INFO("alloc rpcmem %d (MB) failure, %s\n", probe_slots[idx], strerror(errno));
+                break;
+            } else {
+                candidate_size = probe_slots[idx];
+                free_rpcmem(rpc_buffer);
+                rpc_buffer = nullptr;
+            }
+        }
+        if (candidate_size > _rpcmem_capacity)
+            _rpcmem_capacity = candidate_size;
+        QNN_LOG_INFO("capacity of rpc ion memory %d MB\n", _rpcmem_capacity);
+    }
+
     QNN_LOG_DEBUG("leave qni_init\n");
 
     return 0;
@@ -1654,9 +1759,11 @@ static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx,
     const int64_t ne20 = tensor->ne[0];
     const int64_t ne21 = tensor->ne[1];
 
-    //TODO: support other quatinized data type
-    if (ggml_is_quantized(src0->type) && (src0->type != GGML_TYPE_Q8_0)) {
-        return false;
+    //TODO: support other quantized data type
+    if (ggml_is_quantized(src0->type)) {
+        if ((src0->type != GGML_TYPE_Q8_0) && (src0->type != GGML_TYPE_Q4_0)) {
+            return false;
+        }
     }
 
     if (b_dump_tensor_info) {
