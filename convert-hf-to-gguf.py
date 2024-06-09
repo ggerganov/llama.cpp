@@ -47,7 +47,7 @@ class Model:
     _model_classes: dict[str, type[Model]] = {}
 
     dir_model: Path
-    ftype: int
+    ftype: gguf.LlamaFileType
     is_big_endian: bool
     endianess: gguf.GGUFEndian
     use_temp_file: bool
@@ -94,7 +94,7 @@ class Model:
         ftype_lw: str = ftype_up.lower()
         # allow templating the file name with the output ftype, useful with the "auto" ftype
         self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
-        self.gguf_writer = gguf.GGUFWriter(self.fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
+        self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
 
     @classmethod
     def __init_subclass__(cls):
@@ -324,13 +324,13 @@ class Model:
 
     def write(self):
         self.write_tensors()
-        self.gguf_writer.write_header_to_file()
+        self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
         self.gguf_writer.close()
 
     def write_vocab(self):
-        self.gguf_writer.write_header_to_file()
+        self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
 
