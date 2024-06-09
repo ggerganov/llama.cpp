@@ -5,10 +5,13 @@ import os
 import shutil
 import struct
 import tempfile
+from argparse import Namespace
+from collections import deque
 from dataclasses import dataclass
 from enum import Enum, auto
+from pathlib import Path
 from io import BufferedWriter
-from typing import IO, Any, Sequence, Mapping
+from typing import IO, Any, Sequence, Mapping, TypeAlias
 from string import ascii_letters, digits
 
 import numpy as np
@@ -27,8 +30,17 @@ from .constants import (
 )
 
 from .quants import quant_shape_from_byte_shape
+from .constants import Keys
 
 logger = logging.getLogger(__name__)
+
+
+SHARD_NAME_FORMAT = "{:s}-{:05d}-of-{:05d}.gguf"
+NUM_SHARD_KV_DATA = 6
+METADATA_ONLY_INDICATOR = -1
+
+KVTempData: TypeAlias = dict[str, tuple[Any, GGUFValueType | None]] # {key: (value, type)}
+TensorTempData: TypeAlias = tuple[str, np.ndarray[Any, Any], GGMLQuantizationType | None] # (tensor name, tensor data, tensor dtype)
 
 
 @dataclass
@@ -45,6 +57,25 @@ class GGUFValue:
     type: GGUFValueType
 
 
+@dataclass
+class Shard:
+    path: Path
+    tensor_count: int
+    size: int
+    tensors: deque[TensorTempData]
+
+
+class SplitArguments:
+    def __init__(self, args: Namespace) -> None:
+        self.split_max_tensors = args.split_max_tensors if args.split_max_tensors else 0
+        self.split_max_size = GGUFWriter.split_str_to_n_bytes(args.split_max_size) if args.split_max_size else 0
+        self.split_style = SplitStyle.TENSORS if self.split_max_tensors \
+            else SplitStyle.SIZE if self.split_max_size \
+            else SplitStyle.NONE
+        self.dry_run = args.dry_run
+        self.small_first_shard = args.no_tensor_first_split
+
+
 class WriterState(Enum):
     NO_FILE = auto()
     EMPTY   = auto()
@@ -54,11 +85,17 @@ class WriterState(Enum):
     WEIGHTS = auto()
 
 
+class SplitStyle(Enum):
+    NONE    = auto()
+    TENSORS = auto()
+    SIZE    = auto()
+
+
 class GGUFWriter:
-    fout: BufferedWriter | None
+    fout: list[BufferedWriter | None]
     path: os.PathLike[str] | str | None
     temp_file: tempfile.SpooledTemporaryFile[bytes] | None
-    tensors: dict[str, TensorInfo]
+    tensors: list[dict[str, TensorInfo]]
     kv_data: dict[str, GGUFValue]
     state: WriterState
     _simple_value_packing = {
@@ -76,25 +113,55 @@ class GGUFWriter:
     }
 
     def __init__(
-        self, path: os.PathLike[str] | str | None, arch: str, use_temp_file: bool = False,
-        endianess: GGUFEndian = GGUFEndian.LITTLE, add_architecture: bool = True
+        self, path: os.PathLike[str] | str | None, arch: str, split_arguments: SplitArguments,
+        use_temp_file: bool = False, endianess: GGUFEndian = GGUFEndian.LITTLE
     ):
-        self.fout = None
+        self.fout = []
         self.path = path
         self.arch = arch
         self.endianess = endianess
         self.data_alignment = GGUF_DEFAULT_ALIGNMENT
+        self.split_arguments = split_arguments
         self.use_temp_file = use_temp_file
         self.temp_file = None
-        self.tensors = dict()
+        self.tensors = []
         self.kv_data = dict()
         logger.info("gguf: This GGUF file is for {0} Endian only".format(
             "Big" if self.endianess == GGUFEndian.BIG else "Little",
         ))
         self.state = WriterState.NO_FILE
 
-        if add_architecture:
-            self.add_architecture()
+        if self.split_arguments.small_first_shard:
+            self.tensors.append(dict())
+
+        self.add_architecture()
+
+    def verify_arguments(self) -> None:
+        total_tensors = sum(len(ti) for ti in self.tensors)
+        total_size = sum(sum(GGUFWriter.get_tensor_size(ti) for ti in t.values()) for t in self.tensors)
+
+        if self.split_arguments.split_max_tensors and total_tensors < self.split_arguments.split_max_tensors:
+            logger.warning("Model has fewer tensors than the split threshold, not splitting")
+            self.split_style = SplitStyle.NONE
+
+        if self.split_arguments.split_max_size and total_size < self.split_arguments.split_max_size:
+            logger.warning("Model has smaller size than the split threshold, not splitting")
+            self.split_style = SplitStyle.NONE
+
+        # no shards are created when writing vocab so make one
+        if not self.tensors or len(self.tensors) == 0:
+            self.tensors.append(dict())
+
+    def format_shard_names(self) -> list[os.PathLike[str]]:
+        pathobj = Path(self.path)
+        if self.split_arguments.split_style == SplitStyle.NONE:
+            return [pathobj]
+
+        shard_names = []
+        for i in range(len(self.tensors)):
+            shard_names.append(pathobj.with_name(SHARD_NAME_FORMAT.format(pathobj.stem, i + 1, len(self.tensors))))
+
+        return shard_names
 
     def open_output_file(self, path: os.PathLike[str] | str | None = None) -> None:
         if self.state is WriterState.EMPTY and self.fout is not None and (path is None or path == self.path):
@@ -107,23 +174,51 @@ class GGUFWriter:
             self.path = path
 
         if self.path is not None:
-            if self.fout is not None:
-                self.fout.close()
-            self.fout = open(self.path, "wb")
+            self.fout = []
+            for fout in self.format_shard_names():
+                self.fout.append(open(fout, "wb"))
             self.state = WriterState.EMPTY
 
+    def print_plan(self) -> None:
+        logger.info("Writing the following files:")
+        for i in range(len(self.fout)):
+            logger.info(f"  {self.fout[i].name}: n_tensors = {len(self.tensors[i])}, total_size = {GGUFWriter.format_n_bytes_to_str(GGUFWriter.get_tensors_total_size(self.tensors[i].values()))}")
+
+        if self.split_arguments.dry_run:
+            logger.info("Dry run, not writing files")
+            exit()
+
     def write_header_to_file(self, path: os.PathLike[str] | str | None = None) -> None:
+        self.verify_arguments()
         self.open_output_file(path)
+        self.print_plan()
 
         if self.state is not WriterState.EMPTY:
             raise ValueError(f'Expected output file to be empty, got {self.state}')
 
-        self._write_packed("<I", GGUF_MAGIC, skip_pack_prefix = True)
-        self._write_packed("I", GGUF_VERSION)
-        self._write_packed("Q", len(self.tensors))
-        self._write_packed("Q", len(self.kv_data))
-        self.flush()
+        assert len(self.fout) == len(self.tensors)
+
+        for i in range(len(self.fout)):
+            fout = self.fout[i]
+            self._write_packed(fout, "<I", GGUF_MAGIC, skip_pack_prefix = True)
+            self._write_packed(fout, "I", GGUF_VERSION)
+            self._write_packed(fout, "Q", len(self.tensors[i]))
+            kv_data_len = len(self.kv_data) if i == 0 else 0
+            if self.split_arguments.split_style != SplitStyle.NONE or self.split_arguments.small_first_shard:
+                kv_data_len += NUM_SHARD_KV_DATA
+            self._write_packed(fout, "Q", kv_data_len)
+            self.fout[i].flush()
         self.state = WriterState.HEADER
+
+    def add_shard_kv_data(self, kv_data: bytearray, shard_no: int) -> bytearray:
+        total_tensors = sum(len(t) for t in self.tensors)
+        kv_data += self._pack_val(Keys.Split.LLM_KV_SPLIT_NO, GGUFValueType.STRING, add_vtype=False)
+        kv_data += self._pack_val(shard_no, GGUFValueType.UINT16, add_vtype=True)
+        kv_data += self._pack_val(Keys.Split.LLM_KV_SPLIT_COUNT, GGUFValueType.STRING, add_vtype=False)
+        kv_data += self._pack_val(len(self.fout), GGUFValueType.UINT16, add_vtype=True)
+        kv_data += self._pack_val(Keys.Split.LLM_KV_SPLIT_TENSORS_COUNT, GGUFValueType.STRING, add_vtype=False)
+        kv_data += self._pack_val(total_tensors, GGUFValueType.INT32, add_vtype=True)
+        return kv_data
 
     def write_kv_data_to_file(self) -> None:
         if self.state is not WriterState.HEADER:
@@ -136,8 +231,16 @@ class GGUFWriter:
             kv_data += self._pack_val(key, GGUFValueType.STRING, add_vtype=False)
             kv_data += self._pack_val(val.value, val.type, add_vtype=True)
 
-        self.fout.write(kv_data)
-        self.flush()
+        if len(self.fout) > 1:
+            kv_data = self.add_shard_kv_data(kv_data, 0)
+
+        # only the first shard needs kv data
+        self.fout[0].write(kv_data)
+        self.fout[0].flush()
+
+        for i in range(1, len(self.fout)):
+            self.fout[i].write(self.add_shard_kv_data(bytearray(), i))
+            self.fout[i].flush()
         self.state = WriterState.KV_DATA
 
     def write_ti_data_to_file(self) -> None:
@@ -145,21 +248,23 @@ class GGUFWriter:
             raise ValueError(f'Expected output file to contain KV data, got {self.state}')
         assert self.fout is not None
 
-        ti_data = bytearray()
-        offset_tensor = 0
+        for i in range(len(self.fout)):
+            assert self.fout[i] is not None
+            ti_data = bytearray()
+            offset_tensor = 0
 
-        for name, ti in self.tensors.items():
-            ti_data += self._pack_val(name, GGUFValueType.STRING, add_vtype=False)
-            n_dims = len(ti.shape)
-            ti_data += self._pack("I", n_dims)
-            for i in range(n_dims):
-                ti_data += self._pack("Q", ti.shape[n_dims - 1 - i])
-            ti_data += self._pack("I", ti.dtype)
-            ti_data += self._pack("Q", offset_tensor)
-            offset_tensor += GGUFWriter.ggml_pad(ti.nbytes, self.data_alignment)
+            for name, ti in self.tensors[i].items():
+                ti_data += self._pack_val(name, GGUFValueType.STRING, add_vtype=False)
+                n_dims = len(ti.shape)
+                ti_data += self._pack("I", n_dims)
+                for i in range(n_dims):
+                    ti_data += self._pack("Q", ti.shape[n_dims - 1 - i])
+                ti_data += self._pack("I", ti.dtype)
+                ti_data += self._pack("Q", offset_tensor)
+                offset_tensor += GGUFWriter.ggml_pad(ti.nbytes, self.data_alignment)
 
-        self.fout.write(ti_data)
-        self.flush()
+            self.fout[i].write(ti_data)
+            self.fout[i].flush()
         self.state = WriterState.TI_DATA
 
     def add_key_value(self, key: str, val: Any, vtype: GGUFValueType) -> None:
@@ -248,7 +353,18 @@ class GGUFWriter:
             if tensor_dtype == np.uint8:
                 tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
 
-        self.tensors[name] = TensorInfo(shape=tensor_shape, dtype=dtype, nbytes=tensor_nbytes)
+        # create splits as necessary, such as to start it off
+        if (len(self.tensors) == self.split_arguments.small_first_shard \
+            # or split when over tensor limit
+            or (self.split_arguments.split_style == SplitStyle.TENSORS \
+                and len(self.tensors[-1]) >= self.split_arguments.split_max_tensors) \
+            # or split when over size limit
+            or (self.split_arguments.split_style == SplitStyle.SIZE \
+                and GGUFWriter.get_tensors_total_size(self.tensors[-1].values()) + tensor_nbytes > self.split_arguments.split_max_size)):
+
+            self.tensors.append(dict())
+
+        self.tensors[-1][name] = TensorInfo(shape=tensor_shape, dtype=dtype, nbytes=tensor_nbytes)
 
     def add_tensor(
         self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None,
@@ -265,7 +381,7 @@ class GGUFWriter:
         self.add_tensor_info(name, shape, tensor.dtype, tensor.nbytes, raw_dtype=raw_dtype)
 
         if self.temp_file is None:
-            self.tensors[name].tensor = tensor
+            self.tensors[-1][name].tensor = tensor
             return
 
         tensor.tofile(self.temp_file)
@@ -283,9 +399,12 @@ class GGUFWriter:
 
         if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
-        self.write_padding(self.fout, self.fout.tell())
-        tensor.tofile(self.fout)
-        self.write_padding(self.fout, tensor.nbytes)
+
+        for fout in self.fout:
+            assert fout is not None
+            self.write_padding(fout, fout.tell())
+            tensor.tofile(fout)
+            self.write_padding(fout, tensor.nbytes)
 
         self.state = WriterState.WEIGHTS
 
@@ -294,27 +413,31 @@ class GGUFWriter:
 
         assert self.fout is not None
 
-        self.write_padding(self.fout, self.fout.tell())
+        for fout in self.fout:
+            assert fout is not None
+            self.write_padding(fout, fout.tell())
 
         if self.temp_file is None:
-            bar = None
+            for i in range(len(self.fout)):
+                assert self.fout[i] is not None
+                bar = None
 
-            if progress:
-                from tqdm import tqdm
+                if progress:
+                    from tqdm import tqdm
 
-                total_bytes = sum(t.nbytes for t in self.tensors.values())
+                    total_bytes = GGUFWriter.get_tensors_total_size(self.tensors[i].values())
 
-                bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
+                    bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
 
-            # relying on the fact that Python dicts preserve insertion order (since 3.7)
-            for ti in self.tensors.values():
-                assert ti.tensor is not None  # can only iterate once over the tensors
-                assert ti.tensor.nbytes == ti.nbytes
-                ti.tensor.tofile(self.fout)
-                if bar is not None:
-                    bar.update(ti.nbytes)
-                self.write_padding(self.fout, ti.nbytes)
-                ti.tensor = None
+                # relying on the fact that Python dicts preserve insertion order (since 3.7)
+                for ti in self.tensors[i].values():
+                    assert ti.tensor is not None  # can only iterate once over the tensors
+                    assert ti.tensor.nbytes == ti.nbytes
+                    ti.tensor.tofile(self.fout[i])
+                    if bar is not None:
+                        bar.update(ti.nbytes)
+                    self.write_padding(self.fout[i], ti.nbytes)
+                    ti.tensor = None
         else:
             self.temp_file.seek(0)
 
@@ -326,12 +449,16 @@ class GGUFWriter:
 
     def flush(self) -> None:
         assert self.fout is not None
-        self.fout.flush()
+        for fout in self.fout:
+            assert fout is not None
+            fout.flush()
 
     def close(self) -> None:
         if self.fout is not None:
-            self.fout.close()
-            self.fout = None
+            for fout in self.fout:
+                if fout is not None:
+                    fout.close()
+            self.fout = []
 
     def add_architecture(self) -> None:
         self.add_string(Keys.General.ARCHITECTURE, self.arch)
@@ -609,6 +736,46 @@ class GGUFWriter:
 
         return kv_data
 
-    def _write_packed(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> None:
-        assert self.fout is not None
-        self.fout.write(self._pack(fmt, value, skip_pack_prefix))
+    def _write_packed(self, fout: BufferedWriter, fmt: str, value: Any, skip_pack_prefix: bool = False) -> None:
+        assert fout is not None
+        fout.write(self._pack(fmt, value, skip_pack_prefix))
+
+    @staticmethod
+    def get_tensor_size(tensor) -> int:
+        try:
+            return tensor.data_type.elements_to_bytes(np.prod(tensor.shape))
+        except AttributeError: # numpy ndarray[Any, Any]
+            return tensor.nbytes
+        
+    @staticmethod
+    def get_tensors_total_size(tensors) -> int:
+        return sum(GGUFWriter.get_tensor_size(ti) for ti in tensors)
+        
+    @staticmethod
+    def split_str_to_n_bytes(split_str: str) -> int:
+        if split_str.endswith("K"):
+            n = int(split_str[:-1]) * 1000
+        elif split_str.endswith("M"):
+            n = int(split_str[:-1]) * 1000 * 1000
+        elif split_str.endswith("G"):
+            n = int(split_str[:-1]) * 1000 * 1000 * 1000
+        elif split_str.isnumeric():
+            n = int(split_str)
+        else:
+            raise ValueError(f"Invalid split size: {split_str}, must be a number, optionally followed by K, M, or G")
+
+        if n <= 0:
+            raise ValueError(f"Invalid split size: {split_str}, must be positive")
+
+        return n
+
+    @staticmethod
+    def format_n_bytes_to_str(num: int) -> str:
+        if num == METADATA_ONLY_INDICATOR:
+            return "negligible - metadata only"
+        fnum = float(num)
+        for unit in ("", "K", "M", "G"):
+            if abs(fnum) < 1000.0:
+                return f"{fnum:3.1f}{unit}"
+            fnum /= 1000.0
+        return f"{fnum:.1f}T - over 1TB, --split recommended"

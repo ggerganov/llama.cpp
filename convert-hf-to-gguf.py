@@ -59,7 +59,7 @@ class Model:
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
     fname_out: Path
-    gguf_writer: gguf.GGUFWriterSplit
+    gguf_writer: gguf.GGUFWriter
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
@@ -95,8 +95,8 @@ class Model:
         ftype_lw: str = ftype_up.lower()
         # allow templating the file name with the output ftype, useful with the "auto" ftype
         self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
-        self.gguf_writer = gguf.GGUFWriterSplit(self.fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], split_arguments,
-                                                endianess=self.endianess, use_temp_file=self.use_temp_file)
+        self.gguf_writer = gguf.GGUFWriter(None, gguf.MODEL_ARCH_NAMES[self.model_arch], split_arguments,
+                                           endianess=self.endianess, use_temp_file=self.use_temp_file)
 
     @classmethod
     def __init_subclass__(cls):
@@ -326,16 +326,14 @@ class Model:
 
     def write(self):
         self.write_tensors()
-        self.gguf_writer.init_shards()
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
         self.gguf_writer.close()
 
     def write_vocab(self):
-        if self.gguf_writer.split_arguments.split:
+        if self.gguf_writer.split_arguments.split_style != gguf.SplitStyle.NONE:
             raise ValueError('Splitting the vocabulary is not supported')
-        self.gguf_writer.init_shards()
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
