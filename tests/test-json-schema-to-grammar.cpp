@@ -751,15 +751,31 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             alternative-0 ::= foo
             alternative-1 ::= bar
-            bar ::= "{" space  (bar-b-kv )? "}" space
+            array ::= "[" space ( value ("," space value)* )? "]" space
+            bar ::= "{" space  (bar-b-kv bar-b-rest | bar-additional-kvs )? "}" space
+            bar-additional-kv ::= string ":" space bar-additional-value
+            bar-additional-kvs ::= bar-additional-kv ( "," space bar-additional-kv )*
+            bar-additional-value ::= object
             bar-b-kv ::= "\"b\"" space ":" space number
+            bar-b-rest ::= bar-additional-kvs
+            boolean ::= ("true" | "false") space
+            char ::= [^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
             decimal-part ::= [0-9]{1,16}
-            foo ::= "{" space  (foo-a-kv )? "}" space
+            foo ::= "{" space  (foo-a-kv foo-a-rest | foo-additional-kvs )? "}" space
             foo-a-kv ::= "\"a\"" space ":" space number
+            foo-a-rest ::= foo-additional-kvs
+            foo-additional-kv ::= string ":" space foo-additional-value
+            foo-additional-kvs ::= foo-additional-kv ( "," space foo-additional-kv )*
+            foo-additional-value ::= object
             integral-part ::= [0] | [1-9] [0-9]{0,15}
+            null ::= "null" space
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
+            object ::= "{" space ( string ":" space value ("," space string ":" space value)* )? "}" space
             root ::= alternative-0 | alternative-1
             space ::= " "?
+            string ::= "\"" char* "\"" space
+            value ::= object | array | string | number | boolean | null
+
         )"""
     });
 

@@ -372,7 +372,10 @@ class SchemaConverter:
               ('additionalProperties' in schema and schema['additionalProperties'] is not True)):
             required = set(schema.get('required', []))
             properties = list(schema.get('properties', {}).items())
-            return self._add_rule(rule_name, self._build_object_rule(properties, required, name, schema.get('additionalProperties')))
+            additional_properties = schema.get('additionalProperties', True)
+            if additional_properties is None:
+                additional_properties = True
+            return self._add_rule(rule_name, self._build_object_rule(properties, required, name, additional_properties))
 
         elif schema_type in (None, 'object') and 'allOf' in schema:
             required = set()

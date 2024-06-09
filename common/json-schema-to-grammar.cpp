@@ -625,7 +625,7 @@ public:
             return _add_rule(rule_name,
                 _build_object_rule(
                     properties, required, name,
-                    schema.contains("additionalProperties") ? schema["additionalProperties"] : json()));
+                    schema.contains("additionalProperties") ? schema["additionalProperties"] : json::object()));
         } else if ((schema_type.is_null() || schema_type == "object") && schema.contains("allOf")) {
             std::unordered_set<std::string> required;
             std::vector<std::pair<std::string, json>> properties;

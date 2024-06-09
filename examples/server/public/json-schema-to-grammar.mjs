@@ -374,7 +374,11 @@ export class SchemaConverter {
                 ('additionalProperties' in schema && schema.additionalProperties !== true))) {
       const required = new Set(schema.required || []);
       const properties = Object.entries(schema.properties ?? {});
-      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, schema.additionalProperties));
+      let additionalProperties = schema.additionalProperties;
+      if (additionalProperties === undefined) {
+        additionalProperties = true;
+      }
+      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, additionalProperties));
     } else if ((schemaType === undefined || schemaType === 'object') && 'allOf' in schema) {
       const required = new Set();
       const properties = [];
