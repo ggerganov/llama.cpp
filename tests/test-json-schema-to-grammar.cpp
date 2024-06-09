@@ -247,7 +247,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "const": "foo"
         })""",
         R"""(
-            root ::= "\"foo\""
+            root ::= "\"foo\"" space
             space ::= " "?
         )"""
     });
@@ -259,7 +259,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "const": 123
         })""",
         R"""(
-            root ::= "123"
+            root ::= "123" space
             space ::= " "?
         )"""
     });
@@ -271,7 +271,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "enum": ["red", "amber", "green", null, 42, ["foo"]]
         })""",
         R"""(
-            root ::= "\"red\"" | "\"amber\"" | "\"green\"" | "null" | "42" | "[\"foo\"]"
+            root ::= ("\"red\"" | "\"amber\"" | "\"green\"" | "null" | "42" | "[\"foo\"]") space
             space ::= " "?
         )"""
     });

@@ -361,10 +361,10 @@ class SchemaConverter:
             return self._add_rule(rule_name, self._generate_union_rule(name, [{'type': t} for t in schema_type]))
 
         elif 'const' in schema:
-            return self._add_rule(rule_name, self._generate_constant_rule(schema['const']))
+            return self._add_rule(rule_name, self._generate_constant_rule(schema['const']) + ' space')
 
         elif 'enum' in schema:
-            rule = ' | '.join((self._generate_constant_rule(v) for v in schema['enum']))
+            rule = '(' + ' | '.join((self._generate_constant_rule(v) for v in schema['enum'])) + ') space'
             return self._add_rule(rule_name, rule)
 
         elif schema_type in (None, 'object') and \

@@ -365,9 +365,9 @@ export class SchemaConverter {
     } else if (Array.isArray(schemaType)) {
       return this._addRule(ruleName, this._generateUnionRule(name, schemaType.map(t => ({ type: t }))));
     } else if ('const' in schema) {
-      return this._addRule(ruleName, this._generateConstantRule(schema.const));
+      return this._addRule(ruleName, this._generateConstantRule(schema.const) + ' space');
     } else if ('enum' in schema) {
-      const rule = schema.enum.map(v => this._generateConstantRule(v)).join(' | ');
+      const rule = '(' + schema.enum.map(v => this._generateConstantRule(v)).join(' | ') + ') space';
       return this._addRule(ruleName, rule);
     } else if ((schemaType === undefined || schemaType === 'object') &&
                ('properties' in schema ||
