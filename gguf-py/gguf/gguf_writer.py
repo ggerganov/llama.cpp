@@ -30,7 +30,6 @@ from .constants import (
 )
 
 from .quants import quant_shape_from_byte_shape
-from .constants import Keys
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +190,7 @@ class GGUFWriter:
     def add_shard_kv_data(self) -> None:
         if self.split_arguments.split_style == SplitStyle.NONE:
             return
-        
+
         total_tensors = sum(len(t) for t in self.tensors)
         for i in range(len(self.fout)):
             # just see whether it exists
@@ -746,11 +745,11 @@ class GGUFWriter:
             return tensor.data_type.elements_to_bytes(np.prod(tensor.shape))
         except AttributeError: # numpy ndarray[Any, Any]
             return tensor.nbytes
-        
+
     @staticmethod
     def get_tensors_total_size(tensors) -> int:
         return sum(GGUFWriter.get_tensor_size(ti) for ti in tensors)
-        
+
     @staticmethod
     def split_str_to_n_bytes(split_str: str) -> int:
         if split_str.endswith("K"):

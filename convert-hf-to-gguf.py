@@ -2891,15 +2891,13 @@ def main() -> None:
         model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
 
         if args.vocab_only:
-            logger.info(f"Exporting model vocab...")
+            logger.info("Exporting model vocab...")
             model_instance.write_vocab()
-            logger.info(f"Model vocab successfully exported.")
+            logger.info("Model vocab successfully exported.")
         else:
-            logger.info(f"Exporting model...")
+            logger.info("Exporting model...")
             model_instance.write()
-            logger.info(f"Model successfully exported.")
-
-
+            logger.info("Model successfully exported.")
 
 if __name__ == '__main__':
     main()
