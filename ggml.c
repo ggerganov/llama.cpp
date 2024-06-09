@@ -573,7 +573,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .type_name                = "i2",
         .blck_size                = 1,
         .type_size                = sizeof(int8_t),
-        .is_quantized             = false,
+        .is_quantized             = true,
         .vec_dot                  = (ggml_vec_dot_t) ggml_vec_dot_i2_q8_0,
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
@@ -2637,6 +2637,7 @@ inline static void ggml_vec_absmaxclamp_f32(const int n, float * s, float * x, f
     }
     *s = max;
 }
+
 inline static void ggml_vec_scaleroundclamp_f32(const int n, float * s, const float * x, float scale, float min, float max) {
     for (int i = 0; i < n; ++i) {
         s[i] = round(x[i] * scale);
@@ -2645,6 +2646,7 @@ inline static void ggml_vec_scaleroundclamp_f32(const int n, float * s, const fl
         s[i] /= scale;
     }
 }
+
 inline static void ggml_vec_scaleroundclamp_f32_v2(const int n, float * s, int8_t* inp, float scale, float min, float max) {
     float temp;
     for (int i = 0; i < n; ++i) {
@@ -2653,7 +2655,6 @@ inline static void ggml_vec_scaleroundclamp_f32_v2(const int n, float * s, int8_
         if (temp < min) temp = min;
         inp[i] = (int8_t)(temp);
     }
-
 }
 
 //
@@ -21726,6 +21727,7 @@ size_t ggml_quantize_chunk(
         case GGML_TYPE_IQ1_M:   result = quantize_iq1_m  (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_IQ4_NL:  result = quantize_iq4_nl (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_IQ4_XS:  result = quantize_iq4_xs (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_I2:      result = quantize_i2_s   (src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_F16:
             {
                 size_t elemsize = sizeof(ggml_fp16_t);

@@ -1418,6 +1418,10 @@ class BitnetModel(Model):
         dtype = weight.dtype
         weight = weight.float()
         s =  1 / weight.abs().mean().clamp(min=1e-5)
+        # from gguf.lazy import LazyNumpyTensor
+        # np_s = LazyNumpyTensor.to_eager(s.numpy())
+        
+        # print(np_s)
         result = (weight * s).round().clamp(-1, 1) / s
         return result.type(dtype)
 
@@ -1444,14 +1448,15 @@ class BitnetModel(Model):
         scale = np.tile(scale, 8)
         return ans, scale
 
-    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        # quant weight to i2 (in fp16)
-        if name.endswith(("q_proj.weight", "k_proj.weight", "v_proj.weight", 
-                          "down_proj.weight", "up_proj.weight", "gate_proj.weight",
-                          "o_proj.weight")):
-            data_torch = data_torch + (self.weight_quant(data_torch) - data_torch).detach()
+    # def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+    #     # quant weight to i2 (in fp16)
+    #     if name.endswith(("q_proj.weight", "k_proj.weight", "v_proj.weight", 
+    #                       "down_proj.weight", "up_proj.weight", "gate_proj.weight",
+    #                       "o_proj.weight")):
+    #         print(name)
+    #         data_torch = data_torch + (self.weight_quant(data_torch) - data_torch).detach()
 
-        return [(self.map_tensor_name(name), data_torch)]
+    #     return [(self.map_tensor_name(name), data_torch)]
 
     def write_tensors(self):
         max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")

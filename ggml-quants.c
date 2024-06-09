@@ -3306,6 +3306,33 @@ size_t quantize_q8_0(const float * restrict src, void * restrict dst, int64_t nr
     return nrow * row_size;
 }
 
+size_t quantize_i2_s(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
+    // 2 bits per weight
+    size_t row_size = ggml_row_size(GGML_TYPE_I2, n_per_row) / 4;
+    char * qrow = (char *)dst;
+    printf("n_row:%d\n", nrow);
+    printf("n_per_row:%d\n", n_per_row);
+    int n = nrow * n_per_row;
+    float accu = 0.0;
+    float min = 0.00001;
+    for (int i = 0; i < n; ++i) {
+        accu += fabs(src[i]);
+    }
+    accu = accu > min ? accu : min;
+    float scale = n / accu;
+
+    printf("\nscale:%f\n", scale);
+
+    // for (int64_t row = 0; row < nrow; ++row) {
+    //     quantize_row_q4_0_impl(src, (block_q4_0*)qrow, n_per_row, quant_weights);
+    //     src += n_per_row;
+    //     qrow += row_size;
+    // }
+
+    // 32B for scale
+    return nrow * row_size + 32;
+}
+
 // ====================== "True" 2-bit (de)-quantization
 
 void dequantize_row_iq2_xxs(const block_iq2_xxs * restrict x, float * restrict y, int64_t k) {
