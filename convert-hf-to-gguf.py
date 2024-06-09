@@ -66,7 +66,7 @@ class Model:
     model_arch: gguf.MODEL_ARCH
 
     def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool,
-                 split_arguments: gguf.SplitArguments, model_name: str | None):
+                 model_name: str | None, split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = 0, small_first_shard: bool = 0):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
@@ -97,8 +97,8 @@ class Model:
         ftype_lw: str = ftype_up.lower()
         # allow templating the file name with the output ftype, useful with the "auto" ftype
         self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
-        self.gguf_writer = gguf.GGUFWriter(None, gguf.MODEL_ARCH_NAMES[self.model_arch], split_arguments,
-                                           endianess=self.endianess, use_temp_file=self.use_temp_file)
+        self.gguf_writer = gguf.GGUFWriter(None, gguf.MODEL_ARCH_NAMES[self.model_arch],endianess=self.endianess, use_temp_file=self.use_temp_file,
+                                           split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
 
     @classmethod
     def __init_subclass__(cls):
@@ -334,7 +334,7 @@ class Model:
         self.gguf_writer.close()
 
     def write_vocab(self):
-        if self.gguf_writer.split_arguments.split_style != gguf.SplitStyle.NONE:
+        if len(self.gguf_writer.tensors) != 1:
             raise ValueError('Splitting the vocabulary is not supported')
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
@@ -2806,11 +2806,11 @@ def parse_args() -> argparse.Namespace:
         help="increase output verbosity",
     )
     parser.add_argument(
-        "--split-max-tensors", type=int,
+        "--split-max-tensors", type=int, default=0,
         help="max tensors in each split",
     )
     parser.add_argument(
-        "--split-max-size", type=str,
+        "--split-max-size", type=str, default="0",
         help="max size per split N(M|G)",
     )
     parser.add_argument(
@@ -2823,6 +2823,24 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
+
+
+def split_str_to_n_bytes(split_str: str) -> int:
+    if split_str.endswith("K"):
+        n = int(split_str[:-1]) * 1000
+    elif split_str.endswith("M"):
+        n = int(split_str[:-1]) * 1000 * 1000
+    elif split_str.endswith("G"):
+        n = int(split_str[:-1]) * 1000 * 1000 * 1000
+    elif split_str.isnumeric():
+        n = int(split_str)
+    else:
+        raise ValueError(f"Invalid split size: {split_str}, must be a number, optionally followed by K, M, or G")
+
+    if n < 0:
+        raise ValueError(f"Invalid split size: {split_str}, must be positive")
+
+    return n
 
 
 def main() -> None:
@@ -2848,11 +2866,6 @@ def main() -> None:
     if not dir_model.is_dir():
         logger.error(f'Error: {args.model} is not a directory')
         sys.exit(1)
-
-    if args.split_max_tensors and args.split_max_size:
-        raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
-
-    split_arguments = gguf.SplitArguments(args)
 
     ftype_map: dict[str, gguf.LlamaFileType] = {
         "f32": gguf.LlamaFileType.ALL_F32,
@@ -2880,7 +2893,9 @@ def main() -> None:
             sys.exit(1)
 
         model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file,
-                                     args.no_lazy, split_arguments, args.model_name)
+                                     args.no_lazy, args.model_name, split_max_tensors=args.split_max_tensors,
+                                     split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
+                                     small_first_shard=args.no_tensor_first_split)
 
         logger.info("Set model parameters")
         model_instance.set_gguf_parameters()
