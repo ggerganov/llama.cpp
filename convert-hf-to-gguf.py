@@ -73,10 +73,10 @@ class Model:
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
         self.lazy = not eager
-        self.part_names = Model.get_model_part_names(self.dir_model, ".safetensors")
+        self.part_names = Model.get_model_part_names(self.dir_model, "model", ".safetensors")
         self.is_safetensors = len(self.part_names) > 0
         if not self.is_safetensors:
-            self.part_names = Model.get_model_part_names(self.dir_model, ".bin")
+            self.part_names = Model.get_model_part_names(self.dir_model, "pytorch_model", ".bin")
         self.hparams = Model.load_hparams(self.dir_model)
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
@@ -335,10 +335,10 @@ class Model:
         self.gguf_writer.close()
 
     @staticmethod
-    def get_model_part_names(dir_model: Path, suffix: str) -> list[str]:
+    def get_model_part_names(dir_model: Path, prefix: str, suffix: str) -> list[str]:
         part_names: list[str] = []
         for filename in os.listdir(dir_model):
-            if filename.endswith(suffix):
+            if filename.startswith(prefix) and filename.endswith(suffix):
                 part_names.append(filename)
 
         part_names.sort()
