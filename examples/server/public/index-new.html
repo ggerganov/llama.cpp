@@ -416,7 +416,7 @@
           message = html`<${Probabilities} data=${data} />`
         } else {
           const text = isArrayMessage ?
-            data.map(msg => msg.content).join('').replace(/^\s+/, '') :
+            data.map(msg => msg.content).join('') :
             data;
           message = isCompletionMode ?
             text :

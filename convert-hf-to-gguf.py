@@ -52,6 +52,7 @@ class Model:
     endianess: gguf.GGUFEndian
     use_temp_file: bool
     lazy: bool
+    model_name: str | None
     part_names: list[str]
     is_safetensors: bool
     hparams: dict[str, Any]
@@ -65,7 +66,7 @@ class Model:
     model_arch: gguf.MODEL_ARCH
 
     def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool,
-                 split_arguments: gguf.SplitArguments):
+                 split_arguments: gguf.SplitArguments, model_name: str | None):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
@@ -74,6 +75,7 @@ class Model:
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
         self.lazy = not eager
+        self.model_name = model_name
         self.part_names = Model.get_model_part_names(self.dir_model, "model", ".safetensors")
         self.is_safetensors = len(self.part_names) > 0
         if not self.is_safetensors:
@@ -184,7 +186,7 @@ class Model:
         return new_name
 
     def set_gguf_parameters(self):
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_block_count(self.block_count)
 
         if (n_ctx := self.find_hparam(["max_position_embeddings", "n_ctx"], optional=True)) is not None:
@@ -669,7 +671,7 @@ class GPTNeoXModel(Model):
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]
 
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(self.hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
@@ -802,7 +804,7 @@ class MPTModel(Model):
 
     def set_gguf_parameters(self):
         block_count = self.hparams["n_layers"]
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_context_length(self.hparams["max_seq_len"])
         self.gguf_writer.add_embedding_length(self.hparams["d_model"])
         self.gguf_writer.add_block_count(block_count)
@@ -854,7 +856,7 @@ class OrionModel(Model):
             raise ValueError("gguf: can not find ctx length parameter.")
 
         self.gguf_writer.add_file_type(self.ftype)
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_source_hf_repo(hf_repo)
         self.gguf_writer.add_tensor_data_layout("Meta AI original pth")
         self.gguf_writer.add_context_length(ctx_length)
@@ -891,7 +893,7 @@ class BaichuanModel(Model):
         else:
             raise ValueError("gguf: can not find ctx length parameter.")
 
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_source_hf_repo(hf_repo)
         self.gguf_writer.add_tensor_data_layout("Meta AI original pth")
         self.gguf_writer.add_context_length(ctx_length)
@@ -1014,7 +1016,7 @@ class XverseModel(Model):
         else:
             raise ValueError("gguf: can not find ctx length parameter.")
 
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_source_hf_repo(hf_repo)
         self.gguf_writer.add_tensor_data_layout("Meta AI original pth")
         self.gguf_writer.add_context_length(ctx_length)
@@ -1210,7 +1212,7 @@ class StableLMModel(Model):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
 
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
@@ -1685,7 +1687,7 @@ class GPT2Model(Model):
     model_arch = gguf.MODEL_ARCH.GPT2
 
     def set_gguf_parameters(self):
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_block_count(self.hparams["n_layer"])
         self.gguf_writer.add_context_length(self.hparams["n_ctx"])
         self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
@@ -2252,7 +2254,7 @@ class GemmaModel(Model):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
 
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
@@ -2352,7 +2354,7 @@ class MambaModel(Model):
         # Fail early for models which don't have a block expansion factor of 2
         assert d_inner == 2 * d_model
 
-        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_context_length(2**20) # arbitrary value; for those who use the default
         self.gguf_writer.add_embedding_length(d_model)
         self.gguf_writer.add_feed_forward_length(0) # unused, but seemingly required when loading
@@ -2878,7 +2880,7 @@ def main() -> None:
             sys.exit(1)
 
         model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file,
-                                     args.no_lazy, split_arguments)
+                                     args.no_lazy, split_arguments, args.model_name)
 
         logger.info("Set model parameters")
         model_instance.set_gguf_parameters()
