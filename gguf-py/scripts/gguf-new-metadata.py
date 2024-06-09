@@ -101,8 +101,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
             logger.debug(f'Copying {field.name}')
 
         if val.value is not None:
-            writer.add_key(field.name)
-            writer.add_val(val.value, val.type)
+            writer.add_key_value(field.name, val.value, val.type)
 
     if gguf.Keys.Tokenizer.CHAT_TEMPLATE in new_metadata:
         logger.debug('Adding chat template(s)')
@@ -111,8 +110,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
 
     for key, val in new_metadata.items():
         logger.debug(f'Adding {key}: "{val.value}" {val.description}')
-        writer.add_key(key)
-        writer.add_val(val.value, val.type)
+        writer.add_key_value(key, val.value, val.type)
 
     total_bytes = 0
 

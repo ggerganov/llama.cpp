@@ -176,7 +176,7 @@ class Params:
     rope_scaling_type: gguf.RopeScalingType | None = None
     f_rope_freq_base: float | None = None
     f_rope_scale: float | None = None
-    n_orig_ctx: int | None = None
+    n_ctx_orig: int | None = None
     rope_finetuned: bool | None = None
 
     ftype: GGMLFileType | None = None
@@ -226,7 +226,7 @@ class Params:
         with open(config_path) as f:
             config = json.load(f)
 
-        rope_scaling_type = f_rope_scale = n_orig_ctx = rope_finetuned = None
+        rope_scaling_type = f_rope_scale = n_ctx_orig = rope_finetuned = None
         rope_scaling = config.get("rope_scaling")
 
         if rope_scaling is not None and (typ := rope_scaling.get("type")):
@@ -236,7 +236,7 @@ class Params:
                 rope_scaling_type = gguf.RopeScalingType.LINEAR
             elif typ == "yarn":
                 rope_scaling_type = gguf.RopeScalingType.YARN
-                n_orig_ctx = rope_scaling['original_max_position_embeddings']
+                n_ctx_orig = rope_scaling['original_max_position_embeddings']
                 rope_finetuned = rope_scaling['finetuned']
             else:
                 raise NotImplementedError(f'Unknown rope scaling type: {typ}')
@@ -272,7 +272,7 @@ class Params:
             f_rope_freq_base  = config.get("rope_theta"),
             rope_scaling_type = rope_scaling_type,
             f_rope_scale      = f_rope_scale,
-            n_orig_ctx        = n_orig_ctx,
+            n_ctx_orig        = n_ctx_orig,
             rope_finetuned    = rope_finetuned,
         )
 
@@ -864,8 +864,8 @@ class OutputFile:
             self.gguf.add_rope_scaling_type(params.rope_scaling_type)
             self.gguf.add_rope_scaling_factor(params.f_rope_scale)
 
-        if params.n_orig_ctx is not None:
-            self.gguf.add_rope_scaling_orig_ctx_len(params.n_orig_ctx)
+        if params.n_ctx_orig is not None:
+            self.gguf.add_rope_scaling_orig_ctx_len(params.n_ctx_orig)
 
         if params.rope_finetuned is not None:
             self.gguf.add_rope_scaling_finetuned(params.rope_finetuned)

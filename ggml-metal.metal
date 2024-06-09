@@ -1654,8 +1654,7 @@ static float rope_yarn_ramp(const float low, const float high, const int i0) {
 // MIT licensed. Copyright (c) 2023 Jeffrey Quesnelle and Bowen Peng.
 static void rope_yarn(
     float theta_extrap, float freq_scale, float corr_dims[2], int64_t i0, float ext_factor, float mscale,
-    thread float * cos_theta, thread float * sin_theta
-) {
+    thread float * cos_theta, thread float * sin_theta) {
     // Get n-d rotational scaling corrected for extrapolation
     float theta_interp = freq_scale * theta_extrap;
     float theta = theta_interp;
@@ -1672,55 +1671,20 @@ static void rope_yarn(
 
 // Apparently solving `n_rot = 2pi * x * base^((2 * max_pos_emb) / n_dims)` for x, we get
 // `corr_fac(n_rot) = n_dims * log(max_pos_emb / (n_rot * 2pi)) / (2 * log(base))`
-static float rope_yarn_corr_factor(int n_dims, int n_orig_ctx, float n_rot, float base) {
-    return n_dims * log(n_orig_ctx / (n_rot * 2 * M_PI_F)) / (2 * log(base));
+static float rope_yarn_corr_factor(int n_dims, int n_ctx_orig, float n_rot, float base) {
+    return n_dims * log(n_ctx_orig / (n_rot * 2 * M_PI_F)) / (2 * log(base));
 }
 
 static void rope_yarn_corr_dims(
-    int n_dims, int n_orig_ctx, float freq_base, float beta_fast, float beta_slow, float dims[2]
+    int n_dims, int n_ctx_orig, float freq_base, float beta_fast, float beta_slow, float dims[2]
 ) {
     // start and end correction dims
-    dims[0] = max(0.0f,         floor(rope_yarn_corr_factor(n_dims, n_orig_ctx, beta_fast, freq_base)));
-    dims[1] = min(n_dims - 1.0f, ceil(rope_yarn_corr_factor(n_dims, n_orig_ctx, beta_slow, freq_base)));
+    dims[0] = max(0.0f,         floor(rope_yarn_corr_factor(n_dims, n_ctx_orig, beta_fast, freq_base)));
+    dims[1] = min(n_dims - 1.0f, ceil(rope_yarn_corr_factor(n_dims, n_ctx_orig, beta_slow, freq_base)));
 }
 
-typedef void (rope_t)(
-        device const    void * src0,
-        device const int32_t * src1,
-        device const   float * src2,
-        device         float * dst,
-        constant     int64_t & ne00,
-        constant     int64_t & ne01,
-        constant     int64_t & ne02,
-        constant     int64_t & ne03,
-        constant    uint64_t & nb00,
-        constant    uint64_t & nb01,
-        constant    uint64_t & nb02,
-        constant    uint64_t & nb03,
-        constant     int64_t & ne0,
-        constant     int64_t & ne1,
-        constant     int64_t & ne2,
-        constant     int64_t & ne3,
-        constant    uint64_t & nb0,
-        constant    uint64_t & nb1,
-        constant    uint64_t & nb2,
-        constant    uint64_t & nb3,
-        constant         int & n_past,
-        constant         int & n_dims,
-        constant         int & mode,
-        constant         int & n_orig_ctx,
-        constant       float & freq_base,
-        constant       float & freq_scale,
-        constant       float & ext_factor,
-        constant       float & attn_factor,
-        constant       float & beta_fast,
-        constant       float & beta_slow,
-        uint  tiitg[[thread_index_in_threadgroup]],
-        uint3 tptg[[threads_per_threadgroup]],
-        uint3 tgpig[[threadgroup_position_in_grid]]);
-
 template<typename T>
-kernel void kernel_rope(
+kernel void kernel_rope_norm(
         device const    void * src0,
         device const int32_t * src1,
         device const   float * src2,
@@ -1743,8 +1707,7 @@ kernel void kernel_rope(
         constant    uint64_t & nb3,
         constant         int & n_past,
         constant         int & n_dims,
-        constant         int & mode,
-        constant         int & n_orig_ctx,
+        constant         int & n_ctx_orig,
         constant       float & freq_base,
         constant       float & freq_scale,
         constant       float & ext_factor,
@@ -1758,69 +1721,130 @@ kernel void kernel_rope(
     const int64_t i2 = tgpig[1];
     const int64_t i1 = tgpig[0];
 
-    const bool is_neox = mode & 2;
-
     float corr_dims[2];
-    rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
+    rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
     device const int32_t * pos = src1;
 
-    const int64_t p = pos[i2];
-
-    const float theta_base = (float)p;
+    const float theta_base = (float) pos[i2];
     const float inv_ndims = -1.f/n_dims;
 
-    if (!is_neox) {
-        for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
+    float cos_theta;
+    float sin_theta;
+
+    for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
+        if (i0 < n_dims) {
+            const int64_t ic = i0/2;
+
             const float theta = theta_base * pow(freq_base, inv_ndims*i0);
 
-            float cos_theta, sin_theta;
-            rope_yarn(theta, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta);
+            const float freq_factor = src2 != src0 ? src2[ic] : 1.0f;
+
+            rope_yarn(theta/freq_factor, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta);
 
             device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
             device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
 
-            const T x0 = src[0];
-            const T x1 = src[1];
+            const float x0 = src[0];
+            const float x1 = src[1];
 
             dst_data[0] = x0*cos_theta - x1*sin_theta;
             dst_data[1] = x0*sin_theta + x1*cos_theta;
-        }
-    } else {
-        for (int64_t ic = 2*tiitg; ic < ne0; ic += 2*tptg.x) {
-            if (ic < n_dims) {
-                const int64_t i0 = ic/2;
+        } else {
+            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
 
-                const float freq_factor = src2 != src0 ? src2[i0] : 1.0f;
-
-                const float theta = theta_base * pow(freq_base, inv_ndims*ic);
-
-                float cos_theta, sin_theta;
-                rope_yarn(theta/freq_factor, freq_scale, corr_dims, ic, ext_factor, attn_factor, &cos_theta, &sin_theta);
-
-                device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
-
-                const float x0 = src[0];
-                const float x1 = src[n_dims/2];
-
-                dst_data[0]        = x0*cos_theta - x1*sin_theta;
-                dst_data[n_dims/2] = x0*sin_theta + x1*cos_theta;
-            } else {
-                const int64_t i0 = ic;
-
-                device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
-                device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
-
-                dst_data[0] = src[0];
-                dst_data[1] = src[1];
-            }
+            dst_data[0] = src[0];
+            dst_data[1] = src[1];
         }
     }
 }
 
-template [[host_name("kernel_rope_f32")]] kernel rope_t kernel_rope<float>;
-template [[host_name("kernel_rope_f16")]] kernel rope_t kernel_rope<half>;
+template<typename T>
+kernel void kernel_rope_neox(
+        device const    void * src0,
+        device const int32_t * src1,
+        device const   float * src2,
+        device         float * dst,
+        constant     int64_t & ne00,
+        constant     int64_t & ne01,
+        constant     int64_t & ne02,
+        constant     int64_t & ne03,
+        constant    uint64_t & nb00,
+        constant    uint64_t & nb01,
+        constant    uint64_t & nb02,
+        constant    uint64_t & nb03,
+        constant     int64_t & ne0,
+        constant     int64_t & ne1,
+        constant     int64_t & ne2,
+        constant     int64_t & ne3,
+        constant    uint64_t & nb0,
+        constant    uint64_t & nb1,
+        constant    uint64_t & nb2,
+        constant    uint64_t & nb3,
+        constant         int & n_past,
+        constant         int & n_dims,
+        constant         int & n_ctx_orig,
+        constant       float & freq_base,
+        constant       float & freq_scale,
+        constant       float & ext_factor,
+        constant       float & attn_factor,
+        constant       float & beta_fast,
+        constant       float & beta_slow,
+        uint  tiitg[[thread_index_in_threadgroup]],
+        uint3 tptg[[threads_per_threadgroup]],
+        uint3 tgpig[[threadgroup_position_in_grid]]) {
+    const int64_t i3 = tgpig[2];
+    const int64_t i2 = tgpig[1];
+    const int64_t i1 = tgpig[0];
+
+    float corr_dims[2];
+    rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
+
+    device const int32_t * pos = src1;
+
+    const float theta_base = (float) pos[i2];
+    const float inv_ndims = -1.f/n_dims;
+
+    float cos_theta;
+    float sin_theta;
+
+    for (int64_t i0 = 2*tiitg; i0 < ne0; i0 += 2*tptg.x) {
+        if (i0 < n_dims) {
+            const int64_t ic = i0/2;
+
+            const float theta = theta_base * pow(freq_base, inv_ndims*i0);
+
+            const float freq_factor = src2 != src0 ? src2[ic] : 1.0f;
+
+            rope_yarn(theta/freq_factor, freq_scale, corr_dims, i0, ext_factor, attn_factor, &cos_theta, &sin_theta);
+
+            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + ic*nb00);
+            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + ic*nb0);
+
+            const float x0 = src[0];
+            const float x1 = src[n_dims/2];
+
+            dst_data[0]        = x0*cos_theta - x1*sin_theta;
+            dst_data[n_dims/2] = x0*sin_theta + x1*cos_theta;
+        } else {
+            device const T * const src = (device T *)((device char *) src0 + i3*nb03 + i2*nb02 + i1*nb01 + i0*nb00);
+            device       T * dst_data  = (device T *)((device char *)  dst + i3*nb3  + i2*nb2  + i1*nb1  + i0*nb0);
+
+            dst_data[0] = src[0];
+            dst_data[1] = src[1];
+        }
+    }
+}
+
+typedef decltype(kernel_rope_norm<float>) kernel_rope_norm_t;
+typedef decltype(kernel_rope_neox<float>) kernel_rope_neox_t;
+
+template [[host_name("kernel_rope_norm_f32")]] kernel kernel_rope_norm_t kernel_rope_norm<float>;
+template [[host_name("kernel_rope_norm_f16")]] kernel kernel_rope_norm_t kernel_rope_norm<half>;
+
+template [[host_name("kernel_rope_neox_f32")]] kernel kernel_rope_neox_t kernel_rope_neox<float>;
+template [[host_name("kernel_rope_neox_f16")]] kernel kernel_rope_neox_t kernel_rope_neox<half>;
 
 typedef void (im2col_t)(
         device const float * x,
