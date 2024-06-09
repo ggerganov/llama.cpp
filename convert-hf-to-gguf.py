@@ -1417,7 +1417,7 @@ class BitnetModel(Model):
     def weight_quant(self, weight):
         dtype = weight.dtype
         weight = weight.float()
-        s =  1 / weight.abs().mean().clamp(min=1e-5)
+        s = 1 / weight.abs().mean().clamp(min=1e-5)
         result = (weight * s).round().clamp(-1, 1) / s
         return result.type(dtype)
 
