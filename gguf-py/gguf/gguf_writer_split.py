@@ -48,14 +48,13 @@ class SplitStyle(IntEnum):
 
 class SplitArguments:
     def __init__(self, args: Namespace) -> None:
-        self.split = args.split
-        self.split_max_tensors = args.split_max_tensors if args.split else 0
-        self.split_max_size = GGUFWriterSplit.split_str_to_n_bytes(args.split_max_size) if args.split and args.split_max_size else 0
-        self.split_style = SplitStyle.NONE if not self.split \
-            else SplitStyle.TENSORS if self.split_max_tensors \
-            else SplitStyle.SIZE
+        self.split_max_tensors = args.split_max_tensors if args.split_max_tensors else 0
+        self.split_max_size = GGUFWriterSplit.split_str_to_n_bytes(args.split_max_size) if args.split_max_size else 0
+        self.split_style = SplitStyle.TENSORS if self.split_max_tensors \
+            else SplitStyle.SIZE if self.split_max_size \
+            else SplitStyle.NONE
         self.dry_run = args.dry_run
-        self.small_first_shard = args.small_first_shard
+        self.small_first_shard = args.no_tensor_first_split
 
 
 class GGUFWriterSplit(GGUFWriter):

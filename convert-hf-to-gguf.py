@@ -2800,10 +2800,6 @@ def parse_args() -> argparse.Namespace:
         help="increase output verbosity",
     )
     parser.add_argument(
-        "--split", action="store_true",
-        help="split the converted model into multiple files",
-    )
-    parser.add_argument(
         "--split-max-tensors", type=int,
         help="max tensors in each split",
     )
@@ -2816,8 +2812,8 @@ def parse_args() -> argparse.Namespace:
         help="only print out a split plan and exit, without writing any new files",
     )
     parser.add_argument(
-        "--small-first-shard", action="store_true",
-        help="do not add tensors to the first shard (disabled by default)",
+        "--no-tensor-first-split", action="store_true",
+        help="do not add tensors to the first split (disabled by default)"
     )
 
     return parser.parse_args()
@@ -2846,9 +2842,6 @@ def main() -> None:
     if not dir_model.is_dir():
         logger.error(f'Error: {args.model} is not a directory')
         sys.exit(1)
-
-    if args.split and not (args.split_max_tensors or args.split_max_size):
-        raise ValueError("Need to specify one of --split-max-tensors or --split-max-size when splitting")
 
     if args.split_max_tensors and args.split_max_size:
         raise ValueError("Can't specify both --split-max-tensors and --split-max-size")
