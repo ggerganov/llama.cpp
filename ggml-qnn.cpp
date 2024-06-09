@@ -2771,6 +2771,7 @@ GGML_CALL static bool ggml_backend_buffer_is_qnn(ggml_backend_buffer_t buffer) {
 
 GGML_CALL static void ggml_backend_qnn_buffer_free_buffer(ggml_backend_buffer_t buffer) {
     ggml_backend_qnn_buffer_context * ctx = (ggml_backend_qnn_buffer_context *) buffer->context;
+
     delete ctx;
 }
 
@@ -3105,12 +3106,14 @@ ggml_backend_buffer_type_t ggml_backend_qnn_buffer_type(size_t device) {
         return nullptr;
     }
 
+    //ref:https://github.com/zhouwg/llama.cpp/pull/1
+    static ggml_backend_qnn_buffer_type_context ggml_backend_qnn_buffer_type_contexts[GGML_QNN_MAX_DEVICES];
     static ggml_backend_buffer_type ggml_backend_qnn_buffer_types[GGML_QNN_MAX_DEVICES];
-
     static bool ggml_backend_qnn_buffer_type_initialized = false;
-
     if (!ggml_backend_qnn_buffer_type_initialized) {
-        for (int i = 0; i < GGML_QNN_MAX_DEVICES; i++) {
+        for (size_t i = 0; i < GGML_QNN_MAX_DEVICES; i++) {
+            auto & context = ggml_backend_qnn_buffer_type_contexts[i];
+            context = { i, std::string(GGML_QNN_NAME) + std::to_string(i) };
             ggml_backend_qnn_buffer_types[i] = {
                 /* .iface   = */ {
                     /* .get_name         = */ ggml_backend_qnn_buffer_type_name,
@@ -3121,8 +3124,7 @@ ggml_backend_buffer_type_t ggml_backend_qnn_buffer_type(size_t device) {
                     /* .supports_backend = */ ggml_backend_qnn_buffer_type_supports_backend,
                     /* .is_host          = */ ggml_backend_qnn_buffer_is_host
                     },
-                /* .context = */ new ggml_backend_qnn_buffer_type_context { device,
-                                        GGML_QNN_NAME + std::to_string(device)},
+                /* .context = */ & context,
             };
         }
         ggml_backend_qnn_buffer_type_initialized = true;
