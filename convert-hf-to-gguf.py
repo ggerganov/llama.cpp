@@ -66,7 +66,7 @@ class Model:
     model_arch: gguf.MODEL_ARCH
 
     def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool,
-                 model_name: str | None, split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = 0, small_first_shard: bool = 0):
+                 model_name: str | None, split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
@@ -2874,6 +2874,10 @@ def main() -> None:
         "q8_0": gguf.LlamaFileType.MOSTLY_Q8_0,
         "auto": gguf.LlamaFileType.GUESSED,
     }
+
+    if args.use_temp_file and (args.split_max_tensors > 0 or args.split_max_size != "0"):
+        logger.error("Error: Cannot use temp file when splitting")
+        sys.exit(1)
 
     if args.outfile is not None:
         fname_out = args.outfile
