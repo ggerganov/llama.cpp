@@ -34,9 +34,11 @@ ggml-metal-embed.metal
 lcov-report/
 gcovr-report/
 
+tags
 build*
 !build.zig
 cmake-build-*
+android-ndk-*
 out/
 tmp/
 
@@ -105,6 +107,7 @@ examples/jeopardy/results.txt
 examples/server/*.html.hpp
 examples/server/*.js.hpp
 examples/server/*.mjs.hpp
+examples/server/*.css.hpp
 
 poetry.lock
 poetry.toml

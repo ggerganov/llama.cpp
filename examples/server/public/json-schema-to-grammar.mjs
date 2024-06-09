@@ -2,57 +2,26 @@
 const SPACE_RULE = '" "?';
 
 function _buildRepetition(itemRule, minItems, maxItems, opts={}) {
+  if (minItems === 0 && maxItems === 1) {
+    return `${itemRule}?`;
+  }
+
+
   const separatorRule = opts.separatorRule ?? '';
   const itemRuleIsLiteral = opts.itemRuleIsLiteral ?? false
 
   if (separatorRule === '') {
-    if (minItems === 0 && maxItems === 1) {
-      return `${itemRule}?`;
-    } else if (minItems === 1 && maxItems === undefined) {
+    if (minItems === 1 && maxItems === undefined) {
       return `${itemRule}+`;
-    }
-  }
-
-  let result = '';
-  if (minItems > 0) {
-    if (itemRuleIsLiteral && separatorRule === '') {
-      result = `"${itemRule.slice(1, -1).repeat(minItems)}"`;
+    } else if (minItems === 0 && maxItems === undefined) {
+      return `${itemRule}*`;
     } else {
-      result = Array.from({ length: minItems }, () => itemRule)
-        .join(separatorRule !== '' ? ` ${separatorRule} ` : ' ');
+      return `${itemRule}{${minItems},${maxItems !== undefined ? maxItems : ''}}`;
     }
   }
 
-  const optRepetitions = (upToN, prefixWithSep=false) => {
-    const content = separatorRule !== '' && prefixWithSep ? `${separatorRule} ${itemRule}` : itemRule;
-    if (upToN === 0) {
-      return '';
-    } else if (upToN === 1) {
-      return `(${content})?`;
-    } else if (separatorRule !== '' && !prefixWithSep) {
-      return `(${content} ${optRepetitions(upToN - 1, true)})?`;
-    } else {
-      return Array.from({ length: upToN }, () => `(${content}`).join(' ').trim() + Array.from({ length: upToN }, () => ')?').join('');
-    }
-  };
-
-  if (minItems > 0 && maxItems !== minItems) {
-    result += ' ';
-  }
-
-  if (maxItems !== undefined) {
-    result += optRepetitions(maxItems - minItems, minItems > 0);
-  } else {
-    const itemOperator = `(${separatorRule !== '' ? separatorRule + ' ' : ''}${itemRule})`;
-
-    if (minItems === 0 && separatorRule !== '') {
-      result = `(${itemRule} ${itemOperator}*)?`;
-    } else {
-      result += `${itemOperator}*`;
-    }
-  }
-
-  return result;
+  const result = itemRule + ' ' + _buildRepetition(`(${separatorRule} ${itemRule})`, minItems > 0 ? minItems - 1 : 0, maxItems !== undefined ? maxItems - 1 : undefined);
+  return minItems === 0 ? `(${result})?` : result;
 }
 
 class BuiltinRule {
@@ -62,27 +31,25 @@ class BuiltinRule {
   }
 }
 
-const UP_TO_15_DIGITS = _buildRepetition('[0-9]', 0, 15);
-
 const PRIMITIVE_RULES = {
   boolean        : new BuiltinRule('("true" | "false") space', []),
-  'decimal-part' : new BuiltinRule('[0-9] ' + UP_TO_15_DIGITS, []),
-  'integral-part': new BuiltinRule('[0-9] | [1-9] ' + UP_TO_15_DIGITS, []),
+  'decimal-part' : new BuiltinRule('[0-9]{1,16}', []),
+  'integral-part': new BuiltinRule('[0] | [1-9] [0-9]{0,15}', []),
   number         : new BuiltinRule('("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space', ['integral-part', 'decimal-part']),
   integer        : new BuiltinRule('("-"? integral-part) space', ['integral-part']),
   value          : new BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
   object         : new BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
   array          : new BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
-  uuid           : new BuiltinRule('"\\"" ' + [8, 4, 4, 4, 12].map(n => [...new Array(n)].map(_ => '[0-9a-fA-F]').join('')).join(' "-" ') + ' "\\"" space', []),
-  char           : new BuiltinRule(`[^"\\\\] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])`, []),
+  uuid           : new BuiltinRule('"\\"" [0-9a-fA-F]{8} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{12} "\\"" space', []),
+  char           : new BuiltinRule(`[^"\\\\] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F]{4})`, []),
   string         : new BuiltinRule(`"\\"" char* "\\"" space`, ['char']),
   null           : new BuiltinRule('"null" space', []),
 };
 
 // TODO: support "uri", "email" string formats
 const STRING_FORMAT_RULES = {
-  'date'            : new BuiltinRule('[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )', []),
-  'time'            : new BuiltinRule('([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )', []),
+  'date'            : new BuiltinRule('[0-9]{4} "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )', []),
+  'time'            : new BuiltinRule('([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9]{3} )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )', []),
   'date-time'       : new BuiltinRule('date "T" time', ['date', 'time']),
   'date-string'     : new BuiltinRule('"\\"" date "\\"" space', ['date']),
   'time-string'     : new BuiltinRule('"\\"" time "\\"" space', ['time']),
