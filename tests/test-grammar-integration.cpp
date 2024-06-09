@@ -69,7 +69,7 @@ static bool match_string(const std::string & input, llama_grammar* grammar) {
 }
 
 static void test(const std::string & test_desc, const std::string & grammar_str, const std::vector<std::string> & passing_strings, const std::vector<std::string> & failing_strings) {
-    fprintf(stderr, "⚫ Testing %s\n", test_desc.c_str(), grammar_str.c_str());
+    fprintf(stderr, "⚫ Testing %s\n%s\n", test_desc.c_str(), grammar_str.c_str());
     fflush(stderr);
 
     auto grammar = build_grammar(grammar_str);
