@@ -452,15 +452,11 @@ private:
                 }
                 std::string k = ks[0];
                 std::string kv_rule_name = prop_kv_rule_names[k];
-                if (k == "*") {
-                    res = _add_rule(
-                        name + (name.empty() ? "" : "-") + "additional-kvs",
-                        kv_rule_name + " ( \",\" space " + kv_rule_name + " )*"
-                    );
-                } else if (first_is_optional) {
-                    res = "( \",\" space " + kv_rule_name + " )?";
+                std::string comma_ref = "( \",\" space " + kv_rule_name + " )";
+                if (first_is_optional) {
+                    res = comma_ref + (k == "*" ? "*" : "?");
                 } else {
-                    res = kv_rule_name;
+                    res = kv_rule_name + (k == "*" ? " " + comma_ref + "*" : "");
                 }
                 if (ks.size() > 1) {
                     res += " " + _add_rule(

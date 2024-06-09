@@ -489,15 +489,11 @@ class SchemaConverter:
             def get_recursive_refs(ks, first_is_optional):
                 [k, *rest] = ks
                 kv_rule_name = prop_kv_rule_names[k]
-                if k == '*':
-                    res = self._add_rule(
-                        f'{name}{"-" if name else ""}additional-kvs',
-                        f'{kv_rule_name} ( "," space ' + kv_rule_name + ' )*'
-                    )
-                elif first_is_optional:
-                    res = f'( "," space {kv_rule_name} )?'
+                comma_ref = f'( "," space {kv_rule_name} )'
+                if first_is_optional:
+                    res = comma_ref + ('*' if k == '*' else '?')
                 else:
-                    res = kv_rule_name
+                    res = kv_rule_name + (' ' + comma_ref + "*" if k == '*' else '')
                 if len(rest) > 0:
                     res += ' ' + self._add_rule(
                         f'{name}{"-" if name else ""}{k}-rest',

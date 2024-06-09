@@ -506,15 +506,11 @@ export class SchemaConverter {
         const [k, ...rest] = ks;
         const kvRuleName = propKvRuleNames[k];
         let res;
-        if (k === '*') {
-            res = this._addRule(
-                `${name ?? ''}${name ? '-' : ''}additional-kvs`,
-                `${kvRuleName} ( "," space ` + kvRuleName + ` )*`
-            )
-        } else if (firstIsOptional) {
-          res = `( "," space ${kvRuleName} )?`;
+        const commaRef = `( "," space ${kvRuleName} )`;
+        if (firstIsOptional) {
+          res = commaRef + (k === '*' ? '*' : '?');
         } else {
-          res = kvRuleName;
+          res = kvRuleName + (k === '*' ? ' ' + commaRef + '*' : '');
         }
         if (rest.length > 0) {
           res += ' ' + this._addRule(
