@@ -3308,29 +3308,47 @@ size_t quantize_q8_0(const float * restrict src, void * restrict dst, int64_t nr
 
 size_t quantize_i2_s(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     // 2 bits per weight
-    size_t row_size = ggml_row_size(GGML_TYPE_I2, n_per_row) / 4;
-    char * qrow = (char *)dst;
-    printf("n_row:%d\n", nrow);
-    printf("n_per_row:%d\n", n_per_row);
+    size_t row_size = ggml_row_size(GGML_TYPE_I2, n_per_row);
+
     int n = nrow * n_per_row;
-    float accu = 0.0;
-    float min = 0.00001;
-    for (int i = 0; i < n; ++i) {
-        accu += fabs(src[i]);
+
+    // f32 -> q8
+    double i2_scale = 0;
+    for (int i=0; i<n; i++) {
+        if (fabs(src[i]) > 1e-6) {
+            i2_scale = src[i];
+        }
     }
-    accu = accu > min ? accu : min;
-    float scale = n / accu;
 
-    printf("\nscale:%f\n", scale);
+    uint8_t* q8 = (uint8_t*)dst;
+    for (int i=0; i<n; i++) {
+        if (fabs(src[i]) < 1e-6) {
+            q8[i] = 0;
+            continue;
+        }
+        q8[i] = src[i] * i2_scale > 0 ? 1 : 3;
+    }
 
-    // for (int64_t row = 0; row < nrow; ++row) {
-    //     quantize_row_q4_0_impl(src, (block_q4_0*)qrow, n_per_row, quant_weights);
-    //     src += n_per_row;
-    //     qrow += row_size;
-    // }
+    // q8 -> 0, 1, 3
+    //       |  |  |
+    //       0, 1,-1
+
+    uint8_t* i2_weight = (uint8_t*)dst;
+    for (int i=0; i<n; i++) {
+        int group_idx = i / 4;
+        int group_pos = i % 4;
+        uint8_t temp = (q8[i] << (6 - 2 * group_pos));
+        q8[i] = 0;
+        i2_weight[group_idx] |= temp;
+    }
+
+    float* scale_ptr = (float*)((char*)i2_weight + n / 4);
+    for (int i=0; i<8; i++) {
+        scale_ptr[i] = i2_scale;
+    }
 
     // 32B for scale
-    return nrow * row_size + 32;
+    return nrow * row_size / 4 + 32;
 }
 
 // ====================== "True" 2-bit (de)-quantization
@@ -14413,6 +14431,7 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
         case GGML_TYPE_I64:
+        case GGML_TYPE_I2:
             // nothing to validate
             break;
         default:

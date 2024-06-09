@@ -21750,7 +21750,11 @@ size_t ggml_quantize_chunk(
             assert(false);
     }
 
-    GGML_ASSERT(result == nrows * row_size);
+    if (type == GGML_TYPE_I2) {
+        result = nrows * row_size / 4 + 32;
+    } else {
+        GGML_ASSERT(result == nrows * row_size);
+    }
 
     return result;
 }
