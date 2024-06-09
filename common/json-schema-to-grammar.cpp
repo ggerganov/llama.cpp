@@ -40,6 +40,45 @@ static std::string build_repetition(const std::string & item_rule, const int min
     return result;
 }
 
+/* Minimalistic replacement for std::string_view, which is only available from C++17 onwards */
+class string_view {
+    const std::string & _str;
+    const size_t _start;
+    const size_t _end;
+public:
+    string_view(const std::string & str, size_t start = 0, size_t end  = std::string::npos) : _str(str), _start(start), _end(end == std::string::npos ? str.length() : end) {}
+
+    size_t size() const {
+        return _end - _start;
+    }
+
+    size_t length() const {
+        return size();
+    }
+
+    operator std::string() const {
+        return str();
+    }
+
+    std::string str() const {
+        return _str.substr(_start, _end - _start);
+    }
+
+    string_view substr(size_t pos, size_t len = std::string::npos) const {
+        return string_view(_str, _start + pos, len == std::string::npos ? _end : _start + pos + len);
+    }
+
+    char operator[](size_t pos) const {
+        return _str[_start + pos];
+    }
+
+    bool operator==(const string_view & other) const {
+        std::string this_str = *this;
+        std::string other_str = other;
+        return this_str == other_str;
+    }
+};
+
 static void _build_min_max_int(int min_value, int max_value, std::stringstream & out, int decimals_left = 16, bool top_level = true) {
     auto has_min = min_value != std::numeric_limits<int>::min();
     auto has_max = max_value != std::numeric_limits<int>::max();
@@ -68,60 +107,61 @@ static void _build_min_max_int(int min_value, int max_value, std::stringstream &
         }
         out << "}";
     };
-    std::function<void(const std::string_view &, const std::string_view &)> uniform_range = [&](const std::string_view & from, const std::string_view & to) {
-        size_t i = 0;
-        while (from[i] == to[i]) {
-            i++;
-        }
-        if (i > 0) {
-            out << "\"" << from.substr(0, i) << "\"";
-        }
-        if (i < from.length()) {
-            if (i > 0) {
-                out << " ";
+    std::function<void(const string_view &, const string_view &)> uniform_range =
+        [&](const string_view & from, const string_view & to) {
+            size_t i = 0;
+            while (from[i] == to[i]) {
+                i++;
             }
-            auto sub_len = from.length() - i - 1;
-            if (sub_len > 0) {
-                auto from_sub = from.substr(i + 1);
-                auto to_sub = to.substr(i + 1);
-                auto sub_zeros = repeat("0", sub_len);
-                auto sub_nines = repeat("9", sub_len);
-
-                auto to_reached = false;
-                out << "(";
-                if (from_sub == sub_zeros) {
-                    digit_range(from[i], to[i] - 1);
+            if (i > 0) {
+                out << "\"" << from.substr(0, i).str() << "\"";
+            }
+            if (i < from.length()) {
+                if (i > 0) {
                     out << " ";
-                    more_digits(sub_len, sub_len);
-                } else {
-                    out << "[" << from[i] << "] ";
+                }
+                auto sub_len = from.length() - i - 1;
+                if (sub_len > 0) {
+                    auto from_sub = from.substr(i + 1);
+                    auto to_sub = to.substr(i + 1);
+                    auto sub_zeros = repeat("0", sub_len);
+                    auto sub_nines = repeat("9", sub_len);
+
+                    auto to_reached = false;
                     out << "(";
-                    uniform_range(from_sub, sub_nines);
-                    out << ")";
-                    if (from[i] < to[i] - 1) {
-                        out << " | ";
-                        if (to_sub == sub_nines) {
-                            digit_range(from[i] + 1, to[i]);
-                            to_reached = true;
-                        } else {
-                            digit_range(from[i] + 1, to[i] - 1);
-                        }
+                    if (from_sub == sub_zeros) {
+                        digit_range(from[i], to[i] - 1);
                         out << " ";
                         more_digits(sub_len, sub_len);
+                    } else {
+                        out << "[" << from[i] << "] ";
+                        out << "(";
+                        uniform_range(from_sub, sub_nines);
+                        out << ")";
+                        if (from[i] < to[i] - 1) {
+                            out << " | ";
+                            if (to_sub == sub_nines) {
+                                digit_range(from[i] + 1, to[i]);
+                                to_reached = true;
+                            } else {
+                                digit_range(from[i] + 1, to[i] - 1);
+                            }
+                            out << " ";
+                            more_digits(sub_len, sub_len);
+                        }
                     }
+                    if (!to_reached) {
+                        out << " | ";
+                        digit_range(to[i], to[i]);
+                        out << " ";
+                        uniform_range(sub_zeros, to_sub);
+                    }
+                    out << ")";
+                } else {
+                    out << "[" << from[i] << "-" << to[i] << "]";
                 }
-                if (!to_reached) {
-                    out << " | ";
-                    digit_range(to[i], to[i]);
-                    out << " ";
-                    uniform_range(sub_zeros, to_sub);
-                }
-                out << ")";
-            } else {
-                out << "[" << from[i] << "-" << to[i] << "]";
             }
-        }
-    };
+        };
 
     if (has_min && has_max) {
         if (min_value < 0 && max_value < 0) {
