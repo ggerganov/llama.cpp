@@ -302,11 +302,9 @@ class GGUFWriter:
                 tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
 
         # split when over tensor limit
-        if (self.split_max_tensors != 0 and \
-                len(self.tensors[-1]) >= self.split_max_tensors \
-            # or split when over size limit
-            or self.split_max_size != 0 and \
-                sum(ti.nbytes for ti in self.tensors[-1].values()) + tensor_nbytes > self.split_max_size):
+        if (self.split_max_tensors != 0 and len(self.tensors[-1]) >= self.split_max_tensors \
+                # or split when over size limit
+                or self.split_max_size != 0 and sum(ti.nbytes for ti in self.tensors[-1].values()) + tensor_nbytes > self.split_max_size):
 
             self.tensors.append(dict())
 
