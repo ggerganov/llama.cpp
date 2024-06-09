@@ -398,7 +398,7 @@ class GGUFWriter:
         if self.fout is not None:
             for fout in self.fout:
                 fout.close()
-            self.fout = []
+            self.fout = None
 
     def add_architecture(self) -> None:
         self.add_string(Keys.General.ARCHITECTURE, self.arch)
