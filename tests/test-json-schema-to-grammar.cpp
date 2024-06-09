@@ -114,7 +114,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "minimum": 3
         })""",
         R"""(
-            root ::= ([0-2] [0-9]{1,15} | [3-9] [0-9]{0,15}) space
+            root ::= ([1-2] [0-9]{1,15} | [3-9] [0-9]{0,15}) space
             space ::= " "?
         )"""
     });
@@ -127,7 +127,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "minimum": 9
         })""",
         R"""(
-            root ::= ([0-8] [0-9]{1,15} | [9] [0-9]{0,15}) space
+            root ::= ([1-8] [0-9]{1,15} | [9] [0-9]{0,15}) space
             space ::= " "?
         )"""
     });

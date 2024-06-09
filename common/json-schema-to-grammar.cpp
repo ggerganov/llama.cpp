@@ -169,8 +169,9 @@ static void _build_min_max_int(int min_value, int max_value, std::stringstream &
             }
         } else if (min_value <= 9) {
             char c = '0' + min_value;
-            if (min_value > (top_level ? 1 : 0)) {
-                digit_range('0', c - 1);
+            auto range_start = top_level ? '1' : '0';
+            if (c > range_start) {
+                digit_range(range_start, c - 1);
                 out << " ";
                 more_digits(1, less_decimals);
                 out << " | ";

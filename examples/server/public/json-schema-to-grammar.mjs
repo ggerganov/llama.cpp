@@ -165,8 +165,9 @@ function _generateMinMaxInt(minValue, maxValue, out, decimalsLeft = 16, topLevel
           }
       } else if (minValue <= 9) {
           const c = minValue.toString();
-          if (minValue > (topLevel ? 1 : 0)) {
-              digitRange("0", String.fromCharCode(c.charCodeAt(0) - 1));
+          const range_start = topLevel ? '1' : '0';
+          if (c > range_start) {
+              digitRange(range_start, String.fromCharCode(c.charCodeAt(0) - 1));
               out.push(" ");
               moreDigits(1, lessDecimals);
               out.push(" | ");

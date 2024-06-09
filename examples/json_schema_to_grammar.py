@@ -143,8 +143,9 @@ def _generate_min_max_int(min_value: Optional[int], max_value: Optional[int], ou
                 more_digits(1, decimals_left)
         elif min_value <= 9:
             c = str(min_value)
-            if min_value > (1 if top_level else 0):
-                digit_range("0", chr(ord(c) - 1))
+            range_start = '1' if top_level else '0'
+            if c > range_start:
+                digit_range(range_start, chr(ord(c) - 1))
                 out.append(" ")
                 more_digits(1, less_decimals)
                 out.append(" | ")

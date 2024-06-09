@@ -154,6 +154,30 @@ static void test_simple_grammar() {
         }
     );
     test_schema(
+        "simple min 3",
+        R"""({
+            "type": "integer",
+            "minimum": 3
+        })""",
+        // Passing strings
+        {
+            "3",
+            "4",
+            "10",
+            "20",
+        },
+        // Failing strings
+        {
+            "-1",
+            "-100",
+            "0",
+            "1",
+            "2",
+            "01",
+            "02",
+        }
+    );
+    test_schema(
         "simple min 456",
         R"""({
             "type": "integer",
