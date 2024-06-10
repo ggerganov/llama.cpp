@@ -555,7 +555,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   ```sh
   # Build the image
-  docker build -t llama-cpp-vulkan -f .devops/llama-vulkan.Dockerfile .
+  docker build -t llama-cpp-vulkan -f .devops/llama-cli-vulkan.Dockerfile .
 
   # Then, use it:
   docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
@@ -907,7 +907,7 @@ Assuming one has the [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia
 
 ```bash
 docker build -t local/llama.cpp:full-cuda -f .devops/full-cuda.Dockerfile .
-docker build -t local/llama.cpp:light-cuda -f .devops/llama-cuda.Dockerfile .
+docker build -t local/llama.cpp:light-cuda -f .devops/llama-cli-cuda.Dockerfile .
 docker build -t local/llama.cpp:server-cuda -f .devops/llama-server-cuda.Dockerfile .
 ```
 

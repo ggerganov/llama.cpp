@@ -99,7 +99,7 @@ The docker build option is currently limited to *intel GPU* targets.
 ### Build image
 ```sh
 # Using FP16
-docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=ON" -f .devops/llama-intel.Dockerfile .
+docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=ON" -f .devops/llama-cli-intel.Dockerfile .
 ```
 
 *Notes*:
