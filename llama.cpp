@@ -2126,7 +2126,6 @@ struct llama_ubatch {
     llama_token  *  token;    // [n_tokens]
     float        *  embd;     // [n_embd, n_tokens]
     llama_pos    *  pos;      // [n_tokens]
-    // FIXME: make all uses of this use n_seqs
     int32_t      *  n_seq_id; // [n_seqs]
     llama_seq_id ** seq_id;   // [n_seqs]
     int8_t       *  output;   // [n_tokens]
@@ -18992,7 +18991,7 @@ size_t llama_state_set_data(struct llama_context * ctx, const uint8_t * src) {
                 __func__, kv_head, kv_size, kv_self.size);
         }
 
-        llama_kv_cache_clear(ctx);
+        llama_past_clear(ctx);
 
         if (kv_buf_size) {
             const size_t pre_kv_buf_size = inp - src;

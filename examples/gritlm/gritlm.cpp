@@ -43,7 +43,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         }
 
         // clear previous kv_cache values (irrelevant for embeddings)
-        llama_kv_cache_clear(ctx);
+        llama_past_clear(ctx);
         llama_set_causal_attn(ctx, false);
 
         // run model
@@ -97,7 +97,7 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
     const llama_model * mdl = llama_get_model(ctx);
     llama_token eos_token = llama_token_eos(mdl);
 
-    llama_kv_cache_clear(ctx);
+    llama_past_clear(ctx);
     llama_set_causal_attn(ctx, true);
     llama_batch bat = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
