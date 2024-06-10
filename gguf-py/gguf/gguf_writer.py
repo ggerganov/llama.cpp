@@ -346,10 +346,25 @@ class GGUFWriter:
         if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
 
-        for fout in self.fout:
-            self.write_padding(fout, fout.tell())
-            tensor.tofile(fout)
-            self.write_padding(fout, tensor.nbytes)
+        file_id = -1
+        for i, tensors in enumerate(self.tensors):
+            if len(tensors) > 0:
+                file_id = i
+                break
+
+        fout = self.fout[file_id]
+
+        # pop the first tensor info
+        # TODO: cleaner way to get the first key
+        first_tensor_name = [name for name, _ in zip(self.tensors[file_id].keys(), range(1))][0]
+        ti = self.tensors[file_id].pop(first_tensor_name)
+        assert len(ti.shape) == len(tensor.shape)
+        assert all(dim1 == dim2 for dim1, dim2 in zip(ti.shape, tensor.shape))
+        assert ti.nbytes == tensor.nbytes
+
+        self.write_padding(fout, fout.tell())
+        tensor.tofile(fout)
+        self.write_padding(fout, tensor.nbytes)
 
         self.state = WriterState.WEIGHTS
 
