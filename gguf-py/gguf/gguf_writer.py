@@ -379,8 +379,7 @@ class GGUFWriter:
                     shard_bar.set_description(f"Shard ({i + 1}/{len(self.fout)})")
                     total = sum(ti.nbytes for ti in tensors.values())
                     # bar behaves weirdly when total is 0
-                    if total > 0:
-                        shard_bar.reset(total=total)
+                    shard_bar.reset(total=(total if total > 0 else None))
 
                 # relying on the fact that Python dicts preserve insertion order (since 3.7)
                 for ti in tensors.values():
