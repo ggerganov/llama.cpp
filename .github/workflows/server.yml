@@ -115,7 +115,7 @@ jobs:
 
 
   server-windows:
-    runs-on: windows-latest
+    runs-on: windows-2019
 
     steps:
       - name: Clone
