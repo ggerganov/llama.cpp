@@ -11,14 +11,14 @@
 #include <unordered_map>
 #include <vector>
 
-static void print_usage() {
+static void print_usage(char* argv0) {
     fprintf(stderr, "Merges multiple lookup cache files into a single one.\n");
-    fprintf(stderr, "Usage: lookup-merge [--help] lookup_part_1.bin lookup_part_2.bin ... lookup_merged.bin\n");
+    fprintf(stderr, "Usage: %s [--help] lookup_part_1.bin lookup_part_2.bin ... lookup_merged.bin\n", argv0);
 }
 
 int main(int argc, char ** argv){
     if (argc < 3) {
-        print_usage();
+        print_usage(argv[0]);
         exit(1);
     }
 
@@ -27,7 +27,7 @@ int main(int argc, char ** argv){
     for (int i = 0; i < argc-1; ++i) {
         args[i] = argv[i+1];
         if (args[i] == "-h" || args[i] == "--help") {
-            print_usage();
+            print_usage(argv[0]);
             exit(0);
         }
     }

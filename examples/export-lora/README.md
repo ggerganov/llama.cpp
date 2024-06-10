@@ -3,7 +3,7 @@
 Apply LORA adapters to base model and export the resulting model.
 
 ```
-usage: export-lora [options]
+usage: llama-export-lora [options]
 
 options:
   -h, --help                         show this help message and exit
