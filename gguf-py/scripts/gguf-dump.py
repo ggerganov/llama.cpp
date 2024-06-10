@@ -227,8 +227,11 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             tensor_name_to_key[tensor.name] = key
             tensor_groups[tensor_prefix].append(tensor)
 
-        # Generate Markdown metadata
-        markdown_content += "## Tensor Groups\n"
+        # Tensors Mapping Dump
+        markdown_content += f'## Tensors Overview {element_count_rounded_notation(total_elements)} Elements\n'
+        markdown_content += f'Total number of elements in all tensors: {total_elements} Elements\n'
+        markdown_content += '\n'
+
         for group in tensor_prefix_order:
             tensors = tensor_groups[group]
             group_elements = sum(tensor.n_elements for tensor in tensors)
