@@ -16,11 +16,9 @@ on:
     branches:
       - master
     paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
     paths: ['.github/workflows/server.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m', 'examples/server/**.*']
-  schedule:
-    -  cron: '2 4 * * *'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || github.run_id }}
@@ -115,7 +113,7 @@ jobs:
 
 
   server-windows:
-    runs-on: windows-latest
+    runs-on: windows-2019
 
     steps:
       - name: Clone
