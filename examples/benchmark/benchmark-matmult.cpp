@@ -39,9 +39,15 @@ typedef struct {
 } block_q8_0;
 
 static inline float ggml_compute_fp16_to_fp32(uint16_t h) {
+#if defined(__ARM_NEON)
+    __fp16 tmp;
+    memcpy(&tmp, &h, sizeof(uint16_t));
+    return (float) tmp;
+#else
     uint16_t tmp;
     memcpy(&tmp, &h, sizeof(uint16_t));
     return (float) tmp;
+#endif
 }
 
 static float tensor_sum_elements(const ggml_tensor * tensor) {
