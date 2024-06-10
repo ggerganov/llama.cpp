@@ -362,8 +362,8 @@ class GGUFWriter:
             self.write_padding(fout, fout.tell())
 
         if self.temp_file is None:
-            bar = None
             shard_bar = None
+            bar = None
 
             if progress:
                 from tqdm import tqdm
