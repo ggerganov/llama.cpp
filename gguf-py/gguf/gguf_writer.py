@@ -148,10 +148,10 @@ class GGUFWriter:
         assert self.fout is not None
         total_splits = len(self.fout)
         self.kv_data.extend({} for _ in range(len(self.kv_data), total_splits))
-        for i in range(total_splits):
-            self.kv_data[i][Keys.Split.LLM_KV_SPLIT_NO] = GGUFValue(i, GGUFValueType.UINT16)
-            self.kv_data[i][Keys.Split.LLM_KV_SPLIT_COUNT] = GGUFValue(total_splits, GGUFValueType.UINT16)
-            self.kv_data[i][Keys.Split.LLM_KV_SPLIT_TENSORS_COUNT] = GGUFValue(total_tensors, GGUFValueType.INT32)
+        for i, kv_data in enumerate(self.kv_data):
+            kv_data[Keys.Split.LLM_KV_SPLIT_NO] = GGUFValue(i, GGUFValueType.UINT16)
+            kv_data[Keys.Split.LLM_KV_SPLIT_COUNT] = GGUFValue(total_splits, GGUFValueType.UINT16)
+            kv_data[Keys.Split.LLM_KV_SPLIT_TENSORS_COUNT] = GGUFValue(total_tensors, GGUFValueType.INT32)
 
     def write_header_to_file(self, path: Path | None = None) -> None:
         if len(self.tensors) == 1 and (self.split_max_tensors != 0 or self.split_max_size != 0):
