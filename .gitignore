@@ -34,9 +34,11 @@ ggml-metal-embed.metal
 lcov-report/
 gcovr-report/
 
+tags
 build*
 !build.zig
 cmake-build-*
+android-ndk-*
 out/
 tmp/
 

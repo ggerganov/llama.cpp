@@ -6,52 +6,22 @@ import re
 import sys
 from typing import Any, Dict, List, Set, Tuple, Union
 
-def _build_repetition(item_rule, min_items, max_items, separator_rule=None, item_rule_is_literal=False):
+
+def _build_repetition(item_rule, min_items, max_items, separator_rule=None):
+
+    if min_items == 0 and max_items == 1:
+        return f'{item_rule}?'
+
     if not separator_rule:
-        if min_items == 0 and max_items == 1:
-            return f'{item_rule}?'
-        elif min_items == 1 and max_items is None:
+        if min_items == 1 and max_items is None:
             return f'{item_rule}+'
-
-    result = ''
-
-    if min_items > 0:
-        if item_rule_is_literal and separator_rule is None:
-            result = '"' + (item_rule[1:-1] * min_items) + '"'
+        elif min_items == 0 and max_items is None:
+            return f'{item_rule}*'
         else:
-            result = (f' {separator_rule} ' if separator_rule else ' ').join([item_rule] * min_items)
+            return f'{item_rule}{{{min_items},{max_items if max_items is not None else ""}}}'
 
-    def opt_repetitions(up_to_n, prefix_with_sep=False):
-        '''
-            - n=4, no sep:             '(a (a (a (a)?)?)?)?'
-            - n=4, sep=',', prefix:    '("," a ("," a ("," a ("," a)?)?)?)?'
-            - n=4, sep=',', no prefix: '(a ("," a ("," a ("," a)?)?)?)?'
-        '''
-
-        content = f'{separator_rule} {item_rule}' if prefix_with_sep and separator_rule else item_rule
-        if up_to_n == 0:
-            return ''
-        elif up_to_n == 1:
-            return f'({content})?'
-        elif separator_rule and not prefix_with_sep:
-            return f'({content} {opt_repetitions(up_to_n - 1, prefix_with_sep=True)})?'
-        else:
-            return (f'({content} ' * up_to_n).rstrip() + (')?' * up_to_n)
-
-    if min_items > 0 and max_items != min_items:
-        result += ' '
-
-    if max_items is not None:
-        result += opt_repetitions(max_items - min_items, prefix_with_sep=min_items > 0)
-    else:
-        item_operator = f'({separator_rule + " " if separator_rule else ""}{item_rule})'
-
-        if min_items == 0 and separator_rule:
-            result = f'({item_rule} {item_operator}*)?'
-        else:
-            result += f'{item_operator}*'
-
-    return result
+    result = item_rule + ' ' + _build_repetition(f'({separator_rule} {item_rule})', min_items - 1 if min_items > 0 else 0, max_items - 1 if max_items is not None else None)
+    return f'({result})?' if min_items == 0 else result
 
 
 class BuiltinRule:
@@ -59,31 +29,29 @@ class BuiltinRule:
         self.content = content
         self.deps = deps or []
 
-_up_to_15_digits = _build_repetition('[0-9]', 0, 15)
-
 # whitespace is constrained to a single space char to prevent model "running away" in
 # whitespace. Also maybe improves generation quality?
 SPACE_RULE = '" "?'
 
 PRIMITIVE_RULES = {
     'boolean'      : BuiltinRule('("true" | "false") space', []),
-    'decimal-part' : BuiltinRule('[0-9] ' + _up_to_15_digits, []),
-    'integral-part': BuiltinRule('[0-9] | [1-9] ' + _up_to_15_digits, []),
+    'decimal-part' : BuiltinRule('[0-9]{1,16}', []),
+    'integral-part': BuiltinRule('[0] | [1-9] [0-9]{0,15}', []),
     'number'       : BuiltinRule('("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space', ['integral-part', 'decimal-part']),
     'integer'      : BuiltinRule('("-"? integral-part) space', ['integral-part']),
     'value'        : BuiltinRule('object | array | string | number | boolean | null', ['object', 'array', 'string', 'number', 'boolean', 'null']),
     'object'       : BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
     'array'        : BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
-    'uuid'         : BuiltinRule(r'"\"" ' + ' "-" '.join('[0-9a-fA-F]' * n for n in [8, 4, 4, 4, 12]) + r' "\"" space', []),
-    'char'         : BuiltinRule(r'[^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])', []),
+    'uuid'         : BuiltinRule(r'"\"" [0-9a-fA-F]{8} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{12} "\"" space', []),
+    'char'         : BuiltinRule(r'[^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})', []),
     'string'       : BuiltinRule(r'"\"" char* "\"" space', ['char']),
     'null'         : BuiltinRule('"null" space', []),
 }
 
 # TODO: support "uri", "email" string formats
 STRING_FORMAT_RULES = {
-    'date'            : BuiltinRule('[0-9] [0-9] [0-9] [0-9] "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )', []),
-    'time'            : BuiltinRule('([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9] [0-9] [0-9] )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )', []),
+    'date'            : BuiltinRule('[0-9]{4} "-" ( "0" [1-9] | "1" [0-2] ) "-" ( \"0\" [1-9] | [1-2] [0-9] | "3" [0-1] )', []),
+    'time'            : BuiltinRule('([01] [0-9] | "2" [0-3]) ":" [0-5] [0-9] ":" [0-5] [0-9] ( "." [0-9]{3} )? ( "Z" | ( "+" | "-" ) ( [01] [0-9] | "2" [0-3] ) ":" [0-5] [0-9] )', []),
     'date-time'       : BuiltinRule('date "T" time', ['date', 'time']),
     'date-string'     : BuiltinRule('"\\"" date "\\"" space', ['date']),
     'time-string'     : BuiltinRule('"\\"" time "\\"" space', ['time']),
@@ -333,7 +301,7 @@ class SchemaConverter:
                             sub_rule_ids[sub] = id
                         sub = id
 
-                    seq[-1] = (_build_repetition(f'"{sub}"' if sub_is_literal else sub, min_times, max_times, item_rule_is_literal=sub_is_literal), False)
+                    seq[-1] = (_build_repetition(f'"{sub}"' if sub_is_literal else sub, min_times, max_times), False)
                 else:
                     literal = ''
                     while i < length:

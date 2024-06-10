@@ -109,16 +109,16 @@ extern "C" {
 
     enum llama_token_attr {
         LLAMA_TOKEN_ATTR_UNDEFINED    = 0,
-        LLAMA_TOKEN_ATTR_UNKNOWN      = 1 <<  1,
-        LLAMA_TOKEN_ATTR_UNUSED       = 1 <<  2,
-        LLAMA_TOKEN_ATTR_NORMAL       = 1 <<  3,
-        LLAMA_TOKEN_ATTR_CONTROL      = 1 <<  4,  // SPECIAL?
-        LLAMA_TOKEN_ATTR_USER_DEFINED = 1 <<  5,
-        LLAMA_TOKEN_ATTR_BYTE         = 1 <<  6,
-        LLAMA_TOKEN_ATTR_NORMALIZED   = 1 <<  7,
-        LLAMA_TOKEN_ATTR_LSTRIP       = 1 <<  8,
-        LLAMA_TOKEN_ATTR_RSTRIP       = 1 <<  9,
-        LLAMA_TOKEN_ATTR_SINGLE_WORD  = 1 << 10,
+        LLAMA_TOKEN_ATTR_UNKNOWN      = 1 << 0,
+        LLAMA_TOKEN_ATTR_UNUSED       = 1 << 1,
+        LLAMA_TOKEN_ATTR_NORMAL       = 1 << 2,
+        LLAMA_TOKEN_ATTR_CONTROL      = 1 << 3,  // SPECIAL?
+        LLAMA_TOKEN_ATTR_USER_DEFINED = 1 << 4,
+        LLAMA_TOKEN_ATTR_BYTE         = 1 << 5,
+        LLAMA_TOKEN_ATTR_NORMALIZED   = 1 << 6,
+        LLAMA_TOKEN_ATTR_LSTRIP       = 1 << 7,
+        LLAMA_TOKEN_ATTR_RSTRIP       = 1 << 8,
+        LLAMA_TOKEN_ATTR_SINGLE_WORD  = 1 << 9,
     };
 
     // model file types
@@ -366,6 +366,9 @@ extern "C" {
         // modifies a preceding LLAMA_GRETYPE_CHAR or
         // LLAMA_GRETYPE_CHAR_RNG_UPPER to add an alternate char to match ([ab], [a-zA])
         LLAMA_GRETYPE_CHAR_ALT       = 6,
+
+        // any character (.)
+        LLAMA_GRETYPE_CHAR_ANY       = 7,
     };
 
     typedef struct llama_grammar_element {
@@ -1057,48 +1060,8 @@ extern "C" {
                      llama_token   token);
 
     //
-    // Beam search
+    // Model split
     //
-
-    struct llama_beam_view {
-        const llama_token * tokens;
-
-        size_t n_tokens;
-        float  p;        // Cumulative beam probability (renormalized relative to all beams)
-        bool   eob;      // Callback should set this to true when a beam is at end-of-beam.
-    };
-
-    // Passed to beam_search_callback function.
-    // Whenever 0 < common_prefix_length, this number of tokens should be copied from any of the beams
-    // (e.g. beams[0]) as they will be removed (shifted) from all beams in all subsequent callbacks.
-    // These pointers are valid only during the synchronous callback, so should not be saved.
-    struct llama_beams_state {
-        struct llama_beam_view * beam_views;
-
-        size_t n_beams;               // Number of elements in beam_views[].
-        size_t common_prefix_length;  // Current max length of prefix tokens shared by all beams.
-        bool   last_call;             // True iff this is the last callback invocation.
-    };
-
-    // Type of pointer to the beam_search_callback function.
-    // void* callback_data is any custom data passed to llama_beam_search, that is subsequently
-    // passed back to beam_search_callback. This avoids having to use global variables in the callback.
-    typedef void (*llama_beam_search_callback_fn_t)(void * callback_data, struct llama_beams_state);
-
-    /// @details Deterministically returns entire sentence constructed by a beam search.
-    /// @param ctx Pointer to the llama_context.
-    /// @param callback Invoked for each iteration of the beam_search loop, passing in beams_state.
-    /// @param callback_data A pointer that is simply passed back to callback.
-    /// @param n_beams Number of beams to use.
-    /// @param n_past Number of tokens already evaluated.
-    /// @param n_predict Maximum number of tokens to predict. EOS may occur earlier.
-    LLAMA_API void llama_beam_search(
-                   struct llama_context * ctx,
-        llama_beam_search_callback_fn_t   callback,
-                                   void * callback_data,
-                                 size_t   n_beams,
-                                int32_t   n_past,
-                                int32_t   n_predict);
 
     /// @details Build a split GGUF final path for this chunk.
     ///          llama_split_path(split_path, sizeof(split_path), "/models/ggml-model-q4_0", 2, 4) => split_path = "/models/ggml-model-q4_0-00002-of-00004.gguf"
