@@ -31,15 +31,64 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
     ggml_graph_compute(graph, &plan);
 }
 
+#define QK8_0 32
+
+typedef struct {
+    uint16_t d;       // delta
+    int8_t qs[QK8_0]; // quants
+} block_q8_0;
+
+static inline float ggml_compute_fp16_to_fp32(uint16_t h) {
+    uint16_t tmp;
+    memcpy(&tmp, &h, sizeof(uint16_t));
+    return (float) tmp;
+}
+
 static float tensor_sum_elements(const ggml_tensor * tensor) {
-    double sum = 0;
+    double sum                  = 0;
+    float  floatvalue           = 0;
+    unsigned short shortvalue   = 0;
+
     if (tensor->type == GGML_TYPE_F32) {
         for (int j = 0; j < tensor->ne[1]; j++) {
             for (int k = 0; k < tensor->ne[0]; k++) {
-                sum += ((float *) tensor->data)[j*tensor->ne[0] + k];
+                sum += ((float *) tensor->data)[j * tensor->ne[0] + k];
             }
         }
     }
+
+    if (tensor->type == GGML_TYPE_I8) {
+        for (int j = 0; j < tensor->ne[1]; j++) {
+            for (int k = 0; k < tensor->ne[0]; k++) {
+                sum += ((int8_t *) tensor->data)[j * tensor->ne[0] + k];
+            }
+        }
+    }
+
+    if (tensor->type == GGML_TYPE_F16) {
+        for (int j = 0; j < tensor->ne[1]; j++) {
+            for (int k = 0; k < tensor->ne[0]; k++) {
+                shortvalue = ((unsigned short *) tensor->data)[j * tensor->ne[0] + k];
+                floatvalue = ggml_compute_fp16_to_fp32(shortvalue);
+                sum        += floatvalue;
+            }
+        }
+    }
+
+    if (tensor->type == GGML_TYPE_Q8_0) {
+        int blocks = 0;
+        block_q8_0 * quant_datas = (block_q8_0 *)tensor->data;
+        for (int j = 0; j < tensor->ne[1]; j++) {
+            blocks = tensor->ne[0] / QK8_0;
+            for (int i = 0; i < blocks; i++) {
+                floatvalue = ggml_compute_fp16_to_fp32(quant_datas[j * blocks + i].d);
+                for (int k = 0; k < QK8_0; k++) {
+                    sum += (quant_datas[j * blocks + i].qs[k] * floatvalue);
+                }
+            }
+        }
+    }
+
     return sum;
 }
 
