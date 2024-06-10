@@ -12,6 +12,7 @@ BUILD_TARGETS = \
 	llama-eval-callback \
 	llama-export-lora \
 	llama-finetune \
+	llama-gbnf-validator \
 	llama-gguf \
 	llama-gguf-split \
 	llama-gritlm \
