@@ -375,7 +375,7 @@ class GGUFWriter:
                     shard_bar = tqdm(desc=f"Shard (1/{len(self.fout)})", total=total_bytes, unit="byte", unit_scale=True)
 
             for i, (fout, tensors) in enumerate(zip(self.fout, self.tensors)):
-                if shard_bar and len(self.fout) > 1:
+                if shard_bar is not None:
                     shard_bar.set_description(f"Shard ({i + 1}/{len(self.fout)})")
                     total = sum(ti.nbytes for ti in tensors.values())
                     # bar behaves weirdly when total is 0
