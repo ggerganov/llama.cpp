@@ -396,7 +396,6 @@ class GGUFWriter:
         else:
             self.temp_file.seek(0)
 
-            assert self.fout is not None
             shutil.copyfileobj(self.temp_file, self.fout[0 if not self.small_first_shard else 1])
             self.flush()
             self.temp_file.close()
