@@ -26,7 +26,7 @@ To get started right away, run the following command, making sure to use the cor
 #### Windows:
 
 ```powershell
-llama.exe -m models\7B\ggml-model.bin --prompt "Once upon a time"
+llama-cli.exe -m models\7B\ggml-model.bin --prompt "Once upon a time"
 ```
 
 For an interactive experience, try this command:
@@ -45,7 +45,7 @@ User:'
 #### Windows:
 
 ```powershell
-llama.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
+llama-cli.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
 ```
 
 The following command generates "infinite" text from a starting prompt (you can use `Ctrl-C` to stop it):
@@ -59,7 +59,7 @@ The following command generates "infinite" text from a starting prompt (you can 
 #### Windows:
 
 ```powershell
-llama.exe -m models\7B\ggml-model.bin --ignore-eos -n -1
+llama-cli.exe -m models\7B\ggml-model.bin --ignore-eos -n -1
 ```
 
 ## Common Options
