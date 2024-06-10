@@ -38,9 +38,9 @@ After 10 more iterations:
 Checkpoint files (`--checkpoint-in FN`, `--checkpoint-out FN`) store the training process. When the input checkpoint file does not exist, it will begin finetuning a new randomly initialized adapter.
 
 llama.cpp compatible LORA adapters will be saved with filename specified by `--lora-out FN`.
-These LORA adapters can then be used by `main` together with the base model, like in the 'predict' example command above.
+These LORA adapters can then be used by `llama-cli` together with the base model, like in the 'predict' example command above.
 
-In `main` you can also load multiple LORA adapters, which will then be mixed together.
+In `llama-cli` you can also load multiple LORA adapters, which will then be mixed together.
 
 For example if you have two LORA adapters `lora-open-llama-3b-v2-q8_0-shakespeare-LATEST.bin` and `lora-open-llama-3b-v2-q8_0-bible-LATEST.bin`, you can mix them together like this:
 
