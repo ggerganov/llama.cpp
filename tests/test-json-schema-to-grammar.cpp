@@ -278,6 +278,38 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         SUCCESS,
+        "string array",
+        R"""({
+            "type": "array",
+            "prefixItems": { "type": "string" }
+        })""",
+        R"""(
+            char ::= [^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
+            root ::= "[" space (string ("," space string)*)? "]" space
+            space ::= " "?
+            string ::= "\"" char* "\"" space
+        )"""
+    });
+
+    test({
+        SUCCESS,
+        "nullable string array",
+        R"""({
+            "type": ["array", "null"],
+            "prefixItems": { "type": "string" }
+        })""",
+        R"""(
+            alternative-0 ::= "[" space (string ("," space string)*)? "]" space
+            char ::= [^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
+            null ::= "null" space
+            root ::= alternative-0 | null
+            space ::= " "?
+            string ::= "\"" char* "\"" space
+        )"""
+    });
+
+    test({
+        SUCCESS,
         "tuple1",
         R"""({
             "prefixItems": [{ "type": "string" }]
