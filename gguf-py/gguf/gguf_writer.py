@@ -167,10 +167,10 @@ class GGUFWriter:
         self.add_shard_kv_data()
 
         for fout, tensors, kv_data in zip(self.fout, self.tensors, self.kv_data):
-            self._write_packed(fout, "<I", GGUF_MAGIC, skip_pack_prefix = True)
-            self._write_packed(fout, "I", GGUF_VERSION)
-            self._write_packed(fout, "Q", len(tensors))
-            self._write_packed(fout, "Q", len(kv_data))
+            fout.write(self._pack("<I", GGUF_MAGIC, skip_pack_prefix = True))
+            fout.write(self._pack("I", GGUF_VERSION))
+            fout.write(self._pack("Q", len(tensors)))
+            fout.write(self._pack("Q", len(kv_data)))
             fout.flush()
         self.state = WriterState.HEADER
 
