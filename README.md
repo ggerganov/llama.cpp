@@ -733,7 +733,7 @@ Here is an example of a few-shot interaction, invoked with the command
 ./llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
-Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
+Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `llama-cli` example program.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
 
@@ -958,7 +958,7 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m 
 
 ### Docs
 
-- [main](./examples/main/README.md)
+- [main (cli)](./examples/main/README.md)
 - [server](./examples/server/README.md)
 - [jeopardy](./examples/jeopardy/README.md)
 - [BLIS](./docs/BLIS.md)
