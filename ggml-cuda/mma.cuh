@@ -9,15 +9,15 @@ struct mma_int_A_I16K8 {
 
     static __device__ __forceinline__ int get_i(const int l) {
         const int ret = (l%2) * (I/2) + threadIdx.x / (K/2);
-        __builtin_assume(ret >= 0);
-        __builtin_assume(ret <  I);
+        GGML_CUDA_ASSUME(ret >= 0);
+        GGML_CUDA_ASSUME(ret <  I);
         return ret;
     }
 
     static __device__ __forceinline__ int get_k(const int l) {
         const int ret = (l/2) * (K/2) + threadIdx.x % (K/2);
-        __builtin_assume(ret >= 0);
-        __builtin_assume(ret <  K);
+        GGML_CUDA_ASSUME(ret >= 0);
+        GGML_CUDA_ASSUME(ret <  K);
         return ret;
     }
 };
@@ -31,15 +31,15 @@ struct mma_int_B_J8K8 {
 
     static __device__ __forceinline__ int get_j(const int /* l */) {
         const int ret = threadIdx.x / (K/2);
-        __builtin_assume(ret >= 0);
-        __builtin_assume(ret <  J);
+        GGML_CUDA_ASSUME(ret >= 0);
+        GGML_CUDA_ASSUME(ret <  J);
         return ret;
     }
 
     static __device__ __forceinline__ int get_k(const int l) {
         const int ret = l * (K/2) + threadIdx.x % (K/2);
-        __builtin_assume(ret >= 0);
-        __builtin_assume(ret <  K);
+        GGML_CUDA_ASSUME(ret >= 0);
+        GGML_CUDA_ASSUME(ret <  K);
         return ret;
     }
 };
@@ -53,15 +53,15 @@ struct mma_int_C_I16J8 {
 
     static __device__ __forceinline__ int get_i(const int l) {
         const int ret = (l/2) * (I/2) + threadIdx.x / (J/2);
-        __builtin_assume(ret >= 0);
-        __builtin_assume(ret <  I);
+        GGML_CUDA_ASSUME(ret >= 0);
+        GGML_CUDA_ASSUME(ret <  I);
         return ret;
     }
 
     static __device__ __forceinline__ int get_j(const int l) {
         const int ret = 2 * (threadIdx.x % (J/2)) + l%2;
-        __builtin_assume(ret >= 0);
-        __builtin_assume(ret <  J);
+        GGML_CUDA_ASSUME(ret >= 0);
+        GGML_CUDA_ASSUME(ret <  J);
         return ret;
     }
 
