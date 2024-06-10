@@ -372,7 +372,7 @@ class GGUFWriter:
 
                 bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
                 if len(self.fout) > 1:
-                    shard_bar = tqdm(desc=f"Shard (1/{len(self.fout)})", total=total_bytes, unit="byte", unit_scale=True)
+                    shard_bar = tqdm(desc=f"Shard (0/{len(self.fout)})", total=None, unit="byte", unit_scale=True)
 
             for i, (fout, tensors) in enumerate(zip(self.fout, self.tensors)):
                 if shard_bar is not None:
