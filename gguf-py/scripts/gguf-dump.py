@@ -154,15 +154,16 @@ def translate_tensor_name(name):
 
 def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
     host_endian, file_endian = get_file_host_endian(reader)
-    print(f'# {args.model} - GGUF Internal File Dump')  # noqa: NP100
-    print(f'* Endian: {file_endian} endian')  # noqa: NP100
-    print('')  # noqa: NP100
-    print('## Key Value Metadata Store')  # noqa: NP100
-    print(f'There is {len(reader.fields)} key/value pair(s) in this file')  # noqa: NP100
-    print('')  # noqa: NP100
+    markdown_content = ""
+    markdown_content += f'# {args.model} - GGUF Internal File Dump\n'
+    markdown_content += f'* Endian: {file_endian} endian\n'
+    markdown_content += '\n'
+    markdown_content += '## Key Value Metadata Store\n'
+    markdown_content += f'There is {len(reader.fields)} key/value pair(s) in this file\n'
+    markdown_content += '\n'
 
-    print('| POS | TYPE       | Elements | Key                                    | Value                                                                          |')  # noqa: NP100
-    print('|-----|------------|----------|----------------------------------------|--------------------------------------------------------------------------------|')  # noqa: NP100
+    markdown_content += '| POS | TYPE       | Elements | Key                                    | Value                                                                          |\n'
+    markdown_content += '|-----|------------|----------|----------------------------------------|--------------------------------------------------------------------------------|\n'
 
     for n, field in enumerate(reader.fields.values(), 1):
         if not field.types:
@@ -179,9 +180,9 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                 value = repr(str(bytes(field.parts[-1]), encoding='utf-8')[:60])
             elif field.types[0] in reader.gguf_scalar_to_np:
                 value = field.parts[-1][0]
-        print(f'| {n:3} | {pretty_type:10} | {len(field.data):8} | {field.name:38} | {value:<78} |')  # noqa: NP100
+        markdown_content += f'| {n:3} | {pretty_type:10} | {len(field.data):8} | {field.name:38} | {value:<78} |\n'
 
-    print("\n")  # noqa: NP100
+    markdown_content += "\n"
 
     if not args.no_tensors:
         # Group tensors by their prefix and maintain order
@@ -203,24 +204,33 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             tensor_groups[tensor_prefix].append(tensor)
 
         # Generate Markdown metadata
+        markdown_content += "## Tensor Groups\n"
+        for group in tensor_prefix_order:
+            tensors = tensor_groups[group]
+            group_elements = sum(tensor.n_elements for tensor in tensors)
+            markdown_content += f"- [{translate_tensor_name(group)} Tensor Group - {element_count_rounded_notation(group_elements)} Elements](#{group.replace('.', '_')})\n"
+
+        markdown_content += "\n"
+
         for group in tensor_prefix_order:
             tensors = tensor_groups[group]
             group_elements = sum(tensor.n_elements for tensor in tensors)
             group_percentage = group_elements / total_elements * 100
-
-            print(f"## {translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements")  # noqa: NP100
-            print("| Tensor Name          | Human Friendly Name                 |  Elements      | Shape                           | Type |")  # noqa: NP100
-            print("|----------------------|-------------------------------------|----------------|---------------------------------|------|")  # noqa: NP100
+            markdown_content += f"### {translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements <a name=\"{group.replace('.', '_')}\"></a>\n"
+            markdown_content += "| Tensor Name          | Human Friendly Name                 |  Elements      | Shape                           | Type |\n"
+            markdown_content += "|----------------------|-------------------------------------|----------------|---------------------------------|------|\n"
 
             for tensor in tensors:
                 tensor_name = tensor.name.replace(".weight", "")
                 human_friendly_name = translate_tensor_name(tensor.name.replace(".weight", ""))
                 prettydims = ' x '.join('{0:^5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
-                print(f"| {tensor_name:20} | {human_friendly_name:35} | ({element_count_rounded_notation(tensor.n_elements):>4}) {tensor.n_elements:7} | [{prettydims:29}] | {tensor.tensor_type.name:4} |")  # noqa: NP100
-            print("")  # noqa: NP100
-            print(f"- Total elements in {group}: ({element_count_rounded_notation(group_elements):>4}) {group_elements}")  # noqa: NP100
-            print(f"- Percentage of total elements: {group_percentage:.2f}%")  # noqa: NP100
-            print("\n")  # noqa: NP100
+                markdown_content += f"| {tensor_name:20} | {human_friendly_name:35} | ({element_count_rounded_notation(tensor.n_elements):>4}) {tensor.n_elements:7} | [{prettydims:29}] | {tensor.tensor_type.name:4} |\n"
+            markdown_content += "\n"
+            markdown_content += f"- Total elements in {group}: ({element_count_rounded_notation(group_elements):>4}) {group_elements}\n"
+            markdown_content += f"- Percentage of total elements: {group_percentage:.2f}%\n"
+            markdown_content += "\n\n"
+
+        print(markdown_content)  # noqa: NP100
 
 
 def main() -> None:
