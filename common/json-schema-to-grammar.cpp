@@ -160,6 +160,63 @@ static std::string format_literal(const std::string & literal) {
     return "\"" + escaped + "\"";
 }
 
+/*
+    Returns a rule that matches a JSON string that is none of the provided strings
+
+    not_strings({"and", "also"})
+        -> ["] ( [a] ([l] ([s] ([^"o]) | [^"s]) | [n] ([^"d]) | [^"ln]) | [^"a] ) char* ["]
+*/
+std::string not_strings(const std::vector<std::string> & strings) {
+
+    struct TrieNode {
+        std::map<char, TrieNode> children;
+        bool is_end_of_string;
+
+        void insert(const std::string & string) {
+            auto node = this;
+            for (char c : string) {
+                node = &node->children[c];
+            }
+            node->is_end_of_string = true;
+        }
+    };
+
+    TrieNode trie;
+    for (const auto & s : strings) {
+        trie.insert(s);
+    }
+
+    std::ostringstream out;
+    out << "[\"] ( ";
+    std::function<void(const TrieNode &)> visit = [&](const TrieNode & node) {
+        std::ostringstream rejects;
+        auto first = true;
+        for (const auto & kv : node.children) {
+            rejects << kv.first;
+            if (kv.second.is_end_of_string) {
+                continue;
+            }
+            if (first) {
+                first = false;
+            } else {
+                out << " | ";
+            }
+            out << "[" << kv.first << "] (";
+            visit(kv.second);
+            out << ")";
+        }
+        if (!node.children.empty()) {
+            if (!first) {
+                out << " | ";
+            }
+            out << "[^\"" << rejects.str() << "]";
+        }
+    };
+    visit(trie);
+
+    out << " ) char* [\"]";
+    return out.str();
+}
 
 class SchemaConverter {
 private:
@@ -408,6 +465,7 @@ private:
         std::vector<std::string> required_props;
         std::vector<std::string> optional_props;
         std::unordered_map<std::string, std::string> prop_kv_rule_names;
+        std::vector<std::string> prop_names;
         for (const auto & kv : properties) {
             const auto &prop_name = kv.first;
             const auto &prop_schema = kv.second;
@@ -422,11 +480,16 @@ private:
             } else {
                 optional_props.push_back(prop_name);
             }
+            prop_names.push_back(prop_name);
         }
         if (additional_properties.is_object() || (additional_properties.is_boolean() && additional_properties.get<bool>())) {
             std::string sub_name = name + (name.empty() ? "" : "-") + "additional";
             std::string value_rule = visit(additional_properties.is_object() ? additional_properties : json::object(), sub_name + "-value");
-            std::string kv_rule = _add_rule(sub_name + "-kv", _add_primitive("string", PRIMITIVE_RULES.at("string")) + " \":\" space " + value_rule);
+
+            auto key_rule =
+                prop_names.empty() ? _add_primitive("string", PRIMITIVE_RULES.at("string"))
+                : _add_rule(sub_name + "-k", not_strings(prop_names));
+            std::string kv_rule = _add_rule(sub_name + "-kv", key_rule + " \":\" space " + value_rule);
             prop_kv_rule_names["*"] = kv_rule;
             optional_props.push_back("*");
         }
