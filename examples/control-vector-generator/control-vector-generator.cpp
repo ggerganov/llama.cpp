@@ -94,7 +94,7 @@ struct callback_data {
             auto diff_filtered = filter_nonzero_rows(v_pos[il]);
             v_diff_filtered.push_back(diff_filtered);
         }
-        return v_pos; // for convinient, we return the result std::vector
+        return v_diff_filtered; // for convinient, we return the result std::vector
     }
 
     // delete zero rows from a given 2D tensor
@@ -624,7 +624,7 @@ int main(int argc, char ** argv) {
     ctx_train.build_v_diff();
 
     // run PCA
-    pca(ctx_train.v_diff, ctx_train.v_final);
+    PCA::run_pca(ctx_train.v_diff, ctx_train.v_final);
 
     // write output vectors to gguf
     export_gguf(ctx_train.v_final, cparams.outfile, model_hint);
