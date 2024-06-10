@@ -130,22 +130,44 @@ def element_count_rounded_notation(count: int) -> str:
 
 
 def translate_tensor_name(name):
-    import re
-    words = re.split(r"[._]", name)
+    words = name.split(".")
 
+    # Source: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#standardized-tensor-names
     abbreviation_dictionary = {
-        'ffn' : 'Feed Forward',
-        'attn' : 'Attention',
-        'blk' : 'Block',
-        'norm' : 'Normalization',
-        'embd' : 'Embedding',
+        'token_embd': 'Token embedding',
+        'pos_embd': 'Position embedding',
+        'output_norm': 'Output normalization',
+        'output': 'Output',
+        'attn_norm': 'Attention normalization',
+        'attn_norm_2': 'Attention normalization',
+        'attn_qkv': 'Attention query-key-value',
+        'attn_q': 'Attention query',
+        'attn_k': 'Attention key',
+        'attn_v': 'Attention value',
+        'attn_output': 'Attention output',
+        'ffn_norm': 'Feed-forward network normalization',
+        'ffn_up': 'Feed-forward network "up"',
+        'ffn_gate': 'Feed-forward network "gate"',
+        'ffn_down': 'Feed-forward network "down"',
+        'ffn_gate_inp': 'Expert-routing layer for the Feed-forward network in Mixture of Expert models',
+        'ffn_gate_exp': 'Feed-forward network "gate" layer per expert in Mixture of Expert models',
+        'ffn_down_exp': 'Feed-forward network "down" layer per expert in Mixture of Expert models',
+        'ffn_up_exp': 'Feed-forward network "up" layer per expert in Mixture of Expert models',
+        'ssm_in': 'State space model input projections',
+        'ssm_conv1d': 'State space model rolling/shift',
+        'ssm_x': 'State space model selective parametrization',
+        'ssm_a': 'State space model state compression',
+        'ssm_d': 'State space model skip connection',
+        'ssm_dt': 'State space model time step',
+        'ssm_out': 'State space model output projection',
+        'blk': 'Block'
     }
 
     expanded_words = []
     for word in words:
         word_norm = word.strip().lower()
         if word_norm in abbreviation_dictionary:
-            expanded_words.append(abbreviation_dictionary[word_norm])
+            expanded_words.append(abbreviation_dictionary[word_norm].title())
         else:
             expanded_words.append(word.title())
 
@@ -187,13 +209,14 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
     if not args.no_tensors:
         # Group tensors by their prefix and maintain order
         tensor_prefix_order = []
+        tensor_name_to_key = {}
         tensor_groups = {}
         total_elements = sum(tensor.n_elements for tensor in reader.tensors)
 
-        for tensor in reader.tensors:
-            tensor_name = tensor.name.replace(".weight", "")
-            tensor_components = tensor_name.split('.')
+        for key, tensor in enumerate(reader.tensors):
+            tensor_components = tensor.name.split('.')
             tensor_prefix = tensor_components[0]
+
             if tensor_prefix == 'blk':
                 tensor_prefix = f"{tensor_components[0]}.{tensor_components[1]}"
 
@@ -201,6 +224,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                 tensor_groups[tensor_prefix] = []
                 tensor_prefix_order.append(tensor_prefix)
 
+            tensor_name_to_key[tensor.name] = key
             tensor_groups[tensor_prefix].append(tensor)
 
         # Generate Markdown metadata
@@ -217,14 +241,13 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             group_elements = sum(tensor.n_elements for tensor in tensors)
             group_percentage = group_elements / total_elements * 100
             markdown_content += f"### {translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements <a name=\"{group.replace('.', '_')}\"></a>\n"
-            markdown_content += "| Tensor Name          | Human Friendly Name                 |  Elements      | Shape                           | Type |\n"
-            markdown_content += "|----------------------|-------------------------------------|----------------|---------------------------------|------|\n"
+            markdown_content += "| T_ID | Tensor Layer Name         | Human Friendly Tensor Layer Name                   | Elements       | Shape                           | Type |\n"
+            markdown_content += "|------|---------------------------|----------------------------------------------------|----------------|---------------------------------|------|\n"
 
             for tensor in tensors:
-                tensor_name = tensor.name.replace(".weight", "")
-                human_friendly_name = translate_tensor_name(tensor.name.replace(".weight", ""))
+                human_friendly_name = translate_tensor_name(tensor.name.replace(".weight", ".(W)").replace(".bias", ".(B)"))
                 prettydims = ' x '.join('{0:^5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
-                markdown_content += f"| {tensor_name:20} | {human_friendly_name:35} | ({element_count_rounded_notation(tensor.n_elements):>4}) {tensor.n_elements:7} | [{prettydims:29}] | {tensor.tensor_type.name:4} |\n"
+                markdown_content += f"| {tensor_name_to_key[tensor.name]:4} | {tensor.name:25} | {human_friendly_name:50} | ({element_count_rounded_notation(tensor.n_elements):>4}) {tensor.n_elements:7} | [{prettydims:29}] | {tensor.tensor_type.name:4} |\n"
             markdown_content += "\n"
             markdown_content += f"- Total elements in {group}: ({element_count_rounded_notation(group_elements):>4}) {group_elements}\n"
             markdown_content += f"- Percentage of total elements: {group_percentage:.2f}%\n"
