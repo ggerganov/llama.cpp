@@ -1344,7 +1344,7 @@ static __device__ __forceinline__ void mmq_write_back_mma(const float * __restri
             const int j = blockIdx.y*mmq_x + j0 + mma_C::get_j(l);
 
             if (j >= ne1) {
-                return;
+                continue;
             }
 
             const int i = blockIdx.x*mmq_y + i0 + mma_C::get_i(l);
