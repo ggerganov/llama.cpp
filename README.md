@@ -53,7 +53,6 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#constrained-output-with-grammars">Constrained output with grammars</a></li>
-        <li><a href="#instruct-mode">Instruct mode</a></li>
         <li><a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a></li>
         <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
         <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
@@ -768,34 +767,6 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
 The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
 
 For authoring more complex JSON grammars, you can also check out https://grammar.intrinsiclabs.ai/, a browser app that lets you write TypeScript interfaces which it compiles to GBNF grammars that you can save for local use. Note that the app is built and maintained by members of the community, please file any issues or FRs on [its repo](http://github.com/intrinsiclabsai/gbnfgen) and not this one.
-
-### Instruct mode
-
-1. First, download and place the `ggml` model into the `./models` folder
-2. Run the `main` tool like this:
-
-```
-./examples/alpaca.sh
-```
-
-Sample run:
-
-```
-== Running in interactive mode. ==
- - Press Ctrl+C to interject at any time.
- - Press Return to return control to LLaMA.
- - If you want to submit another line, end your input in '\'.
-
- Below is an instruction that describes a task. Write a response that appropriately completes the request.
-
-> How many letters are there in the English alphabet?
-There 26 letters in the English Alphabet
-> What is the most common way of transportation in Amsterdam?
-The majority (54%) are using public transit. This includes buses, trams and metros with over 100 lines throughout the city which make it very accessible for tourists to navigate around town as well as locals who commute by tram or metro on a daily basis
-> List 5 words that start with "ca".
-cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
->
-```
 
 ### Obtaining and using the Facebook LLaMA 2 model
 
