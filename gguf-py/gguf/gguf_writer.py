@@ -370,15 +370,14 @@ class GGUFWriter:
 
                 total_bytes = sum(ti.nbytes for t in self.tensors for ti in t.values())
 
-                bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
                 if len(self.fout) > 1:
                     shard_bar = tqdm(desc=f"Shard (0/{len(self.fout)})", total=None, unit="byte", unit_scale=True)
+                bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
 
             for i, (fout, tensors) in enumerate(zip(self.fout, self.tensors)):
                 if shard_bar is not None:
                     shard_bar.set_description(f"Shard ({i + 1}/{len(self.fout)})")
                     total = sum(ti.nbytes for ti in tensors.values())
-                    # bar behaves weirdly when total is 0
                     shard_bar.reset(total=(total if total > 0 else None))
 
                 # relying on the fact that Python dicts preserve insertion order (since 3.7)
@@ -386,10 +385,10 @@ class GGUFWriter:
                     assert ti.tensor is not None  # can only iterate once over the tensors
                     assert ti.tensor.nbytes == ti.nbytes
                     ti.tensor.tofile(fout)
-                    if bar is not None:
-                        bar.update(ti.nbytes)
                     if shard_bar is not None:
                         shard_bar.update(ti.nbytes)
+                    if bar is not None:
+                        bar.update(ti.nbytes)
                     self.write_padding(fout, ti.nbytes)
                     ti.tensor = None
         else:
