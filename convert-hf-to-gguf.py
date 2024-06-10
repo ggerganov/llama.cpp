@@ -2782,7 +2782,7 @@ def parse_args() -> argparse.Namespace:
         help="model is executed on big endian machine",
     )
     parser.add_argument(
-        "model", type=Path,
+        "--model",dest="model", type=Path, default="models/phi-3-mini/",
         help="directory containing model file",
     )
     parser.add_argument(
