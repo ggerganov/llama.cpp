@@ -12,7 +12,7 @@ if [[ "$arg1" == '--convert' || "$arg1" == '-c' ]]; then
 elif [[ "$arg1" == '--quantize' || "$arg1" == '-q' ]]; then
     ./llama-quantize "$@"
 elif [[ "$arg1" == '--run' || "$arg1" == '-r' ]]; then
-    ./llama "$@"
+    ./llama-cli "$@"
 elif [[ "$arg1" == '--finetune' || "$arg1" == '-f' ]]; then
     ./llama-finetune "$@"
 elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then

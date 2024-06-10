@@ -19,7 +19,7 @@ fi
 set -x
 
 SPLIT=$1/gguf-split
-MAIN=$1/llama
+MAIN=$1/llama-cli
 WORK_PATH=$TMP_DIR/gguf-split
 ROOT_DIR=$(realpath $(dirname $0)/../../)
 

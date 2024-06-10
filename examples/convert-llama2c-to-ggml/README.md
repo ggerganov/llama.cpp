@@ -25,4 +25,4 @@ Note: The vocabulary for `stories260K.bin` should be its own tokenizer `tok512.b
 
 Now you can use the model with a command like:
 
-`$ ./llama -m stories42M.gguf.bin -p "One day, Lily met a Shoggoth" -n 500 -c 256`
+`$ ./llama-cli -m stories42M.gguf.bin -p "One day, Lily met a Shoggoth" -n 500 -c 256`

@@ -292,7 +292,7 @@ effectiveStdenv.mkDerivation (
       license = lib.licenses.mit;
 
       # Accommodates `nix run` and `lib.getExe`
-      mainProgram = "llama";
+      mainProgram = "llama-cli";
 
       # These people might respond, on the best effort basis, if you ping them
       # in case of Nix-specific regressions or for reviewing Nix-specific PRs.

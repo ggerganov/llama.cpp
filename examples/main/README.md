@@ -20,7 +20,7 @@ To get started right away, run the following command, making sure to use the cor
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./llama -m models/7B/ggml-model.bin --prompt "Once upon a time"
+./llama-cli -m models/7B/ggml-model.bin --prompt "Once upon a time"
 ```
 
 #### Windows:
@@ -34,7 +34,7 @@ For an interactive experience, try this command:
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./llama -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
+./llama-cli -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
 'User: Hi
 AI: Hello. I am an AI chatbot. Would you like to talk?
 User: Sure!
@@ -53,7 +53,7 @@ The following command generates "infinite" text from a starting prompt (you can 
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./llama -m models/7B/ggml-model.bin --ignore-eos -n -1
+./llama-cli -m models/7B/ggml-model.bin --ignore-eos -n -1
 ```
 
 #### Windows:
@@ -107,7 +107,7 @@ To overcome this limitation, you can use the `--in-prefix` flag to add a space o
 The `--in-prefix` flag is used to add a prefix to your input, primarily, this is used to insert a space after the reverse prompt. Here's an example of how to use the `--in-prefix` flag in conjunction with the `--reverse-prompt` flag:
 
 ```sh
-./llama -r "User:" --in-prefix " "
+./llama-cli -r "User:" --in-prefix " "
 ```
 
 ### In-Suffix
@@ -115,7 +115,7 @@ The `--in-prefix` flag is used to add a prefix to your input, primarily, this is
 The `--in-suffix` flag is used to add a suffix after your input. This is useful for adding an "Assistant:" prompt after the user's input. It's added after the new-line character (`\n`) that's automatically added to the end of the user's input. Here's an example of how to use the `--in-suffix` flag in conjunction with the `--reverse-prompt` flag:
 
 ```sh
-./llama -r "User:" --in-prefix " " --in-suffix "Assistant:"
+./llama-cli -r "User:" --in-prefix " " --in-suffix "Assistant:"
 ```
 
 ## Context Management

@@ -7,7 +7,7 @@
 cd `dirname $0`
 cd ..
 
-./llama -m ./models/alpaca.13b.ggmlv3.q8_0.bin \
+./llama-cli -m ./models/alpaca.13b.ggmlv3.q8_0.bin \
        --color \
        -f ./prompts/alpaca.txt \
        --ctx_size 2048 \

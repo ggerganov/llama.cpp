@@ -18,7 +18,7 @@ wget https://raw.githubusercontent.com/brunoklein99/deep-learning-notes/master/s
         --no-checkpointing
 
 # predict
-./bin/llama -m ggml-shakespeare-256x16-f32.gguf
+./bin/llama-cli -m ggml-shakespeare-256x16-f32.gguf
 ```
 
 Output files will be saved every N iterations (config with `--save-every N`).

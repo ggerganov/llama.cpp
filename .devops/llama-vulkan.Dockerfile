@@ -19,9 +19,9 @@ RUN cmake -B build -DLLAMA_VULKAN=1 && \
 
 # Clean up
 WORKDIR /
-RUN cp /app/build/bin/llama /llama && \
+RUN cp /app/build/bin/llama-cli /llama-cli && \
     rm -rf /app
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/main" ]
+ENTRYPOINT [ "/llama-cli" ]

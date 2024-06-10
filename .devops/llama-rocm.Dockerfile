@@ -42,4 +42,4 @@ ENV CXX=/opt/rocm/llvm/bin/clang++
 
 RUN make -j$(nproc) llama
 
-ENTRYPOINT [ "/app/main" ]
+ENTRYPOINT [ "/app/llama-cli" ]

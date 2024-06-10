@@ -91,7 +91,7 @@ item ::= [^\n]+ "\n"
 
 This guide provides a brief overview. Check out the GBNF files in this directory (`grammars/`) for examples of full grammars. You can try them out with:
 ```
-./llama -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
+./llama-cli -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
 ```
 
 ## Troubleshooting

@@ -47,7 +47,6 @@ models-mnt
 
 /Pipfile
 /libllama.so
-/llama
 /llama-*
 llama-batched-swift
 /common/build-info.cpp
