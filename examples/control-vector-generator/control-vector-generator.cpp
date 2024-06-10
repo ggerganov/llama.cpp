@@ -210,8 +210,9 @@ struct train_context {
             auto & diff_tmp = v_diff_tmp[il];
             int n_elem = diff_tmp.size() / sizeof(float);
             int n_rows = n_elem / n_embd;
-            struct ggml_tensor * diff = ggml_new_tensor_2d(ctx_ggml, GGML_TYPE_F32, n_embd, n_rows);
+            struct ggml_tensor * diff = ggml_new_tensor_2d(ctx_ggml, GGML_TYPE_F32, n_rows, n_embd);
             ggml_set_name(diff, (std::string("diff_") + std::to_string(il)).c_str());
+            // TODO: IMPORTANT!! transpose diff
             diff->data = diff_tmp.data();
             v_diff.push_back(diff);
         }

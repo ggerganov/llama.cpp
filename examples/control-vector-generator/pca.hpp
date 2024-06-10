@@ -72,11 +72,11 @@ void load_pca_model(pca_model & model, struct ggml_tensor * input) {
     };
     model.ctx = ggml_init(params);
 
-    auto n_embd    = input->ne[0];
-    auto n_samples = input->ne[1];
+    auto n_embd    = input->ne[1];
+    auto n_samples = input->ne[0];
 
-    model.v_diff_original = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_embd, n_samples);
-    model.square          = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_embd, n_embd);
+    model.v_diff_original = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_samples, n_embd);
+    model.square          = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, n_embd,    n_embd);
     model.eigenvector     = ggml_new_tensor_1d(model.ctx, GGML_TYPE_F32, n_embd);
 
     ggml_set_name(model.v_diff_original, "v_diff_original");
@@ -117,9 +117,11 @@ static struct ggml_cgraph * build_graph_piter(
     struct ggml_cgraph * gf = ggml_new_graph(ctx0);
 
     // turn v_diff_original into square matrix if needed
+    struct ggml_tensor * square;
     if (calc_square) {
         //struct ggml_tensor * v_diff_transposed = ggml_transpose(ctx0, model.v_diff_original);
-        struct ggml_tensor * square = ggml_mul_mat(ctx0, model.v_diff_original, model.v_diff_original);
+        print_debug_tensor(model.v_diff_original);
+        square = ggml_mul_mat(ctx0, model.v_diff_original, model.v_diff_original);
         ggml_set_name(square, "square");
         //model.square = ggml_scale_inplace(ctx0, model.square, 0.0);
     }
@@ -128,7 +130,7 @@ static struct ggml_cgraph * build_graph_piter(
 
     for (int i = 0; i < nb_iterations; ++i) {
         // b_tensor = square * eigenvector^T
-        b_tensor = ggml_mul_mat(ctx0, model.square, model.eigenvector);
+        b_tensor = ggml_mul_mat(ctx0, square, model.eigenvector);
         ggml_set_name(b_tensor, "b_tensor");
 
         // normalize
@@ -209,7 +211,6 @@ static void power_iteration(
         }
         allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
         struct ggml_cgraph * gf = build_graph_piter(model, iter == 0);
-        printf("kkk\n");
         ggml_graph_dump_dot(gf, nullptr, "/tmp/_cgraph.dot");
         struct ggml_tensor * distance = compute_piter(model, gf, allocr, n_threads);
 
@@ -236,6 +237,7 @@ static void run_pca(
     int n_embd = v_input[0]->ne[0]; // shape of v_input[0]: [n_embd, m]
     int n_threads = 8; // TODO: change me
     for (size_t il = 0; il < v_input.size(); ++il) {
+        print_debug_tensor(v_input[il]);
         // prepare output vector
         struct ggml_tensor * ctrl_out = v_output[il];
         auto name = std::string("direction.") + std::to_string(il + 1);
