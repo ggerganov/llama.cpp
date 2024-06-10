@@ -696,4 +696,4 @@ class GGUFWriter:
             if abs(fnum) < 1000.0:
                 return f"{fnum:3.1f}{unit}"
             fnum /= 1000.0
-        return f"{fnum:.1f}T - over 1TB, --split recommended"
+        return f"{fnum:.1f}T - over 1TB, split recommended"
