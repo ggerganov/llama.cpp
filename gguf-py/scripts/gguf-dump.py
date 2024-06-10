@@ -196,13 +196,27 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
         else:
             pretty_type = str(field.types[-1].name)
 
+        total_elements = len(field.data)
+        value = ""
         if len(field.types) == 1:
             curr_type = field.types[0]
             if curr_type == GGUFValueType.STRING:
                 value = repr(str(bytes(field.parts[-1]), encoding='utf-8')[:60])
-            elif field.types[0] in reader.gguf_scalar_to_np:
-                value = field.parts[-1][0]
-        markdown_content += f'| {n:3} | {pretty_type:10} | {len(field.data):8} | {field.name:38} | {value:<78} |\n'
+            elif curr_type in reader.gguf_scalar_to_np:
+                value = str(field.parts[-1][0])
+        else:
+            if field.types[0] == GGUFValueType.ARRAY:
+                curr_type = field.types[1]
+                if curr_type == GGUFValueType.STRING:
+                    render_element = min(5, total_elements)
+                    for element_pos in range(render_element):
+                        value += repr(str(bytes(field.parts[-1 - element_pos]), encoding='utf-8')[:5]) + (", " if total_elements > 1 else "")
+                elif curr_type in reader.gguf_scalar_to_np:
+                    render_element = min(7, total_elements)
+                    for element_pos in range(render_element):
+                        value += str(field.parts[-1 - element_pos][0]) + (", " if total_elements > 1 else "")
+                value = f'[ {value}{" ..." if total_elements > 1 else ""} ]'
+        markdown_content += f'| {n:3} | {pretty_type:10} | {total_elements:8} | {field.name:38} | {value:<78} |\n'
 
     markdown_content += "\n"
 
