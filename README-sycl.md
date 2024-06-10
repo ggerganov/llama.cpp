@@ -275,7 +275,7 @@ source /opt/intel/oneapi/setvars.sh
 Similar to the native `sycl-ls`, available SYCL devices can be queried as follow:
 
 ```sh
-./build/bin/ls-sycl-device
+./build/bin/llama-ls-sycl-device
 ```
 A example of such log in a system with 1 *intel CPU* and 1 *intel GPU* can look like the following:
 ```
