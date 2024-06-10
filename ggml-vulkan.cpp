@@ -345,15 +345,12 @@ struct vk_context {
 };
 
 struct ggml_tensor_extra_gpu {
-    bool ready;
-
     size_t ctx_idx;
 
     vk_buffer_ref buffer_gpu;
     uint64_t offset;
 
     void reset() {
-        ready = false;
         ctx_idx = 0;
         buffer_gpu.reset();
         offset = 0;
@@ -2949,7 +2946,7 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context * su
     const uint64_t d_sz = sizeof(float) * d_ne;
 
     vk_buffer d_D = extra->buffer_gpu.lock();
-    const uint64_t d_buf_offset = extra->offset;
+    const uint64_t d_buf_offset = extra->offset + dst->view_offs;
     GGML_ASSERT(d_D != nullptr);
     GGML_ASSERT(d_D->size >= d_buf_offset + d_sz * ne02 * ne03);
     vk_buffer d_X;
@@ -2958,12 +2955,12 @@ static void ggml_vk_mul_mat_q_f16(ggml_backend_vk_context * ctx, vk_context * su
     uint64_t y_buf_offset = 0;
     if (!src0_uma) {
         d_Qx = extra_src0->buffer_gpu.lock();
-        qx_buf_offset = extra_src0->offset;
+        qx_buf_offset = extra_src0->offset + src0->view_offs;
         GGML_ASSERT(d_Qx != nullptr);
     }
     if (!src1_uma) {
         d_Qy = extra_src1->buffer_gpu.lock();
-        qy_buf_offset = extra_src1->offset;
+        qy_buf_offset = extra_src1->offset + src1->view_offs;
         GGML_ASSERT(d_Qy != nullptr);
     }
     if (qx_needs_dequant) {
@@ -3114,7 +3111,7 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context 
     const uint64_t d_sz = sizeof(float) * d_ne;
 
     vk_buffer d_D = extra->buffer_gpu.lock();
-    const uint64_t d_buf_offset = extra->offset;
+    const uint64_t d_buf_offset = extra->offset + dst->view_offs;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer d_X;
     uint64_t x_buf_offset = 0;
@@ -3122,12 +3119,12 @@ static void ggml_vk_mul_mat_vec_q_f16(ggml_backend_vk_context * ctx, vk_context 
     uint64_t y_buf_offset = 0;
     if(!src0_uma) {
         d_Qx = extra_src0->buffer_gpu.lock();
-        qx_buf_offset = extra_src0->offset;
+        qx_buf_offset = extra_src0->offset + src0->view_offs;
         GGML_ASSERT(d_Qx != nullptr);
     }
     if(!src1_uma) {
         d_Qy = extra_src1->buffer_gpu.lock();
-        qy_buf_offset = extra_src1->offset;
+        qy_buf_offset = extra_src1->offset + src1->view_offs;
         GGML_ASSERT(d_Qy != nullptr);
     }
     if (qx_needs_dequant) {
@@ -3246,14 +3243,14 @@ static void ggml_vk_mul_mat_vec_p021_f16_f32(ggml_backend_vk_context * ctx, vk_c
     const uint64_t d_sz = sizeof(float) * d_ne;
 
     vk_buffer d_D = extra->buffer_gpu.lock();
-    const uint64_t d_buf_offset = extra->offset;
+    const uint64_t d_buf_offset = extra->offset + dst->view_offs;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer d_Qx = extra_src0->buffer_gpu.lock();
-    const uint64_t qx_buf_offset = extra_src0->offset;
+    const uint64_t qx_buf_offset = extra_src0->offset + src0->view_offs;
     GGML_ASSERT(d_Qx != nullptr);
     if (!src1_uma) {
         d_Qy = extra_src1->buffer_gpu.lock();
-        qy_buf_offset = extra_src1->offset;
+        qy_buf_offset = extra_src1->offset + src1->view_offs;
         GGML_ASSERT(d_Qx != nullptr);
     }
 
@@ -3323,14 +3320,14 @@ static void ggml_vk_mul_mat_vec_nc_f16_f32(ggml_backend_vk_context * ctx, vk_con
     const uint64_t d_sz = sizeof(float) * d_ne;
 
     vk_buffer d_D = extra->buffer_gpu.lock();
-    const uint64_t d_buf_offset = extra->offset;
+    const uint64_t d_buf_offset = extra->offset + dst->view_offs;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer d_Qx = extra_src0->buffer_gpu.lock();
-    const uint64_t qx_buf_offset = extra_src0->offset;
+    const uint64_t qx_buf_offset = extra_src0->offset + src0->view_offs;
     GGML_ASSERT(d_Qx != nullptr);
     if (!src1_uma) {
         d_Qy = extra_src1->buffer_gpu.lock();
-        qy_buf_offset = extra_src1->offset;
+        qy_buf_offset = extra_src1->offset + src1->view_offs;
         GGML_ASSERT(d_Qx != nullptr);
     }
 
@@ -3459,7 +3456,7 @@ static void ggml_vk_mul_mat_id_q_f16(ggml_backend_vk_context * ctx, vk_context *
     const uint64_t d_sz = sizeof(float) * d_ne;
 
     vk_buffer d_D = extra->buffer_gpu.lock();
-    const uint64_t d_buf_offset = extra->offset;
+    const uint64_t d_buf_offset = extra->offset + dst->view_offs;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer d_X;
     uint64_t x_buf_offset = 0;
@@ -3467,17 +3464,17 @@ static void ggml_vk_mul_mat_id_q_f16(ggml_backend_vk_context * ctx, vk_context *
     uint64_t y_buf_offset = 0;
     if (!src0_uma) {
         d_Qx = extra_src0->buffer_gpu.lock();
-        qx_buf_offset = extra_src0->offset;
+        qx_buf_offset = extra_src0->offset + src0->view_offs;
         GGML_ASSERT(d_Qx != nullptr);
     }
     if (!src1_uma) {
         d_Qy = extra_src1->buffer_gpu.lock();
-        qy_buf_offset = extra_src1->offset;
+        qy_buf_offset = extra_src1->offset + src1->view_offs;
         GGML_ASSERT(d_Qy != nullptr);
     }
     if (!ids_uma) {
         d_ids = extra_ids->buffer_gpu.lock();
-        ids_buf_offset = extra_ids->offset;
+        ids_buf_offset = extra_ids->offset + ids->view_offs;
         GGML_ASSERT(d_ids != nullptr);
     }
     if (qx_needs_dequant) {
@@ -3636,7 +3633,7 @@ static void ggml_vk_mul_mat_vec_id_q_f16(ggml_backend_vk_context * ctx, vk_conte
     const uint64_t d_sz = sizeof(float) * d_ne;
 
     vk_buffer d_D = extra->buffer_gpu.lock();
-    const uint64_t d_buf_offset = extra->offset;
+    const uint64_t d_buf_offset = extra->offset + dst->view_offs;
     GGML_ASSERT(d_D != nullptr);
     vk_buffer d_X;
     uint64_t x_buf_offset = 0;
@@ -3644,17 +3641,17 @@ static void ggml_vk_mul_mat_vec_id_q_f16(ggml_backend_vk_context * ctx, vk_conte
     uint64_t y_buf_offset = 0;
     if(!src0_uma) {
         d_Qx = extra_src0->buffer_gpu.lock();
-        qx_buf_offset = extra_src0->offset;
+        qx_buf_offset = extra_src0->offset + src0->view_offs;
         GGML_ASSERT(d_Qx != nullptr);
     }
     if(!src1_uma) {
         d_Qy = extra_src1->buffer_gpu.lock();
-        qy_buf_offset = extra_src1->offset;
+        qy_buf_offset = extra_src1->offset + src1->view_offs;
         GGML_ASSERT(d_Qy != nullptr);
     }
     if(!ids_uma) {
         d_ids = extra_ids->buffer_gpu.lock();
-        ids_buf_offset = extra_ids->offset;
+        ids_buf_offset = extra_ids->offset + ids->view_offs;
         GGML_ASSERT(d_ids != nullptr);
     }
     if (qx_needs_dequant) {
@@ -3769,9 +3766,9 @@ static void ggml_vk_op_repeat(ggml_backend_vk_context * ctx, vk_context * subctx
     ggml_tensor_extra_gpu * extra_src0 = (ggml_tensor_extra_gpu *) src0->extra;
 
     const vk_buffer src_buf = extra_src0->buffer_gpu.lock();
-    const uint64_t src_offset = extra_src0->offset;
+    const uint64_t src_offset = extra_src0->offset + src0->view_offs;
     vk_buffer dst_buf = extra->buffer_gpu.lock();
-    const uint64_t dst_offset = extra->offset;
+    const uint64_t dst_offset = extra->offset + dst->view_offs;
 
     std::vector<vk::BufferCopy> copies;
 
@@ -3898,11 +3895,6 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
         {
             const int mode = ((const int32_t *) dst->op_params)[2];
             const bool is_neox = mode & 2;
-            const bool is_glm  = mode & 4;
-
-            if (is_glm) {
-                return nullptr;
-            }
 
             if (is_neox) {
                 if (src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
@@ -4067,21 +4059,21 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context * subctx, c
     }
 
     GGML_ASSERT(d_D != nullptr);
-    uint64_t d_buf_offset = (extra->offset / ctx->device->properties.limits.minStorageBufferOffsetAlignment) * ctx->device->properties.limits.minStorageBufferOffsetAlignment;
+    uint64_t d_buf_offset = ((extra->offset + dst->view_offs) / ctx->device->properties.limits.minStorageBufferOffsetAlignment) * ctx->device->properties.limits.minStorageBufferOffsetAlignment;
     GGML_ASSERT(d_buf_offset == extra->offset || op == GGML_OP_CPY);  // NOLINT
     if(!src0_uma) {
         d_X = extra_src0->buffer_gpu.lock();
-        x_buf_offset = extra_src0->offset;
+        x_buf_offset = extra_src0->offset + src0->view_offs;
         GGML_ASSERT(d_X != nullptr);
     }
     if (use_src1 && !src1_uma) {
         d_Y = extra_src1->buffer_gpu.lock();
-        y_buf_offset = extra_src1->offset;
+        y_buf_offset = extra_src1->offset + src1->view_offs;
         GGML_ASSERT(d_Y != nullptr);
     }
     if (use_src2 && !src2_uma) {
         d_Z = extra_src2->buffer_gpu.lock();
-        z_buf_offset = extra_src2->offset;
+        z_buf_offset = extra_src2->offset + src2->view_offs;
         GGML_ASSERT(d_Z != nullptr);
     }
 
@@ -4341,7 +4333,7 @@ static void ggml_vk_cpy(ggml_backend_vk_context * ctx, vk_context * subctx, cons
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) dst->extra;
     const uint32_t src0_type_size = ggml_type_size(src0->type);
     const uint32_t dst_type_size = ggml_type_size(dst->type);
-    const uint32_t d_offset = (extra->offset % ctx->device->properties.limits.minStorageBufferOffsetAlignment) / dst_type_size;
+    const uint32_t d_offset = ((extra->offset + dst->view_offs) % ctx->device->properties.limits.minStorageBufferOffsetAlignment) / dst_type_size;
 
     ggml_vk_op_f32<vk_op_unary_push_constants>(ctx, subctx, src0, nullptr, nullptr, dst, GGML_OP_CPY, {
         (uint32_t)ggml_nelements(src0),
@@ -4401,7 +4393,7 @@ static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context * subctx, con
     const int n_dims        = ((int32_t *) dst->op_params)[1];
     const int mode          = ((int32_t *) dst->op_params)[2];
     // const int n_ctx         = ((int32_t *) dst->op_params)[3];
-    const int n_orig_ctx    = ((int32_t *) dst->op_params)[4];
+    const int n_ctx_orig    = ((int32_t *) dst->op_params)[4];
     const float freq_base   = ((float *)   dst->op_params)[5];
     const float freq_scale  = ((float *)   dst->op_params)[6];
     const float ext_factor  = ((float *)   dst->op_params)[7];
@@ -4410,12 +4402,12 @@ static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context * subctx, con
     const float beta_slow   = ((float *)   dst->op_params)[10];
 
     const bool is_neox = mode & 2;
-    const bool is_glm  = mode & 4;
 
-    GGML_ASSERT(!is_glm);
+#pragma message("TODO: update rope NORM mode to match NEOX mode")
+#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7634")
 
     float corr_dims[2];
-    ggml_rope_yarn_corr_dims(n_dims, n_orig_ctx, freq_base, beta_fast, beta_slow, corr_dims);
+    ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
     if (is_neox) {
         const float theta_scale = powf(freq_base, -2.0f/n_dims);
@@ -5574,6 +5566,13 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     const ggml_tensor * src2 = node->src[2];
 
     switch (node->op) {
+    // Return on empty ops to avoid generating a compute_ctx and setting exit_tensor
+    case GGML_OP_RESHAPE:
+    case GGML_OP_VIEW:
+    case GGML_OP_PERMUTE:
+    case GGML_OP_TRANSPOSE:
+    case GGML_OP_NONE:
+        return;
     case GGML_OP_UNARY:
         switch (ggml_get_unary_op(node)) {
         case GGML_UNARY_OP_SILU:
@@ -5595,10 +5594,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_CPY:
     case GGML_OP_CONT:
     case GGML_OP_DUP:
-    case GGML_OP_RESHAPE:
-    case GGML_OP_VIEW:
-    case GGML_OP_PERMUTE:
-    case GGML_OP_TRANSPOSE:
     case GGML_OP_NORM:
     case GGML_OP_RMS_NORM:
     case GGML_OP_DIAG_MASK_INF:
@@ -5606,7 +5601,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_ROPE:
     case GGML_OP_MUL_MAT:
     case GGML_OP_MUL_MAT_ID:
-    case GGML_OP_NONE:
     case GGML_OP_ARGSORT:
     case GGML_OP_SUM_ROWS:
         break;
@@ -5660,12 +5654,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         ggml_vk_cpy(ctx, ctx->compute_ctx, src0, node);
 
         break;
-    case GGML_OP_RESHAPE:
-    case GGML_OP_VIEW:
-    case GGML_OP_PERMUTE:
-    case GGML_OP_TRANSPOSE:
-    case GGML_OP_NONE:
-        break;
     case GGML_OP_NORM:
         ggml_vk_norm(ctx, ctx->compute_ctx, src0, node);
 
@@ -5717,7 +5705,6 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         return;
     }
 
-    extra->ready = true;
     extra->ctx_idx = ctx->compute_ctx->idx;
 
 #ifdef GGML_VULKAN_CHECK_RESULTS
@@ -5801,8 +5788,6 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_compute_
     ggml_vk_check_results_0(ctx, params, tensor);
 #endif
 
-    GGML_ASSERT(extra->ready);
-
     vk_context& subctx = ctx->gc.contexts[extra->ctx_idx];
 
     // Only run if ctx hasn't been submitted yet
@@ -5826,8 +5811,6 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_compute_
         subctx.in_memcpys.clear();
         subctx.out_memcpys.clear();
     }
-
-    extra->ready = false;
 
     return true;
 }
@@ -5948,7 +5931,9 @@ struct ggml_backend_vk_buffer_context {
 
     ~ggml_backend_vk_buffer_context() {
         ggml_vk_destroy_buffer(dev_buffer);
-        delete[] temp_tensor_extras;
+        if (temp_tensor_extras != nullptr) {
+            delete[] temp_tensor_extras;
+        }
     }
 
     ggml_tensor_extra_gpu * ggml_vk_alloc_temp_tensor_extra() {
@@ -5995,18 +5980,16 @@ GGML_CALL static void ggml_backend_vk_buffer_init_tensor(ggml_backend_buffer_t b
 #endif
     ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
 
-    ggml_tensor_extra_gpu * extra = ctx->ggml_vk_alloc_temp_tensor_extra();
-    if (tensor->view_src != nullptr && tensor->view_src->extra != nullptr) {
+    if (tensor->view_src != nullptr) {
         GGML_ASSERT(tensor->view_src->buffer->buft == buffer->buft);
-        ggml_tensor_extra_gpu * extra_view = (ggml_tensor_extra_gpu *) tensor->view_src->extra;
-        extra->buffer_gpu = extra_view->buffer_gpu;
-        extra->offset = extra_view->offset + tensor->view_offs;
+        GGML_ASSERT(tensor->view_src->extra != nullptr);
+        tensor->extra = tensor->view_src->extra;
     } else {
+        ggml_tensor_extra_gpu * extra = ctx->ggml_vk_alloc_temp_tensor_extra();
         extra->buffer_gpu = ctx->dev_buffer;
         extra->offset = (uint8_t *) tensor->data - (uint8_t *) vk_ptr_base;
+        tensor->extra = extra;
     }
-
-    tensor->extra = extra;
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -6019,7 +6002,7 @@ GGML_CALL static void ggml_backend_vk_buffer_set_tensor(ggml_backend_buffer_t bu
 
     vk_buffer buf = extra->buffer_gpu.lock();
 
-    ggml_vk_buffer_write(ctx->ctx, buf, extra->offset + offset, data, size);
+    ggml_vk_buffer_write(ctx->ctx, buf, extra->offset + tensor->view_offs + offset, data, size);
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_get_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
@@ -6032,7 +6015,7 @@ GGML_CALL static void ggml_backend_vk_buffer_get_tensor(ggml_backend_buffer_t bu
 
     vk_buffer buf = extra->buffer_gpu.lock();
 
-    ggml_vk_buffer_read(ctx->ctx, buf, extra->offset + offset, data, size);
+    ggml_vk_buffer_read(ctx->ctx, buf, extra->offset + tensor->view_offs + offset, data, size);
 }
 
 GGML_CALL static bool ggml_backend_vk_buffer_cpy_tensor(ggml_backend_buffer_t buffer, const ggml_tensor * src, ggml_tensor * dst) {
@@ -6043,7 +6026,7 @@ GGML_CALL static bool ggml_backend_vk_buffer_cpy_tensor(ggml_backend_buffer_t bu
         vk_buffer src_buf = src_extra->buffer_gpu.lock();
         vk_buffer dst_buf = dst_extra->buffer_gpu.lock();
 
-        ggml_vk_buffer_copy(dst_buf, dst_extra->offset, src_buf, src_extra->offset, ggml_nbytes(src));
+        ggml_vk_buffer_copy(dst_buf, dst_extra->offset + dst->view_offs, src_buf, src_extra->offset + src->view_offs, ggml_nbytes(src));
 
         return true;
     }
@@ -6269,7 +6252,7 @@ GGML_CALL static void ggml_backend_vk_set_tensor_async(ggml_backend_t backend, g
 
     vk_buffer buf = extra->buffer_gpu.lock();
 
-    ggml_vk_buffer_write_async(ctx, ctx->transfer_ctx, buf, extra->offset + offset, data, size);
+    ggml_vk_buffer_write_async(ctx, ctx->transfer_ctx, buf, extra->offset + tensor->view_offs + offset, data, size);
 }
 
 GGML_CALL static void ggml_backend_vk_get_tensor_async(ggml_backend_t backend, const ggml_tensor * tensor, void * data, size_t offset, size_t size) {
@@ -6289,7 +6272,7 @@ GGML_CALL static void ggml_backend_vk_get_tensor_async(ggml_backend_t backend, c
 
     vk_buffer buf = extra->buffer_gpu.lock();
 
-    ggml_vk_buffer_read_async(ctx, ctx->transfer_ctx, buf, extra->offset + offset, data, size);
+    ggml_vk_buffer_read_async(ctx, ctx->transfer_ctx, buf, extra->offset + tensor->view_offs + offset, data, size);
 }
 
 GGML_CALL static bool ggml_backend_vk_cpy_tensor_async(ggml_backend_t backend, const ggml_tensor * src, ggml_tensor * dst) {
@@ -6310,7 +6293,7 @@ GGML_CALL static bool ggml_backend_vk_cpy_tensor_async(ggml_backend_t backend, c
         vk_buffer src_buf = src_extra->buffer_gpu.lock();
         vk_buffer dst_buf = dst_extra->buffer_gpu.lock();
 
-        ggml_vk_buffer_copy_async(ctx->transfer_ctx, dst_buf, dst_extra->offset, src_buf, src_extra->offset, ggml_nbytes(src));
+        ggml_vk_buffer_copy_async(ctx->transfer_ctx, dst_buf, dst_extra->offset + dst->view_offs, src_buf, src_extra->offset + src->view_offs, ggml_nbytes(src));
         return true;
     }
 
@@ -6483,12 +6466,7 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
         //         return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
         //     } break;
         case GGML_OP_ROPE:
-            {
-                const int mode = ((const int32_t *) op->op_params)[2];
-                const bool is_glm  = mode & 4;
-
-                return !is_glm;
-            } break;
+            return true;
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
@@ -6731,7 +6709,7 @@ static void ggml_vk_print_tensor(ggml_backend_vk_context * ctx, const ggml_tenso
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
         vk_buffer buffer_gpu = extra->buffer_gpu.lock();
-        ggml_vk_buffer_read(ctx, buffer_gpu, extra->offset, tensor_data, tensor_size);
+        ggml_vk_buffer_read(ctx, buffer_gpu, extra->offset + tensor->view_offs, tensor_data, tensor_size);
     }
 
     std::cerr << "TENSOR CHECK " << name << " (" << tensor->name << "): " << ggml_op_name(tensor->op) << std::endl;
@@ -6815,7 +6793,7 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
         } else if (ggml_backend_buffer_is_vk(src0->buffer)) {
             ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src0->extra;
             vk_buffer buffer_gpu = extra->buffer_gpu.lock();
-            uint64_t offset = extra->offset;
+            uint64_t offset = extra->offset + src0->view_offs;
             if (!ggml_is_contiguous(src0) && ggml_vk_dim01_contiguous(src0)) {
                 for (int i3 = 0; i3 < src0->ne[3]; i3++) {
                     for (int i2 = 0; i2 < src0->ne[2]; i2++) {
@@ -6857,7 +6835,7 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
         } else if (ggml_backend_buffer_is_vk(src1->buffer)) {
             ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src1->extra;
             vk_buffer buffer_gpu = extra->buffer_gpu.lock();
-            uint64_t offset = extra->offset;
+            uint64_t offset = extra->offset + src1->view_offs;
             if (!ggml_is_contiguous(src1) && ggml_vk_dim01_contiguous(src1)) {
                 for (int i3 = 0; i3 < src1->ne[3]; i3++) {
                     for (int i2 = 0; i2 < src1->ne[2]; i2++) {
@@ -6915,7 +6893,7 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
         } else if (ggml_backend_buffer_is_vk(src2->buffer)) {
             ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) src2->extra;
             vk_buffer buffer_gpu = extra->buffer_gpu.lock();
-            uint64_t offset = extra->offset;
+            uint64_t offset = extra->offset + src2->view_offs;
             if (!ggml_is_contiguous(src2) && ggml_vk_dim01_contiguous(src2)) {
                 for (int i3 = 0; i3 < src2->ne[3]; i3++) {
                     for (int i2 = 0; i2 < src2->ne[2]; i2++) {
@@ -6992,15 +6970,15 @@ static void ggml_vk_check_results_0(ggml_backend_vk_context * ctx, ggml_compute_
     } else if (tensor->op == GGML_OP_ROPE) {
         const int n_dims      = ((int32_t *) tensor->op_params)[1];
         const int mode        = ((int32_t *) tensor->op_params)[2];
-        const int n_ggml_ctx       = ((int32_t *) tensor->op_params)[3];
-        const int n_orig_ggml_ctx  = ((int32_t *) tensor->op_params)[4];
+        //const int n_ctx_ggml       = ((int32_t *) tensor->op_params)[3];
+        const int n_ctx_orig_ggml  = ((int32_t *) tensor->op_params)[4];
         float freq_base       = ((float *)   tensor->op_params)[5];
         float freq_scale      = ((float *)   tensor->op_params)[6];
         float ext_factor      = ((float *)   tensor->op_params)[7];
         float attn_factor     = ((float *)   tensor->op_params)[8];
         float beta_fast       = ((float *)   tensor->op_params)[9];
         float beta_slow       = ((float *)   tensor->op_params)[10];
-        tensor_clone = ggml_rope_ext(ggml_ctx, src0_clone, src1_clone, src2_clone, n_dims, mode, n_ggml_ctx, n_orig_ggml_ctx, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
+        tensor_clone = ggml_rope_ext(ggml_ctx, src0_clone, src1_clone, src2_clone, n_dims, mode, n_ctx_orig_ggml, freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow);
     } else if (tensor->op == GGML_OP_UNARY) {
         switch (ggml_get_unary_op(tensor)) {
         case GGML_UNARY_OP_SILU:
@@ -7098,11 +7076,11 @@ static void ggml_vk_check_results_1(ggml_backend_vk_context * ctx, ggml_compute_
         ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) tensor->extra;
 
         vk_buffer buffer_gpu = extra->buffer_gpu.lock();
-        if (extra->offset + tensor_size >= buffer_gpu->size) {
-            tensor_size = buffer_gpu->size - (extra->offset);
+        if (extra->offset + tensor->view_offs + tensor_size >= buffer_gpu->size) {
+            tensor_size = buffer_gpu->size - (extra->offset + tensor->view_offs);
         }
 
-        ggml_vk_buffer_read(ctx, buffer_gpu, extra->offset, tensor_data, tensor_size);
+        ggml_vk_buffer_read(ctx, buffer_gpu, extra->offset + tensor->view_offs, tensor_data, tensor_size);
     }
 
     float first_error_result = -1.0f;
