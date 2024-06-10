@@ -664,13 +664,13 @@ void quantize_row_i8_s(const float * x, void * y, int64_t n, float* act_scales) 
     double min = 0.00001;
     double max = min;
     for (int i = 0; i < n; ++i) {
-        max = MAX(max, (double)fabs(x[i]));
+        max = MAX(max, (double)fabs((double)x[i]));
     }
     float s = 127 / max;
     act_scales[0] = s;
     float temp;
     for (int i = 0; i < n; ++i) {
-        temp = round(x[i] * s);
+        temp = round((double)(x[i] * s));
         if (temp >  127) temp = 127;
         if (temp < -128) temp = -128;
         dst[i] = (int8_t)(temp);
@@ -3335,14 +3335,14 @@ size_t quantize_i2_s(const float * restrict src, void * restrict dst, int64_t nr
     // f32 -> q8
     double i2_scale = 0;
     for (int i=0; i<n; i++) {
-        if (fabs(src[i]) > 1e-6) {
-            i2_scale = src[i];
+        if (fabs((double)(src[i])) > 1e-6) {
+            i2_scale = (double)src[i];
         }
     }
 
     uint8_t* q8 = (uint8_t*)dst;
     for (int i=0; i<n; i++) {
-        if (fabs(src[i]) < 1e-6) {
+        if (fabs((double)(src[i])) < 1e-6) {
             q8[i] = 0;
             continue;
         }
@@ -3802,8 +3802,59 @@ void ggml_vec_dot_i2_i8_s(int n, float * restrict s, size_t bs, const void * res
     UNUSED(by);
     UNUSED(nrc);
 
+// TODO
 // #if defined(__AVX2__)
-//     // TODO
+//     __m256i accu = _mm256_setzero_si256();
+
+//     for (int i=0; i<n/32; i++) {
+//         const int8_t* w0 = (const int8_t *)(i2_q8 + x[i*8 + 0]);
+//         const int8_t* w1 = (const int8_t *)(i2_q8 + x[i*8 + 1]);
+//         const int8_t* w2 = (const int8_t *)(i2_q8 + x[i*8 + 2]);
+//         const int8_t* w3 = (const int8_t *)(i2_q8 + x[i*8 + 3]);
+//         const int8_t* w4 = (const int8_t *)(i2_q8 + x[i*8 + 4]);
+//         const int8_t* w5 = (const int8_t *)(i2_q8 + x[i*8 + 5]);
+//         const int8_t* w6 = (const int8_t *)(i2_q8 + x[i*8 + 6]);
+//         const int8_t* w7 = (const int8_t *)(i2_q8 + x[i*8 + 7]);
+
+//         __m256i xq8 = _mm256_set_epi8(
+//             w0[0], w0[1], w0[2], w0[3],
+//             w1[0], w1[1], w1[2], w1[3],
+//             w2[0], w2[1], w2[2], w2[3],
+//             w3[0], w3[1], w3[2], w3[3],
+//             w4[0], w4[1], w4[2], w4[3],
+//             w5[0], w5[1], w5[2], w5[3],
+//             w6[0], w6[1], w6[2], w6[3],
+//             w7[0], w7[1], w7[2], w7[3]
+//         );
+
+//         __m256i yq8 = _mm256_loadu_si256((const __m256i*)(y + i*32));
+
+//         __m128i hxq8 = _mm256_castsi256_si128(xq8);
+//         __m128i lxq8 = _mm256_extractf128_si256(xq8, 1);
+//         __m128i hyq8 = _mm256_castsi256_si128(yq8);
+//         __m128i lyq8 = _mm256_extractf128_si256(yq8, 1);
+
+//         __m256i hxq16 = _mm256_cvtepi8_epi16(hxq8);
+//         __m256i lxq16 = _mm256_cvtepi8_epi16(lxq8);
+//         __m256i hyq16 = _mm256_cvtepi8_epi16(hyq8);
+//         __m256i lyq16 = _mm256_cvtepi8_epi16(lyq8);
+
+//         __m256i hzq16 = _mm256_sign_epi16(hyq16, hxq16);
+//         __m256i lzq16 = _mm256_sign_epi16(lyq16, lxq16);
+
+//         __m256i hhzq32 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(hzq16));
+//         __m256i hlzq32 = _mm256_cvtepi16_epi32(_mm256_extractf128_si256(hzq16, 1));
+//         __m256i llzq32 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(lzq16));
+//         __m256i lhzq32 = _mm256_cvtepi16_epi32(_mm256_extractf128_si256(lzq16, 1));
+
+//         accu = _mm256_add_epi32(accu, hhzq32);
+//         accu = _mm256_add_epi32(accu, hlzq32);
+//         accu = _mm256_add_epi32(accu, llzq32);
+//         accu = _mm256_add_epi32(accu, lhzq32);
+//     }
+
+//     int sumi = hsum_i32_8(accu);
+//     *s = (float)sumi;
 // #else
 
     int sumi = 0;
