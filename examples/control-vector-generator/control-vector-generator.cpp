@@ -454,17 +454,6 @@ static std::vector<std::string> ctrlvec_load_prompt_file(std::string path, bool 
 
 static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
     auto * cb_data = (callback_data *) user_data;
-    /*auto ggml_ne_string = [](const ggml_tensor * t) -> std::string {
-        std::string str;
-        for (int i = 0; i < GGML_MAX_DIMS; ++i) {
-            str += std::to_string(t->ne[i]);
-            if (i + 1 < GGML_MAX_DIMS) {
-                str += ", ";
-            }
-        }
-        return str;
-    };*/
-
     static const char * l_out_name = "l_out";
     const bool is_l_out = strncmp(t->name, l_out_name, strlen(l_out_name)) == 0;
 
