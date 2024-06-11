@@ -10670,7 +10670,7 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * restrict s, size_t bs, const void *
 
 
 #if defined(__AVX__)
-static inline __m128i mul_add_epi8(const __m128i x, const __m128i y) {
+static inline __m128i mul_add_epi8_sse(const __m128i x, const __m128i y) {
     const __m128i ax = _mm_sign_epi8(x, x);
     const __m128i sy = _mm_sign_epi8(y, x);
     return _mm_maddubs_epi16(ax, sy);
@@ -11485,10 +11485,10 @@ void ggml_vec_dot_iq4_xs_q8_K(int n, float * restrict s, size_t bs, const void *
             const __m128i q4b_1_1 = _mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_1, 4), m4b));
             const __m128i q4b_2_0 = _mm_shuffle_epi8(values128, _mm_and_si128(q4bits_2, m4b));
             const __m128i q4b_2_1 = _mm_shuffle_epi8(values128, _mm_and_si128(_mm_srli_epi16(q4bits_2, 4), m4b));
-            const __m128i p16_1_0 = mul_add_epi8(q4b_1_0, q8b_1_0);
-            const __m128i p16_1_1 = mul_add_epi8(q4b_1_1, q8b_1_1);
-            const __m128i p16_2_0 = mul_add_epi8(q4b_2_0, q8b_2_0);
-            const __m128i p16_2_1 = mul_add_epi8(q4b_2_1, q8b_2_1);
+            const __m128i p16_1_0 = mul_add_epi8_sse(q4b_1_0, q8b_1_0);
+            const __m128i p16_1_1 = mul_add_epi8_sse(q4b_1_1, q8b_1_1);
+            const __m128i p16_2_0 = mul_add_epi8_sse(q4b_2_0, q8b_2_0);
+            const __m128i p16_2_1 = mul_add_epi8_sse(q4b_2_1, q8b_2_1);
             const int16_t ls1 = ((x[ibl].scales_l[ib/2] & 0xf) | ((sh << 4) & 0x30)) - 32;
             const int16_t ls2 = ((x[ibl].scales_l[ib/2] >>  4) | ((sh << 2) & 0x30)) - 32;
             sh >>= 4;
