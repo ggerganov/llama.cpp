@@ -40,7 +40,7 @@ static std::string build_repetition(const std::string & item_rule, int min_items
     return result;
 }
 
-const std::string SPACE_RULE = "\" \"?";
+const std::string SPACE_RULE = "| \" \" | \"\\n\" [ \\t]{0,20}";
 
 struct BuiltinRule {
     std::string content;
