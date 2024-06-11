@@ -24,7 +24,7 @@ TEST_TARGETS = \
 	tests/test-tokenizer-1-bpe \
 	tests/test-tokenizer-1-spm
 
-# Code coverage output files
+# Code coverage output files;
 COV_TARGETS = *.gcno tests/*.gcno *.gcda tests/*.gcda *.gcov tests/*.gcov lcov-report gcovr-report
 
 ifndef UNAME_S

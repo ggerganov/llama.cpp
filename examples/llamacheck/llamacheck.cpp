@@ -15,8 +15,6 @@ int main(int argc, char ** argv) {
         params.model = argv[1];
     }
 
-
-
     params.prompt = "";
 
     // total length of the sequence including the prompt
@@ -32,7 +30,6 @@ int main(int argc, char ** argv) {
     llama_model_params model_params = llama_model_default_params();
 
     // model_params.n_gpu_layers = 99; // offload all layers to the GPU
-
     llama_model * model = llama_load_model_from_file(params.model.c_str(), model_params);
 
     if (model == NULL) {
@@ -41,7 +38,6 @@ int main(int argc, char ** argv) {
     }
 
     // initialize the context
-
     llama_context_params ctx_params = llama_context_default_params();
 
     ctx_params.seed  = 1234;
@@ -55,8 +51,6 @@ int main(int argc, char ** argv) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
         return 1;
     }
-
-
 
     // main loop
 
