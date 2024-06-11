@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <climits>
 
 
 //////////////////////////////////////////////////
@@ -244,7 +245,7 @@ struct train_context {
 
 struct ctrl_params {
     /* default meta parameters */
-    int n_completions = 64;
+    int n_completions = INT_MAX;
     int n_pca_batch = 5;
     int n_pca_iterations = 1000;
 
@@ -538,7 +539,7 @@ static int prepare_entries(ctrl_params & cparams) {
         return persona + " " + suffix; // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
     };
     for (size_t i = 0; i < positive_prompts.size(); ++i) {
-        for (size_t j = 0; j < completions.size() && j < cparams.n_completions; ++j) {
+        for (int j = 0; j < std::min((int) completions.size(), cparams.n_completions); ++j) {
             // TODO replicate the truncations done by the python implementation
             cparams.positive_entries.push_back(format_template(positive_prompts[i], completions[j]));
             cparams.negative_entries.push_back(format_template(negative_prompts[i], completions[j]));
@@ -606,7 +607,7 @@ int main(int argc, char ** argv) {
         cb_data.n_tokens = t.max_seq_len;
 
         printf("Evaluating prompt[%ld/%ld]: \"%s\" - \"%s\" (%ld tokens)\n", 
-            i+1, t.tokens_pos.size(),
+            i+1, cparams.positive_entries.size(),
             tokens_to_str(ctx, t.tokens_pos.cbegin(), t.tokens_pos.cend()).c_str(),
             tokens_to_str(ctx, t.tokens_neg.cbegin(), t.tokens_neg.cend()).c_str(),
             t.max_seq_len);
