@@ -661,6 +661,7 @@ struct ggml_cuda_device_info {
         int     cc;                 // compute capability
         int     nsm;                // number of streaming multiprocessors
         size_t  smpb;               // max. shared memory per block
+        size_t  smpbo;              // max. shared memory per block (with opt-in)
         bool    vmm;                // virtual memory support
         size_t  vmm_granularity;    // granularity of virtual memory
         size_t  total_vram;
