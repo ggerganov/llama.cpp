@@ -337,6 +337,63 @@ export class SchemaConverter {
     return this._addRule(name, "\"\\\"\" " + toRule(transform()) + " \"\\\"\" space")
   }
 
+  _notStrings(strings) {
+    class TrieNode {
+      constructor() {
+        this.children = {};
+        this.isEndOfString = false;
+      }
+
+      insert(str) {
+        let node = this;
+        for (const c of str) {
+          node = node.children[c] = node.children[c] || new TrieNode();
+        }
+        node.isEndOfString = true;
+      }
+    }
+
+    const trie = new TrieNode();
+    for (const s of strings) {
+      trie.insert(s);
+    }
+
+    const charRuleName = this._addPrimitive('char', PRIMITIVE_RULES['char']);
+    const out = ['["] ( '];
+
+    const visit = (node) => {
+      const rejects = [];
+      let first = true;
+      for (const c of Object.keys(node.children).sort()) {
+        const child = node.children[c];
+        rejects.push(c);
+        if (!first) {
+          out.push(' | ');
+        }
+        out.push(`[${c}]`);
+        if (child.isEndOfString) {
+          out.push(` ${charRuleName}+`);
+        } else {
+          out.push(' (');
+          visit(child);
+          out.push(')');
+        }
+        first = false;
+      }
+      if (Object.keys(node.children).length > 0) {
+        if (!first) {
+          out.push(' | ');
+        }
+        out.push(`[^"${rejects.join('')}] ${charRuleName}*`);
+      }
+    };
+
+    visit(trie);
+
+    out.push(` )${trie.isEndOfString ? '' : '?'} ["] space`);
+    return out.join('');
+  }
+
   _resolveRef(ref) {
     let refName = ref.split('/').pop();
     if (!(refName in this._rules) && !this._refsBeingResolved.has(ref)) {
@@ -487,9 +544,14 @@ export class SchemaConverter {
     if (typeof additionalProperties === 'object' || additionalProperties === true) {
       const subName = `${name ?? ''}${name ? '-' : ''}additional`;
       const valueRule = this.visit(additionalProperties === true ? {} : additionalProperties, `${subName}-value`);
+
+      const key_rule =
+        sortedProps.length === 0 ? this._addPrimitive('string', PRIMITIVE_RULES['string'])
+        : this._addRule(`${subName}-k`, this._notStrings(sortedProps));
+
       propKvRuleNames['*'] = this._addRule(
         `${subName}-kv`,
-        `${this._addPrimitive('string', PRIMITIVE_RULES['string'])} ":" space ${valueRule}`);
+        `${key_rule} ":" space ${valueRule}`);
       optionalProps.push('*');
     }
 

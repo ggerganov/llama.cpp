@@ -71,47 +71,6 @@ NON_LITERAL_SET = set('|.()[]{}*+?')
 ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('[]()|{}*+?')
 
 
-def not_strings(strings):
-    class TrieNode:
-        def __init__(self):
-            self.children = {}
-            self.is_end_of_string = False
-
-        def insert(self, string):
-            node = self
-            for c in string:
-                node = node.children.setdefault(c, TrieNode())
-            node.is_end_of_string = True
-
-    trie = TrieNode()
-    for s in strings:
-        trie.insert(s)
-
-    out = ['["] ( ']
-
-    def visit(node):
-        rejects = []
-        first = True
-        for c, child in node.children.items():
-            rejects.append(c)
-            if child.is_end_of_string:
-                continue
-            if first:
-                first = False
-            else:
-                out.append(' | ')
-            out.append(f'[{c}] (')
-            visit(child)
-            out.append(')')
-        if node.children:
-            if not first:
-                out.append(' | ')
-            out.append(f'[^"{"".join(rejects)}]')
-    visit(trie)
-
-    out.append(' ) char* ["] space')
-    return ''.join(out)
-
 class SchemaConverter:
     def __init__(self, *, prop_order, allow_fetch, dotall, raw_pattern):
         self._prop_order = prop_order
@@ -152,6 +111,51 @@ class SchemaConverter:
                 yield ')?'
 
         return ''.join(('(', *recurse(0), ')'))
+
+    def _not_strings(self, strings):
+        class TrieNode:
+            def __init__(self):
+                self.children = {}
+                self.is_end_of_string = False
+
+            def insert(self, string):
+                node = self
+                for c in string:
+                    node = node.children.setdefault(c, TrieNode())
+                node.is_end_of_string = True
+
+        trie = TrieNode()
+        for s in strings:
+            trie.insert(s)
+
+        char_rule = self._add_primitive('char', PRIMITIVE_RULES['char'])
+        out = ['["] ( ']
+
+        def visit(node):
+            rejects = []
+            first = True
+            for c in sorted(node.children.keys()):
+                child = node.children[c]
+                rejects.append(c)
+                if first:
+                    first = False
+                else:
+                    out.append(' | ')
+                out.append(f'[{c}]')
+                if (child.is_end_of_string):
+                    out.append(f' {char_rule}+')
+                else:
+                    out.append(f' (')
+                    visit(child)
+                    out.append(')')
+            if node.children:
+                if not first:
+                    out.append(' | ')
+                out.append(f'[^"{"".join(rejects)}] {char_rule}*')
+        visit(trie)
+
+        out.append(f' ){"" if trie.is_end_of_string else "?"} ["] space')
+        return ''.join(out)
 
     def _add_rule(self, name, rule):
         esc_name = INVALID_RULE_CHARS_RE.sub('-', name)
@@ -513,8 +517,8 @@ class SchemaConverter:
             sub_name = f'{name}{"-" if name else ""}additional'
             value_rule = self.visit({} if additional_properties == True else additional_properties, f'{sub_name}-value')
             key_rule = self._add_primitive('string', PRIMITIVE_RULES['string']) if not sorted_props \
-                else self._add_rule(f'{sub_name}-k', not_strings(sorted_props))
-            
+                else self._add_rule(f'{sub_name}-k', self._not_strings(sorted_props))
+
             prop_kv_rule_names["*"] = self._add_rule(
                 f'{sub_name}-kv',
                 f'{key_rule} ":" space {value_rule}'

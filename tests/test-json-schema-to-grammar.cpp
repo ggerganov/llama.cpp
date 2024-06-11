@@ -634,7 +634,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             a-kv ::= "\"a\"" space ":" space number
-            additional-k ::= ["] ( [^"a] ) char* ["] space
+            additional-k ::= ["] ( [a] char+ | [^"a] char* )? ["] space
             additional-kv ::= additional-k ":" space string
             char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
             decimal-part ::= [0-9]{1,16}
@@ -659,8 +659,9 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             a-kv ::= "\"a\"" space ":" space number
             a-rest ::= ( "," space additional-kv )*
-            additional-k ::= ["] ( [^"a] ) char* ["] space
+            additional-k ::= ["] ( [a] char+ | [^"a] char* )? ["] space
             additional-kv ::= additional-k ":" space number
+            char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
             decimal-part ::= [0-9]{1,16}
             integral-part ::= [0] | [1-9] [0-9]{0,15}
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
@@ -682,11 +683,12 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "additionalProperties": {"type": "number"}
         })""",
         R"""(
-            additional-k ::= ["] ( [a] ([l] ([s] ([^"o]) | [^"s]) | [n] ([^"d]) | [^"ln]) | [^"a] ) char* ["] space
+            additional-k ::= ["] ( [a] ([l] ([s] ([o] char+ | [^"o] char*) | [^"s] char*) | [n] ([d] char+ | [^"d] char*) | [^"ln] char*) | [^"a] char* )? ["] space
             additional-kv ::= additional-k ":" space number
             also-kv ::= "\"also\"" space ":" space number
             also-rest ::= ( "," space additional-kv )*
             and-kv ::= "\"and\"" space ":" space number
+            char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
             decimal-part ::= [0-9]{1,16}
             integral-part ::= [0] | [1-9] [0-9]{0,15}
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
@@ -748,7 +750,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             alternative-1 ::= bar
             array ::= "[" space ( value ("," space value)* )? "]" space
             bar ::= "{" space  (bar-b-kv bar-b-rest | bar-additional-kv ( "," space bar-additional-kv )* )? "}" space
-            bar-additional-k ::= ["] ( [^"b] ) char* ["] space
+            bar-additional-k ::= ["] ( [b] char+ | [^"b] char* )? ["] space
             bar-additional-kv ::= bar-additional-k ":" space bar-additional-value
             bar-additional-value ::= object
             bar-b-kv ::= "\"b\"" space ":" space number
@@ -759,7 +761,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             foo ::= "{" space  (foo-a-kv foo-a-rest | foo-additional-kv ( "," space foo-additional-kv )* )? "}" space
             foo-a-kv ::= "\"a\"" space ":" space number
             foo-a-rest ::= ( "," space foo-additional-kv )*
-            foo-additional-k ::= ["] ( [^"a] ) char* ["] space
+            foo-additional-k ::= ["] ( [a] char+ | [^"a] char* )? ["] space
             foo-additional-kv ::= foo-additional-k ":" space foo-additional-value
             foo-additional-value ::= object
             integral-part ::= [0] | [1-9] [0-9]{0,15}

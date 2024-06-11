@@ -160,64 +160,6 @@ static std::string format_literal(const std::string & literal) {
     return "\"" + escaped + "\"";
 }
 
-/*
-    Returns a rule that matches a JSON string that is none of the provided strings
-
-    not_strings({"and", "also"})
-        -> ["] ( [a] ([l] ([s] ([^"o]) | [^"s]) | [n] ([^"d]) | [^"ln]) | [^"a] ) char* ["]
-*/
-std::string not_strings(const std::vector<std::string> & strings) {
-
-    struct TrieNode {
-        std::map<char, TrieNode> children;
-        bool is_end_of_string;
-
-        void insert(const std::string & string) {
-            auto node = this;
-            for (char c : string) {
-                node = &node->children[c];
-            }
-            node->is_end_of_string = true;
-        }
-    };
-
-    TrieNode trie;
-    for (const auto & s : strings) {
-        trie.insert(s);
-    }
-
-    std::ostringstream out;
-    out << "[\"] ( ";
-    std::function<void(const TrieNode &)> visit = [&](const TrieNode & node) {
-        std::ostringstream rejects;
-        auto first = true;
-        for (const auto & kv : node.children) {
-            rejects << kv.first;
-            if (kv.second.is_end_of_string) {
-                continue;
-            }
-            if (first) {
-                first = false;
-            } else {
-                out << " | ";
-            }
-            out << "[" << kv.first << "] (";
-            visit(kv.second);
-            out << ")";
-        }
-        if (!node.children.empty()) {
-            if (!first) {
-                out << " | ";
-            }
-            out << "[^\"" << rejects.str() << "]";
-        }
-    };
-    visit(trie);
-
-    out << " ) char* [\"] space";
-    return out.str();
-}
-
 class SchemaConverter {
 private:
     std::function<json(const std::string &)> _fetch_json;
@@ -445,6 +387,67 @@ private:
         return _add_rule(name, "\"\\\"\" " + to_rule(transform()) + " \"\\\"\" space");
     }
 
+    /*
+        Returns a rule that matches a JSON string that is none of the provided strings
+
+        not_strings({"and", "also"})
+            -> ["] ( [a] ([l] ([s] ([^"o]) | [^"s]) | [n] ([^"d]) | [^"ln]) | [^"a] ) char* ["]
+    */
+    std::string _not_strings(const std::vector<std::string> & strings) {
+
+        struct TrieNode {
+            std::map<char, TrieNode> children;
+            bool is_end_of_string;
+
+            void insert(const std::string & string) {
+                auto node = this;
+                for (char c : string) {
+                    node = &node->children[c];
+                }
+                node->is_end_of_string = true;
+            }
+        };
+
+        TrieNode trie;
+        for (const auto & s : strings) {
+            trie.insert(s);
+        }
+
+        std::string char_rule = _add_primitive("char", PRIMITIVE_RULES.at("char"));
+        std::ostringstream out;
+        out << "[\"] ( ";
+        std::function<void(const TrieNode &)> visit = [&](const TrieNode & node) {
+            std::ostringstream rejects;
+            auto first = true;
+            for (const auto & kv : node.children) {
+                rejects << kv.first;
+                if (first) {
+                    first = false;
+                } else {
+                    out << " | ";
+                }
+                out << "[" << kv.first << "]";
+                if (kv.second.is_end_of_string) {
+                    out << " " << char_rule << "+";
+                } else {
+                    out << " (";
+                    visit(kv.second);
+                    out << ")";
+                }
+            }
+            if (!node.children.empty()) {
+                if (!first) {
+                    out << " | ";
+                }
+                out << "[^\"" << rejects.str() << "] " << char_rule << "*";
+            }
+        };
+        visit(trie);
+
+        out << " )? [\"] space";
+        return out.str();
+    }
+
     std::string _resolve_ref(const std::string & ref) {
         std::string ref_name = ref.substr(ref.find_last_of('/') + 1);
         if (_rules.find(ref_name) == _rules.end() && _refs_being_resolved.find(ref) == _refs_being_resolved.end()) {
@@ -484,11 +487,13 @@ private:
         }
         if (additional_properties.is_object() || (additional_properties.is_boolean() && additional_properties.get<bool>())) {
             std::string sub_name = name + (name.empty() ? "" : "-") + "additional";
-            std::string value_rule = visit(additional_properties.is_object() ? additional_properties : json::object(), sub_name + "-value");
+            std::string value_rule =
+                additional_properties.is_object() ? visit(additional_properties, sub_name + "-value")
+                : _add_primitive("value", PRIMITIVE_RULES.at("value"));
 
             auto key_rule =
                 prop_names.empty() ? _add_primitive("string", PRIMITIVE_RULES.at("string"))
-                : _add_rule(sub_name + "-k", not_strings(prop_names));
+                : _add_rule(sub_name + "-k", _not_strings(prop_names));
             std::string kv_rule = _add_rule(sub_name + "-kv", key_rule + " \":\" space " + value_rule);
             prop_kv_rule_names["*"] = kv_rule;
             optional_props.push_back("*");
