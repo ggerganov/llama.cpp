@@ -246,7 +246,7 @@ struct train_context {
 struct ctrl_params {
     /* default meta parameters */
     int n_completions = INT_MAX;
-    int n_pca_batch = 5;
+    int n_pca_batch = 20;
     int n_pca_iterations = 1000;
 
     /* default filepaths */
@@ -294,6 +294,7 @@ static std::string to_string(const T & val) {
 }
 
 static void print_usage(const char * executable) {
+    struct ctrl_params defaults;
     printf("\n");
     printf("usage: %s [options] -m <model> [gpt-opts]", executable);
     printf("\n");
@@ -302,19 +303,19 @@ static void print_usage(const char * executable) {
     printf("options:\n");
     printf("  -h,  --help               show this help message and exit\n");
     printf("  -o,  --outfile            output file\n");
-    printf("                              default: 'control_vector.gguf'\n");
+    printf("                              default: %s\n", defaults.outfile.c_str());
     printf("  -pf, --positive-file      positive prompts file, one prompt per line\n");
-    printf("                              default: 'examples/control-vector-generator/positive.txt'\n");
+    printf("                              default: %s\n", defaults.positive_prompts_file.c_str());
     printf("  -nf, --negative-file      negative prompts file, one prompt per line\n");
-    printf("                              default: 'examples/control-vector-generator/negative.txt'\n");
+    printf("                              default: %s\n", defaults.negative_prompts_file.c_str());
     printf("  -cf, --completions-file   completions file\n");
-    printf("                              default: 'examples/control-vector-generator/completions.txt'\n");
+    printf("                              default: %s\n", defaults.completions_file.c_str());
     printf("  -nc, --num-completions N  number of lines of completions file to use\n");
-    printf("                              default: 64\n");
-    printf("  --batch-pca N             batch size used for PCA\n");
-    printf("                              default: 5\n");
+    printf("                              default: use all lines\n");
+    printf("  --batch-pca N             batch size used for PCA. Larger batch runs faster, but uses more memory\n");
+    printf("                              default: %d\n", defaults.n_pca_batch);
     printf("  --iter-pca N              number of iterations used for PCA\n");
-    printf("                              default: 1000\n");
+    printf("                              default: %d\n", defaults.n_pca_iterations);
     printf("\n");
     printf("gpt-opts:\n");
     printf("  other options from main\n");

@@ -35,7 +35,7 @@ namespace PCA {
 // input params for PCA computations
 struct pca_params {
     int n_threads = 1;
-    int n_batch = 5; // number of iterations do to in one batch. larger the batch, more memory is used
+    int n_batch = 20; // number of iterations do to in one batch. larger the batch, more memory is used
     int n_iterations = 1000;
     float tolerance = 1e-7;
 
