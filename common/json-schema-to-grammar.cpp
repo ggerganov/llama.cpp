@@ -429,12 +429,12 @@ private:
                     out << " | ";
                 }
                 out << "[" << kv.first << "]";
-                if (kv.second.is_end_of_string) {
-                    out << " " << char_rule << "+";
-                } else {
+                if (!kv.second.children.empty()) {
                     out << " (";
                     visit(kv.second);
                     out << ")";
+                } else if (kv.second.is_end_of_string) {
+                    out << " " << char_rule << "+";
                 }
             }
             if (!node.children.empty()) {
@@ -446,7 +446,11 @@ private:
         };
         visit(trie);
 
-        out << " )? [\"] space";
+        out << " )";
+        if (!trie.is_end_of_string) {
+            out << "?";
+        }
+        out << " [\"] space";
         return out.str();
     }
 

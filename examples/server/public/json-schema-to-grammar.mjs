@@ -367,18 +367,19 @@ export class SchemaConverter {
       for (const c of Object.keys(node.children).sort()) {
         const child = node.children[c];
         rejects.push(c);
-        if (!first) {
+        if (first) {
+          first = false;
+        } else {
           out.push(' | ');
         }
         out.push(`[${c}]`);
-        if (child.isEndOfString) {
-          out.push(` ${charRuleName}+`);
-        } else {
+        if (Object.keys(child.children).length > 0) {
           out.push(' (');
           visit(child);
           out.push(')');
+        } else if (child.isEndOfString) {
+          out.push(` ${charRuleName}+`);
         }
-        first = false;
       }
       if (Object.keys(node.children).length > 0) {
         if (!first) {

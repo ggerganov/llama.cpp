@@ -142,12 +142,12 @@ class SchemaConverter:
                 else:
                     out.append(' | ')
                 out.append(f'[{c}]')
-                if (child.is_end_of_string):
-                    out.append(f' {char_rule}+')
-                else:
+                if child.children:
                     out.append(f' (')
                     visit(child)
                     out.append(')')
+                elif child.is_end_of_string:
+                    out.append(f' {char_rule}+')
             if node.children:
                 if not first:
                     out.append(' | ')
