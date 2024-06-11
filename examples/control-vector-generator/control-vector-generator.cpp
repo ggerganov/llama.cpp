@@ -538,10 +538,10 @@ static int prepare_entries(ctrl_params & cparams) {
         return persona + " " + suffix; // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
     };
     for (size_t i = 0; i < positive_prompts.size(); ++i) {
-        for (auto & cmpl : completions) {
+        for (size_t j = 0; j < completions.size() && j < cparams.n_completions; ++j) {
             // TODO replicate the truncations done by the python implementation
-            cparams.positive_entries.push_back(format_template(positive_prompts[i], cmpl));
-            cparams.negative_entries.push_back(format_template(negative_prompts[i], cmpl));
+            cparams.positive_entries.push_back(format_template(positive_prompts[i], completions[j]));
+            cparams.negative_entries.push_back(format_template(negative_prompts[i], completions[j]));
         }
     }
     return 0;
