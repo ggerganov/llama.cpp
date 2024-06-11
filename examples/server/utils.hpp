@@ -116,13 +116,6 @@ static inline void server_log(const char * level, const char * function, int lin
 // chat template utils
 //
 
-// Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-inline bool verify_custom_template(const std::string & tmpl) {
-    llama_chat_message chat[] = {{"user", "test"}};
-    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
-    return res >= 0;
-}
-
 // Format given chat. If tmpl is empty, we take the template from model metadata
 inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
     size_t alloc_size = 0;
@@ -254,6 +247,13 @@ static std::string gen_chatcmplid() {
 //
 
 static size_t common_part(const std::vector<llama_token> & a, const std::vector<llama_token> & b) {
+    size_t i;
+    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
+
+    return i;
+}
+
+static size_t common_part(const std::string & a, const std::string & b) {
     size_t i;
     for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
 
