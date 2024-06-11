@@ -14,7 +14,7 @@ void main() {
     const bool is_neox = (pcs.mode & 2) != 0;
 
     float corr_dims[2];
-    rope_yarn_corr_dims(pcs.n_dims, pcs.n_orig_ctx, pcs.freq_base, pcs.beta_fast, pcs.beta_slow, corr_dims);
+    rope_yarn_corr_dims(pcs.n_dims, pcs.n_ctx_orig, pcs.freq_base, pcs.beta_fast, pcs.beta_slow, corr_dims);
 
     const float theta_scale = pow(pcs.freq_base, -2.0/pcs.n_dims);
 

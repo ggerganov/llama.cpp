@@ -21,6 +21,17 @@
 .role-user {
     background-color: lightgray;
 }
+.role-trim {
+    background-color: lightpink;
+}
+
+.gridx2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    border-bottom-style: dotted;
+    border-bottom-width: thin;
+    border-bottom-color: lightblue;
+}
 
 .flex-grow {
     flex-grow: 1;
@@ -46,6 +57,13 @@ button {
 .samecolumn {
     display: flex;
     flex-direction: column;
+}
+
+.ul1 {
+    padding-inline-start: 2vw;
+}
+.ul2 {
+    padding-inline-start: 2vw;
 }
 
 * {
