@@ -188,7 +188,9 @@ struct train_context {
         for (int il = 0; il < n_layers - 1; il++) {
             std::vector<uint8_t> empty;
             v_diff_tmp.push_back(empty);
-            v_final.push_back(ggml_new_tensor_1d(ctx_ggml, GGML_TYPE_F32, n_embd));
+            auto t = ggml_new_tensor_1d(ctx_ggml, GGML_TYPE_F32, n_embd);
+            t->data = malloc(ggml_nbytes(t)); // TODO: get rid of malloc if possible
+            v_final.push_back(t);
         }
     }
 
@@ -625,7 +627,9 @@ int main(int argc, char ** argv) {
     ctx_train.build_v_diff();
 
     // run PCA
-    PCA::run_pca(ctx_train.v_diff, ctx_train.v_final);
+    PCA::pca_params pca_params;
+    PCA::run_pca(pca_params, ctx_train.v_diff, ctx_train.v_final);
+    exit(0); // TODO: REMOVE ME !!!!!!!!!!!!!!!!!!!!!!!!
 
     // write output vectors to gguf
     export_gguf(ctx_train.v_final, cparams.outfile, model_hint);
