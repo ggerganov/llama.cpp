@@ -390,8 +390,10 @@ private:
     /*
         Returns a rule that matches a JSON string that is none of the provided strings
 
+        not_strings({"a"})
+            -> ["] ( [a] char+ | [^"a] char* )? ["] space
         not_strings({"and", "also"})
-            -> ["] ( [a] ([l] ([s] ([^"o]) | [^"s]) | [n] ([^"d]) | [^"ln]) | [^"a] ) char* ["]
+            -> ["] ( [a] ([l] ([s] ([o] char+ | [^"o] char*) | [^"s] char*) | [n] ([d] char+ | [^"d] char*) | [^"ln] char*) | [^"a] char* )? ["] space
     */
     std::string _not_strings(const std::vector<std::string> & strings) {
 
