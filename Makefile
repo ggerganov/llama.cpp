@@ -912,7 +912,7 @@ gbnf-validator: examples/gbnf-validator/gbnf-validator.cpp ggml.o llama.o $(COMM
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llamacheck: examples/llamacheck/llamacheck.cpp                          ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+llamacheck: examples/llamacheck/llamacheck.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

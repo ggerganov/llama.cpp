@@ -1,7 +1,4 @@
 #include "common.h"
-#include "llama.h"
-
-#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -66,6 +63,7 @@ int main(int argc, char ** argv) {
     std::string prompt_template = "You will see two sentences. The first is marked INCORRECT and has a plethora of spelling and grammatical issues, the second is marked CORRECT and shows the fixed version of the prior sentence. INCORRECT:";
     std::string prompt_suffix = " CORRECT: ";
     std::string input_string = "";
+    LOG_TEE(">>>\n");
     while (std::getline(std::cin, input_string, '\n')) {
         if (input_string == "q") {
             break;
@@ -144,7 +142,7 @@ int main(int argc, char ** argv) {
                 const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
 
                 // is it an end of generation?
-                if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
+                if (llama_token_is_eog(model, new_token_id) || n_cur >= n_len) {
                     LOG_TEE("\n");
 
                     break;
@@ -182,6 +180,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "\n");
 
         llama_batch_free(batch);
+        LOG_TEE(">>>\n");
     }
 
 
