@@ -21,7 +21,7 @@
 #define DEBUG_POS 5
 
 static void print_debug_tensor(struct ggml_tensor * t, bool with_data = true) {
-    printf("%s: %s (%s): [%ld, %ld]\n", __func__, t->name, ggml_type_name(t->type), t->ne[0], t->ne[1]);
+    printf("%s: %s (%s): [%ld, %ld]\n", __func__, t->name, ggml_type_name(t->type), (size_t) t->ne[0], (size_t) t->ne[1]);
     if (!with_data) return;
     printf("%s: %s[0] = [", __func__, t->name);
     for (size_t i = 0; i <= DEBUG_POS; i++) {
@@ -73,7 +73,6 @@ struct pca_model {
 
 #ifdef GGML_USE_METAL
         fprintf(stderr, "%s: using Metal backend\n", __func__);
-        ggml_backend_metal_log_set_callback(ggml_log_callback_default, nullptr);
         backend = ggml_backend_metal_init();
         if (!backend) {
             fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
@@ -185,7 +184,7 @@ static struct ggml_cgraph * build_graph_piter(
         ggml_set_name(b_tensor, ("b_tensor_norm_" + std::to_string(i)).c_str());
 
         // calculate distance(new eigenvector - old eigenvector)
-        struct ggml_tensor * new_sub_old = ggml_sub(ctx0, old_eigen, b_tensor);
+        struct ggml_tensor * new_sub_old = ggml_add(ctx0, old_eigen, ggml_scale(ctx0, b_tensor, -1));
         distance = ggml_sqrt_inplace(ctx0,
             ggml_sum_rows(ctx0, ggml_sqr_inplace(ctx0, new_sub_old)));
         ggml_set_name(distance, ("distance_" + std::to_string(i)).c_str());
