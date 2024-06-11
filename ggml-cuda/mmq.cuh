@@ -1089,7 +1089,7 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
 }
 
 template <int mmq_x, int mmq_y, int nwarps>
-static __device__ __forceinline__ void vec_dot_q4_K_q8_1_mul_mat(
+static __device__ __forceinline__ void vec_dot_q4_K_q8_1_dp4a(
     const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
     const int * __restrict__ y, float * __restrict__ sum, const int & k0) {
 
@@ -1111,6 +1111,97 @@ static __device__ __forceinline__ void vec_dot_q4_K_q8_1_mul_mat(
             sum[j0/nwarps*mmq_y/WARP_SIZE + i0/WARP_SIZE] += vec_dot_q4_K_q8_1_impl_mmq(
                 &x_ql[i*(WARP_SIZE + 1) + k0], &y_qs[j*MMQ_TILE_Y_K + (QR4_K*k0) % WARP_SIZE], sc, sc+8,
                 x_dm[i*(WARP_SIZE/QI4_K) + i/QI4_K], &y_ds[j*MMQ_TILE_Y_K + ((QR4_K*k0) % WARP_SIZE)/QI8_1]);
+        }
+    }
+}
+
+template <int mmq_x, int mmq_y, int nwarps>
+static __device__ __forceinline__ void vec_dot_q4_K_q8_1_mma(
+    const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
+    const int * __restrict__ y, float * __restrict__ sum, const int & k0) {
+
+    GGML_UNUSED(x_qh); GGML_UNUSED(x_sc);
+
+    typedef mma_int_A_I16K8 mma_A;
+    typedef mma_int_B_J8K8  mma_B;
+    typedef mma_int_C_I16J8 mma_C;
+
+    const int   * y_qs = (const int   *) y + 4;
+    const half2 * y_ds = (const half2 *) y;
+
+    const int i0 = threadIdx.y*mma_A::I;
+    static_assert(nwarps*mma_A::I == mmq_y, "nwarps*mma_A::I != mmq_y");
+
+    mma_A   A[2];
+    int   scA[mma_C::ne/2][2];
+    int    mA[mma_C::ne/2][2];
+    half2 dmA[mma_C::ne/2];
+#pragma unroll
+    for (int kvdr = 0; kvdr < VDR_Q4_K_Q8_1_MMQ; kvdr += 4) {
+#pragma unroll
+        for (int l = 0; l < mma_A::ne; ++l) {
+            const int i = i0 + mma_A::get_i(l);
+            const int k = k0 + mma_A::get_k(l);
+
+            A[kvdr/4].x[l] = (x_ql[i*(WARP_SIZE + 1) + k] >> kvdr) & 0x0F0F0F0F;
+        }
+
+#pragma unroll
+        for (int l = 0; l < mma_C::ne/2; ++l) {
+            const int i = i0 + mma_C::get_i(2*l);
+
+            const uint8_t * sc = ((const uint8_t *) &x_sc[i * (WARP_SIZE/8) + i/8 + k0/16]) + 2 * ((k0 % 16) / 8);
+            const uint8_t *  m = sc + 8;
+
+            scA[l][kvdr/4] = sc[kvdr/4];
+            mA[l][kvdr/4]  =  m[kvdr/4];
+        }
+    }
+
+#pragma unroll
+    for (int l = 0; l < mma_C::ne/2; ++l) {
+        const int i = i0 + mma_C::get_i(2*l);
+
+        dmA[l] = x_dm[i*(WARP_SIZE/QI5_K) + i/QI5_K + k0/QI5_K];
+    }
+
+#pragma unroll
+    for (int j0 = 0; j0 < mmq_x; j0 += mma_int_B_J8K8::J) {
+        float tmpd[mma_C::ne] = {0.0f};
+        float tmpm[mma_C::ne] = {0.0f};
+
+#pragma unroll
+        for (int kvdr = 0; kvdr < VDR_Q5_K_Q8_1_MMQ; kvdr += 4) {
+            mma_C   C;
+            mma_B   B;
+            half2 dsB[mma_C::ne/2];
+
+#pragma unroll
+            for (int l = 0; l < mma_B::ne; ++l) {
+                const int j = j0 + mma_B::get_j(l);
+                const int k = (2*k0 + 2*kvdr + mma_B::get_k(l)) % WARP_SIZE;
+
+                B.x[l] = y_qs[j*MMQ_TILE_Y_K + k];
+            }
+#pragma unroll
+            for (int l = 0; l < mma_C::ne/2; ++l) {
+                const int j = j0 + mma_C::get_j(l);
+
+                dsB[l] = y_ds[j*MMQ_TILE_Y_K + ((2*k0 + 2*kvdr)/QI8_1) % (WARP_SIZE/QI8_1)];
+            }
+
+            C.mma_K8(A[kvdr/4], B);
+
+#pragma unroll
+            for (int l = 0; l < mma_C::ne; ++l) {
+                tmpd[l] += (C.x[l]*scA[l/2][kvdr/4]) *  __low2float(dsB[l%2]);
+                tmpm[l] += mA[l/2][kvdr/4]           * __high2float(dsB[l%2]);
+            }
+        }
+
+#pragma unroll
+        for (int l = 0; l < mma_C::ne; ++l) {
+            sum[(j0/mma_B::J)*mma_C::ne + l] += __low2float(dmA[l/2])*tmpd[l] - __high2float(dmA[l/2])*tmpm[l];
         }
     }
 }
@@ -1188,7 +1279,7 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
 }
 
 template <int mmq_x, int mmq_y, int nwarps>
-static __device__ __forceinline__ void vec_dot_q5_K_q8_1_mul_mat(
+static __device__ __forceinline__ void vec_dot_q5_K_q8_1_dp4a(
     const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
     const int * __restrict__ y, float * __restrict__ sum, const int & k0) {
 
@@ -1210,6 +1301,97 @@ static __device__ __forceinline__ void vec_dot_q5_K_q8_1_mul_mat(
             sum[j0/nwarps*mmq_y/WARP_SIZE + i0/WARP_SIZE] += vec_dot_q5_K_q8_1_impl_mmq(
                 &x_ql[i*(QR5_K*WARP_SIZE + 1) + QR5_K*k0], &y_qs[j*MMQ_TILE_Y_K + (QR5_K*k0) % WARP_SIZE], sc, sc+8,
                 x_dm[i*(WARP_SIZE/QI5_K) + i/QI5_K], &y_ds[j*MMQ_TILE_Y_K + ((QR5_K*k0) % WARP_SIZE)/QI8_1]);
+        }
+    }
+}
+
+template <int mmq_x, int mmq_y, int nwarps>
+static __device__ __forceinline__ void vec_dot_q5_K_q8_1_mma(
+    const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
+    const int * __restrict__ y, float * __restrict__ sum, const int & k0) {
+
+    GGML_UNUSED(x_qh); GGML_UNUSED(x_sc);
+
+    typedef mma_int_A_I16K8 mma_A;
+    typedef mma_int_B_J8K8  mma_B;
+    typedef mma_int_C_I16J8 mma_C;
+
+    const int   * y_qs = (const int   *) y + 4;
+    const half2 * y_ds = (const half2 *) y;
+
+    const int i0 = threadIdx.y*mma_A::I;
+    static_assert(nwarps*mma_A::I == mmq_y, "nwarps*mma_A::I != mmq_y");
+
+    mma_A   A[2];
+    int   scA[mma_C::ne/2][2];
+    int    mA[mma_C::ne/2][2];
+    half2 dmA[mma_C::ne/2];
+#pragma unroll
+    for (int kvdr = 0; kvdr < VDR_Q5_K_Q8_1_MMQ; kvdr += 4) {
+#pragma unroll
+        for (int l = 0; l < mma_A::ne; ++l) {
+            const int i = i0 + mma_A::get_i(l);
+            const int k = QR5_K*k0 + QR5_K*kvdr + mma_A::get_k(l);
+
+            A[kvdr/4].x[l] = x_ql[i*(QR5_K*WARP_SIZE + 1) + k];
+        }
+
+#pragma unroll
+        for (int l = 0; l < mma_C::ne/2; ++l) {
+            const int i = i0 + mma_C::get_i(2*l);
+
+            const uint8_t * sc = ((const uint8_t *) &x_sc[i * (WARP_SIZE/8) + i/8 + k0/16]) + 2 * ((k0 % 16) / 8);
+            const uint8_t *  m = sc + 8;
+
+            scA[l][kvdr/4] = sc[kvdr/4];
+            mA[l][kvdr/4]  =  m[kvdr/4];
+        }
+    }
+
+#pragma unroll
+    for (int l = 0; l < mma_C::ne/2; ++l) {
+        const int i = i0 + mma_C::get_i(2*l);
+
+        dmA[l] = x_dm[i*(WARP_SIZE/QI5_K) + i/QI5_K + k0/QI5_K];
+    }
+
+#pragma unroll
+    for (int j0 = 0; j0 < mmq_x; j0 += mma_int_B_J8K8::J) {
+        float tmpd[mma_C::ne] = {0.0f};
+        float tmpm[mma_C::ne] = {0.0f};
+
+#pragma unroll
+        for (int kvdr = 0; kvdr < VDR_Q5_K_Q8_1_MMQ; kvdr += 4) {
+            mma_C   C;
+            mma_B   B;
+            half2 dsB[mma_C::ne/2];
+
+#pragma unroll
+            for (int l = 0; l < mma_B::ne; ++l) {
+                const int j = j0 + mma_B::get_j(l);
+                const int k = (2*k0 + 2*kvdr + mma_B::get_k(l)) % WARP_SIZE;
+
+                B.x[l] = y_qs[j*MMQ_TILE_Y_K + k];
+            }
+#pragma unroll
+            for (int l = 0; l < mma_C::ne/2; ++l) {
+                const int j = j0 + mma_C::get_j(l);
+
+                dsB[l] = y_ds[j*MMQ_TILE_Y_K + ((2*k0 + 2*kvdr)/QI8_1) % (WARP_SIZE/QI8_1)];
+            }
+
+            C.mma_K8(A[kvdr/4], B);
+
+#pragma unroll
+            for (int l = 0; l < mma_C::ne; ++l) {
+                tmpd[l] += (C.x[l]*scA[l/2][kvdr/4]) *  __low2float(dsB[l%2]);
+                tmpm[l] += mA[l/2][kvdr/4]           * __high2float(dsB[l%2]);
+            }
+        }
+
+#pragma unroll
+        for (int l = 0; l < mma_C::ne; ++l) {
+            sum[(j0/mma_B::J)*mma_C::ne + l] += __low2float(dmA[l/2])*tmpd[l] - __high2float(dmA[l/2])*tmpm[l];
         }
     }
 }
@@ -1280,7 +1462,7 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
 }
 
 template <int mmq_x, int mmq_y, int nwarps>
-static __device__ __forceinline__ void vec_dot_q6_K_q8_1_mul_mat(
+static __device__ __forceinline__ void vec_dot_q6_K_q8_1_dp4a(
     const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
     const int * __restrict__ y, float * __restrict__ sum, const int & k0) {
 
@@ -1303,6 +1485,97 @@ static __device__ __forceinline__ void vec_dot_q6_K_q8_1_mul_mat(
             sum[j0/nwarps*mmq_y/WARP_SIZE + i0/WARP_SIZE] += vec_dot_q6_K_q8_1_impl_mmq(
                 &x_ql[i*(QR6_K*WARP_SIZE + 1) + QR6_K*k0], &y_qs[j*MMQ_TILE_Y_K + (QR6_K*k0) % WARP_SIZE], sc,
                 x_dmf[i*(WARP_SIZE/QI6_K) + i/QI6_K], &y_df[j*MMQ_TILE_Y_K + ((QR6_K*k0) % WARP_SIZE)/QI8_1]);
+        }
+    }
+}
+
+template <int mmq_x, int mmq_y, int nwarps>
+static __device__ __forceinline__ void vec_dot_q6_K_q8_1_mma(
+    const int * __restrict__ x_ql, const half2 * __restrict__ x_dm, const int * __restrict__ x_qh, const int * __restrict__ x_sc,
+    const int * __restrict__ y, float * __restrict__ sum, const int & k0) {
+
+    GGML_UNUSED(x_qh); GGML_UNUSED(x_sc);
+
+    typedef mma_int_A_I16K4 mma_A;
+    typedef mma_int_B_J8K4  mma_B;
+    typedef mma_int_C_I16J8 mma_C;
+
+    const float * x_df = (const float *) x_dm;
+    const int   * y_qs = (const int   *) y + 4;
+    const float * y_df = (const float *) y;
+
+    const int i0 = threadIdx.y*mma_A::I;
+    static_assert(nwarps*mma_A::I == mmq_y, "nwarps*mma_A::I != mmq_y");
+
+    mma_A   A[4];
+    int   scA[mma_C::ne/2][4];
+    float  dA[mma_C::ne/2];
+#pragma unroll
+    for (int kvdr = 0; kvdr < VDR_Q6_K_Q8_1_MMQ; kvdr += 4) {
+#pragma unroll
+        for (int l = 0; l < mma_A::ne; ++l) {
+            const int i = i0 + mma_A::get_i(l);
+            const int k = QR6_K*k0 + QR6_K*kvdr + mma_A::get_k(l);
+
+            A[kvdr/2 + 0].x[l] = x_ql[i*(QR6_K*WARP_SIZE + 1) + k + 0];
+            A[kvdr/2 + 1].x[l] = x_ql[i*(QR6_K*WARP_SIZE + 1) + k + mma_A::K];
+        }
+
+#pragma unroll
+        for (int l = 0; l < mma_C::ne/2; ++l) {
+            const int i = i0 + mma_C::get_i(2*l);
+
+            const int8_t * sc = ((const int8_t *) &x_sc[i * (WARP_SIZE/8) + i/8 + k0/8]);
+
+            scA[l][kvdr/2 + 0] = sc[kvdr/2 + 0];
+            scA[l][kvdr/2 + 1] = sc[kvdr/2 + 1];
+        }
+    }
+
+#pragma unroll
+    for (int l = 0; l < mma_C::ne/2; ++l) {
+        const int i = i0 + mma_C::get_i(2*l);
+
+        dA[l] = x_df[i*(WARP_SIZE/QI6_K) + i/QI6_K + k0/QI6_K];
+    }
+
+#pragma unroll
+    for (int j0 = 0; j0 < mmq_x; j0 += mma_int_B_J8K8::J) {
+        float tmp[mma_C::ne] = {0.0f};
+
+#pragma unroll
+        for (int kvdr = 0; kvdr < VDR_Q6_K_Q8_1_MMQ; kvdr += 4) {
+            mma_C C[2];
+            mma_B B[2];
+            float dB[mma_C::ne/2];
+
+#pragma unroll
+            for (int l = 0; l < mma_B::ne; ++l) {
+                const int j = j0 + mma_B::get_j(l);
+                const int k = (2*k0 + 2*kvdr + mma_B::get_k(l)) % WARP_SIZE;
+
+                B[0].x[l] = y_qs[j*MMQ_TILE_Y_K + k + 0];
+                B[1].x[l] = y_qs[j*MMQ_TILE_Y_K + k + mma_B::K];
+            }
+#pragma unroll
+            for (int l = 0; l < mma_C::ne/2; ++l) {
+                const int j = j0 + mma_C::get_j(l);
+
+                dB[l] = y_df[j*MMQ_TILE_Y_K + ((2*k0 + 2*kvdr)/QI8_1) % (WARP_SIZE/QI8_1)];
+            }
+
+            C[0].mma_K4(A[kvdr/2 + 0], B[0]);
+            C[1].mma_K4(A[kvdr/2 + 1], B[1]);
+
+#pragma unroll
+            for (int l = 0; l < mma_C::ne; ++l) {
+                tmp[l] += (C[0].x[l]*scA[l/2][kvdr/2 + 0] + C[1].x[l]*scA[l/2][kvdr/2 + 1])*dB[l%2];
+            }
+        }
+
+#pragma unroll
+        for (int l = 0; l < mma_C::ne; ++l) {
+            sum[(j0/mma_B::J)*mma_C::ne + l] += tmp[l]*dA[l/2];
         }
     }
 }
@@ -1448,24 +1721,39 @@ template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q4_K> {
     static constexpr int              vdr        = VDR_Q4_K_Q8_1_MMQ;
     static constexpr load_tiles_mmq_t load_tiles = load_tiles_q4_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q4_K_q8_1_mul_mat<mmq_x, mmq_y, nwarps>;
+#ifdef INT8_MMA_AVAILABLE
+    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q4_K_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    static constexpr mmq_write_back_t write_back = mmq_write_back_mma<mmq_x, mmq_y, nwarps, need_check>;
+#else
+    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q4_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
     static constexpr mmq_write_back_t write_back = mmq_write_back_dp4a<mmq_x, mmq_y, nwarps, need_check>;
+#endif // INT8_MMA_AVAILABLE
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q5_K> {
     static constexpr int              vdr        = VDR_Q5_K_Q8_1_MMQ;
     static constexpr load_tiles_mmq_t load_tiles = load_tiles_q5_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q5_K_q8_1_mul_mat<mmq_x, mmq_y, nwarps>;
+#ifdef INT8_MMA_AVAILABLE
+    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q5_K_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    static constexpr mmq_write_back_t write_back = mmq_write_back_mma<mmq_x, mmq_y, nwarps, need_check>;
+#else
+    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q5_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
     static constexpr mmq_write_back_t write_back = mmq_write_back_dp4a<mmq_x, mmq_y, nwarps, need_check>;
+#endif // INT8_MMA_AVAILABLE
 };
 
 template <int mmq_x, int mmq_y, int nwarps, bool need_check>
 struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q6_K> {
     static constexpr int              vdr        = VDR_Q6_K_Q8_1_MMQ;
     static constexpr load_tiles_mmq_t load_tiles = load_tiles_q6_K<mmq_y, nwarps, need_check>;
-    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q6_K_q8_1_mul_mat<mmq_x, mmq_y, nwarps>;
+#ifdef INT8_MMA_AVAILABLE
+    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q6_K_q8_1_mma<mmq_x, mmq_y, nwarps>;
+    static constexpr mmq_write_back_t write_back = mmq_write_back_mma<mmq_x, mmq_y, nwarps, need_check>;
+#else
+    static constexpr vec_dot_mmq_t    vec_dot    = vec_dot_q6_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
     static constexpr mmq_write_back_t write_back = mmq_write_back_dp4a<mmq_x, mmq_y, nwarps, need_check>;
+#endif // INT8_MMA_AVAILABLE
 };
 
 static int mmq_need_sum(const ggml_type type_x) {
