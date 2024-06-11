@@ -1,5 +1,5 @@
 // WARNING: This file was ported from json_schema_to_grammar.py, please fix bugs / add features there first.
-const SPACE_RULE = '" "?';
+const SPACE_RULE = '| " " | "\\n" [ \\t]{0,20}';
 
 function _buildRepetition(itemRule, minItems, maxItems, opts={}) {
   if (minItems === 0 && maxItems === 1) {
@@ -41,7 +41,7 @@ const PRIMITIVE_RULES = {
   object         : new BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
   array          : new BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
   uuid           : new BuiltinRule('"\\"" [0-9a-fA-F]{8} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{12} "\\"" space', []),
-  char           : new BuiltinRule(`[^"\\\\] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F]{4})`, []),
+  char           : new BuiltinRule(`[^"\\\\\\x7F\\x00-\\x1F] | [\\\\] (["\\\\bfnrt] | "u" [0-9a-fA-F]{4})`, []),
   string         : new BuiltinRule(`"\\"" char* "\\"" space`, ['char']),
   null           : new BuiltinRule('"null" space', []),
 };

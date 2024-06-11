@@ -74,7 +74,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
 
         const int sumi = __dp4a(v, u, 0);
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
             const half2  * Q_ds = (const half2  *) Q_ds_v;
 
@@ -122,7 +122,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_1(
 
         const int sumi = __dp4a(v, u, 0);
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
             const half2  * Q_ds = (const half2  *) Q_ds_v;
 
@@ -181,7 +181,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
 
         const int sumi = __dp4a(v, u, 0);
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
             const half2  * Q_ds = (const half2  *) Q_ds_v;
 
@@ -236,7 +236,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
 
         const int sumi = __dp4a(v, u, 0);
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
             const half2  * Q_ds = (const half2  *) Q_ds_v;
 
@@ -314,7 +314,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_f16(
     GGML_UNUSED(Q_q8);
     GGML_UNUSED(Q_ds_v);
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
     if (std::is_same<T, half>::value) {
         const half2 * Q_h2 = (const half2 *) Q_v;
 
@@ -407,7 +407,7 @@ static __device__ __forceinline__ T dequantize_1_q4_0(const void * __restrict__ 
     const int q0 = x[ib].qs[iqs];
     const int q  = ((q0 >> (4*shift)) & 0x0F) - 8;
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
     if (std::is_same<T, half>::value) {
         return ((half) d)*((half) q);
     }
@@ -428,7 +428,7 @@ static __device__ __forceinline__ T dequantize_1_q4_1(const void * __restrict__ 
     const int   q0 = x[ib].qs[iqs];
     const int   q  = ((q0 >> (4*shift)) & 0x0F);
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
     if (std::is_same<T, half>::value) {
         return __low2half(dm)*((half) q) + __high2half(dm);
     }
@@ -453,7 +453,7 @@ static __device__ __forceinline__ T dequantize_1_q5_0(const void * __restrict__ 
     const int qh  = ((qh0 >> idq) << 4) & 0x10;
     const int q   = (ql | qh) - 16;
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
     if (std::is_same<T, half>::value) {
         return ((half) d)*((half) q);
     }
@@ -478,7 +478,7 @@ static __device__ __forceinline__ T dequantize_1_q5_1(const void * __restrict__ 
     const int   qh  = ((qh0 >> idq) << 4) & 0x10;
     const int   q   = (ql | qh);
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
     if (std::is_same<T, half>::value) {
         return __low2half(dm)*((half) q) + __high2half(dm);
     }
@@ -497,7 +497,7 @@ static __device__ __forceinline__ T dequantize_1_q8_0(const void * __restrict__ 
     const T   d = x[ib].d;
     const int q = x[ib].qs[iqs];
 
-#if FP16_AVAILABLE
+#ifdef FP16_AVAILABLE
     if (std::is_same<T, half>::value) {
         return ((half) d)*((half) q);
     }
