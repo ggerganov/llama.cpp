@@ -144,7 +144,7 @@ struct callback_data {
         return diff_filtered;
     }
 
-    // we don't implement destructor, because we want to reuse callback_data. we just want to free the tensors  
+    // we don't implement destructor, because we want to reuse callback_data. we just want to free the tensors
     void reset() {
         for (auto ptr : v_pos) free(ptr->data);
         for (auto ptr : v_neg) free(ptr->data);
@@ -430,7 +430,7 @@ static int ctrlvec_params_parse(int argc, char ** argv, ctrl_params & params) {
     catch (const std::invalid_argument & ex) {
         fprintf(stderr, "%s\n", ex.what());
         print_usage(argv[0]);
-        exit(EXIT_FAILURE);    
+        exit(EXIT_FAILURE);
     }
     return skipme;
 }
@@ -495,7 +495,7 @@ static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const 
         printf("Added tensor: %s\n", v_ctrl[i]->name);
     }
 
-    printf("Writing file...\n"); 
+    printf("Writing file...\n");
 
     gguf_write_to_file(ctx, fname.c_str(), false);
 
@@ -603,7 +603,7 @@ int main(int argc, char ** argv) {
         cb_data.n_layers = n_layers;
         cb_data.n_tokens = t.max_seq_len;
 
-        printf("Evaluating prompt[%ld/%ld]: \"%s\" - \"%s\" (%ld tokens)\n", 
+        printf("Evaluating prompt[%ld/%ld]: \"%s\" - \"%s\" (%ld tokens)\n",
             i+1, cparams.positive_entries.size(),
             tokens_to_str(ctx, t.tokens_pos.cbegin(), t.tokens_pos.cend()).c_str(),
             tokens_to_str(ctx, t.tokens_neg.cbegin(), t.tokens_neg.cend()).c_str(),
