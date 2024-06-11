@@ -159,7 +159,6 @@
                 windows = config.legacyPackages.llamaPackagesWindows.llama-cpp;
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
-                opencl = config.packages.default.override { useOpenCL = true; };
                 cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };

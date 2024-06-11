@@ -9,9 +9,12 @@ WORKDIR /app
 
 COPY . .
 
-RUN make
+RUN make -j$(nproc) main
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
+
+RUN apt-get update && \
+    apt-get install -y libgomp1
 
 COPY --from=build /app/main /main
 
