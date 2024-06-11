@@ -40,7 +40,7 @@ static std::string build_repetition(const std::string & item_rule, int min_items
     return result;
 }
 
-const std::string SPACE_RULE = "\" \"?";
+const std::string SPACE_RULE = "| \" \" | \"\\n\" [ \\t]{0,20}";
 
 struct BuiltinRule {
     std::string content;
@@ -57,7 +57,7 @@ std::unordered_map<std::string, BuiltinRule> PRIMITIVE_RULES = {
     {"object", {"\"{\" space ( string \":\" space value (\",\" space string \":\" space value)* )? \"}\" space", {"string", "value"}}},
     {"array", {"\"[\" space ( value (\",\" space value)* )? \"]\" space", {"value"}}},
     {"uuid", {"\"\\\"\" [0-9a-fA-F]{8} \"-\" [0-9a-fA-F]{4} \"-\" [0-9a-fA-F]{4} \"-\" [0-9a-fA-F]{4} \"-\" [0-9a-fA-F]{12} \"\\\"\" space", {}}},
-    {"char",   {"[^\"\\\\] | \"\\\\\" ([\"\\\\/bfnrt] | \"u\" [0-9a-fA-F]{4})", {}}},
+    {"char",   {"[^\"\\\\\\x7F\\x00-\\x1F] | [\\\\] ([\"\\\\bfnrt] | \"u\" [0-9a-fA-F]{4})", {}}},
     {"string", {"\"\\\"\" char* \"\\\"\" space", {"char"}}},
     {"null", {"\"null\" space", {}}},
 };
