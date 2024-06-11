@@ -106,7 +106,7 @@ ifeq ($(UNAME_S),Darwin)
 endif
 
 ifdef LLAMA_RPC
-	BUILD_TARGETS += rpc-server
+	BUILD_TARGETS += llama-rpc-server
 endif
 
 default: $(BUILD_TARGETS)
@@ -699,7 +699,7 @@ ggml-rpc.o: ggml-rpc.cpp ggml-rpc.h
 rpc-server.o: examples/rpc/rpc-server.cpp ggml-rpc.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-rpc-server: rpc-server.o ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+llama-rpc-server: rpc-server.o ggml.o llama.o $(COMMON_DEPS) $(OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 endif # LLAMA_RPC
 
