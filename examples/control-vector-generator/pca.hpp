@@ -181,13 +181,14 @@ static struct ggml_cgraph * build_graph_piter(
             b_tensor,
             ggml_sqrt_inplace(ctx0, ggml_sum_rows(ctx0, ggml_sqr(ctx0, b_tensor)))
         );
-        ggml_set_name(b_tensor, ("b_tensor_norm_" + std::to_string(i)).c_str());
+        ggml_format_name(b_tensor, "b_tensor_norm_%d", i);
 
         // calculate distance(new eigenvector - old eigenvector)
+        // we don't use ggml_sub because it may not be implemented on GPU backend
         struct ggml_tensor * new_sub_old = ggml_add(ctx0, old_eigen, ggml_scale(ctx0, b_tensor, -1));
         distance = ggml_sqrt_inplace(ctx0,
             ggml_sum_rows(ctx0, ggml_sqr_inplace(ctx0, new_sub_old)));
-        ggml_set_name(distance, ("distance_" + std::to_string(i)).c_str());
+        ggml_format_name(distance, "distance_%d", i);
 
         old_eigen = b_tensor;
 
@@ -317,22 +318,20 @@ static void run_pca(
         struct pca_params & params,
         const std::vector<struct ggml_tensor *> & v_input, // shape of v_input[0]: [n_samples, n_embd]
         const std::vector<struct ggml_tensor *> & v_output) {
-    printf("Running PCA...\n");
+    printf("%s: Running PCA...\n", __func__);
     for (size_t il = 0; il < v_input.size(); ++il) {
 
         // prepare output vector
         struct ggml_tensor * ctrl_out = v_output[il];
-        auto name = std::string("direction.") + std::to_string(il + 1);
-        ggml_set_name(ctrl_out, name.c_str());
+        ggml_format_name(ctrl_out, "direction.%ld", il+1);
 
         // run power_iteration
         params.i_layer = il;
         params.n_layers = v_input.size();
         power_iteration(params, v_input[il], ctrl_out);
-        printf("DONE layer %ld / %ld\n", il+1, v_input.size());
+        printf("%s: Done layer %ld / %ld\n", __func__, il+1, v_input.size());
         //print_debug_tensor(ctrl_out);
     }
-    printf("Done with PCA.\n");
 }
 
 }

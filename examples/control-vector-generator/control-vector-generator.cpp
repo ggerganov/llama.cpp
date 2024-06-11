@@ -127,7 +127,7 @@ struct callback_data {
         // diff_filtered: [n_embd, n_nonzero_rows]
         struct ggml_tensor * diff_filtered = ggml_new_tensor_2d(
             ctx_ggml, GGML_TYPE_F32, n_embd, n_nonzero_rows);
-        ggml_set_name(diff_filtered, (std::string("diff_filtered_") + a->name).c_str());
+        ggml_format_name(diff_filtered, "diff_filtered_%s", a->name);
         diff_filtered->data = malloc(ggml_nbytes(diff_filtered));
 
         // copy non-zero rows
@@ -245,7 +245,7 @@ struct train_context {
 
 struct ctrl_params {
     /* default meta parameters */
-    int n_completions = INT_MAX;
+    int n_completions = 64;
     int n_pca_batch = 20;
     int n_pca_iterations = 1000;
 
@@ -311,7 +311,7 @@ static void print_usage(const char * executable) {
     printf("  -cf, --completions-file   completions file\n");
     printf("                              default: %s\n", defaults.completions_file.c_str());
     printf("  -nc, --num-completions N  number of lines of completions file to use\n");
-    printf("                              default: use all lines\n");
+    printf("                              default: %d\n", defaults.n_completions);
     printf("  --batch-pca N             batch size used for PCA. Larger batch runs faster, but uses more memory\n");
     printf("                              default: %d\n", defaults.n_pca_batch);
     printf("  --iter-pca N              number of iterations used for PCA\n");
@@ -547,6 +547,11 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
     if (!gpt_params_parse(argc, argv, params)) {
+        return 1;
+    }
+
+    if (cparams.n_pca_iterations % cparams.n_pca_batch != 0) {
+        fprintf(stderr, "PCA iterations must by multiply of PCA batch size\n");
         return 1;
     }
 
