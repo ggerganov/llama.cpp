@@ -1,5 +1,5 @@
 #include "ggml-vulkan.h"
-
+#include <vulkan/vulkan_core.h>
 #ifdef GGML_VULKAN_RUN_TESTS
 #include <chrono>
 #endif
@@ -9,12 +9,13 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <limits>
 #include <tuple>
 #include <vector>
 #include <sstream>
 #include <utility>
 #include <memory>
+#include <limits>
+#include <map>
 
 #include "ggml.h"
 #include "ggml-backend-impl.h"
@@ -1555,8 +1556,10 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     vk::PhysicalDeviceProperties2 props2;
     vk::PhysicalDeviceMaintenance3Properties props3;
     vk::PhysicalDeviceSubgroupProperties subgroup_props;
+    vk::PhysicalDeviceDriverProperties driver_props;
     props2.pNext = &props3;
     props3.pNext = &subgroup_props;
+    subgroup_props.pNext = &driver_props;
     physical_device.getProperties2(&props2);
 
     const size_t subgroup_size = subgroup_props.subgroupSize;
@@ -1600,7 +1603,7 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     fp16 = fp16 && vk12_features.shaderFloat16;
 
     std::string device_name = props2.properties.deviceName.data();
-    std::cerr << GGML_VK_NAME << idx << ": " << device_name << " | uma: " << uma << " | fp16: " << fp16 << " | warp size: " << subgroup_size << std::endl;
+    std::cerr << GGML_VK_NAME << idx << ": " << device_name << " (" << driver_props.driverName << ") | uma: " << uma << " | fp16: " << fp16 << " | warp size: " << subgroup_size << std::endl;
 
     if (props2.properties.deviceType == vk::PhysicalDeviceType::eCpu) {
         std::cerr << "ggml_vulkan: Warning: Device type is CPU. This is probably not the device you want." << std::endl;
@@ -1696,7 +1699,78 @@ void ggml_vk_instance_init() {
             vk::PhysicalDeviceProperties props = devices[i].getProperties();
 
             if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
-                vk_instance.device_indices.push_back(i);
+                // Check if there are two physical devices corresponding to the same GPU
+                auto old_device = std::find_if(
+                    vk_instance.device_indices.begin(),
+                    vk_instance.device_indices.end(),
+                    [&devices, &props](const size_t k){ return devices[k].getProperties().deviceID == props.deviceID; }
+                );
+                if (old_device == vk_instance.device_indices.end()) {
+                    vk_instance.device_indices.push_back(i);
+                } else {
+                    // There can be two physical devices corresponding to the same GPU if there are 2 different drivers
+                    // This can cause error when splitting layers aross the devices, need to keep only 1
+#ifdef GGML_VULKAN_DEBUG
+                    std::cerr << "Device " << i << " and device " << *old_device << " have the same device id" << std::endl;
+#endif
+
+                    vk::PhysicalDeviceProperties2 old_prop;
+                    vk::PhysicalDeviceDriverProperties old_driver;
+                    old_prop.pNext = &old_driver;
+                    devices[*old_device].getProperties2(&old_prop);
+
+                    vk::PhysicalDeviceProperties2 new_prop;
+                    vk::PhysicalDeviceDriverProperties new_driver;
+                    new_prop.pNext = &new_driver;
+                    devices[i].getProperties2(&new_prop);
+
+                    std::map<vk::DriverId, int> driver_priorities {};
+                    int old_priority = std::numeric_limits<int>::max();
+                    int new_priority = std::numeric_limits<int>::max();
+
+                    // Check https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkDriverId.html for the list of driver id
+                    // Smaller number -> higher priority
+                    switch (old_prop.properties.vendorID) {
+                        case VK_VENDOR_ID_AMD:
+                            driver_priorities[vk::DriverId::eMesaRadv] = 1;
+                            driver_priorities[vk::DriverId::eAmdOpenSource] = 2;
+                            driver_priorities[vk::DriverId::eAmdProprietary] = 3;
+                            break;
+                        case VK_VENDOR_ID_INTEL:
+                            driver_priorities[vk::DriverId::eIntelOpenSourceMESA] = 1;
+                            driver_priorities[vk::DriverId::eIntelProprietaryWindows] = 2;
+                            break;
+                        case VK_VENDOR_ID_NVIDIA:
+                            driver_priorities[vk::DriverId::eNvidiaProprietary] = 1;
+#if defined(VK_API_VERSION_1_3) && VK_HEADER_VERSION >= 235
+                            driver_priorities[vk::DriverId::eMesaNvk] = 2;
+#endif
+                            break;
+                    }
+
+                    if (driver_priorities.count(old_driver.driverID)) {
+                        old_priority = driver_priorities[old_driver.driverID];
+                    }
+                    if (driver_priorities.count(new_driver.driverID)) {
+                        new_priority = driver_priorities[new_driver.driverID];
+                    }
+
+                    if (new_priority < old_priority) {
+                        auto r = std::remove(vk_instance.device_indices.begin(), vk_instance.device_indices.end(), *old_device);
+                        vk_instance.device_indices.erase(r, vk_instance.device_indices.end());
+                        vk_instance.device_indices.push_back(i);
+
+#ifdef GGML_VULKAN_DEBUG
+                        std::cerr << "Prioritize device " << i << " driver " << new_driver.driverName << " over device " << *old_device << " driver " << old_driver.driverName << std::endl;
+#endif
+                    }
+#ifdef GGML_VULKAN_DEBUG
+                    else {
+                        std::cerr << "Prioritize device " << *old_device << " driver " << old_driver.driverName << " over device " << i << " driver " << new_driver.driverName << std::endl;
+
+                    }
+#endif
+                }
             }
         }
 
