@@ -12275,9 +12275,6 @@ static void ggml_compute_forward_mul_mat_one_chunk(
 
     const void * wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
     const size_t row_size = ggml_row_size(vec_dot_type, ne10);
-    // if (src0->type == 31) {
-    //     row_size = ne10;
-    // }
 
     assert(ne12 % ne02 == 0);
     assert(ne13 % ne03 == 0);
@@ -12291,6 +12288,8 @@ static void ggml_compute_forward_mul_mat_one_chunk(
     // attempt to reduce false-sharing (does not seem to make a difference)
     // 16 * 2, accounting for mmla kernels
     float tmp[32];
+
+    // for per-tensor quant
     const float * scale      = (float * )((uint8_t*) (src0->data) + (ne00 * ne01 / 4));
     const float * act_scales = (const float*) ((const char *) wdata + (ne11 * ne10));
 
