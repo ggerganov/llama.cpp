@@ -1141,7 +1141,7 @@ struct test_rope : public test_case {
     const std::array<int64_t, 4> ne_a;
     int n_dims;
     int mode;
-    int n_ctx;
+    int n_ctx; // used to generate positions
     float fs; // freq_scale
     float ef; // ext_factor
     float af; // attn_factor
@@ -1168,7 +1168,7 @@ struct test_rope : public test_case {
         }
         ggml_tensor * pos = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, ne_a[2]);
         ggml_tensor * freq = ff ? ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_dims/2) : nullptr;
-        ggml_tensor * out = ggml_rope_ext(ctx, a, pos, freq, n_dims, mode, n_ctx, 0, 10000.0f, fs, ef, af, 1.0f, 1.0f);
+        ggml_tensor * out = ggml_rope_ext(ctx, a, pos, freq, n_dims, mode, 0, 10000.0f, fs, ef, af, 1.0f, 1.0f);
         return out;
     }
 
@@ -1570,21 +1570,25 @@ struct test_flash_attn_ext : public test_case {
 
     const float max_bias; // ALiBi
 
+    const ggml_type type_KV;
+
     std::string vars() override {
-        return VARS_TO_STR6(hs, nh, kv, nb, mask, max_bias);
+        return VARS_TO_STR7(hs, nh, kv, nb, mask, max_bias, type_KV);
     }
 
     double max_nmse_err() override {
         return 5e-4;
     }
 
-    test_flash_attn_ext(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8, bool mask = true, float max_bias = 0.0f)
-        : hs(hs), nh(nh), kv(kv), nb(nb), mask(mask), max_bias(max_bias) {}
+    test_flash_attn_ext(int64_t hs = 128, int64_t nh = 32, int64_t kv = 96, int64_t nb = 8, bool mask = true, float max_bias = 0.0f, ggml_type type_KV = GGML_TYPE_F16)
+        : hs(hs), nh(nh), kv(kv), nb(nb), mask(mask), max_bias(max_bias), type_KV(type_KV) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
-        ggml_tensor * q = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, hs, nb, nh, 1);
-        ggml_tensor * k = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, hs, kv, nh, 1);
-        ggml_tensor * v = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, hs, kv, nh, 1);
+        const int64_t hs_padded = GGML_PAD(hs, ggml_blck_size(type_KV));
+
+        ggml_tensor * q = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, hs_padded, nb, nh, 1);
+        ggml_tensor * k = ggml_new_tensor_4d(ctx, type_KV,       hs_padded, kv, nh, 1);
+        ggml_tensor * v = ggml_new_tensor_4d(ctx, type_KV,       hs_padded, kv, nh, 1);
         ggml_tensor * m = mask ? ggml_new_tensor_4d(ctx, GGML_TYPE_F16, kv, GGML_PAD(nb, GGML_KQ_MASK_PAD), 1, 1) : nullptr;
         ggml_tensor * out = ggml_flash_attn_ext(ctx, q, k, v, m, 1.0f/sqrtf(hs), max_bias);
         return out;
@@ -1611,7 +1615,7 @@ struct llama_hparams {
 
     // cparams
     static constexpr uint32_t n_ctx = 512; // user-specified context size
-    static constexpr uint32_t n_orig_ctx = n_ctx;
+    static constexpr uint32_t n_ctx_orig = n_ctx;
 
     // batch
     int32_t n_tokens;
@@ -1802,13 +1806,13 @@ struct test_llama : public test_llm {
 
                 Qcur = ggml_rope_ext(
                     ctx, ggml_reshape_3d(ctx, Qcur, hp.n_embd_head, hp.n_head,    hp.n_tokens), inp_pos, nullptr,
-                    hp.n_rot, 0, 0, hp.n_orig_ctx, freq_base, freq_scale,
+                    hp.n_rot, 0, hp.n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
                 Kcur = ggml_rope_ext(
                     ctx, ggml_reshape_3d(ctx, Kcur, hp.n_embd_head, hp.n_head_kv, hp.n_tokens), inp_pos, nullptr,
-                    hp.n_rot, 0, 0, hp.n_orig_ctx, freq_base, freq_scale,
+                    hp.n_rot, 0, hp.n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
@@ -1927,12 +1931,12 @@ struct test_falcon : public test_llm {
 
                 // using mode = 2 for neox mode
                 Qcur = ggml_rope_ext(
-                    ctx, Qcur, inp_pos, nullptr, hp.n_rot, 2, 0, hp.n_orig_ctx,
+                    ctx, Qcur, inp_pos, nullptr, hp.n_rot, 2, hp.n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
                 Kcur = ggml_rope_ext(
-                    ctx, Kcur, inp_pos, nullptr, hp.n_rot, 2, 0, hp.n_orig_ctx,
+                    ctx, Kcur, inp_pos, nullptr, hp.n_rot, 2, hp.n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
 
@@ -2232,15 +2236,15 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
                 for (float ef : { 0.0f, 0.7465f }) {
                     for (float af : { 1.0f, 1.4245f }) {
                         for (ggml_type type : {GGML_TYPE_F32, GGML_TYPE_F16}) {
-                            // TODO: ff not supported yet for !neox
-                            test_cases.emplace_back(new test_rope(type, {128,  32, 10, 1}, 128, 0, 512, fs, ef, af, false, v)); // llama 7B
-                            if (all) {
-                                test_cases.emplace_back(new test_rope(type, {128,  40, 10, 1}, 128, 0, 512, fs, ef, af, false, v)); // llama 13B
-                                test_cases.emplace_back(new test_rope(type, {128,  52, 10, 1}, 128, 0, 512, fs, ef, af, false, v)); // llama 30B
-                                test_cases.emplace_back(new test_rope(type, {128,  64, 10, 1}, 128, 0, 512, fs, ef, af, false, v)); // llama 65B
-                            }
-
                             for (bool ff : {false, true}) { // freq_factors
+                                test_cases.emplace_back(new test_rope(type, {128,  32, 10, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 7B
+
+                                if (all) {
+                                    test_cases.emplace_back(new test_rope(type, {128,  40, 10, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 13B
+                                    test_cases.emplace_back(new test_rope(type, {128,  52, 10, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 30B
+                                    test_cases.emplace_back(new test_rope(type, {128,  64, 10, 1}, 128, 0, 512, fs, ef, af, ff, v)); // llama 65B
+                                }
+
                                 if (all) {
                                     test_cases.emplace_back(new test_rope(type, { 64,   1, 10, 1},  64, 2, 512, fs, ef, af, ff, v)); // neox (falcon 7B)
                                     test_cases.emplace_back(new test_rope(type, { 64,  71, 10, 1},  64, 2, 512, fs, ef, af, ff, v)); // neox (falcon 7B)
@@ -2252,6 +2256,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
                                 test_cases.emplace_back(new test_rope(type, { 64, 128, 10, 1},  64, 2, 512, fs, ef, af, ff, v)); // neox (falcon 40B)
                             }
                         }
+
                         all = false;
                     }
                 }
@@ -2290,7 +2295,9 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
                 for (int nh : { 32, }) {
                     for (int kv : { 512, 1024, }) {
                         for (int nb : { 1, 2, 4, 8, }) {
-                            test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb, mask, max_bias));
+                            for (ggml_type type_KV : {GGML_TYPE_F16, GGML_TYPE_Q8_0, GGML_TYPE_Q4_0}) {
+                                test_cases.emplace_back(new test_flash_attn_ext(hs, nh, kv, nb, mask, max_bias, type_KV));
+                            }
                         }
                     }
                 }
