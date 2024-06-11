@@ -214,7 +214,7 @@ std::string not_strings(const std::vector<std::string> & strings) {
     };
     visit(trie);
 
-    out << " ) char* [\"]";
+    out << " ) char* [\"] space";
     return out.str();
 }
 

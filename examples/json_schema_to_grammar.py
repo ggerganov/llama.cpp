@@ -71,6 +71,47 @@ NON_LITERAL_SET = set('|.()[]{}*+?')
 ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('[]()|{}*+?')
 
 
+def not_strings(strings):
+    class TrieNode:
+        def __init__(self):
+            self.children = {}
+            self.is_end_of_string = False
+
+        def insert(self, string):
+            node = self
+            for c in string:
+                node = node.children.setdefault(c, TrieNode())
+            node.is_end_of_string = True
+
+    trie = TrieNode()
+    for s in strings:
+        trie.insert(s)
+
+    out = ['["] ( ']
+
+    def visit(node):
+        rejects = []
+        first = True
+        for c, child in node.children.items():
+            rejects.append(c)
+            if child.is_end_of_string:
+                continue
+            if first:
+                first = False
+            else:
+                out.append(' | ')
+            out.append(f'[{c}] (')
+            visit(child)
+            out.append(')')
+        if node.children:
+            if not first:
+                out.append(' | ')
+            out.append(f'[^"{"".join(rejects)}]')
+    visit(trie)
+
+    out.append(' ) char* ["] space')
+    return ''.join(out)
+
 class SchemaConverter:
     def __init__(self, *, prop_order, allow_fetch, dotall, raw_pattern):
         self._prop_order = prop_order
@@ -471,9 +512,12 @@ class SchemaConverter:
         if additional_properties == True or isinstance(additional_properties, dict):
             sub_name = f'{name}{"-" if name else ""}additional'
             value_rule = self.visit({} if additional_properties == True else additional_properties, f'{sub_name}-value')
+            key_rule = self._add_primitive('string', PRIMITIVE_RULES['string']) if not sorted_props \
+                else self._add_rule(f'{sub_name}-k', not_strings(sorted_props))
+            
             prop_kv_rule_names["*"] = self._add_rule(
                 f'{sub_name}-kv',
-                self._add_primitive('string', PRIMITIVE_RULES['string']) + f' ":" space {value_rule}'
+                f'{key_rule} ":" space {value_rule}'
             )
             optional_props.append("*")
 
