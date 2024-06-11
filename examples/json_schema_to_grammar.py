@@ -29,9 +29,8 @@ class BuiltinRule:
         self.content = content
         self.deps = deps or []
 
-# whitespace is constrained to a single space char to prevent model "running away" in
-# whitespace. Also maybe improves generation quality?
-SPACE_RULE = '" "?'
+# Constraining spaces to prevent model "running away".
+SPACE_RULE = '| " " | "\\n" [ \\t]{0,20}'
 
 PRIMITIVE_RULES = {
     'boolean'      : BuiltinRule('("true" | "false") space', []),
