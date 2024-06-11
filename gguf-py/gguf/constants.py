@@ -149,6 +149,7 @@ class MODEL_ARCH(IntEnum):
     OLMO       = auto()
     ARCTIC     = auto()
     DEEPSEEK2  = auto()
+    CHATGLM    = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -237,6 +238,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.OLMO:           "olmo",
     MODEL_ARCH.ARCTIC:         "arctic",
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
+    MODEL_ARCH.CHATGLM:        "chatglm",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -808,6 +810,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
     ],
+    MODEL_ARCH.CHATGLM : [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     # TODO
 }
 
@@ -844,6 +858,9 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.DEEPSEEK2: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.CHATGLM: [
+        MODEL_TENSOR.ROPE_FREQS,
     ],
 }
 

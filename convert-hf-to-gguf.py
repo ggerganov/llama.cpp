@@ -80,7 +80,7 @@ class Model:
         if not self.is_safetensors:
             self.part_names = Model.get_model_part_names(self.dir_model, "pytorch_model", ".bin")
         self.hparams = Model.load_hparams(self.dir_model)
-        self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
+        self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer", "num_layers"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensor_names = None
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -2723,6 +2723,167 @@ class DeepseekV2Model(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
+
+
+@Model.register("ChatGLMModel")
+class ChatGLMModel(Model):
+    model_arch = gguf.MODEL_ARCH.CHATGLM
+
+    def set_vocab(self):
+        dir_model = self.dir_model
+        hparams = self.hparams
+        tokens: list[bytearray] = []
+        toktypes: list[int] = []
+        scores: list[float] = []
+
+        from transformers import AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
+        vocab_size = hparams.get("padded_vocab_size", len(tokenizer.get_vocab()))
+        assert max(tokenizer.get_vocab().values()) < vocab_size
+
+        reverse_vocab = {id_: encoded_tok for encoded_tok, id_ in tokenizer.get_vocab().items()}
+
+        for token_id in range(vocab_size):
+            piece = tokenizer._convert_id_to_token(token_id)
+            if token_id == 0:
+                piece = "<unk>"
+            elif token_id == 1:
+                piece = "<bos>"
+            elif token_id == 2:
+                piece = "<eos>"
+
+            text = piece.encode("utf-8")
+            score = 0.0
+            if len(piece) != 0 and token_id < 64789:
+                score = tokenizer.tokenizer.sp_model.get_score(token_id)
+
+            if len(piece) == 0:
+                text = f"[PAD{token_id}]".encode("utf-8")
+
+            if token_id >= 64789:
+                toktype = SentencePieceTokenTypes.UNKNOWN
+                tokens.append(text)
+                scores.append(score)
+                toktypes.append(toktype)
+                continue
+
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.tokenizer.sp_model.is_unknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.tokenizer.sp_model.is_control(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.tokenizer.sp_model.is_unused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.tokenizer.sp_model.is_byte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+
+            tokens.append(text)
+            scores.append(score)
+            toktypes.append(toktype)
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name("ChatGLM-6b-chat")
+        n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
+        n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
+        n_head_kv = self.hparams.get("multi_query_group_num", n_head)
+        self.gguf_writer.add_context_length(self.hparams.get("seq_length", n_embed))
+        self.gguf_writer.add_embedding_length(n_embed)
+        self.gguf_writer.add_feed_forward_length(self.hparams.get("ffn_hidden_size", 4 * n_embed))
+        self.gguf_writer.add_block_count(self.hparams["num_layers"])
+        self.gguf_writer.add_head_count(n_head)
+        self.gguf_writer.add_head_count_kv(n_head_kv)
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layernorm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_rope_dimension_count(64)
+        self.gguf_writer.add_add_bos_token(False)
+
+    def write_tensors(self):
+        block_count = self.hparams["num_layers"]
+        tensors = dict(self.get_tensors())
+        tensor_map = gguf.get_tensor_name_map(self.model_arch, block_count)
+        has_lm_head = True
+        n_head = self.hparams.get("n_head", self.hparams.get("num_attention_heads"))
+        n_embed = self.hparams.get("hidden_size", self.hparams.get("n_embed"))
+
+        for name, data_torch in tensors.items():
+            if name.endswith(".rotary_pos_emb.inv_freq"):
+                continue
+
+            if "lm_head.weight" not in tensors.keys() and "output.weight" not in tensors.keys():
+                has_lm_head = False
+
+            name = re.sub(r'transformer\.', '', name)
+
+            old_dtype = data_torch.dtype
+
+            # convert any unsupported data types to float32
+            if data_torch.dtype not in (torch.float16, torch.float32):
+                data_torch = data_torch.to(torch.float32)
+
+            data = data_torch.squeeze().numpy()
+
+            if re.match(r"h\.\d+\.self_attention\.query_key_value\.weight", name):
+                # Map bloom-style qkv_linear to gpt-style qkv_linear
+                # bloom: https://github.com/huggingface/transformers/blob/main/src/transformers/models/bloom/modeling_bloom.py#L238-L252  # noqa
+                # gpt-2: https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py#L312  # noqa
+                qkv_weights = data.reshape((n_head, 3, n_embed // n_head, n_embed))
+                data = np.concatenate(
+                    (
+                        qkv_weights[:, 0, :, :].reshape((-1, n_embed)),
+                        qkv_weights[:, 1, :, :].reshape((-1, n_embed)),
+                        qkv_weights[:, 2, :, :].reshape((-1, n_embed)),
+                    ),
+                    axis=0,
+                )
+                print("re-format attention.linear_qkv.weight")
+            elif re.match(r"h\.\d+\.self_attention\.query_key_value\.bias", name):
+                qkv_bias = data.reshape((n_head, 3, n_embed // n_head))
+                data = np.concatenate(
+                    (
+                        qkv_bias[:, 0, :].reshape((n_embed,)),
+                        qkv_bias[:, 1, :].reshape((n_embed,)),
+                        qkv_bias[:, 2, :].reshape((n_embed,)),
+                    ),
+                    axis=0,
+                )
+                print("re-format attention.linear_qkv.bias")
+
+            # map tensor names
+            new_name = tensor_map.get_name(name, try_suffixes=(".weight", ".bias"))
+            if new_name is None:
+                print(f"Can not map tensor {name!r}")
+                sys.exit()
+
+            n_dims = len(data.shape)
+            data_dtype = data.dtype
+
+            # if f32 desired, convert any float16 to float32
+            if self.ftype == 0 and data_dtype == np.float16:
+                data = data.astype(np.float32)
+
+            # TODO: Why cant we use these float16 as-is? There should be not reason to store float16 as float32
+            if self.ftype == 1 and data_dtype == np.float16 and n_dims == 1:
+                data = data.astype(np.float32)
+
+            # if f16 desired, convert any float32 2-dim weight tensors to float16
+            if self.ftype == 1 and data_dtype == np.float32 and name.endswith(".weight") and n_dims == 2:
+                data = data.astype(np.float16)
+
+            print(f"=> {new_name}, shape = {data.shape}, {old_dtype} --> {data.dtype}")
+
+            self.gguf_writer.add_tensor(new_name, data)
+
+            if not has_lm_head and name == "word_embeddings.weight":
+                self.gguf_writer.add_tensor("output.weight", data)
+                print(name, f"=> output.weight, shape = {data.shape}, {old_dtype} --> {data.dtype}")
 
 
 ###### CONVERSION LOGIC ######
