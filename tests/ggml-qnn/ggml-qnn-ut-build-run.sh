@@ -12,6 +12,8 @@ ANDROID_PLATFORM=android-34
 
 GGML_QNN_UT=ggml-qnn-ut
 REMOTE_PATH=/data/local/tmp/
+BUILDTYPE=Debug
+BUILDTYPE=Release
 
 
 function dump_vars()
@@ -70,7 +72,7 @@ function check_and_download_ndk()
 
 function build_arm64
 {
-    cmake -H. -B./out/arm64-v8a -DTARGET_NAME=${GGML_QNN_UT} -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=${ANDROID_PLATFORM} -DANDROID_NDK=${ANDROID_NDK}  -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake -DQNN_SDK_PATH=${QNN_SDK_PATH}
+    cmake -H. -B./out/arm64-v8a -DTARGET_NAME=${GGML_QNN_UT} -DCMAKE_BUILD_TYPE=${BUILDTYPE} -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=${ANDROID_PLATFORM} -DANDROID_NDK=${ANDROID_NDK}  -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK}/build/cmake/android.toolchain.cmake -DQNN_SDK_PATH=${QNN_SDK_PATH}
 
     cd ./out/arm64-v8a
     make
@@ -166,9 +168,9 @@ function show_usage()
     echo "Usage:"
     echo "  $0 build            (build Android command line UT program)"
     echo "  $0 updateqnnlibs    (upload the latest QNN libs to Android phone)"
-    echo "  $0 GGML_OP_ADD      0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU)"
-    echo "  $0 GGML_OP_MUL      0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU)"
-    echo "  $0 GGML_OP_MUL_MAT  0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU)"
+    echo "  $0 GGML_OP_ADD      0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU) / 3(ggml)"
+    echo "  $0 GGML_OP_MUL      0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU) / 3(ggml)"
+    echo "  $0 GGML_OP_MUL_MAT  0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU) / 3(ggml)"
     echo -e "\n\n\n"
 }
 

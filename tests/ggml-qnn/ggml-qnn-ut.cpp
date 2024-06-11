@@ -72,13 +72,11 @@ static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const
         int len_prefix = snprintf(s_ggml_qnn_log_internal_buf, GGML_QNN_LOGBUF_LEN, "[%s, %d]: ", func, line);
         int len = vsnprintf(s_ggml_qnn_log_internal_buf + len_prefix, GGML_QNN_LOGBUF_LEN - len_prefix, format, args);
         if (len < (GGML_QNN_LOGBUF_LEN - len_prefix)) {
-            //for Android command line application or WoA
             printf("%s\n", s_ggml_qnn_log_internal_buf);
         }
         va_end(args);
     }
 }
-
 
 static const char * get_qnn_backend_name(int n_backend_type) {
     switch (n_backend_type) {
@@ -94,7 +92,6 @@ static const char * get_qnn_backend_name(int n_backend_type) {
             return "unknown";
     }
 }
-
 
 static bool ggml_graph_compute_helper(
         struct ggml_backend * backend,
@@ -123,26 +120,25 @@ static bool ggml_graph_compute_helper(
     }
 #endif
 
-    //a new approch of mixed inference
     if (nullptr != backend)
         return ggml_backend_graph_compute(backend, graph) == GGML_STATUS_SUCCESS;
     else
         return ggml_graph_compute(graph, &plan);
 }
 
-
 #define QK8_0 32
+
 typedef struct {
     uint16_t d;        // delta
     int8_t  qs[QK8_0]; // quants
 } block_q8_0;
-
 
 static inline float ggml_compute_fp16_to_fp32(uint16_t h) {
     __fp16 tmp;
     memcpy(&tmp, &h, sizeof(uint16_t));
     return (float)tmp;
 }
+
 #define GGML_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
 
 static void tensor_dump(const ggml_tensor * tensor, const char * name) {
@@ -245,7 +241,6 @@ static void tensor_dump(const ggml_tensor * tensor, const char * name) {
     }
 }
 
-
 static uint32_t get_tensor_rank(const ggml_tensor * tensor) {
     uint32_t rank = 0;
     for (int i = 0; i < GGML_MAX_DIMS; i++) {
@@ -255,7 +250,6 @@ static uint32_t get_tensor_rank(const ggml_tensor * tensor) {
     }
     return rank;
 }
-
 
 static uint32_t get_tensor_data_size(const ggml_tensor * tensor) {
     size_t data_size = ggml_row_size(tensor->type, tensor->ne[0]);
@@ -269,7 +263,6 @@ static uint32_t get_tensor_data_size(const ggml_tensor * tensor) {
 
     return ggml_nbytes(tensor);
 }
-
 
 //ref: https://github.com/ggerganov/llama.cpp/blob/master/tests/test-backend-ops.cpp#L20
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
@@ -305,8 +298,11 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         t.join();
     }
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
-        //ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
+#ifdef GGML_USE_QNN
         memcpy((char*)tensor->data, data.data(), size * sizeof(float));
+#else
+        ggml_backend_tensor_set(tensor, data.data(), 0, size * sizeof(float));
+#endif
     } else if (ggml_is_quantized(tensor->type) || tensor->type == GGML_TYPE_F16 || tensor->type == GGML_TYPE_BF16) {
         GGML_ASSERT(size % ggml_blck_size(tensor->type) == 0);
         std::vector<uint8_t> dataq(ggml_row_size(tensor->type, size));
@@ -321,17 +317,22 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
         }
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], im);
         GGML_ASSERT(ggml_validate_row_data(tensor->type, dataq.data(), dataq.size()));
-        //ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
+#ifdef GGML_USE_QNN
         memcpy((char*)tensor->data, dataq.data(), dataq.size());
+#else
+        ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
+#endif
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
-        //ggml_backend_tensor_set(tensor, data.data(), 0, ggml_nbytes(tensor));
+#ifdef GGML_USE_QNN
         memcpy((char*)tensor->data, data.data(), ggml_nbytes(tensor));
+#else
+        ggml_backend_tensor_set(tensor, data.data(), 0, ggml_nbytes(tensor));
+#endif
     } else {
         GGML_ASSERT(false);
     }
 }
-
 
 //ref: https://github.com/ggerganov/llama.cpp/blob/master/tests/test-backend-ops.cpp#L310
 static void initialize_tensors(ggml_context * ctx) {
@@ -340,18 +341,16 @@ static void initialize_tensors(ggml_context * ctx) {
     }
 }
 
-
 static void show_usage() {
     printf(" " \
         "\nUsage: test_qnn_ops [options]\n" \
         "\n" \
         "Options:\n" \
         " -t GGML_OP_ADD / GGML_OP_MUL / GGML_OP_MULMAT\n" \
-        " -b 0(QNN_CPU) 1(QNN_GPU) 2(QNN_NPU)\n" \
+        " -b 0(QNN_CPU) 1(QNN_GPU) 2(QNN_NPU) 3(ggml)\n" \
         " ?/h print usage infomation\n\n"
     );
 }
-
 
 static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     int64_t n_begin_time        = 0LL;
@@ -369,15 +368,14 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     ggml_backend_t backend      = nullptr;
     ggml_backend_buffer_t buffer= nullptr;
 
-    ggml_type qtype             = GGML_TYPE_I8;
-    qtype             = GGML_TYPE_F32;
+    ggml_type qtype   = GGML_TYPE_I8;
     qtype             = GGML_TYPE_F16;
     qtype             = GGML_TYPE_Q8_0;
+    qtype             = GGML_TYPE_F32;
 
     std::vector<uint8_t> work_buffer;
     QNN_LOG_DEBUG("enter qnn_ggml_op\n");
     QNN_LOG_DEBUG("ggml op:%d(%s)\n", n_ggml_op_type, ggml_op_name((enum ggml_op) n_ggml_op_type));
-
 
     n_begin_time = ggml_time_us();
     srand(time(NULL));
@@ -473,7 +471,6 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
             initialize_tensors(ctx);
         }
         ggml_set_f32(src1, (rand() % 100 + 1));
-        //ggml_set_f32(dst, 0.0f);
     }
 
     ggml_graph_compute_helper(backend, gf, work_buffer, num_threads, nullptr, nullptr);
@@ -501,12 +498,12 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     ggml_free(ctx);
     ggml_backend_buffer_free(buffer);
     ggml_backend_free(backend);
+
     n_end_time = ggml_time_us();
     n_duration = (n_end_time - n_begin_time) / 1000;
     QNN_LOG_DEBUG("duration of ut GGML_OP_%s using QNN backend %s: %lld milliseconds\n", ggml_op_name((enum ggml_op)n_ggml_op_type), get_qnn_backend_name(n_backend_type), n_duration);
     return 0;
 }
-
 
 int main(int argc, char * argv[]) {
     int num_threads             = 4;
@@ -531,7 +528,7 @@ int main(int argc, char * argv[]) {
         } else if (0 == strcmp(argv[i], "-b")) {
             if (i + 1 < argc) {
                 int backend = atoi(argv[i + 1]);
-                if (backend <= QNN_BACKEND_NPU)
+                if (backend <= QNN_BACKEND_GGML)
                     n_backend_type     = backend;
                 else {
                     show_usage();
@@ -548,6 +545,7 @@ int main(int argc, char * argv[]) {
     QNN_LOG_DEBUG("enter qnn_ggml_op\n");
     QNN_LOG_DEBUG("backend %d, ggml op:%d(%s)", n_backend_type, n_ggml_op_type, ggml_op_name((enum ggml_op) n_ggml_op_type));
     qnn_op_ut(num_threads, n_backend_type, n_ggml_op_type);
+
 
     return 0;
 }
