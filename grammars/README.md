@@ -110,20 +110,20 @@ While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) ma
 
 You can use GBNF grammars:
 
-- In the [server](../examples/server)'s completion endpoints, passed as the `grammar` body field
-- In the [main](../examples/main) CLI, passed as the `--grammar` & `--grammar-file` flags
-- With the [gbnf-validator](../examples/gbnf-validator) tool, to test them against strings.
+- In [llama-server](../examples/server)'s completion endpoints, passed as the `grammar` body field
+- In [llama-cli](../examples/main), passed as the `--grammar` & `--grammar-file` flags
+- With [llama-gbnf-validator](../examples/gbnf-validator) tool, to test them against strings.
 
 ## JSON Schemas → GBNF
 
 `llama.cpp` supports converting a subset of https://json-schema.org/ to GBNF grammars:
 
-- In the [server](../examples/server):
+- In [llama-server](../examples/server):
     - For any completion endpoints, passed as the `json_schema` body field
     - For the `/chat/completions` endpoint, passed inside the `result_format` body field (e.g. `{"type", "json_object", "schema": {"items": {}}}`)
-- In the [main](../examples/main) CLI, passed as the `--json` / `-j` flag
+- In [llama-cli](../examples/main), passed as the `--json` / `-j` flag
 - To convert to a grammar ahead of time:
-    - in CLI, with [json_schema_to_grammar.py](../examples/json_schema_to_grammar.py)
+    - in CLI, with [examples/json_schema_to_grammar.py](../examples/json_schema_to_grammar.py)
     - in JavaScript with [json-schema-to-grammar.mjs](../examples/server/public/json-schema-to-grammar.mjs) (this is used by the [server](../examples/server)'s Web UI)
 
 Take a look at [tests](../../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/llama.cpp/pull/5978, https://github.com/ggerganov/llama.cpp/pull/6659 & https://github.com/ggerganov/llama.cpp/pull/6555).
