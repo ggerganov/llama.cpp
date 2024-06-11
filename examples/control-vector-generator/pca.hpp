@@ -38,10 +38,15 @@ struct pca_params {
     int n_batch = 5; // number of iterations do to in one batch. larger the batch, more memory is used
     int n_iterations = 1000;
     float tolerance = 1e-7;
+
+    // for debugging
+    int i_layer = 0;
+    int n_layers = 0;
 };
 
 // result from each iteration
 struct pca_result {
+    struct ggml_tensor * calculated_square = NULL;
     std::vector<struct ggml_tensor *> eigenvectors;
     std::vector<float> distances;
 };
@@ -162,7 +167,6 @@ static struct ggml_cgraph * build_graph_piter(
     // turn v_diff_original into square matrix if needed
     struct ggml_tensor * tmp_square;
     if (calc_square) {
-        print_debug_tensor(model.dev_input);
         tmp_square = ggml_mul_mat(ctx0, model.dev_input, model.dev_input);
         ggml_set_name(tmp_square, "tmp_square");
     }
@@ -229,17 +233,17 @@ static ggml_status compute_piter(
             }
             return i;
         };
-        // get output nodes
+        result.calculated_square = NULL;
         result.eigenvectors.clear();
         result.distances.clear();
         result.eigenvectors.resize(params.n_batch);
         result.distances.resize(params.n_batch);
+        // get output nodes
         for (int i = 0; i < gf->n_nodes; ++i) {
             auto node = gf->nodes[i];
             int iter = -1;
             // find b_tensor (without copying data from device)
             if ((iter = extract_i("b_tensor_norm_", node->name)) > -1) {
-                print_debug_tensor(node, false);
                 result.eigenvectors[iter] = node;
             }
             // find distances, then copy data from device
@@ -247,7 +251,11 @@ static ggml_status compute_piter(
                 float d;
                 ggml_backend_tensor_get(node, &d, 0, sizeof(float));
                 result.distances[iter] = d;
-                std::cout << node->name << " = " << d << "\n";
+                // std::cout << node->name << " = " << d << "\n";
+            }
+            // find tmp_square if it exists (without copying data from device)
+            if (std::string(node->name) == "tmp_square") {
+                result.calculated_square = node;
             }
         }
     }
@@ -258,23 +266,22 @@ static void power_iteration(
         const struct pca_params & params,
         struct ggml_tensor * input, // shape of input: [n_samples, n_embd]
         struct ggml_tensor * output) {
-    printf("in power iteration\n");
-    //int n_embd = input->ne[1];
+    //printf("in power iteration\n");
     struct pca_model model(input);
 
     ggml_gallocr_t allocr = NULL;
     struct pca_result result;
-    struct ggml_tensor * last_eigenvector;
+    struct ggml_tensor * last_eigenvector = NULL;
 
-    int n_iter = params.n_iterations / params.n_batch; // more batch, fewer iterations
-    for (int iter = 0; iter < n_iter; ++iter) {
+    int n_iters = params.n_iterations / params.n_batch; // more batch, fewer iterations
+    for (int iter = 0; iter < n_iters; ++iter) {
         bool calc_square = (iter == 0); // only need to calculate square for first iteration
         if (allocr) {
             ggml_gallocr_free(allocr);
         }
         allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
         struct ggml_cgraph * gf = build_graph_piter(params, model, calc_square);
-        ggml_graph_dump_dot(gf, nullptr, "/tmp/_cgraph.dot");
+        // ggml_graph_dump_dot(gf, nullptr, "/tmp/_cgraph.dot");
         compute_piter(params, model, gf, allocr, result);
 
         for (size_t k = 0; k < result.distances.size(); ++k) {
@@ -283,31 +290,44 @@ static void power_iteration(
                 break; // done
             }
         }
-        
-        break; // FIXME
+
+        if (calc_square) {
+            // copy and store the square matrix if needed
+            GGML_ASSERT(result.calculated_square != NULL);
+            std::vector<uint8_t> tmp_buf(ggml_nbytes(model.dev_square));
+            ggml_backend_tensor_get(result.calculated_square, tmp_buf.data(), 0, tmp_buf.size());
+            ggml_backend_tensor_set(model.dev_square, tmp_buf.data(), 0, tmp_buf.size());
+        }
+
+        printf("%s: layer %d/%d, iteration: %d / total: %d (batch = %d) ...\n",
+            __func__, params.i_layer+1, params.n_layers, iter, n_iters, params.n_batch);
     }
 
+    // get output tensor
+    GGML_ASSERT(last_eigenvector);
     ggml_backend_tensor_get(last_eigenvector, output->data, 0, ggml_nbytes(last_eigenvector));
-    print_debug_tensor(output);
+    //print_debug_tensor(output);
     ggml_gallocr_free(allocr);
 }
 
 static void run_pca(
-        const struct pca_params & params,
-        const std::vector<struct ggml_tensor *> & v_input,
+        struct pca_params & params,
+        const std::vector<struct ggml_tensor *> & v_input, // shape of v_input[0]: [n_samples, n_embd]
         const std::vector<struct ggml_tensor *> & v_output) {
     printf("Running PCA...\n");
-    int n_embd = v_input[0]->ne[0]; // shape of v_input[0]: [n_embd, m]
     for (size_t il = 0; il < v_input.size(); ++il) {
-        print_debug_tensor(v_input[il]);
+
         // prepare output vector
         struct ggml_tensor * ctrl_out = v_output[il];
         auto name = std::string("direction.") + std::to_string(il + 1);
         ggml_set_name(ctrl_out, name.c_str());
+
         // run power_iteration
+        params.i_layer = il;
+        params.n_layers = v_input.size();
         power_iteration(params, v_input[il], ctrl_out);
-        printf("Done with layer %d\n", il);
-        print_debug_tensor(ctrl_out);
+        printf("DONE layer %ld / %ld\n", il+1, v_input.size());
+        //print_debug_tensor(ctrl_out);
     }
     printf("Done with PCA.\n");
 }

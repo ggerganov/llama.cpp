@@ -70,7 +70,7 @@ struct callback_data {
         t_layer->data = malloc(n_bytes); // TODO @ngxson : get rid of this malloc somehow
         ggml_backend_tensor_get(t, t_layer->data, 0, n_bytes);
         ggml_set_name(t_layer, ggml_get_name(t));
-        print_debug_tensor(t_layer);
+        //print_debug_tensor(t_layer);
 
         if (is_eval_pos) {
             v_pos.push_back(t_layer);
@@ -99,7 +99,7 @@ struct callback_data {
 
     // delete zero rows from a given 2D tensor
     struct ggml_tensor * filter_nonzero_rows(struct ggml_tensor * a) {
-        printf("filter_nonzero_rows\n");
+        //printf("filter_nonzero_rows\n");
         auto is_row_all_zeros = [](struct ggml_tensor * t, int row, float eps) -> bool {
             // check if given row containing all zero elements
             int n_cols = t->ne[0]; // hint: should be equal to n_embd
@@ -119,7 +119,7 @@ struct callback_data {
 
         // get "n_nonzero_rows" for the output "diff_filtered"
         int n_nonzero_rows = rows_to_copy.size();
-        printf("n_nonzero_rows: %d\n", n_nonzero_rows);
+        //printf("n_nonzero_rows: %d\n", n_nonzero_rows);
         int n_embd = a->ne[0];
         GGML_ASSERT(n_nonzero_rows > 0);
 
@@ -138,7 +138,7 @@ struct callback_data {
             }
         }
 
-        print_debug_tensor(diff_filtered);
+        //print_debug_tensor(diff_filtered);
 
         return diff_filtered;
     }
@@ -169,7 +169,8 @@ struct train_context {
 
     // each element of the vector correspond to one layer
     // NOTE: the last layer is discard. therefore, we will have (n_layers - 1) elements here
-    std::vector<struct ggml_tensor *> v_diff;  // vector of matrices of size [n_embd, m] where m ~ n_tokens * n_completions (v_diff contains no zero-rows)
+    // NOTE (2): v_diff is transposed from v_diff_tmp
+    std::vector<struct ggml_tensor *> v_diff;  // vector of matrices of size [m, n_embd] where m ~ n_tokens * n_completions (v_diff contains no zero-rows)
     std::vector<struct ggml_tensor *> v_final; // vector of vectors of size [n_embd] to be written to file
 
     // to easily re-alloc when concat v_diff, we temporary store v_diff in a vector instead of a tensor
@@ -196,7 +197,7 @@ struct train_context {
 
     // add new rows into existing tensor in v_diff_tmp
     void concat_diff_tmp(const std::vector<struct ggml_tensor *> & diff_filtered) {
-        GGML_ASSERT(diff_filtered.size() == n_layers - 1);
+        GGML_ASSERT((int) diff_filtered.size() == n_layers - 1);
         for (int il = 0; il < n_layers - 1; il++) {
             auto t = diff_filtered[il];
             auto & diff_tmp = v_diff_tmp[il];
@@ -206,32 +207,46 @@ struct train_context {
         }
     }
 
-    // build the v_diff tensors from v_diff_tmp
+    // build the v_diff tensors from v_diff_tmp (v_diff need to be transposed)
     void build_v_diff() {
+        printf("build_v_diff\n");
         for (int il = 0; il < n_layers - 1; il++) {
             auto & diff_tmp = v_diff_tmp[il];
             int n_elem = diff_tmp.size() / sizeof(float);
+            GGML_ASSERT(n_elem % n_embd == 0);
             int n_rows = n_elem / n_embd;
             struct ggml_tensor * diff = ggml_new_tensor_2d(ctx_ggml, GGML_TYPE_F32, n_rows, n_embd);
             ggml_set_name(diff, (std::string("diff_") + std::to_string(il)).c_str());
-            // TODO: IMPORTANT!! transpose diff
-            diff->data = diff_tmp.data();
+            // copy data & transpose
+            diff->data = malloc(ggml_nbytes(diff)); // TODO: get rid of this malloc if possible
+            float * arr = (float *) diff_tmp.data();
+            for (int ir = 0; ir < n_rows; ++ir) {
+                for (int ic = 0; ic < n_embd; ++ic) {
+                    float f = arr[ir*n_embd + ic];
+                    //std::cout << ir << "," << ic << " = " << f << "\n";
+                    ggml_set_f32_nd(diff, ir, ic, 0, 0, f);
+                }
+            }
             v_diff.push_back(diff);
+            print_debug_tensor(diff);
+            // free memory of diff_tmp
+            diff_tmp.resize(0);
         }
     }
 
     ~train_context() {
         for (auto ptr : v_final) free(ptr->data);
-        // no need to free v_diff_tmp or v_diff, since we didn't use malloc
+        for (auto ptr : v_diff) free(ptr->data);
+        // no need to free v_diff_tmp, since we didn't use malloc
         ggml_free(ctx_ggml);
     }
 };
 
 struct ctrl_params {
     /* default meta parameters */
-    bool always_reload = false;
     int n_completions = 64;
-    int n_threads = 8;
+    int n_pca_batch = 5;
+    int n_pca_iterations = 1000;
 
     /* default filepaths */
     std::string outfile = "control_vector.gguf";
@@ -295,9 +310,10 @@ static void print_usage(const char * executable) {
     printf("                              default: 'examples/control-vector-generator/completions.txt'\n");
     printf("  -nc, --num-completions N  number of lines of completions file to use\n");
     printf("                              default: 64\n");
-    printf("  -t,  --num-threads N      number of threads to use (do not confuse with gpt-opts -t)\n");
-    printf("                              default: 8\n");
-    printf("       --always-reload      reload the model for every new template to parse (not recommended)\n");
+    printf("  --batch-pca N             batch size used for PCA\n");
+    printf("                              default: 5\n");
+    printf("  --iter-pca N              number of iterations used for PCA\n");
+    printf("                              default: 1000\n");
     printf("\n");
     printf("gpt-opts:\n");
     printf("  other options from main\n");
@@ -370,10 +386,10 @@ static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params)
                 throw std::invalid_argument("error: missing argument for " + arg);
             }
         }
-        if (arg == "--num-threads" || arg == "-t") {
+        if (arg == "--pca-batch") {
             if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
                 try {
-                    params.n_threads = std::stoi(argv[arg_idx]);
+                    params.n_pca_batch = std::stoi(argv[arg_idx]);
                 }
                 catch (const std::invalid_argument & ex) {
                     throw std::invalid_argument("error: invalid argument for " + arg);
@@ -383,9 +399,18 @@ static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params)
                 throw std::invalid_argument("error: missing argument for " + arg);
             }
         }
-        if (arg == "--always-reload") {
-            params.always_reload = true;
-            skipme += 1;
+        if (arg == "--pca-iter") {
+            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
+                try {
+                    params.n_pca_iterations = std::stoi(argv[arg_idx]);
+                }
+                catch (const std::invalid_argument & ex) {
+                    throw std::invalid_argument("error: invalid argument for " + arg);
+                }
+                skipme += 2;
+            } else {
+                throw std::invalid_argument("error: missing argument for " + arg);
+            }
         }
         // TODO it might be nice QoL to have single positive/negative args
         // we do not handle any other unknown arguments here because they will be handled by gpt_parse_params
@@ -427,7 +452,7 @@ static std::vector<std::string> ctrlvec_load_prompt_file(std::string path, bool 
 
 static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
     auto * cb_data = (callback_data *) user_data;
-    auto ggml_ne_string = [](const ggml_tensor * t) -> std::string {
+    /*auto ggml_ne_string = [](const ggml_tensor * t) -> std::string {
         std::string str;
         for (int i = 0; i < GGML_MAX_DIMS; ++i) {
             str += std::to_string(t->ne[i]);
@@ -436,7 +461,7 @@ static bool cb_eval(struct ggml_tensor * t, bool ask, void * user_data) {
             }
         }
         return str;
-    };
+    };*/
 
     static const char * l_out_name = "l_out";
     const bool is_l_out = strncmp(t->name, l_out_name, strlen(l_out_name)) == 0;
@@ -473,6 +498,7 @@ static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const 
 
     for (size_t i = 0; i < v_ctrl.size(); ++i) {
         gguf_add_tensor(ctx, v_ctrl[i]);
+        print_debug_tensor(v_ctrl[i]);
         printf("Added tensor: %s\n", v_ctrl[i]->name);
     }
 
@@ -489,7 +515,7 @@ static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const 
  * Load prompt files and completion file.
  * Then format each pair of prompt + completion to make an entry.
  */
-int prepare_entries(ctrl_params & cparams) {
+static int prepare_entries(ctrl_params & cparams) {
     // load prompts
     std::vector<std::string> positive_prompts = ctrlvec_load_prompt_file(cparams.positive_prompts_file);
     std::vector<std::string> negative_prompts = ctrlvec_load_prompt_file(cparams.negative_prompts_file);
@@ -511,7 +537,7 @@ int prepare_entries(ctrl_params & cparams) {
         // TODO make this dynamic - allow the user to change it somehow - and adapt based on model
         return persona + " " + suffix; // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
     };
-    for (int i = 0; i < positive_prompts.size(); ++i) {
+    for (size_t i = 0; i < positive_prompts.size(); ++i) {
         for (auto & cmpl : completions) {
             // TODO replicate the truncations done by the python implementation
             cparams.positive_entries.push_back(format_template(positive_prompts[i], cmpl));
@@ -553,7 +579,7 @@ int main(int argc, char ** argv) {
     llama_context * ctx;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
-    int n_ctx = llama_n_ctx(ctx);
+    // int n_ctx = llama_n_ctx(ctx);
     int n_layers = llama_n_layer(model);
     int n_embd = llama_n_embd(model);
     // get model hint param (a.k.a model arch name)
@@ -574,29 +600,13 @@ int main(int argc, char ** argv) {
     // init train_context
     train_context ctx_train(n_embd, n_layers);
 
-    int token_ct = 0;
-
     for(size_t i = 0; i < cparams.positive_entries.size(); ++i) {
         tokenized_prompt t = tokenized_prompts[i];
         cb_data.n_layers = n_layers;
         cb_data.n_tokens = t.max_seq_len;
 
-        // need to reload the model so it doesn't run out of context
-        // this should scale with -c option passed by main
-        token_ct += 2 * t.max_seq_len;
-        if (token_ct > n_ctx || cparams.always_reload) {
-            //break;
-            llama_free(ctx);
-            llama_free_model(model);
-            std::tie(model, ctx) = llama_init_from_gpt_params(params);
-            token_ct = 2 * t.max_seq_len;
-        }
-        if (token_ct > n_ctx) {
-            fprintf(stderr, "context size exceeded on iteration %zu\n", i);
-            break;
-        }
-
-        printf("Evaluating prompt: \"%s\" - \"%s\" (%ld tokens)\n", 
+        printf("Evaluating prompt[%ld/%ld]: \"%s\" - \"%s\" (%ld tokens)\n", 
+            i+1, t.tokens_pos.size(),
             tokens_to_str(ctx, t.tokens_pos.cbegin(), t.tokens_pos.cend()).c_str(),
             tokens_to_str(ctx, t.tokens_neg.cbegin(), t.tokens_neg.cend()).c_str(),
             t.max_seq_len);
@@ -610,12 +620,10 @@ int main(int argc, char ** argv) {
         auto v_diff_filtered = cb_data.calc_diff();
 
         // save & concat the filtered v_diff to ctx_train
-        printf("concat_diff_tmp\n");
         ctx_train.concat_diff_tmp(v_diff_filtered);
 
         // reset for next iteration
         cb_data.reset();
-        printf("reset\n");
     }
 
     // done with the model, we can now free it to make gain some memory
@@ -628,8 +636,10 @@ int main(int argc, char ** argv) {
 
     // run PCA
     PCA::pca_params pca_params;
+    pca_params.n_threads = params.n_threads;
+    pca_params.n_batch = cparams.n_pca_batch;
+    pca_params.n_iterations = cparams.n_pca_iterations;
     PCA::run_pca(pca_params, ctx_train.v_diff, ctx_train.v_final);
-    exit(0); // TODO: REMOVE ME !!!!!!!!!!!!!!!!!!!!!!!!
 
     // write output vectors to gguf
     export_gguf(ctx_train.v_final, cparams.outfile, model_hint);
