@@ -2740,7 +2740,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                 case GGML_UNARY_OP_HARDSWISH:
                 case GGML_UNARY_OP_GELU_QUICK:
                 case GGML_UNARY_OP_TANH:
-                    return true;
+                    return ggml_is_contiguous(op->src[0]);
                 default:
                     return false;
             }

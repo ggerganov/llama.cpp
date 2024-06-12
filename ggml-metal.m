@@ -744,7 +744,7 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
                 case GGML_UNARY_OP_GELU:
                 case GGML_UNARY_OP_GELU_QUICK:
                 case GGML_UNARY_OP_SILU:
-                    return true;
+                    return ggml_is_contiguous(op->src[0]);
                 default:
                     return false;
             }
