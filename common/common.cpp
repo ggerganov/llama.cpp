@@ -1982,13 +1982,13 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
 #endif // LOG_DISABLE_LOGS
 
     options.push_back({ "control-vector-generator" });
-    options.push_back({ "control-vector-generator", "-o,  --output FNAME",    "output file (default: '%s')", params.cvector_outfile.c_str() });
-    options.push_back({ "control-vector-generator", "--positive-file FNAME",  "positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str() });
-    options.push_back({ "control-vector-generator", "--negative-file FNAME",  "negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str() });
-    options.push_back({ "control-vector-generator", "--completions-file",     "completions file (default: '%s')", params.cvector_completions_file.c_str() });
-    options.push_back({ "control-vector-generator", "--num-completions N",    "number of lines of completions file to use (default: %d)", params.n_completions });
-    options.push_back({ "control-vector-generator", "--batch-pca N",          "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
-    options.push_back({ "control-vector-generator", "--iter-pca N",           "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
+    options.push_back({ "control-vector-generator", "-o,  --output FNAME",     "output file (default: '%s')", params.cvector_outfile.c_str() });
+    options.push_back({ "control-vector-generator", "--positive-file FNAME",   "positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str() });
+    options.push_back({ "control-vector-generator", "--negative-file FNAME",   "negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str() });
+    options.push_back({ "control-vector-generator", "--completions-file FNAME","completions file (default: '%s')", params.cvector_completions_file.c_str() });
+    options.push_back({ "control-vector-generator", "--num-completions N",     "number of lines of completions file to use (default: %d)", params.n_completions });
+    options.push_back({ "control-vector-generator", "--batch-pca N",           "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
+    options.push_back({ "control-vector-generator", "--iter-pca N",            "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
 
     printf("usage: %s [options]\n", argv[0]);
 

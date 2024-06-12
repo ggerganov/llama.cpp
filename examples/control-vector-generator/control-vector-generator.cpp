@@ -213,6 +213,7 @@ struct train_context {
     }
 
     // build the v_diff tensors from v_diff_tmp (v_diff need to be transposed)
+    // TODO @ngxson : maybe add option NOT to transpose v_diff; will be useful for "mean" method
     void build_v_diff() {
         printf("build_v_diff\n");
         for (int il = 0; il < n_layers - 1; il++) {
@@ -228,7 +229,6 @@ struct train_context {
             for (int ir = 0; ir < n_rows; ++ir) {
                 for (int ic = 0; ic < n_embd; ++ic) {
                     float f = arr[ir*n_embd + ic];
-                    //std::cout << ir << "," << ic << " = " << f << "\n";
                     ggml_set_f32_nd(diff, ir, ic, 0, 0, f);
                 }
             }
@@ -341,12 +341,9 @@ static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const 
         printf("Added tensor: %s\n", v_ctrl[i]->name);
     }
 
-    printf("Writing file...\n");
-
+    printf("%s: writing file...\n", __func__);
     gguf_write_to_file(ctx, fname.c_str(), false);
-
     printf("%s: wrote file '%s'\n", __func__, fname.c_str());
-
     gguf_free(ctx);
 }
 
@@ -370,11 +367,8 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
     // create templated prompts
     std::vector<std::string> completions = ctrlvec_load_prompt_file(params.cvector_completions_file, false);
     auto format_template = [](std::string persona, std::string suffix) {
-        //const std::string user_tag = "[INST]";
-        //const std::string asst_tag = "[/INST]";
-        //return user_tag + " Act as if you're extremely " + persona + ". " + asst_tag + " " + suffix;
-        // TODO make this dynamic - allow the user to change it somehow - and adapt based on model
-        return persona + " " + suffix; // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
+        // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
+        return persona + " " + suffix;
     };
     for (size_t i = 0; i < positive_prompts.size(); ++i) {
         for (int j = 0; j < std::min((int) completions.size(), params.n_completions); ++j) {

@@ -123,15 +123,6 @@ struct pca_model {
             }
             ggml_backend_tensor_set(dev_eigenvector, random_vec.data(), 0, ggml_nbytes(dev_eigenvector));
         }
-
-        // init host context
-        //struct ggml_init_params host_params = {
-        //    /*.mem_size   =*/ (n_embd * sizeof(float) + ggml_tensor_overhead()) * 2u,
-        //    /*.mem_buffer =*/ NULL,
-        //    /*.no_alloc   =*/ false,
-        //};
-        //ctx_host = ggml_init(host_params);
-        //host_eigenvector = ggml_new_tensor_1d(ctx_host, GGML_TYPE_F32, n_embd);
     }
 
     ~pca_model() {
@@ -322,7 +313,6 @@ static void run_pca(
         params.n_layers = v_input.size();
         power_iteration(params, v_input[il], ctrl_out);
         printf("%s: Done layer %d / %d\n", __func__, (int) il+1, (int) v_input.size());
-        //print_debug_tensor(ctrl_out);
     }
 }
 
