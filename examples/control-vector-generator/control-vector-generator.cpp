@@ -284,7 +284,8 @@ static std::vector<std::string> ctrlvec_load_prompt_file(std::string path, bool 
     std::vector<std::string> output;
     std::ifstream file(path);
     if (!file.is_open()) {
-        throw std::runtime_error("Unable to open file " + path);
+        fprintf(stderr, "error: unable to open file: %s\n", path.c_str());
+        exit(1);
     }
     std::string line;
     while (std::getline(file, line)) {
@@ -441,6 +442,7 @@ int main(int argc, char ** argv) {
     std::cout << "n_total_tokens: " << n_total_tokens << std::endl;
 
     for(size_t i = 0; i < ctx_train.positive_entries.size(); ++i) {
+        bool success = false;
         tokenized_prompt t = tokenized_prompts[i];
         cb_data.n_layers = n_layers;
         cb_data.n_tokens = t.max_seq_len;
@@ -452,9 +454,12 @@ int main(int argc, char ** argv) {
             (int) t.max_seq_len);
 
         cb_data.is_eval_pos = true;
-        get_hidden_layers(ctx, t.tokens_pos);
+        success = get_hidden_layers(ctx, t.tokens_pos);
+        if (!success) break;
+
         cb_data.is_eval_pos = false;
-        get_hidden_layers(ctx, t.tokens_neg);
+        success = get_hidden_layers(ctx, t.tokens_neg);
+        if (!success) break;
 
         // calculate diff and remove all zero rows
         auto v_diff_filtered = cb_data.calc_diff();
