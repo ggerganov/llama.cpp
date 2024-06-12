@@ -2187,7 +2187,6 @@ struct llama_vocab {
     bool tokenizer_add_bos          = false;
     bool tokenizer_add_eos          = false;
     bool tokenizer_ignore_merges    = false;
-    bool tokenizer_mask_lstrip      = false;
 
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const {
         GGML_ASSERT(token_left.find(' ') == std::string::npos);
@@ -4688,7 +4687,6 @@ static void llm_load_vocab(
                     tokenizer_pre == "jina-v2-de" ||
                     tokenizer_pre == "jina-v2-code") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
-                vocab.tokenizer_mask_lstrip = tokenizer_pre.find("jina-v2") < std::string::npos;
             } else if (
                     tokenizer_pre == "refact") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_REFACT;
@@ -4929,7 +4927,7 @@ static void llm_load_vocab(
         );
 
         // set attributes by model/tokenizer name
-        if (_contains_any(tokenizer_pre, {"jina-v2-es", "jina-v2-de"})) {
+        if (_contains_any(tokenizer_pre, {"jina-v2-"})) {
             _set_token_attr("<mask>", LLAMA_TOKEN_ATTR_LSTRIP, true);
         } else if (_contains_any(model_name, {"phi-3", "phi3"})) {
             for (auto id : vocab.cache_special_tokens) {
