@@ -3936,8 +3936,12 @@ struct llama_model_loader {
         }
 
 #if defined(GGML_USE_CUDA)
-        for (auto const& event : events) {
-            ggml_backend_event_synchronize(event);
+        for (size_t idx = 0; idx < num_buffers;++idx) {
+            ggml_backend_event_synchronize(events[idx]);
+            ggml_backend_event_free(events[idx]);
+            ggml_backend_buffer_free(host_buffers[idx]);
+
+            //ggml_backend_free(backend);
         }
 #endif
 
