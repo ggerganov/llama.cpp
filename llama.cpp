@@ -8867,7 +8867,7 @@ static struct ggml_tensor * llm_build_mamba(
 
         // {d_inner, n_seq_tokens, n_seqs} * {d_inner} => {d_inner, n_seq_tokens, n_seqs}
         y = ggml_add(ctx, y, ggml_mul(ctx, x, model.layers[il].ssm_d));
-        y = ggml_mul(ctx, y, ggml_silu(ctx, z));
+        y = ggml_mul(ctx, y, ggml_silu(ctx, ggml_cont(ctx, z)));
 
         // {d_inner, n_embd} @ {d_inner, n_seq_tokens, n_seqs} => {n_embd, n_seq_tokens, n_seqs}
         cur = ggml_mul_mat(ctx, model.layers[il].ssm_out, y);
