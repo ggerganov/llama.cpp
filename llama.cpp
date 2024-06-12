@@ -15231,19 +15231,25 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     if (params->only_copy) {
         ftype = model.ftype;
     }
-    const std::unordered_map<std::string, std::vector<float>> * imatrix_data = nullptr;
+    std::unordered_map<std::string, std::vector<float>> * imatrix_data = nullptr;
     if (params->imatrix) {
-        imatrix_data = static_cast<const std::unordered_map<std::string, std::vector<float>>*>(params->imatrix);
+        imatrix_data = static_cast<std::unordered_map<std::string, std::vector<float>>*>(params->imatrix);
         if (imatrix_data) {
             LLAMA_LOG_INFO("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
             qs.has_imatrix = true;
             // check imatrix for nans or infs
-            for (const auto & kv : *imatrix_data) {
-                for (float f : kv.second) {
-                    if (!std::isfinite(f)) {
-                        throw std::runtime_error(format("imatrix contains non-finite value %f\n", f));
+            for (auto it = imatrix_data->begin(); it != imatrix_data->end();) {
+                bool remove_entry = false;
+
+                for (float f : it->second) {
+                    if (!std::isnormal(f)) {
+                        LLAMA_LOG_WARN("imatrix entry \"%s\" contains non-normal value %f, skipping!\n", it->first.c_str(), f);
+                        remove_entry = true;
+                        break;
                     }
                 }
+
+                it = remove_entry ? imatrix_data->erase(it) : ++it;
             }
         }
     }
