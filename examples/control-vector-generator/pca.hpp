@@ -265,17 +265,13 @@ static void power_iteration(
     //printf("in power iteration\n");
     struct pca_model model(input);
 
-    ggml_gallocr_t allocr = NULL;
+    ggml_gallocr_t allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
     struct pca_result result;
     struct ggml_tensor * last_eigenvector = NULL;
 
     int n_iters = params.n_iterations / params.n_batch; // more batch, fewer iterations
     for (int iter = 0; iter < n_iters; ++iter) {
         bool calc_square = (iter == 0); // only need to calculate square for first iteration
-        if (allocr) {
-            ggml_gallocr_free(allocr);
-        }
-        allocr = ggml_gallocr_new(ggml_backend_get_default_buffer_type(model.backend));
         struct ggml_cgraph * gf = build_graph_piter(params, model, calc_square);
         // ggml_graph_dump_dot(gf, nullptr, "/tmp/_cgraph.dot");
         compute_piter(params, model, gf, allocr, result);
