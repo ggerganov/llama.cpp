@@ -96,7 +96,7 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
 
                 const int min_cols_per_thread = 4096;
                 const int min_rows_per_thread = std::max((int)(min_cols_per_thread/ne00), 1);
-                const int n_threads = std::min(ctx->n_threads, (int)(ne01/min_rows_per_thread));
+                const int n_threads = std::max(std::min(ctx->n_threads, (int)(ne01/min_rows_per_thread)), 1);
 
 #ifdef GGML_USE_OPENMP
                 #pragma omp parallel for num_threads(n_threads)
@@ -116,7 +116,7 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
                     }
                 }
                 {
-                    // reuse the current thread for the last task
+                    // reuse the current thread for the first task
                     const int64_t start = 0;
                     const int64_t end   = ne01/n_threads;
                     for (int64_t i01 = start; i01 < end; i01++) {
