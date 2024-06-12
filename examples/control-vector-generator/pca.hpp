@@ -21,7 +21,7 @@
 #define DEBUG_POS 5
 
 static void print_debug_tensor(struct ggml_tensor * t, bool with_data = true) {
-    printf("%s: %s (%s): [%ld, %ld]\n", __func__, t->name, ggml_type_name(t->type), (size_t) t->ne[0], (size_t) t->ne[1]);
+    printf("%s: %s (%s): [%d, %d]\n", __func__, t->name, ggml_type_name(t->type), (int) t->ne[0], (int) t->ne[1]);
     if (!with_data) return;
     printf("%s: %s[0] = [", __func__, t->name);
     for (size_t i = 0; i <= DEBUG_POS; i++) {
@@ -325,7 +325,7 @@ static void run_pca(
         params.i_layer = il;
         params.n_layers = v_input.size();
         power_iteration(params, v_input[il], ctrl_out);
-        printf("%s: Done layer %ld / %ld\n", __func__, il+1, v_input.size());
+        printf("%s: Done layer %d / %d\n", __func__, (int) il+1, v_input.size());
         //print_debug_tensor(ctrl_out);
     }
 }

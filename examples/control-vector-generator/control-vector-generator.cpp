@@ -603,11 +603,11 @@ int main(int argc, char ** argv) {
         cb_data.n_layers = n_layers;
         cb_data.n_tokens = t.max_seq_len;
 
-        printf("Evaluating prompt[%ld/%ld]: \"%s\" - \"%s\" (%ld tokens)\n",
-            i+1, cparams.positive_entries.size(),
+        printf("Evaluating prompt[%d/%d]: \"%s\" - \"%s\" (%d tokens)\n",
+            (int) i+1, (int) cparams.positive_entries.size(),
             tokens_to_str(ctx, t.tokens_pos.cbegin(), t.tokens_pos.cend()).c_str(),
             tokens_to_str(ctx, t.tokens_neg.cbegin(), t.tokens_neg.cend()).c_str(),
-            t.max_seq_len);
+            (int) t.max_seq_len);
 
         cb_data.is_eval_pos = true;
         get_hidden_layers(ctx, t.tokens_pos);
