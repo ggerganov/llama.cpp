@@ -1272,9 +1272,9 @@ def context_text(context):
 
 def start_server_background(context):
     if os.name == 'nt':
-        context.server_path = '../../../build/bin/Release/server.exe'
+        context.server_path = '../../../build/bin/Release/llama-server.exe'
     else:
-        context.server_path = '../../../build/bin/server'
+        context.server_path = '../../../build/bin/llama-server'
     if 'LLAMA_SERVER_BIN_PATH' in os.environ:
         context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
     server_listen_addr = context.server_fqdn

@@ -7,6 +7,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -69,13 +71,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    fseek(grammar_file, 0, SEEK_END);
-    size_t grammar_size = ftell(grammar_file);
-    fseek(grammar_file, 0, SEEK_SET);
-
-    std::string grammar_str(grammar_size, ' ');
-    fread(&grammar_str[0], 1, grammar_size, grammar_file);
-    fclose(grammar_file);
+    std::string grammar_str;
+    {
+        std::ifstream grammar_file(grammar_filename);
+        GGML_ASSERT(grammar_file.is_open() && "Failed to open grammar file");
+        std::stringstream buffer;
+        buffer << grammar_file.rdbuf();
+        grammar_str = buffer.str();
+    }
 
     // Parse the GBNF grammar
     auto parsed_grammar = grammar_parser::parse(grammar_str.c_str());
@@ -100,19 +103,14 @@ int main(int argc, char** argv) {
             grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
 
     // Read the input file
-    FILE* input_file = fopen(input_filename.c_str(), "r");
-    if (!input_file) {
-        fprintf(stdout, "Failed to open input file: %s\n", input_filename.c_str());
-        return 1;
+    std::string input_str;
+    {
+        std::ifstream input_file(input_filename);
+        GGML_ASSERT(input_file.is_open() && "Failed to open input file");
+        std::stringstream buffer;
+        buffer << input_file.rdbuf();
+        input_str = buffer.str();
     }
-
-    fseek(input_file, 0, SEEK_END);
-    size_t input_size = ftell(input_file);
-    fseek(input_file, 0, SEEK_SET);
-
-    std::string input_str(input_size, ' ');
-    fread(&input_str[0], 1, input_size, input_file);
-    fclose(input_file);
 
     // Validate the input string against the grammar
     size_t error_pos;

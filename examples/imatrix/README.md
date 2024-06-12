@@ -6,7 +6,7 @@ More information is available here: https://github.com/ggerganov/llama.cpp/pull/
 ## Usage
 
 ```
-./imatrix \
+./llama-imatrix \
     -m model.gguf -f some-text.txt [-o imatrix.dat] [--process-output] [--verbosity 1] \
     [--no-ppl] [--chunk 123] [--output-frequency 10] [--save-frequency 0] \
     [--in-file imatrix-prev-0.dat --in-file imatrix-prev-1.dat ...]
@@ -28,8 +28,8 @@ For faster computation, make sure to use GPU offloading via the `-ngl` argument
 LLAMA_CUDA=1 make -j
 
 # generate importance matrix (imatrix.dat)
-./imatrix -m ggml-model-f16.gguf -f train-data.txt -ngl 99
+./llama-imatrix -m ggml-model-f16.gguf -f train-data.txt -ngl 99
 
 # use the imatrix to perform a Q4_K_M quantization
-./quantize --imatrix imatrix.dat ggml-model-f16.gguf ./ggml-model-q4_k_m.gguf q4_k_m
+./llama-quantize --imatrix imatrix.dat ggml-model-f16.gguf ./ggml-model-q4_k_m.gguf q4_k_m
 ```

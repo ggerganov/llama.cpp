@@ -40,6 +40,11 @@ ENV LLAMA_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 
-RUN make -j$(nproc) main
+# Enable cURL
+ENV LLAMA_CURL=1
+RUN apt-get update && \
+    apt-get install -y libcurl4-openssl-dev
 
-ENTRYPOINT [ "/app/main" ]
+RUN make -j$(nproc) llama-server
+
+ENTRYPOINT [ "/app/llama-server" ]
