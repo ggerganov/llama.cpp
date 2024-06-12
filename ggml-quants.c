@@ -3807,14 +3807,14 @@ void ggml_vec_dot_i2_i8_s(int n, float * restrict s, size_t bs, const void * res
 //     __m256i accu = _mm256_setzero_si256();
 
 //     for (int i=0; i<n/32; i++) {
-//         const int8_t* w0 = (const int8_t *)(i2_q8 + x[i*8 + 0]);
-//         const int8_t* w1 = (const int8_t *)(i2_q8 + x[i*8 + 1]);
-//         const int8_t* w2 = (const int8_t *)(i2_q8 + x[i*8 + 2]);
-//         const int8_t* w3 = (const int8_t *)(i2_q8 + x[i*8 + 3]);
-//         const int8_t* w4 = (const int8_t *)(i2_q8 + x[i*8 + 4]);
-//         const int8_t* w5 = (const int8_t *)(i2_q8 + x[i*8 + 5]);
-//         const int8_t* w6 = (const int8_t *)(i2_q8 + x[i*8 + 6]);
-//         const int8_t* w7 = (const int8_t *)(i2_q8 + x[i*8 + 7]);
+//         const int8_t* w0 = (const int8_t *)(i2s_i8s + x[i*8 + 0]);
+//         const int8_t* w1 = (const int8_t *)(i2s_i8s + x[i*8 + 1]);
+//         const int8_t* w2 = (const int8_t *)(i2s_i8s + x[i*8 + 2]);
+//         const int8_t* w3 = (const int8_t *)(i2s_i8s + x[i*8 + 3]);
+//         const int8_t* w4 = (const int8_t *)(i2s_i8s + x[i*8 + 4]);
+//         const int8_t* w5 = (const int8_t *)(i2s_i8s + x[i*8 + 5]);
+//         const int8_t* w6 = (const int8_t *)(i2s_i8s + x[i*8 + 6]);
+//         const int8_t* w7 = (const int8_t *)(i2s_i8s + x[i*8 + 7]);
 
 //         __m256i xq8 = _mm256_set_epi8(
 //             w0[0], w0[1], w0[2], w0[3],
@@ -3860,7 +3860,7 @@ void ggml_vec_dot_i2_i8_s(int n, float * restrict s, size_t bs, const void * res
     int sumi = 0;
 
     for (int i = 0; i < n / 4; i++) {
-        const int8_t* weight = (const int8_t *)(i2_q8 + x[i]);
+        const int8_t* weight = (const int8_t *)(i2s_i8s + x[i]);
         sumi += (int)y[i*4+0] * weight[0];
         sumi += (int)y[i*4+1] * weight[1];
         sumi += (int)y[i*4+2] * weight[2];
