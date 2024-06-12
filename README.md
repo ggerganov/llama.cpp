@@ -10,6 +10,9 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+> [!IMPORTANT]
+[2024 Jun 12] Binaries have been renamed w/ a `llama-` prefix. `main` is now `llama-cli`, `server` is `llama-server`, etc (https://github.com/ggerganov/llama.cpp/pull/7809)
+
 ### Recent API changes
 
 - [2024 Apr 21] `llama_token_to_piece` can now optionally render special tokens https://github.com/ggerganov/llama.cpp/pull/6807
@@ -53,7 +56,6 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
         <li><a href="#quantization">Quantization</a></li>
         <li><a href="#interactive-mode">Interactive mode</a></li>
         <li><a href="#constrained-output-with-grammars">Constrained output with grammars</a></li>
-        <li><a href="#instruct-mode">Instruct mode</a></li>
         <li><a href="#obtaining-and-using-the-facebook-llama-2-model">Obtaining and using the Facebook LLaMA 2 model</a></li>
         <li><a href="#seminal-papers-and-background-on-the-models">Seminal papers and background on the models</a></li>
         <li><a href="#perplexity-measuring-model-quality">Perplexity (measuring model quality)</a></li>
@@ -218,7 +220,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
 
 ```
-$ make -j && ./main -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
+$ make -j && ./llama-cli -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
 I llama.cpp build info:
 I UNAME_S:  Darwin
 I UNAME_P:  arm
@@ -556,7 +558,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   ```sh
   # Build the image
-  docker build -t llama-cpp-vulkan -f .devops/main-vulkan.Dockerfile .
+  docker build -t llama-cpp-vulkan -f .devops/llama-cli-vulkan.Dockerfile .
 
   # Then, use it:
   docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
@@ -577,7 +579,9 @@ Building the program with BLAS support may lead to some performance improvements
   vulkaninfo
   ```
 
-  Alternatively your package manager might be able to provide the appropiate libraries. For example for Ubuntu 22.04 you can install `libvulkan-dev` instead.
+  Alternatively your package manager might be able to provide the appropriate libraries.
+  For example for Ubuntu 22.04 you can install `libvulkan-dev` instead.
+  For Fedora 40, you can install `vulkan-devel`, `glslc` and `glslang` packages.
 
   Then, build llama.cpp using the cmake command below:
 
@@ -585,7 +589,7 @@ Building the program with BLAS support may lead to some performance improvements
   cmake -B build -DLLAMA_VULKAN=1
   cmake --build build --config Release
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
-  ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
+  ./bin/llama-cli -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
 
   # You should see in the output, ggml_vulkan detected your GPU. For example:
   # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
@@ -622,17 +626,17 @@ python3 convert-hf-to-gguf.py models/mymodel/
 python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
 
 # quantize the model to 4-bits (using Q4_K_M method)
-./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
+./llama-quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
 
 # update the gguf filetype to current version if older version is now unsupported
-./quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
+./llama-quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
 ```
 
 ### Run the quantized model
 
 ```bash
 # start inference on a gguf model
-./main -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
+./llama-cli -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -707,7 +711,7 @@ The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 thread
 #### How to run
 
 1. Download/extract: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-2. Run `./perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
+2. Run `./llama-perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
 3. Output:
 ```
 perplexity : calculating perplexity over 655 chunks
@@ -731,16 +735,16 @@ Here is an example of a few-shot interaction, invoked with the command
 ./examples/chat-13B.sh
 
 # custom arguments using a 13B model
-./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
+./llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
-Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
+Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `llama-cli` example program.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
 
 ### Persistent Interaction
 
-The prompt, user inputs, and model generations can be saved and resumed across calls to `./main` by leveraging `--prompt-cache` and `--prompt-cache-all`. The `./examples/chat-persistent.sh` script demonstrates this with support for long-running, resumable chat sessions. To use this example, you must provide a file to cache the initial chat prompt and a directory to save the chat session, and may optionally provide the same variables as `chat-13B.sh`. The same prompt cache can be reused for new chat sessions. Note that both prompt cache and chat directory are tied to the initial prompt (`PROMPT_TEMPLATE`) and the model file.
+The prompt, user inputs, and model generations can be saved and resumed across calls to `./llama-cli` by leveraging `--prompt-cache` and `--prompt-cache-all`. The `./examples/chat-persistent.sh` script demonstrates this with support for long-running, resumable chat sessions. To use this example, you must provide a file to cache the initial chat prompt and a directory to save the chat session, and may optionally provide the same variables as `chat-13B.sh`. The same prompt cache can be reused for new chat sessions. Note that both prompt cache and chat directory are tied to the initial prompt (`PROMPT_TEMPLATE`) and the model file.
 
 ```bash
 # Start a new chat
@@ -762,40 +766,12 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
 `llama.cpp` supports grammars to constrain model output. For example, you can force the model to output JSON only:
 
 ```bash
-./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
+./llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
 ```
 
 The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
 
 For authoring more complex JSON grammars, you can also check out https://grammar.intrinsiclabs.ai/, a browser app that lets you write TypeScript interfaces which it compiles to GBNF grammars that you can save for local use. Note that the app is built and maintained by members of the community, please file any issues or FRs on [its repo](http://github.com/intrinsiclabsai/gbnfgen) and not this one.
-
-### Instruct mode
-
-1. First, download and place the `ggml` model into the `./models` folder
-2. Run the `main` tool like this:
-
-```
-./examples/alpaca.sh
-```
-
-Sample run:
-
-```
-== Running in interactive mode. ==
- - Press Ctrl+C to interject at any time.
- - Press Return to return control to LLaMA.
- - If you want to submit another line, end your input in '\'.
-
- Below is an instruction that describes a task. Write a response that appropriately completes the request.
-
-> How many letters are there in the English alphabet?
-There 26 letters in the English Alphabet
-> What is the most common way of transportation in Amsterdam?
-The majority (54%) are using public transit. This includes buses, trams and metros with over 100 lines throughout the city which make it very accessible for tourists to navigate around town as well as locals who commute by tram or metro on a daily basis
-> List 5 words that start with "ca".
-cadaver, cauliflower, cabbage (vegetable), catalpa (tree) and Cailleach.
->
-```
 
 ### Obtaining and using the Facebook LLaMA 2 model
 
@@ -869,7 +845,7 @@ $mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/ho
 Now, you can start chatting:
 ```
 $cd /data/data/com.termux/files/home/bin
-$./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+$./llama-cli -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
 ```
 
 Here's a demo of an interactive session running on Pixel 5 phone:
@@ -936,8 +912,8 @@ Assuming one has the [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia
 
 ```bash
 docker build -t local/llama.cpp:full-cuda -f .devops/full-cuda.Dockerfile .
-docker build -t local/llama.cpp:light-cuda -f .devops/main-cuda.Dockerfile .
-docker build -t local/llama.cpp:server-cuda -f .devops/server-cuda.Dockerfile .
+docker build -t local/llama.cpp:light-cuda -f .devops/llama-cli-cuda.Dockerfile .
+docker build -t local/llama.cpp:server-cuda -f .devops/llama-server-cuda.Dockerfile .
 ```
 
 You may want to pass in some different `ARGS`, depending on the CUDA environment supported by your container host, as well as the GPU architecture.
@@ -987,7 +963,7 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m 
 
 ### Docs
 
-- [main](./examples/main/README.md)
+- [main (cli)](./examples/main/README.md)
 - [server](./examples/server/README.md)
 - [jeopardy](./examples/jeopardy/README.md)
 - [BLIS](./docs/BLIS.md)

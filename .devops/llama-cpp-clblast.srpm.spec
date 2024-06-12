@@ -36,9 +36,9 @@ make -j LLAMA_CLBLAST=1
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p main %{buildroot}%{_bindir}/llamaclblast
-cp -p server %{buildroot}%{_bindir}/llamaclblastserver
-cp -p simple %{buildroot}%{_bindir}/llamaclblastsimple
+cp -p llama-cli %{buildroot}%{_bindir}/llama-clblast-cli
+cp -p llama-server %{buildroot}%{_bindir}/llama-clblast-server
+cp -p llama-simple %{buildroot}%{_bindir}/llama-clblast-simple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system
 %{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llamaclblast.service
@@ -49,7 +49,7 @@ After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.t
 [Service]
 Type=simple
 EnvironmentFile=/etc/sysconfig/llama
-ExecStart=/usr/bin/llamaclblastserver $LLAMA_ARGS
+ExecStart=/usr/bin/llama-clblast-server $LLAMA_ARGS
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=never
 
@@ -67,9 +67,9 @@ rm -rf %{buildroot}
 rm -rf %{_builddir}/*
 
 %files
-%{_bindir}/llamaclblast
-%{_bindir}/llamaclblastserver
-%{_bindir}/llamaclblastsimple
+%{_bindir}/llama-clblast-cli
+%{_bindir}/llama-clblast-server
+%{_bindir}/llama-clblast-simple
 /usr/lib/systemd/system/llamaclblast.service
 %config /etc/sysconfig/llama
 
