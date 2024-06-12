@@ -13,7 +13,7 @@ on:
     paths: ['.github/workflows/**', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
   pull_request:
     types: [opened, synchronize, reopened]
-    paths: ['**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.swift', '**/*.m']
+    paths: ['.github/workflows/build.yml', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.cuh', '**/*.swift', '**/*.m']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
@@ -684,7 +684,7 @@ jobs:
             cmake --build build --config ${{ matrix.build }} -j $(nproc)
 
   windows-latest-cmake:
-    runs-on: windows-latest
+    runs-on: windows-2019
 
     env:
       OPENBLAS_VERSION: 0.3.23
@@ -829,7 +829,7 @@ jobs:
           name: llama-bin-win-${{ matrix.build }}.zip
 
   windows-latest-cmake-cuda:
-    runs-on: windows-latest
+    runs-on: windows-2019
 
     strategy:
       matrix:
@@ -843,8 +843,9 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: Jimver/cuda-toolkit@v0.2.11
+      - name: Install CUDA toolkit
         id: cuda-toolkit
+        uses: Jimver/cuda-toolkit@v0.2.15
         with:
           cuda: ${{ matrix.cuda }}
           method: 'network'

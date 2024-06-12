@@ -6,10 +6,6 @@
 #include "ggml-metal.h"
 #endif
 
-#ifdef GGML_USE_SYCL
-#include "ggml-sycl.h"
-#endif
-
 #include "ggml-rpc.h"
 #ifdef _WIN32
 #  include <windows.h>
@@ -82,12 +78,6 @@ static ggml_backend_t create_backend() {
     backend = ggml_backend_metal_init();
     if (!backend) {
         fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
-    }
-#elif GGML_USE_SYCL
-    fprintf(stderr, "%s: using SYCL backend\n", __func__);
-    backend = ggml_backend_sycl_init(0); // init device 0
-    if (!backend) {
-        fprintf(stderr, "%s: ggml_backend_sycl_init() failed\n", __func__);
     }
 #endif
 

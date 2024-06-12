@@ -1,5 +1,5 @@
 #include "ggml-vulkan.h"
-
+#include <vulkan/vulkan_core.h>
 #ifdef GGML_VULKAN_RUN_TESTS
 #include <chrono>
 #endif
@@ -9,12 +9,13 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-#include <limits>
 #include <tuple>
 #include <vector>
 #include <sstream>
 #include <utility>
 #include <memory>
+#include <limits>
+#include <map>
 
 #include "ggml.h"
 #include "ggml-backend-impl.h"
@@ -150,7 +151,7 @@ struct vk_device {
     vk_pipeline pipeline_relu_f32;
     vk_pipeline pipeline_diag_mask_inf_f32;
     vk_pipeline pipeline_soft_max_f32, pipeline_soft_max_f32_f16;
-    vk_pipeline pipeline_rope_f32, pipeline_rope_f16;
+    vk_pipeline pipeline_rope_norm_f32, pipeline_rope_norm_f16;
     vk_pipeline pipeline_rope_neox_f32, pipeline_rope_neox_f16;
     vk_pipeline pipeline_argsort_f32;
     vk_pipeline pipeline_sum_rows_f32;
@@ -283,26 +284,15 @@ struct vk_op_diag_mask_push_constants {
 
 struct vk_op_rope_push_constants {
     uint32_t ncols;
+    uint32_t n_dims;
     float freq_scale;
     uint32_t p_delta_rows;
     float freq_base;
     float ext_factor;
     float attn_factor;
-    float corr_dims[4];
-};
-
-struct vk_op_rope_neox_push_constants {
-    uint32_t ncols;
-    uint32_t ndims;
-    float freq_scale;
-    uint32_t p_delta_rows;
-    float freq_base;
-    float ext_factor;
-    float attn_factor;
-    float corr_dims[4];
+    float corr_dims[2];
     float theta_scale;
-    float inv_ndims;
-    uint32_t has_freq_facs;
+    uint32_t has_ff;
 };
 
 struct vk_op_soft_max_push_constants {
@@ -1534,11 +1524,11 @@ static void ggml_vk_load_shaders(ggml_backend_vk_context * ctx) {
     ggml_vk_create_pipeline(ctx, ctx->device->pipeline_soft_max_f32, "soft_max_f32", soft_max_f32_len, soft_max_f32_data, "main", 3, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, {}, 1);
     ggml_vk_create_pipeline(ctx, ctx->device->pipeline_soft_max_f32_f16, "soft_max_f32_f16", soft_max_f32_f16_len, soft_max_f32_f16_data, "main", 3, sizeof(vk_op_soft_max_push_constants), {1, 1, 1}, {}, 1);
 
-    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_f32, "rope_f32", rope_f32_len, rope_f32_data, "main", 3, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
-    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_f16, "rope_f16", rope_f16_len, rope_f16_data, "main", 3, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
+    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_norm_f32, "rope_norm_f32", rope_norm_f32_len, rope_norm_f32_data, "main", 4, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
+    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_norm_f16, "rope_norm_f16", rope_norm_f16_len, rope_norm_f16_data, "main", 4, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
 
-    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_neox_f32, "rope_neox_f32", rope_neox_f32_len, rope_neox_f32_data, "main", 4, sizeof(vk_op_rope_neox_push_constants), {1, 512, 1}, {}, 1);
-    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_neox_f16, "rope_neox_f16", rope_neox_f16_len, rope_neox_f16_data, "main", 4, sizeof(vk_op_rope_neox_push_constants), {1, 512, 1}, {}, 1);
+    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_neox_f32, "rope_neox_f32", rope_neox_f32_len, rope_neox_f32_data, "main", 4, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
+    ggml_vk_create_pipeline(ctx, ctx->device->pipeline_rope_neox_f16, "rope_neox_f16", rope_neox_f16_len, rope_neox_f16_data, "main", 4, sizeof(vk_op_rope_push_constants), {1, 512, 1}, {}, 1);
 
     ggml_vk_create_pipeline(ctx, ctx->device->pipeline_argsort_f32, "argsort_f32", argsort_f32_len, argsort_f32_data, "main", 2, sizeof(vk_op_argsort_push_constants), {1024, 1, 1}, {}, 1);
 
@@ -1566,8 +1556,10 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     vk::PhysicalDeviceProperties2 props2;
     vk::PhysicalDeviceMaintenance3Properties props3;
     vk::PhysicalDeviceSubgroupProperties subgroup_props;
+    vk::PhysicalDeviceDriverProperties driver_props;
     props2.pNext = &props3;
     props3.pNext = &subgroup_props;
+    subgroup_props.pNext = &driver_props;
     physical_device.getProperties2(&props2);
 
     const size_t subgroup_size = subgroup_props.subgroupSize;
@@ -1611,7 +1603,7 @@ static void ggml_vk_print_gpu_info(size_t idx) {
     fp16 = fp16 && vk12_features.shaderFloat16;
 
     std::string device_name = props2.properties.deviceName.data();
-    std::cerr << GGML_VK_NAME << idx << ": " << device_name << " | uma: " << uma << " | fp16: " << fp16 << " | warp size: " << subgroup_size << std::endl;
+    std::cerr << GGML_VK_NAME << idx << ": " << device_name << " (" << driver_props.driverName << ") | uma: " << uma << " | fp16: " << fp16 << " | warp size: " << subgroup_size << std::endl;
 
     if (props2.properties.deviceType == vk::PhysicalDeviceType::eCpu) {
         std::cerr << "ggml_vulkan: Warning: Device type is CPU. This is probably not the device you want." << std::endl;
@@ -1707,7 +1699,78 @@ void ggml_vk_instance_init() {
             vk::PhysicalDeviceProperties props = devices[i].getProperties();
 
             if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
-                vk_instance.device_indices.push_back(i);
+                // Check if there are two physical devices corresponding to the same GPU
+                auto old_device = std::find_if(
+                    vk_instance.device_indices.begin(),
+                    vk_instance.device_indices.end(),
+                    [&devices, &props](const size_t k){ return devices[k].getProperties().deviceID == props.deviceID; }
+                );
+                if (old_device == vk_instance.device_indices.end()) {
+                    vk_instance.device_indices.push_back(i);
+                } else {
+                    // There can be two physical devices corresponding to the same GPU if there are 2 different drivers
+                    // This can cause error when splitting layers aross the devices, need to keep only 1
+#ifdef GGML_VULKAN_DEBUG
+                    std::cerr << "Device " << i << " and device " << *old_device << " have the same device id" << std::endl;
+#endif
+
+                    vk::PhysicalDeviceProperties2 old_prop;
+                    vk::PhysicalDeviceDriverProperties old_driver;
+                    old_prop.pNext = &old_driver;
+                    devices[*old_device].getProperties2(&old_prop);
+
+                    vk::PhysicalDeviceProperties2 new_prop;
+                    vk::PhysicalDeviceDriverProperties new_driver;
+                    new_prop.pNext = &new_driver;
+                    devices[i].getProperties2(&new_prop);
+
+                    std::map<vk::DriverId, int> driver_priorities {};
+                    int old_priority = std::numeric_limits<int>::max();
+                    int new_priority = std::numeric_limits<int>::max();
+
+                    // Check https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkDriverId.html for the list of driver id
+                    // Smaller number -> higher priority
+                    switch (old_prop.properties.vendorID) {
+                        case VK_VENDOR_ID_AMD:
+                            driver_priorities[vk::DriverId::eMesaRadv] = 1;
+                            driver_priorities[vk::DriverId::eAmdOpenSource] = 2;
+                            driver_priorities[vk::DriverId::eAmdProprietary] = 3;
+                            break;
+                        case VK_VENDOR_ID_INTEL:
+                            driver_priorities[vk::DriverId::eIntelOpenSourceMESA] = 1;
+                            driver_priorities[vk::DriverId::eIntelProprietaryWindows] = 2;
+                            break;
+                        case VK_VENDOR_ID_NVIDIA:
+                            driver_priorities[vk::DriverId::eNvidiaProprietary] = 1;
+#if defined(VK_API_VERSION_1_3) && VK_HEADER_VERSION >= 235
+                            driver_priorities[vk::DriverId::eMesaNvk] = 2;
+#endif
+                            break;
+                    }
+
+                    if (driver_priorities.count(old_driver.driverID)) {
+                        old_priority = driver_priorities[old_driver.driverID];
+                    }
+                    if (driver_priorities.count(new_driver.driverID)) {
+                        new_priority = driver_priorities[new_driver.driverID];
+                    }
+
+                    if (new_priority < old_priority) {
+                        auto r = std::remove(vk_instance.device_indices.begin(), vk_instance.device_indices.end(), *old_device);
+                        vk_instance.device_indices.erase(r, vk_instance.device_indices.end());
+                        vk_instance.device_indices.push_back(i);
+
+#ifdef GGML_VULKAN_DEBUG
+                        std::cerr << "Prioritize device " << i << " driver " << new_driver.driverName << " over device " << *old_device << " driver " << old_driver.driverName << std::endl;
+#endif
+                    }
+#ifdef GGML_VULKAN_DEBUG
+                    else {
+                        std::cerr << "Prioritize device " << *old_device << " driver " << old_driver.driverName << " over device " << i << " driver " << new_driver.driverName << std::endl;
+
+                    }
+#endif
+                }
             }
         }
 
@@ -3905,10 +3968,10 @@ static vk_pipeline ggml_vk_op_get_pipeline(ggml_backend_vk_context * ctx, const 
                 }
             } else {
                 if (src0->type == GGML_TYPE_F32 && dst->type == GGML_TYPE_F32) {
-                    return ctx->device->pipeline_rope_f32;
+                    return ctx->device->pipeline_rope_norm_f32;
                 }
                 if (src0->type == GGML_TYPE_F16 && dst->type == GGML_TYPE_F16) {
-                    return ctx->device->pipeline_rope_f16;
+                    return ctx->device->pipeline_rope_norm_f16;
                 }
             }
             return nullptr;
@@ -4152,24 +4215,16 @@ static void ggml_vk_op_f32(ggml_backend_vk_context * ctx, vk_context * subctx, c
             ggml_vk_sync_buffers(subctx);
             ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, { { d_X, x_buf_offset, x_sz }, subbuf_y, { d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
         } else if (op == GGML_OP_ROPE) {
-            const int mode          = ((int32_t *) dst->op_params)[2];
-            const bool is_neox = mode & 2;
-
-            if (is_neox) {
-                // Empty src2 is possible in rope, but the shader needs a buffer
-                vk_subbuffer subbuf_z;
-                if (use_src2) {
-                    subbuf_z = { d_Z, z_buf_offset, z_sz };
-                } else {
-                    subbuf_z = { d_X, 0, d_X->size };
-                }
-
-                ggml_vk_sync_buffers(subctx);
-                ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, { { d_X, x_buf_offset, x_sz }, { d_Y, y_buf_offset, y_sz }, subbuf_z, { d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
+            // Empty src2 is possible in rope, but the shader needs a buffer
+            vk_subbuffer subbuf_z;
+            if (use_src2) {
+                subbuf_z = { d_Z, z_buf_offset, z_sz };
             } else {
-                ggml_vk_sync_buffers(subctx);
-                ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, { { d_X, x_buf_offset, x_sz }, { d_Y, y_buf_offset, y_sz }, { d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
+                subbuf_z = { d_X, 0, d_X->size };
             }
+
+            ggml_vk_sync_buffers(subctx);
+            ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, { { d_X, x_buf_offset, x_sz }, { d_Y, y_buf_offset, y_sz }, subbuf_z, { d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
         } else if (use_src2) {
             ggml_vk_sync_buffers(subctx);
             ggml_vk_dispatch_pipeline(ctx, subctx, pipeline, { { d_X, x_buf_offset, x_sz }, { d_Y, y_buf_offset, y_sz }, { d_Z, z_buf_offset, z_sz }, { d_D, d_buf_offset, d_sz } }, sizeof(PC), &pc, elements);
@@ -4391,7 +4446,7 @@ static void ggml_vk_soft_max(ggml_backend_vk_context * ctx, vk_context * subctx,
 
 static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context * subctx, const ggml_tensor * src0, const ggml_tensor * src1, const ggml_tensor * src2, ggml_tensor * dst) {
     const int n_dims        = ((int32_t *) dst->op_params)[1];
-    const int mode          = ((int32_t *) dst->op_params)[2];
+    // const int mode          = ((int32_t *) dst->op_params)[2];
     // const int n_ctx         = ((int32_t *) dst->op_params)[3];
     const int n_ctx_orig    = ((int32_t *) dst->op_params)[4];
     const float freq_base   = ((float *)   dst->op_params)[5];
@@ -4401,28 +4456,16 @@ static void ggml_vk_rope(ggml_backend_vk_context * ctx, vk_context * subctx, con
     const float beta_fast   = ((float *)   dst->op_params)[9];
     const float beta_slow   = ((float *)   dst->op_params)[10];
 
-    const bool is_neox = mode & 2;
-
-#pragma message("TODO: update rope NORM mode to match NEOX mode")
-#pragma message("      https://github.com/ggerganov/llama.cpp/pull/7634")
-
     float corr_dims[2];
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
-    if (is_neox) {
-        const float theta_scale = powf(freq_base, -2.0f/n_dims);
-        const float inv_ndims = -1.0f / n_dims;
-        ggml_vk_op_f32<vk_op_rope_neox_push_constants>(ctx, subctx, src0, src1, src2, dst, GGML_OP_ROPE, {
-            (uint32_t)src0->ne[0], (uint32_t)n_dims, freq_scale, (uint32_t)src0->ne[1],
-            freq_base, ext_factor, attn_factor, {corr_dims[0], corr_dims[1], 0.0f, 0.0f}, theta_scale, inv_ndims,
-            src2 != nullptr,
-        });
-    } else {
-        ggml_vk_op_f32<vk_op_rope_push_constants>(ctx, subctx, src0, src1, src2, dst, GGML_OP_ROPE, {
-            (uint32_t)src0->ne[0], freq_scale, (uint32_t)src0->ne[1],
-            freq_base, ext_factor, attn_factor, {corr_dims[0], corr_dims[1], 0.0f, 0.0f}
-        });
-    }
+    const float theta_scale = powf(freq_base, -2.0f/n_dims);
+
+    ggml_vk_op_f32<vk_op_rope_push_constants>(ctx, subctx, src0, src1, src2, dst, GGML_OP_ROPE, {
+        (uint32_t)src0->ne[0], (uint32_t)n_dims, freq_scale, (uint32_t)src0->ne[1],
+        freq_base, ext_factor, attn_factor, {corr_dims[0], corr_dims[1]}, theta_scale,
+        src2 != nullptr,
+    });
 }
 
 static void ggml_vk_argsort(ggml_backend_vk_context * ctx, vk_context * subctx, const ggml_tensor * src0, ggml_tensor * dst) {
@@ -6070,7 +6113,13 @@ GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_buffer_type_alloc_buffer(
     std::cerr << "ggml_backend_vk_buffer_type_alloc_buffer(" << size << ")" << std::endl;
 #endif
     ggml_backend_vk_buffer_type_context * ctx = (ggml_backend_vk_buffer_type_context *) buft->context;
-    vk_buffer dev_buffer = ggml_vk_create_buffer_device(ctx->ctx, size);
+
+    vk_buffer dev_buffer = nullptr;
+    try {
+        dev_buffer = ggml_vk_create_buffer_device(ctx->ctx, size);
+    } catch (const vk::SystemError& e) {
+        return nullptr;
+    }
 
     ggml_backend_vk_buffer_context * bufctx = new ggml_backend_vk_buffer_context(ctx->ctx, std::move(dev_buffer), ctx->name);
 
@@ -6390,7 +6439,7 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
                 case GGML_UNARY_OP_GELU:
                 case GGML_UNARY_OP_SILU:
                 case GGML_UNARY_OP_RELU:
-                    return true;
+                    return ggml_is_contiguous(op->src[0]);
                 default:
                     return false;
             }
@@ -6466,7 +6515,7 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
         //         return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
         //     } break;
         case GGML_OP_ROPE:
-            return true;
+            return ggml_is_contiguous(op->src[0]);
         case GGML_OP_NONE:
         case GGML_OP_RESHAPE:
         case GGML_OP_VIEW:
