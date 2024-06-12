@@ -1033,6 +1033,27 @@ struct markdown_printer : public printer {
         if (field == "n_gpu_layers") {
             return 3;
         }
+        if (field == "n_threads") {
+            return 7;
+        }
+        if (field == "n_batch") {
+            return 7;
+        }
+        if (field == "n_ubatch") {
+            return 8;
+        }
+        if (field == "type_k" || field == "type_v") {
+            return 6;
+        }
+        if (field == "split_mode") {
+            return 5;
+        }
+        if (field == "flash_attn") {
+            return 2;
+        }
+        if (field == "use_mmap") {
+            return 4;
+        }
         if (field == "test") {
             return 13;
         }
