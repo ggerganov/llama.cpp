@@ -290,17 +290,13 @@ static void power_iteration(
         if (calc_square) {
             // copy and store the square matrix if needed
             GGML_ASSERT(result.calculated_square != NULL);
-            std::vector<uint8_t> tmp_buf(ggml_nbytes(model.dev_square));
-            ggml_backend_tensor_get(result.calculated_square, tmp_buf.data(), 0, tmp_buf.size());
-            ggml_backend_tensor_set(model.dev_square, tmp_buf.data(), 0, tmp_buf.size());
+            ggml_backend_tensor_copy(result.calculated_square, model.dev_square);
         }
 
         {
             // copy last eigen vector and store as input for next iteration
             GGML_ASSERT(last_eigenvector != NULL);
-            std::vector<uint8_t> tmp_buf(ggml_nbytes(last_eigenvector));
-            ggml_backend_tensor_get(last_eigenvector, tmp_buf.data(), 0, tmp_buf.size());
-            ggml_backend_tensor_set(model.dev_eigenvector, tmp_buf.data(), 0, tmp_buf.size());
+            ggml_backend_tensor_copy(last_eigenvector, model.dev_eigenvector);
         }
 
         printf("%s: layer %d/%d, iteration: %d / total: %d (batch = %d) ...\n",
