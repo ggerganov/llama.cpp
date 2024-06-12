@@ -415,7 +415,8 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
             sizex = ggml_blck_size(qtype) * 2;
         }
     }
-    QNN_LOG_DEBUG("sizex %d\n", sizex);
+    QNN_LOG_DEBUG("sizex: %d\n", sizex);
+    QNN_LOG_DEBUG("sizey: %d\n", sizey);
 
     if (n_ggml_op_type == GGML_OP_MUL) {
         src0 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
