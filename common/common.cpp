@@ -1636,7 +1636,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.cvector_negative_file = argv[i];
         return true;
     }
-    if (arg == "--num-completions") {
+    if (arg == "--completions") {
         if (++i >= argc) {
             invalid_param = true;
             return true;
@@ -1986,7 +1986,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "control-vector-generator", "--positive-file FNAME",   "positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str() });
     options.push_back({ "control-vector-generator", "--negative-file FNAME",   "negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str() });
     options.push_back({ "control-vector-generator", "--completions-file FNAME","completions file (default: '%s')", params.cvector_completions_file.c_str() });
-    options.push_back({ "control-vector-generator", "--num-completions N",     "number of lines of completions file to use (default: %d)", params.n_completions });
+    options.push_back({ "control-vector-generator", "--completions N",         "number of lines of completions file to use (default: %d)", params.n_completions });
     options.push_back({ "control-vector-generator", "--batch-pca N",           "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
     options.push_back({ "control-vector-generator", "--iter-pca N",            "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
 

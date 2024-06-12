@@ -17,7 +17,7 @@ Example:
 ./control-vector-generator -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99
 
 # With advanced options
-./control-vector-generator -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --num-completions 128 --pca-iter 2000 --batch-pca 100
+./control-vector-generator -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --batch-pca 100
 
 # To see help message
 ./control-vector-generator -h
