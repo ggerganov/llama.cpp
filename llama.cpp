@@ -13,8 +13,6 @@
 
 #ifdef GGML_USE_CUDA
 #  include "ggml-cuda.h"
-#elif defined(GGML_USE_CLBLAST)
-#  include "ggml-opencl.h"
 #elif defined(GGML_USE_VULKAN)
 #  include "ggml-vulkan.h"
 #elif defined(GGML_USE_SYCL)
@@ -103,14 +101,14 @@
 #endif
 
 #define LLAMA_MAX_NODES   8192
-#define LLAMA_MAX_EXPERTS 60
+#define LLAMA_MAX_EXPERTS 160
 
 //
 // logging
 //
 
 LLAMA_ATTRIBUTE_FORMAT(2, 3)
-static void llama_log_internal        (ggml_log_level level, const char* format, ...);
+static void llama_log_internal        (ggml_log_level level, const char * format, ...);
 static void llama_log_callback_default(ggml_log_level level, const char * text, void * user_data);
 
 #define LLAMA_LOG_INFO(...)  llama_log_internal(GGML_LOG_LEVEL_INFO , __VA_ARGS__)
@@ -221,6 +219,8 @@ enum llm_arch {
     LLM_ARCH_COMMAND_R,
     LLM_ARCH_DBRX,
     LLM_ARCH_OLMO,
+    LLM_ARCH_ARCTIC,
+    LLM_ARCH_DEEPSEEK2,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -257,6 +257,8 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_COMMAND_R,       "command-r"    },
     { LLM_ARCH_DBRX,            "dbrx"         },
     { LLM_ARCH_OLMO,            "olmo"         },
+    { LLM_ARCH_ARCTIC,          "arctic"       },
+    { LLM_ARCH_DEEPSEEK2,       "deepseek2"    },
     { LLM_ARCH_UNKNOWN,         "(unknown)"    },
 };
 
@@ -277,11 +279,15 @@ enum llm_kv {
     LLM_KV_CONTEXT_LENGTH,
     LLM_KV_EMBEDDING_LENGTH,
     LLM_KV_BLOCK_COUNT,
+    LLM_KV_LEADING_DENSE_BLOCK_COUNT,
     LLM_KV_FEED_FORWARD_LENGTH,
+    LLM_KV_EXPERT_FEED_FORWARD_LENGTH,
     LLM_KV_USE_PARALLEL_RESIDUAL,
     LLM_KV_TENSOR_DATA_LAYOUT,
     LLM_KV_EXPERT_COUNT,
     LLM_KV_EXPERT_USED_COUNT,
+    LLM_KV_EXPERT_SHARED_COUNT,
+    LLM_KV_EXPERT_WEIGHTS_SCALE,
     LLM_KV_POOLING_TYPE,
     LLM_KV_LOGIT_SCALE,
 
@@ -294,6 +300,8 @@ enum llm_kv {
     LLM_KV_ATTENTION_LAYERNORM_EPS,
     LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,
     LLM_KV_ATTENTION_CAUSAL,
+    LLM_KV_ATTENTION_Q_LORA_RANK,
+    LLM_KV_ATTENTION_KV_LORA_RANK,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
@@ -303,6 +311,7 @@ enum llm_kv {
     LLM_KV_ROPE_SCALING_ATTN_FACTOR,
     LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,
     LLM_KV_ROPE_SCALING_FINETUNED,
+    LLM_KV_ROPE_SCALING_YARN_LOG_MUL,
 
     LLM_KV_SPLIT_NO,
     LLM_KV_SPLIT_COUNT,
@@ -351,17 +360,21 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_GENERAL_SOURCE_URL,            "general.source.url"                    },
     { LLM_KV_GENERAL_SOURCE_HF_REPO,        "general.source.huggingface.repository" },
 
-    { LLM_KV_VOCAB_SIZE,                    "%s.vocab_size"            },
-    { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"        },
-    { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"      },
-    { LLM_KV_BLOCK_COUNT,                   "%s.block_count"           },
-    { LLM_KV_FEED_FORWARD_LENGTH,           "%s.feed_forward_length"   },
-    { LLM_KV_USE_PARALLEL_RESIDUAL,         "%s.use_parallel_residual" },
-    { LLM_KV_TENSOR_DATA_LAYOUT,            "%s.tensor_data_layout"    },
-    { LLM_KV_EXPERT_COUNT,                  "%s.expert_count"          },
-    { LLM_KV_EXPERT_USED_COUNT,             "%s.expert_used_count"     },
-    { LLM_KV_POOLING_TYPE ,                 "%s.pooling_type"          },
-    { LLM_KV_LOGIT_SCALE,                   "%s.logit_scale"           },
+    { LLM_KV_VOCAB_SIZE,                    "%s.vocab_size"                 },
+    { LLM_KV_CONTEXT_LENGTH,                "%s.context_length"             },
+    { LLM_KV_EMBEDDING_LENGTH,              "%s.embedding_length"           },
+    { LLM_KV_BLOCK_COUNT,                   "%s.block_count"                },
+    { LLM_KV_LEADING_DENSE_BLOCK_COUNT,     "%s.leading_dense_block_count"  },
+    { LLM_KV_FEED_FORWARD_LENGTH,           "%s.feed_forward_length"        },
+    { LLM_KV_EXPERT_FEED_FORWARD_LENGTH,    "%s.expert_feed_forward_length" },
+    { LLM_KV_USE_PARALLEL_RESIDUAL,         "%s.use_parallel_residual"      },
+    { LLM_KV_TENSOR_DATA_LAYOUT,            "%s.tensor_data_layout"         },
+    { LLM_KV_EXPERT_COUNT,                  "%s.expert_count"               },
+    { LLM_KV_EXPERT_USED_COUNT,             "%s.expert_used_count"          },
+    { LLM_KV_EXPERT_SHARED_COUNT,           "%s.expert_shared_count"        },
+    { LLM_KV_EXPERT_WEIGHTS_SCALE,          "%s.expert_weights_scale"       },
+    { LLM_KV_POOLING_TYPE ,                 "%s.pooling_type"               },
+    { LLM_KV_LOGIT_SCALE,                   "%s.logit_scale"                },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,          "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,       "%s.attention.head_count_kv"          },
@@ -372,6 +385,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_LAYERNORM_EPS,       "%s.attention.layer_norm_epsilon"     },
     { LLM_KV_ATTENTION_LAYERNORM_RMS_EPS,   "%s.attention.layer_norm_rms_epsilon" },
     { LLM_KV_ATTENTION_CAUSAL,              "%s.attention.causal"                 },
+    { LLM_KV_ATTENTION_Q_LORA_RANK,         "%s.attention.q_lora_rank"            },
+    { LLM_KV_ATTENTION_KV_LORA_RANK,        "%s.attention.kv_lora_rank"           },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
@@ -381,6 +396,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ROPE_SCALING_ATTN_FACTOR,      "%s.rope.scaling.attn_factor"             },
     { LLM_KV_ROPE_SCALING_ORIG_CTX_LEN,     "%s.rope.scaling.original_context_length" },
     { LLM_KV_ROPE_SCALING_FINETUNED,        "%s.rope.scaling.finetuned"               },
+    { LLM_KV_ROPE_SCALING_YARN_LOG_MUL,     "%s.rope.scaling.yarn_log_multiplier"     },
 
     { LLM_KV_SPLIT_NO,                      "split.no"            },
     { LLM_KV_SPLIT_COUNT,                   "split.count"         },
@@ -455,6 +471,7 @@ enum llm_tensor {
     LLM_TENSOR_FFN_DOWN_EXP,  // split experts for backward compatibility
     LLM_TENSOR_FFN_GATE_EXP,
     LLM_TENSOR_FFN_UP_EXP,
+    LLM_TENSOR_FFN_NORM_EXPS,
     LLM_TENSOR_FFN_DOWN_EXPS, // merged experts
     LLM_TENSOR_FFN_GATE_EXPS,
     LLM_TENSOR_FFN_UP_EXPS,
@@ -471,6 +488,12 @@ enum llm_tensor {
     LLM_TENSOR_SSM_A,
     LLM_TENSOR_SSM_D,
     LLM_TENSOR_SSM_OUT,
+    LLM_TENSOR_ATTN_Q_A,
+    LLM_TENSOR_ATTN_Q_B,
+    LLM_TENSOR_ATTN_KV_A_MQA,
+    LLM_TENSOR_ATTN_KV_B,
+    LLM_TENSOR_ATTN_Q_A_NORM,
+    LLM_TENSOR_ATTN_KV_A_NORM,
 };
 
 static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
@@ -681,6 +704,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM, "token_embd_norm" },
             { LLM_TENSOR_TOKEN_TYPES,     "token_types" },
+            { LLM_TENSOR_ATTN_NORM_2,     "blk.%d.attn_norm_2" },
             { LLM_TENSOR_ATTN_OUT_NORM,   "blk.%d.attn_output_norm" },
             { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
             { LLM_TENSOR_ATTN_Q_NORM,     "blk.%d.attn_q_norm" },
@@ -1030,6 +1054,57 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+        },
+    },
+    {
+        LLM_ARCH_ARCTIC,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
+            { LLM_TENSOR_OUTPUT,          "output" },
+            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_GATE_INP,    "blk.%d.ffn_gate_inp" },
+            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
+            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_NORM_EXPS,   "blk.%d.ffn_norm_exps" },
+            { LLM_TENSOR_FFN_GATE_EXPS,   "blk.%d.ffn_gate_exps" },
+            { LLM_TENSOR_FFN_DOWN_EXPS,   "blk.%d.ffn_down_exps" },
+            { LLM_TENSOR_FFN_UP_EXPS,     "blk.%d.ffn_up_exps" },
+        },
+    },
+    {
+        LLM_ARCH_DEEPSEEK2,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,         "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,        "output_norm" },
+            { LLM_TENSOR_OUTPUT,             "output" },
+            { LLM_TENSOR_ATTN_NORM,          "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_Q_A_NORM,      "blk.%d.attn_q_a_norm" },
+            { LLM_TENSOR_ATTN_KV_A_NORM,     "blk.%d.attn_kv_a_norm" },
+            { LLM_TENSOR_ATTN_Q,             "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_Q_A,           "blk.%d.attn_q_a" },
+            { LLM_TENSOR_ATTN_Q_B,           "blk.%d.attn_q_b" },
+            { LLM_TENSOR_ATTN_KV_A_MQA,      "blk.%d.attn_kv_a_mqa" },
+            { LLM_TENSOR_ATTN_KV_B,          "blk.%d.attn_kv_b" },
+            { LLM_TENSOR_ATTN_OUT,           "blk.%d.attn_output" },
+            { LLM_TENSOR_FFN_NORM,           "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_GATE,           "blk.%d.ffn_gate" },
+            { LLM_TENSOR_FFN_UP,             "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_DOWN,           "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_GATE_INP,       "blk.%d.ffn_gate_inp" },
+            { LLM_TENSOR_FFN_GATE_EXPS,      "blk.%d.ffn_gate_exps" },
+            { LLM_TENSOR_FFN_DOWN_EXPS,      "blk.%d.ffn_down_exps" },
+            { LLM_TENSOR_FFN_UP_EXPS,        "blk.%d.ffn_up_exps" },
+            { LLM_TENSOR_FFN_GATE_INP_SHEXP, "blk.%d.ffn_gate_inp_shexp" },
+            { LLM_TENSOR_FFN_GATE_SHEXP,     "blk.%d.ffn_gate_shexp" },
+            { LLM_TENSOR_FFN_DOWN_SHEXP,     "blk.%d.ffn_down_shexp" },
+            { LLM_TENSOR_FFN_UP_SHEXP,       "blk.%d.ffn_up_shexp" },
         },
     },
     {
@@ -1626,12 +1701,13 @@ struct llama_mlock {
 };
 using llama_mlocks = std::vector<std::unique_ptr<llama_mlock>>;
 
-static std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
+// NOTE: avoid ever using this except for building the token_to_piece caches
+static std::string llama_token_to_piece(const struct llama_model * model, llama_token token, bool special) {
     std::vector<char> result(8, 0);
-    const int n_tokens = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), special);
+    const int n_tokens = llama_token_to_piece(model, token, result.data(), result.size(), special);
     if (n_tokens < 0) {
         result.resize(-n_tokens);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, result.data(), result.size(), special);
+        int check = llama_token_to_piece(model, token, result.data(), result.size(), special);
         GGML_ASSERT(check == -n_tokens);
     }
     else {
@@ -1716,6 +1792,7 @@ enum e_model {
     MODEL_13B,
     MODEL_14B,
     MODEL_15B,
+    MODEL_16B,
     MODEL_20B,
     MODEL_30B,
     MODEL_34B,
@@ -1723,6 +1800,7 @@ enum e_model {
     MODEL_40B,
     MODEL_65B,
     MODEL_70B,
+    MODEL_236B,
     MODEL_314B,
     MODEL_SMALL,
     MODEL_MEDIUM,
@@ -1732,6 +1810,7 @@ enum e_model {
     MODEL_8x7B,
     MODEL_8x22B,
     MODEL_16x12B,
+    MODEL_10B_128x3_66B,
 };
 
 static const size_t kiB = 1024;
@@ -1757,13 +1836,21 @@ struct llama_hparams {
     uint32_t n_expert_used = 0;
     uint32_t n_vocab_type = 0; // for BERT-style token types
 
+    uint32_t n_layer_dense_lead = 0;
+    uint32_t n_lora_q = 0;
+    uint32_t n_lora_kv = 0;
+    uint32_t n_ff_exp = 0;
+    uint32_t n_expert_shared = 0;
+    float    expert_weights_scale = 0.0;
+
     float f_norm_eps;
     float f_norm_rms_eps;
 
     float    rope_attn_factor = 1.0f;
     float    rope_freq_base_train;
     float    rope_freq_scale_train;
-    uint32_t n_yarn_orig_ctx;
+    uint32_t n_ctx_orig_yarn;
+    float    rope_yarn_log_mul;
 
     // for State Space Models
     uint32_t ssm_d_conv  = 0;
@@ -1797,8 +1884,14 @@ struct llama_hparams {
         if (this->n_expert      != other.n_expert)      return true;
         if (this->n_expert_used != other.n_expert_used) return true;
 
+        if (this->n_layer_dense_lead != other.n_layer_dense_lead) return true;
+        if (this->n_lora_q           != other.n_lora_q)           return true;
+        if (this->n_lora_kv          != other.n_lora_kv)          return true;
+        if (this->n_ff_exp           != other.n_ff_exp)           return true;
+        if (this->n_expert_shared    != other.n_expert_shared)    return true;
+
         if (this->rope_finetuned  != other.rope_finetuned)  return true;
-        if (this->n_yarn_orig_ctx != other.n_yarn_orig_ctx) return true;
+        if (this->n_ctx_orig_yarn != other.n_ctx_orig_yarn) return true;
 
         if (this->ssm_d_conv  != other.ssm_d_conv)  return true;
         if (this->ssm_d_inner != other.ssm_d_inner) return true;
@@ -1812,6 +1905,8 @@ struct llama_hparams {
         if (!is_float_close(this->rope_attn_factor,      other.rope_attn_factor,      EPSILON)) return true;
         if (!is_float_close(this->rope_freq_base_train,  other.rope_freq_base_train,  EPSILON)) return true;
         if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
+        if (!is_float_close(this->expert_weights_scale,  other.expert_weights_scale,  EPSILON)) return true;
+        if (!is_float_close(this->rope_yarn_log_mul,     other.rope_yarn_log_mul,     EPSILON)) return true;
 
         return false;
     }
@@ -1855,7 +1950,7 @@ struct llama_cparams {
     float rope_freq_base;
     float rope_freq_scale;
 
-    uint32_t n_yarn_orig_ctx;
+    uint32_t n_ctx_orig_yarn;
     // These hyperparameters are not exposed in GGUF, because all
     // existing YaRN models use the same values for them.
     float yarn_ext_factor;
@@ -1887,6 +1982,8 @@ struct llama_layer {
     struct ggml_tensor * attn_k_norm_b;
     struct ggml_tensor * attn_out_norm;
     struct ggml_tensor * attn_out_norm_b;
+    struct ggml_tensor * attn_q_a_norm;
+    struct ggml_tensor * attn_kv_a_norm;
 
     // attention
     struct ggml_tensor * wq;
@@ -1894,6 +1991,10 @@ struct llama_layer {
     struct ggml_tensor * wv;
     struct ggml_tensor * wo;
     struct ggml_tensor * wqkv;
+    struct ggml_tensor * wq_a;
+    struct ggml_tensor * wq_b;
+    struct ggml_tensor * wkv_a_mqa;
+    struct ggml_tensor * wkv_b;
 
     // attention bias
     struct ggml_tensor * bq;
@@ -1907,6 +2008,7 @@ struct llama_layer {
     struct ggml_tensor * ffn_norm_b;
     struct ggml_tensor * layer_out_norm;
     struct ggml_tensor * layer_out_norm_b;
+    struct ggml_tensor * ffn_norm_exps;
 
     // ff
     struct ggml_tensor * ffn_gate; // w1
@@ -1926,8 +2028,9 @@ struct llama_layer {
     struct ggml_tensor * ffn_up_shexp;
 
     // ff bias
-    struct ggml_tensor * ffn_down_b; // b2
-    struct ggml_tensor * ffn_up_b;   // b3
+    struct ggml_tensor * ffn_gate_b = nullptr;
+    struct ggml_tensor * ffn_down_b = nullptr; // b2
+    struct ggml_tensor * ffn_up_b   = nullptr; // b3
     struct ggml_tensor * ffn_act;
 
     // mamba proj
@@ -2045,12 +2148,12 @@ struct llama_control_vector {
 struct llama_vocab {
     using id    = int32_t;
     using token = std::string;
-    using ttype = llama_token_type;
+    using tattr = llama_token_attr;
 
     struct token_data {
         token text;
         float score;
-        ttype type;
+        tattr attr;
     };
 
     enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
@@ -2059,7 +2162,8 @@ struct llama_vocab {
     std::unordered_map<token, id> token_to_id;
     std::vector<token_data>       id_to_token;
 
-    std::unordered_map<token, id> special_tokens_cache;
+    std::vector<id>    cache_special_tokens;
+    std::vector<token> cache_token_to_piece; // llama_token_to_piece(special = true);
 
     std::map<std::pair<std::string, std::string>, int> bpe_ranks;
 
@@ -2266,13 +2370,34 @@ struct llama_context {
     struct llama_control_vector cvec;
 };
 
+static size_t llama_get_device_count(const llama_model & model) {
+    size_t count = 1;
+#if defined(GGML_USE_CUDA)
+    count = ggml_backend_cuda_get_device_count();
+#elif defined(GGML_USE_SYCL)
+    count = ggml_backend_sycl_get_device_count();
+#elif defined(GGML_USE_VULKAN)
+    count = ggml_backend_vk_get_device_count();
+#endif
+#if defined(GGML_USE_RPC)
+    count += model.rpc_servers.size();
+#endif
+    return count;
+    GGML_UNUSED(model);
+}
+
 static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int gpu) {
     ggml_backend_buffer_type_t buft = nullptr;
 
-#ifdef GGML_USE_RPC
-    std::string endpoint = model.rpc_servers[gpu];
-    buft = ggml_backend_rpc_buffer_type(endpoint.c_str());
-#elif defined(GGML_USE_METAL)
+#if defined(GGML_USE_RPC)
+    int dev_count = (int)llama_get_device_count(model);
+    int rpc_count = (int)model.rpc_servers.size();
+    if (gpu >= dev_count - rpc_count) {
+        const char * endpoint = model.rpc_servers[gpu - dev_count + rpc_count].c_str();
+        return ggml_backend_rpc_buffer_type(endpoint);
+    }
+#endif
+#if defined(GGML_USE_METAL)
     buft = ggml_backend_metal_buffer_type();
 #elif defined(GGML_USE_CUDA)
     buft = ggml_backend_cuda_buffer_type(gpu);
@@ -2280,8 +2405,6 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
     buft = ggml_backend_vk_buffer_type(gpu);
 #elif defined(GGML_USE_SYCL)
     buft = ggml_backend_sycl_buffer_type(gpu);
-#elif defined(GGML_USE_CLBLAST)
-    buft = ggml_backend_opencl_buffer_type();
 #elif defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(gpu);
     if (buft == nullptr) {
@@ -2320,29 +2443,19 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
     GGML_UNUSED(tensor_split);
 }
 
-static size_t llama_get_device_count(const llama_model & model) {
-#if defined(GGML_USE_RPC)
-    return model.rpc_servers.size();
-#elif defined(GGML_USE_CUDA)
-    return ggml_backend_cuda_get_device_count();
-#elif defined(GGML_USE_SYCL)
-    return ggml_backend_sycl_get_device_count();
-#elif defined(GGML_USE_VULKAN)
-    return ggml_backend_vk_get_device_count();
-#else
-    return 1;
-#endif
-    GGML_UNUSED(model);
-}
-
 static size_t llama_get_device_memory(const llama_model & model, int device) {
 #if defined(GGML_USE_RPC)
-    size_t total;
-    size_t free;
-    std::string endpoint = model.rpc_servers[device];
-    ggml_backend_rpc_get_device_memory(endpoint.c_str(), &free, &total);
-    return free;
-#elif defined(GGML_USE_CUDA)
+    int dev_count = (int)llama_get_device_count(model);
+    int rpc_count = (int)model.rpc_servers.size();
+    if (device >= dev_count - rpc_count) {
+        size_t total;
+        size_t free;
+        const char * endpoint = model.rpc_servers[device - dev_count + rpc_count].c_str();
+        ggml_backend_rpc_get_device_memory(endpoint, &free, &total);
+        return free;
+    }
+#endif
+#if defined(GGML_USE_CUDA)
     size_t total;
     size_t free;
     ggml_backend_cuda_get_device_memory(device, &free, &total);
@@ -2413,10 +2526,6 @@ static bool llama_kv_cache_init(
             cache.cells[i].src = i;
         }
     }
-
-#ifdef GGML_USE_CLBLAST
-    offload = false;
-#endif
 
     // count used buffer types
     std::map<ggml_backend_buffer_type_t, int> buft_layer_count;
@@ -3781,47 +3890,50 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
 
 static const char * llama_model_type_name(e_model type) {
     switch (type) {
-        case MODEL_14M:    return "14M";
-        case MODEL_17M:    return "17M";
-        case MODEL_22M:    return "22M";
-        case MODEL_33M:    return "33M";
-        case MODEL_70M:    return "70M";
-        case MODEL_109M:   return "109M";
-        case MODEL_137M:   return "137M";
-        case MODEL_160M:   return "160M";
-        case MODEL_335M:   return "335M";
-        case MODEL_410M:   return "410M";
-        case MODEL_0_5B:   return "0.5B";
-        case MODEL_1B:     return "1B";
-        case MODEL_1_4B:   return "1.4B";
-        case MODEL_2B:     return "2B";
-        case MODEL_2_8B:   return "2.8B";
-        case MODEL_3B:     return "3B";
-        case MODEL_4B:     return "4B";
-        case MODEL_6_9B:   return "6.9B";
-        case MODEL_7B:     return "7B";
-        case MODEL_8B:     return "8B";
-        case MODEL_12B:    return "12B";
-        case MODEL_13B:    return "13B";
-        case MODEL_14B:    return "14B";
-        case MODEL_15B:    return "15B";
-        case MODEL_20B:    return "20B";
-        case MODEL_30B:    return "30B";
-        case MODEL_34B:    return "34B";
-        case MODEL_35B:    return "35B";
-        case MODEL_40B:    return "40B";
-        case MODEL_65B:    return "65B";
-        case MODEL_70B:    return "70B";
-        case MODEL_314B:   return "314B";
-        case MODEL_SMALL:  return "0.1B";
-        case MODEL_MEDIUM: return "0.4B";
-        case MODEL_LARGE:  return "0.8B";
-        case MODEL_XL:     return "1.5B";
-        case MODEL_A2_7B:  return "A2.7B";
-        case MODEL_8x7B:   return "8x7B";
-        case MODEL_8x22B:  return "8x22B";
-        case MODEL_16x12B: return "16x12B";
-        default:           return "?B";
+        case MODEL_14M:           return "14M";
+        case MODEL_17M:           return "17M";
+        case MODEL_22M:           return "22M";
+        case MODEL_33M:           return "33M";
+        case MODEL_70M:           return "70M";
+        case MODEL_109M:          return "109M";
+        case MODEL_137M:          return "137M";
+        case MODEL_160M:          return "160M";
+        case MODEL_335M:          return "335M";
+        case MODEL_410M:          return "410M";
+        case MODEL_0_5B:          return "0.5B";
+        case MODEL_1B:            return "1B";
+        case MODEL_1_4B:          return "1.4B";
+        case MODEL_2B:            return "2B";
+        case MODEL_2_8B:          return "2.8B";
+        case MODEL_3B:            return "3B";
+        case MODEL_4B:            return "4B";
+        case MODEL_6_9B:          return "6.9B";
+        case MODEL_7B:            return "7B";
+        case MODEL_8B:            return "8B";
+        case MODEL_12B:           return "12B";
+        case MODEL_13B:           return "13B";
+        case MODEL_14B:           return "14B";
+        case MODEL_15B:           return "15B";
+        case MODEL_16B:           return "16B";
+        case MODEL_20B:           return "20B";
+        case MODEL_30B:           return "30B";
+        case MODEL_34B:           return "34B";
+        case MODEL_35B:           return "35B";
+        case MODEL_40B:           return "40B";
+        case MODEL_65B:           return "65B";
+        case MODEL_70B:           return "70B";
+        case MODEL_236B:          return "236B";
+        case MODEL_314B:          return "314B";
+        case MODEL_SMALL:         return "0.1B";
+        case MODEL_MEDIUM:        return "0.4B";
+        case MODEL_LARGE:         return "0.8B";
+        case MODEL_XL:            return "1.5B";
+        case MODEL_A2_7B:         return "A2.7B";
+        case MODEL_8x7B:          return "8x7B";
+        case MODEL_8x22B:         return "8x22B";
+        case MODEL_16x12B:        return "16x12B";
+        case MODEL_10B_128x3_66B: return "10B+128x3.66B";
+        default:                  return "?B";
     }
 }
 
@@ -3894,8 +4006,8 @@ static void llm_load_hparams(
     ml.get_key(LLM_KV_ROPE_SCALING_FINETUNED, rope_finetuned, false);
     hparams.rope_finetuned = rope_finetuned;
 
-    hparams.n_yarn_orig_ctx = hparams.n_ctx_train;
-    ml.get_key(LLM_KV_ROPE_SCALING_ORIG_CTX_LEN, hparams.n_yarn_orig_ctx, false);
+    hparams.n_ctx_orig_yarn = hparams.n_ctx_train;
+    ml.get_key(LLM_KV_ROPE_SCALING_ORIG_CTX_LEN, hparams.n_ctx_orig_yarn, false);
 
     // rope_freq_base (optional)
     hparams.rope_freq_base_train = 10000.0f;
@@ -3953,7 +4065,9 @@ static void llm_load_hparams(
                     switch (hparams.n_layer) {
                         case 22: model.type = e_model::MODEL_1B; break;
                         case 26: model.type = e_model::MODEL_3B; break;
-                        case 32: model.type = hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B; break;
+                        // granite uses a vocab with len 49152
+                        case 32: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
+                        case 36: model.type = e_model::MODEL_8B; break; // granite
                         case 40: model.type = e_model::MODEL_13B; break;
                         case 48: model.type = e_model::MODEL_34B; break;
                         case 60: model.type = e_model::MODEL_30B; break;
@@ -4223,6 +4337,8 @@ static void llm_load_hparams(
                     case 30: model.type = e_model::MODEL_3B; break;
                     case 32: model.type = e_model::MODEL_7B; break;
                     case 40: model.type = e_model::MODEL_15B; break;
+                    case 52: model.type = e_model::MODEL_20B; break; // granite
+                    case 88: model.type = e_model::MODEL_34B; break; // granite
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
@@ -4343,6 +4459,39 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
+        case LLM_ARCH_ARCTIC:
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+
+                if (hparams.n_expert == 128) {
+                    switch (hparams.n_layer) {
+                        case 35: model.type = e_model::MODEL_10B_128x3_66B; break;
+                        default: model.type = e_model::MODEL_UNKNOWN;
+                    }
+                } else {
+                    model.type = e_model::MODEL_UNKNOWN;
+                }
+            } break;
+        case LLM_ARCH_DEEPSEEK2:
+            {
+                bool is_lite = (hparams.n_layer == 27);
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                ml.get_key(LLM_KV_LEADING_DENSE_BLOCK_COUNT, hparams.n_layer_dense_lead);
+                if (!is_lite) {
+                    ml.get_key(LLM_KV_ATTENTION_Q_LORA_RANK, hparams.n_lora_q);
+                }
+                ml.get_key(LLM_KV_ATTENTION_KV_LORA_RANK, hparams.n_lora_kv);
+                ml.get_key(LLM_KV_EXPERT_FEED_FORWARD_LENGTH, hparams.n_ff_exp);
+                ml.get_key(LLM_KV_EXPERT_SHARED_COUNT, hparams.n_expert_shared);
+                ml.get_key(LLM_KV_EXPERT_WEIGHTS_SCALE, hparams.expert_weights_scale);
+                ml.get_key(LLM_KV_ROPE_SCALING_YARN_LOG_MUL, hparams.rope_yarn_log_mul);
+
+                switch (hparams.n_layer) {
+                    case 27: model.type = e_model::MODEL_16B; break;
+                    case 60: model.type = e_model::MODEL_236B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
+            } break;
         default: (void)0;
     }
 
@@ -4449,15 +4598,14 @@ static void llm_load_vocab(
             vocab.special_cls_id  = 101;
             vocab.special_mask_id = 103;
             vocab.add_space_prefix = false;
-        } else {
-            if (tokenizer_model == "gpt2") {
-                vocab.type = LLAMA_VOCAB_TYPE_BPE;
-            } else {
-                LLAMA_LOG_WARN("%s: unknown tokenizer: '%s'", __func__, tokenizer_model.c_str());
-                LLAMA_LOG_WARN("%s: using default tokenizer: 'llama'", __func__);
-                vocab.type = LLAMA_VOCAB_TYPE_SPM;
-                return;
+        } else if (tokenizer_model == "gpt2") {
+            vocab.type = LLAMA_VOCAB_TYPE_BPE;
+
+            const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
+            if (add_space_prefix_keyidx != -1) {
+                vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
             }
+
             // read bpe merges and populate bpe ranks
             const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
             if (merges_keyidx == -1) {
@@ -4491,6 +4639,8 @@ static void llm_load_vocab(
             vocab.special_pad_id  = -1;
             vocab.special_cls_id  = -1;
             vocab.special_mask_id = -1;
+        } else {
+            throw std::runtime_error(format("unknown tokenizer: '%s'", tokenizer_model.c_str()));
         }
 
         // for now, only BPE models have pre-tokenizers
@@ -4504,8 +4654,7 @@ static void llm_load_vocab(
                 LLAMA_LOG_WARN("%s: ************************************        \n", __func__);
                 LLAMA_LOG_WARN("%s:                                             \n", __func__);
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
-            } else if (
-                    tokenizer_pre == "default") {
+            } else if (tokenizer_pre == "default") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             } else if (
                     tokenizer_pre == "llama3"   ||
@@ -4532,7 +4681,8 @@ static void llm_load_vocab(
                     tokenizer_pre == "jina-es" ||
                     tokenizer_pre == "jina-de" ||
                     tokenizer_pre == "jina-v2-es" ||
-                    tokenizer_pre == "jina-v2-de") {
+                    tokenizer_pre == "jina-v2-de" ||
+                    tokenizer_pre == "jina-v2-code") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT2;
             } else if (
                     tokenizer_pre == "refact") {
@@ -4552,6 +4702,9 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "dbrx") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DBRX;
+            } else if (
+                tokenizer_pre == "smaug-bpe") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMAUG;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -4590,7 +4743,20 @@ static void llm_load_vocab(
         auto & token_data = vocab.id_to_token[i];
         token_data.text  = std::move(word);
         token_data.score = scores ? scores[i] : 0.0f;
-        token_data.type  = toktypes ? (llama_token_type) toktypes[i] : LLAMA_TOKEN_TYPE_NORMAL;
+        token_data.attr  = LLAMA_TOKEN_ATTR_NORMAL;
+
+        if (toktypes) {  //TODO: remove, required until per token attributes are available from GGUF file
+            switch(toktypes[i]) {
+                case LLAMA_TOKEN_TYPE_UNKNOWN:      token_data.attr = LLAMA_TOKEN_ATTR_UNKNOWN;      break;
+                case LLAMA_TOKEN_TYPE_UNUSED:       token_data.attr = LLAMA_TOKEN_ATTR_UNUSED;       break;
+                case LLAMA_TOKEN_TYPE_NORMAL:       token_data.attr = LLAMA_TOKEN_ATTR_NORMAL;       break;
+                case LLAMA_TOKEN_TYPE_CONTROL:      token_data.attr = LLAMA_TOKEN_ATTR_CONTROL;      break;
+                case LLAMA_TOKEN_TYPE_USER_DEFINED: token_data.attr = LLAMA_TOKEN_ATTR_USER_DEFINED; break;
+                case LLAMA_TOKEN_TYPE_BYTE:         token_data.attr = LLAMA_TOKEN_ATTR_BYTE;         break;
+                case LLAMA_TOKEN_TYPE_UNDEFINED:    token_data.attr = LLAMA_TOKEN_ATTR_UNDEFINED;    break;
+                default:                            token_data.attr = LLAMA_TOKEN_ATTR_UNDEFINED;    break;
+            }
+        }
     }
     GGML_ASSERT(vocab.id_to_token.size() == vocab.token_to_id.size());
 
@@ -4680,96 +4846,88 @@ static void llm_load_vocab(
 
     // build special tokens cache
     {
-        // TODO: It is unclear (to me) at this point, whether special tokes are guaranteed to be of a deterministic type,
-        //  and will always be correctly labeled in 'added_tokens.json' etc.
-        // The assumption is, since special tokens aren't meant to be exposed to end user, they are designed
-        //  to be unmatchable by the tokenizer, therefore tokens from the vocab, which are unmatchable by the tokenizer
-        //  are special tokens.
-        // From testing, this appears to correlate 1:1 with special tokens.
-        //
-
-        // Counting special tokens and verifying in only one direction
-        //  is sufficient to detect difference in those two sets.
-        //
-        uint32_t special_tokens_count_by_type = 0;
-        uint32_t special_tokens_count_from_verification = 0;
-
-        bool special_tokens_definition_mismatch = false;
-
-        for (const auto & t : vocab.token_to_id) {
-            const auto & token = t.first;
-            const auto & id    = t.second;
-
-            // Count all non-normal tokens in the vocab while iterating
-            if (vocab.id_to_token[id].type != LLAMA_TOKEN_TYPE_NORMAL) {
-                special_tokens_count_by_type++;
-            }
-
-            // Skip single character tokens
-            if (token.length() > 1) {
-                bool is_tokenizable = false;
-
-                // Split token string representation in two, in all possible ways
-                //  and check if both halves can be matched to a valid token
-                for (unsigned i = 1; i < token.length();) {
-                    const auto left  = token.substr(0, i);
-                    const auto right = token.substr(i);
-
-                    // check if we didnt partition in the middle of a utf sequence
-                    auto utf = utf8_len(left.at(left.length() - 1));
-
-                    if (utf == 1) {
-                        if (vocab.token_to_id.find(left)  != vocab.token_to_id.end() &&
-                            vocab.token_to_id.find(right) != vocab.token_to_id.end() ) {
-                            is_tokenizable = true;
-                            break;
-                        }
-                        i++;
-                    } else {
-                        // skip over the rest of multibyte utf sequence
-                        i += utf - 1;
-                    }
-                }
-
-                if (!is_tokenizable) {
-                    // Some tokens are multibyte, but they are utf sequences with equivalent text length of 1
-                    //  it's faster to re-filter them here, since there are way less candidates now
-
-                    // Calculate a total "utf" length of a token string representation
-                    size_t utf8_str_len = 0;
-                    for (unsigned i = 0; i < token.length();) {
-                        utf8_str_len++;
-                        i += utf8_len(token.at(i));
-                    }
-
-                    // And skip the ones which are one character
-                    if (utf8_str_len > 1) {
-                        // At this point what we have left are special tokens only
-                        vocab.special_tokens_cache[token] = id;
-
-                        // Count manually found special tokens
-                        special_tokens_count_from_verification++;
-
-                        // If this manually found special token is not marked as such, flag a mismatch
-                        if (vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_NORMAL) {
-                            special_tokens_definition_mismatch = true;
-                        }
-                    }
-                }
+        for (llama_vocab::id id = 0; id < (llama_vocab::id)n_vocab; ++id) {
+            if (!(vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_NORMAL)) {
+                vocab.cache_special_tokens.push_back(id);
             }
         }
 
-        if (special_tokens_definition_mismatch || special_tokens_count_from_verification != special_tokens_count_by_type) {
-            LLAMA_LOG_WARN("%s: mismatch in special tokens definition ( %u/%zu vs %u/%zu ).\n",
-                __func__,
-                special_tokens_count_from_verification, vocab.id_to_token.size(),
-                special_tokens_count_by_type, vocab.id_to_token.size()
-            );
-        } else {
-            LLAMA_LOG_INFO("%s: special tokens definition check successful ( %u/%zu ).\n",
-                __func__,
-                special_tokens_count_from_verification, vocab.id_to_token.size()
-            );
+        std::sort( vocab.cache_special_tokens.begin(), vocab.cache_special_tokens.end(),
+            [&] (const llama_vocab::id a, const llama_vocab::id b) {
+                return vocab.id_to_token[a].text.size() > vocab.id_to_token[b].text.size();
+            }
+        );
+
+        LLAMA_LOG_INFO("%s: special tokens cache size = %u\n", __func__, (uint32_t)vocab.cache_special_tokens.size());
+    }
+
+    // build token to piece cache
+    {
+        size_t size_cache = 0;
+
+        std::vector<llama_vocab::token> cache_token_to_piece(n_vocab);
+
+        for (uint32_t id = 0; id < n_vocab; ++id) {
+            cache_token_to_piece[id] = llama_token_to_piece(&model, id, true);
+
+            size_cache += cache_token_to_piece[id].size();
+        }
+
+        std::swap(vocab.cache_token_to_piece, cache_token_to_piece);
+
+        LLAMA_LOG_INFO("%s: token to piece cache size = %.4f MB\n", __func__, size_cache / 1024.0 / 1024.0);
+    }
+
+    // Handle per token attributes
+    //NOTE: Each model customizes per token attributes.
+    //NOTE: Per token attributes are missing from the GGUF file.
+    //TODO: Extract attributes from GGUF file.
+    {
+        auto _contains_any = [] (const std::string &str, const std::vector<std::string> &substrs) -> bool {
+            for (auto substr : substrs) {
+                if (str.find(substr) < std::string::npos) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        auto _set_tokenid_attr = [&] (const llama_vocab::id id, llama_token_attr attr, bool value) {
+            uint32_t current = vocab.id_to_token.at(id).attr;
+            current = value ? (current | attr) : (current & ~attr);
+            vocab.id_to_token[id].attr = (llama_token_attr) current;
+        };
+
+        auto _set_token_attr = [&] (const std::string & token, llama_token_attr attr, bool value) {
+            _set_tokenid_attr(vocab.token_to_id.at(token), attr, value);
+        };
+
+        std::string model_name;
+        std::string tokenizer_pre;
+
+        ml.get_key(LLM_KV_GENERAL_NAME, model_name, false);
+        ml.get_key(LLM_KV_TOKENIZER_PRE, tokenizer_pre, false);
+
+        // model name to lowercase
+        std::transform(model_name.begin(), model_name.end(), model_name.begin(),
+            [] (const std::string::value_type x) {
+                return std::tolower(x);
+            }
+        );
+
+        // set attributes by model/tokenizer name
+        if (_contains_any(tokenizer_pre, {"jina-v2-es", "jina-v2-de"})) {
+            _set_token_attr("<mask>", LLAMA_TOKEN_ATTR_LSTRIP, true);
+        } else if (_contains_any(model_name, {"phi-3", "phi3"})) {
+            for (auto id : vocab.cache_special_tokens) {
+                _set_tokenid_attr(id, LLAMA_TOKEN_ATTR_RSTRIP, true);
+            }
+            for (auto token : {"</s>"}) {
+                _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, true);
+            }
+            for (auto token : {"<unk>", "<s>", "<|endoftext|>"}) {
+                _set_token_attr(token, LLAMA_TOKEN_ATTR_RSTRIP, false);
+            }
         }
     }
 }
@@ -4811,7 +4969,7 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     LLAMA_LOG_INFO("%s: rope scaling     = %s\n",     __func__, rope_scaling_type);
     LLAMA_LOG_INFO("%s: freq_base_train  = %.1f\n",   __func__, hparams.rope_freq_base_train);
     LLAMA_LOG_INFO("%s: freq_scale_train = %g\n",     __func__, hparams.rope_freq_scale_train);
-    LLAMA_LOG_INFO("%s: n_yarn_orig_ctx  = %u\n",     __func__, hparams.n_yarn_orig_ctx);
+    LLAMA_LOG_INFO("%s: n_ctx_orig_yarn  = %u\n",     __func__, hparams.n_ctx_orig_yarn);
     LLAMA_LOG_INFO("%s: rope_finetuned   = %s\n",     __func__, hparams.rope_finetuned ? "yes" : "unknown");
     LLAMA_LOG_INFO("%s: ssm_d_conv       = %u\n",     __func__, hparams.ssm_d_conv);
     LLAMA_LOG_INFO("%s: ssm_d_inner      = %u\n",     __func__, hparams.ssm_d_inner);
@@ -4851,6 +5009,16 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (vocab.special_suffix_id != -1) { LLAMA_LOG_INFO( "%s: SUF token        = %d '%s'\n", __func__, vocab.special_suffix_id, vocab.id_to_token[vocab.special_suffix_id].text.c_str() ); }
     if (vocab.special_middle_id != -1) { LLAMA_LOG_INFO( "%s: MID token        = %d '%s'\n", __func__, vocab.special_middle_id, vocab.id_to_token[vocab.special_middle_id].text.c_str() ); }
     if (vocab.special_eot_id    != -1) { LLAMA_LOG_INFO( "%s: EOT token        = %d '%s'\n", __func__, vocab.special_eot_id,    vocab.id_to_token[vocab.special_eot_id].text.c_str() );    }
+
+    if (model.arch == LLM_ARCH_DEEPSEEK2) {
+        LLAMA_LOG_INFO("%s: n_layer_dense_lead   = %d\n",     __func__, hparams.n_layer_dense_lead);
+        LLAMA_LOG_INFO("%s: n_lora_q             = %d\n",     __func__, hparams.n_lora_q);
+        LLAMA_LOG_INFO("%s: n_lora_kv            = %d\n",     __func__, hparams.n_lora_kv);
+        LLAMA_LOG_INFO("%s: n_ff_exp             = %d\n",     __func__, hparams.n_ff_exp);
+        LLAMA_LOG_INFO("%s: n_expert_shared      = %d\n",     __func__, hparams.n_expert_shared);
+        LLAMA_LOG_INFO("%s: expert_weights_scale = %.1f\n",   __func__, hparams.expert_weights_scale);
+        LLAMA_LOG_INFO("%s: rope_yarn_log_mul    = %.4f\n",   __func__, hparams.rope_yarn_log_mul);
+    }
 }
 
 // Returns false if cancelled by progress_callback
@@ -5007,8 +5175,6 @@ static bool llm_load_tensors(
             throw std::runtime_error("model has expert layers but no expert layers are used");
         }
 
-        GGML_ASSERT(n_embd_gqa == n_embd_k_gqa);
-
         ggml_context * ctx_input        = ctx_map.at(model.buft_input.buft);
         ggml_context * ctx_output       = ctx_map.at(model.buft_output.buft);
         ggml_context * ctx_output_split = ctx_map.at(model.buft_output.buft_matrix);
@@ -5028,12 +5194,10 @@ static bool llm_load_tensors(
                     // output
                     {
                         model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
-                        if (model.arch != LLM_ARCH_MINICPM){
-                            model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                            // if output is NULL, init from the input tok embed
-                            if (model.output == NULL) {
-                                model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
-                            }
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        // if output is NULL, init from the input tok embed
+                        if (model.output == NULL) {
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
                         }
                     }
 
@@ -5062,6 +5226,11 @@ static bool llm_load_tensors(
                             layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
                             layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
                             layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
+
+                            // optional MLP bias
+                            layer.ffn_gate_b = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "bias", i), {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                            layer.ffn_down_b = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                            layer.ffn_up_b   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
                         } else {
                             layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert});
 
@@ -5347,7 +5516,7 @@ static bool llm_load_tensors(
 
                             layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd});
                         } else {
-                            layer.ffn_gate   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
+                            layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff});
                         }
 
                         layer.layer_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_LAYER_OUT_NORM, "weight", i), {n_embd});
@@ -5387,6 +5556,9 @@ static bool llm_load_tensors(
 
                         layer.attn_out_norm   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "weight", i), {n_embd}); //output_norm
                         layer.attn_out_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT_NORM, "bias", i),   {n_embd});
+
+                        layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.ffn_up = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,        "weight", i), {n_embd, n_ff});
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE,    "weight", i), {n_embd, n_ff});
@@ -6129,6 +6301,110 @@ static bool llm_load_tensors(
                         layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
                     }
                 } break;
+            case LLM_ARCH_ARCTIC:
+                {
+                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+
+                    // output
+                    {
+                        model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+                        model.output = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        // if output is NULL, init from the input tok embed
+                        if (model.output == NULL) {
+                            model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab}, llama_model_loader::TENSOR_DUPLICATED);
+                        }
+                    }
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        ggml_context * ctx_layer = ctx_for_layer(i);
+                        ggml_context * ctx_split = ctx_for_layer_split(i);
+
+                        auto & layer = model.layers[i];
+
+                        layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
+
+                        layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
+                        layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
+                        layer.wv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V,   "weight", i), {n_embd, n_embd_gqa});
+                        layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
+
+                        layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
+
+                        layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_embd});
+                        layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_embd, n_embd});
+                        layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_embd});
+
+                        layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert});
+                        layer.ffn_norm_exps = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM_EXPS, "weight", i), {n_embd});
+                        layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {n_embd,   n_ff, n_expert}, false);
+                        layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {  n_ff, n_embd, n_expert});
+                        layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {n_embd,   n_ff, n_expert});
+                    }
+                } break;
+            case LLM_ARCH_DEEPSEEK2:
+                {
+                    bool is_lite = (hparams.n_layer == 27);
+
+                    const uint32_t n_embd_head_qk_rope = hparams.n_rot;
+                    const uint32_t n_embd_head_qk_nope = hparams.n_embd_head_k - hparams.n_rot;
+                    const uint32_t q_lora_rank = hparams.n_lora_q;
+                    const uint32_t kv_lora_rank = hparams.n_lora_kv;
+                    const uint32_t n_ff_exp = hparams.n_ff_exp;
+
+                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+
+                    // output
+                    {
+                        model.output_norm = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
+                        model.output      = ml.create_tensor(ctx_output_split, tn(LLM_TENSOR_OUTPUT,      "weight"), {n_embd, n_vocab});
+                    }
+
+                    for (int i = 0; i < n_layer; ++i) {
+                        ggml_context * ctx_layer = ctx_for_layer(i);
+                        ggml_context * ctx_split = ctx_for_layer_split(i);
+
+                        auto & layer = model.layers[i];
+
+                        layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
+                        if (!is_lite) {
+                            layer.attn_q_a_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_A_NORM, "weight", i), {q_lora_rank});
+                        }
+                        layer.attn_kv_a_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_KV_A_NORM, "weight", i), {kv_lora_rank});
+
+                        if (!is_lite) {
+                            layer.wq_a = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q_A,   "weight", i), {n_embd, q_lora_rank});
+                            layer.wq_b = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q_B,   "weight", i), {q_lora_rank, hparams.n_head * hparams.n_embd_head_k});
+                        } else {
+                            layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd_k_gqa});
+                        }
+                        layer.wkv_a_mqa = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_KV_A_MQA,   "weight", i), {n_embd, kv_lora_rank + n_embd_head_qk_rope});
+                        layer.wkv_b = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_KV_B,   "weight", i), {kv_lora_rank, hparams.n_head * (n_embd_head_qk_nope + hparams.n_embd_head_v)});
+                        layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {hparams.n_head * hparams.n_embd_head_v, n_embd});
+
+                        layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
+
+                        if ((uint32_t) i < hparams.n_layer_dense_lead) {
+                            layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd,   n_ff});
+                            layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {  n_ff, n_embd});
+                            layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
+                        } else {
+                            layer.ffn_gate_inp = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE_INP, "weight", i), {n_embd, n_expert});
+
+                            GGML_ASSERT(hparams.n_expert      > 0);
+                            GGML_ASSERT(hparams.n_expert_used > 0);
+
+                            // MoE branch
+                            layer.ffn_gate_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_EXPS, "weight", i), {  n_embd, n_ff_exp, n_expert});
+                            layer.ffn_down_exps = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_EXPS, "weight", i), {n_ff_exp,   n_embd, n_expert});
+                            layer.ffn_up_exps   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_EXPS,   "weight", i), {  n_embd, n_ff_exp, n_expert});
+
+                            // Shared expert branch
+                            layer.ffn_gate_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SHEXP, "weight", i), {n_embd,   n_ff_exp * hparams.n_expert_shared});
+                            layer.ffn_down_shexp = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SHEXP, "weight", i), {  n_ff_exp * hparams.n_expert_shared, n_embd});
+                            layer.ffn_up_shexp   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SHEXP,   "weight", i), {n_embd,   n_ff_exp * hparams.n_expert_shared});
+                        }
+                    }
+                } break;
             default:
                 throw std::runtime_error("unknown architecture");
         }
@@ -6583,6 +6859,8 @@ static struct ggml_tensor * llm_build_moe_ffn(
                     int64_t   n_expert_used,
             llm_ffn_op_type   type_op,
                        bool   norm_w,
+                       bool   scale_w,
+                      float   w_scale,
          const llm_build_cb & cb,
                         int   il) {
     int64_t n_embd = cur->ne[0];
@@ -6613,6 +6891,10 @@ static struct ggml_tensor * llm_build_moe_ffn(
         cb(weights, "ffn_moe_weights_norm", il);
 
         weights = ggml_reshape_3d(ctx, weights, 1, n_expert_used, n_tokens);
+    }
+    if (scale_w) {
+        weights = ggml_scale(ctx, weights, w_scale);
+        cb(weights, "ffn_moe_weights_scaled", il);
     }
 
     cur = ggml_reshape_3d(ctx, cur, n_embd, 1, n_tokens);
@@ -6856,7 +7138,7 @@ struct llm_build_context {
     const int32_t n_kv;     // size of KV cache to consider (n_kv <= kv_self.size)
     const int32_t n_outputs;
     const int32_t kv_head;  // index of where we store new KV data in the cache
-    const int32_t n_orig_ctx;
+    const int32_t n_ctx_orig;
 
     const bool flash_attn;
 
@@ -6905,7 +7187,7 @@ struct llm_build_context {
         n_kv             (worst_case ? kv_self.size : kv_self.n),
         n_outputs        (worst_case ? n_tokens : lctx.n_outputs),
         kv_head          (worst_case ? (kv_self.recurrent ? 0 : kv_self.size - n_tokens) : kv_self.head),
-        n_orig_ctx       (cparams.n_yarn_orig_ctx),
+        n_ctx_orig       (cparams.n_ctx_orig_yarn),
         flash_attn       (cparams.flash_attn),
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
@@ -6963,7 +7245,7 @@ struct llm_build_context {
                             ggml_row_size(kv_self.k_l[il]->type, n_embd_head_k),
                             ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
                             0),
-                        lctx.inp_K_shift, rope_factors, n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                        lctx.inp_K_shift, rope_factors, n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
 
             cb(tmp, "K_shifted", il);
@@ -7072,7 +7354,7 @@ struct llm_build_context {
         // choose long/short freq factors based on the context size
         const auto n_ctx_pre_seq = cparams.n_ctx / cparams.n_seq_max;
 
-        if (n_ctx_pre_seq > hparams.n_yarn_orig_ctx) {
+        if (n_ctx_pre_seq > hparams.n_ctx_orig_yarn) {
             return model.layers[il].rope_long;
         }
 
@@ -7188,14 +7470,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -7224,9 +7506,9 @@ struct llm_build_context {
                 cb(cur, "ffn_norm", il);
 
                 cur = llm_build_ffn(ctx0, cur,
-                        model.layers[il].ffn_up,   NULL,
-                        model.layers[il].ffn_gate, NULL,
-                        model.layers[il].ffn_down, NULL,
+                        model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
+                        model.layers[il].ffn_gate, model.layers[il].ffn_gate_b,
+                        model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                         NULL,
                         LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
@@ -7244,6 +7526,7 @@ struct llm_build_context {
                         model.layers[il].ffn_down_exps,
                         n_expert, n_expert_used,
                         LLM_FFN_SILU, true,
+                        false, 0.0,
                         cb, il);
                 cb(cur, "ffn_moe_out", il);
             }
@@ -7318,12 +7601,12 @@ struct llm_build_context {
                     case MODEL_7B:
                         Qcur = ggml_rope_ext(
                             ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                            n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                            n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                             ext_factor, attn_factor, beta_fast, beta_slow
                         );
                         Kcur = ggml_rope_ext(
                             ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                            n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                            n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                             ext_factor, attn_factor, beta_fast, beta_slow
                         );
                         break;
@@ -7430,14 +7713,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -7550,13 +7833,13 @@ struct llm_build_context {
 
                 // using mode = 2 for neox mode
                 Qcur = ggml_rope_ext(
-                    ctx0, Qcur, inp_pos, nullptr, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Qcur, inp_pos, nullptr, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
-                    ctx0, Kcur, inp_pos, nullptr, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Kcur, inp_pos, nullptr, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -7674,14 +7957,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -7725,6 +8008,7 @@ struct llm_build_context {
                     model.layers[il].ffn_down_exps,
                     n_expert, n_expert_used,
                     LLM_FFN_GELU, true,
+                    false, 0.0,
                     cb, il);
             cb(cur, "ffn_moe_out", il);
 
@@ -7826,14 +8110,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -7868,6 +8152,7 @@ struct llm_build_context {
                     model.layers[il].ffn_down_exps,
                     n_expert, n_expert_used,
                     LLM_FFN_SILU, true,
+                    false, 0.0,
                     cb, il);
             cb(cur, "ffn_moe_out", il);
 
@@ -8179,14 +8464,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -8237,6 +8522,11 @@ struct llm_build_context {
 
             // attention layer norm
             cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].attn_out_norm, model.layers[il].attn_out_norm_b, LLM_NORM, cb, il);
+
+            if (model.layers[il].attn_norm_2 != nullptr) {
+                cur = ggml_add(ctx0, cur, inpL); // re-add the layer input
+                cur = llm_build_norm(ctx0, cur, hparams, model.layers[il].attn_norm_2, model.layers[il].attn_norm_2_b, LLM_NORM, cb, il);
+            }
 
             struct ggml_tensor * ffn_inp = cur;
             cb(ffn_inp, "ffn_inp", il);
@@ -8619,14 +8909,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, Qcur, inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, Kcur, inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -8738,13 +9028,13 @@ struct llm_build_context {
 
                 // using mode = 2 for neox mode
                 Qcur = ggml_rope_ext(
-                    ctx0, Qcur, inp_pos, nullptr, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Qcur, inp_pos, nullptr, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
-                    ctx0, Kcur, inp_pos, nullptr, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Kcur, inp_pos, nullptr, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -8850,14 +9140,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -8964,14 +9254,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -9006,6 +9296,7 @@ struct llm_build_context {
                         model.layers[il].ffn_down_exps,
                         n_expert, n_expert_used,
                         LLM_FFN_SILU, false,
+                        false, 0.0,
                         cb, il);
             cb(cur, "ffn_moe_out", il);
 
@@ -9115,7 +9406,7 @@ struct llm_build_context {
                 Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
 
                 Qcur = ggml_rope_ext(
-                    ctx0, Qcur, inp_pos, nullptr, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Qcur, inp_pos, nullptr, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
@@ -9126,7 +9417,7 @@ struct llm_build_context {
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
-                    ctx0, Kcur, inp_pos, nullptr, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Kcur, inp_pos, nullptr, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -9237,7 +9528,7 @@ struct llm_build_context {
                 Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
 
                 Qcur = ggml_rope_ext(
-                    ctx0, Qcur, inp_pos, rope_factors, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Qcur, inp_pos, rope_factors, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
@@ -9246,7 +9537,7 @@ struct llm_build_context {
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
-                    ctx0, Kcur, inp_pos, rope_factors, n_rot, rope_type, 0, n_orig_ctx,
+                    ctx0, Kcur, inp_pos, rope_factors, n_rot, rope_type, n_ctx_orig,
                     freq_base, freq_scale, ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -9354,13 +9645,13 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                         ctx0, ggml_reshape_3d(ctx0, Qcur, n_rot, n_head,    n_tokens), inp_pos, nullptr,
-                        n_embd_head, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                        n_embd_head, rope_type, n_ctx_orig, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                         ctx0, ggml_reshape_3d(ctx0, Kcur, n_rot, n_head_kv, n_tokens), inp_pos, nullptr,
-                        n_embd_head, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                        n_embd_head, rope_type, n_ctx_orig, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Kcur, "Kcur", il);
 
@@ -9562,14 +9853,14 @@ struct llm_build_context {
 
                 struct ggml_tensor * Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, tmpq, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 struct ggml_tensor * Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, tmpk, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -9678,14 +9969,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -9795,14 +10086,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -9925,14 +10216,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -9997,7 +10288,7 @@ struct llm_build_context {
         cb(cur, "lmhead_scaling", -1);
 
         // lm_head
-        cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
+        cur = ggml_mul_mat(ctx0, model.output, cur);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
@@ -10045,7 +10336,7 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                         ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head_k, n_head,    n_tokens), inp_pos, nullptr,
-                        n_embd_head_k, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                        n_embd_head_k, rope_type, n_ctx_orig, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Qcur, "Qcur", il);
 
@@ -10054,7 +10345,7 @@ struct llm_build_context {
 
                 Kcur = ggml_rope_ext(
                         ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head_k, n_head_kv, n_tokens), inp_pos, nullptr,
-                        n_embd_head_k, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                        n_embd_head_k, rope_type, n_ctx_orig, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Kcur, "Kcur", il);
 
@@ -10165,14 +10456,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -10455,14 +10746,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -10586,14 +10877,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -10700,14 +10991,14 @@ struct llm_build_context {
 
                 Qcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Qcur, "Qcur", il);
 
                 Kcur = ggml_rope_ext(
                     ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
-                    n_rot, rope_type, 0, n_orig_ctx, freq_base, freq_scale,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
@@ -10790,6 +11081,374 @@ struct llm_build_context {
 
         return gf;
     }
+
+    struct ggml_cgraph * build_arctic() {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
+
+        // mutable variable, needed during the last layer of the computation to skip unused tokens
+        int32_t n_tokens = this->n_tokens;
+
+        const int64_t n_embd_head = hparams.n_embd_head_v;
+        GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
+        GGML_ASSERT(n_embd_head == hparams.n_rot);
+
+        struct ggml_tensor * cur;
+        struct ggml_tensor * inpL;
+
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+
+        // inp_pos - contains the positions
+        struct ggml_tensor * inp_pos = build_inp_pos();
+
+        // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
+        struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
+
+        for (int il = 0; il < n_layer; ++il) {
+            struct ggml_tensor * inpSA = inpL;
+
+            // norm
+            cur = llm_build_norm(ctx0, inpL, hparams,
+                    model.layers[il].attn_norm, NULL,
+                    LLM_NORM_RMS, cb, il);
+            cb(cur, "attn_norm", il);
+
+            // self-attention
+            {
+                // compute Q and K and RoPE them
+                struct ggml_tensor * Qcur = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+                cb(Qcur, "Qcur", il);
+
+                struct ggml_tensor * Kcur = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
+                cb(Kcur, "Kcur", il);
+
+                struct ggml_tensor * Vcur = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
+                cb(Vcur, "Vcur", il);
+
+                Qcur = ggml_rope_ext(
+                    ctx0, ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens), inp_pos, nullptr,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
+                    ext_factor, attn_factor, beta_fast, beta_slow
+                );
+                cb(Qcur, "Qcur", il);
+
+                Kcur = ggml_rope_ext(
+                    ctx0, ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens), inp_pos, nullptr,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
+                    ext_factor, attn_factor, beta_fast, beta_slow
+                );
+                cb(Kcur, "Kcur", il);
+
+                cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
+                        model.layers[il].wo, NULL,
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+            }
+
+            if (il == n_layer - 1) {
+                // skip computing output for unused tokens
+                struct ggml_tensor * inp_out_ids = build_inp_out_ids();
+                n_tokens = n_outputs;
+                cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
+                inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
+            }
+
+            struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
+            cb(ffn_inp, "ffn_inp", il);
+
+            // feed-forward network
+            cur = llm_build_norm(ctx0, ffn_inp, hparams,
+                    model.layers[il].ffn_norm, NULL,
+                    LLM_NORM_RMS, cb, il);
+            cb(cur, "ffn_norm", il);
+
+            cur = llm_build_ffn(ctx0, cur,
+                    model.layers[il].ffn_up,   NULL,
+                    model.layers[il].ffn_gate, NULL,
+                    model.layers[il].ffn_down, NULL,
+                    NULL,
+                    LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
+            cb(cur, "ffn_out", il);
+
+            struct ggml_tensor * ffn_out = ggml_add(ctx0, cur, ffn_inp);
+            cb(ffn_out, "ffn_out", il);
+
+            // MoE
+            cur = llm_build_norm(ctx0, inpSA, hparams,
+                    model.layers[il].ffn_norm_exps, NULL,
+                    LLM_NORM_RMS, cb, il);
+            cb(cur, "ffn_norm_exps", il);
+
+            cur = llm_build_moe_ffn(ctx0, cur,
+                    model.layers[il].ffn_gate_inp,
+                    model.layers[il].ffn_up_exps,
+                    model.layers[il].ffn_gate_exps,
+                    model.layers[il].ffn_down_exps,
+                    n_expert, n_expert_used,
+                    LLM_FFN_SILU, true,
+                    false, 0.0,
+                    cb, il);
+            cb(cur, "ffn_moe_out", il);
+
+            cur = ggml_add(ctx0, cur, ffn_out);
+            cb(cur, "ffn_out", il);
+
+            ggml_tensor * layer_dir = lctx.cvec.tensor_for(il);
+            if (layer_dir != nullptr) {
+                cur = ggml_add(ctx0, cur, layer_dir);
+            }
+            cb(cur, "l_out", il);
+
+            // input for next layer
+            inpL = cur;
+        }
+
+        cur = inpL;
+
+        cur = llm_build_norm(ctx0, cur, hparams,
+                model.output_norm, NULL,
+                LLM_NORM_RMS, cb, -1);
+        cb(cur, "result_norm", -1);
+
+        // lm_head
+        cur = ggml_mul_mat(ctx0, model.output, cur);
+        cb(cur, "result_output", -1);
+
+        ggml_build_forward_expand(gf, cur);
+
+        return gf;
+    }
+
+    struct ggml_cgraph * build_deepseek2() {
+        struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
+
+        // mutable variable, needed during the last layer of the computation to skip unused tokens
+        int32_t n_tokens = this->n_tokens;
+
+        bool is_lite = (hparams.n_layer == 27);
+
+        // We have to pre-scale kq_scale and attn_factor to make the YaRN RoPE work correctly.
+        // See https://github.com/ggerganov/llama.cpp/discussions/7416 for detailed explanation.
+        const float mscale = attn_factor * (1.0f + hparams.rope_yarn_log_mul * logf(1.0f / freq_scale));
+        const float kq_scale = 1.0f*mscale*mscale/sqrtf(float(hparams.n_embd_head_k));
+        const float attn_factor_scaled = 1.0f / (1.0f + 0.1f * logf(1.0f / freq_scale));
+
+        const uint32_t n_embd_head_qk_rope = hparams.n_rot;
+        const uint32_t n_embd_head_qk_nope = hparams.n_embd_head_k - hparams.n_rot;
+        const uint32_t kv_lora_rank = hparams.n_lora_kv;
+
+        struct ggml_tensor * cur;
+        struct ggml_tensor * inpL;
+
+        // {n_embd, n_tokens}
+        inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
+
+        // inp_pos - contains the positions
+        struct ggml_tensor * inp_pos = build_inp_pos();
+
+        // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
+        struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
+
+        for (int il = 0; il < n_layer; ++il) {
+            struct ggml_tensor * inpSA = inpL;
+
+            // norm
+            cur = llm_build_norm(ctx0, inpL, hparams,
+                    model.layers[il].attn_norm, NULL,
+                    LLM_NORM_RMS, cb, il);
+            cb(cur, "attn_norm", il);
+
+            // self_attention
+            {
+                struct ggml_tensor * q = NULL;
+                if (!is_lite) {
+                    // {n_embd, q_lora_rank} * {n_embd, n_tokens} -> {q_lora_rank, n_tokens}
+                    q = ggml_mul_mat(ctx0, model.layers[il].wq_a, cur);
+                    cb(q, "q", il);
+
+                    q = llm_build_norm(ctx0, q, hparams,
+                            model.layers[il].attn_q_a_norm, NULL,
+                            LLM_NORM_RMS, cb, il);
+                    cb(q, "q", il);
+
+                    // {q_lora_rank, n_head * hparams.n_embd_head_k} * {q_lora_rank, n_tokens} -> {n_head * hparams.n_embd_head_k, n_tokens}
+                    q = ggml_mul_mat(ctx0, model.layers[il].wq_b, q);
+                    cb(q, "q", il);
+                } else {
+                    q = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+                    cb(q, "q", il);
+                }
+
+                // split into {n_head * n_embd_head_qk_nope, n_tokens}
+                struct ggml_tensor * q_nope = ggml_view_3d(ctx0, q, n_embd_head_qk_nope, n_head, n_tokens,
+                        ggml_row_size(q->type, hparams.n_embd_head_k),
+                        ggml_row_size(q->type, hparams.n_embd_head_k * n_head),
+                        0);
+                cb(q_nope, "q_nope", il);
+
+                // and {n_head * n_embd_head_qk_rope, n_tokens}
+                struct ggml_tensor * q_pe = ggml_view_3d(ctx0, q, n_embd_head_qk_rope, n_head, n_tokens,
+                        ggml_row_size(q->type, hparams.n_embd_head_k),
+                        ggml_row_size(q->type, hparams.n_embd_head_k * n_head),
+                        ggml_row_size(q->type, n_embd_head_qk_nope));
+                cb(q_pe, "q_pe", il);
+
+                // {n_embd, kv_lora_rank + n_embd_head_qk_rope} * {n_embd, n_tokens} -> {kv_lora_rank + n_embd_head_qk_rope, n_tokens}
+                struct ggml_tensor * kv_pe_compresseed = ggml_mul_mat(ctx0, model.layers[il].wkv_a_mqa, cur);
+                cb(kv_pe_compresseed, "kv_pe_compresseed", il);
+
+                // split into {kv_lora_rank, n_tokens}
+                struct ggml_tensor * kv_compressed = ggml_view_2d(ctx0, kv_pe_compresseed, kv_lora_rank, n_tokens,
+                        kv_pe_compresseed->nb[1],
+                        0);
+                cb(kv_compressed, "kv_compressed", il);
+
+                // and {n_embd_head_qk_rope, n_tokens}
+                struct ggml_tensor * k_pe = ggml_view_3d(ctx0, kv_pe_compresseed, n_embd_head_qk_rope, 1, n_tokens,
+                        kv_pe_compresseed->nb[1],
+                        kv_pe_compresseed->nb[1],
+                        ggml_row_size(kv_pe_compresseed->type, kv_lora_rank));
+                cb(k_pe, "k_pe", il);
+
+                kv_compressed = ggml_cont(ctx0, kv_compressed); // TODO: the CUDA backend does not support non-contiguous norm
+                kv_compressed = llm_build_norm(ctx0, kv_compressed, hparams,
+                        model.layers[il].attn_kv_a_norm, NULL,
+                        LLM_NORM_RMS, cb, il);
+                cb(kv_compressed, "kv_compressed", il);
+
+                // {kv_lora_rank, n_head * (n_embd_head_qk_nope + n_embd_head_v)} * {kv_lora_rank, n_tokens} -> {n_head * (n_embd_head_qk_nope + n_embd_head_v), n_tokens}
+                struct ggml_tensor * kv = ggml_mul_mat(ctx0, model.layers[il].wkv_b, kv_compressed);
+                cb(kv, "kv", il);
+
+                // split into {n_head * n_embd_head_qk_nope, n_tokens}
+                struct ggml_tensor * k_nope = ggml_view_3d(ctx0, kv, n_embd_head_qk_nope, n_head, n_tokens,
+                        ggml_row_size(kv->type, n_embd_head_qk_nope + hparams.n_embd_head_v),
+                        ggml_row_size(kv->type, n_head * (n_embd_head_qk_nope + hparams.n_embd_head_v)),
+                        0);
+                cb(k_nope, "k_nope", il);
+
+                // and {n_head * n_embd_head_v, n_tokens}
+                struct ggml_tensor * v_states = ggml_view_3d(ctx0, kv, hparams.n_embd_head_v, n_head, n_tokens,
+                        ggml_row_size(kv->type, (n_embd_head_qk_nope + hparams.n_embd_head_v)),
+                        ggml_row_size(kv->type, (n_embd_head_qk_nope + hparams.n_embd_head_v)*n_head),
+                        ggml_row_size(kv->type, (n_embd_head_qk_nope)));
+                cb(v_states, "v_states", il);
+
+                v_states = ggml_cont(ctx0, v_states);
+                cb(v_states, "v_states", il);
+
+                v_states = ggml_view_2d(ctx0, v_states, hparams.n_embd_head_v * n_head, n_tokens,
+                    ggml_row_size(kv->type, hparams.n_embd_head_v * n_head),
+                    0);
+                cb(v_states, "v_states", il);
+
+                q_pe = ggml_cont(ctx0, q_pe); // TODO: the CUDA backend does not support non-contiguous RoPE
+                q_pe = ggml_rope_ext(
+                    ctx0, q_pe, inp_pos, nullptr,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
+                    ext_factor, attn_factor_scaled, beta_fast, beta_slow
+                );
+                cb(q_pe, "q_pe", il);
+
+                // shared RoPE key
+                k_pe = ggml_cont(ctx0, k_pe); // TODO: the CUDA backend does not support non-contiguous RoPE
+                k_pe = ggml_rope_ext(
+                    ctx0, k_pe, inp_pos, nullptr,
+                    n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
+                    ext_factor, attn_factor_scaled, beta_fast, beta_slow
+                );
+                cb(k_pe, "k_pe", il);
+
+                struct ggml_tensor * q_states = ggml_concat(ctx0, q_nope, q_pe, 0);
+                cb(q_states, "q_states", il);
+
+                struct ggml_tensor * k_states = ggml_concat(ctx0, k_nope, ggml_repeat(ctx0, k_pe, q_pe), 0);
+                cb(k_states, "k_states", il);
+
+                cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
+                        model.layers[il].wo, NULL,
+                        k_states, v_states, q_states, KQ_mask, n_tokens, kv_head, n_kv, kq_scale, cb, il);
+            }
+
+            if (il == n_layer - 1) {
+                // skip computing output for unused tokens
+                struct ggml_tensor * inp_out_ids = build_inp_out_ids();
+                n_tokens = n_outputs;
+                cur   = ggml_get_rows(ctx0,   cur, inp_out_ids);
+                inpSA = ggml_get_rows(ctx0, inpSA, inp_out_ids);
+            }
+
+            struct ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
+            cb(ffn_inp, "ffn_inp", il);
+
+            if ((uint32_t) il < hparams.n_layer_dense_lead) {
+                cur = llm_build_norm(ctx0, ffn_inp, hparams,
+                        model.layers[il].ffn_norm, NULL,
+                        LLM_NORM_RMS, cb, il);
+                cb(cur, "ffn_norm", il);
+
+                cur = llm_build_ffn(ctx0, cur,
+                        model.layers[il].ffn_up,   NULL,
+                        model.layers[il].ffn_gate, NULL,
+                        model.layers[il].ffn_down, NULL,
+                        NULL,
+                        LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
+                cb(cur, "ffn_out", il);
+            } else {
+                // MoE branch
+                cur = llm_build_norm(ctx0, ffn_inp, hparams,
+                        model.layers[il].ffn_norm, NULL,
+                        LLM_NORM_RMS, cb, il);
+                cb(cur, "ffn_norm", il);
+
+                ggml_tensor * moe_out =
+                        llm_build_moe_ffn(ctx0, cur,
+                            model.layers[il].ffn_gate_inp,
+                            model.layers[il].ffn_up_exps,
+                            model.layers[il].ffn_gate_exps,
+                            model.layers[il].ffn_down_exps,
+                            n_expert, n_expert_used,
+                            LLM_FFN_SILU, false,
+                            true, hparams.expert_weights_scale,
+                            cb, il);
+                cb(moe_out, "ffn_moe_out", il);
+
+                // FFN shared expert
+                {
+                    ggml_tensor * ffn_shexp = llm_build_ffn(ctx0, cur,
+                            model.layers[il].ffn_up_shexp,   NULL,
+                            model.layers[il].ffn_gate_shexp, NULL,
+                            model.layers[il].ffn_down_shexp, NULL,
+                            NULL,
+                            LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
+                    cb(ffn_shexp, "ffn_shexp", il);
+
+                    cur = ggml_add(ctx0, moe_out, ffn_shexp);
+                    cb(cur, "ffn_out", il);
+                }
+            }
+
+            cur = ggml_add(ctx0, cur, ffn_inp);
+            cb(cur, "l_out", il);
+
+            // input for next layer
+            inpL = cur;
+        }
+
+        cur = inpL;
+
+        cur = llm_build_norm(ctx0, cur, hparams,
+                model.output_norm, NULL,
+                LLM_NORM_RMS, cb, -1);
+        cb(cur, "result_norm", -1);
+
+        // lm_head
+        cur = ggml_mul_mat(ctx0, model.output, cur);
+        cb(cur, "result_output", -1);
+
+        ggml_build_forward_expand(gf, cur);
+
+        return gf;
+    }
+
 };
 
 static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const std::vector<uint32_t> & ids) {
@@ -11003,6 +11662,14 @@ static struct ggml_cgraph * llama_build_graph(
         case LLM_ARCH_GPTNEOX:
             {
                 result = llm.build_gptneox();
+            } break;
+        case LLM_ARCH_ARCTIC:
+            {
+                result = llm.build_arctic();
+            } break;
+        case LLM_ARCH_DEEPSEEK2:
+            {
+                result = llm.build_deepseek2();
             } break;
         default:
             GGML_ASSERT(false);
@@ -12020,27 +12687,27 @@ static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
 
 static bool llama_is_normal_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_NORMAL;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_NORMAL;
 }
 
 static bool llama_is_unknown_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_UNKNOWN;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_UNKNOWN;
 }
 
 static bool llama_is_control_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_CONTROL;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_CONTROL;
 }
 
 static bool llama_is_byte_token(const llama_vocab & vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_BYTE;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_BYTE;
 }
 
 static bool llama_is_user_defined_token(const llama_vocab& vocab, llama_token id) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return vocab.id_to_token[id].type == LLAMA_TOKEN_TYPE_USER_DEFINED;
+    return vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_USER_DEFINED;
 }
 
 static uint8_t llama_token_to_byte(const llama_vocab& vocab, llama_token id) {
@@ -12293,6 +12960,7 @@ struct llm_tokenizer_bpe {
                         });
                         break;
                     case LLAMA_VOCAB_PRE_TYPE_DBRX:
+                    case LLAMA_VOCAB_PRE_TYPE_SMAUG:
                         word_collection = unicode_regex_split(text, {
                             // same as llama3
                             "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
@@ -12515,7 +13183,7 @@ struct llm_tokenizer_wpm {
     llm_tokenizer_wpm(const llama_vocab & vocab): vocab(vocab) {}
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
-        auto * token_map = &vocab.token_to_id;
+        const auto & token_map = vocab.token_to_id;
 
         // normalize and split by whitespace
         std::vector<std::string> words = preprocess(text);
@@ -12530,108 +13198,89 @@ struct llm_tokenizer_wpm {
             }
 
             // prepend phantom space
-            std::string word1 = "\xe2\x96\x81" + word;
-            int n = word1.size();
+            const std::string word1 = "\xe2\x96\x81" + word;
+            const int n = word1.size();
+
+            const size_t current_tokens = output.size();
 
             // we're at the start of a new word
-            int i = 0;
-            bool match_any = false;
-
             // move through character position in word
-            while (i < n) {
+            for (int i = 0; i < n; ++i) {
                 // loop through possible match length
                 bool match = false;
                 for (int j = n; j > i; j--) {
-                    auto it = token_map->find(word1.substr(i, j - i));
-                    if (it != token_map->end()) {
+                    auto it = token_map.find(word1.substr(i, j - i));
+                    if (it != token_map.end()) {
                         output.push_back(it->second);
                         match = true;
-                        match_any = true;
-                        i = j;
+                        i = j - 1;
                         break;
                     }
                 }
 
-                // must be an unknown character
-                if (!match) {
-                    i++;
+                if (!match) { // discard all
+                    output.resize(current_tokens);
+                    break;  // and discard next tokens
                 }
             }
 
             // we didn't find any matches for this word
-            if (!match_any) {
+            if (current_tokens == output.size()) {
                 output.push_back(vocab.special_unk_id);
             }
         }
     }
 
     std::vector<std::string> preprocess(const std::string & text) {
-        std::vector<uint32_t> cpts_nfd = unicode_cpts_normalize_nfd(unicode_cpts_from_utf8(text));
+        const std::vector<uint32_t> cpts_nfd = unicode_cpts_normalize_nfd(unicode_cpts_from_utf8(text));
+        std::vector<std::string> words(1, "");
 
-        // strip accents, strip control, uniformize whitespace,
-        // to lowercase, pad chinese characters, pad punctuation
-        std::string new_str = "";
-        for (uint32_t code : cpts_nfd) {
-            const codepoint_flags flags = unicode_cpt_flags(code);
-            if (flags.is_accent_mark || flags.is_control) {
+        for (const char32_t cpt : cpts_nfd) {
+            const auto flags = unicode_cpt_flags(cpt);
+
+            if (flags.is_whitespace) {
+                if (words.back().size()) {  // finish previous word if any
+                    words.emplace_back();
+                }
                 continue;
             }
-            code = unicode_tolower(code);
-            if (flags.is_separator || flags.is_whitespace) {  //####FIXME: is_separator ?
-                code = ' ';
+
+            assert (!flags.is_separator);
+            if (cpt == 0 || cpt == 0xFFFD || flags.is_control) {
+                continue;
             }
-            std::string s = unicode_cpt_to_utf8(code);
-            if (flags.is_punctuation || is_ascii_punct(code) || is_chinese_char(code)) {
-                new_str += " ";
-                new_str += s;
-                new_str += " ";
+
+            const std::string s = unicode_cpt_to_utf8(unicode_tolower(cpt));
+            if (flags.is_punctuation || ( cpt < 0x7F && flags.is_symbol ) || is_chinese_char(cpt)) {
+                if (words.back().size()) {  // finish previous word if any
+                    words.emplace_back();
+                }
+                words.back() = s;       // single char word
+                words.emplace_back();   // start a new word
             } else {
-                new_str += s;
+                words.back() += s;  // append char to word
             }
         }
 
-        // split by whitespace
-        uint64_t l = 0;
-        uint64_t r = 0;
-        std::vector<std::string> words;
-        while (r < new_str.size()) {
-            // if is whitespace
-            if (isspace(new_str[r], std::locale::classic())) {
-                if (r > l) words.push_back(new_str.substr(l, (r - l)));
-                l = r + 1;
-                r = l;
-            } else {
-                r += 1;
-            }
+        if (!words.back().size()) {
+            words.pop_back();
         }
-        if (r > l) {
-            words.push_back(new_str.substr(l, (r - l)));
-        }
+
         return words;
     }
 
-    bool is_ascii_punct(uint32_t code) {
-        if (code > 0xFF) {
-            return false;
-        }
-        auto c = char(static_cast<unsigned char>(code));
-        return ispunct(c, std::locale::classic());
-    }
-
-    bool is_chinese_char(uint32_t cpt) {
-        if ((cpt >= 0x4E00  && cpt <= 0x9FFF)  ||
-            (cpt >= 0x3400  && cpt <= 0x4DBF)  ||
+    static bool is_chinese_char(uint32_t cpt) {
+        return
+            (cpt >= 0x04E00 && cpt <= 0x09FFF) ||
+            (cpt >= 0x03400 && cpt <= 0x04DBF) ||
             (cpt >= 0x20000 && cpt <= 0x2A6DF) ||
             (cpt >= 0x2A700 && cpt <= 0x2B73F) ||
             (cpt >= 0x2B740 && cpt <= 0x2B81F) ||
             (cpt >= 0x2B920 && cpt <= 0x2CEAF) || // this should be 0x2B820 but in hf rust code it is 0x2B920
-            (cpt >= 0xF900  && cpt <= 0xFAFF)  ||
-            (cpt >= 0x2F800 && cpt <= 0x2FA1F) ||
-            (cpt >= 0x3000  && cpt <= 0x303F)  ||
-            (cpt >= 0xFF00  && cpt <= 0xFFEF)) {
-            return true; // NOLINT
-        }
-        return false;
+            (cpt >= 0x0F900 && cpt <= 0x0FAFF) ||
+            (cpt >= 0x2F800 && cpt <= 0x2FA1F);
+            //(cpt >= 0x3000  && cpt <= 0x303F)  ||
+            //(cpt >= 0xFF00  && cpt <= 0xFFEF);
     }
 
     const llama_vocab & vocab;
@@ -12675,9 +13324,9 @@ struct fragment_buffer_variant {
 
 static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer) {
     // for each special token
-    for (const auto & st: vocab.special_tokens_cache) {
-        const auto & special_token = st.first;
-        const auto & special_id    = st.second;
+    for (const llama_vocab::id special_id : vocab.cache_special_tokens) {
+        const auto & data = vocab.id_to_token[special_id];
+        const auto & special_token = data.text;
 
         // for each text fragment
         std::forward_list<fragment_buffer_variant>::iterator it = buffer.begin();
@@ -12686,7 +13335,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
 
             // if a fragment is text ( not yet processed )
             if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                auto * raw_text = &(fragment.raw_text);
+                auto & raw_text = fragment.raw_text;
 
                 auto raw_text_base_offset = fragment.offset;
                 auto raw_text_base_length = fragment.length;
@@ -12696,7 +13345,7 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     // find the first occurrence of a given special token in this fragment
                     //  passing offset argument only limit the "search area" but match coordinates
                     //  are still relative to the source full raw_text
-                    auto match = raw_text->find(special_token, raw_text_base_offset);
+                    auto match = raw_text.find(special_token, raw_text_base_offset);
 
                     // no occurrences found, stop processing this fragment for a given special token
                     if (match == std::string::npos) break;
@@ -12714,13 +13363,22 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
                     if (match > raw_text_base_offset) {
                         // left
                         const int64_t left_reminder_offset = raw_text_base_offset + 0;
-                        const int64_t left_reminder_length = match - raw_text_base_offset;
-                        buffer.emplace_after(it, (*raw_text), left_reminder_offset, left_reminder_length);
+                        int64_t left_reminder_length = match - raw_text_base_offset;
+
+                        if (data.attr & LLAMA_TOKEN_ATTR_LSTRIP) {
+                            while (left_reminder_length > 0 && isspace(raw_text[left_reminder_offset + left_reminder_length - 1])) {
+                                left_reminder_length--;
+                            }
+                        }
+
+                        if (left_reminder_length > 0) {
+                            buffer.emplace_after(it, raw_text, left_reminder_offset, left_reminder_length);
+                            it++;
+                        }
 
 #ifdef PRETOKENIZERDEBUG
                         LLAMA_LOG_WARN("FL: (%ld %ld) '%s'\n", left_reminder_offset, left_reminder_length, raw_text->substr(left_reminder_offset, left_reminder_length).c_str());
 #endif
-                        it++;
                     }
 
                     // special token
@@ -12729,15 +13387,24 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
 
                     // right
                     if (match + special_token.length() < raw_text_base_offset + raw_text_base_length) {
-                        const int64_t right_reminder_offset = match + special_token.length();
-                        const int64_t right_reminder_length = raw_text_base_length - ((match - raw_text_base_offset) + special_token.length());
-                        buffer.emplace_after(it, (*raw_text), right_reminder_offset, right_reminder_length);
+                        int64_t right_reminder_offset = match + special_token.length();
+                        int64_t right_reminder_length = raw_text_base_length - ((match - raw_text_base_offset) + special_token.length());
+
+                        if (data.attr & LLAMA_TOKEN_ATTR_RSTRIP) {
+                            while (right_reminder_length > 0 && isspace(raw_text[right_reminder_offset])) {
+                                right_reminder_offset++;
+                                right_reminder_length--;
+                            }
+                        }
+
+                        if (right_reminder_length > 0) {
+                            buffer.emplace_after(it, raw_text, right_reminder_offset, right_reminder_length);
+                            it++;
+                        }
 
 #ifdef PRETOKENIZERDEBUG
                         LLAMA_LOG_WARN("FR: (%ld %ld) '%s'\n", right_reminder_offset, right_reminder_length, raw_text->substr(right_reminder_offset, right_reminder_length).c_str());
 #endif
-
-                        it++;
 
                         if (source == 0) {
                             buffer.erase_after(buffer.before_begin());
@@ -12784,9 +13451,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 // tokenizer.encode('', add_special_tokens=True)  returns [1]
                 // tokenizer.encode('', add_special_tokens=False) returns []
 
-                static const bool rtrim = true;  //TODO: as param
                 bool is_prev_special = false;
-                bool special_token_rtrim = false;
 
                 if (add_special && vocab.special_add_bos != 0) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
@@ -12796,24 +13461,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
-                        // without adding this leading whitespace, we do not get the same results as the original tokenizer
-
-                        // TODO: It's likely possible to get rid of this string copy entirely
-                        //  by modifying llm_tokenizer_x to operate with string offsets like pre-tokenizer
-                        //  and passing 'add space prefix' as bool argument
-                        //
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
-
-                        if (special_token_rtrim) {
-                            size_t num_whitespaces = 0;
-                            while (isspace(raw_text[num_whitespaces])) {
-                                num_whitespaces++;
-                            }
-                            if (num_whitespaces == raw_text.size()) {
-                                continue; // skip if all whitespaces
-                            }
-                            raw_text = raw_text.substr(num_whitespaces);
-                        }
 
                         if (vocab.add_space_prefix) {
                             if (!output.size() || is_prev_special) {  // prefix with space if first token
@@ -12830,11 +13478,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                         is_prev_special = true;
-                        // phi-3 special tokens without rtrim, works fine for llama-spm too
-                        special_token_rtrim = rtrim
-                            && fragment.token != vocab.special_bos_id
-                            && fragment.token != vocab.special_unk_id
-                            && fragment.token != vocab.special_eos_id;
                     }
                 }
 
@@ -12997,7 +13640,7 @@ static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
         const uint32_t                chr) {
 
     bool found            = false;
-    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR;
+    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR || pos->type == LLAMA_GRETYPE_CHAR_ANY;
 
     GGML_ASSERT(is_positive_char || pos->type == LLAMA_GRETYPE_CHAR_NOT); // NOLINT
 
@@ -13006,6 +13649,10 @@ static std::pair<bool, const llama_grammar_element *> llama_grammar_match_char(
             // inclusive range, e.g. [a-z]
             found = found || (pos->value <= chr && chr <= pos[1].value);
             pos += 2;
+        } else if (pos->type == LLAMA_GRETYPE_CHAR_ANY) {
+            // Any character matches "."
+            found = true;
+            pos += 1;
         } else {
             // exact char match, e.g. [a] or "a"
             found = found || pos->value == chr;
@@ -13023,7 +13670,7 @@ static bool llama_grammar_match_partial_char(
         const llama_grammar_element * pos,
         const llama_partial_utf8      partial_utf8) {
 
-    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR;
+    bool is_positive_char = pos->type == LLAMA_GRETYPE_CHAR || pos->type == LLAMA_GRETYPE_CHAR_ANY;
     GGML_ASSERT(is_positive_char || pos->type == LLAMA_GRETYPE_CHAR_NOT);
 
     uint32_t partial_value = partial_utf8.value;
@@ -13053,6 +13700,9 @@ static bool llama_grammar_match_partial_char(
                 return is_positive_char;
             }
             pos += 2;
+        } else if (pos->type == LLAMA_GRETYPE_CHAR_ANY) {
+            // Any character matches "."
+            return true;
         } else {
             // exact char match, e.g. [a] or "a"
             if (low <= pos->value && pos->value <= high) {
@@ -13113,6 +13763,7 @@ static void llama_grammar_advance_stack(
         }
         case LLAMA_GRETYPE_CHAR:
         case LLAMA_GRETYPE_CHAR_NOT:
+        case LLAMA_GRETYPE_CHAR_ANY:
             if (std::find(new_stacks.begin(), new_stacks.end(), stack) == new_stacks.end()) {
                 // only add the stack if it's not a duplicate of one we already have
                 new_stacks.emplace_back(stack);
@@ -13835,7 +14486,7 @@ void llama_sample_repetition_penalties(
 
 void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
     GGML_ASSERT(ctx);
-    const int64_t t_start_sample_us = ggml_time_us();
+    int64_t t_start_sample_us = ggml_time_us();
 
     bool allow_eog = false;
     for (const auto & stack : grammar->stacks) {
@@ -13847,12 +14498,13 @@ void llama_sample_grammar(struct llama_context * ctx, llama_token_data_array * c
 
     std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
     candidates_decoded.reserve(candidates->size);
-    std::vector<llama_grammar_candidate>                              candidates_grammar;
+
+    std::vector<llama_grammar_candidate> candidates_grammar;
     candidates_grammar.reserve(candidates->size);
 
     for (size_t i = 0; i < candidates->size; ++i) {
-        const llama_token id    = candidates->data[i].id;
-        const std::string piece = llama_token_to_piece(ctx, id, false);
+        const llama_token id      = candidates->data[i].id;
+        const std::string & piece = ctx->model.vocab.cache_token_to_piece.at(id);
 
         if (llama_token_is_eog(&ctx->model, id)) {
             if (!allow_eog) {
@@ -14052,7 +14704,7 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string piece = llama_token_to_piece(ctx, token, false);
+    const std::string & piece = ctx->model.vocab.cache_token_to_piece.at(token);
 
     // Note terminating 0 in decoded string
     const auto   decoded     = decode_utf8(piece, grammar->partial_utf8);
@@ -14066,260 +14718,6 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
     GGML_ASSERT(!grammar->stacks.empty());
 
     ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-}
-
-//
-// Beam search
-//
-
-struct llama_beam {
-    std::vector<llama_token> tokens;
-    float p;  // Cumulative beam probability (renormalized relative to all beams)
-    bool eob; // Initialize end-of-beam to false. Callback sets this to true.
-    // Sort beams by probability. In case of ties, prefer beams at eob.
-    bool operator<(const llama_beam & rhs) const {
-        return std::make_pair(p, eob) < std::make_pair(rhs.p, rhs.eob);
-    }
-    // Shift off first n tokens and discard them.
-    void shift_tokens(const size_t n) {
-        if (n) {
-            std::copy(tokens.begin() + n, tokens.end(), tokens.begin());
-            tokens.resize(tokens.size() - n);
-        }
-    }
-    llama_beam_view view() const { return {tokens.data(), tokens.size(), p, eob}; }
-};
-
-// A struct for calculating logit-related info.
-struct llama_logit_info {
-    const float * const logits;
-    const int n_vocab;
-    const float max_l;
-    const float normalizer;
-    struct sum_exp {
-        float max_l;
-        float operator()(float sum, float l) const { return sum + std::exp(l - max_l); }
-    };
-    llama_logit_info(llama_context * ctx)
-      : logits(llama_get_logits(ctx))
-      , n_vocab(llama_n_vocab(llama_get_model(ctx)))
-      , max_l(*std::max_element(logits, logits + n_vocab))
-      , normalizer(1.0f / std::accumulate(logits, logits + n_vocab, 0.0f, sum_exp{max_l}))
-      { }
-    llama_token_data get_token_data(const llama_token token_id) const {
-        constexpr auto p = std::numeric_limits<float>::quiet_NaN();  // never used
-        return {token_id, logits[token_id], p};
-    }
-    // Return top k token_data by logit.
-    std::vector<llama_token_data> top_k(size_t k) {
-        std::vector<llama_token_data> min_heap;  // min-heap by logit
-        const llama_token k_min = std::min(static_cast<llama_token>(k), n_vocab);
-        min_heap.reserve(k_min);
-        for (llama_token token_id = 0 ; token_id < k_min ; ++token_id) {
-            min_heap.push_back(get_token_data(token_id));
-        }
-        auto comp = [](const llama_token_data & a, const llama_token_data & b) { return a.logit > b.logit; };
-        std::make_heap(min_heap.begin(), min_heap.end(), comp);
-        for (llama_token token_id = k_min ; token_id < n_vocab ; ++token_id) {
-            if (min_heap.front().logit < logits[token_id]) {
-                std::pop_heap(min_heap.begin(), min_heap.end(), comp);
-                min_heap.back().id = token_id;
-                min_heap.back().logit = logits[token_id];
-                std::push_heap(min_heap.begin(), min_heap.end(), comp);
-            }
-        }
-        return min_heap;
-    }
-    float probability_from_logit(float logit) const {
-        return normalizer * std::exp(logit - max_l);
-    }
-};
-
-struct llama_beam_search_data {
-    llama_context * ctx;
-    size_t n_beams;
-    int n_past;
-    int n_predict;
-    std::vector<llama_beam> beams;
-    std::vector<llama_beam> next_beams;
-
-    // Re-calculated on each loop iteration
-    size_t common_prefix_length;
-
-    // Used to communicate to/from callback on beams state.
-    std::vector<llama_beam_view> beam_views;
-
-    llama_beam_search_data(llama_context * ctx, size_t n_beams, int n_past, int n_predict)
-      : ctx(ctx)
-      , n_beams(n_beams)
-      , n_past(n_past)
-      , n_predict(n_predict)
-      , beam_views(n_beams) {
-        beams.reserve(n_beams);
-        next_beams.reserve(n_beams);
-    }
-
-    // Collapse beams to a single beam given by index.
-    void collapse_beams(const size_t beam_idx) {
-        if (0u < beam_idx) {
-            std::swap(beams[0], beams[beam_idx]);
-        }
-        beams.resize(1);
-    }
-
-    // Min-heaps are used to efficiently collect the top-k elements (k=n_beams).
-    // The repetitive patterns below reflect the 2 stages of heaps:
-    //  * Gather elements until the vector is full, then call std::make_heap() on it.
-    //  * If the heap is full and a new element is found that should be included, pop the
-    //    least element to the back(), replace it with the new, then push it into the heap.
-    void fill_next_beams_by_top_probabilities(llama_beam & beam) {
-        // Min-heaps use a greater-than comparator.
-        const auto comp = [](const llama_beam & a, const llama_beam & b) { return a.p > b.p; };
-        if (beam.eob) {
-            // beam is at end-of-sentence, so just copy it to next_beams if its probability is high enough.
-            if (next_beams.size() < n_beams) {
-                next_beams.push_back(std::move(beam));
-                if (next_beams.size() == n_beams) {
-                    std::make_heap(next_beams.begin(), next_beams.end(), comp);
-                }
-            } else if (next_beams.front().p < beam.p) {
-                std::pop_heap(next_beams.begin(), next_beams.end(), comp);
-                next_beams.back() = std::move(beam);
-                std::push_heap(next_beams.begin(), next_beams.end(), comp);
-            }
-        } else {
-            // beam is not at end-of-sentence, so branch with next top_k tokens.
-            if (!beam.tokens.empty()) {
-                llama_decode(ctx, llama_batch_get_one(beam.tokens.data(), beam.tokens.size(), n_past, 0));
-            }
-            llama_logit_info logit_info(ctx);
-            std::vector<llama_token_data> next_tokens = logit_info.top_k(n_beams);
-
-            // Clear the kv slot so that other beams may try different tokens at this position. The llama_decode()
-            // call in loop() will conclusively fill in the kv slot once the beams converge at this position.
-            llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
-
-            size_t i=0;
-            if (next_beams.size() < n_beams) {
-                for (; next_beams.size() < n_beams ; ++i) {
-                    llama_beam next_beam = beam;
-                    next_beam.tokens.push_back(next_tokens[i].id);
-                    next_beam.p *= logit_info.probability_from_logit(next_tokens[i].logit);
-                    next_beams.push_back(std::move(next_beam));
-                }
-                std::make_heap(next_beams.begin(), next_beams.end(), comp);
-            } else {
-                for (; next_beams.front().p == 0.0f ; ++i) {
-                    std::pop_heap(next_beams.begin(), next_beams.end(), comp);
-                    next_beams.back() = beam;
-                    next_beams.back().tokens.push_back(next_tokens[i].id);
-                    next_beams.back().p *= logit_info.probability_from_logit(next_tokens[i].logit);
-                    std::push_heap(next_beams.begin(), next_beams.end(), comp);
-                }
-            }
-            for (; i < n_beams ; ++i) {
-                const float next_p = beam.p * logit_info.probability_from_logit(next_tokens[i].logit);
-                if (next_beams.front().p < next_p) {
-                    std::pop_heap(next_beams.begin(), next_beams.end(), comp);
-                    next_beams.back() = beam;
-                    next_beams.back().tokens.push_back(next_tokens[i].id);
-                    next_beams.back().p = next_p;
-                    std::push_heap(next_beams.begin(), next_beams.end(), comp);
-                }
-            }
-        }
-    }
-
-    // Find common_prefix_length based on beams.
-    // Requires beams is not empty.
-    size_t find_common_prefix_length() {
-        size_t common_prefix_length = beams[0].tokens.size();
-        for (size_t i = 1 ; i < beams.size() ; ++i) {
-            common_prefix_length = std::min(common_prefix_length, beams[i].tokens.size());
-            for (size_t j = 0 ; j < common_prefix_length ; ++j) {
-                if (beams[0].tokens[j] != beams[i].tokens[j]) {
-                    common_prefix_length = j;
-                    break;
-                }
-            }
-        }
-        return common_prefix_length;
-    }
-
-    // Construct beams_state to send back to caller via the callback function.
-    // Side effect: set common_prefix_length = find_common_prefix_length();
-    llama_beams_state get_beams_state(const bool last_call) {
-        for (size_t i = 0 ; i < beams.size() ; ++i) {
-            beam_views[i] = beams[i].view();
-        }
-        common_prefix_length = find_common_prefix_length();
-        return {beam_views.data(), beams.size(), common_prefix_length, last_call};
-    }
-
-    // Loop:
-    //  * while i < n_predict, AND
-    //  * any of the beams have not yet reached end-of-beam (eob), AND
-    //  * the highest probability beam(s) (plural in case of ties) are not at end-of-sentence
-    //    (since all other beam probabilities can only decrease)
-    void loop(const llama_beam_search_callback_fn_t callback, void * const callback_data) {
-        beams.push_back({{}, 1.0f, false});  // Start with one empty beam w/ probability = 1.0 and !eob.
-        const auto not_eob = [](const llama_beam & beam) { return !beam.eob; };
-        for (int i = 0 ; i < n_predict && std::any_of(beams.begin(),beams.end(),not_eob) &&
-                       !beams[top_beam_index()].eob ; ++i) {
-            callback(callback_data, get_beams_state(false));  // Sets common_prefix_length
-            update_beams_from_beam_views();   // Update values (p,eob) that callback may have changed.
-            if (common_prefix_length) {
-                llama_decode(ctx, llama_batch_get_one(beams[0].tokens.data(), common_prefix_length, n_past, 0));
-                n_past += common_prefix_length;
-            }
-            // Zero-out next_beam probabilities to place them last in following min-heap.
-            std::for_each(next_beams.begin(), next_beams.end(), [](llama_beam & beam) { beam.p = 0.0f; });
-            for (llama_beam & beam : beams) {
-                beam.shift_tokens(common_prefix_length);
-                fill_next_beams_by_top_probabilities(beam);
-            }
-            // next_beams become the beams of next/final iteration. Swap them to re-use memory.
-            beams.swap(next_beams);
-            renormalize_beam_probabilities(beams);
-        }
-        collapse_beams(top_beam_index());
-        callback(callback_data, get_beams_state(true));
-    }
-
-    // As beams grow, the cumulative probabilities decrease.
-    // Renormalize them to avoid floating point underflow.
-    static void renormalize_beam_probabilities(std::vector<llama_beam> & beams) {
-        const auto sum_p = [](float sum, llama_beam & beam) { return sum + beam.p; };
-        const float inv_sum = 1.0f / std::accumulate(beams.begin(), beams.end(), 0.0f, sum_p);
-        std::for_each(beams.begin(), beams.end(), [=](llama_beam & beam) { beam.p *= inv_sum; });
-    }
-
-    // Assumes beams is non-empty.  Uses llama_beam::operator<() for ordering.
-    size_t top_beam_index() {
-        return std::max_element(beams.begin(), beams.end()) - beams.begin();
-    }
-
-    // Copy (p,eob) for each beam which may have been changed by the callback.
-    void update_beams_from_beam_views() {
-        for (size_t i = 0 ; i < beams.size() ; ++i) {
-            beams[i].p = beam_views[i].p;
-            beams[i].eob = beam_views[i].eob;
-        }
-    }
-};
-
-void llama_beam_search(llama_context * ctx,
-                       llama_beam_search_callback_fn_t callback, void * callback_data,
-                       size_t n_beams, int n_past, int n_predict) {
-    assert(ctx);
-    const int64_t t_start_sample_us = ggml_time_us();
-
-    llama_beam_search_data beam_search_data(ctx, n_beams, n_past, n_predict);
-
-    beam_search_data.loop(callback, callback_data);
-
-    ctx->t_sample_us += ggml_time_us() - t_start_sample_us;
-    ctx->n_sample++;
 }
 
 //
@@ -14839,6 +15237,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         if (imatrix_data) {
             LLAMA_LOG_INFO("================================ Have weights data with %d entries\n",int(imatrix_data->size()));
             qs.has_imatrix = true;
+            // check imatrix for nans or infs
+            for (const auto & kv : *imatrix_data) {
+                for (float f : kv.second) {
+                    if (!std::isfinite(f)) {
+                        throw std::runtime_error(format("imatrix contains non-finite value %f\n", f));
+                    }
+                }
+            }
         }
     }
 
@@ -15532,7 +15938,7 @@ bool llama_supports_mlock(void) {
 }
 
 bool llama_supports_gpu_offload(void) {
-#if defined(GGML_USE_CUDA) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_METAL) || defined(GGML_USE_VULKAN) || \
+#if defined(GGML_USE_CUDA) || defined(GGML_USE_METAL)   || defined(GGML_USE_VULKAN) || \
     defined(GGML_USE_SYCL) || defined(GGML_USE_KOMPUTE) || defined(GGML_USE_RPC)
     // Defined when llama.cpp is compiled with support for offloading model layers to GPU.
     return true;
@@ -15589,7 +15995,7 @@ struct llama_model * llama_load_model_from_file(
             return true;
         };
     }
-    if (params.rpc_servers != nullptr) {
+    if (params.rpc_servers != nullptr && params.rpc_servers[0] != '\0') {
         // split the servers set them into model->rpc_servers
         std::string servers(params.rpc_servers);
         size_t pos = 0;
@@ -15643,6 +16049,11 @@ struct llama_context * llama_new_context_with_model(
         params.flash_attn = false;
     }
 
+    if (params.type_v != GGML_TYPE_F16 && !params.flash_attn) {
+        LLAMA_LOG_ERROR("%s: V cache quantization requires flash_attn\n", __func__);
+        return nullptr;
+    }
+
     llama_context * ctx = new llama_context(*model);
 
     const auto & hparams = model->hparams;
@@ -15681,8 +16092,8 @@ struct llama_context * llama_new_context_with_model(
 
     cparams.n_ubatch         = std::min(cparams.n_batch, params.n_ubatch == 0 ? params.n_batch : params.n_ubatch);
 
-    cparams.n_yarn_orig_ctx  = params.yarn_orig_ctx    != 0 ? params.yarn_orig_ctx    :
-                               hparams.n_yarn_orig_ctx != 0 ? hparams.n_yarn_orig_ctx :
+    cparams.n_ctx_orig_yarn  = params.yarn_orig_ctx    != 0 ? params.yarn_orig_ctx    :
+                               hparams.n_ctx_orig_yarn != 0 ? hparams.n_ctx_orig_yarn :
                                                               hparams.n_ctx_train;
 
     cparams.cb_eval           = params.cb_eval;
@@ -15747,17 +16158,7 @@ struct llama_context * llama_new_context_with_model(
 
     if (!hparams.vocab_only) {
         // initialize backends
-#if defined(GGML_USE_RPC)
-        for (auto & server : model->rpc_servers) {
-            ggml_backend_t backend = ggml_backend_rpc_init(server.c_str());
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to connect RPC backend to %s\n", __func__, server.c_str());
-                llama_free(ctx);
-                return nullptr;
-            }
-            ctx->backends.push_back(backend);
-        }
-#elif defined(GGML_USE_METAL)
+#if defined(GGML_USE_METAL)
         if (model->n_gpu_layers > 0) {
             ctx->backend_metal = ggml_backend_metal_init();
             if (ctx->backend_metal == nullptr) {
@@ -15796,7 +16197,7 @@ struct llama_context * llama_new_context_with_model(
             return nullptr;
         }
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_t backend = ggml_backend_vk_init(0);
+            ggml_backend_t backend = ggml_backend_vk_init(model->main_gpu);
             if (backend == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Vulkan backend\n", __func__);
                 llama_free(ctx);
@@ -15848,6 +16249,19 @@ struct llama_context * llama_new_context_with_model(
                 return nullptr;
             }
             ctx->backends.push_back(backend);
+        }
+#endif
+#if defined(GGML_USE_RPC)
+        if (model->n_gpu_layers > 0) {
+            for (const auto & endpoint : model->rpc_servers) {
+                ggml_backend_t backend = ggml_backend_rpc_init(endpoint.c_str());
+                if (backend == nullptr) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize RPC to '%s'\n", __func__, endpoint.c_str());
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            }
         }
 #endif
         ctx->backend_cpu = ggml_backend_cpu_init();
@@ -16015,6 +16429,8 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_XVERSE:
         case LLM_ARCH_COMMAND_R:
         case LLM_ARCH_OLMO:
+        case LLM_ARCH_ARCTIC:
+        case LLM_ARCH_DEEPSEEK2:
             return LLAMA_ROPE_TYPE_NORM;
 
         // the pairs of head values are offset by n_rot/2
@@ -17629,9 +18045,9 @@ float llama_token_get_score(const struct llama_model * model, llama_token token)
     return model->vocab.id_to_token[token].score;
 }
 
-llama_token_type llama_token_get_type(const struct llama_model * model, llama_token token) {
+llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token) {
     GGML_ASSERT(model->vocab.type != LLAMA_VOCAB_TYPE_NONE);
-    return model->vocab.id_to_token[token].type;
+    return model->vocab.id_to_token[token].attr;
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
@@ -17639,6 +18055,10 @@ bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
         token == llama_token_eos(model) ||
         token == llama_token_eot(model)
     );
+}
+
+bool llama_token_is_control(const struct llama_model * model, llama_token token) {
+    return llama_is_control_token(model->vocab, token);
 }
 
 llama_token llama_token_bos(const struct llama_model * model) {
@@ -17712,7 +18132,16 @@ static std::string llama_decode_text(const std::string & text) {
 
     const auto cpts = unicode_cpts_from_utf8(text);
     for (const auto cpt : cpts) {
-        decoded_text += unicode_utf8_to_byte(unicode_cpt_to_utf8(cpt));
+        const auto utf8 = unicode_cpt_to_utf8(cpt);
+        try {
+            decoded_text += unicode_utf8_to_byte(utf8);
+        } catch (const std::out_of_range & e) {
+            decoded_text += "[UNK_BYTE_0x";
+            for (const auto c : utf8) {
+                decoded_text += format("%02x", (uint8_t) c);
+            }
+            decoded_text += text + "]";
+        }
     }
 
     return decoded_text;
@@ -17720,69 +18149,88 @@ static std::string llama_decode_text(const std::string & text) {
 
 // does not write null-terminator to buf
 int32_t llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int32_t length, bool special) {
+    // ref: https://github.com/ggerganov/llama.cpp/pull/7587#discussion_r1620983843
+    if (!special && llama_is_control_token(model->vocab, token)) {
+        return 0;
+    }
+
+    // if we have a cache - use it
+    {
+        const auto & cache = model->vocab.cache_token_to_piece;
+
+        if (!cache.empty()) {
+            const auto & res = cache.at(token);
+            if (length < (int) res.size()) {
+                return -(int) res.size();
+            }
+            memcpy(buf, res.c_str(), res.size());
+            return res.size();
+        }
+    }
+
     if (0 <= token && token < llama_n_vocab(model)) {
         switch (llama_vocab_get_type(model->vocab)) {
-        case LLAMA_VOCAB_TYPE_WPM:
-        case LLAMA_VOCAB_TYPE_SPM: {
-            // NOTE: we accept all unsupported token types,
-            // suppressing them like CONTROL tokens.
-            if (llama_is_normal_token(model->vocab, token)) {
-                std::string result = model->vocab.id_to_token[token].text;
-                llama_unescape_whitespace(result);
-                if (length < (int) result.length()) {
-                    return -(int) result.length();
+            case LLAMA_VOCAB_TYPE_WPM:
+            case LLAMA_VOCAB_TYPE_SPM: {
+                // NOTE: we accept all unsupported token types,
+                // suppressing them like CONTROL tokens.
+                if (llama_is_normal_token(model->vocab, token)) {
+                    std::string result = model->vocab.id_to_token[token].text;
+                    llama_unescape_whitespace(result);
+                    if (length < (int) result.length()) {
+                        return -(int) result.length();
+                    }
+                    memcpy(buf, result.c_str(), result.length());
+                    return result.length();
+                } else if (
+                        (llama_is_user_defined_token(model->vocab, token)) ||
+                        (llama_is_control_token     (model->vocab, token) && special)) {
+                    std::string result = model->vocab.id_to_token[token].text;
+                    if (length < (int) result.length()) {
+                        return -(int) result.length();
+                    }
+                    memcpy(buf, result.c_str(), result.length());
+                    return result.length();
+                } else if (llama_is_unknown_token(model->vocab, token)) { // NOLINT
+                    if (length < 3) {
+                        return -3;
+                    }
+                    memcpy(buf, "\xe2\x96\x85", 3);
+                    return 3;
+                } else if (llama_is_byte_token(model->vocab, token)) {
+                    if (length < 1) {
+                        return -1;
+                    }
+                    buf[0] = llama_token_to_byte(model->vocab, token);
+                    return 1;
                 }
-                memcpy(buf, result.c_str(), result.length());
-                return result.length();
-            } else if (
-                    (llama_is_user_defined_token(model->vocab, token)) ||
-                    (llama_is_control_token     (model->vocab, token) && special)) {
-                std::string result = model->vocab.id_to_token[token].text;
-                if (length < (int) result.length()) {
-                    return -(int) result.length();
-                }
-                memcpy(buf, result.c_str(), result.length());
-                return result.length();
-            } else if (llama_is_unknown_token(model->vocab, token)) { // NOLINT
-                if (length < 3) {
-                    return -3;
-                }
-                memcpy(buf, "\xe2\x96\x85", 3);
-                return 3;
-            } else if (llama_is_byte_token(model->vocab, token)) {
-                if (length < 1) {
-                    return -1;
-                }
-                buf[0] = llama_token_to_byte(model->vocab, token);
-                return 1;
+                break;
             }
-            break;
-        }
-        case LLAMA_VOCAB_TYPE_BPE: {
-            // NOTE: we accept all unsupported token types,
-            // suppressing them like CONTROL tokens.
-            if (llama_is_normal_token(model->vocab, token)) {
-                std::string result = model->vocab.id_to_token[token].text;
-                result = llama_decode_text(result);
-                if (length < (int) result.length()) {
-                    return -(int) result.length();
+            case LLAMA_VOCAB_TYPE_BPE: {
+                // NOTE: we accept all unsupported token types,
+                // suppressing them like CONTROL tokens.
+                if (llama_is_normal_token(model->vocab, token)) {
+                    std::string result = model->vocab.id_to_token[token].text;
+                    result = llama_decode_text(result);
+                    if (length < (int) result.length()) {
+                        return -(int) result.length();
+                    }
+                    memcpy(buf, result.c_str(), result.length());
+                    return result.length();
+                } else if (
+                        (llama_is_user_defined_token(model->vocab, token)) ||
+                        (llama_is_control_token     (model->vocab, token) && special)) {
+                    std::string result = model->vocab.id_to_token[token].text;
+                    if (length < (int) result.length()) {
+                        return -(int) result.length();
+                    }
+                    memcpy(buf, result.c_str(), result.length());
+                    return result.length();
                 }
-                memcpy(buf, result.c_str(), result.length());
-                return result.length();
-            } else if (
-                    (llama_is_user_defined_token(model->vocab, token)) ||
-                    (llama_is_control_token     (model->vocab, token) && special)) {
-                std::string result = model->vocab.id_to_token[token].text;
-                if (length < (int) result.length()) {
-                    return -(int) result.length();
-                }
-                memcpy(buf, result.c_str(), result.length());
-                return result.length();
+                break;
             }
-            break;
-        }
-        default:
-            GGML_ASSERT(false);
+            default:
+                GGML_ASSERT(false);
         }
     }
     return 0;
@@ -18117,6 +18565,7 @@ const char * llama_print_system_info(void) {
     s += "AVX512_BF16 = " + std::to_string(ggml_cpu_has_avx512_bf16()) + " | ";
     s += "FMA = "         + std::to_string(ggml_cpu_has_fma())         + " | ";
     s += "NEON = "        + std::to_string(ggml_cpu_has_neon())        + " | ";
+    s += "SVE = "         + std::to_string(ggml_cpu_has_sve())         + " | ";
     s += "ARM_FMA = "     + std::to_string(ggml_cpu_has_arm_fma())     + " | ";
     s += "F16C = "        + std::to_string(ggml_cpu_has_f16c())        + " | ";
     s += "FP16_VA = "     + std::to_string(ggml_cpu_has_fp16_va())     + " | ";

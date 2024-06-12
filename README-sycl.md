@@ -29,7 +29,7 @@ The llama.cpp SYCL backend is designed to support **Intel GPU** firstly. Based o
 
 When targeting **Intel CPU**, it is recommended to use llama.cpp for [Intel oneMKL](README.md#intel-onemkl) backend.
 
-It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS, cuBLAS, CLBlast etc..*. In beginning work, the oneAPI's [SYCLomatic](https://github.com/oneapi-src/SYCLomatic) open-source migration tool (Commercial release [Intel® DPC++ Compatibility Tool](https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compatibility-tool.html)) was used for this purpose.
+It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS, cuBLAS, etc..*. In beginning work, the oneAPI's [SYCLomatic](https://github.com/oneapi-src/SYCLomatic) open-source migration tool (Commercial release [Intel® DPC++ Compatibility Tool](https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compatibility-tool.html)) was used for this purpose.
 
 ## News
 
@@ -54,10 +54,10 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 
 ## OS
 
-| OS      | Status  | Verified                           |
-|---------|---------|------------------------------------|
-| Linux   | Support | Ubuntu 22.04, Fedora Silverblue 39 |
-| Windows | Support | Windows 11                         |
+| OS      | Status  | Verified                                       |
+|---------|---------|------------------------------------------------|
+| Linux   | Support | Ubuntu 22.04, Fedora Silverblue 39, Arch Linux |
+| Windows | Support | Windows 11                                     |
 
 
 ## Hardware
@@ -70,7 +70,7 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 |-------------------------------|---------|---------------------------------------|
 | Intel Data Center Max Series  | Support | Max 1550, 1100                        |
 | Intel Data Center Flex Series | Support | Flex 170                              |
-| Intel Arc Series              | Support | Arc 770, 730M                         |
+| Intel Arc Series              | Support | Arc 770, 730M, Arc A750               |
 | Intel built-in Arc GPU        | Support | built-in Arc GPU in Meteor Lake       |
 | Intel iGPU                    | Support | iGPU in i5-1250P, i7-1260P, i7-1165G7 |
 
