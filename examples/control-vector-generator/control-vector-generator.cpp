@@ -168,6 +168,10 @@ struct train_context {
     int n_embd;
     int n_layers;
 
+    /* pair of prompts to be used for generating final vector */
+    std::vector<std::string> positive_entries;
+    std::vector<std::string> negative_entries;
+
     // each element of the vector correspond to one layer
     // NOTE: the last layer is discard. therefore, we will have (n_layers - 1) elements here
     // NOTE (2): v_diff is transposed from v_diff_tmp
@@ -243,23 +247,6 @@ struct train_context {
     }
 };
 
-struct ctrl_params {
-    /* default meta parameters */
-    int n_completions = 64;
-    int n_pca_batch = 20;
-    int n_pca_iterations = 1000;
-
-    /* default filepaths */
-    std::string outfile = "control_vector.gguf";
-    std::string completions_file = "examples/control-vector-generator/completions.txt";
-    std::string positive_prompts_file = "examples/control-vector-generator/positive.txt";
-    std::string negative_prompts_file = "examples/control-vector-generator/negative.txt";
-
-    /* pair of prompts to be used for generating final vector */
-    std::vector<std::string> positive_entries;
-    std::vector<std::string> negative_entries;
-};
-
 struct tokenized_prompt {
     std::vector<llama_token> tokens_pos;
     std::vector<llama_token> tokens_neg;
@@ -291,148 +278,6 @@ static std::string to_string(const T & val) {
     std::stringstream ss;
     ss << val;
     return ss.str();
-}
-
-static void print_usage(const char * executable) {
-    struct ctrl_params defaults;
-    printf("\n");
-    printf("usage: %s [options] -m <model> [gpt-opts]", executable);
-    printf("\n");
-    printf("Creates a GGUF control vector for a given model.");
-    printf("\n");
-    printf("options:\n");
-    printf("  -h,  --help                 show this help message and exit\n");
-    printf("  -o,  --outfile FNAME        output file\n");
-    printf("                                default: %s\n", defaults.outfile.c_str());
-    printf("  -pf, --positive-file FNAME  positive prompts file, one prompt per line\n");
-    printf("                                default: %s\n", defaults.positive_prompts_file.c_str());
-    printf("  -nf, --negative-file FNAME  negative prompts file, one prompt per line\n");
-    printf("                                default: %s\n", defaults.negative_prompts_file.c_str());
-    printf("  -cf, --completions-file     completions file\n");
-    printf("                                default: %s\n", defaults.completions_file.c_str());
-    printf("  -nc, --num-completions N    number of lines of completions file to use\n");
-    printf("                                default: %d\n", defaults.n_completions);
-    printf("  --batch-pca N               batch size used for PCA. Larger batch runs faster, but uses more memory\n");
-    printf("                                default: %d\n", defaults.n_pca_batch);
-    printf("  --iter-pca N                number of iterations used for PCA\n");
-    printf("                                default: %d\n", defaults.n_pca_iterations);
-    printf("\n");
-    printf("gpt-opts:\n");
-    printf("  -m, --model  FNAME          path to model file\n");
-    printf("  -ngl,  --gpu-layers N       number of layers to offload to GPU\n");
-    printf("  ...other options from main\n");
-    printf("\n");
-}
-
-static int ctrlvec_params_parse_ex(int argc, char ** argv, ctrl_params & params) {
-    std::string arg;
-    const std::string arg_prefix = "-";
-    // hack to skip ctrlvec args in gpt_parse_params but we'll leave it as is
-    int skipme = 0;
-
-    for(int arg_idx = 1; arg_idx < argc; ++arg_idx) {
-        arg = argv[arg_idx];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
-            std::replace(arg.begin(), arg.end(), '_', '-');
-        }
-
-        if (arg == "-h" || arg == "--help") {
-            print_usage(argv[0]);
-            exit(0);
-        }
-        if (arg == "--version") {
-            fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
-            fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
-            exit(0);
-        }
-        if (arg == "--outfile" || arg == "-o") {
-            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
-                params.outfile = argv[arg_idx];
-                skipme += 2;
-            } else {
-                throw std::invalid_argument("error: missing argument for " + arg);
-            }
-        }
-        if (arg == "--completions-file" || arg == "-cf") {
-            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
-                params.completions_file = argv[arg_idx];
-                skipme += 2;
-            } else {
-                throw std::invalid_argument("error: missing argument for " + arg);
-            }
-        }
-        if (arg == "--positive-file" || arg == "-pf") {
-            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
-                params.positive_prompts_file = argv[arg_idx];
-                skipme += 2;
-            } else {
-                throw std::invalid_argument("error: missing argument for " + arg);
-            }
-        }
-        if (arg == "--negative-file" || arg == "-nf") {
-            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
-                params.negative_prompts_file = argv[arg_idx];
-                skipme += 2;
-            } else {
-                throw std::invalid_argument("error: missing argument for " + arg);
-            }
-        }
-        if (arg == "--num-completions" || arg == "-nc") {
-            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
-                try {
-                    params.n_completions = std::stoi(argv[arg_idx]);
-                }
-                catch (const std::invalid_argument & ex) {
-                    throw std::invalid_argument("error: invalid argument for " + arg);
-                }
-                skipme += 2;
-            } else {
-                throw std::invalid_argument("error: missing argument for " + arg);
-            }
-        }
-        if (arg == "--pca-batch") {
-            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
-                try {
-                    params.n_pca_batch = std::stoi(argv[arg_idx]);
-                }
-                catch (const std::invalid_argument & ex) {
-                    throw std::invalid_argument("error: invalid argument for " + arg);
-                }
-                skipme += 2;
-            } else {
-                throw std::invalid_argument("error: missing argument for " + arg);
-            }
-        }
-        if (arg == "--pca-iter") {
-            if (++arg_idx < argc && strncmp(argv[arg_idx], arg_prefix.c_str(), 2) != 0) {
-                try {
-                    params.n_pca_iterations = std::stoi(argv[arg_idx]);
-                }
-                catch (const std::invalid_argument & ex) {
-                    throw std::invalid_argument("error: invalid argument for " + arg);
-                }
-                skipme += 2;
-            } else {
-                throw std::invalid_argument("error: missing argument for " + arg);
-            }
-        }
-        // TODO it might be nice QoL to have single positive/negative args
-        // we do not handle any other unknown arguments here because they will be handled by gpt_parse_params
-    }
-    return skipme;
-}
-
-static int ctrlvec_params_parse(int argc, char ** argv, ctrl_params & params) {
-    int skipme = 0;
-    try {
-        skipme = ctrlvec_params_parse_ex(argc, argv, params);
-    }
-    catch (const std::invalid_argument & ex) {
-        fprintf(stderr, "%s\n", ex.what());
-        print_usage(argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    return skipme;
 }
 
 static std::vector<std::string> ctrlvec_load_prompt_file(std::string path, bool skip_empty_lines = false) {
@@ -508,10 +353,10 @@ static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const 
  * Load prompt files and completion file.
  * Then format each pair of prompt + completion to make an entry.
  */
-static int prepare_entries(ctrl_params & cparams) {
+static int prepare_entries(gpt_params & params, train_context & ctx_train) {
     // load prompts
-    std::vector<std::string> positive_prompts = ctrlvec_load_prompt_file(cparams.positive_prompts_file);
-    std::vector<std::string> negative_prompts = ctrlvec_load_prompt_file(cparams.negative_prompts_file);
+    std::vector<std::string> positive_prompts = ctrlvec_load_prompt_file(params.cvector_positive_file);
+    std::vector<std::string> negative_prompts = ctrlvec_load_prompt_file(params.cvector_negative_file);
     if (positive_prompts.size() != negative_prompts.size()) {
         fprintf(stderr, "number of positive and negative prompts must be equal\n");
         return 1;
@@ -522,7 +367,7 @@ static int prepare_entries(ctrl_params & cparams) {
     }
 
     // create templated prompts
-    std::vector<std::string> completions = ctrlvec_load_prompt_file(cparams.completions_file, false);
+    std::vector<std::string> completions = ctrlvec_load_prompt_file(params.cvector_completions_file, false);
     auto format_template = [](std::string persona, std::string suffix) {
         //const std::string user_tag = "[INST]";
         //const std::string asst_tag = "[/INST]";
@@ -531,34 +376,28 @@ static int prepare_entries(ctrl_params & cparams) {
         return persona + " " + suffix; // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
     };
     for (size_t i = 0; i < positive_prompts.size(); ++i) {
-        for (int j = 0; j < std::min((int) completions.size(), cparams.n_completions); ++j) {
+        for (int j = 0; j < std::min((int) completions.size(), params.n_completions); ++j) {
             // TODO replicate the truncations done by the python implementation
-            cparams.positive_entries.push_back(format_template(positive_prompts[i], completions[j]));
-            cparams.negative_entries.push_back(format_template(negative_prompts[i], completions[j]));
+            ctx_train.positive_entries.push_back(format_template(positive_prompts[i], completions[j]));
+            ctx_train.negative_entries.push_back(format_template(negative_prompts[i], completions[j]));
         }
     }
     return 0;
 }
 
 int main(int argc, char ** argv) {
-    ctrl_params cparams;
-
-    int skipme = ctrlvec_params_parse(argc, argv, cparams);
-    argc -= skipme;
-    argv += skipme;
-
     gpt_params params;
+
     if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
 
-    if (cparams.n_pca_iterations % cparams.n_pca_batch != 0) {
+    if (params.n_pca_iterations % params.n_pca_batch != 0) {
         fprintf(stderr, "PCA iterations must by multiply of PCA batch size\n");
         return 1;
     }
 
-    // load and prepare entries for training
-    prepare_entries(cparams);
 
     callback_data cb_data;
 
@@ -584,27 +423,30 @@ int main(int argc, char ** argv) {
     char model_hint[128];
     llama_model_meta_val_str(model, "general.architecture", model_hint, 128);
 
+    // init train_context
+    train_context ctx_train(n_embd, n_layers);
+
+    // load and prepare entries for training
+    prepare_entries(params, ctx_train);
+
     // we have to pretokenize everything because otherwise we don't know how much overhead to allocate ctx_diffs_wrapped
     std::vector<tokenized_prompt> tokenized_prompts;
     size_t n_total_tokens = 0;
-    for (size_t i = 0; i < cparams.positive_entries.size(); ++i) {
-        tokenized_prompt t(ctx, cparams.positive_entries[i], cparams.negative_entries[i]);
+    for (size_t i = 0; i < ctx_train.positive_entries.size(); ++i) {
+        tokenized_prompt t(ctx, ctx_train.positive_entries[i], ctx_train.negative_entries[i]);
         n_total_tokens += 2 * t.max_seq_len;
         tokenized_prompts.push_back(std::move(t));
     }
 
     std::cout << "n_total_tokens: " << n_total_tokens << std::endl;
 
-    // init train_context
-    train_context ctx_train(n_embd, n_layers);
-
-    for(size_t i = 0; i < cparams.positive_entries.size(); ++i) {
+    for(size_t i = 0; i < ctx_train.positive_entries.size(); ++i) {
         tokenized_prompt t = tokenized_prompts[i];
         cb_data.n_layers = n_layers;
         cb_data.n_tokens = t.max_seq_len;
 
         printf("Evaluating prompt[%d/%d]: \"%s\" - \"%s\" (%d tokens)\n",
-            (int) i+1, (int) cparams.positive_entries.size(),
+            (int) i+1, (int) ctx_train.positive_entries.size(),
             tokens_to_str(ctx, t.tokens_pos.cbegin(), t.tokens_pos.cend()).c_str(),
             tokens_to_str(ctx, t.tokens_neg.cbegin(), t.tokens_neg.cend()).c_str(),
             (int) t.max_seq_len);
@@ -635,12 +477,12 @@ int main(int argc, char ** argv) {
     // run PCA
     PCA::pca_params pca_params;
     pca_params.n_threads = params.n_threads;
-    pca_params.n_batch = cparams.n_pca_batch;
-    pca_params.n_iterations = cparams.n_pca_iterations;
+    pca_params.n_batch = params.n_pca_batch;
+    pca_params.n_iterations = params.n_pca_iterations;
     PCA::run_pca(pca_params, ctx_train.v_diff, ctx_train.v_final);
 
     // write output vectors to gguf
-    export_gguf(ctx_train.v_final, cparams.outfile, model_hint);
+    export_gguf(ctx_train.v_final, params.cvector_outfile, model_hint);
 
     llama_backend_free();
 
