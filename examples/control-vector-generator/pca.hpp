@@ -325,7 +325,7 @@ static void run_pca(
         params.i_layer = il;
         params.n_layers = v_input.size();
         power_iteration(params, v_input[il], ctrl_out);
-        printf("%s: Done layer %d / %d\n", __func__, (int) il+1, v_input.size());
+        printf("%s: Done layer %d / %d\n", __func__, (int) il+1, (int) v_input.size());
         //print_debug_tensor(ctrl_out);
     }
 }
