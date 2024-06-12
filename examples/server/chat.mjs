@@ -26,8 +26,9 @@ const propOrder = grammarJsonSchemaPropOrder
 
 let grammar = null
 if (grammarJsonSchemaFile) {
-    const schema = JSON.parse(readFileSync(grammarJsonSchemaFile, 'utf-8'))
-    const converter = new SchemaConverter(propOrder)
+    let schema = JSON.parse(readFileSync(grammarJsonSchemaFile, 'utf-8'))
+    const converter = new SchemaConverter({prop_order: propOrder, allow_fetch: true})
+    schema = await converter.resolveRefs(schema, grammarJsonSchemaFile)
     converter.visit(schema, '')
     grammar = converter.formatGrammar()
 }

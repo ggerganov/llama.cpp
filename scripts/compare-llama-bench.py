@@ -178,6 +178,9 @@ def get_commit_hexsha8(name):
     for t in repo.tags:
         if t.name == name:
             return t.commit.hexsha[:8]
+    for c in repo.iter_commits("--all"):
+        if c.hexsha[:8] == name[:8]:
+            return c.hexsha[:8]
     return None
 
 
@@ -224,7 +227,7 @@ if known_args.compare is not None:
         hexsha8_compare = get_commit_hexsha8(known_args.compare)
         name_compare = known_args.compare
     if hexsha8_compare is None:
-        print(f"ERROR: cannot find data for baseline={known_args.compare}.")
+        print(f"ERROR: cannot find data for compare={known_args.compare}.")
         sys.exit(1)
 # Otherwise, search for the commit for llama-bench was most recently run
 # and that is not a parent of master:

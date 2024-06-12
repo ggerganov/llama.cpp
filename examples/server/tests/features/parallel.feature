@@ -4,7 +4,8 @@ Feature: Parallel
 
   Background: Server startup
     Given a server listening on localhost:8080
-    And   a model file tinyllamas/stories260K.gguf from HF repo ggml-org/models
+    And   a model file tinyllamas/split/stories15M-00001-of-00003.gguf from HF repo ggml-org/models
+    And   a model file test-model-00001-of-00003.gguf
     And   42 as server seed
     And   128 as batch size
     And   256 KV cache size

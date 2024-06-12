@@ -20,8 +20,8 @@ COPY . .
 
 # Set nvcc architecture
 ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
-# Enable cuBLAS
-ENV LLAMA_CUBLAS=1
+# Enable CUDA
+ENV LLAMA_CUDA=1
 
 RUN make
 

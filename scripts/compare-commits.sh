@@ -23,7 +23,7 @@ fi
 make_opts=""
 
 if [[ "$backend" == "cuda" ]]; then
-    make_opts="LLAMA_CUBLAS=1"
+    make_opts="LLAMA_CUDA=1"
 fi
 
 git checkout $1

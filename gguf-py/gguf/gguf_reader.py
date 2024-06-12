@@ -242,12 +242,27 @@ class GGUFReader:
             n_bytes = n_elems * type_size // block_size
             data_offs = int(start_offs + offset_tensor[0])
             item_type: npt.DTypeLike
-            if ggml_type == GGMLQuantizationType.F32:
-                item_count = n_elems
-                item_type = np.float32
-            elif ggml_type == GGMLQuantizationType.F16:
+            if ggml_type == GGMLQuantizationType.F16:
                 item_count = n_elems
                 item_type = np.float16
+            elif ggml_type == GGMLQuantizationType.F32:
+                item_count = n_elems
+                item_type = np.float32
+            elif ggml_type == GGMLQuantizationType.F64:
+                item_count = n_elems
+                item_type = np.float64
+            elif ggml_type == GGMLQuantizationType.I8:
+                item_count = n_elems
+                item_type = np.int8
+            elif ggml_type == GGMLQuantizationType.I16:
+                item_count = n_elems
+                item_type = np.int16
+            elif ggml_type == GGMLQuantizationType.I32:
+                item_count = n_elems
+                item_type = np.int32
+            elif ggml_type == GGMLQuantizationType.I64:
+                item_count = n_elems
+                item_type = np.int64
             else:
                 item_count = n_bytes
                 item_type = np.uint8

@@ -1430,6 +1430,10 @@ static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml
             struct ggml_tensor * dst = gf->nodes[i];
             GGML_ASSERT(dst->data != nullptr);
 
+            if (ggml_is_empty(dst)) {
+                continue;
+            }
+
             switch (dst->op) {
                 case GGML_OP_NONE:
                 case GGML_OP_RESHAPE:
@@ -1951,6 +1955,12 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_kompute_graph_compute,
     /* .supports_op             = */ ggml_backend_kompute_supports_op,
+    /* .offload_op              = */ NULL,
+    /* .event_new               = */ NULL,
+    /* .event_free              = */ NULL,
+    /* .event_record            = */ NULL,
+    /* .event_wait              = */ NULL,
+    /* .event_synchronize       = */ NULL,
 };
 
 static ggml_guid_t ggml_backend_kompute_guid() {

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 import os
 import sys
@@ -106,12 +108,12 @@ def main():
     tensor_map = gguf.get_tensor_name_map(arch, block_count)
     print(tensor_map)
     for name in tensors.keys():
-        data = tensors[name]
+        data_torch = tensors[name]
         if name.endswith(".self_attention.rotary_emb.inv_freq"):
             continue
-        old_dtype = data.dtype
+        old_dtype = data_torch.dtype
         # TODO: FP16 conversion produces garbage outputs. (Q8_0 does not, so..?)
-        data = data.to(torch.float32).squeeze().numpy()
+        data = data_torch.to(torch.float32).squeeze().numpy()
         new_name = tensor_map.get_name(name, try_suffixes = (".weight", ".bias"))
         if new_name is None:
             print("Can not map tensor '" + name + "'")

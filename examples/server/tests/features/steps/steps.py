@@ -5,6 +5,8 @@ import os
 import re
 import socket
 import subprocess
+import sys
+import threading
 import time
 from contextlib import closing
 from re import RegexFlag
@@ -14,7 +16,6 @@ import numpy as np
 import openai
 from behave import step
 from behave.api.async_step import async_run_until_complete
-from huggingface_hub import hf_hub_download
 from prometheus_client import parser
 
 
@@ -22,24 +23,35 @@ from prometheus_client import parser
 def step_server_config(context, server_fqdn, server_port):
     context.server_fqdn = server_fqdn
     context.server_port = int(server_port)
+    context.n_gpu_layer = None
     if 'PORT' in os.environ:
         context.server_port = int(os.environ['PORT'])
         print(f"$PORT set, overriding server port with to {context.server_port}")
     if 'FQDN' in os.environ:
         context.server_fqdn = os.environ['FQDN']
         print(f"$FQDN set, overriding server fqdn with to {context.server_fqdn}")
+    if 'N_GPU_LAYERS' in os.environ:
+        context.n_gpu_layer = int(os.environ['N_GPU_LAYERS'])
+        print(f"$N_GPU_LAYERS set, overriding n_gpu_layer with to {context.n_gpu_layer}")
 
     context.base_url = f'http://{context.server_fqdn}:{context.server_port}'
 
     context.model_alias = None
+    context.model_file = None
+    context.model_hf_repo = None
+    context.model_hf_file = None
+    context.model_url = None
     context.n_batch = None
+    context.n_ubatch = None
     context.n_ctx = None
     context.n_ga = None
     context.n_ga_w = None
-    context.n_gpu_layer = None
     context.n_predict = None
     context.n_prompts = 0
     context.n_server_predict = None
+    context.slot_save_path = None
+    context.id_slot = None
+    context.cache_prompt = None
     context.n_slots = None
     context.prompt_prefix = None
     context.prompt_suffix = None
@@ -51,6 +63,7 @@ def step_server_config(context, server_fqdn, server_port):
     context.seed = None
     context.server_seed = None
     context.user_api_key = None
+    context.response_format = None
 
     context.tasks_result = []
     context.concurrent_tasks = []
@@ -59,9 +72,19 @@ def step_server_config(context, server_fqdn, server_port):
 
 @step('a model file {hf_file} from HF repo {hf_repo}')
 def step_download_hf_model(context, hf_file, hf_repo):
-    context.model_file = hf_hub_download(repo_id=hf_repo, filename=hf_file)
-    if context.debug:
-        print(f"model file: {context.model_file}\n")
+    context.model_hf_repo = hf_repo
+    context.model_hf_file = hf_file
+    context.model_file = os.path.basename(hf_file)
+
+
+@step('a model file {model_file}')
+def step_model_file(context, model_file):
+    context.model_file = model_file
+
+
+@step('a model url {model_url}')
+def step_model_url(context, model_url):
+    context.model_url = model_url
 
 
 @step('a model alias {model_alias}')
@@ -99,6 +122,21 @@ def step_server_n_predict(context, n_predict):
     context.n_server_predict = n_predict
 
 
+@step('{slot_save_path} as slot save path')
+def step_slot_save_path(context, slot_save_path):
+    context.slot_save_path = slot_save_path
+
+
+@step('using slot id {id_slot:d}')
+def step_id_slot(context, id_slot):
+    context.id_slot = id_slot
+
+
+@step('prompt caching is enabled')
+def step_enable_prompt_cache(context):
+    context.cache_prompt = True
+
+
 @step('continuous batching')
 def step_server_continuous_batching(context):
     context.server_continuous_batching = True
@@ -118,14 +156,21 @@ def step_server_metrics(context):
 def step_start_server(context):
     start_server_background(context)
     attempts = 0
+    max_attempts = 20
+    if 'GITHUB_ACTIONS' in os.environ:
+        max_attempts *= 2
+
+    addrs = socket.getaddrinfo(context.server_fqdn, context.server_port, type=socket.SOCK_STREAM)
+    family, typ, proto, _, sockaddr = addrs[0]
+
     while True:
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            result = sock.connect_ex((context.server_fqdn, context.server_port))
+        with closing(socket.socket(family, typ, proto)) as sock:
+            result = sock.connect_ex(sockaddr)
             if result == 0:
                 print("\x1b[33;46mserver started!\x1b[0m")
                 return
             attempts += 1
-            if attempts > 20:
+            if attempts > max_attempts:
                 assert False, "server not started"
             print(f"waiting for server to start, connect error code = {result}...")
             time.sleep(0.1)
@@ -136,7 +181,8 @@ def step_start_server(context):
 async def step_wait_for_the_server_to_be_started(context, expecting_status):
     match expecting_status:
         case 'healthy':
-            await wait_for_health_status(context, context.base_url, 200, 'ok')
+            await wait_for_health_status(context, context.base_url, 200, 'ok',
+                                         timeout=30)
 
         case 'ready' | 'idle':
             await wait_for_health_status(context, context.base_url, 200, 'ok',
@@ -184,12 +230,14 @@ async def step_request_completion(context, api_error):
                                           context.base_url,
                                           debug=context.debug,
                                           n_predict=context.n_predict,
+                                          cache_prompt=context.cache_prompt,
+                                          id_slot=context.id_slot,
                                           seed=await completions_seed(context),
                                           expect_api_error=expect_api_error,
                                           user_api_key=context.user_api_key)
     context.tasks_result.append(completion)
     if context.debug:
-        print(f"Completion response: {completion}\n")
+        print(f"Completion response: {completion}")
     if expect_api_error:
         assert completion == 401, f"completion must be an 401 status code: {completion}"
 
@@ -243,6 +291,11 @@ def step_max_tokens(context, max_tokens):
     context.n_predict = max_tokens
 
 
+@step('a response format {response_format}')
+def step_response_format(context, response_format):
+    context.response_format = json.loads(response_format)
+
+
 @step('streaming is {enable_streaming}')
 def step_streaming(context, enable_streaming):
     context.enable_streaming = enable_streaming == 'enabled'
@@ -276,6 +329,11 @@ def step_n_junk(context, n_junk):
 @step('{n_batch:d} as batch size')
 def step_n_batch(context, n_batch):
     context.n_batch = n_batch
+
+
+@step('{n_ubatch:d} as ubatch size')
+def step_n_ubatch(context, n_ubatch):
+    context.n_ubatch = n_ubatch
 
 
 @step('{seed:d} as seed')
@@ -329,7 +387,7 @@ def step_prompt_passkey(context, passkey, i_pos):
         prompt += context.prompt_junk_suffix
     if context.debug:
         passkey_highlight = "\x1b[33m" + passkey + "\x1b[0m"
-        print(f"Passkey challenge:\n```{prompt.replace(passkey, passkey_highlight)}```\n")
+        print(f"Passkey challenge:\n```{prompt.replace(passkey, passkey_highlight)}```")
     context.prompts.append(context.prompt_prefix + prompt + context.prompt_suffix)
     context.n_prompts = len(context.prompts)
 
@@ -338,7 +396,7 @@ def step_prompt_passkey(context, passkey, i_pos):
 @async_run_until_complete
 async def step_oai_chat_completions(context, api_error):
     if context.debug:
-        print(f"Submitting OAI compatible completions request...\n")
+        print(f"Submitting OAI compatible completions request...")
     expect_api_error = api_error == 'raised'
     completion = await oai_chat_completions(context.prompts.pop(),
                                             context.system_prompt,
@@ -352,6 +410,9 @@ async def step_oai_chat_completions(context, api_error):
 
                                             enable_streaming=context.enable_streaming
                                             if hasattr(context, 'enable_streaming') else None,
+
+                                            response_format=context.response_format
+                                            if hasattr(context, 'response_format') else None,
 
                                             seed=await completions_seed(context),
 
@@ -412,6 +473,8 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'n_predict') else None,
                               enable_streaming=context.enable_streaming
                               if hasattr(context, 'enable_streaming') else None,
+                              response_format=context.response_format
+                              if hasattr(context, 'response_format') else None,
                               seed=await completions_seed(context),
                               user_api_key=context.user_api_key
                               if hasattr(context, 'user_api_key') else None)
@@ -432,6 +495,8 @@ async def step_oai_chat_completions(context):
                               if hasattr(context, 'n_predict') else None,
                               enable_streaming=context.enable_streaming
                               if hasattr(context, 'enable_streaming') else None,
+                              response_format=context.response_format
+                              if hasattr(context, 'response_format') else None,
                               seed=context.seed
                               if hasattr(context, 'seed') else
                               context.server_seed
@@ -483,12 +548,12 @@ async def step_all_embeddings_are_the_same(context):
             embedding1 = np.array(embeddings[i])
             embedding2 = np.array(embeddings[j])
             if context.debug:
-                print(f"embedding1: {embedding1[-8:]}\n")
-                print(f"embedding2: {embedding2[-8:]}\n")
+                print(f"embedding1: {embedding1[-8:]}")
+                print(f"embedding2: {embedding2[-8:]}")
             similarity = np.dot(embedding1, embedding2) / (np.linalg.norm(embedding1) * np.linalg.norm(embedding2))
             msg = f"Similarity between {i} and {j}: {similarity:.10f}"
             if context.debug:
-                print(f"{msg}\n")
+                print(f"{msg}")
             assert np.isclose(similarity, 1.0, rtol=1e-05, atol=1e-08, equal_nan=False), msg
 
 
@@ -605,7 +670,7 @@ async def step_prometheus_metrics_exported(context):
             metrics_raw = await metrics_response.text()
             metric_exported = False
             if context.debug:
-                print(f"/metrics answer:\n{metrics_raw}\n")
+                print(f"/metrics answer:\n{metrics_raw}")
             context.metrics = {}
             for metric in parser.text_string_to_metric_families(metrics_raw):
                 match metric.name:
@@ -666,12 +731,48 @@ async def concurrent_requests(context, f_completion, *args, **kwargs):
     await asyncio.sleep(0.1)
 
 
+@step('the slot {slot_id:d} is saved with filename "{filename}"')
+@async_run_until_complete
+async def step_save_slot(context, slot_id, filename):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/slots/{slot_id}?action=save',
+                                json={"filename": filename},
+                                headers={"Content-Type": "application/json"}) as response:
+            context.response = response
+
+
+@step('the slot {slot_id:d} is restored with filename "{filename}"')
+@async_run_until_complete
+async def step_restore_slot(context, slot_id, filename):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/slots/{slot_id}?action=restore',
+                                json={"filename": filename},
+                                headers={"Content-Type": "application/json"}) as response:
+            context.response = response
+
+
+@step('the slot {slot_id:d} is erased')
+@async_run_until_complete
+async def step_erase_slot(context, slot_id):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/slots/{slot_id}?action=erase',
+                                headers={"Content-Type": "application/json"}) as response:
+            context.response = response
+
+
+@step('the server responds with status code {status_code:d}')
+def step_server_responds_with_status_code(context, status_code):
+    assert context.response.status == status_code
+
+
 async def request_completion(prompt,
                              base_url,
                              debug=False,
                              prompt_prefix=None,
                              prompt_suffix=None,
                              n_predict=None,
+                             cache_prompt=False,
+                             id_slot=None,
                              seed=None,
                              expect_api_error=None,
                              user_api_key=None):
@@ -693,6 +794,8 @@ async def request_completion(prompt,
                                     "prompt": prompt,
                                     "input_suffix": prompt_suffix,
                                     "n_predict": n_predict if n_predict is not None else -1,
+                                    "cache_prompt": cache_prompt,
+                                    "id_slot": id_slot,
                                     "seed": seed if seed is not None else 42
                                 },
                                 headers=headers,
@@ -714,6 +817,7 @@ async def oai_chat_completions(user_prompt,
                                model=None,
                                n_predict=None,
                                enable_streaming=None,
+                               response_format=None,
                                seed=None,
                                user_api_key=None,
                                expect_api_error=None):
@@ -739,6 +843,8 @@ async def oai_chat_completions(user_prompt,
         "stream": enable_streaming,
         "seed": seed
     }
+    if response_format is not None:
+        payload['response_format'] = response_format
     completion_response = {
         'content': '',
         'timings': {
@@ -799,6 +905,7 @@ async def oai_chat_completions(user_prompt,
                 model=model,
                 max_tokens=n_predict,
                 stream=enable_streaming,
+                response_format=payload.get('response_format'),
                 seed=seed
             )
         except openai.error.AuthenticationError as e:
@@ -907,7 +1014,7 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
             last_match = end
         highlighted += content[last_match:]
         if 'DEBUG' in os.environ and os.environ['DEBUG'] == 'ON':
-          print(f"Checking completion response: {highlighted}\n")
+          print(f"Checking completion response: {highlighted}")
         assert last_match > 0, f'/{re_content}/ must match ```{highlighted}```'
     if expected_predicted_n and expected_predicted_n > 0:
         assert n_predicted == expected_predicted_n, (f'invalid number of tokens predicted:'
@@ -917,7 +1024,7 @@ def assert_n_tokens_predicted(completion_response, expected_predicted_n=None, re
 async def gather_tasks_results(context):
     n_tasks = len(context.concurrent_tasks)
     if context.debug:
-        print(f"Waiting for all {n_tasks} tasks results...\n")
+        print(f"Waiting for all {n_tasks} tasks results...")
     for task_no in range(n_tasks):
         context.tasks_result.append(await context.concurrent_tasks.pop())
     n_completions = len(context.tasks_result)
@@ -934,9 +1041,12 @@ async def wait_for_health_status(context,
                                  slots_processing=None,
                                  expected_slots=None):
     if context.debug:
-        print(f"Starting checking for health for expected_health_status={expected_health_status}\n")
+        print(f"Starting checking for health for expected_health_status={expected_health_status}")
     interval = 0.5
     counter = 0
+    if 'GITHUB_ACTIONS' in os.environ:
+        timeout *= 2
+
     async with aiohttp.ClientSession() as session:
         while True:
             async with await session.get(f'{base_url}/health', params=params) as health_response:
@@ -1020,15 +1130,22 @@ def start_server_background(context):
     if 'LLAMA_SERVER_BIN_PATH' in os.environ:
         context.server_path = os.environ['LLAMA_SERVER_BIN_PATH']
     server_listen_addr = context.server_fqdn
-    if os.name == 'nt':
-        server_listen_addr = '0.0.0.0'
     server_args = [
         '--host', server_listen_addr,
         '--port', context.server_port,
-        '--model', context.model_file
     ]
+    if context.model_file:
+        server_args.extend(['--model', context.model_file])
+    if context.model_url:
+        server_args.extend(['--model-url', context.model_url])
+    if context.model_hf_repo:
+        server_args.extend(['--hf-repo', context.model_hf_repo])
+    if context.model_hf_file:
+        server_args.extend(['--hf-file', context.model_hf_file])
     if context.n_batch:
         server_args.extend(['--batch-size', context.n_batch])
+    if context.n_ubatch:
+        server_args.extend(['--ubatch-size', context.n_ubatch])
     if context.n_gpu_layer:
         server_args.extend(['--n-gpu-layers', context.n_gpu_layer])
     if context.server_continuous_batching:
@@ -1045,6 +1162,8 @@ def start_server_background(context):
         server_args.extend(['--parallel', context.n_slots])
     if context.n_server_predict:
         server_args.extend(['--n-predict', context.n_server_predict])
+    if context.slot_save_path:
+        server_args.extend(['--slot-save-path', context.slot_save_path])
     if context.server_api_key:
         server_args.extend(['--api-key', context.server_api_key])
     if context.n_ga:
@@ -1055,7 +1174,10 @@ def start_server_background(context):
         server_args.append('--verbose')
     if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
         server_args.extend(['--log-format', "text"])
-    print(f"starting server with: {context.server_path} {server_args}\n")
+
+    args = [str(arg) for arg in [context.server_path, *server_args]]
+    print(f"bench: starting server with: {' '.join(args)}")
+
     flags = 0
     if 'nt' == os.name:
         flags |= subprocess.DETACHED_PROCESS
@@ -1064,8 +1186,21 @@ def start_server_background(context):
 
     pkwargs = {
         'creationflags': flags,
+        'stdout': subprocess.PIPE,
+        'stderr': subprocess.PIPE
     }
     context.server_process = subprocess.Popen(
         [str(arg) for arg in [context.server_path, *server_args]],
         **pkwargs)
+
+    def server_log(in_stream, out_stream):
+        for line in iter(in_stream.readline, b''):
+            print(line.decode('utf-8'), end='', file=out_stream)
+
+    thread_stdout = threading.Thread(target=server_log, args=(context.server_process.stdout, sys.stdout))
+    thread_stdout.start()
+
+    thread_stderr = threading.Thread(target=server_log, args=(context.server_process.stderr, sys.stderr))
+    thread_stderr.start()
+
     print(f"server pid={context.server_process.pid}, behave pid={os.getpid()}")

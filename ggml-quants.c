@@ -138,7 +138,7 @@ static inline __m256 sum_i16_pairs_float(const __m256i x) {
 }
 
 static inline __m256 mul_sum_us8_pairs_float(const __m256i ax, const __m256i sy) {
-#if __AVXVNNI__
+#if defined(__AVXVNNI__) || defined(__AVX512VNNI__)
     const __m256i zero = _mm256_setzero_si256();
     const __m256i summed_pairs = _mm256_dpbusd_epi32(zero, ax, sy);
     return _mm256_cvtepi32_ps(summed_pairs);
@@ -550,7 +550,7 @@ static const uint64_t table_b2b_1[1 << 8] = { B8(10, 00) }; // (!b) << 4
 #endif
 
 // reference implementation for deterministic creation of model files
-void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int k) {
+void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int64_t k) {
     static const int qk = QK4_0;
 
     assert(k % qk == 0);
@@ -587,12 +587,12 @@ void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict
     }
 }
 
-void quantize_row_q4_0(const float * restrict x, void * restrict y, int k) {
+void quantize_row_q4_0(const float * restrict x, void * restrict y, int64_t k) {
     quantize_row_q4_0_reference(x, y, k);
 }
 
 
-void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * restrict y, int k) {
+void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * restrict y, int64_t k) {
     const int qk = QK4_1;
 
     assert(k % qk == 0);
@@ -629,11 +629,11 @@ void quantize_row_q4_1_reference(const float * restrict x, block_q4_1 * restrict
     }
 }
 
-void quantize_row_q4_1(const float * restrict x, void * restrict y, int k) {
+void quantize_row_q4_1(const float * restrict x, void * restrict y, int64_t k) {
     quantize_row_q4_1_reference(x, y, k);
 }
 
-void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * restrict y, int k) {
+void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * restrict y, int64_t k) {
     static const int qk = QK5_0;
 
     assert(k % qk == 0);
@@ -677,11 +677,11 @@ void quantize_row_q5_0_reference(const float * restrict x, block_q5_0 * restrict
     }
 }
 
-void quantize_row_q5_0(const float * restrict x, void * restrict y, int k) {
+void quantize_row_q5_0(const float * restrict x, void * restrict y, int64_t k) {
     quantize_row_q5_0_reference(x, y, k);
 }
 
-void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * restrict y, int k) {
+void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * restrict y, int64_t k) {
     const int qk = QK5_1;
 
     assert(k % qk == 0);
@@ -725,12 +725,12 @@ void quantize_row_q5_1_reference(const float * restrict x, block_q5_1 * restrict
     }
 }
 
-void quantize_row_q5_1(const float * restrict x, void * restrict y, int k) {
+void quantize_row_q5_1(const float * restrict x, void * restrict y, int64_t k) {
     quantize_row_q5_1_reference(x, y, k);
 }
 
 // reference implementation for deterministic creation of model files
-void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * restrict y, int k) {
+void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * restrict y, int64_t k) {
     assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
 
@@ -755,7 +755,7 @@ void quantize_row_q8_0_reference(const float * restrict x, block_q8_0 * restrict
     }
 }
 
-void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q8_0(const float * restrict x, void * restrict vy, int64_t k) {
     assert(QK8_0 == 32);
     assert(k % QK8_0 == 0);
     const int nb = k / QK8_0;
@@ -944,7 +944,7 @@ void quantize_row_q8_0(const float * restrict x, void * restrict vy, int k) {
 }
 
 // reference implementation for deterministic creation of model files
-void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict y, int k) {
+void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict y, int64_t k) {
     assert(QK8_1 == 32);
     assert(k % QK8_1 == 0);
     const int nb = k / QK8_1;
@@ -979,7 +979,7 @@ void quantize_row_q8_1_reference(const float * restrict x, block_q8_1 * restrict
     }
 }
 
-void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q8_1(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK8_1 == 0);
     const int nb = k / QK8_1;
 
@@ -1198,7 +1198,7 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int k) {
 #endif
 }
 
-void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict y, int k) {
+void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict y, int64_t k) {
     static const int qk = QK4_0;
 
     assert(k % qk == 0);
@@ -1218,7 +1218,7 @@ void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict y, int 
     }
 }
 
-void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict y, int k) {
+void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict y, int64_t k) {
     static const int qk = QK4_1;
 
     assert(k % qk == 0);
@@ -1239,7 +1239,7 @@ void dequantize_row_q4_1(const block_q4_1 * restrict x, float * restrict y, int 
     }
 }
 
-void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict y, int k) {
+void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict y, int64_t k) {
     static const int qk = QK5_0;
 
     assert(k % qk == 0);
@@ -1265,7 +1265,7 @@ void dequantize_row_q5_0(const block_q5_0 * restrict x, float * restrict y, int 
     }
 }
 
-void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict y, int k) {
+void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict y, int64_t k) {
     static const int qk = QK5_1;
 
     assert(k % qk == 0);
@@ -1292,7 +1292,7 @@ void dequantize_row_q5_1(const block_q5_1 * restrict x, float * restrict y, int 
     }
 }
 
-void dequantize_row_q8_0(const block_q8_0 * restrict x, float * restrict y, int k) {
+void dequantize_row_q8_0(const block_q8_0 * restrict x, float * restrict y, int64_t k) {
     static const int qk = QK8_0;
 
     assert(k % qk == 0);
@@ -1587,7 +1587,7 @@ static inline void get_scale_min_k4(int j, const uint8_t * restrict q, uint8_t *
 
 //========================- 2-bit (de)-quantization
 
-void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict y, int k) {
+void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -1664,7 +1664,7 @@ void quantize_row_q2_K_reference(const float * restrict x, block_q2_K * restrict
     }
 }
 
-void dequantize_row_q2_K(const block_q2_K * restrict x, float * restrict y, int k) {
+void dequantize_row_q2_K(const block_q2_K * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -1710,7 +1710,7 @@ void dequantize_row_q2_K(const block_q2_K * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q2_K(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q2_K(const float * restrict x, void * restrict vy, int64_t k) {
     quantize_row_q2_K_reference(x, vy, k);
 }
 
@@ -1966,14 +1966,14 @@ static void quantize_row_q2_K_impl(const float * restrict x, block_q2_K * restri
     }
 }
 
-size_t quantize_q2_K(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q2_K(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     size_t row_size = ggml_row_size(GGML_TYPE_Q2_K, n_per_row);
     if (!quant_weights) {
-        quantize_row_q2_K_reference(src, dst, nrow*n_per_row);
+        quantize_row_q2_K_reference(src, dst, (int64_t)nrow*n_per_row);
     }
     else {
         char * qrow = (char *)dst;
-        for (int row = 0; row < nrow; ++row) {
+        for (int64_t row = 0; row < nrow; ++row) {
             quantize_row_q2_K_impl(src, (block_q2_K*)qrow, n_per_row, quant_weights);
             src += n_per_row;
             qrow += row_size;
@@ -1984,7 +1984,7 @@ size_t quantize_q2_K(const float * restrict src, void * restrict dst, int nrow, 
 
 //========================= 3-bit (de)-quantization
 
-void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict y, int k) {
+void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -2098,7 +2098,7 @@ void quantize_row_q3_K_reference(const float * restrict x, block_q3_K * restrict
 }
 
 #if QK_K == 256
-void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int k) {
+void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -2148,7 +2148,7 @@ void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int 
     }
 }
 #else
-void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int k) {
+void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     assert(QK_K == 64);
     const int nb = k / QK_K;
@@ -2181,11 +2181,11 @@ void dequantize_row_q3_K(const block_q3_K * restrict x, float * restrict y, int 
 }
 #endif
 
-void quantize_row_q3_K(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q3_K(const float * restrict x, void * restrict vy, int64_t k) {
     quantize_row_q3_K_reference(x, vy, k);
 }
 
-static void quantize_row_q3_K_impl(const float * restrict x, block_q3_K * restrict y, int n_per_row, const float * restrict quant_weights) {
+static void quantize_row_q3_K_impl(const float * restrict x, block_q3_K * restrict y, int64_t n_per_row, const float * restrict quant_weights) {
 #if QK_K != 256
     (void)quant_weights;
     quantize_row_q3_K_reference(x, y, n_per_row);
@@ -2274,14 +2274,14 @@ static void quantize_row_q3_K_impl(const float * restrict x, block_q3_K * restri
 #endif
 }
 
-size_t quantize_q3_K(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q3_K(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     size_t row_size = ggml_row_size(GGML_TYPE_Q3_K, n_per_row);
     if (!quant_weights) {
-        quantize_row_q3_K_reference(src, dst, nrow*n_per_row);
+        quantize_row_q3_K_reference(src, dst, (int64_t)nrow*n_per_row);
     }
     else {
         char * qrow = (char *)dst;
-        for (int row = 0; row < nrow; ++row) {
+        for (int64_t row = 0; row < nrow; ++row) {
             quantize_row_q3_K_impl(src, (block_q3_K*)qrow, n_per_row, quant_weights);
             src += n_per_row;
             qrow += row_size;
@@ -2292,7 +2292,7 @@ size_t quantize_q3_K(const float * restrict src, void * restrict dst, int nrow, 
 
 // ====================== 4-bit (de)-quantization
 
-void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict y, int k) {
+void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -2399,7 +2399,7 @@ void quantize_row_q4_K_reference(const float * restrict x, block_q4_K * restrict
     }
 }
 
-void dequantize_row_q4_K(const block_q4_K * restrict x, float * restrict y, int k) {
+void dequantize_row_q4_K(const block_q4_K * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     const int nb = k / QK_K;
 
@@ -2438,19 +2438,19 @@ void dequantize_row_q4_K(const block_q4_K * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q4_K(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q4_K(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK_K == 0);
     block_q4_K * restrict y = vy;
     quantize_row_q4_K_reference(x, y, k);
 }
 
-static void quantize_row_q4_K_impl(const float * restrict x, block_q4_K * restrict y, int n_per_row, const float * quant_weights) {
+static void quantize_row_q4_K_impl(const float * restrict x, block_q4_K * restrict y, int64_t n_per_row, const float * quant_weights) {
 #if QK_K != 256
     (void)quant_weights;
     quantize_row_q4_K_reference(x, y, n_per_row);
 #else
     assert(n_per_row % QK_K == 0);
-    const int nb = n_per_row / QK_K;
+    const int64_t nb = n_per_row / QK_K;
 
     uint8_t L[QK_K];
     uint8_t Laux[32];
@@ -2522,14 +2522,14 @@ static void quantize_row_q4_K_impl(const float * restrict x, block_q4_K * restri
 #endif
 }
 
-size_t quantize_q4_K(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q4_K(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     size_t row_size = ggml_row_size(GGML_TYPE_Q4_K, n_per_row);
     if (!quant_weights) {
-        quantize_row_q4_K_reference(src, dst, nrow*n_per_row);
+        quantize_row_q4_K_reference(src, dst, (int64_t)nrow*n_per_row);
     }
     else {
         char * qrow = (char *)dst;
-        for (int row = 0; row < nrow; ++row) {
+        for (int64_t row = 0; row < nrow; ++row) {
             quantize_row_q4_K_impl(src, (block_q4_K*)qrow, n_per_row, quant_weights);
             src += n_per_row;
             qrow += row_size;
@@ -2540,9 +2540,9 @@ size_t quantize_q4_K(const float * restrict src, void * restrict dst, int nrow, 
 
 // ====================== 5-bit (de)-quantization
 
-void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict y, int k) {
+void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
 #if QK_K == 256
     uint8_t L[QK_K];
@@ -2682,9 +2682,9 @@ void quantize_row_q5_K_reference(const float * restrict x, block_q5_K * restrict
     }
 }
 
-void dequantize_row_q5_K(const block_q5_K * restrict x, float * restrict y, int k) {
+void dequantize_row_q5_K(const block_q5_K * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     for (int i = 0; i < nb; i++) {
 
@@ -2727,19 +2727,19 @@ void dequantize_row_q5_K(const block_q5_K * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q5_K(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q5_K(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK_K == 0);
     block_q5_K * restrict y = vy;
     quantize_row_q5_K_reference(x, y, k);
 }
 
-static void quantize_row_q5_K_impl(const float * restrict x, block_q5_K * restrict y, int n_per_row, const float * quant_weights) {
+static void quantize_row_q5_K_impl(const float * restrict x, block_q5_K * restrict y, int64_t n_per_row, const float * quant_weights) {
 #if QK_K != 256
     (void)quant_weights;
     quantize_row_q5_K_reference(x, y, n_per_row);
 #else
     assert(n_per_row % QK_K == 0);
-    const int nb = n_per_row / QK_K;
+    const int64_t nb = n_per_row / QK_K;
 
     uint8_t L[QK_K];
     uint8_t Laux[32];
@@ -2831,14 +2831,14 @@ static void quantize_row_q5_K_impl(const float * restrict x, block_q5_K * restri
 #endif
 }
 
-size_t quantize_q5_K(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q5_K(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     size_t row_size = ggml_row_size(GGML_TYPE_Q5_K, n_per_row);
     if (!quant_weights) {
-        quantize_row_q5_K_reference(src, dst, nrow*n_per_row);
+        quantize_row_q5_K_reference(src, dst, (int64_t)nrow*n_per_row);
     }
     else {
         char * qrow = (char *)dst;
-        for (int row = 0; row < nrow; ++row) {
+        for (int64_t row = 0; row < nrow; ++row) {
             quantize_row_q5_K_impl(src, (block_q5_K*)qrow, n_per_row, quant_weights);
             src += n_per_row;
             qrow += row_size;
@@ -2849,9 +2849,9 @@ size_t quantize_q5_K(const float * restrict src, void * restrict dst, int nrow, 
 
 // ====================== 6-bit (de)-quantization
 
-void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict y, int k) {
+void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     int8_t L[QK_K];
     float   scales[QK_K/16];
@@ -2931,9 +2931,9 @@ void quantize_row_q6_K_reference(const float * restrict x, block_q6_K * restrict
     }
 }
 
-void dequantize_row_q6_K(const block_q6_K * restrict x, float * restrict y, int k) {
+void dequantize_row_q6_K(const block_q6_K * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     for (int i = 0; i < nb; i++) {
 
@@ -2978,19 +2978,19 @@ void dequantize_row_q6_K(const block_q6_K * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q6_K(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_q6_K(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK_K == 0);
     block_q6_K * restrict y = vy;
     quantize_row_q6_K_reference(x, y, k);
 }
 
-static void quantize_row_q6_K_impl(const float * restrict x, block_q6_K * restrict y, int n_per_row, const float * quant_weights) {
+static void quantize_row_q6_K_impl(const float * restrict x, block_q6_K * restrict y, int64_t n_per_row, const float * quant_weights) {
 #if QK_K != 256
     (void)quant_weights;
     quantize_row_q6_K_reference(x, y, n_per_row);
 #else
     assert(n_per_row % QK_K == 0);
-    const int nb = n_per_row / QK_K;
+    const int64_t nb = n_per_row / QK_K;
 
     int8_t L[QK_K];
     float   scales[QK_K/16];
@@ -3073,14 +3073,14 @@ static void quantize_row_q6_K_impl(const float * restrict x, block_q6_K * restri
 #endif
 }
 
-size_t quantize_q6_K(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q6_K(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     size_t row_size = ggml_row_size(GGML_TYPE_Q6_K, n_per_row);
     if (!quant_weights) {
-        quantize_row_q6_K_reference(src, dst, nrow*n_per_row);
+        quantize_row_q6_K_reference(src, dst, (int64_t)nrow*n_per_row);
     }
     else {
         char * qrow = (char *)dst;
-        for (int row = 0; row < nrow; ++row) {
+        for (int64_t row = 0; row < nrow; ++row) {
             quantize_row_q6_K_impl(src, (block_q6_K*)qrow, n_per_row, quant_weights);
             src += n_per_row;
             qrow += row_size;
@@ -3089,7 +3089,7 @@ size_t quantize_q6_K(const float * restrict src, void * restrict dst, int nrow, 
     return nrow * row_size;
 }
 
-static void quantize_row_q4_0_impl(const float * restrict x, block_q4_0 * restrict y, int n_per_row, const float * quant_weights) {
+static void quantize_row_q4_0_impl(const float * restrict x, block_q4_0 * restrict y, int64_t n_per_row, const float * quant_weights) {
     static_assert(QK4_0 == 32, "QK4_0 must be 32");
 
     if (!quant_weights) {
@@ -3104,7 +3104,7 @@ static void quantize_row_q4_0_impl(const float * restrict x, block_q4_0 * restri
     for (int j = 0; j < n_per_row; ++j) sum_x2 += x[j]*x[j];
     float sigma2 = sum_x2/n_per_row;
 
-    const int nb = n_per_row/QK4_0;
+    const int64_t nb = n_per_row/QK4_0;
     for (int ib = 0; ib < nb; ++ib) {
         const float * xb = x + QK4_0 * ib;
         const float * qw = quant_weights + QK4_0 * ib;
@@ -3117,14 +3117,14 @@ static void quantize_row_q4_0_impl(const float * restrict x, block_q4_0 * restri
     }
 }
 
-size_t quantize_q4_0(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q4_0(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     if (!quant_weights) {
-        quantize_row_q4_0_reference(src, dst, nrow*n_per_row);
+        quantize_row_q4_0_reference(src, dst, (int64_t)nrow*n_per_row);
         return nrow * ggml_row_size(GGML_TYPE_Q4_0, n_per_row);
     }
     size_t row_size = ggml_row_size(GGML_TYPE_Q4_0, n_per_row);
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_q4_0_impl(src, (block_q4_0*)qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += row_size;
@@ -3132,7 +3132,7 @@ size_t quantize_q4_0(const float * restrict src, void * restrict dst, int nrow, 
     return nrow * row_size;
 }
 
-static void quantize_row_q4_1_impl(const float * restrict x, block_q4_1 * restrict y, int n_per_row, const float * quant_weights) {
+static void quantize_row_q4_1_impl(const float * restrict x, block_q4_1 * restrict y, int64_t n_per_row, const float * quant_weights) {
     static_assert(QK4_1 == 32, "QK4_1 must be 32");
 
     if (!quant_weights) {
@@ -3147,7 +3147,7 @@ static void quantize_row_q4_1_impl(const float * restrict x, block_q4_1 * restri
     for (int j = 0; j < n_per_row; ++j) sum_x2 += x[j]*x[j];
     float sigma2 = sum_x2/n_per_row;
 
-    const int nb = n_per_row/QK4_1;
+    const int64_t nb = n_per_row/QK4_1;
     for (int ib = 0; ib < nb; ++ib) {
         const float * xb = x + QK4_1 * ib;
         const float * qw = quant_weights + QK4_1 * ib;
@@ -3162,14 +3162,14 @@ static void quantize_row_q4_1_impl(const float * restrict x, block_q4_1 * restri
     }
 }
 
-size_t quantize_q4_1(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q4_1(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     if (!quant_weights) {
-        quantize_row_q4_1_reference(src, dst, nrow*n_per_row);
+        quantize_row_q4_1_reference(src, dst, (int64_t)nrow*n_per_row);
         return nrow * ggml_row_size(GGML_TYPE_Q4_1, n_per_row);
     }
     size_t row_size = ggml_row_size(GGML_TYPE_Q4_1, n_per_row);
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_q4_1_impl(src, (block_q4_1*)qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += row_size;
@@ -3177,7 +3177,7 @@ size_t quantize_q4_1(const float * restrict src, void * restrict dst, int nrow, 
     return nrow * row_size;
 }
 
-static void quantize_row_q5_0_impl(const float * restrict x, block_q5_0 * restrict y, int n_per_row, const float * quant_weights) {
+static void quantize_row_q5_0_impl(const float * restrict x, block_q5_0 * restrict y, int64_t n_per_row, const float * quant_weights) {
     static_assert(QK5_0 == 32, "QK5_0 must be 32");
 
     if (!quant_weights) {
@@ -3192,7 +3192,7 @@ static void quantize_row_q5_0_impl(const float * restrict x, block_q5_0 * restri
     for (int j = 0; j < n_per_row; ++j) sum_x2 += x[j]*x[j];
     float sigma2 = sum_x2/n_per_row;
 
-    const int nb = n_per_row/QK5_0;
+    const int64_t nb = n_per_row/QK5_0;
     for (int ib = 0; ib < nb; ++ib) {
         const float * xb = x + QK5_0 * ib;
         const float * qw = quant_weights + QK5_0 * ib;
@@ -3216,14 +3216,14 @@ static void quantize_row_q5_0_impl(const float * restrict x, block_q5_0 * restri
     }
 }
 
-size_t quantize_q5_0(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q5_0(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     if (!quant_weights) {
-        quantize_row_q5_0_reference(src, dst, nrow*n_per_row);
+        quantize_row_q5_0_reference(src, dst, (int64_t)nrow*n_per_row);
         return nrow * ggml_row_size(GGML_TYPE_Q5_0, n_per_row);
     }
     size_t row_size = ggml_row_size(GGML_TYPE_Q5_0, n_per_row);
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_q5_0_impl(src, (block_q5_0*)qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += row_size;
@@ -3231,7 +3231,7 @@ size_t quantize_q5_0(const float * restrict src, void * restrict dst, int nrow, 
     return nrow * row_size;
 }
 
-static void quantize_row_q5_1_impl(const float * restrict x, block_q5_1 * restrict y, int n_per_row, const float * quant_weights) {
+static void quantize_row_q5_1_impl(const float * restrict x, block_q5_1 * restrict y, int64_t n_per_row, const float * quant_weights) {
     static_assert(QK5_1 == 32, "QK5_1 must be 32");
 
     if (!quant_weights) {
@@ -3246,7 +3246,7 @@ static void quantize_row_q5_1_impl(const float * restrict x, block_q5_1 * restri
     for (int j = 0; j < n_per_row; ++j) sum_x2 += x[j]*x[j];
     float sigma2 = sum_x2/n_per_row;
 
-    const int nb = n_per_row/QK5_1;
+    const int64_t nb = n_per_row/QK5_1;
     for (int ib = 0; ib < nb; ++ib) {
         const float * xb = x + QK5_1 * ib;
         const float * qw = quant_weights + QK5_1 * ib;
@@ -3269,14 +3269,14 @@ static void quantize_row_q5_1_impl(const float * restrict x, block_q5_1 * restri
     }
 }
 
-size_t quantize_q5_1(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q5_1(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     if (!quant_weights) {
-        quantize_row_q5_1_reference(src, dst, nrow*n_per_row);
+        quantize_row_q5_1_reference(src, dst, (int64_t)nrow*n_per_row);
         return nrow * ggml_row_size(GGML_TYPE_Q5_1, n_per_row);
     }
     size_t row_size = ggml_row_size(GGML_TYPE_Q5_1, n_per_row);
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_q5_1_impl(src, (block_q5_1*)qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += row_size;
@@ -3284,18 +3284,18 @@ size_t quantize_q5_1(const float * restrict src, void * restrict dst, int nrow, 
     return nrow * row_size;
 }
 
-size_t quantize_q8_0(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_q8_0(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     (void)quant_weights; // not used
     const size_t row_size = ggml_row_size(GGML_TYPE_Q8_0, n_per_row);
-    quantize_row_q8_0_reference(src, dst, nrow*n_per_row);
+    quantize_row_q8_0_reference(src, dst, (int64_t)nrow*n_per_row);
     return nrow * row_size;
 }
 
 // ====================== "True" 2-bit (de)-quantization
 
-void dequantize_row_iq2_xxs(const block_iq2_xxs * restrict x, float * restrict y, int k) {
+void dequantize_row_iq2_xxs(const block_iq2_xxs * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     uint32_t aux32[2];
     const uint8_t * aux8 = (const uint8_t *)aux32;
@@ -3321,9 +3321,9 @@ void dequantize_row_iq2_xxs(const block_iq2_xxs * restrict x, float * restrict y
 
 // ====================== 2.3125 bpw (de)-quantization
 
-void dequantize_row_iq2_xs(const block_iq2_xs * restrict x, float * restrict y, int k) {
+void dequantize_row_iq2_xs(const block_iq2_xs * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     float db[2];
 
@@ -3348,9 +3348,9 @@ void dequantize_row_iq2_xs(const block_iq2_xs * restrict x, float * restrict y, 
 
 // ====================== 2.5625 bpw (de)-quantization
 
-void dequantize_row_iq2_s(const block_iq2_s * restrict x, float * restrict y, int k) {
+void dequantize_row_iq2_s(const block_iq2_s * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     float db[2];
 
@@ -3380,9 +3380,9 @@ void dequantize_row_iq2_s(const block_iq2_s * restrict x, float * restrict y, in
 
 // ====================== 3.0625 bpw (de)-quantization
 
-void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y, int k) {
+void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     uint32_t aux32;
 
@@ -3412,9 +3412,9 @@ void dequantize_row_iq3_xxs(const block_iq3_xxs * restrict x, float * restrict y
 
 // ====================== 3.3125 bpw (de)-quantization
 
-void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, int k) {
+void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     for (int i = 0; i < nb; i++) {
 
@@ -3455,9 +3455,9 @@ void dequantize_row_iq3_s(const block_iq3_s * restrict x, float * restrict y, in
 
 // ====================== 1.5625 bpw (de)-quantization
 
-void dequantize_row_iq1_s(const block_iq1_s * restrict x, float * restrict y, int k) {
+void dequantize_row_iq1_s(const block_iq1_s * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     for (int i = 0; i < nb; i++) {
 
@@ -3480,11 +3480,70 @@ void dequantize_row_iq1_s(const block_iq1_s * restrict x, float * restrict y, in
     }
 }
 
+void dequantize_row_iq1_m(const block_iq1_m * restrict x, float * restrict y, int64_t k) {
+    assert(k % QK_K == 0);
+    const int64_t nb = k / QK_K;
+
+    float delta[4];
+    uint16_t idx[4];
+
+#if QK_K != 64
+    iq1m_scale_t scale;
+#endif
+
+    for (int i = 0; i < nb; i++) {
+
+        const uint16_t * sc = (const uint16_t *)x[i].scales;
+#if QK_K == 64
+        const float d = GGML_FP16_TO_FP32(x[i].d);
+#else
+        scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+        const float d = GGML_FP16_TO_FP32(scale.f16);
+#endif
+        const uint8_t * qs = x[i].qs;
+        const uint8_t * qh = x[i].qh;
+
+        for (int ib = 0; ib < QK_K/32; ++ib) {
+#if QK_K == 64
+            const float dl1 = d * (2*((sc[ib/2] >> (8*(ib%2)+0)) & 0xf) + 1);
+            const float dl2 = d * (2*((sc[ib/2] >> (8*(ib%2)+4)) & 0xf) + 1);
+#else
+            const float dl1 = d * (2*((sc[ib/2] >> (6*(ib%2)+0)) & 0x7) + 1);
+            const float dl2 = d * (2*((sc[ib/2] >> (6*(ib%2)+3)) & 0x7) + 1);
+#endif
+            idx[0] = qs[0] | ((qh[0] << 8) & 0x700);
+            idx[1] = qs[1] | ((qh[0] << 4) & 0x700);
+            idx[2] = qs[2] | ((qh[1] << 8) & 0x700);
+            idx[3] = qs[3] | ((qh[1] << 4) & 0x700);
+            delta[0] = qh[0] & 0x08 ? -IQ1S_DELTA : IQ1S_DELTA;
+            delta[1] = qh[0] & 0x80 ? -IQ1S_DELTA : IQ1S_DELTA;
+            delta[2] = qh[1] & 0x08 ? -IQ1S_DELTA : IQ1S_DELTA;
+            delta[3] = qh[1] & 0x80 ? -IQ1S_DELTA : IQ1S_DELTA;
+            for (int l = 0; l < 2; ++l) {
+                const int8_t * grid = (const int8_t *)(iq1s_grid + idx[l]);
+                for (int j = 0; j < 8; ++j) {
+                    y[j] = dl1 * (grid[j] + delta[l]);
+                }
+                y += 8;
+            }
+            for (int l = 2; l < 4; ++l) {
+                const int8_t * grid = (const int8_t *)(iq1s_grid + idx[l]);
+                for (int j = 0; j < 8; ++j) {
+                    y[j] = dl2 * (grid[j] + delta[l]);
+                }
+                y += 8;
+            }
+            qs += 4;
+            qh += 2;
+        }
+    }
+}
+
 static const int8_t kvalues_iq4nl[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 
-void dequantize_row_iq4_nl(const block_iq4_nl * restrict x, float * restrict y, int k) {
+void dequantize_row_iq4_nl(const block_iq4_nl * restrict x, float * restrict y, int64_t k) {
     assert(k % QK4_NL == 0);
-    const int nb = k / QK4_NL;
+    const int64_t nb = k / QK4_NL;
 
     for (int i = 0; i < nb; i++) {
 
@@ -3500,12 +3559,12 @@ void dequantize_row_iq4_nl(const block_iq4_nl * restrict x, float * restrict y, 
     }
 }
 
-void dequantize_row_iq4_xs(const block_iq4_xs * restrict x, float * restrict y, int k) {
+void dequantize_row_iq4_xs(const block_iq4_xs * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
 #if QK_K == 64
     dequantize_row_iq4_nl((const block_iq4_nl *)x, y, k);
 #else
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     for (int i = 0; i < nb; i++) {
 
@@ -3529,9 +3588,9 @@ void dequantize_row_iq4_xs(const block_iq4_xs * restrict x, float * restrict y, 
 
 //===================================== Q8_K ==============================================
 
-void quantize_row_q8_K_reference(const float * restrict x, block_q8_K * restrict y, int k) {
+void quantize_row_q8_K_reference(const float * restrict x, block_q8_K * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     for (int i = 0; i < nb; i++) {
 
@@ -3568,9 +3627,9 @@ void quantize_row_q8_K_reference(const float * restrict x, block_q8_K * restrict
     }
 }
 
-void dequantize_row_q8_K(const block_q8_K * restrict x, float * restrict y, int k) {
+void dequantize_row_q8_K(const block_q8_K * restrict x, float * restrict y, int64_t k) {
     assert(k % QK_K == 0);
-    const int nb = k / QK_K;
+    const int64_t nb = k / QK_K;
 
     for (int i = 0; i < nb; i++) {
         for (int j = 0; j < QK_K; ++j) {
@@ -3579,7 +3638,7 @@ void dequantize_row_q8_K(const block_q8_K * restrict x, float * restrict y, int 
     }
 }
 
-void quantize_row_q8_K(const float * restrict x, void * restrict y, int k) {
+void quantize_row_q8_K(const float * restrict x, void * restrict y, int64_t k) {
     quantize_row_q8_K_reference(x, y, k);
 }
 
@@ -9705,6 +9764,248 @@ void ggml_vec_dot_iq1_s_q8_K  (int n, float * restrict s, size_t bs, const void 
 #endif
 }
 
+void ggml_vec_dot_iq1_m_q8_K  (int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+    assert(n % QK_K == 0);
+    assert(nrc == 1);
+    UNUSED(nrc);
+    UNUSED(bx);
+    UNUSED(by);
+    UNUSED(bs);
+
+    const block_iq1_m * restrict x = vx;
+    const block_q8_K  * restrict y = vy;
+
+    const int nb = n / QK_K;
+
+#if QK_K != 64
+    iq1m_scale_t scale;
+#endif
+
+#if defined __ARM_NEON
+
+#if QK_K == 64
+    const int32x4_t mask  = vdupq_n_s32(0xf);
+#else
+    const int32x4_t mask  = vdupq_n_s32(0x7);
+#endif
+    const int32x4_t mone  = vdupq_n_s32(1);
+    const int32x4_t mzero = vdupq_n_s32(0);
+
+    ggml_int8x16x4_t deltas;
+    deltas.val[0] = vcombine_s8(vdup_n_s8(+1), vdup_n_s8(+1));
+    deltas.val[1] = vcombine_s8(vdup_n_s8(-1), vdup_n_s8(+1));
+    deltas.val[2] = vcombine_s8(vdup_n_s8(+1), vdup_n_s8(-1));
+    deltas.val[3] = vcombine_s8(vdup_n_s8(-1), vdup_n_s8(-1));
+
+    ggml_int8x16x4_t q1b;
+    ggml_int8x16x4_t q8b;
+
+    uint32_t aux32;
+    const uint8_t * aux8 = (const uint8_t *)&aux32;
+
+    float sumf = 0;
+    for (int i = 0; i < nb; ++i) {
+
+        const int8_t   * q8 = y[i].qs;
+        const uint8_t  * qs = x[i].qs;
+        const uint8_t  * qh = x[i].qh;
+        const uint16_t * sc = (const uint16_t *)x[i].scales;
+
+#if QK_K != 64
+        scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+#endif
+
+        int32x4_t sumi1 = mzero;
+        int32x4_t sumi2 = mzero;
+
+        for (int ib = 0; ib < QK_K/32; ib += 2) {
+
+            q1b.val[0] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[0] | ((qh[0] << 8) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[1] | ((qh[0] << 4) & 0x700)))));
+            q1b.val[1] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[2] | ((qh[1] << 8) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[3] | ((qh[1] << 4) & 0x700)))));
+            q1b.val[2] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[4] | ((qh[2] << 8) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[5] | ((qh[2] << 4) & 0x700)))));
+            q1b.val[3] = vcombine_s8(vld1_s8((const int8_t *)(iq1s_grid + (qs[6] | ((qh[3] << 8) & 0x700)))),
+                                     vld1_s8((const int8_t *)(iq1s_grid + (qs[7] | ((qh[3] << 4) & 0x700)))));
+
+            q8b = ggml_vld1q_s8_x4(q8); q8 += 64;
+
+            const int32x4_t p1 = vpaddq_s32(ggml_vdotq_s32(mzero, q1b.val[0], q8b.val[0]), ggml_vdotq_s32(mzero, q1b.val[1], q8b.val[1]));
+            const int32x4_t p2 = vpaddq_s32(ggml_vdotq_s32(mzero, q1b.val[2], q8b.val[2]), ggml_vdotq_s32(mzero, q1b.val[3], q8b.val[3]));
+            const int32x4_t p12 = vpaddq_s32(p1, p2);
+
+            const uint32_t * qh32 = (const uint32_t *)qh; // we are 4-byte aligned, so we can do that
+            aux32 = ((qh32[0] >> 3) & 0x01010101) | ((qh32[0] >> 6) & 0x02020202);
+
+            const int32x4_t p3 = vpaddq_s32(ggml_vdotq_s32(mzero, deltas.val[aux8[0]], q8b.val[0]), ggml_vdotq_s32(mzero, deltas.val[aux8[1]], q8b.val[1]));
+            const int32x4_t p4 = vpaddq_s32(ggml_vdotq_s32(mzero, deltas.val[aux8[2]], q8b.val[2]), ggml_vdotq_s32(mzero, deltas.val[aux8[3]], q8b.val[3]));
+            const int32x4_t p34 = vpaddq_s32(p3, p4);
+
+#if QK_K == 64
+            int32x4_t scales_4 = ggml_vld1q_u32(sc[0] >> 0, sc[0] >> 4, sc[0] >> 8, sc[0] >> 12);
+#else
+            int32x4_t scales_4 = ggml_vld1q_u32(sc[ib/2] >> 0, sc[ib/2] >> 3, sc[ib/2] >> 6, sc[ib/2] >> 9);
+#endif
+            scales_4 = vaddq_s32(vshlq_n_s32(vandq_s32(scales_4, mask), 1), mone);
+
+            sumi1 = vmlaq_s32(sumi1, scales_4, p12);
+            sumi2 = vmlaq_s32(sumi2, scales_4, p34);
+
+            qs += 8; qh += 4;
+
+        }
+
+#if QK_K == 64
+        sumf += y[i].d * GGML_FP16_TO_FP32(x[i].d) * (vaddvq_s32(sumi1) + IQ1M_DELTA * vaddvq_s32(sumi2));
+#else
+        sumf += y[i].d * GGML_FP16_TO_FP32(scale.f16) * (vaddvq_s32(sumi1) + IQ1M_DELTA * vaddvq_s32(sumi2));
+#endif
+    }
+
+    *s = sumf;
+
+#elif defined __AVX2__
+
+#if QK_K == 64
+    const __m256i mask = _mm256_set1_epi16(0xf);
+#else
+    const __m256i mask = _mm256_set1_epi16(0x7);
+#endif
+    const __m256i mone = _mm256_set1_epi16(1);
+
+    __m256 accum1 = _mm256_setzero_ps();
+    __m256 accum2 = _mm256_setzero_ps();
+    for (int i = 0; i < nb; ++i) {
+
+        const int8_t   * q8 = y[i].qs;
+        const uint8_t  * qs = x[i].qs;
+        const uint8_t  * qh = x[i].qh;
+        const uint16_t * sc = (const uint16_t *)x[i].scales;
+
+#if QK_K != 64
+        scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+#endif
+
+        __m256i sumi1 = _mm256_setzero_si256();
+        __m256i sumi2 = _mm256_setzero_si256();
+        for (int ib = 0; ib < QK_K/32; ib += 2) {
+            const __m256i q1b_1 = _mm256_set_epi64x(
+                    iq1s_grid[qs[3] | (((uint16_t)qh[1] << 4) & 0x700)], iq1s_grid[qs[2] | (((uint16_t)qh[1] << 8) & 0x700)],
+                    iq1s_grid[qs[1] | (((uint16_t)qh[0] << 4) & 0x700)], iq1s_grid[qs[0] | (((uint16_t)qh[0] << 8) & 0x700)]
+            );
+            const __m256i q1b_2 = _mm256_set_epi64x(
+                    iq1s_grid[qs[7] | (((uint16_t)qh[3] << 4) & 0x700)], iq1s_grid[qs[6] | (((uint16_t)qh[3] << 8) & 0x700)],
+                    iq1s_grid[qs[5] | (((uint16_t)qh[2] << 4) & 0x700)], iq1s_grid[qs[4] | (((uint16_t)qh[2] << 8) & 0x700)]
+            );
+            const __m256i q8b_1 = _mm256_loadu_si256((const __m256i*)q8); q8 += 32;
+            const __m256i q8b_2 = _mm256_loadu_si256((const __m256i*)q8); q8 += 32;
+
+            const __m256i dot1 = mul_add_epi8(q1b_1, q8b_1);
+            const __m256i dot2 = mul_add_epi8(q1b_2, q8b_2);
+
+            const __m256i delta1 = _mm256_set_epi64x(qh[1] & 0x80 ? 0xffffffffffffffff : 0x0101010101010101,
+                                                     qh[1] & 0x08 ? 0xffffffffffffffff : 0x0101010101010101,
+                                                     qh[0] & 0x80 ? 0xffffffffffffffff : 0x0101010101010101,
+                                                     qh[0] & 0x08 ? 0xffffffffffffffff : 0x0101010101010101);
+            const __m256i delta2 = _mm256_set_epi64x(qh[3] & 0x80 ? 0xffffffffffffffff : 0x0101010101010101,
+                                                     qh[3] & 0x08 ? 0xffffffffffffffff : 0x0101010101010101,
+                                                     qh[2] & 0x80 ? 0xffffffffffffffff : 0x0101010101010101,
+                                                     qh[2] & 0x08 ? 0xffffffffffffffff : 0x0101010101010101);
+
+            const __m256i dot3 = mul_add_epi8(delta1, q8b_1);
+            const __m256i dot4 = mul_add_epi8(delta2, q8b_2);
+#if QK_K == 64
+            __m256i scale1 = MM256_SET_M128I(_mm_set1_epi16(sc[0] >>  4), _mm_set1_epi16(sc[0] >> 0));
+            __m256i scale2 = MM256_SET_M128I(_mm_set1_epi16(sc[0] >> 12), _mm_set1_epi16(sc[0] >> 8));
+#else
+            __m256i scale1 = MM256_SET_M128I(_mm_set1_epi16(sc[ib/2] >> 3), _mm_set1_epi16(sc[ib/2] >> 0));
+            __m256i scale2 = MM256_SET_M128I(_mm_set1_epi16(sc[ib/2] >> 9), _mm_set1_epi16(sc[ib/2] >> 6));
+#endif
+            scale1 = _mm256_add_epi16(_mm256_slli_epi16(_mm256_and_si256(scale1, mask), 1), mone);
+            scale2 = _mm256_add_epi16(_mm256_slli_epi16(_mm256_and_si256(scale2, mask), 1), mone);
+            const __m256i p1 = _mm256_madd_epi16(dot1, scale1);
+            const __m256i p2 = _mm256_madd_epi16(dot2, scale2);
+            const __m256i p3 = _mm256_madd_epi16(dot3, scale1);
+            const __m256i p4 = _mm256_madd_epi16(dot4, scale2);
+
+            sumi1 = _mm256_add_epi32(sumi1, _mm256_add_epi32(p1, p2));
+            sumi2 = _mm256_add_epi32(sumi2, _mm256_add_epi32(p3, p4));
+
+            qs += 8; qh += 4;
+        }
+
+#if QK_K == 64
+        const __m256 d = _mm256_set1_ps(y[i].d * GGML_FP16_TO_FP32(x[i].d));
+#else
+        const __m256 d = _mm256_set1_ps(y[i].d * GGML_FP16_TO_FP32(scale.f16));
+#endif
+        accum1 = _mm256_fmadd_ps(d, _mm256_cvtepi32_ps(sumi1), accum1);
+        accum2 = _mm256_fmadd_ps(d, _mm256_cvtepi32_ps(sumi2), accum2);
+
+    }
+
+    *s = hsum_float_8(accum1) + IQ1M_DELTA * hsum_float_8(accum2);
+
+#else
+
+    int sum1[2], sum2[2], delta[4];
+
+    float sumf = 0;
+    for (int i = 0; i < nb; i++) {
+
+        const int8_t   * q8 = y[i].qs;
+        const uint8_t  * qs = x[i].qs;
+        const uint8_t  * qh = x[i].qh;
+        const uint16_t * sc = (const uint16_t *)x[i].scales;
+
+#if QK_K != 64
+        scale.u16 = (sc[0] >> 12) | ((sc[1] >> 8) & 0x00f0) | ((sc[2] >> 4) & 0x0f00) | (sc[3] & 0xf000);
+#endif
+
+        int sumi1 = 0, sumi2 = 0;
+        for (int ib = 0; ib < QK_K/32; ++ib) {
+            delta[0] = qh[0] & 0x08 ? -1 : 1;
+            delta[1] = qh[0] & 0x80 ? -1 : 1;
+            delta[2] = qh[1] & 0x08 ? -1 : 1;
+            delta[3] = qh[1] & 0x80 ? -1 : 1;
+            sum1[0] = sum1[1] = sum2[0] = sum2[1] = 0;
+            for (int l = 0; l < 4; ++l) {
+                const int8_t * grid = (const int8_t *)(iq1s_grid + (qs[l] | (((uint16_t)qh[l/2] << (8 - 4*(l%2))) & 0x700)));
+                int lsum1 = 0, lsum2 = 0;
+                for (int j = 0; j < 8; ++j) {
+                    lsum1 += q8[j] * grid[j];
+                    lsum2 += q8[j];
+                }
+                q8 += 8;
+                sum1[l/2] += lsum1;
+                sum2[l/2] += lsum2*delta[l];
+            }
+#if QK_K == 64
+            const int ls1 = 2*((sc[0] >> (8*(ib%2)+0)) & 0xf) + 1;
+            const int ls2 = 2*((sc[0] >> (8*(ib%2)+4)) & 0xf) + 1;
+#else
+            const int ls1 = 2*((sc[ib/2] >> (6*(ib%2)+0)) & 0x7) + 1;
+            const int ls2 = 2*((sc[ib/2] >> (6*(ib%2)+3)) & 0x7) + 1;
+#endif
+            sumi1 += sum1[0] * ls1 + sum1[1] * ls2;
+            sumi2 += sum2[0] * ls1 + sum2[1] * ls2;
+            qs += 4;
+            qh += 2;
+        }
+
+#if QK_K == 64
+        sumf += GGML_FP16_TO_FP32(x[i].d) * y[i].d * (sumi1 + IQ1M_DELTA * sumi2);
+#else
+        sumf += GGML_FP16_TO_FP32(scale.f16) * y[i].d * (sumi1 + IQ1M_DELTA * sumi2);
+#endif
+    }
+
+    *s = sumf;
+
+#endif
+}
+
 void ggml_vec_dot_iq4_nl_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
     assert(nrc == 1);
     UNUSED(nrc);
@@ -9948,17 +10249,17 @@ static iq2_entry_t iq2_data[4] = {
 };
 
 static inline int iq2_data_index(enum ggml_type type) {
-    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ2_S);
+    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M || type == GGML_TYPE_IQ2_S);
     return type == GGML_TYPE_IQ2_XXS ? 0 :
            type == GGML_TYPE_IQ2_XS  ? 1 :
-           type == GGML_TYPE_IQ1_S   ? 2 : 3;
+           type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M ? 2 : 3;
 }
 
 static inline int iq2_grid_size(enum ggml_type type) {
-    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ2_S);
+    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M || type == GGML_TYPE_IQ2_S);
     return type == GGML_TYPE_IQ2_XXS ? 256 :
            type == GGML_TYPE_IQ2_XS  ? 512 :
-           type == GGML_TYPE_IQ1_S   ? NGRID_IQ1S : 1024;
+           type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M ? NGRID_IQ1S : 1024;
 }
 
 static int iq2_compare_func(const void * left, const void * right) {
@@ -10224,10 +10525,10 @@ void iq2xs_init_impl(enum ggml_type type) {
 
     const int kmap_size = 43692;
     //const int nwant = type == GGML_TYPE_IQ1_S ? 3 : 2;
-    const int nwant = type == GGML_TYPE_IQ1_S ? 3 : type == GGML_TYPE_IQ2_S ? 1 : 2;
+    const int nwant = type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M ? 3 : type == GGML_TYPE_IQ2_S ? 1 : 2;
     const uint16_t * kgrid = type == GGML_TYPE_IQ2_XXS ? kgrid_2bit_256 :
                              type == GGML_TYPE_IQ2_XS  ? kgrid_2bit_512 :
-                             type == GGML_TYPE_IQ1_S   ? kgrid_1bit_2048 : kgrid_2bit_1024;
+                             type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M ? kgrid_1bit_2048 : kgrid_2bit_1024;
     uint64_t * kgrid_q2xs;
     int      * kmap_q2xs;
     uint16_t * kneighbors_q2xs;
@@ -10324,7 +10625,7 @@ void iq2xs_init_impl(enum ggml_type type) {
 }
 
 void iq2xs_free_impl(enum ggml_type type) {
-    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ2_S);
+    GGML_ASSERT(type == GGML_TYPE_IQ2_XXS || type == GGML_TYPE_IQ2_XS || type == GGML_TYPE_IQ1_S || type == GGML_TYPE_IQ1_M || type == GGML_TYPE_IQ2_S);
     const int gindex = iq2_data_index(type);
     if (iq2_data[gindex].grid) {
         free(iq2_data[gindex].grid);       iq2_data[gindex].grid = NULL;
@@ -10357,7 +10658,7 @@ static int iq2_find_best_neighbour(const uint16_t * restrict neighbours, const u
     return grid_index;
 }
 
-static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights) {
+static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict vy, int64_t n, const float * restrict quant_weights) {
 
     const int gindex = iq2_data_index(GGML_TYPE_IQ2_XXS);
 
@@ -10373,7 +10674,7 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
 
     const int kMaxQ = 3;
 
-    const int nbl = n/QK_K;
+    const int64_t nbl = n/QK_K;
 
     block_iq2_xxs * y = vy;
 
@@ -10530,7 +10831,7 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
     }
 }
 
-static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights) {
+static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict vy, int64_t n, const float * restrict quant_weights) {
 
     const int gindex = iq2_data_index(GGML_TYPE_IQ2_XS);
 
@@ -10546,7 +10847,7 @@ static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict v
 
     const int kMaxQ = 3;
 
-    const int nbl = n/QK_K;
+    const int64_t nbl = n/QK_K;
 
     block_iq2_xs * y = vy;
 
@@ -10710,11 +11011,11 @@ static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict v
     }
 }
 
-size_t quantize_iq2_xxs(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq2_xxs(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     GGML_ASSERT(n_per_row%QK_K == 0);
-    int nblock = n_per_row/QK_K;
+    int64_t nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_iq2_xxs_impl(src, qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq2_xxs);
@@ -10722,11 +11023,11 @@ size_t quantize_iq2_xxs(const float * restrict src, void * restrict dst, int nro
     return nrow * nblock * sizeof(block_iq2_xxs);
 }
 
-size_t quantize_iq2_xs(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq2_xs(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     GGML_ASSERT(n_per_row%QK_K == 0);
-    int nblock = n_per_row/QK_K;
+    int64_t nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_iq2_xs_impl(src, qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq2_xs);
@@ -10951,7 +11252,7 @@ static int iq3_find_best_neighbour(const uint16_t * restrict neighbours, const u
     return grid_index;
 }
 
-static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, void * restrict vy, int n,
+static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, void * restrict vy, int64_t n,
         const float * restrict quant_weights) {
 
     const int gindex = iq3_data_index(grid_size);
@@ -10968,7 +11269,7 @@ static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, v
 
     const int kMaxQ = 8;
 
-    const int nbl = n/QK_K;
+    const int64_t nbl = n/QK_K;
 
     ggml_fp16_t * dh;
     uint8_t * qs;
@@ -11164,11 +11465,11 @@ static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, v
     }
 }
 
-size_t quantize_iq3_xxs(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq3_xxs(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     GGML_ASSERT(n_per_row%QK_K == 0);
-    int nblock = n_per_row/QK_K;
+    int64_t nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_iq3_xxs_impl(256, src, qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq3_xxs);
@@ -11176,13 +11477,13 @@ size_t quantize_iq3_xxs(const float * restrict src, void * restrict dst, int nro
     return nrow * nblock * sizeof(block_iq3_xxs);
 }
 
-void quantize_row_iq3_xxs(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_iq3_xxs(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK_K == 0);
     block_iq3_xxs * restrict y = vy;
     quantize_row_iq3_xxs_reference(x, y, k);
 }
 
-void quantize_row_iq3_xxs_reference(const float * restrict x, block_iq3_xxs * restrict y, int k) {
+void quantize_row_iq3_xxs_reference(const float * restrict x, block_iq3_xxs * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     quantize_row_iq3_xxs_impl(256, x, y, k, NULL);
 }
@@ -11213,7 +11514,7 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
 
     const int kMaxQ = 8;
 
-    const int nbl = n/QK_K;
+    const int64_t nbl = n/QK_K;
 
     block_iq3_s * y = vy;
 
@@ -11370,9 +11671,9 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
 }
 
 #define IQ3S_BLOCK_SIZE 32
-size_t quantize_iq3_s(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq3_s(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     GGML_ASSERT(n_per_row%QK_K == 0);
-    int nblock = n_per_row/QK_K;
+    int64_t nblock = n_per_row/QK_K;
     float scales[QK_K/IQ3S_BLOCK_SIZE];
     float weight[IQ3S_BLOCK_SIZE];
     float xval[IQ3S_BLOCK_SIZE];
@@ -11383,7 +11684,7 @@ size_t quantize_iq3_s(const float * restrict src, void * restrict dst, int nrow,
     bool   is_on_grid_aux[IQ3S_BLOCK_SIZE/4];
     uint8_t block_signs[IQ3S_BLOCK_SIZE/8];
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_iq3_s_impl(IQ3S_BLOCK_SIZE, src, qrow, n_per_row, quant_weights,
                 scales, weight, xval, L, Laux, waux, is_on_grid, is_on_grid_aux, block_signs);
         src += n_per_row;
@@ -11392,13 +11693,13 @@ size_t quantize_iq3_s(const float * restrict src, void * restrict dst, int nrow,
     return nrow * nblock * sizeof(block_iq3_s);
 }
 
-void quantize_row_iq3_s(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_iq3_s(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK_K == 0);
     block_iq3_s * restrict y = vy;
     quantize_row_iq3_s_reference(x, y, k);
 }
 
-void quantize_row_iq3_s_reference(const float * restrict x, block_iq3_s * restrict y, int k) {
+void quantize_row_iq3_s_reference(const float * restrict x, block_iq3_s * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     quantize_iq3_s(x, y, 1, k, NULL);
 }
@@ -11530,7 +11831,16 @@ static int iq1_sort_helper(const void * left, const void * right) {
 }
 
 #define IQ1S_BLOCK_SIZE 32
-static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights) {
+#define IQ1M_BLOCK_SIZE 16
+static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy, int64_t n, const float * restrict quant_weights,
+        float    * scales,
+        float    * weight,
+        float    * sumx,
+        float    * sumw,
+        float    * pairs,
+        int8_t   * L,
+        uint16_t * index,
+        int8_t   * shifts) {
 
     const int gindex = iq2_data_index(GGML_TYPE_IQ1_S);
 
@@ -11544,22 +11854,17 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
     GGML_ASSERT(kneighbors_q2xs && "forgot to call ggml_quantize_init()?");
     GGML_ASSERT(n%QK_K == 0);
 
-    const int nbl = n/QK_K;
-
     block_iq1_s * y = vy;
+
+    const int64_t nbl = n/QK_K;
+
+    const int block_size = IQ1S_BLOCK_SIZE;
 
     const float x_p[3] = {-1 + IQ1S_DELTA,  IQ1S_DELTA, 1 + IQ1S_DELTA};
     const float x_m[3] = {-1 - IQ1S_DELTA, -IQ1S_DELTA, 1 - IQ1S_DELTA};
 
-    float  scales[QK_K/IQ1S_BLOCK_SIZE];
-    float  weight[IQ1S_BLOCK_SIZE];
-    int8_t L[IQ1S_BLOCK_SIZE];
-    float  sumx[IQ1S_BLOCK_SIZE+1];
-    float  sumw[IQ1S_BLOCK_SIZE+1];
-    float  pairs[2*IQ1S_BLOCK_SIZE];
+
     int * idx = (int *)(pairs + 1);
-    uint16_t index[IQ1S_BLOCK_SIZE/8];
-    int8_t shifts[QK_K/IQ1S_BLOCK_SIZE];
 
     for (int ibl = 0; ibl < nbl; ++ibl) {
 
@@ -11574,15 +11879,15 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
         for (int i = 0; i < QK_K; ++i) sumx2 += xbl[i]*xbl[i];
         float sigma2 = 2*sumx2/QK_K;
 
-        for (int ib = 0; ib < QK_K/IQ1S_BLOCK_SIZE; ++ib) {
-            const float * xb = xbl + IQ1S_BLOCK_SIZE*ib;
-            const float * qw = quant_weights + QK_K*ibl + IQ1S_BLOCK_SIZE*ib;
-            for (int i = 0; i < IQ1S_BLOCK_SIZE; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+        for (int ib = 0; ib < QK_K/block_size; ++ib) {
+            const float * xb = xbl + block_size*ib;
+            const float * qw = quant_weights + QK_K*ibl + block_size*ib;
+            for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
             float max = fabsf(xb[0]);
-            for (int i = 1; i < IQ1S_BLOCK_SIZE; ++i) max = MAX(max, fabsf(xb[i]));
+            for (int i = 1; i < block_size; ++i) max = MAX(max, fabsf(xb[i]));
             if (!max) {
                 scales[ib] = 0;
-                memset(L, 1, IQ1S_BLOCK_SIZE);
+                memset(L, 1, block_size);
                 continue;
             }
             // Here we solve exactly the sum of squared difference (SSD) weighted minimization problem.
@@ -11591,14 +11896,14 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
             // in ascending order, compute Si = sum[weight[j] xb[j], j = 0...i] and
             // Wi = sum[weight[j], j = 0...i], and use these to quckly get get the optimum scale
             // for each possible and score for each split.
-            for (int j = 0; j < IQ1S_BLOCK_SIZE; ++j) {
+            for (int j = 0; j < block_size; ++j) {
                 pairs[2*j] = xb[j];
                 idx[2*j] = j;
             }
-            qsort(pairs, IQ1S_BLOCK_SIZE, 2*sizeof(float), iq1_sort_helper);
+            qsort(pairs, block_size, 2*sizeof(float), iq1_sort_helper);
             {
                 sumx[0] = sumw[0] = 0;
-                for (int j = 0; j < IQ1S_BLOCK_SIZE; ++j) {
+                for (int j = 0; j < block_size; ++j) {
                     int i = idx[2*j];
                     sumx[j+1] = sumx[j] + weight[i]*xb[i];
                     sumw[j+1] = sumw[j] + weight[i];
@@ -11606,16 +11911,16 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
             }
             float best_score = 0, scale = max;
             int besti1 = -1, besti2 = -1, best_shift = 0;
-            for (int i1 = 0; i1 <= IQ1S_BLOCK_SIZE; ++i1) {
-                for (int i2 = i1; i2 <= IQ1S_BLOCK_SIZE; ++i2) {
-                    float sumqx = (sumx[i1] - sumx[0])*x_p[0] + (sumx[i2] - sumx[i1])*x_p[1] + (sumx[IQ1S_BLOCK_SIZE] - sumx[i2])*x_p[2];
-                    float sumq2 = (sumw[i1] - sumw[0])*x_p[0]*x_p[0] + (sumw[i2] - sumw[i1])*x_p[1]*x_p[1] + (sumw[IQ1S_BLOCK_SIZE] - sumw[i2])*x_p[2]*x_p[2];
+            for (int i1 = 0; i1 <= block_size; ++i1) {
+                for (int i2 = i1; i2 <= block_size; ++i2) {
+                    float sumqx = (sumx[i1] - sumx[0])*x_p[0] + (sumx[i2] - sumx[i1])*x_p[1] + (sumx[block_size] - sumx[i2])*x_p[2];
+                    float sumq2 = (sumw[i1] - sumw[0])*x_p[0]*x_p[0] + (sumw[i2] - sumw[i1])*x_p[1]*x_p[1] + (sumw[block_size] - sumw[i2])*x_p[2]*x_p[2];
                     if (sumq2 > 0 && sumqx*sumqx > best_score*sumq2) {
                         scale = sumqx/sumq2; best_score = scale*sumqx;
                         besti1 = i1; besti2 = i2; best_shift = 1;
                     }
-                    sumqx = (sumx[i1] - sumx[0])*x_m[0] + (sumx[i2] - sumx[i1])*x_m[1] + (sumx[IQ1S_BLOCK_SIZE] - sumx[i2])*x_m[2];
-                    sumq2 = (sumw[i1] - sumw[0])*x_m[0]*x_m[0] + (sumw[i2] - sumw[i1])*x_m[1]*x_m[1] + (sumw[IQ1S_BLOCK_SIZE] - sumw[i2])*x_m[2]*x_m[2];
+                    sumqx = (sumx[i1] - sumx[0])*x_m[0] + (sumx[i2] - sumx[i1])*x_m[1] + (sumx[block_size] - sumx[i2])*x_m[2];
+                    sumq2 = (sumw[i1] - sumw[0])*x_m[0]*x_m[0] + (sumw[i2] - sumw[i1])*x_m[1]*x_m[1] + (sumw[block_size] - sumw[i2])*x_m[2]*x_m[2];
                     if (sumq2 > 0 && sumqx*sumqx > best_score*sumq2) {
                         scale = sumqx/sumq2; best_score = scale*sumqx;
                         besti1 = i1; besti2 = i2; best_shift = -1;
@@ -11625,14 +11930,14 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
             GGML_ASSERT(besti1 >= 0 && besti2 >= 0 && best_shift != 0);
             for (int j =      0; j < besti1; ++j) L[idx[2*j]] = 0;
             for (int j = besti1; j < besti2; ++j) L[idx[2*j]] = 1;
-            for (int j = besti2; j < IQ1S_BLOCK_SIZE; ++j) L[idx[2*j]] = 2;
+            for (int j = besti2; j < block_size; ++j) L[idx[2*j]] = 2;
             if (scale < 0) {
-                for (int j = 0; j < IQ1S_BLOCK_SIZE; ++j) L[j] = 2 - L[j];
+                for (int j = 0; j < block_size; ++j) L[j] = 2 - L[j];
                 scale = -scale; best_shift = -best_shift;
             }
             bool all_on_grid = true;
             const float * xx = best_shift == 1 ? x_p : x_m;
-            for (int k = 0; k < IQ1S_BLOCK_SIZE/8; ++k) {
+            for (int k = 0; k < block_size/8; ++k) {
                 uint16_t u = 0;
                 for (int j = 0; j < 8; ++j) u |= (L[8*k+j] << 2*j);
                 int grid_index = kmap_q2xs[u];
@@ -11646,7 +11951,7 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
             }
             if (!all_on_grid) {
                 float sumqx = 0, sumq2 = 0;
-                for (int k = 0; k < IQ1S_BLOCK_SIZE/8; ++k) {
+                for (int k = 0; k < block_size/8; ++k) {
                     const int8_t * pg = (const int8_t *)(kgrid_q2xs + index[k]);
                     for (int j = 0; j < 8; ++j) {
                         float w = weight[8*k + j];
@@ -11658,8 +11963,8 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
                 if (sumqx > 0 && sumq2 > 0) scale = sumqx/sumq2;
             }
             uint16_t h = 0;
-            for (int k = 0; k < IQ1S_BLOCK_SIZE/8; ++k) {
-                y[ibl].qs[(IQ1S_BLOCK_SIZE/8)*ib + k] = index[k] & 255;
+            for (int k = 0; k < block_size/8; ++k) {
+                y[ibl].qs[(block_size/8)*ib + k] = index[k] & 255;
                 h |= (index[k] >> 8) << 3*k;
             }
             y[ibl].qh[ib] = h;
@@ -11670,14 +11975,13 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
         }
 
         if (!max_scale) {
-            memset(y[ibl].qs, 0, QK_K/8);
             continue;
         }
 
         float d = max_scale/15;
-        y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.085f is another fudge factor. Don't ask me why it is needed.
+        y[ibl].d = GGML_FP32_TO_FP16(d*1.125f); // 1.125f is another fudge factor. Don't ask me why it is needed.
         float id = 1/d;
-        for (int ib = 0; ib < QK_K/IQ1S_BLOCK_SIZE; ++ib) {
+        for (int ib = 0; ib < QK_K/block_size; ++ib) {
             int l = nearest_int(0.5f*(id*scales[ib]-1));
             l = MAX(0, MIN(7, l));
             if (shifts[ib] == -1) l |= 8;
@@ -11686,16 +11990,307 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
     }
 }
 
-size_t quantize_iq1_s(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq1_s(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     GGML_ASSERT(n_per_row%QK_K == 0);
-    int nblock = n_per_row/QK_K;
+    float  scales[QK_K/IQ1S_BLOCK_SIZE];
+    float  weight[IQ1S_BLOCK_SIZE];
+    int8_t L[IQ1S_BLOCK_SIZE];
+    float  sumx[IQ1S_BLOCK_SIZE+1];
+    float  sumw[IQ1S_BLOCK_SIZE+1];
+    float  pairs[2*IQ1S_BLOCK_SIZE];
+    uint16_t index[IQ1S_BLOCK_SIZE/8];
+    int8_t shifts[QK_K/IQ1S_BLOCK_SIZE];
+    int64_t nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
-        quantize_row_iq1_s_impl(src, qrow, n_per_row, quant_weights);
+    for (int64_t row = 0; row < nrow; ++row) {
+        quantize_row_iq1_s_impl(src, qrow, n_per_row, quant_weights, scales, weight, sumx, sumw, pairs, L, index, shifts);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq1_s);
     }
     return nrow * nblock * sizeof(block_iq1_s);
+}
+
+static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy, int64_t n, const float * restrict quant_weights,
+        float    * scales,
+        float    * weight,
+        float    * pairs,
+        int8_t   * L,
+        uint16_t * index,
+        int8_t   * shifts) {
+
+    const int gindex = iq2_data_index(GGML_TYPE_IQ1_M);
+
+    const uint64_t * kgrid_q2xs      = iq2_data[gindex].grid;
+    const int      * kmap_q2xs       = iq2_data[gindex].map;
+    const uint16_t * kneighbors_q2xs = iq2_data[gindex].neighbours;
+
+    //GGML_ASSERT(quant_weights   && "missing quantization weights");
+    GGML_ASSERT(kgrid_q2xs      && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kmap_q2xs       && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(kneighbors_q2xs && "forgot to call ggml_quantize_init()?");
+    GGML_ASSERT(n%QK_K == 0);
+
+    block_iq1_m * y = vy;
+
+    const int64_t nbl = n/QK_K;
+
+    const int block_size = IQ1M_BLOCK_SIZE;
+
+    const float x_p[3] = {-1 + IQ1M_DELTA,  IQ1M_DELTA, 1 + IQ1M_DELTA};
+    const float x_m[3] = {-1 - IQ1M_DELTA, -IQ1M_DELTA, 1 - IQ1M_DELTA};
+    const uint8_t masks[4] = {0x00, 0x80, 0x08, 0x88};
+
+    int * idx = (int *)(pairs + 1);
+
+    float sumqx[4], sumq2[4];
+
+    iq1m_scale_t s;
+    const float * xx;
+
+    for (int ibl = 0; ibl < nbl; ++ibl) {
+
+#if QK_K == 64
+        y[ibl].d = GGML_FP32_TO_FP16(0.f);
+#endif
+        memset(y[ibl].qs, 0, QK_K/8);
+        memset(y[ibl].qh, 0, QK_K/16);
+        memset(y[ibl].scales, 0, QK_K/32);
+
+        float max_scale = 0;
+
+        const float * xbl = x + QK_K*ibl;
+        float sumx2 = 0;
+        for (int i = 0; i < QK_K; ++i) sumx2 += xbl[i]*xbl[i];
+        float sigma2 = 2*sumx2/QK_K;
+
+        for (int ib = 0; ib < QK_K/block_size; ++ib) {
+            const float * xb = xbl + block_size*ib;
+            if (quant_weights) {
+                const float * qw = quant_weights + QK_K*ibl + block_size*ib;
+                for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+            } else {
+                for (int i = 0; i < block_size; ++i) weight[i] = xb[i]*xb[i];
+            }
+            float max = fabsf(xb[0]);
+            for (int i = 1; i < block_size; ++i) max = MAX(max, fabsf(xb[i]));
+            if (!max) {
+                scales[ib] = 0;
+                memset(L, 1, block_size);
+                continue;
+            }
+            // Here we solve exactly the sum of squared difference (SSD) weighted minimization problem.
+            // With just 3 allowed quant values (-1, 0, 1), we can search exhaustively for the two
+            // boundaries that split the weights xb[i] into 3 groups. To do so, we sort the weights
+            // in ascending order, compute Si = sum[weight[j] xb[j], j = 0...i] and
+            // Wi = sum[weight[j], j = 0...i], and use these to quckly get get the optimum scale
+            // for each possible and score for each split.
+            for (int j = 0; j < block_size; ++j) {
+                pairs[2*j] = xb[j];
+                idx[2*j] = j;
+            }
+            qsort(pairs, block_size, 2*sizeof(float), iq1_sort_helper);
+            float best_score = 0, scale = max;
+            int besti1 = -1, besti2 = -1, best_k = -1;
+            // 0: +, +
+            // 1: +, -
+            // 2: -, +
+            // 3: -, -
+            for (int i1 = 0; i1 <= block_size; ++i1) {
+                for (int i2 = i1; i2 <= block_size; ++i2) {
+                    memset(sumqx, 0, 4*sizeof(float));
+                    memset(sumq2, 0, 4*sizeof(float));
+                    for (int j = 0; j < i1; ++j) {
+                        int i = idx[2*j];
+                        if (i < block_size/2) {
+                            sumqx[0] += weight[i]*x_p[0]*xb[i];
+                            sumqx[1] += weight[i]*x_p[0]*xb[i];
+                            sumqx[2] += weight[i]*x_m[0]*xb[i];
+                            sumqx[3] += weight[i]*x_m[0]*xb[i];
+                            sumq2[0] += weight[i]*x_p[0]*x_p[0];
+                            sumq2[1] += weight[i]*x_p[0]*x_p[0];
+                            sumq2[2] += weight[i]*x_m[0]*x_m[0];
+                            sumq2[3] += weight[i]*x_m[0]*x_m[0];
+                        } else {
+                            sumqx[0] += weight[i]*x_p[0]*xb[i];
+                            sumqx[2] += weight[i]*x_p[0]*xb[i];
+                            sumqx[1] += weight[i]*x_m[0]*xb[i];
+                            sumqx[3] += weight[i]*x_m[0]*xb[i];
+                            sumq2[0] += weight[i]*x_p[0]*x_p[0];
+                            sumq2[2] += weight[i]*x_p[0]*x_p[0];
+                            sumq2[1] += weight[i]*x_m[0]*x_m[0];
+                            sumq2[3] += weight[i]*x_m[0]*x_m[0];
+                        }
+                    }
+                    for (int j = i1; j < i2; ++j) {
+                        int i = idx[2*j];
+                        if (i < block_size/2) {
+                            sumqx[0] += weight[i]*x_p[1]*xb[i];
+                            sumqx[1] += weight[i]*x_p[1]*xb[i];
+                            sumqx[2] += weight[i]*x_m[1]*xb[i];
+                            sumqx[3] += weight[i]*x_m[1]*xb[i];
+                            sumq2[0] += weight[i]*x_p[1]*x_p[1];
+                            sumq2[1] += weight[i]*x_p[1]*x_p[1];
+                            sumq2[2] += weight[i]*x_m[1]*x_m[1];
+                            sumq2[3] += weight[i]*x_m[1]*x_m[1];
+                        } else {
+                            sumqx[0] += weight[i]*x_p[1]*xb[i];
+                            sumqx[2] += weight[i]*x_p[1]*xb[i];
+                            sumqx[1] += weight[i]*x_m[1]*xb[i];
+                            sumqx[3] += weight[i]*x_m[1]*xb[i];
+                            sumq2[0] += weight[i]*x_p[1]*x_p[1];
+                            sumq2[2] += weight[i]*x_p[1]*x_p[1];
+                            sumq2[1] += weight[i]*x_m[1]*x_m[1];
+                            sumq2[3] += weight[i]*x_m[1]*x_m[1];
+                        }
+                    }
+                    for (int j = i2; j < block_size; ++j) {
+                        int i = idx[2*j];
+                        if (i < block_size/2) {
+                            sumqx[0] += weight[i]*x_p[2]*xb[i];
+                            sumqx[1] += weight[i]*x_p[2]*xb[i];
+                            sumqx[2] += weight[i]*x_m[2]*xb[i];
+                            sumqx[3] += weight[i]*x_m[2]*xb[i];
+                            sumq2[0] += weight[i]*x_p[2]*x_p[2];
+                            sumq2[1] += weight[i]*x_p[2]*x_p[2];
+                            sumq2[2] += weight[i]*x_m[2]*x_m[2];
+                            sumq2[3] += weight[i]*x_m[2]*x_m[2];
+                        } else {
+                            sumqx[0] += weight[i]*x_p[2]*xb[i];
+                            sumqx[2] += weight[i]*x_p[2]*xb[i];
+                            sumqx[1] += weight[i]*x_m[2]*xb[i];
+                            sumqx[3] += weight[i]*x_m[2]*xb[i];
+                            sumq2[0] += weight[i]*x_p[2]*x_p[2];
+                            sumq2[2] += weight[i]*x_p[2]*x_p[2];
+                            sumq2[1] += weight[i]*x_m[2]*x_m[2];
+                            sumq2[3] += weight[i]*x_m[2]*x_m[2];
+                        }
+                    }
+                    for (int k = 0; k < 4; ++k) {
+                        if (sumq2[k] > 0 && sumqx[k]*sumqx[k] > best_score*sumq2[k]) {
+                            scale = sumqx[k]/sumq2[k]; best_score = scale*sumqx[k];
+                            besti1 = i1; besti2 = i2; best_k = k;
+                        }
+                    }
+                }
+            }
+            GGML_ASSERT(besti1 >= 0 && besti2 >= 0 && best_k >= 0);
+            for (int j =      0; j < besti1; ++j) L[idx[2*j]] = 0;
+            for (int j = besti1; j < besti2; ++j) L[idx[2*j]] = 1;
+            for (int j = besti2; j < block_size; ++j) L[idx[2*j]] = 2;
+            if (scale < 0) {
+                for (int j = 0; j < block_size; ++j) L[j] = 2 - L[j];
+                scale = -scale;
+                best_k = best_k == 0 ? 3 : best_k == 1 ? 2 : best_k == 2 ? 1 : 0;
+            }
+            bool all_on_grid = true;
+            for (int k = 0; k < block_size/8; ++k) {
+                if (k == 0) xx = best_k < 2 ? x_p : x_m;
+                else xx = best_k%2 == 0 ? x_p : x_m;
+                uint16_t u = 0;
+                for (int j = 0; j < 8; ++j) u |= (L[8*k+j] << 2*j);
+                int grid_index = kmap_q2xs[u];
+                if (grid_index < 0) {
+                    all_on_grid = false;
+                    const uint16_t * neighbours = kneighbors_q2xs - kmap_q2xs[u] - 1;
+                    grid_index = iq1_find_best_neighbour2(neighbours, kgrid_q2xs, xb + 8*k, weight + 8*k, scale, xx, L + 8*k, NGRID_IQ1S);
+                    GGML_ASSERT(grid_index >= 0);
+                }
+                index[k] = grid_index;
+            }
+            if (!all_on_grid) {
+                float sumqx_f = 0, sumq2_f = 0;
+                for (int k = 0; k < block_size/8; ++k) {
+                    if (k == 0) xx = best_k < 2 ? x_p : x_m;
+                    else xx = best_k%2 == 0 ? x_p : x_m;
+                    const int8_t * pg = (const int8_t *)(kgrid_q2xs + index[k]);
+                    for (int j = 0; j < 8; ++j) {
+                        float w = weight[8*k + j];
+                        float q = xx[(pg[j] - 1)/2];
+                        sumqx_f += w*q*xb[8*k+j];
+                        sumq2_f += w*q*q;
+                    }
+                }
+                if (sumqx_f > 0 && sumq2_f > 0) scale = sumqx_f/sumq2_f;
+            }
+            y[ibl].qs[2*ib + 0] = index[0] & 255;
+            y[ibl].qs[2*ib + 1] = index[1] & 255;
+            y[ibl].qh[ib] = (index[0] >> 8) | ((index[1] >> 8) << 4);
+            GGML_ASSERT(scale >= 0);
+            scales[ib] = scale;
+            shifts[ib] = best_k;
+            max_scale = MAX(max_scale, scale);
+        }
+
+        if (!max_scale) {
+            continue;
+        }
+
+        uint16_t * sc = (uint16_t *)y[ibl].scales;
+#if QK_K == 64
+        float d = max_scale/31;
+#else
+        float d = max_scale/15;
+#endif
+        float id = 1/d;
+        float sumqx_f = 0, sumq2_f = 0;
+        for (int ib = 0; ib < QK_K/block_size; ++ib) {
+            int l = nearest_int(0.5f*(id*scales[ib+0]-1));
+#if QK_K == 64
+            l = MAX(0, MIN(15, l));
+            sc[ib/4] |= (l << 4*(ib%4));
+#else
+            l = MAX(0, MIN(7, l));
+            sc[ib/4] |= (l << 3*(ib%4));
+#endif
+            y[ibl].qh[ib] |= masks[shifts[ib]];
+            const float * xb = xbl + block_size*ib;
+            if (quant_weights) {
+                const float * qw = quant_weights + QK_K*ibl + block_size*ib;
+                for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+            } else {
+                for (int i = 0; i < block_size; ++i) weight[i] = xb[i]*xb[i];
+            }
+            for (int k = 0; k < block_size/8; ++k) {
+                if (k == 0) xx = shifts[ib] < 2 ? x_p : x_m;
+                else xx = shifts[ib]%2 == 0 ? x_p : x_m;
+                const int8_t * pg = (const int8_t *)(kgrid_q2xs + y[ibl].qs[2*ib+k] + ((y[ibl].qh[ib] << (8 - 4*k)) & 0x700));
+                for (int j = 0; j < 8; ++j) {
+                    float w = weight[8*k + j];
+                    float q = xx[(pg[j] - 1)/2]*(2*l+1);
+                    sumqx_f += w*q*xb[8*k+j];
+                    sumq2_f += w*q*q;
+                }
+            }
+        }
+        if (sumq2_f > 0) d = sumqx_f/sumq2_f;
+        s.f16 = GGML_FP32_TO_FP16(d*1.1125f); // 1.1125f is another fudge factor. Don't ask me why it is needed.
+#if QK_K == 64
+        y[ibl].d = s.f16;
+#else
+        sc[0] |= ((s.u16 & 0x000f) << 12);
+        sc[1] |= ((s.u16 & 0x00f0) <<  8);
+        sc[2] |= ((s.u16 & 0x0f00) <<  4);
+        sc[3] |= ((s.u16 & 0xf000) <<  0);
+#endif
+    }
+}
+
+size_t quantize_iq1_m(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
+    GGML_ASSERT(n_per_row%QK_K == 0);
+    float  scales[QK_K/IQ1M_BLOCK_SIZE];
+    float  weight[IQ1M_BLOCK_SIZE];
+    int8_t L[IQ1M_BLOCK_SIZE];
+    float  pairs[2*IQ1M_BLOCK_SIZE];
+    uint16_t index[IQ1M_BLOCK_SIZE/8];
+    int8_t shifts[QK_K/IQ1M_BLOCK_SIZE];
+    int64_t nblock = n_per_row/QK_K;
+    char * qrow = (char *)dst;
+    for (int64_t row = 0; row < nrow; ++row) {
+        quantize_row_iq1_m_impl(src, qrow, n_per_row, quant_weights, scales, weight, pairs, L, index, shifts);
+        src += n_per_row;
+        qrow += nblock*sizeof(block_iq1_m);
+    }
+    return nrow * nblock * sizeof(block_iq1_m);
 }
 
 // ============================ 4-bit non-linear quants
@@ -11715,9 +12310,8 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
         ggml_fp16_t * dh, uint8_t * q4, uint16_t * scales_h, uint8_t * scales_l,
         float * scales, float * weight, uint8_t * L,
         const int8_t * values,
-        const float * quant_weights) {
-
-    const int ntry = 7;
+        const float * quant_weights,
+        const int ntry) {
 
     float sigma2 = 0;
     for (int j = 0; j < super_block_size; ++j) sigma2 += x[j]*x[j];
@@ -11729,6 +12323,7 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
     float max_scale = 0, amax_scale = 0;
     for (int ib = 0; ib < super_block_size/block_size; ++ib) {
         const float * xb = x + ib*block_size;
+        uint8_t * Lb = L + ib*block_size;
         if (quant_weights) {
             const float * qw = quant_weights + ib*block_size;
             for (int j = 0; j < block_size; ++j) weight[j] = qw[j] * sqrtf(sigma2 + xb[j]*xb[j]);
@@ -11746,12 +12341,13 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
             scales[ib] = 0;
             continue;
         }
-        float d = -max/values[0];
+        float d = ntry > 0 ? -max/values[0] : max/values[0];
         float id = 1/d;
         float sumqx = 0, sumq2 = 0;
         for (int j = 0; j < block_size; ++j) {
             float al = id*xb[j];
             int l = best_index_int8(16, values, al);
+            Lb[j] = l;
             float q = values[l];
             float w = weight[j];
             sumqx += w*q*xb[j];
@@ -11806,9 +12402,11 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
         }
     } else {
         dh[0] = GGML_FP32_TO_FP16(scales[0]);
-        float id = scales[0] ? 1/scales[0] : 0;
-        for (int j = 0; j < super_block_size; ++j) {
-            L[j] = best_index_int8(16, values, id*x[j]);
+        if (ntry > 0) {
+            float id = scales[0] ? 1/scales[0] : 0;
+            for (int j = 0; j < super_block_size; ++j) {
+                L[j] = best_index_int8(16, values, id*x[j]);
+            }
         }
     }
 
@@ -11819,21 +12417,21 @@ static void quantize_row_iq4_nl_impl(const int super_block_size, const int block
     }
 }
 
-size_t quantize_iq4_nl(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq4_nl(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     GGML_ASSERT(n_per_row%QK4_NL == 0);
-    int nblock = n_per_row/QK4_NL;
+    int64_t nblock = n_per_row/QK4_NL;
     char * qrow = (char *)dst;
     uint8_t L[QK4_NL];
     float weight[QK4_NL];
     uint16_t unused_h;
     uint8_t * unused_l = NULL;
     float scale;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         block_iq4_nl * iq4 = (block_iq4_nl *)qrow;
         for (int ibl = 0; ibl < nblock; ++ibl) {
             const float * qw = quant_weights ? quant_weights + QK4_NL*ibl : NULL;
             quantize_row_iq4_nl_impl(QK4_NL, 32, src + QK4_NL*ibl, &iq4[ibl].d, iq4[ibl].qs, &unused_h, unused_l,
-                    &scale, weight, L, kvalues_iq4nl, qw);
+                    &scale, weight, L, kvalues_iq4nl, qw, 7);
         }
         src += n_per_row;
         qrow += nblock*sizeof(block_iq4_nl);
@@ -11841,33 +12439,42 @@ size_t quantize_iq4_nl(const float * restrict src, void * restrict dst, int nrow
     return nrow * nblock * sizeof(block_iq4_nl);
 }
 
-void quantize_row_iq4_nl(const float * restrict x, void * restrict vy, int k) {
-    assert(k % QK4_NL == 0);
-    block_iq4_nl * restrict y = vy;
-    quantize_row_iq4_nl_reference(x, y, k);
+void quantize_row_iq4_nl(const float * restrict x, void * restrict vy, int64_t k) {
+    GGML_ASSERT(k%QK4_NL == 0);
+    int64_t nblock = k/QK4_NL;
+    uint8_t L[QK4_NL];
+    float weight[QK4_NL];
+    uint16_t unused_h;
+    uint8_t * unused_l = NULL;
+    float scale;
+    block_iq4_nl * iq4 = (block_iq4_nl *)vy;
+    for (int ibl = 0; ibl < nblock; ++ibl) {
+        quantize_row_iq4_nl_impl(QK4_NL, 32, x + QK4_NL*ibl, &iq4[ibl].d, iq4[ibl].qs, &unused_h, unused_l,
+                &scale, weight, L, kvalues_iq4nl, NULL, -1);
+    }
 }
 
-void quantize_row_iq4_nl_reference(const float * restrict x, block_iq4_nl * restrict y, int k) {
+void quantize_row_iq4_nl_reference(const float * restrict x, block_iq4_nl * restrict y, int64_t k) {
     assert(k % QK4_NL == 0);
-    quantize_iq4_nl(x, y, 1, k, NULL);
+    quantize_row_iq4_nl(x, y, k);
 }
 
-size_t quantize_iq4_xs(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq4_xs(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
 #if QK_K == 64
     return quantize_iq4_nl(src, dst, nrow, n_per_row, quant_weights);
 #else
     GGML_ASSERT(n_per_row%QK_K == 0);
-    int nblock = n_per_row/QK_K;
+    int64_t nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
     uint8_t L[QK_K];
     float weight[32];
     float scales[QK_K/32];
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         block_iq4_xs * iq4 = (block_iq4_xs *)qrow;
         for (int ibl = 0; ibl < nblock; ++ibl) {
             const float * qw = quant_weights ? quant_weights + QK_K*ibl : NULL;
             quantize_row_iq4_nl_impl(QK_K, 32, src + QK_K*ibl, &iq4[ibl].d, iq4[ibl].qs, &iq4[ibl].scales_h, iq4[ibl].scales_l,
-                    scales, weight, L, kvalues_iq4nl, qw);
+                    scales, weight, L, kvalues_iq4nl, qw, 7);
         }
         src += n_per_row;
         qrow += nblock*sizeof(block_iq4_xs);
@@ -11876,20 +12483,20 @@ size_t quantize_iq4_xs(const float * restrict src, void * restrict dst, int nrow
 #endif
 }
 
-void quantize_row_iq4_xs(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_iq4_xs(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK_K == 0);
     block_iq4_xs * restrict y = vy;
     quantize_row_iq4_xs_reference(x, y, k);
 }
 
-void quantize_row_iq4_xs_reference(const float * restrict x, block_iq4_xs * restrict y, int k) {
+void quantize_row_iq4_xs_reference(const float * restrict x, block_iq4_xs * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     quantize_iq4_xs(x, y, 1, k, NULL);
 }
 
 // =============================== 2.5625 bpw
 
-static void quantize_row_iq2_s_impl(const float * restrict x, void * restrict vy, int n, const float * restrict quant_weights) {
+static void quantize_row_iq2_s_impl(const float * restrict x, void * restrict vy, int64_t n, const float * restrict quant_weights) {
 
     const int gindex = iq2_data_index(GGML_TYPE_IQ2_S);
 
@@ -11904,7 +12511,7 @@ static void quantize_row_iq2_s_impl(const float * restrict x, void * restrict vy
 
     const int kMaxQ = 3;
 
-    const int nbl = n/QK_K;
+    const int64_t nbl = n/QK_K;
 
     block_iq2_s * y = vy;
 
@@ -12057,11 +12664,11 @@ static void quantize_row_iq2_s_impl(const float * restrict x, void * restrict vy
     }
 }
 
-size_t quantize_iq2_s(const float * restrict src, void * restrict dst, int nrow, int n_per_row, const float * quant_weights) {
+size_t quantize_iq2_s(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
     GGML_ASSERT(n_per_row%QK_K == 0);
-    int nblock = n_per_row/QK_K;
+    int64_t nblock = n_per_row/QK_K;
     char * qrow = (char *)dst;
-    for (int row = 0; row < nrow; ++row) {
+    for (int64_t row = 0; row < nrow; ++row) {
         quantize_row_iq2_s_impl(src, qrow, n_per_row, quant_weights);
         src += n_per_row;
         qrow += nblock*sizeof(block_iq2_s);
@@ -12069,12 +12676,12 @@ size_t quantize_iq2_s(const float * restrict src, void * restrict dst, int nrow,
     return nrow * nblock * sizeof(block_iq2_s);
 }
 
-void quantize_row_iq2_s_reference(const float * restrict x, block_iq2_s * restrict y, int k) {
+void quantize_row_iq2_s_reference(const float * restrict x, block_iq2_s * restrict y, int64_t k) {
     assert(k % QK_K == 0);
     quantize_iq2_s(x, y, 1, k, NULL);
 }
 
-void quantize_row_iq2_s(const float * restrict x, void * restrict vy, int k) {
+void quantize_row_iq2_s(const float * restrict x, void * restrict vy, int64_t k) {
     assert(k % QK_K == 0);
     block_iq2_s * restrict y = vy;
     quantize_row_iq2_s_reference(x, y, k);

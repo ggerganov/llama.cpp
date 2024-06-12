@@ -1,5 +1,5 @@
 # SRPM for building from source and packaging an RPM for RPM-based distros.
-# https://fedoraproject.org/wiki/How_to_create_an_RPM_package
+# https://docs.fedoraproject.org/en-US/quick-docs/creating-rpm-packages
 # Built and maintained by John Boero - boeroboy@gmail.com
 # In honor of Seth Vidal https://www.redhat.com/it/blog/thank-you-seth-vidal
 
@@ -12,7 +12,7 @@
 # 4. OpenCL/CLBLAST support simply requires the ICD loader and basic opencl libraries.
 #    It is up to the user to install the correct vendor-specific support.
 
-Name:           llama.cpp-cublas
+Name:           llama.cpp-cuda
 Version:        %( date "+%%Y%%m%%d" )
 Release:        1%{?dist}
 Summary:        CPU Inference of LLaMA model in pure C/C++ (no CUDA/OpenCL)
@@ -32,16 +32,16 @@ CPU inference for Meta's Lllama2 models using default options.
 %setup -n llama.cpp-master
 
 %build
-make -j LLAMA_CUBLAS=1
+make -j LLAMA_CUDA=1
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p main %{buildroot}%{_bindir}/llamacppcublas
-cp -p server %{buildroot}%{_bindir}/llamacppcublasserver
-cp -p simple %{buildroot}%{_bindir}/llamacppcublassimple
+cp -p main %{buildroot}%{_bindir}/llamacppcuda
+cp -p server %{buildroot}%{_bindir}/llamacppcudaserver
+cp -p simple %{buildroot}%{_bindir}/llamacppcudasimple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system
-%{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llamacublas.service
+%{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llamacuda.service
 [Unit]
 Description=Llama.cpp server, CPU only (no GPU support in this build).
 After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.target
@@ -49,7 +49,7 @@ After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.t
 [Service]
 Type=simple
 EnvironmentFile=/etc/sysconfig/llama
-ExecStart=/usr/bin/llamacppcublasserver $LLAMA_ARGS
+ExecStart=/usr/bin/llamacppcudaserver $LLAMA_ARGS
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=never
 
@@ -67,10 +67,10 @@ rm -rf %{buildroot}
 rm -rf %{_builddir}/*
 
 %files
-%{_bindir}/llamacppcublas
-%{_bindir}/llamacppcublasserver
-%{_bindir}/llamacppcublassimple
-/usr/lib/systemd/system/llamacublas.service
+%{_bindir}/llamacppcuda
+%{_bindir}/llamacppcudaserver
+%{_bindir}/llamacppcudasimple
+/usr/lib/systemd/system/llamacuda.service
 %config /etc/sysconfig/llama
 
 %pre

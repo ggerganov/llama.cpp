@@ -12,6 +12,7 @@ Checks: >
     -readability-implicit-bool-conversion,
     -readability-magic-numbers,
     -readability-uppercase-literal-suffix,
+    -readability-simplify-boolean-expr,
     clang-analyzer-*,
     -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
     performance-*,

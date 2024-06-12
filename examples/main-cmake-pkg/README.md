@@ -8,7 +8,7 @@ Because this example is "outside of the source tree", it is important to first b
 
 ### Considerations
 
-When hardware acceleration libraries are used (e.g. CUBlas, Metal, CLBlast, etc.), CMake must be able to locate the associated CMake package. In the example below, when building _main-cmake-pkg_ notice the `CMAKE_PREFIX_PATH` includes the Llama CMake package location _in addition to_ the CLBlast package—which was used when compiling _llama.cpp_.
+When hardware acceleration libraries are used (e.g. CUDA, Metal, CLBlast, etc.), CMake must be able to locate the associated CMake package. In the example below, when building _main-cmake-pkg_ notice the `CMAKE_PREFIX_PATH` includes the Llama CMake package location _in addition to_ the CLBlast package—which was used when compiling _llama.cpp_.
 
 ### Build llama.cpp and install to C:\LlamaCPP directory
 

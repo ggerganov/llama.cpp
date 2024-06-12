@@ -11,7 +11,10 @@
 *.gcda
 *.dot
 *.bat
+*.tmp
 *.metallib
+*.etag
+*.lastModified
 .DS_Store
 .build/
 .cache/
@@ -24,6 +27,8 @@
 .vs/
 .vscode/
 .idea/
+
+ggml-metal-embed.metal
 
 lcov-report/
 gcovr-report/
@@ -43,8 +48,10 @@ models-mnt
 /convert-llama2c-to-ggml
 /embd-input-test
 /embedding
+/eval-callback
 /gguf
 /gguf-llama-simple
+/gguf-split
 /gritlm
 /imatrix
 /infill
@@ -53,6 +60,9 @@ models-mnt
 /llava-cli
 /lookahead
 /lookup
+/lookup-create
+/lookup-merge
+/lookup-stats
 /main
 /metal
 /passkey
@@ -68,6 +78,7 @@ models-mnt
 /batched-bench
 /export-lora
 /finetune
+/retrieval
 /speculative
 /parallel
 /train-text-from-scratch

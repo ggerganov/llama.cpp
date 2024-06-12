@@ -10,12 +10,19 @@ Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others)
 
 ### Recent API changes
 
+- [2024 Apr 4] State and session file functions reorganized under `llama_state_*` https://github.com/ggerganov/llama.cpp/pull/6341
+- [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
+- [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
 - [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_seq_max()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
 - [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
 - [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
 
 ### Hot topics
 
+- **MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387**
+- Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
+- Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
+- Multi-GPU pipeline parallelism support https://github.com/ggerganov/llama.cpp/pull/6017
 - Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
 - Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
 - Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
@@ -87,6 +94,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] LLaMA 2 🦙🦙
 - [X] [Mistral 7B](https://huggingface.co/mistralai/Mistral-7B-v0.1)
 - [x] [Mixtral MoE](https://huggingface.co/models?search=mistral-ai/Mixtral)
+- [x] [DBRX](https://huggingface.co/databricks/dbrx-instruct)
 - [X] Falcon
 - [X] [Chinese LLaMA / Alpaca](https://github.com/ymcui/Chinese-LLaMA-Alpaca) and [Chinese LLaMA-2 / Alpaca-2](https://github.com/ymcui/Chinese-LLaMA-Alpaca-2)
 - [X] [Vigogne (French)](https://github.com/bofenghuang/vigogne)
@@ -110,6 +118,12 @@ Typically finetunes of the base models below are supported as well.
 - [x] [CodeShell](https://github.com/WisdomShell/codeshell)
 - [x] [Gemma](https://ai.google.dev/gemma)
 - [x] [Mamba](https://github.com/state-spaces/mamba)
+- [x] [Xverse](https://huggingface.co/models?search=xverse)
+- [x] [Command-R](https://huggingface.co/CohereForAI/c4ai-command-r-v01)
+- [x] [SEA-LION](https://huggingface.co/models?search=sea-lion)
+- [x] [GritLM-7B](https://huggingface.co/GritLM/GritLM-7B) + [GritLM-8x7B](https://huggingface.co/GritLM/GritLM-8x7B)
+
+(instructions for supporting more models: [HOWTO-add-model.md](./docs/HOWTO-add-model.md))
 
 **Multimodal models:**
 
@@ -131,7 +145,9 @@ Typically finetunes of the base models below are supported as well.
 - Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp)
 - JS/TS (llama.cpp server client): [lgrammel/modelfusion](https://modelfusion.dev/integration/model-provider/llamacpp)
 - JavaScript/Wasm (works in browser): [tangledgroup/llama-cpp-wasm](https://github.com/tangledgroup/llama-cpp-wasm)
+- Typescript/Wasm (nicer API, available on npm): [ngxson/wllama](https://github.com/ngxson/wllama)
 - Ruby: [yoshoku/llama_cpp.rb](https://github.com/yoshoku/llama_cpp.rb)
+- Rust (more features): [edgenai/llama_cpp-rs](https://github.com/edgenai/llama_cpp-rs)
 - Rust (nicer API): [mdrokz/rust-llama.cpp](https://github.com/mdrokz/rust-llama.cpp)
 - Rust (more direct bindings): [utilityai/llama-cpp-rs](https://github.com/utilityai/llama-cpp-rs)
 - C#/.NET: [SciSharp/LLamaSharp](https://github.com/SciSharp/LLamaSharp)
@@ -141,6 +157,7 @@ Typically finetunes of the base models below are supported as well.
 - Java: [kherud/java-llama.cpp](https://github.com/kherud/java-llama.cpp)
 - Zig: [deins/llama.cpp.zig](https://github.com/Deins/llama.cpp.zig)
 - Flutter/Dart: [netdur/llama_cpp_dart](https://github.com/netdur/llama_cpp_dart)
+- PHP (API bindings and features built on top of llama.cpp): [distantmagic/resonance](https://github.com/distantmagic/resonance) [(more info)](https://github.com/ggerganov/llama.cpp/pull/6326)
 
 **UI:**
 
@@ -161,11 +178,18 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
+- [RecurseChat](https://recurse.chat/) (proprietary)
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
 - [Mobile-Artificial-Intelligence/maid](https://github.com/Mobile-Artificial-Intelligence/maid) (MIT)
 - [Msty](https://msty.app) (proprietary)
 - [LLMFarm](https://github.com/guinmoon/LLMFarm?tab=readme-ov-file) (MIT)
+- [KanTV](https://github.com/zhouwg/kantv?tab=readme-ov-file)(Apachev2.0 or later)
+- [Dot](https://github.com/alexpinel/Dot) (GPL)
+- [MindMac](https://mindmac.app) (proprietary)
+- [KodiBot](https://github.com/firatkiral/kodibot) (GPL)
+- [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
+*(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
 ---
 
@@ -441,44 +465,41 @@ Building the program with BLAS support may lead to some performance improvements
 
   Check [Optimizing and Running LLaMA2 on Intel® CPU](https://www.intel.com/content/www/us/en/content-details/791610/optimizing-and-running-llama2-on-intel-cpu.html) for more information.
 
-- #### cuBLAS
+- #### CUDA
 
-  This provides BLAS acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+  This provides GPU acceleration using the CUDA cores of your Nvidia GPU. Make sure to have the CUDA toolkit installed. You can download it from your Linux distro's package manager (e.g. `apt install nvidia-cuda-toolkit`) or from here: [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
 
   For Jetson user, if you have Jetson Orin, you can try this: [Offical Support](https://www.jetson-ai-lab.com/tutorial_text-generation.html). If you are using an old model(nano/TX2), need some additional operations before compiling.
 
   - Using `make`:
     ```bash
-    make LLAMA_CUBLAS=1
+    make LLAMA_CUDA=1
     ```
   - Using `CMake`:
 
     ```bash
     mkdir build
     cd build
-    cmake .. -DLLAMA_CUBLAS=ON
+    cmake .. -DLLAMA_CUDA=ON
     cmake --build . --config Release
     ```
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
 
-<!---
-  | LLAMA_CUDA_CUBLAS       | Boolean                |   false | Use cuBLAS instead of custom CUDA kernels for prompt processing. Faster for all quantization formats except for q4_0 and q8_0, especially for k-quants. Increases VRAM usage (700 MiB for 7b, 970 MiB for 13b, 1430 MiB for 33b). |
---->
-  | Option                         | Legal values           | Default | Description |
-  |--------------------------------|------------------------|---------|-------------|
-  | LLAMA_CUDA_FORCE_DMMV          | Boolean                |   false | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
-  | LLAMA_CUDA_DMMV_X              | Positive integer >= 32 |      32 | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
-  | LLAMA_CUDA_MMV_Y               | Positive integer       |       1 | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. |
-  | LLAMA_CUDA_F16                 | Boolean                |   false | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs. |
-  | LLAMA_CUDA_KQUANTS_ITER        | 1 or 2                 |       2 | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
-  | LLAMA_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       |     128 | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial. |
+  | Option                         | Legal values           | Default | Description                                                                                                                                                                                                                                                                             |
+  |--------------------------------|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+  | LLAMA_CUDA_FORCE_DMMV          | Boolean                | false   | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
+  | LLAMA_CUDA_DMMV_X              | Positive integer >= 32 | 32      | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants.                                         |
+  | LLAMA_CUDA_MMV_Y               | Positive integer       | 1       | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended.                                                                                                                                         |
+  | LLAMA_CUDA_F16                 | Boolean                | false   | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs.                                                           |
+  | LLAMA_CUDA_KQUANTS_ITER        | 1 or 2                 | 2       | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                                                                     |
+  | LLAMA_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       | 128     | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial.                                                                         |
 
 - #### hipBLAS
 
   This provides BLAS acceleration on HIP-supported AMD GPUs.
   Make sure to have ROCm installed.
-  You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/en/latest/deploy/linux/quick_start.html).
+  You can download it from your Linux distro's package manager or from here: [ROCm Quick Start (Linux)](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/tutorial/quick-start.html#rocm-install-quick).
 
   - Using `make`:
     ```bash
@@ -495,7 +516,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   - Using `make` (example for target gfx1030, build with 16 CPU threads):
     ```bash
-    make -j16 LLAMA_HIPBLAS=1 LLAMA_HIP_UMA=1 AMDGPU_TARGETS=gxf1030
+    make -j16 LLAMA_HIPBLAS=1 LLAMA_HIP_UMA=1 AMDGPU_TARGETS=gfx1030
     ```
 
   - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
@@ -503,7 +524,7 @@ Building the program with BLAS support may lead to some performance improvements
     set PATH=%HIP_PATH%\bin;%PATH%
     mkdir build
     cd build
-    cmake -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
+    cmake -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release ..
     cmake --build .
     ```
     Make sure that `AMDGPU_TARGETS` is set to the GPU arch you want to compile for. The above example uses `gfx1100` that corresponds to Radeon RX 7900XTX/XT/GRE. You can find a list of targets [here](https://llvm.org/docs/AMDGPUUsage.html#processors)
@@ -514,11 +535,11 @@ Building the program with BLAS support may lead to some performance improvements
   If your GPU is not officially supported you can use the environment variable [`HSA_OVERRIDE_GFX_VERSION`] set to a similar GPU, for example 10.3.0 on RDNA2 (e.g. gfx1030, gfx1031, or gfx1035) or 11.0.0 on RDNA3.
   The following compilation options are also available to tweak performance (yes, they refer to CUDA, not HIP, because it uses the same code as the cuBLAS version above):
 
-  | Option                  | Legal values           | Default | Description |
-  |-------------------------|------------------------|---------|-------------|
-  | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 |      32 | Number of values in x direction processed by the HIP dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
-  | LLAMA_CUDA_MMV_Y        | Positive integer       |       1 | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants. |
-  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 |       2 | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs. |
+  | Option                  | Legal values           | Default | Description                                                                                                                                                                                                                                    |
+  |-------------------------|------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+  | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 | 32      | Number of values in x direction processed by the HIP dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
+  | LLAMA_CUDA_MMV_Y        | Positive integer       | 1       | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants.                                                                       |
+  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
 
 - #### CLBlast
 
@@ -726,11 +747,11 @@ From the unzipped folder, open a terminal/cmd window here and place a pre-conver
 As the models are currently fully loaded into memory, you will need adequate disk space to save them and sufficient RAM to load them. At the moment, memory and disk requirements are the same.
 
 | Model | Original size | Quantized size (Q4_0) |
-|------:|--------------:|-----------------------:|
-|    7B |         13 GB |                 3.9 GB |
-|   13B |         24 GB |                 7.8 GB |
-|   30B |         60 GB |                19.5 GB |
-|   65B |        120 GB |                38.5 GB |
+|------:|--------------:|----------------------:|
+|    7B |         13 GB |                3.9 GB |
+|   13B |         24 GB |                7.8 GB |
+|   30B |         60 GB |               19.5 GB |
+|   65B |        120 GB |               38.5 GB |
 
 ### Quantization
 
@@ -738,7 +759,7 @@ Several quantization methods are supported. They differ in the resulting model d
 
 *(outdated)*
 
-| Model | Measure      | F16    | Q4_0   | Q4_1   | Q5_0   | Q5_1   | Q8_0   |
+| Model | Measure      |    F16 |   Q4_0 |   Q4_1 |   Q5_0 |   Q5_1 |   Q8_0 |
 |------:|--------------|-------:|-------:|-------:|-------:|-------:|-------:|
 |    7B | perplexity   | 5.9066 | 6.1565 | 6.0912 | 5.9862 | 5.9481 | 5.9070 |
 |    7B | file size    |  13.0G |   3.5G |   3.9G |   4.3G |   4.7G |   6.7G |
@@ -902,6 +923,9 @@ First, install the essential packages for termux:
 pkg install clang wget git cmake
 ```
 Second, obtain the [Android NDK](https://developer.android.com/ndk) and then build with CMake:
+
+You can execute the following commands on your computer to avoid downloading the NDK to your mobile. Of course, you can also do this in Termux.
+
 ```
 $ mkdir build-android
 $ cd build-android
@@ -910,7 +934,28 @@ $ cmake -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake -DANDROI
 $ make
 ```
 Install [termux](https://termux.dev/) on your device and run `termux-setup-storage` to get access to your SD card.
-Finally, copy the `llama` binary and the model files to your device storage. Here is a demo of an interactive session running on Pixel 5 phone:
+Finally, copy these built `llama` binaries and the model file to your device storage. Because the file permissions in the Android sdcard cannot be changed, you can copy the executable files to the `/data/data/com.termux/files/home/bin` path, and then execute the following commands in Termux to add executable permission:
+
+(Assumed that you have pushed the built executable files to the /sdcard/llama.cpp/bin path using `adb push`)
+```
+$cp -r /sdcard/llama.cpp/bin /data/data/com.termux/files/home/
+$cd /data/data/com.termux/files/home/bin
+$chmod +x ./*
+```
+
+Download model [llama-2-7b-chat.Q4_K_M.gguf](https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/blob/main/llama-2-7b-chat.Q4_K_M.gguf), and push it to `/sdcard/llama.cpp/`, then move it to `/data/data/com.termux/files/home/model/`
+
+```
+$mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/home/model/
+```
+
+Now, you can start chatting:
+```
+$cd /data/data/com.termux/files/home/bin
+$./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+```
+
+Here is a demo of an interactive session running on Pixel 5 phone:
 
 https://user-images.githubusercontent.com/271616/225014776-1d567049-ad71-4ef2-b050-55b0b3b9274c.mp4
 

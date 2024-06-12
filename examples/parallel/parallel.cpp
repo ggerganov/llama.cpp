@@ -132,7 +132,6 @@ int main(int argc, char ** argv) {
     llama_context * ctx = NULL;
 
     // load the target model
-    params.logits_all = true;
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
 
     // load the prompts from an external file if there are any

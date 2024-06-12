@@ -15,6 +15,10 @@ on:
     branches:
       - master
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
@@ -42,7 +46,7 @@ jobs:
           - { tag: "server-intel", dockerfile: ".devops/server-intel.Dockerfile", platforms: "linux/amd64" }
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -87,6 +91,12 @@ jobs:
             echo "name=${SAFE_NAME}-b${BUILD_NUMBER}-${SHORT_HASH}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Downcase github.repository_owner
+        run: |
+          echo "repository_owner_lowercase=${GITHUB_REPOSITORY_OWNER@L}" >> $GITHUB_ENV
+        env:
+          GITHUB_REPOSITORY_OWNER: '${{ github.repository_owner }}'
+
       - name: Build and push Docker image (versioned)
         if: github.event_name == 'push'
         uses: docker/build-push-action@v4
@@ -94,7 +104,7 @@ jobs:
           context: .
           push: true
           platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/${{ github.repository_owner }}/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
+          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
           file: ${{ matrix.config.dockerfile }}
 
       - name: Build and push Docker image (tagged)
@@ -103,5 +113,5 @@ jobs:
           context: .
           push: ${{ github.event_name == 'push' }}
           platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/${{ github.repository_owner }}/llama.cpp:${{ matrix.config.tag }},ghcr.io/${{ github.repository_owner }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
+          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }},ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
           file: ${{ matrix.config.dockerfile }}

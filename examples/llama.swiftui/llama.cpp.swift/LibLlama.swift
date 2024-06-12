@@ -221,6 +221,7 @@ actor LlamaContext {
             if llama_decode(context, batch) != 0 {
                 print("llama_decode() failed during prompt")
             }
+            llama_synchronize(context)
 
             let t_pp_end = ggml_time_us()
 
@@ -240,6 +241,7 @@ actor LlamaContext {
                 if llama_decode(context, batch) != 0 {
                     print("llama_decode() failed during text generation")
                 }
+                llama_synchronize(context)
             }
 
             let t_tg_end = ggml_time_us()

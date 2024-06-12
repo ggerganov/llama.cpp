@@ -1,5 +1,5 @@
 # SRPM for building from source and packaging an RPM for RPM-based distros.
-# https://fedoraproject.org/wiki/How_to_create_an_RPM_package
+# https://docs.fedoraproject.org/en-US/quick-docs/creating-rpm-packages
 # Built and maintained by John Boero - boeroboy@gmail.com
 # In honor of Seth Vidal https://www.redhat.com/it/blog/thank-you-seth-vidal
 
