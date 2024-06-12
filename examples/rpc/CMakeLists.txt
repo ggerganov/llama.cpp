@@ -1,3 +1,2 @@
-set(TARGET llama-rpc-server)
-add_executable(${TARGET} rpc-server.cpp)
-target_link_libraries(${TARGET} PRIVATE ggml llama)
+add_executable(rpc-server rpc-server.cpp)
+target_link_libraries(rpc-server PRIVATE ggml llama)
