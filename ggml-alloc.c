@@ -886,7 +886,7 @@ static bool alloc_tensor_range(struct ggml_context * ctx,
         fprintf(stderr, "%s: failed to allocate %s buffer of size %zu\n", __func__, ggml_backend_buft_name(buft), size);
 #endif
         for (size_t i = 0; i < *n_buffers; i++) {
-            ggml_backend_buffer_free(*buffers[i]);
+            ggml_backend_buffer_free((*buffers)[i]);
         }
         free(*buffers);
         return false;
