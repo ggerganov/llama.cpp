@@ -343,7 +343,7 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
 
         // Recreate the state as expected by save_imatrix(), and corerct for weighted sum.
         for (int i = 0; i < nval; i++) {
-            if (tmp[i]) {
+            if (std::isnormal(tmp[i])) {
                 e.values[i] += tmp[i];
                 e.counts[i] += ncall;
             }
