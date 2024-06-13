@@ -3840,8 +3840,8 @@ struct llama_model_loader {
         std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
 
 #if defined(GGML_USE_CUDA)
-		// 4 staging buffers for async uploads, each sized 1MB seems to be a good default for single NVMe drives.
-		// NVMe raid configurations might require more / larger buffers.
+        // 4 staging buffers for async uploads, each sized 1MB seems to be a good default for single NVMe drives.
+        // NVMe raid configurations might require more / larger buffers.
         constexpr size_t num_buffers = 4;
         constexpr size_t buffer_size = 1 * 1024 * 1024; // 1MB
 
@@ -3858,8 +3858,8 @@ struct llama_model_loader {
             if (buf) {
                 ggml_backend_buffer_type_t buffer_type = ggml_backend_buffer_get_type(buf);
                 for (int i = 0; i < ggml_backend_cuda_get_device_count(); ++i) {
-                    auto cuda_buffer_type = ggml_backend_cuda_buffer_type(i);
-                    if (buffer_type == ggml_backend_cuda_buffer_type(i)) {
+                    auto * cuda_buffer_type = ggml_backend_cuda_buffer_type(i);
+                    if (buffer_type == cuda_buffer_type) {
                         cuda_backend = ggml_backend_cuda_init(i);
                         break;
                     }
