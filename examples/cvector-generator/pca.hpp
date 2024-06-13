@@ -72,7 +72,7 @@ struct pca_model {
 //             fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
 //         }
 // #endif
-// 
+
 // #ifdef GGML_USE_METAL
 //         fprintf(stderr, "%s: using Metal backend\n", __func__);
 //         backend = ggml_backend_metal_init();
