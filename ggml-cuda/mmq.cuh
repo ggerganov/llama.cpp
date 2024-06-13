@@ -839,7 +839,14 @@ template <int mmq_y, int nwarps, bool need_check> static __device__ __forceinlin
         }
 
         const int sc_m = bxi->scales[kqsx];
-        x_dm[i*(WARP_SIZE + 1) + threadIdx.x] = bxi->dm * make_half2(sc_m & 0x0F, sc_m >> 4);
+#ifdef FAST_FP16_AVAILABLE
+        const half2 x_dm_ik = __hmul2(bxi->dm, make_half2(sc_m & 0x0F, sc_m >> 4));
+#else
+        const float2 bxi_dmf = __half22float2(bxi->dm);
+        const half2 x_dm_ik = make_half2(bxi_dmf.x*(sc_m & 0x0F), bxi_dmf.y*(sc_m >> 4));
+#endif // FAST_FP16_AVAILABLE
+
+        x_dm[i*(WARP_SIZE + 1) + threadIdx.x] = x_dm_ik;
     }
 }
 
