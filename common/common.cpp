@@ -1611,7 +1611,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.i_chunk = std::stoi(argv[i]);
         return true;
     }
-    // control-vector-generator params
+    // cvector params
     if (arg == "--completions-file") {
         if (++i >= argc) {
             invalid_param = true;
@@ -1981,7 +1981,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "logging",     "       --log-append",           "Don't truncate the old log file." });
 #endif // LOG_DISABLE_LOGS
 
-    options.push_back({ "control-vector" });
+    options.push_back({ "cvector" });
     options.push_back({ "cvector",     "-o,    --output FNAME",         "output file (default: '%s')", params.cvector_outfile.c_str() });
     options.push_back({ "cvector",     "       --positive-file FNAME",  "positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str() });
     options.push_back({ "cvector",     "       --negative-file FNAME",  "negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str() });
