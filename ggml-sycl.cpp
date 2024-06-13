@@ -3307,7 +3307,7 @@ class sycl_gpu_mgr {
 
         void detect_sycl_gpu_list_with_max_cu() try {
             int device_count = dpct::dev_mgr::instance().device_count();
-            sycl::backend backend;
+            sycl::platform platform;
 
             for (int id = 0; id < device_count; id++) {
                 sycl::device device = dpct::dev_mgr::instance().get_device(id);
@@ -3317,7 +3317,7 @@ class sycl_gpu_mgr {
                 dpct::get_device_info(prop, device);
                 if (max_compute_units < prop.get_max_compute_units()) {
                     max_compute_units = prop.get_max_compute_units();
-                    backend = device.get_backend();
+                    platform = device.get_platform();
                 }
             }
 
@@ -3328,7 +3328,7 @@ class sycl_gpu_mgr {
                 dpct::device_info prop;
                 dpct::get_device_info(prop, device);
                 if (max_compute_units == prop.get_max_compute_units() &&
-                    backend == device.get_backend()) {
+                    platform == device.get_platform()) {
                     gpus.push_back(id);
                     devices.push_back(device);
                     work_group_size = prop.get_max_work_group_size();
