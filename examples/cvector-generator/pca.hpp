@@ -64,21 +64,22 @@ struct pca_model {
     struct ggml_tensor * dev_eigenvector;
 
     pca_model(struct ggml_tensor * t_input) {
-#ifdef GGML_USE_CUDA
-        fprintf(stderr, "%s: using CUDA backend\n", __func__);
-        backend = ggml_backend_cuda_init(0); // init device 0
-        if (!backend) {
-            fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
-        }
-#endif
-
-#ifdef GGML_USE_METAL
-        fprintf(stderr, "%s: using Metal backend\n", __func__);
-        backend = ggml_backend_metal_init();
-        if (!backend) {
-            fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
-        }
-#endif
+// TODO: enable GPU support when support for GGML_OP_SQRT is added
+// #ifdef GGML_USE_CUDA
+//         fprintf(stderr, "%s: using CUDA backend\n", __func__);
+//         backend = ggml_backend_cuda_init(0); // init device 0
+//         if (!backend) {
+//             fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
+//         }
+// #endif
+// 
+// #ifdef GGML_USE_METAL
+//         fprintf(stderr, "%s: using Metal backend\n", __func__);
+//         backend = ggml_backend_metal_init();
+//         if (!backend) {
+//             fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
+//         }
+// #endif
 
         // if there aren't GPU Backends fallback to CPU backend
         if (!backend) {
@@ -206,11 +207,12 @@ static ggml_status compute_piter(
         ggml_backend_cpu_set_n_threads(model.backend, params.n_threads);
     }
 
-#ifdef GGML_USE_METAL
-    if (ggml_backend_is_metal(model.backend)) {
-        ggml_backend_metal_set_n_cb(model.backend, params.n_threads);
-    }
-#endif
+// TODO: enable GPU support when support for GGML_OP_SQRT is added
+//#ifdef GGML_USE_METAL
+//    if (ggml_backend_is_metal(model.backend)) {
+//        ggml_backend_metal_set_n_cb(model.backend, params.n_threads);
+//    }
+//#endif
 
     ggml_status res = ggml_backend_graph_compute(model.backend, gf);
     if (res == GGML_STATUS_SUCCESS) {
