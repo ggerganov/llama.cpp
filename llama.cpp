@@ -1320,7 +1320,7 @@ public:
         li.QuadPart = 0;
         BOOL ret = SetFilePointerEx(fp_win32, li, &li, FILE_CURRENT);
         if (!ret) {
-            throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError())));
+            throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
         }
 
         return li.QuadPart;
@@ -1329,15 +1329,15 @@ public:
     void seek(size_t offset, int whence) const {
         // no need to convert SEEK_* to FILE_*. The enums are the same.
         // Still, keep static asserts to avoid failures in the future.
-        static_assert(SEEK_SET == FILE_BEGIN);
-        static_assert(SEEK_CUR == FILE_CURRENT);
-        static_assert(SEEK_END == FILE_END);
+        static_assert(SEEK_SET == FILE_BEGIN, "SEEK_SET != FILE_BEGIN");
+        static_assert(SEEK_CUR == FILE_CURRENT, "SEEK_CUR != FILE_CURRENT");
+        static_assert(SEEK_END == FILE_END, "SEEK_END != FILE_END");
 
         LARGE_INTEGER li;
         li.QuadPart = offset;
         BOOL ret = SetFilePointerEx(fp_win32, li, NULL, whence);
         if (!ret) {
-            throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError())));
+            throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
         }
     }
 
@@ -1353,7 +1353,7 @@ public:
             DWORD chunk_read = 0;
             BOOL result = ReadFile(fp_win32, reinterpret_cast<char*>(ptr) + bytes_read, chunk_size, &chunk_read, NULL);
             if (!result) {
-                throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError())));
+                throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
             }
             if (chunk_read < chunk_size || chunk_read == 0) {
                 throw std::runtime_error("unexpectedly reached end of file");
