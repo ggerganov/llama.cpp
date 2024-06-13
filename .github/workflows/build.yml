@@ -103,12 +103,10 @@ jobs:
         id: cmake_build
         run: |
           sysctl -a
-          mkdir build
-          cd build
           # Metal is disabled due to intermittent failures with Github runners not having a GPU:
           # https://github.com/ggerganov/llama.cpp/actions/runs/8635935781/job/23674807267#step:5:2313
-          cmake -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL=OFF -DLLAMA_CURL=ON ..
-          cmake --build . --config Release -j $(sysctl -n hw.logicalcpu)
+          cmake -B build -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_METAL=OFF -DLLAMA_CURL=ON
+          cmake --build build --config Release -j $(sysctl -n hw.logicalcpu)
 
       - name: Test
         id: cmake_test
@@ -241,8 +239,8 @@ jobs:
           wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/tok512.bin
           echo "Fetch llama2c model"
           wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories260K/stories260K.bin
-          ./bin/convert-llama2c-to-ggml --copy-vocab-from-model ./tok512.bin --llama2c-model stories260K.bin --llama2c-output-model stories260K.gguf
-          ./bin/main -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
+          ./bin/llama-convert-llama2c-to-ggml --copy-vocab-from-model ./tok512.bin --llama2c-model stories260K.bin --llama2c-output-model stories260K.gguf
+          ./bin/llama-cli -m stories260K.gguf -p "One day, Lily met a Shoggoth" -n 500 -c 256
 
       - name: Determine tag name
         id: tag

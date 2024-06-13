@@ -293,6 +293,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     params.output_format = cmd_params_defaults.output_format;
     params.output_format_stderr = cmd_params_defaults.output_format_stderr;
     params.reps = cmd_params_defaults.reps;
+    params.numa = cmd_params_defaults.numa;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
@@ -1032,6 +1033,27 @@ struct markdown_printer : public printer {
         }
         if (field == "n_gpu_layers") {
             return 3;
+        }
+        if (field == "n_threads") {
+            return 7;
+        }
+        if (field == "n_batch") {
+            return 7;
+        }
+        if (field == "n_ubatch") {
+            return 8;
+        }
+        if (field == "type_k" || field == "type_v") {
+            return 6;
+        }
+        if (field == "split_mode") {
+            return 5;
+        }
+        if (field == "flash_attn") {
+            return 2;
+        }
+        if (field == "use_mmap") {
+            return 4;
         }
         if (field == "test") {
             return 13;

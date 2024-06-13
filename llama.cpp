@@ -21,6 +21,10 @@
 #   include "ggml-kompute.h"
 #endif
 
+#ifdef GGML_USE_BLAS
+#  include "ggml-blas.h"
+#endif
+
 #ifdef GGML_USE_METAL
 #  include "ggml-metal.h"
 #endif
@@ -2426,7 +2430,11 @@ struct llama_context {
 #ifdef GGML_USE_METAL
     ggml_backend_t backend_metal = nullptr;
 #endif
+#ifdef GGML_USE_BLAS
+    ggml_backend_t backend_blas = nullptr;
+#endif
     ggml_backend_t backend_cpu = nullptr;
+
 
     const llama_model & model;
 
@@ -11729,7 +11737,8 @@ static struct ggml_cgraph * llama_build_graph(
         if (batch.n_tokens < 32 || full_offload) {
             if (il != -1 && strcmp(name, "norm") == 0) {
                 for (auto * backend : lctx.backends) {
-                    if (ggml_backend_buft_supports_backend(lctx.model.buft_layer[il].buft, backend)) {
+                    if (ggml_backend_supports_buft(backend, lctx.model.buft_layer[il].buft) &&
+                        (ggml_backend_supports_op(backend, cur) || ggml_backend_offload_op(backend, cur))) {
                         ggml_backend_sched_set_tensor_backend(lctx.sched, cur, backend);
                         break;
                     }
@@ -12226,6 +12235,11 @@ static void llama_graph_compute(
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
+#ifdef GGML_USE_BLAS
+    if (lctx.backend_blas != nullptr) {
+        ggml_backend_blas_set_n_threads(lctx.backend_blas, n_threads);
+    }
+#endif
 
     ggml_backend_sched_graph_compute_async(lctx.sched, gf);
 
@@ -12447,17 +12461,6 @@ static int llama_decode_internal(
             GGML_ASSERT(strcmp(res->name, "result_output") == 0 && "missing result_output tensor");
         }
         // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
-
-        // for big prompts, if BLAS is enabled, it is better to use only one thread
-        // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-        // TODO: this is mostly important for Apple Silicon where CBLAS is still performing very well
-        //       we still need some threads to process all non-mul_mat ops, but not too much to avoid interfering
-        //       with the BLAS calls. need a better solution
-        // MoE Special Case: This logic applies when hparams.n_expert == 0, i.e. the model is NOT an MoE model. When an MoE is
-        //                   being processed then Accelerate/BLAS will not be involved, so capping would limit performance.
-        if (n_tokens >= 32 && hparams.n_expert == 0 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas()) {
-            n_threads = std::min(4, n_threads);
-        }
 
         ggml_backend_sched_alloc_graph(lctx.sched, gf);
 
@@ -16451,6 +16454,16 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(backend);
         }
 #endif
+
+#ifdef GGML_USE_BLAS
+        ctx->backend_blas = ggml_backend_blas_init();
+        if (ctx->backend_blas == nullptr) {
+            LLAMA_LOG_WARN("%s: failed to initialize BLAS backend\n", __func__);
+        } else {
+            ctx->backends.push_back(ctx->backend_blas);
+        }
+#endif
+
 #if defined(GGML_USE_RPC)
         if (model->n_gpu_layers > 0) {
             for (const auto & endpoint : model->rpc_servers) {
