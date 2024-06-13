@@ -101,11 +101,11 @@ def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
     json.dump(result, sys.stdout)
 
 
-def markdownTableWithAlignmentSupport(header_map, data):
+def markdownTableWithAlignmentSupport(header_map: list[dict[str, str]], data: list[dict[str, Any]]):
     # JSON to Markdown table formatting: https://stackoverflow.com/a/72983854/2850957
 
     # Alignment Utility Function
-    def strAlign(padding:int, alignMode:str, strVal:str):
+    def strAlign(padding: int, alignMode: str | None, strVal: str):
         if alignMode == 'center':
             return strVal.center(padding)
         elif alignMode == 'right':
@@ -115,7 +115,7 @@ def markdownTableWithAlignmentSupport(header_map, data):
         else: # default left
             return ' ' + strVal.ljust(padding - 1)
 
-    def dashAlign(padding:int, alignMode:str):
+    def dashAlign(padding: int, alignMode: str | None):
         if alignMode == 'center':
             return ':' + '-' * (padding - 2) + ':'
         elif alignMode == 'right':
@@ -228,7 +228,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
     markdown_content += f'# {args.model} - GGUF Internal File Dump\n'
     markdown_content += f'* Endian: {file_endian} endian\n'
     markdown_content += '\n'
-    markdown_content += '## Key Value Metadata Store\n'
+    markdown_content += '## Key Value Metadata Store\n\n'
     markdown_content += f'There is {len(reader.fields)} key/value pair(s) in this file\n'
     markdown_content += '\n'
 
@@ -265,9 +265,9 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
         kv_dump_table.append({"n":n, "pretty_type":pretty_type, "total_elements":total_elements, "field_name":field.name, "value":value})
 
     kv_dump_table_header_map = [
-        {'key_name':'n',                'header_name':'POS',      'align':'center'},
+        {'key_name':'n',                'header_name':'POS',      'align':'right'},
         {'key_name':'pretty_type',      'header_name':'TYPE',     'align':'left'},
-        {'key_name':'total_elements',   'header_name':'Count',    'align':'left'},
+        {'key_name':'total_elements',   'header_name':'Count',    'align':'right'},
         {'key_name':'field_name',       'header_name':'Key',      'align':'left'},
         {'key_name':'value',            'header_name':'Value',    'align':'left'},
     ]
@@ -302,7 +302,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             tensor_name_to_key[tensor.name] = key
 
         # Tensors Mapping Dump
-        markdown_content += f'## Tensors Overview {element_count_rounded_notation(total_elements)} Elements\n'
+        markdown_content += f'## Tensors Overview {element_count_rounded_notation(total_elements)} Elements\n\n'
         markdown_content += f'Total number of elements in all tensors: {total_elements} Elements\n'
         markdown_content += '\n'
 
@@ -317,7 +317,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             tensors = tensor_groups[group]
             group_elements = sum(tensor.n_elements for tensor in tensors)
             group_percentage = group_elements / total_elements * 100
-            markdown_content += f"### <a name=\"{group.replace('.', '_')}\">{translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements</a>\n"
+            markdown_content += f"### <a name=\"{group.replace('.', '_')}\">{translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements</a>\n\n"
 
             tensor_dump_table = []
             for tensor in tensors:
@@ -328,7 +328,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                 tensor_dump_table.append({"t_id":tensor_name_to_key[tensor.name], "layer_name":tensor.name, "human_layer_name":human_friendly_name, "element_count":element_count_string, "pretty_dims":prettydims, "tensor_type":type_name_string})
 
             tensor_dump_table_header_map = [
-                {'key_name':'t_id',             'header_name':'T_ID',                             'align':'center'},
+                {'key_name':'t_id',             'header_name':'T_ID',                             'align':'right'},
                 {'key_name':'layer_name',       'header_name':'Tensor Layer Name',                'align':'left'},
                 {'key_name':'human_layer_name', 'header_name':'Human Friendly Tensor Layer Name', 'align':'left'},
                 {'key_name':'element_count',    'header_name':'Elements',                         'align':'left'},
