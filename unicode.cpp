@@ -681,10 +681,14 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                 continue;
             }
 
-            const int cpt_flag = unicode_cpt_flags(cpts[i]).category_flag();
+            const auto flags = unicode_cpt_flags(cpts[i]);
 
-            if (k_ucat_cpt.find(cpt_flag) != k_ucat_cpt.end()) {
-                text_collapsed[i] = k_ucat_cpt.at(cpt_flag);
+            if (flags.is_whitespace) {
+                //NOTE: C++ std::regex \s does not mach 0x85, Rust and Python regex does.
+                //text_collapsed[i] = (char) 0x85;  // <Next Line> as whitespace fallback
+                text_collapsed[i] = (char) 0x0B;    // <vertical tab> as whitespace fallback
+            } else if (k_ucat_cpt.find(flags.category_flag()) != k_ucat_cpt.end()) {
+                text_collapsed[i] = k_ucat_cpt.at(flags.category_flag());
             } else {
                 text_collapsed[i] = (char) 0xD0; // fallback
             }
