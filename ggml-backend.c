@@ -1116,9 +1116,10 @@ static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, co
         }
     }
 
-    fprintf(stderr, "%s: error: no backend supports buffer type %s used in tensor %s\n",
-        __func__, ggml_backend_buffer_name(buffer), tensor->name);
-    GGML_ASSERT(false);
+#ifndef NDEBUG
+    fprintf(stderr, "%s: warning: no backend supports op %s with a weight with buffer type %s used in tensor %s, the weight will need to be copied\n",
+        __func__, ggml_op_desc(tensor), ggml_backend_buffer_name(buffer), tensor->name);
+#endif
 
     return -1;
 }
