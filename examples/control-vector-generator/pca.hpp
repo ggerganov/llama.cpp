@@ -11,6 +11,7 @@
 #endif
 
 #include <cstdio>
+#include <ctime>
 #include <string>
 #include <tuple>
 #include <vector>

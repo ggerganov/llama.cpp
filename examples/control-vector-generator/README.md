@@ -7,7 +7,7 @@ Related PRs:
 - (Issue) [Generate control vector using llama.cpp](https://github.com/ggerganov/llama.cpp/issues/6880)
 - [Add control-vector-generator example](https://github.com/ggerganov/llama.cpp/pull/7514)
 
-Example:
+## Examples
 
 ```sh
 # CPU only
@@ -21,5 +21,14 @@ Example:
 
 # To see help message
 ./control-vector-generator -h
-# Then, have a look at "control-vector-generator" section
+# Then, have a look at "control-vector" section
+```
+
+## Tips and tricks
+
+If your prompt have multiple lines (per prompt), convert the newline to escape sequence `\n`. For example:
+
+```
+<|im_start|>system\nAct like a person who is extremely happy.<|im_end|>
+<|im_start|>system\nYou are in a very good mood today<|im_end|>
 ```
