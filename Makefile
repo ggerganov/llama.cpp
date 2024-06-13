@@ -440,10 +440,11 @@ ifndef LLAMA_NO_ACCELERATE
 	# Mac OS - include Accelerate framework.
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
-		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
+		MK_CPPFLAGS += -DGGML_USE_ACCELERATE -DGGML_USE_BLAS
 		MK_CPPFLAGS += -DACCELERATE_NEW_LAPACK
 		MK_CPPFLAGS += -DACCELERATE_LAPACK_ILP64
 		MK_LDFLAGS  += -framework Accelerate
+		OBJS        += ggml-blas.o
 	endif
 endif # LLAMA_NO_ACCELERATE
 
@@ -454,20 +455,29 @@ ifndef LLAMA_NO_OPENMP
 endif # LLAMA_NO_OPENMP
 
 ifdef LLAMA_OPENBLAS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
+	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
+	OBJS        += ggml-blas.o
 endif # LLAMA_OPENBLAS
+
+ifdef LLAMA_OPENBLAS64
+	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas64)
+	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas64)
+	MK_LDFLAGS  += $(shell pkg-config --libs openblas64)
+	OBJS        += ggml-blas.o
+endif # LLAMA_OPENBLAS64
+
+ifdef LLAMA_BLIS
+	MK_CPPFLAGS += -DGGML_USE_BLAS -I/usr/local/include/blis -I/usr/include/blis
+	MK_LDFLAGS  += -lblis -L/usr/local/lib
+	OBJS        += ggml-blas.o
+endif # LLAMA_BLIS
 
 ifndef LLAMA_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
 	OBJS        += sgemm.o
 endif
-
-ifdef LLAMA_BLIS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
-	MK_LDFLAGS  += -lblis -L/usr/local/lib
-endif # LLAMA_BLIS
 
 ifdef LLAMA_RPC
 	MK_CPPFLAGS   += -DGGML_USE_RPC
@@ -775,6 +785,9 @@ ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 
 ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
+
+ggml-blas.o: ggml-blas.cpp ggml-blas.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 unicode.o: unicode.cpp unicode.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
