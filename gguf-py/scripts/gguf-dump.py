@@ -101,6 +101,54 @@ def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
     json.dump(result, sys.stdout)
 
 
+def markdownTableWithAlignmentSupport(header_map, data):
+    # JSON to Markdown table formatting: https://stackoverflow.com/a/72983854/2850957
+
+    # Alignment Utility Function
+    def strAlign(padding:int, alignMode:str, strVal:str):
+        if alignMode == 'center':
+            return strVal.center(padding)
+        elif alignMode == 'right':
+            return strVal.rjust(padding - 1) + ' '
+        elif alignMode == 'left':
+            return ' ' + strVal.ljust(padding - 1)
+        else: # default left
+            return ' ' + strVal.ljust(padding - 1)
+
+    def dashAlign(padding:int, alignMode:str):
+        if alignMode == 'center':
+            return ':' + '-' * (padding - 2) + ':'
+        elif alignMode == 'right':
+            return '-' * (padding - 1) + ':'
+        elif alignMode == 'left':
+            return ':' + '-' * (padding - 1)
+        else: # default left
+            return '-' * (padding)
+
+    # Calculate Padding For Each Column Based On Header and Data Length
+    rowsPadding = {}
+    for index, columnEntry in enumerate(header_map):
+        padCount = max([len(str(v)) for d in data for k, v in d.items() if k == columnEntry['key_name']], default=0) + 2
+        headerPadCount = len(columnEntry['header_name']) + 2
+        rowsPadding[index] = headerPadCount if padCount <= headerPadCount else padCount
+
+    # Render Markdown Header
+    rows = []
+    rows.append('|'.join(strAlign(rowsPadding[index], columnEntry.get('align'), str(columnEntry['header_name'])) for index, columnEntry in enumerate(header_map)))
+    rows.append('|'.join(dashAlign(rowsPadding[index], columnEntry.get('align')) for index, columnEntry in enumerate(header_map)))
+
+    # Render Tabular Data
+    for item in data:
+        rows.append('|'.join(strAlign(rowsPadding[index], columnEntry.get('align'), str(item[columnEntry['key_name']])) for index, columnEntry in enumerate(header_map)))
+
+    # Convert Tabular String Rows Into String
+    tableString = ""
+    for row in rows:
+        tableString += f'|{row}|\n'
+
+    return tableString
+
+
 def element_count_rounded_notation(count: int) -> str:
     if count > 1e15 :
         # Quadrillion
@@ -184,9 +232,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
     markdown_content += f'There is {len(reader.fields)} key/value pair(s) in this file\n'
     markdown_content += '\n'
 
-    markdown_content += '| POS | TYPE       | Elements | Key                                    | Value                                                                          |\n'
-    markdown_content += '|-----|------------|----------|----------------------------------------|--------------------------------------------------------------------------------|\n'
-
+    kv_dump_table = []
     for n, field in enumerate(reader.fields.values(), 1):
         if not field.types:
             pretty_type = 'N/A'
@@ -216,7 +262,17 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                     for element_pos in range(render_element):
                         value += str(field.parts[-1 - element_pos][0]) + (", " if total_elements > 1 else "")
                 value = f'[ {value}{" ..." if total_elements > 1 else ""} ]'
-        markdown_content += f'| {n:3} | {pretty_type:10} | {total_elements:8} | {field.name:38} | {value:<78} |\n'
+        kv_dump_table.append({"n":n, "pretty_type":pretty_type, "total_elements":total_elements, "field_name":field.name, "value":value})
+
+    kv_dump_table_header_map = [
+        {'key_name':'n',                'header_name':'POS',      'align':'center'},
+        {'key_name':'pretty_type',      'header_name':'TYPE',     'align':'left'},
+        {'key_name':'total_elements',   'header_name':'Count',    'align':'left'},
+        {'key_name':'field_name',       'header_name':'Key',      'align':'left'},
+        {'key_name':'value',            'header_name':'Value',    'align':'left'},
+    ]
+
+    markdown_content += markdownTableWithAlignmentSupport(kv_dump_table_header_map, kv_dump_table)
 
     markdown_content += "\n"
 
@@ -227,19 +283,23 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
         tensor_groups = {}
         total_elements = sum(tensor.n_elements for tensor in reader.tensors)
 
+        # Parsing Tensors Record
         for key, tensor in enumerate(reader.tensors):
             tensor_components = tensor.name.split('.')
-            tensor_prefix = tensor_components[0]
 
-            if tensor_prefix == 'blk':
-                tensor_prefix = f"{tensor_components[0]}.{tensor_components[1]}"
+            # Classify Tensor Group
+            tensor_group_name = "base"
+            if tensor_components[0] == 'blk':
+                tensor_group_name = f"{tensor_components[0]}.{tensor_components[1]}"
 
-            if tensor_prefix not in tensor_groups:
-                tensor_groups[tensor_prefix] = []
-                tensor_prefix_order.append(tensor_prefix)
+            # Check if new Tensor Group
+            if tensor_group_name not in tensor_groups:
+                tensor_groups[tensor_group_name] = []
+                tensor_prefix_order.append(tensor_group_name)
 
+            # Record Tensor and Tensor Position
+            tensor_groups[tensor_group_name].append(tensor)
             tensor_name_to_key[tensor.name] = key
-            tensor_groups[tensor_prefix].append(tensor)
 
         # Tensors Mapping Dump
         markdown_content += f'## Tensors Overview {element_count_rounded_notation(total_elements)} Elements\n'
@@ -257,14 +317,27 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             tensors = tensor_groups[group]
             group_elements = sum(tensor.n_elements for tensor in tensors)
             group_percentage = group_elements / total_elements * 100
-            markdown_content += f"### {translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements <a name=\"{group.replace('.', '_')}\"></a>\n"
-            markdown_content += "| T_ID | Tensor Layer Name         | Human Friendly Tensor Layer Name                   | Elements       | Shape                           | Type |\n"
-            markdown_content += "|------|---------------------------|----------------------------------------------------|----------------|---------------------------------|------|\n"
+            markdown_content += f"### <a name=\"{group.replace('.', '_')}\">{translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements</a>\n"
 
+            tensor_dump_table = []
             for tensor in tensors:
                 human_friendly_name = translate_tensor_name(tensor.name.replace(".weight", ".(W)").replace(".bias", ".(B)"))
                 prettydims = ' x '.join('{0:^5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
-                markdown_content += f"| {tensor_name_to_key[tensor.name]:4} | {tensor.name:25} | {human_friendly_name:50} | ({element_count_rounded_notation(tensor.n_elements):>4}) {tensor.n_elements:7} | [{prettydims:29}] | {tensor.tensor_type.name:4} |\n"
+                element_count_string = f"({element_count_rounded_notation(tensor.n_elements):>4}) {tensor.n_elements:7}"
+                type_name_string = f"{tensor.tensor_type.name}"
+                tensor_dump_table.append({"t_id":tensor_name_to_key[tensor.name], "layer_name":tensor.name, "human_layer_name":human_friendly_name, "element_count":element_count_string, "pretty_dims":prettydims, "tensor_type":type_name_string})
+
+            tensor_dump_table_header_map = [
+                {'key_name':'t_id',             'header_name':'T_ID',                             'align':'center'},
+                {'key_name':'layer_name',       'header_name':'Tensor Layer Name',                'align':'left'},
+                {'key_name':'human_layer_name', 'header_name':'Human Friendly Tensor Layer Name', 'align':'left'},
+                {'key_name':'element_count',    'header_name':'Elements',                         'align':'left'},
+                {'key_name':'pretty_dims',      'header_name':'Shape',                            'align':'left'},
+                {'key_name':'tensor_type',      'header_name':'Type',                             'align':'left'},
+            ]
+
+            markdown_content += markdownTableWithAlignmentSupport(tensor_dump_table_header_map, tensor_dump_table)
+
             markdown_content += "\n"
             markdown_content += f"- Total elements in {group}: ({element_count_rounded_notation(group_elements):>4}) {group_elements}\n"
             markdown_content += f"- Percentage of total elements: {group_percentage:.2f}%\n"
