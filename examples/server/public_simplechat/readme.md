@@ -44,12 +44,12 @@ http module.
 
 ### running using examples/server
 
-bin/server -m path/model.gguf --path ../examples/server/public_simplechat [--port PORT]
+./llama-server -m path/model.gguf --path examples/server/public_simplechat [--port PORT]
 
 ### running using python3's server module
 
 first run examples/server
-* bin/server -m path/model.gguf
+* ./llama-server -m path/model.gguf
 
 next run this web front end in examples/server/public_simplechat
 * cd ../examples/server/public_simplechat

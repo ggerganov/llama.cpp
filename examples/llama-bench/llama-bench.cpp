@@ -293,6 +293,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     params.output_format = cmd_params_defaults.output_format;
     params.output_format_stderr = cmd_params_defaults.output_format_stderr;
     params.reps = cmd_params_defaults.reps;
+    params.numa = cmd_params_defaults.numa;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];

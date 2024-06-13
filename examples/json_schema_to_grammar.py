@@ -523,7 +523,7 @@ class SchemaConverter:
 def main(args_in = None):
     parser = argparse.ArgumentParser(
         description='''
-            Generates a grammar (suitable for use in ./main) that produces JSON conforming to a
+            Generates a grammar (suitable for use in ./llama-cli) that produces JSON conforming to a
             given JSON schema. Only a subset of JSON schema features are supported; more may be
             added in the future.
         ''',
