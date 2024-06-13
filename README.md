@@ -622,9 +622,6 @@ python3 -m pip install -r requirements.txt
 # convert the model to ggml FP16 format
 python3 convert-hf-to-gguf.py models/mymodel/
 
-# [Optional] for models using BPE tokenizers
-python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
-
 # quantize the model to 4-bits (using Q4_K_M method)
 ./llama-quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
 
