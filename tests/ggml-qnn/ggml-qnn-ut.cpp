@@ -346,7 +346,7 @@ static void show_usage() {
         "\nUsage: test_qnn_ops [options]\n" \
         "\n" \
         "Options:\n" \
-        " -t GGML_OP_ADD / GGML_OP_MUL / GGML_OP_MULMAT\n" \
+        " -t GGML_OP_ADD / GGML_OP_MULMAT\n" \
         " -b 0(QNN_CPU) 1(QNN_GPU) 2(QNN_NPU) 3(ggml)\n" \
         " ?/h print usage infomation\n\n"
     );
@@ -418,22 +418,15 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     QNN_LOG_DEBUG("sizex: %d\n", sizex);
     QNN_LOG_DEBUG("sizey: %d\n", sizey);
 
-    if (n_ggml_op_type == GGML_OP_MUL) {
-        src0 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
-        src1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
-    } else {
-        src0 = ggml_new_tensor_2d(ctx, qtype, sizex, sizey);
-        src1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
-    }
+    src0 = ggml_new_tensor_2d(ctx, qtype, sizex, sizey);
+    src1 = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, sizex, sizey);
+
     ggml_set_input(src0);
     ggml_set_input(src1);
 
     switch (n_ggml_op_type) {
         case GGML_OP_ADD:
             dst = ggml_add(ctx, src0, src1);
-            break;
-        case GGML_OP_MUL:
-            dst = ggml_mul(ctx, src0, src1);
             break;
         case GGML_OP_MUL_MAT:
             dst = ggml_mul_mat(ctx, src0, src1);
@@ -518,8 +511,6 @@ int main(int argc, char * argv[]) {
                     n_ggml_op_type = GGML_OP_ADD;
                 } else if (0 == memcmp(argv[i + 1], "GGML_OP_MUL_MAT", 15)) {
                     n_ggml_op_type = GGML_OP_MUL_MAT;
-                } else if (0 == memcmp(argv[i + 1], "GGML_OP_MUL", 11)) {
-                    n_ggml_op_type = GGML_OP_MUL;
                 } else {
                     show_usage();
                     return 1;

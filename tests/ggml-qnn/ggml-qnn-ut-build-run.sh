@@ -12,8 +12,8 @@ ANDROID_PLATFORM=android-34
 
 GGML_QNN_UT=ggml-qnn-ut
 REMOTE_PATH=/data/local/tmp/
-BUILDTYPE=Debug
 BUILDTYPE=Release
+BUILDTYPE=Debug
 
 
 function dump_vars()
@@ -100,7 +100,7 @@ function update_qnn_libs()
     adb push ${QNN_SDK_PATH}/lib/aarch64-android/libQnnCpu.so                 ${REMOTE_PATH}/
     adb push ${QNN_SDK_PATH}/lib/aarch64-android/libQnnGpu.so                 ${REMOTE_PATH}/
 
-    #the QNN NPU(aka HTP/DSP) backend only verified on Xiaomi14(Qualcomm SM8650-AB Snapdragon 8 Gen 3) successfully
+    #the QNN NPU(aka HTP) backend only verified on Qualcomm Snapdragon 8 Gen 3 equipped Android phone
     adb push ${QNN_SDK_PATH}/lib/aarch64-android/libQnnHtp.so                 ${REMOTE_PATH}/
     adb push ${QNN_SDK_PATH}/lib/aarch64-android/libQnnHtpNetRunExtensions.so ${REMOTE_PATH}/
     adb push ${QNN_SDK_PATH}/lib/aarch64-android/libQnnHtpPrepare.so          ${REMOTE_PATH}/
@@ -142,12 +142,7 @@ function run_ggml_qnn_ut()
 
     case "$ggmlop" in
         GGML_OP_ADD)
-            echo "adb shell ${REMOTE_PATH}/${GGML_QNN_UT}  -t GGML_OP_ADD -b $qnnbackend"
             adb shell ${REMOTE_PATH}/${GGML_QNN_UT}  -t GGML_OP_ADD -b $qnnbackend
-        ;;
-
-        GGML_OP_MUL)
-            adb shell ${REMOTE_PATH}/${GGML_QNN_UT}  -t GGML_OP_MUL -b $qnnbackend
         ;;
 
         GGML_OP_MUL_MAT)
@@ -169,7 +164,6 @@ function show_usage()
     echo "  $0 build            (build Android command line UT program)"
     echo "  $0 updateqnnlibs    (upload the latest QNN libs to Android phone)"
     echo "  $0 GGML_OP_ADD      0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU) / 3(ggml)"
-    echo "  $0 GGML_OP_MUL      0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU) / 3(ggml)"
     echo "  $0 GGML_OP_MUL_MAT  0 (QNN_CPU) / 1(QNN_GPU) / 2(QNN_NPU) / 3(ggml)"
     echo -e "\n\n\n"
 }
