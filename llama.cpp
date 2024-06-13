@@ -3851,7 +3851,7 @@ struct llama_model_loader {
         size_t buffer_idx = 0; // buffer to use for async loads
 
         ggml_backend_t cuda_backend = nullptr;
-        if (!use_mmap) {
+        if (!use_mmap && !check_tensors) {
             // When not using mmaped io use async uploads from pinned memory to GPU memory.
             // First determine if the CUDA backend is active, and if so, determine the device ID.
             ggml_backend_buffer_t buf = bufs_mmap.count(0) ? bufs_mmap.at(0) : nullptr;
@@ -3939,8 +3939,7 @@ struct llama_model_loader {
 
                         size_t bytes_read = 0;
 
-                        while (bytes_read < n_size)
-                        {
+                        while (bytes_read < n_size) {
                             size_t read_iteration = std::min<size_t>(buffer_size, n_size - bytes_read);
 
                             ggml_backend_event_synchronize(events[buffer_idx]);
@@ -3981,7 +3980,6 @@ struct llama_model_loader {
             ggml_backend_free(cuda_backend);
         }
 #endif
-
 
         // check validation results
         bool validation_failed = false;
