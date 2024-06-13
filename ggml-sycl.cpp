@@ -17235,7 +17235,12 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
         case GGML_OP_CONCAT:
             {
                 ggml_type src0_type = op->src[0]->type;
-                return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16;
+                int dim = op->op_params[0];
+                return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16 && dim == 2;
+            } break;
+        case GGML_OP_ROPE:
+            {
+                return ggml_is_contiguous(op->src[0]);
             } break;
         case GGML_OP_DUP:
         case GGML_OP_NONE:
@@ -17255,7 +17260,6 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
         case GGML_OP_CONT:
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
-        case GGML_OP_ROPE:
         case GGML_OP_IM2COL:
         case GGML_OP_POOL_2D:
         case GGML_OP_SUM_ROWS:
