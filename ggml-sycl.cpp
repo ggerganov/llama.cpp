@@ -12438,26 +12438,26 @@ static void rope_neox_sycl(const T *x, T *dst, int ne0, int n_dims, int nr,
 
     const float theta_scale = powf(freq_base, -2.0f/n_dims);
 
-        dpct::has_capability_or_fail(stream->get_device(),
-                                     {sycl::aspect::fp16});
-        if (freq_factors == nullptr) {
-            stream->parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
+    dpct::has_capability_or_fail(stream->get_device(),
+                                    {sycl::aspect::fp16});
+    if (freq_factors == nullptr) {
+        stream->parallel_for(
+            sycl::nd_range<3>(block_nums * block_dims, block_dims),
+            [=](sycl::nd_item<3> item_ct1) {
                 rope_neox<T, false>(x, dst, ne0, n_dims, pos, freq_scale,
-                                        p_delta_rows, ext_factor, attn_factor,
+                                    p_delta_rows, ext_factor, attn_factor,
                                     corr_dims, theta_scale, freq_factors,
-                                        item_ct1);
-                });
-        } else {
-            stream->parallel_for(
-                sycl::nd_range<3>(block_nums * block_dims, block_dims),
-                [=](sycl::nd_item<3> item_ct1) {
+                                    item_ct1);
+            });
+    } else {
+        stream->parallel_for(
+            sycl::nd_range<3>(block_nums * block_dims, block_dims),
+            [=](sycl::nd_item<3> item_ct1) {
                 rope_neox<T, true>(x, dst, ne0, n_dims, pos, freq_scale,
-                                        p_delta_rows, ext_factor, attn_factor,
+                                    p_delta_rows, ext_factor, attn_factor,
                                     corr_dims, theta_scale, freq_factors,
-                                        item_ct1);
-                });
+                                    item_ct1);
+            });
     }
 }
 
@@ -14010,8 +14010,8 @@ inline void ggml_sycl_op_rope(const ggml_tensor *src0, const ggml_tensor *src1,
     const int32_t * pos = (const int32_t *) src1_dd;
 
     const float * freq_factors = nullptr;
-        if (src2 != nullptr) {
-            freq_factors = (const float *) src2->data;
+    if (src2 != nullptr) {
+        freq_factors = (const float *) src2->data;
     }
 
     rope_corr_dims corr_dims;
