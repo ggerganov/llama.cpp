@@ -4927,7 +4927,7 @@ static void llm_load_vocab(
         );
 
         // set attributes by model/tokenizer name
-        if (_contains_any(tokenizer_pre, {"jina-v2-"})) {
+        if (_contains_any(tokenizer_pre, {"jina-v2-de", "jina-v2-es", "jina-v2-code"})) {
             _set_token_attr("<mask>", LLAMA_TOKEN_ATTR_LSTRIP, true);
         } else if (_contains_any(model_name, {"phi-3", "phi3"})) {
             for (auto id : vocab.cache_special_tokens) {
