@@ -26,7 +26,7 @@ Related PRs:
 
 ## Tips and tricks
 
-If your prompt have multiple lines (per prompt), convert the newline to escape sequence `\n`. For example:
+If you have multiple lines per prompt, you can escape the newline character (change it to `\n`). For example:
 
 ```
 <|im_start|>system\nAct like a person who is extremely happy.<|im_end|>
