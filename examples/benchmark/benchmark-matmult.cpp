@@ -1,5 +1,6 @@
 #include "common.h"
 #include "ggml.h"
+#include "ggml-impl.h"
 
 #include <locale.h>
 #include <assert.h>
@@ -38,18 +39,6 @@ typedef struct {
     int8_t qs[QK8_0]; // quants
 } block_q8_0;
 
-static inline float ggml_compute_fp16_to_fp32(uint16_t h) {
-#if defined(__ARM_NEON)
-    __fp16 tmp;
-    memcpy(&tmp, &h, sizeof(uint16_t));
-    return (float) tmp;
-#else
-    uint16_t tmp;
-    memcpy(&tmp, &h, sizeof(uint16_t));
-    return (float) tmp;
-#endif
-}
-
 static float tensor_sum_elements(const ggml_tensor * tensor) {
     double sum                  = 0;
     float  floatvalue           = 0;
@@ -75,7 +64,7 @@ static float tensor_sum_elements(const ggml_tensor * tensor) {
         for (int j = 0; j < tensor->ne[1]; j++) {
             for (int k = 0; k < tensor->ne[0]; k++) {
                 shortvalue = ((unsigned short *) tensor->data)[j * tensor->ne[0] + k];
-                floatvalue = ggml_compute_fp16_to_fp32(shortvalue);
+                floatvalue = GGML_FP16_TO_FP32(shortvalue);
                 sum        += floatvalue;
             }
         }
@@ -87,7 +76,7 @@ static float tensor_sum_elements(const ggml_tensor * tensor) {
         for (int j = 0; j < tensor->ne[1]; j++) {
             blocks = tensor->ne[0] / QK8_0;
             for (int i = 0; i < blocks; i++) {
-                floatvalue = ggml_compute_fp16_to_fp32(quant_datas[j * blocks + i].d);
+                floatvalue = GGML_FP16_TO_FP32(quant_datas[j * blocks + i].d);
                 for (int k = 0; k < QK8_0; k++) {
                     sum += (quant_datas[j * blocks + i].qs[k] * floatvalue);
                 }
