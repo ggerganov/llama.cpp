@@ -232,7 +232,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
     markdown_content += f'There is {len(reader.fields)} key/value pair(s) in this file\n'
     markdown_content += '\n'
 
-    kv_dump_table = []
+    kv_dump_table: list[dict[str, str | int]] = []
     for n, field in enumerate(reader.fields.values(), 1):
         if not field.types:
             pretty_type = 'N/A'
@@ -278,9 +278,9 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
 
     if not args.no_tensors:
         # Group tensors by their prefix and maintain order
-        tensor_prefix_order = []
-        tensor_name_to_key = {}
-        tensor_groups = {}
+        tensor_prefix_order: list[str] = []
+        tensor_name_to_key: dict[str, int] = {}
+        tensor_groups: dict[str, list[ReaderTensor]] = {}
         total_elements = sum(tensor.n_elements for tensor in reader.tensors)
 
         # Parsing Tensors Record
@@ -320,7 +320,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             markdown_content += f"### <a name=\"{group.replace('.', '_')}\">{translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements</a>\n\n"
 
             # Precalculate pretty shape column sizing for visual consistency
-            prettify_dimension_max_widths = {}
+            prettify_dimension_max_widths: dict[int, int] = {}
             for tensor in tensors:
                 for i, dimension_size in enumerate(list(tensor.shape) + [1] * (4 - len(tensor.shape))):
                     if i in prettify_dimension_max_widths:
@@ -329,12 +329,12 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                         prettify_dimension_max_widths[i] = len(str(dimension_size))
 
             # Generate Tensor Layer Table Content
-            tensor_dump_table = []
+            tensor_dump_table: list[dict[str, str | int]] = []
             for tensor in tensors:
                 human_friendly_name = translate_tensor_name(tensor.name.replace(".weight", ".(W)").replace(".bias", ".(B)"))
-                pretty_dimension = ' x '.join(f'{str(d):^{prettify_dimension_max_widths[i]}}' for i, d in enumerate(list(tensor.shape) + [1] * (4 - len(tensor.shape))))
-                element_count_est = f"({element_count_rounded_notation(tensor.n_elements):>4})"
-                element_count_string = f"{element_count_est:>6} {tensor.n_elements:^8}"
+                pretty_dimension = ' x '.join(f'{str(d):>{prettify_dimension_max_widths[i]}}' for i, d in enumerate(list(tensor.shape) + [1] * (4 - len(tensor.shape))))
+                element_count_est = f"({element_count_rounded_notation(tensor.n_elements):>5})"
+                element_count_string = f"{element_count_est} {tensor.n_elements:>8}"
                 type_name_string = f"{tensor.tensor_type.name}"
                 tensor_dump_table.append({"t_id":tensor_name_to_key[tensor.name], "layer_name":tensor.name, "human_layer_name":human_friendly_name, "element_count":element_count_string, "pretty_dimension":pretty_dimension, "tensor_type":type_name_string})
 
