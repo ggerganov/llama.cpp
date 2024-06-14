@@ -11,15 +11,15 @@ COPY . .
 
 ENV LLAMA_CURL=1
 
-RUN make -j$(nproc) server
+RUN make -j$(nproc) llama-server
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
 
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev libgomp1
 
-COPY --from=build /app/server /server
+COPY --from=build /app/llama-server /llama-server
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/server" ]
+ENTRYPOINT [ "/llama-server" ]

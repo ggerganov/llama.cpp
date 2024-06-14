@@ -540,22 +540,12 @@ GGML_CALL static size_t ggml_backend_rpc_buffer_type_get_alloc_size(ggml_backend
     return ggml_nbytes(tensor);
 }
 
-GGML_CALL static bool ggml_backend_rpc_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
-    if (!ggml_backend_is_rpc(backend)) {
-        return false;
-    }
-    ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
-    ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
-    return buft_ctx->endpoint == rpc_ctx->endpoint;
-}
-
 static ggml_backend_buffer_type_i ggml_backend_rpc_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_rpc_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_rpc_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_rpc_buffer_type_get_alignment,
     /* .get_max_size     = */ ggml_backend_rpc_get_max_size,
     /* .get_alloc_size   = */ ggml_backend_rpc_buffer_type_get_alloc_size,
-    /* .supports_backend = */ ggml_backend_rpc_buffer_type_supports_backend,
     /* .is_host          = */ NULL,
 };
 
@@ -634,8 +624,17 @@ GGML_CALL static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t 
 GGML_CALL static bool ggml_backend_rpc_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
     UNUSED(backend);
     UNUSED(op);
-    GGML_ASSERT(false && "not implemented");
-    return false;
+    //TODO: call the remote backend and cache the results
+    return true;
+}
+
+GGML_CALL static bool ggml_backend_rpc_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
+    if (buft->iface.get_name != ggml_backend_rpc_buffer_type_name) {
+        return false;
+    }
+    ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
+    ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
+    return buft_ctx->endpoint == rpc_ctx->endpoint;
 }
 
 static ggml_backend_i ggml_backend_rpc_interface = {
@@ -648,9 +647,11 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .synchronize             = */ ggml_backend_rpc_synchronize,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
+    /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_rpc_graph_compute,
     /* .supports_op             = */ ggml_backend_rpc_supports_op,
+    /* .supports_buft           = */ ggml_backend_rpc_supports_buft,
     /* .offload_op              = */ NULL,
     /* .event_new               = */ NULL,
     /* .event_free              = */ NULL,

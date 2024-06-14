@@ -96,7 +96,7 @@ jobs:
               -DLLAMA_CURL=ON \
               -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
               -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON ;
-          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target server
+          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target llama-server
 
       - name: Tests
         id: server_integration_tests
@@ -136,7 +136,7 @@ jobs:
         id: cmake_build
         run: |
           cmake -B build -DLLAMA_CURL=ON -DCURL_LIBRARY="$env:RUNNER_TEMP/libcurl/lib/libcurl.dll.a" -DCURL_INCLUDE_DIR="$env:RUNNER_TEMP/libcurl/include"
-          cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS} --target server
+          cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS} --target llama-server
 
       - name: Python setup
         id: setup_python
