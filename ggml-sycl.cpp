@@ -11988,9 +11988,6 @@ static size_t ggml_nbytes_split(const struct ggml_tensor * tensor, int nrows_spl
     return nrows_split*ggml_row_size(tensor->type, tensor->ne[0]);
 }
 
-static ggml_tensor_extra_gpu * g_temp_tensor_extras = nullptr;
-static size_t g_temp_tensor_extra_index = 0;
-
 void ggml_sycl_set_main_device(const int main_device) try {
     if (dpct::get_current_device_id() == main_device) return;
     check_allow_gpu_index(main_device);
