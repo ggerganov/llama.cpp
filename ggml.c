@@ -911,6 +911,11 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
     return type_traits[type];
 }
 
+const ggml_type_traits_t * ggml_internal_get_type_traits_ptr(enum ggml_type type) {
+    GGML_ASSERT(type < GGML_TYPE_COUNT);
+    return &type_traits[type];
+}
+
 //
 // simd mappings
 //
