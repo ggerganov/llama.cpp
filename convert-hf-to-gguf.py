@@ -1421,7 +1421,7 @@ class BitnetModel(Model):
         if name.endswith(("q_proj.weight", "k_proj.weight", "v_proj.weight",
                           "down_proj.weight", "up_proj.weight", "gate_proj.weight",
                           "o_proj.weight")):
-            data_torch = data_torch + (self.weight_quant(data_torch) - data_torch).detach()
+            data_torch = self.weight_quant(data_torch)
 
         return [(self.map_tensor_name(name), data_torch)]
 
