@@ -33,17 +33,9 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
 }
 
 static float tensor_sum_elements(const ggml_tensor * tensor) {
-    double sum                  = 0;
-    float  floatvalue           = 0;
+    double sum                  = 0.0;
+    float  floatvalue           = 0.0f;
     unsigned short shortvalue   = 0;
-
-    if (tensor->type == GGML_TYPE_I8) {
-        for (int j = 0; j < tensor->ne[1]; j++) {
-            for (int k = 0; k < tensor->ne[0]; k++) {
-                sum += ((int8_t *) tensor->data)[j * tensor->ne[0] + k];
-            }
-        }
-    }
 
     if (tensor->type == GGML_TYPE_F16) {
         for (int j = 0; j < tensor->ne[1]; j++) {
@@ -53,17 +45,13 @@ static float tensor_sum_elements(const ggml_tensor * tensor) {
                 sum        += floatvalue;
             }
         }
-    }
-
-    if (tensor->type == GGML_TYPE_F32) {
+    } else if (tensor->type == GGML_TYPE_F32) {
         for (int j = 0; j < tensor->ne[1]; j++) {
             for (int k = 0; k < tensor->ne[0]; k++) {
                 sum += ((float *) tensor->data)[j * tensor->ne[0] + k];
             }
         }
-    }
-
-    if (ggml_is_quantized(tensor->type)) {
+    } else if (ggml_is_quantized(tensor->type)) {
         std::vector<float> f32out(ggml_nelements(tensor));
         ggml_type_traits_t qtype = ggml_internal_get_type_traits(tensor->type);
         qtype.to_float((void *)tensor->data, f32out.data(), f32out.size());
