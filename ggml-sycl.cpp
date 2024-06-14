@@ -10774,14 +10774,10 @@ static void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_ten
     ggml_tensor_extra_gpu * src1_extra = use_src1 ? (ggml_tensor_extra_gpu *) src1->extra : nullptr;
     ggml_tensor_extra_gpu * dst_extra  =            (ggml_tensor_extra_gpu *)  dst->extra;
 
-    const bool src0_on_device =             src0->backend == GGML_BACKEND_TYPE_GPU || src0->backend == GGML_BACKEND_TYPE_GPU_SPLIT;
-    const bool src1_on_device = use_src1 && src1->backend == GGML_BACKEND_TYPE_GPU;
-    const bool  dst_on_device =              dst->backend == GGML_BACKEND_TYPE_GPU;
-
     // dd = data device
-    float * src0_ddf = nullptr;
-    float * src1_ddf = nullptr;
-    float *  dst_ddf = nullptr;
+    float * src0_ddf = (float *) src0->data;
+    float * src1_ddf = use_src1 ? (float *) src1->data : nullptr;
+    float *  dst_ddf = (float *) dst->data;
 
     ggml_sycl_pool_alloc<float> src0_f(ctx.pool());
     ggml_sycl_pool_alloc<float> src1_f(ctx.pool());
@@ -10792,48 +10788,8 @@ static void ggml_sycl_op_flatten(ggml_backend_sycl_context & ctx, const ggml_ten
     // GGML_SYCL_DEBUG("ctx.device=%d, main_stream=%p src0_on_device=%d, src1_on_device=%d, dst_on_device=%d\n",
         // ctx.device, main_stream, src0_on_device, src1_on_device, dst_on_device);
 
-    if (src0_on_device) {
-        src0_ddf = (float *) src0_extra->data_device[ctx.device];
-    } else {
-        src0_ddf = src0_f.alloc(ggml_nelements(src0));
-        // GGML_SYCL_DEBUG("before ggml_sycl_cpy_tensor_2d src0_ddf=%p, src0=%p\n", src0_ddf, src0);
-        SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src0_ddf, src0, 0, 0, 0, nrows0, main_stream));
-    }
-
-    if (use_src1) {
-        if (src1_on_device) {
-            src1_ddf = (float *) src1_extra->data_device[ctx.device];
-        } else {
-            src1_ddf = src1_f.alloc(ggml_nelements(src1));
-            SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src1_ddf, src1, 0, 0, 0, nrows1, main_stream));
-        }
-    }
-    if (dst_on_device) {
-        dst_ddf = (float *) dst_extra->data_device[ctx.device];
-    } else {
-        dst_ddf = dst_f.alloc(ggml_nelements(dst));
-    }
-
-    // GGML_SYCL_DEBUG("op src0=%p, src1=%p, dst=%p, src0_ddf=%p, src1_ddf=%p, dst_ddf=%p, main_stream=%p\n",
-        // src0, src1, dst, src0_ddf, src1_ddf, dst_ddf, main_stream);
     // do the computation
     op(ctx, src0, src1, dst, src0_ddf, src1_ddf, dst_ddf, main_stream);
-    /*
-    DPCT1010:89: SYCL uses exceptions to report errors and does not use the
-    error codes. The call was replaced with 0. You need to rewrite this code.
-    */
-    SYCL_CHECK(0);
-
-    // copy dst to host if necessary
-    if (!dst_on_device) {
-        SYCL_CHECK(CHECK_TRY_ERROR(
-            main_stream->memcpy(dst->data, dst_ddf, ggml_nbytes(dst)).wait()));
-    }
-
-    if (dst->backend == GGML_BACKEND_TYPE_CPU) {
-        SYCL_CHECK(CHECK_TRY_ERROR(
-            dpct::get_current_device().queues_wait_and_throw()));
-    }
     // print_ggml_tensor("tensor", dst);
 }
 catch (sycl::exception const &exc) {
@@ -10923,7 +10879,6 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
     ggml_tensor_extra_gpu * src1_extra = (ggml_tensor_extra_gpu *) src1->extra;
     ggml_tensor_extra_gpu *  dst_extra = (ggml_tensor_extra_gpu *)  dst->extra;
 
-    const bool src0_on_device = src0->backend == GGML_BACKEND_TYPE_GPU || src0->backend == GGML_BACKEND_TYPE_GPU_SPLIT;
     const bool src0_is_contiguous = ggml_is_contiguous(src0);
     const bool src1_is_contiguous = ggml_is_contiguous(src1);
 
@@ -10995,20 +10950,20 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
 
         used_devices++;
 
-        const bool src1_on_device = src1->backend == GGML_BACKEND_TYPE_GPU && i == ctx.device;
-        const bool  dst_on_device =  dst->backend == GGML_BACKEND_TYPE_GPU && i == ctx.device;
+        const bool src1_on_device = i == ctx.device;
+        const bool  dst_on_device = i == ctx.device;
 
         ggml_sycl_set_device(i);
         queue_ptr stream = ctx.stream(i, 0);
 
-        if (src0_on_device && src0_is_contiguous) {
-            dev[i].src0_dd = (char *) src0_extra->data_device[i];
+        if (src0_is_contiguous) {
+            dev[i].src0_dd = (char *) src0->data;
         } else {
             dev[i].src0_dd = dev[i].src0_dd_alloc.alloc(ctx.pool(i), ggml_nbytes(src0));
         }
 
         if (src1_on_device && src1_is_contiguous) {
-            dev[i].src1_ddf = (float *) src1_extra->data_device[i];
+            dev[i].src1_ddf = (float *) src1->data;
         } else {
             dev[i].src1_ddf = dev[i].src1_ddf_alloc.alloc(ctx.pool(i), ggml_nelements(src1));
         }
@@ -11028,7 +10983,7 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
         }
 
         if (dst_on_device) {
-            dev[i].dst_dd = (float *) dst_extra->data_device[i];
+            dev[i].dst_dd = (float *) dst->data;
         } else {
             const size_t size_dst_ddf = split ? (dev[i].row_high - dev[i].row_low)*ne1 : ggml_nelements(dst);
             dev[i].dst_dd = dev[i].dst_dd_alloc.alloc(ctx.pool(i), size_dst_ddf);
@@ -11059,8 +11014,8 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
                 continue;
             }
 
-            const bool src1_on_device = src1->backend == GGML_BACKEND_TYPE_GPU && i == ctx.device;
-            const bool  dst_on_device =  dst->backend == GGML_BACKEND_TYPE_GPU && i == ctx.device;
+            const bool src1_on_device = i == ctx.device;
+            const bool  dst_on_device = i == ctx.device;
             const int64_t row_diff = dev[i].row_high - dev[i].row_low;
 
             ggml_sycl_set_device(i);
@@ -11091,12 +11046,12 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
 
                 // the main device memory buffer can be on VRAM scratch, with space for all partial results
                 // in that case an offset on dst_ddf_i is needed
-                if (dst->backend == GGML_BACKEND_TYPE_GPU && i == ctx.device) {
+                if (i == ctx.device) {
                     dst_dd_i += dev[i].row_low; // offset is 0 if no tensor split
                 }
 
                 // copy src0, src1 to device if necessary
-                if (src1->backend == GGML_BACKEND_TYPE_GPU && src1_is_contiguous) {
+                if (src1_is_contiguous) {
                     if (i != ctx.device) {
                         if (convert_src1_to_q8_1) {
                             char * src1_ddq_i_source = dev[ctx.device].src1_ddq + src1_ddq_i_offset;
@@ -11114,14 +11069,14 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
                                 src1_ncols * ne10 * sizeof(float))));
                         }
                     }
-                } else if (src1->backend == GGML_BACKEND_TYPE_CPU || (src1_on_device && !src1_is_contiguous)) {
+                } else if (src1_on_device && !src1_is_contiguous) {
                     SYCL_CHECK(ggml_sycl_cpy_tensor_2d(
                                    src1_ddf_i, src1, i03, i02, src1_col_0, src1_col_0+src1_ncols, stream));
                 } else {
                     GGML_ASSERT(false);
                 }
 
-                if (convert_src1_to_q8_1 && (src1->backend == GGML_BACKEND_TYPE_CPU || !src1_is_contiguous)) {
+                if (convert_src1_to_q8_1 && !src1_is_contiguous) {
                     quantize_row_q8_1_sycl(src1_ddf_i, src1_ddq_i, ne10, src1_ncols, src1_padded_col_size, stream);
                     /*
                     DPCT1010:92: SYCL uses exceptions to report errors and does
@@ -11131,7 +11086,7 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
                     SYCL_CHECK(0);
                 }
 
-                if (src1_col_0 == 0 && (!src0_on_device || !src0_is_contiguous) && i02 % i02_divisor == 0) {
+                if (src1_col_0 == 0 && !src0_is_contiguous && i02 % i02_divisor == 0) {
                     SYCL_CHECK(ggml_sycl_cpy_tensor_2d(src0_dd_i, src0, i03, i02/i02_divisor, dev[i].row_low, dev[i].row_high, stream));
                 }
                 if (src1->type == GGML_TYPE_F16) {
@@ -11149,17 +11104,7 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
 
                 // copy dst to host or other device if necessary
                 if (!dst_on_device) {
-                    void * dst_off_device;
-                    dpct::memcpy_direction kind;
-                    if (dst->backend == GGML_BACKEND_TYPE_CPU) {
-                        dst_off_device = dst->data;
-                        kind = dpct::device_to_host;
-                    } else if (dst->backend == GGML_BACKEND_TYPE_GPU) {
-                        dst_off_device = dst_extra->data_device[ctx.device];
-                        kind = dpct::device_to_device;
-                    } else {
-                        GGML_ASSERT(false);
-                    }
+                    void * dst_off_device = dst->data;
                     if (split) {
                         // src0 = weight matrix is saved as a transposed matrix for better memory layout.
                         // dst is NOT transposed.
@@ -11170,27 +11115,10 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
                         dhf_dst_i += src1_col_0*ne0 + dev[i].row_low;
 
-                        //todo, dirty solution. Need be updated when device2device memcpy() is supported.
-                        if (kind == dpct::device_to_device) {
-                            size_t dst_size = ggml_nbytes_pad(dst);
-                            float *host_buf = (float *)malloc(dst_size);
-                            SYCL_CHECK(CHECK_TRY_ERROR(dpct::async_dpct_memcpy(
-                                host_buf, ne0 * sizeof(float), dst_dd_i,
-                                row_diff * sizeof(float), row_diff * sizeof(float),
-                                src1_ncols, dpct::device_to_host, *stream)));
-                            dpct::dev_mgr::instance().get_device(i).queues_wait_and_throw();
-                            SYCL_CHECK(CHECK_TRY_ERROR(dpct::async_dpct_memcpy(
-                                dhf_dst_i, ne0 * sizeof(float), host_buf,
-                                row_diff * sizeof(float), row_diff * sizeof(float),
-                                src1_ncols, dpct::host_to_device, *main_stream)));
-                            dpct::dev_mgr::instance().get_device(ctx.device).queues_wait_and_throw();
-                            free(host_buf);
-                        } else {
-                            SYCL_CHECK(CHECK_TRY_ERROR(dpct::async_dpct_memcpy(
-                                dhf_dst_i, ne0 * sizeof(float), dst_dd_i,
-                                row_diff * sizeof(float), row_diff * sizeof(float),
-                                src1_ncols, kind, *stream)));
-                        }
+                        SYCL_CHECK(CHECK_TRY_ERROR(dpct::async_dpct_memcpy(
+                            dhf_dst_i, ne0 * sizeof(float), dst_dd_i,
+                            row_diff * sizeof(float), row_diff * sizeof(float),
+                            src1_ncols, dpct::device_to_device, *stream)));
                     } else {
                         float * dhf_dst_i = (float *) ((char *) dst_off_device + i02*nb2 + i03*nb3);
                         GGML_ASSERT(dst->nb[1] == ne0*sizeof(float));
@@ -11233,12 +11161,6 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
                         {*src0_extra->events[i][is]})));
             }
         }
-    }
-
-    if (dst->backend == GGML_BACKEND_TYPE_CPU) {
-        SYCL_CHECK(ggml_sycl_set_device(ctx.device));
-        SYCL_CHECK(CHECK_TRY_ERROR(
-            dpct::get_current_device().queues_wait_and_throw()));
     }
 }
 catch (sycl::exception const &exc) {
