@@ -4561,35 +4561,6 @@ static void llm_load_vocab(
             vocab.special_cls_id  = -1;
             vocab.special_mask_id = -1;
 
-            // For Fill-In-the-Middle (FIM)/infill models which where converted
-            // prior to support of FIM special tokens in GGUF, the following
-            // will allow those models to continue to work. The general names
-            // of the known models are currently CodeLlama (LLM_ARCH_LLAMA) and
-            // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
-            // new versions of these models have been published.
-            std::string gen_name;
-            ml.get_key(LLM_KV_GENERAL_NAME, gen_name, false);
-
-            std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
-                [](unsigned char c){ return std::tolower(c); });
-
-            if (gen_name.find("code") != std::string::npos) {
-                if (model.arch == LLM_ARCH_LLAMA) {
-                    vocab.special_prefix_id = 32007;
-                    vocab.special_suffix_id = 32008;
-                    vocab.special_middle_id = 32009;
-                    vocab.special_eot_id    = 32010;
-                } else if (model.arch == LLM_ARCH_GEMMA) {
-                    vocab.special_prefix_id = 67;
-                    vocab.special_suffix_id = 69;
-                    vocab.special_middle_id = 68;
-                    // TODO: this is not EOT, it is "file separator" token, needs fix
-                    //       https://huggingface.co/google/codegemma-7b-it/blob/9b1d9231388358c04d90bd003458f5070d97db44/tokenizer_config.json#L565-L572
-                    //vocab.special_eot_id    = 70;
-                    vocab.special_eot_id    = 107;
-                }
-            }
-
             const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
             if (add_space_prefix_keyidx != -1) {
                 vocab.add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
@@ -4773,6 +4744,45 @@ static void llm_load_vocab(
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
+        // For Fill-In-the-Middle (FIM)/infill models which where converted
+        // prior to support of FIM special tokens in GGUF, the following
+        // will allow those models to continue to work. The general names
+        // of the known models are currently CodeLlama (LLM_ARCH_LLAMA) and
+        // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
+        // new versions of these models have been published.
+        std::string gen_name;
+        ml.get_key(LLM_KV_GENERAL_NAME, gen_name, false);
+
+        std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
+            [](unsigned char c){ return std::tolower(c); });
+
+        if (gen_name.find("code") != std::string::npos) {
+            if (model.arch == LLM_ARCH_LLAMA
+              && 32010 < vocab.id_to_token.size()
+              && vocab.id_to_token[32007].text == "<PRE>"
+              && vocab.id_to_token[32008].text == "<SUF>"
+              && vocab.id_to_token[32009].text == "<MID>"
+              && vocab.id_to_token[32010].text == "<EOT>") {
+                vocab.special_prefix_id = 32007;
+                vocab.special_suffix_id = 32008;
+                vocab.special_middle_id = 32009;
+                vocab.special_eot_id    = 32010;
+            } else if (model.arch == LLM_ARCH_GEMMA
+              && 107 < vocab.id_to_token.size()
+              && vocab.id_to_token[67].text == "<|fim_prefix|>"
+              && vocab.id_to_token[69].text == "<|fim_suffix|>"
+              && vocab.id_to_token[68].text == "<|fim_middle|>"
+              && vocab.id_to_token[107].text == "<end_of_turn>") {
+                vocab.special_prefix_id = 67;
+                vocab.special_suffix_id = 69;
+                vocab.special_middle_id = 68;
+                // TODO: this is not EOT, it is "file separator" token, needs fix
+                //       https://huggingface.co/google/codegemma-7b-it/blob/9b1d9231388358c04d90bd003458f5070d97db44/tokenizer_config.json#L565-L572
+                //vocab.special_eot_id    = 70;
+                vocab.special_eot_id    = 107;
+            }
+        }
+
         try {
             vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
         } catch (const std::exception & e) {
