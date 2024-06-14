@@ -8877,7 +8877,7 @@ static void rope_norm(
     const int i = row*ne0 + i0;
     const int i2 = row/p_delta_rows;
 
-    const float theta_base = pos[i2]*powf(theta_scale, i0/2.0f);
+    const float theta_base = pos[i2]*sycl::pow(theta_scale, i0/2.0f);
     const float freq_factor = has_ff ? freq_factors[i0 / 2] : 1.0f;
 
     float cos_theta, sin_theta;
@@ -8919,7 +8919,7 @@ static void rope_neox(const T *x, T *dst, int ne0, int n_dims,
     const int i  = row*ne0 + i0/2;
     const int i2 = row/p_delta_rows;
 
-    const float theta_base = pos[i2]*powf(theta_scale, i0/2.0f);
+    const float theta_base = pos[i2]*sycl::pow(theta_scale, i0/2.0f);
     const float freq_factor = has_ff ? freq_factors[i0/2] : 1.0f;
 
     float cos_theta, sin_theta;
@@ -12388,7 +12388,7 @@ static void rope_norm_sycl(const T *x, T *dst, int ne0, int n_dims, int nr,
     const int n_blocks_x = (ne0 + 2*SYCL_ROPE_BLOCK_SIZE - 1) / (2*SYCL_ROPE_BLOCK_SIZE);
     const sycl::range<3> block_nums(1, n_blocks_x, nr);
 
-    const float theta_scale = powf(freq_base, -2.0f/n_dims);
+    const float theta_scale = sycl::pow(freq_base, -2.0f/n_dims);
 
     if (freq_factors == nullptr) {
         /*
@@ -12436,7 +12436,7 @@ static void rope_neox_sycl(const T *x, T *dst, int ne0, int n_dims, int nr,
     const int n_blocks_x = (ne0 + 2*SYCL_ROPE_BLOCK_SIZE - 1) / (2*SYCL_ROPE_BLOCK_SIZE);
     const sycl::range<3> block_nums(1, n_blocks_x, nr);
 
-    const float theta_scale = powf(freq_base, -2.0f/n_dims);
+    const float theta_scale = sycl::pow(freq_base, -2.0f/n_dims);
 
     dpct::has_capability_or_fail(stream->get_device(),
                                     {sycl::aspect::fp16});
@@ -12575,8 +12575,8 @@ static void soft_max_f32_sycl(const float * x, const float * mask,
     const uint32_t n_head_kv   = nrows_x/nrows_y;
     const uint32_t n_head_log2 = 1u << (uint32_t) floorf(log2f((float) n_head_kv));
 
-    const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
-    const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
+    const float m0 = sycl::pow(2.0f, -(max_bias       ) / n_head_log2);
+    const float m1 = sycl::pow(2.0f, -(max_bias / 2.0f) / n_head_log2);
 
     const size_t local_mem_size = stream->get_device().get_info<sycl::info::device::local_mem_size>();
     if (n_local_scratch*sizeof(float) < local_mem_size) {
