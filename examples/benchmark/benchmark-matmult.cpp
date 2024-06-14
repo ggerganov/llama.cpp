@@ -71,8 +71,23 @@ static float tensor_sum_elements(const ggml_tensor * tensor) {
     }
 
     if (tensor->type == GGML_TYPE_Q8_0) {
-        int blocks = 0;
         block_q8_0 * quant_datas = (block_q8_0 *)tensor->data;
+#if 1
+        ggml_type_traits_t qtype = ggml_internal_get_type_traits(tensor->type);
+        float * float32 = (float*)malloc((tensor->ne[0] * tensor->ne[1]) * sizeof(float));
+        if (NULL == float32) {
+            printf("malloc failed\n");
+            return 0.0;
+        }
+        qtype.to_float(quant_datas, float32, tensor->ne[0] * tensor->ne[1]);
+        for (int j = 0; j < tensor->ne[1]; j++) {
+            for (int k = 0; k < tensor->ne[0]; k++) {
+                sum += float32[j * tensor->ne[0] + k];
+            }
+        }
+        free(float32);
+#else
+        int blocks = 0;
         for (int j = 0; j < tensor->ne[1]; j++) {
             blocks = tensor->ne[0] / QK8_0;
             for (int i = 0; i < blocks; i++) {
@@ -82,6 +97,7 @@ static float tensor_sum_elements(const ggml_tensor * tensor) {
                 }
             }
         }
+#endif
     }
 
     return sum;
