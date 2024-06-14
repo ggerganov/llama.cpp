@@ -32,25 +32,10 @@ static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * 
     ggml_graph_compute(graph, &plan);
 }
 
-#define QK8_0 32
-
-typedef struct {
-    uint16_t d;       // delta
-    int8_t qs[QK8_0]; // quants
-} block_q8_0;
-
 static float tensor_sum_elements(const ggml_tensor * tensor) {
     double sum                  = 0;
     float  floatvalue           = 0;
     unsigned short shortvalue   = 0;
-
-    if (tensor->type == GGML_TYPE_F32) {
-        for (int j = 0; j < tensor->ne[1]; j++) {
-            for (int k = 0; k < tensor->ne[0]; k++) {
-                sum += ((float *) tensor->data)[j * tensor->ne[0] + k];
-            }
-        }
-    }
 
     if (tensor->type == GGML_TYPE_I8) {
         for (int j = 0; j < tensor->ne[1]; j++) {
@@ -70,34 +55,21 @@ static float tensor_sum_elements(const ggml_tensor * tensor) {
         }
     }
 
-    if (tensor->type == GGML_TYPE_Q8_0) {
-        block_q8_0 * quant_datas = (block_q8_0 *)tensor->data;
-#if 1
-        ggml_type_traits_t qtype = ggml_internal_get_type_traits(tensor->type);
-        float * float32 = (float*)malloc((tensor->ne[0] * tensor->ne[1]) * sizeof(float));
-        if (NULL == float32) {
-            printf("malloc failed\n");
-            return 0.0;
-        }
-        qtype.to_float(quant_datas, float32, tensor->ne[0] * tensor->ne[1]);
+    if (tensor->type == GGML_TYPE_F32) {
         for (int j = 0; j < tensor->ne[1]; j++) {
             for (int k = 0; k < tensor->ne[0]; k++) {
-                sum += float32[j * tensor->ne[0] + k];
+                sum += ((float *) tensor->data)[j * tensor->ne[0] + k];
             }
         }
-        free(float32);
-#else
-        int blocks = 0;
-        for (int j = 0; j < tensor->ne[1]; j++) {
-            blocks = tensor->ne[0] / QK8_0;
-            for (int i = 0; i < blocks; i++) {
-                floatvalue = GGML_FP16_TO_FP32(quant_datas[j * blocks + i].d);
-                for (int k = 0; k < QK8_0; k++) {
-                    sum += (quant_datas[j * blocks + i].qs[k] * floatvalue);
-                }
-            }
+    }
+
+    if (ggml_is_quantized(tensor->type)) {
+        std::vector<float> f32out(ggml_nelements(tensor));
+        ggml_type_traits_t qtype = ggml_internal_get_type_traits(tensor->type);
+        qtype.to_float((void *)tensor->data, f32out.data(), f32out.size());
+        for (const float & value : f32out) {
+            sum += value;
         }
-#endif
     }
 
     return sum;
