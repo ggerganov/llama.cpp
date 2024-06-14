@@ -882,8 +882,8 @@ static __device__ __forceinline__ void vec_dot_q2_K_q8_1_dp4a(
     const int * __restrict__ x_qs, const half2 * __restrict__ x_dm, const int * __restrict__ x_sc,
     const int * __restrict__ y, float * __restrict__ sum, const int & k0) {
 
-    const int   * y_qs  = (const int   *) y + 4;
-    const half2 * y_ds  = (const half2 *) y;
+    const int   * y_qs = (const int   *) y + 4;
+    const float * y_df = (const float *) y;
 
 #pragma unroll
     for (int j0 = 0; j0 < mmq_x; j0 += nwarps) {
@@ -895,7 +895,7 @@ static __device__ __forceinline__ void vec_dot_q2_K_q8_1_dp4a(
 
             sum[j0/nwarps*mmq_y/WARP_SIZE + i0/WARP_SIZE] += vec_dot_q2_K_q8_1_impl_mmq(
                 &x_qs[i*(WARP_SIZE + 1) + k0], &y_qs[j*MMQ_TILE_Y_K + (QR2_K*k0) % WARP_SIZE],
-                &x_dm[i*(WARP_SIZE + 1) + k0], y_ds[j*MMQ_TILE_Y_K + ((QR2_K*k0) % WARP_SIZE)/QI8_1]);
+                &x_dm[i*(WARP_SIZE + 1) + k0], y_df[j*MMQ_TILE_Y_K + ((QR2_K*k0) % WARP_SIZE)/QI8_1]);
         }
     }
 }
@@ -911,7 +911,7 @@ static __device__ __forceinline__ void vec_dot_q2_K_q8_1_mma(
     typedef mma_int_C_I16J8 mma_C;
 
     const int   * y_qs = (const int   *) y + 4;
-    const half2 * y_ds = (const half2 *) y;
+    const float * y_df = (const float *) y;
 
     const int i0 = threadIdx.y*mma_A::I;
     static_assert(nwarps*mma_A::I == mmq_y, "nwarps*mma_A::I != mmq_y");
@@ -944,10 +944,10 @@ static __device__ __forceinline__ void vec_dot_q2_K_q8_1_mma(
 
 #pragma unroll
     for (int j0 = 0; j0 < mmq_x; j0 += mma_int_B_J8K8::J) {
-        mma_C C[2];
+        mma_C Cd[2];
+        mma_C Cm[2];
         mma_B B[2];
         float dB[mma_C::ne/2];
-        float sB[mma_C::ne/2][2];
 
 #pragma unroll
         for (int l = 0; l < mma_B::ne; ++l) {
@@ -961,20 +961,21 @@ static __device__ __forceinline__ void vec_dot_q2_K_q8_1_mma(
         for (int l = 0; l < mma_C::ne/2; ++l) {
             const int j = j0 + mma_C::get_j(l);
 
-            const half2 tmp = y_ds[j*MMQ_TILE_Y_K + ((4*k0)/QI8_1) % (WARP_SIZE/QI8_1)];
-            dB[l] = __low2float(tmp);
-
-            const int8_t * sBi = (const int8_t *) &tmp.y;
-            sB[l][0] = (127.0f/8.0f)*sBi[0];
-            sB[l][1] = (127.0f/8.0f)*sBi[1];
+            dB[l] = y_df[j*MMQ_TILE_Y_K + ((4*k0)/QI8_1) % (WARP_SIZE/QI8_1)];
         }
 
-        C[0].mma_K4(A[0], B[0]);
-        C[1].mma_K4(A[1], B[1]);
+        Cd[0].mma_K4(A[0], B[0]);
+        Cd[1].mma_K4(A[1], B[1]);
+
+        mma_A A1;
+        A1.x[0] = 0x01010101;
+        A1.x[1] = 0x01010101;
+        Cm[0].mma_K4(A1, B[0]);
+        Cm[1].mma_K4(A1, B[1]);
 
 #pragma unroll
         for (int l = 0; l < mma_C::ne; ++l) {
-            sum[(j0/mma_B::J)*mma_C::ne + l] += (C[0].x[l]*dA[l/2][0] + C[1].x[l]*dA[l/2][1] + mA[l/2][0]*sB[l%2][0] + mA[l/2][1]*sB[l%2][1])*dB[l%2];
+            sum[(j0/mma_B::J)*mma_C::ne + l] += (Cd[0].x[l]*dA[l/2][0] + Cd[1].x[l]*dA[l/2][1] - Cm[0].x[l]*mA[l/2][0] - Cm[1].x[l]*mA[l/2][1])*dB[l%2];
         }
     }
 #else
@@ -1870,26 +1871,24 @@ struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_Q6_K> {
     static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q6_K_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
 
-static int mmq_need_sum(const ggml_type type_x) {
+static bool mmq_need_sum(const ggml_type type_x) {
     switch (type_x) {
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
-            return 1;
+            return true;
         case GGML_TYPE_Q5_0:
-            return 0;
+            return false;
         case GGML_TYPE_Q5_1:
-            return 1;
+            return true;
         case GGML_TYPE_Q8_0:
-            return 0;
         case GGML_TYPE_Q2_K:
-            return 2;
         case GGML_TYPE_Q3_K:
-            return 0;
+            return false;
         case GGML_TYPE_Q4_K:
         case GGML_TYPE_Q5_K:
-            return 1;
+            return true;
         case GGML_TYPE_Q6_K:
-            return 0;
+            return false;
         default:
             GGML_ASSERT(false);
             break;

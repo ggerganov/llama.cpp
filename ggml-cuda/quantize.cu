@@ -1,5 +1,4 @@
 #include "quantize.cuh"
-#include <cmath>
 #include <cstdint>
 
 static __global__ void quantize_q8_1(const float * __restrict__ x, void * __restrict__ vy, const int64_t kx, const int64_t kx0_padded) {
@@ -38,7 +37,7 @@ static __global__ void quantize_q8_1(const float * __restrict__ x, void * __rest
     reinterpret_cast<half&>(y[ib].ds.y) = sum;
 }
 
-template <int need_sum>
+template <bool need_sum>
 static __global__ void quantize_mmq_q8_1(
     const float * __restrict__ x, void * __restrict__ vy, const int64_t kx0, const int64_t kx1, const int64_t kx0_padded) {
 
@@ -61,48 +60,24 @@ static __global__ void quantize_mmq_q8_1(
 
     amax = warp_reduce_max(amax);
 
+    float sum;
+    if (need_sum) {
+        sum = warp_reduce_sum(xi);
+    }
+
     const float d = amax / 127;
     const int8_t q = amax == 0.0f ? 0 : roundf(xi / d);
 
     y[ib].qs[iqs] = q;
 
-    static_assert(need_sum >= 0 && need_sum <= 2, "Invalid need_sum value.");
-    if (need_sum == 0) {
-        if (iqs % QK8_1 != 0) {
-            return;
-        }
+    if (iqs % QK8_1 != 0) {
+        return;
+    }
 
-        ((float *) y[ib].ds)[iqs/QK8_1] = d;
-    } else if (need_sum == 1) {
-        const float sum = warp_reduce_sum(xi);
-
-        if (iqs % QK8_1 != 0) {
-            return;
-        }
-
+    if (need_sum) {
         y[ib].ds[iqs/QK8_1] = make_half2(d, sum);
     } else {
-        float sum = xi;
-
-        // Calculate sum per 16 values:
-#pragma unroll
-        for (int mask = 8; mask > 0; mask >>= 1) {
-            sum += __shfl_xor_sync(0xffffffff, sum, mask, 32);
-        }
-
-        if (iqs % (QK8_1/2) != 0) {
-            return;
-        }
-
-        int8_t * si = (int8_t *) &y[ib].ds[iqs/QK8_1].y;
-        const int tmp = roundf(amax == 0.0f ? 0.0f : -8*sum/amax);
-        si[(iqs % QK8_1)/(QK8_1/2)] = min(tmp, 127);
-
-        if (iqs % QK8_1 != 0) {
-            return;
-        }
-
-        reinterpret_cast<half&>(y[ib].ds[iqs/QK8_1].x) = d;
+        ((float *) y[ib].ds)[iqs/QK8_1] = d;
     }
 }
 
@@ -129,14 +104,9 @@ void quantize_mmq_q8_1_cuda(
     const int64_t block_num_x = (kx0_padded + CUDA_QUANTIZE_BLOCK_SIZE - 1) / CUDA_QUANTIZE_BLOCK_SIZE;
     const dim3 num_blocks(block_num_x, kx1, channels);
     const dim3 block_size(CUDA_QUANTIZE_BLOCK_SIZE, 1, 1);
-    const int need_sum = mmq_need_sum(type_x);
-    if (need_sum == 0) {
-        quantize_mmq_q8_1<0><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
-    } else if (need_sum == 1) {
-        quantize_mmq_q8_1<1><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
-    } else if (need_sum == 2) {
-        quantize_mmq_q8_1<2><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
+    if (mmq_need_sum(type_x)) {
+        quantize_mmq_q8_1<true><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
     } else {
-        GGML_ASSERT(false);
+        quantize_mmq_q8_1<false><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
     }
 }
