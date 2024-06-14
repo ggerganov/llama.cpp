@@ -671,7 +671,7 @@ GGML_API GGML_CALL ggml_backend_buffer_type_t ggml_backend_rpc_buffer_type(const
     }
     auto sock = get_socket(endpoint);
     if (sock == nullptr) {
-        return nullptr;
+        throw std::runtime_error("Failed to connect to " + std::string(endpoint));
     }
     size_t alignment = get_alignment(sock);
     size_t max_size = get_max_size(sock);
