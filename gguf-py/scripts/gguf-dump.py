@@ -101,7 +101,7 @@ def dump_metadata_json(reader: GGUFReader, args: argparse.Namespace) -> None:
     json.dump(result, sys.stdout)
 
 
-def markdownTableWithAlignmentSupport(header_map: list[dict[str, str]], data: list[dict[str, Any]]):
+def markdown_table_with_alignment_support(header_map: list[dict[str, str]], data: list[dict[str, Any]]):
     # JSON to Markdown table formatting: https://stackoverflow.com/a/72983854/2850957
 
     # Alignment Utility Function
@@ -272,7 +272,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
         {'key_name':'value',            'header_name':'Value',    'align':'left'},
     ]
 
-    markdown_content += markdownTableWithAlignmentSupport(kv_dump_table_header_map, kv_dump_table)
+    markdown_content += markdown_table_with_alignment_support(kv_dump_table_header_map, kv_dump_table)
 
     markdown_content += "\n"
 
@@ -319,24 +319,35 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             group_percentage = group_elements / total_elements * 100
             markdown_content += f"### <a name=\"{group.replace('.', '_')}\">{translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements</a>\n\n"
 
+            # Precalculate pretty shape column sizing for visual consistency
+            prettify_dimension_max_widths = {}
+            for tensor in tensors:
+                for i, dimension_size in enumerate(list(tensor.shape) + [1] * (4 - len(tensor.shape))):
+                    if i in prettify_dimension_max_widths:
+                        prettify_dimension_max_widths[i] = max(prettify_dimension_max_widths[i], len(str(dimension_size)))
+                    else:
+                        prettify_dimension_max_widths[i] = len(str(dimension_size))
+
+            # Generate Tensor Layer Table Content
             tensor_dump_table = []
             for tensor in tensors:
                 human_friendly_name = translate_tensor_name(tensor.name.replace(".weight", ".(W)").replace(".bias", ".(B)"))
-                prettydims = ' x '.join('{0:^5}'.format(d) for d in list(tensor.shape) + [1] * (4 - len(tensor.shape)))
-                element_count_string = f"({element_count_rounded_notation(tensor.n_elements):>4}) {tensor.n_elements:7}"
+                pretty_dimension = ' x '.join(f'{str(d):^{prettify_dimension_max_widths[i]}}' for i, d in enumerate(list(tensor.shape) + [1] * (4 - len(tensor.shape))))
+                element_count_est = f"({element_count_rounded_notation(tensor.n_elements):>4})"
+                element_count_string = f"{element_count_est:>6} {tensor.n_elements:^8}"
                 type_name_string = f"{tensor.tensor_type.name}"
-                tensor_dump_table.append({"t_id":tensor_name_to_key[tensor.name], "layer_name":tensor.name, "human_layer_name":human_friendly_name, "element_count":element_count_string, "pretty_dims":prettydims, "tensor_type":type_name_string})
+                tensor_dump_table.append({"t_id":tensor_name_to_key[tensor.name], "layer_name":tensor.name, "human_layer_name":human_friendly_name, "element_count":element_count_string, "pretty_dimension":pretty_dimension, "tensor_type":type_name_string})
 
             tensor_dump_table_header_map = [
                 {'key_name':'t_id',             'header_name':'T_ID',                             'align':'right'},
                 {'key_name':'layer_name',       'header_name':'Tensor Layer Name',                'align':'left'},
                 {'key_name':'human_layer_name', 'header_name':'Human Friendly Tensor Layer Name', 'align':'left'},
                 {'key_name':'element_count',    'header_name':'Elements',                         'align':'left'},
-                {'key_name':'pretty_dims',      'header_name':'Shape',                            'align':'left'},
+                {'key_name':'pretty_dimension', 'header_name':'Shape',                            'align':'left'},
                 {'key_name':'tensor_type',      'header_name':'Type',                             'align':'left'},
             ]
 
-            markdown_content += markdownTableWithAlignmentSupport(tensor_dump_table_header_map, tensor_dump_table)
+            markdown_content += markdown_table_with_alignment_support(tensor_dump_table_header_map, tensor_dump_table)
 
             markdown_content += "\n"
             markdown_content += f"- Total elements in {group}: ({element_count_rounded_notation(group_elements):>4}) {group_elements}\n"
