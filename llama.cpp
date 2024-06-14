@@ -4713,6 +4713,9 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "smaug-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMAUG;
+            } else if (
+                tokenizer_pre == "poro-chat") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_PORO;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -13026,6 +13029,11 @@ struct llm_tokenizer_bpe {
                             // original regex from tokenizer.json
                             // "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
                             "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+                        });
+                        break;
+                    case LLAMA_VOCAB_PRE_TYPE_PORO:
+                        word_collection = unicode_regex_split(text, {
+                            " ?[^(\\s|.,!?…。，、।۔،)]+",
                         });
                         break;
                     default:
