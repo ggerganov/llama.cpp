@@ -772,8 +772,15 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                 bpe_offsets = unicode_regex_split_stl(text_collapsed, regex_expr_collapsed, bpe_offsets);
             } else {
                 // no unicode category used, we can use std::wregex directly
-                const std::wstring wtext       = unicode_wstring_from_utf8(text);
                 const std::wstring wregex_expr = unicode_wstring_from_utf8(regex_expr);
+
+                // std::wregex \s does not mach non-ASCII whitespaces, using 0x0B as fallback
+                std::wstring wtext(cpts.begin(), cpts.end());
+                for (size_t i = 0; i < wtext.size(); ++i) {
+                    if (wtext[i] > 0x7F && unicode_cpt_flags(wtext[i]).is_whitespace) {
+                        wtext[i] = 0x0B;
+                    }
+                }
 
                 //printf("text: %s\n", text.c_str());
                 //printf("regex_expr: %s\n", regex_expr.c_str());
