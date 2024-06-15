@@ -6625,16 +6625,6 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
         }
 #endif
 
-#ifdef GGML_USE_SYCL
-        if (params.split_mode == LLAMA_SPLIT_MODE_NONE) {
-            ggml_backend_sycl_set_single_device_mode(params.main_gpu);
-            //SYCL use device index (0, 1, 2) directly, uer input device id, then convert to device index.
-            params.main_gpu = ggml_backend_sycl_get_device_index(params.main_gpu);
-        } else {
-            ggml_backend_sycl_set_mul_device_mode();
-        }
-#endif
-
         if (!llm_load_tensors(
             ml, model, params.n_gpu_layers, params.split_mode,  params.main_gpu, params.tensor_split, params.use_mlock,
             params.progress_callback, params.progress_callback_user_data
@@ -16241,8 +16231,7 @@ struct llama_context * llama_new_context_with_model(
         if (model->split_mode == LLAMA_SPLIT_MODE_NONE || model->split_mode == LLAMA_SPLIT_MODE_ROW) {
             ggml_backend_t backend = ggml_backend_sycl_init(model->main_gpu);
             if (backend == nullptr) {
-                int main_gpu_id = ggml_backend_sycl_get_device_id(model->main_gpu);
-                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d) backend\n", __func__, main_gpu_id, model->main_gpu);
+                LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d backend\n", __func__, model->main_gpu);
                 llama_free(ctx);
                 return nullptr;
             }
