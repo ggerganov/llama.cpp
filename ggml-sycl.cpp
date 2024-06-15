@@ -6220,7 +6220,7 @@ static void norm_f32_sycl(const float *x, float *dst, const int ncols,
         });
     } else {
         // FIXME: 1024 from cuda
-        const int work_group_size = 1024;
+        const int work_group_size = GROUP_SIZE;
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:17: The work-group size passed to the SYCL kernel may exceed
@@ -6266,7 +6266,7 @@ static void group_norm_f32_sycl(const float *x, float *dst,
                     });
         });
     } else {
-        const int work_group_size = 1024;
+        const int work_group_size = GROUP_SIZE;
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:18: The work-group size passed to the SYCL kernel may exceed
@@ -6355,7 +6355,7 @@ static void rms_norm_f32_sycl(const float *x, float *dst, const int ncols,
                     });
         });
     } else {
-        const int work_group_size = 1024;
+        const int work_group_size = GROUP_SIZE;
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:19: The work-group size passed to the SYCL kernel may exceed
@@ -9115,8 +9115,6 @@ static void argsort_f32_i32_sycl(const float *x, int *dst, const int ncols,
     const sycl::range<3> block_nums(1, nrows, 1);
     const size_t shared_mem = ncols_pad * sizeof(int);
 
-    // GGML_ASSERT(shared_mem <= ggml_cuda_info().devices[ggml_cuda_get_device()].smpb);
-
     if (order == GGML_SORT_ORDER_ASC) {
         stream->submit([&](sycl::handler &cgh) {
             sycl::local_accessor<uint8_t, 1> dpct_local_acc_ct1(
@@ -9189,7 +9187,7 @@ static void soft_max_f32_sycl(const float * x, const float * mask,
                               const int nrows_y, const float scale, const float max_bias,
                               queue_ptr stream) {
     int nth = WARP_SIZE;
-    int max_block_size = 1024;
+    int max_block_size = GROUP_SIZE;
     while (nth < ncols_x && nth < max_block_size) nth *= 2;
     if (nth>max_block_size) nth = max_block_size;
 
@@ -9572,8 +9570,8 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
 
 std::unique_ptr<ggml_sycl_pool> ggml_backend_sycl_context::new_pool_for_device(queue_ptr qptr, int device) {
     // TBD: NO VMM support
-    // if (ggml_cuda_info().devices[device].vmm) {
-    //     return std::unique_ptr<ggml_cuda_pool>(new ggml_cuda_pool_vmm(device));
+    // if (ggml_sycl_info().devices[device].vmm) {
+    //     return std::unique_ptr<ggml_sycl_pool>(new ggml_sycl_pool_vmm(device));
     // }
    return std::unique_ptr<ggml_sycl_pool>(new ggml_sycl_pool_leg(qptr, device));
 }
