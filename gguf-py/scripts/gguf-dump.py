@@ -14,7 +14,7 @@ import numpy as np
 if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from gguf import GGUFReader, GGUFValueType  # noqa: E402
+from gguf import GGUFReader, GGUFValueType, ReaderTensor  # noqa: E402
 
 logger = logging.getLogger("gguf-dump")
 
@@ -319,22 +319,23 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             group_percentage = group_elements / total_elements * 100
             markdown_content += f"### <a name=\"{group.replace('.', '_')}\">{translate_tensor_name(group)} Tensor Group : {element_count_rounded_notation(group_elements)} Elements</a>\n\n"
 
-            # Precalculate pretty shape column sizing for visual consistency
+            # Precalculate column sizing for visual consistency
+            prettify_element_est_count_size: int = 1
+            prettify_element_count_size: int = 1
             prettify_dimension_max_widths: dict[int, int] = {}
             for tensor in tensors:
+                prettify_element_est_count_size = max(prettify_element_est_count_size, len(str(element_count_rounded_notation(tensor.n_elements))))
+                prettify_element_count_size = max(prettify_element_count_size, len(str(tensor.n_elements)))
                 for i, dimension_size in enumerate(list(tensor.shape) + [1] * (4 - len(tensor.shape))):
-                    if i in prettify_dimension_max_widths:
-                        prettify_dimension_max_widths[i] = max(prettify_dimension_max_widths[i], len(str(dimension_size)))
-                    else:
-                        prettify_dimension_max_widths[i] = len(str(dimension_size))
+                    prettify_dimension_max_widths[i] = max(prettify_dimension_max_widths.get(i,1), len(str(dimension_size)))
 
             # Generate Tensor Layer Table Content
             tensor_dump_table: list[dict[str, str | int]] = []
             for tensor in tensors:
                 human_friendly_name = translate_tensor_name(tensor.name.replace(".weight", ".(W)").replace(".bias", ".(B)"))
                 pretty_dimension = ' x '.join(f'{str(d):>{prettify_dimension_max_widths[i]}}' for i, d in enumerate(list(tensor.shape) + [1] * (4 - len(tensor.shape))))
-                element_count_est = f"({element_count_rounded_notation(tensor.n_elements):>5})"
-                element_count_string = f"{element_count_est} {tensor.n_elements:>8}"
+                element_count_est = f"({element_count_rounded_notation(tensor.n_elements):>{prettify_element_est_count_size}})"
+                element_count_string = f"{element_count_est} {tensor.n_elements:>{prettify_element_count_size}}"
                 type_name_string = f"{tensor.tensor_type.name}"
                 tensor_dump_table.append({"t_id":tensor_name_to_key[tensor.name], "layer_name":tensor.name, "human_layer_name":human_friendly_name, "element_count":element_count_string, "pretty_dimension":pretty_dimension, "tensor_type":type_name_string})
 
