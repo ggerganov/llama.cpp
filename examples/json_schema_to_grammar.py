@@ -29,9 +29,8 @@ class BuiltinRule:
         self.content = content
         self.deps = deps or []
 
-# whitespace is constrained to a single space char to prevent model "running away" in
-# whitespace. Also maybe improves generation quality?
-SPACE_RULE = '" "?'
+# Constraining spaces to prevent model "running away".
+SPACE_RULE = '| " " | "\\n" [ \\t]{0,20}'
 
 PRIMITIVE_RULES = {
     'boolean'      : BuiltinRule('("true" | "false") space', []),
@@ -43,7 +42,7 @@ PRIMITIVE_RULES = {
     'object'       : BuiltinRule('"{" space ( string ":" space value ("," space string ":" space value)* )? "}" space', ['string', 'value']),
     'array'        : BuiltinRule('"[" space ( value ("," space value)* )? "]" space', ['value']),
     'uuid'         : BuiltinRule(r'"\"" [0-9a-fA-F]{8} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{4} "-" [0-9a-fA-F]{12} "\"" space', []),
-    'char'         : BuiltinRule(r'[^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})', []),
+    'char'         : BuiltinRule(r'[^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})', []),
     'string'       : BuiltinRule(r'"\"" char* "\"" space', ['char']),
     'null'         : BuiltinRule('"null" space', []),
 }
@@ -524,7 +523,7 @@ class SchemaConverter:
 def main(args_in = None):
     parser = argparse.ArgumentParser(
         description='''
-            Generates a grammar (suitable for use in ./main) that produces JSON conforming to a
+            Generates a grammar (suitable for use in ./llama-cli) that produces JSON conforming to a
             given JSON schema. Only a subset of JSON schema features are supported; more may be
             added in the future.
         ''',

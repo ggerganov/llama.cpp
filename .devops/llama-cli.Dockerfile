@@ -9,15 +9,15 @@ WORKDIR /app
 
 COPY . .
 
-RUN make -j$(nproc) main
+RUN make -j$(nproc) llama-cli
 
 FROM ubuntu:$UBUNTU_VERSION as runtime
 
 RUN apt-get update && \
     apt-get install -y libgomp1
 
-COPY --from=build /app/main /main
+COPY --from=build /app/llama-cli /llama-cli
 
 ENV LC_ALL=C.utf8
 
-ENTRYPOINT [ "/main" ]
+ENTRYPOINT [ "/llama-cli" ]

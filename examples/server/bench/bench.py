@@ -245,7 +245,7 @@ def start_server(args):
 
 def start_server_background(args):
     # Start the server
-    server_path = '../../../build/bin/server'
+    server_path = '../../../build/bin/llama-server'
     if 'LLAMA_SERVER_BIN_PATH' in os.environ:
         server_path = os.environ['LLAMA_SERVER_BIN_PATH']
     server_args = [

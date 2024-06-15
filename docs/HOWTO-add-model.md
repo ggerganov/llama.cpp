@@ -100,7 +100,7 @@ Have a look at existing implementation like `build_llama`, `build_dbrx` or `buil
 
 When implementing a new graph, please note that the underlying `ggml` backends might not support them all, support for missing backend operations can be added in another PR.
 
-Note: to debug the inference graph: you can use [eval-callback](../examples/eval-callback).
+Note: to debug the inference graph: you can use [llama-eval-callback](../examples/eval-callback).
 
 ## GGUF specification
 
