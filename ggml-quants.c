@@ -3333,12 +3333,11 @@ size_t quantize_i2_s(const float * restrict src, void * restrict dst, int64_t nr
     int n = nrow * n_per_row;
 
     // f32 -> q8
-    double i2_scale = 0;
-    for (int i=0; i<n; i++) {
-        if (fabs((double)(src[i])) > 1e-6) {
-            i2_scale = (double)src[i];
-        }
+    double max = 0;
+    for (int i = 0; i < n; ++i) {
+        max = MAX(max, (double)fabs((double)src[i]));
     }
+    double i2_scale = max;
 
     uint8_t* q8 = (uint8_t*)dst;
     for (int i=0; i<n; i++) {
@@ -3363,11 +3362,9 @@ size_t quantize_i2_s(const float * restrict src, void * restrict dst, int64_t nr
     }
 
     float* scale_ptr = (float*)((char*)i2_weight + n / 4);
-    for (int i=0; i<8; i++) {
-        scale_ptr[i] = i2_scale;
-    }
+    scale_ptr[0] = i2_scale;
 
-    // 32B for scale
+    // 32B for alignment
     return nrow * row_size / 4 + 32;
 }
 
