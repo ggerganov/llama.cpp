@@ -11,6 +11,7 @@ endif()
 
 set(TARGET_SRCS
     server.cpp
+    stoplist.cpp
     utils.hpp
     httplib.h
 )
