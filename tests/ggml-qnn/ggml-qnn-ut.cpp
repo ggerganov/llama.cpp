@@ -266,37 +266,12 @@ static uint32_t get_tensor_data_size(const ggml_tensor * tensor) {
 
 //ref: https://github.com/ggerganov/llama.cpp/blob/master/tests/test-backend-ops.cpp#L20
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
-    // static RNG initialization (revisit if n_threads stops being constant)
-    static const size_t n_threads = std::thread::hardware_concurrency();
-    static std::vector<std::default_random_engine> generators = []() {
-        std::random_device rd;
-        std::vector<std::default_random_engine> vec;
-        vec.reserve(n_threads);
-        //for (size_t i = 0; i < n_threads; i++) { vec.emplace_back(1234 + i); } // fixed seed
-        for (size_t i = 0; i < n_threads; i++) { vec.emplace_back(rd()); }
-        return vec;
-    }();
-
     size_t size = ggml_nelements(tensor);
     std::vector<float> data(size);
-
-    auto init_thread = [&](size_t ith, size_t start, size_t end) {
-        std::uniform_real_distribution<float> distribution(min, max);
-        for (size_t i = start; i < end; i++) {
-            data[i] = distribution(generators[ith]);
-        }
-    };
-
-    std::vector<std::thread> threads;
-    threads.reserve(n_threads);
-    for (size_t i = 0; i < n_threads; i++) {
-        size_t start =     i*size/n_threads;
-        size_t end   = (i+1)*size/n_threads;
-        threads.emplace_back(init_thread, i, start, end);
+    for (size_t i = 0; i < size; i++) {
+        data[i] = i + 1;
     }
-    for (auto & t : threads) {
-        t.join();
-    }
+
     if (tensor->type == GGML_TYPE_F32 || tensor->type == GGML_TYPE_I32) {
 #ifdef GGML_USE_QNN
         memcpy((char*)tensor->data, data.data(), size * sizeof(float));
@@ -378,7 +353,6 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     QNN_LOG_DEBUG("ggml op:%d(%s)\n", n_ggml_op_type, ggml_op_name((enum ggml_op) n_ggml_op_type));
 
     n_begin_time = ggml_time_us();
-    srand(time(NULL));
 
     ctx_size += 1024 * 1024 * 32;
     QNN_LOG_DEBUG("Allocating Memory of size %zi bytes, %zi MB\n", ctx_size,
@@ -460,11 +434,11 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
         initialize_tensors(ctx);
     } else {
         if (qtype == GGML_TYPE_F32) {
-            ggml_set_f32(src0, (rand() % 100 + 1));
+            ggml_set_f32(src0, 2.f);
         } else {
             initialize_tensors(ctx);
         }
-        ggml_set_f32(src1, (rand() % 100 + 1));
+        ggml_set_f32(src1, 3.f);
     }
 
     ggml_graph_compute_helper(backend, gf, work_buffer, num_threads, nullptr, nullptr);
