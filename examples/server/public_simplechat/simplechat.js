@@ -745,6 +745,7 @@ class Me {
             "temperature": 0.7,
             "max_tokens": 1024,
             "n_predict": 1024,
+            "cache_prompt": false,
             //"frequency_penalty": 1.2,
             //"presence_penalty": 1.2,
         };
