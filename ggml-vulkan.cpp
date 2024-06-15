@@ -5288,7 +5288,7 @@ static void ggml_vk_preallocate_buffers_graph(ggml_backend_vk_context * ctx, ggm
 
     bool mmp = (use_src0 && use_src1 && src1_type == GGML_TYPE_F32) ? ggml_vk_get_mul_mat_mat_pipeline(ctx, src0_type, y_non_contig ? GGML_TYPE_F16 : src1->type) != nullptr : false;
 
-    const bool qx_needs_dequant = use_src0 && (mmp || x_non_contig);
+    const bool qx_needs_dequant = use_src0 && (!mmp || x_non_contig);
     const bool qy_needs_dequant = use_src1 && ((src1->type != GGML_TYPE_F16 && !y_f32_kernel) || y_non_contig);
 
     int split_k;
