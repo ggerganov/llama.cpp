@@ -835,16 +835,20 @@ class Me {
         for(const k in this.chatRequestOptions) {
             let val = this.chatRequestOptions[k];
             let type = typeof(val);
-            if (!((type == "string") || (type == "number"))) {
-                continue;
+            if (((type == "string") || (type == "number"))) {
+                let inp = ui.el_creatediv_input(`Set${k}`, k, typeDict[type], this.chatRequestOptions[k], (val)=>{
+                    if (type == "number") {
+                        val = Number(val);
+                    }
+                    this.chatRequestOptions[k] = val;
+                });
+                fs.appendChild(inp.div);
+            } else if (type == "boolean") {
+                let bbtn = ui.el_creatediv_boolbutton(`Set{k}`, k, {true: "true", false: "false"}, val, (userVal)=>{
+                    this.chatRequestOptions[k] = userVal;
+                });
+                fs.appendChild(bbtn.div);
             }
-            let inp = ui.el_creatediv_input(`Set${k}`, k, typeDict[type], this.chatRequestOptions[k], (val)=>{
-                if (type == "number") {
-                    val = Number(val);
-                }
-                this.chatRequestOptions[k] = val;
-            });
-            fs.appendChild(inp.div);
         }
     }
 

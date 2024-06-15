@@ -177,9 +177,14 @@ It is attached to the document object. Some of these can also be updated using t
     modify the existing options value or remove them, for now you can update this global var
     using browser's development-tools/console.
 
-    For string and numeric fields in chatRequestOptions, including even those added by a user
-    at runtime by directly modifying gMe.chatRequestOptions, setting ui entries will be auto
+    For string, numeric and boolean fields in chatRequestOptions, including even those added by a
+    user at runtime by directly modifying gMe.chatRequestOptions, setting ui entries will be auto
     created.
+
+    cache_prompt option supported by example/server is allowed to be controlled by user. So that
+    any caching supported with system-prompt and chat history if usable can get used. If one has
+    enabled chat history sliding window, then the chat history caching may or maynot kick in at
+    the backend, based on aspects related to positional encoding, attention mechanism etal.
 
   headers - maintains the list of http headers sent when request is made to the server. By default
   Content-Type is set to application/json. Additionally Authorization entry is provided, which can
