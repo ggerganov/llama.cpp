@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <tuple>
 #include <vector>
@@ -61,7 +62,7 @@ static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUA
 #define VK_LOG_DEBUG(msg) std::cerr << msg << std::endl
 #else
 #define VK_LOG_DEBUG(msg) ((void) 0)
-#endif
+#endif // GGML_VULKAN_DEBUG
 
 struct ggml_backend_vk_context;
 
@@ -357,6 +358,49 @@ struct ggml_vk_garbage_collector {
     std::vector<vk_context> contexts;
 };
 
+#if defined(GGML_VULKAN_MEMORY_DEBUG) || defined(GGML_VULKAN_DEBUG)
+#include <mutex>
+
+#define VK_LOG_MEMORY(msg) std::cerr << "ggml_vulkan memory: " << msg << std::endl
+
+static std::string format_size(size_t size) {
+    const size_t kib = 1024;
+    const size_t mib = kib * 1024;
+    const size_t gib = mib * 1024;
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+
+    if (size >= gib) {
+        oss << static_cast<double>(size) / gib << " GiB";
+    } else if (size >= mib) {
+        oss << static_cast<double>(size) / mib << " MiB";
+    } else if (size >= kib) {
+        oss << static_cast<double>(size) / kib << " KiB";
+    } else {
+        oss << size << " B";
+    }
+
+    return oss.str();
+}
+
+static std::mutex log_mutex;
+
+class vk_memory_logger {
+public:
+    vk_memory_logger(): total_device(0), total_host(0) {}
+    void log_allocation(vk_buffer_ref buf_ref, size_t size);
+    void log_deallocation(vk_buffer_ref buf_ref);
+
+private:
+    std::map<vk::Buffer, size_t> allocations; // Track allocations
+    size_t total_device;
+    size_t total_host;
+};
+#else
+#define VK_LOG_MEMORY(msg) ((void) 0)
+#endif // GGML_VULKAN_MEMORY_DEBUG
+
 struct ggml_backend_vk_context {
     std::string name;
 
@@ -381,7 +425,44 @@ struct ggml_backend_vk_context {
     bool initialized;
 
     size_t idx;
+
+#ifdef GGML_VULKAN_MEMORY_DEBUG
+    vk_memory_logger memory_logger;
+#endif
 };
+
+#ifdef GGML_VULKAN_MEMORY_DEBUG
+void vk_memory_logger::log_allocation(vk_buffer_ref buf_ref, size_t size) {
+    std::lock_guard<std::mutex> guard(log_mutex);
+    vk_buffer buf = buf_ref.lock();
+    const bool device = bool(buf->memory_property_flags & vk::MemoryPropertyFlagBits::eDeviceLocal);
+    const std::string type = device ? "device" : "host";
+    allocations[buf->buffer] = size;
+    total_device += device ? size : 0;
+    total_host += device ? 0 : size;
+    VK_LOG_MEMORY("VULKAN" << buf->ctx->idx << ": +" << format_size(size) << " " << type << " at " << buf->buffer << ". Total device: " << format_size(total_device) << ", total host: " << format_size(total_host));
+}
+
+void vk_memory_logger::log_deallocation(vk_buffer_ref buf_ref) {
+    if (buf_ref.expired() || buf_ref.lock()->size == 0) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> guard(log_mutex);
+    vk_buffer buf = buf_ref.lock();
+    const bool device = bool(buf->memory_property_flags & vk::MemoryPropertyFlagBits::eDeviceLocal);
+    std::string type = device ? "device" : "host";
+    auto it = allocations.find(buf->buffer);
+    total_device -= device ? it->second : 0;
+    total_host -= device ? 0 : it->second;
+    if (it != allocations.end()) {
+        VK_LOG_MEMORY("VULKAN" << buf->ctx->idx << ": -" << format_size(it->second) << " " << type << " at " << buf->buffer << ". Total device: " << format_size(total_device) << ", total host: " << format_size(total_host));
+        allocations.erase(it);
+    } else {
+        VK_LOG_MEMORY("ERROR VULKAN" << buf->ctx->idx << ": Attempted to deallocate unknown " << type << " memory at " << buf->buffer);
+    }
+}
+#endif // GGML_VULKAN_MEMORY_DEBUG
 
 struct vk_instance_t {
     vk::Instance instance;
@@ -862,7 +943,9 @@ static vk_buffer ggml_vk_create_buffer(ggml_backend_vk_context * ctx, size_t siz
 
     buf->device = ctx->device;
 
-    VK_LOG_DEBUG("Created buffer " << buf->buffer);
+#ifdef GGML_VULKAN_MEMORY_DEBUG
+    ctx->memory_logger.log_allocation(buf, size);
+#endif
 
     return buf;
 }
@@ -896,6 +979,14 @@ static vk_buffer ggml_vk_create_buffer_device(ggml_backend_vk_context * ctx, siz
 }
 
 static void ggml_vk_destroy_buffer(vk_buffer& buf) {
+    if (buf == nullptr) {
+        return;
+    }
+
+#ifdef GGML_VULKAN_MEMORY_DEBUG
+    buf->ctx->memory_logger.log_deallocation(buf);
+#endif
+
     buf.reset();
 }
 
@@ -2058,6 +2149,8 @@ static vk_pipeline ggml_vk_get_dequantize_mul_mat_vec_id(ggml_backend_vk_context
 
 static vk_buffer ggml_vk_pool_malloc(ggml_backend_vk_context * ctx, size_t size) {
     VK_LOG_DEBUG("ggml_vk_pool_malloc(" << size << ")");
+    VK_LOG_MEMORY("ggml_vk_pool_malloc");
+
     int best_i = -1;
     size_t best_size = std::numeric_limits<size_t>::max(); //smallest unused buffer that fits our needs
     int worst_i = -1;
@@ -2085,7 +2178,7 @@ static vk_buffer ggml_vk_pool_malloc(ggml_backend_vk_context * ctx, size_t size)
         ggml_vk_destroy_buffer(b);
     }
 
-    return ggml_vk_create_buffer_check(ctx, size, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    return ggml_vk_create_buffer_device(ctx, size);
 }
 
 static void ggml_vk_pool_free(ggml_backend_vk_context * ctx, vk_buffer& buffer) {
@@ -2110,6 +2203,8 @@ static vk_buffer ggml_vk_create_buffer_temp(ggml_backend_vk_context * ctx, size_
         }
     }
 
+    VK_LOG_MEMORY("ggml_vk_create_buffer_temp(" << size << ")");
+
     // Otherwise create new buffer
     vk_buffer buf = ggml_vk_pool_malloc(ctx, size);
     ctx->gc.temp_buffers.push_back(buf);
@@ -2118,7 +2213,7 @@ static vk_buffer ggml_vk_create_buffer_temp(ggml_backend_vk_context * ctx, size_
 }
 
 static void * ggml_vk_host_malloc(ggml_backend_vk_context * ctx, size_t size) {
-    VK_LOG_DEBUG("ggml_vk_host_malloc(" << size << ")");
+    VK_LOG_MEMORY("ggml_vk_host_malloc(" << size << ")");
     vk_buffer buf = ggml_vk_create_buffer(ctx, size,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
@@ -2140,7 +2235,7 @@ static void ggml_vk_host_free(ggml_backend_vk_context * ctx, void* ptr) {
     if (ptr == nullptr) {
         return;
     }
-    VK_LOG_DEBUG("ggml_vk_host_free(" << ptr << ")");
+    VK_LOG_MEMORY("ggml_vk_host_free(" << ptr << ")");
     vk_buffer buf;
     size_t index;
     for (size_t i = 0; i < ctx->pinned_memory.size(); i++) {
@@ -2263,6 +2358,7 @@ static void deferred_memcpy(void * dst, const void * src, size_t size, std::vect
 
 static void ggml_vk_ensure_sync_staging_buffer(ggml_backend_vk_context * ctx, size_t size) {
     if (ctx->sync_staging == nullptr || ctx->sync_staging->size < size) {
+        VK_LOG_MEMORY("ggml_vk_ensure_sync_staging_buffer(" << size << ")");
         ggml_vk_destroy_buffer(ctx->sync_staging);
         ctx->sync_staging = ggml_vk_create_buffer_check(ctx, size,
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached,
@@ -5270,7 +5366,6 @@ static void ggml_vk_preallocate_buffers_graph(ggml_backend_vk_context * ctx, ggm
 }
 
 static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
-    VK_LOG_DEBUG("ggml_vk_preallocate_buffers(x_size: " << ctx->prealloc_size_x << " y_size: " << ctx->prealloc_size_y << " split_k_size: " << ctx->prealloc_size_split_k << ")");
 #if defined(GGML_VULKAN_RUN_TESTS)
     ctx->staging = ggml_vk_create_buffer_check(ctx, 100ul * 1024ul * 1024ul,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached,
@@ -5409,6 +5504,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
 #endif
 
     if (ctx->prealloc_x == nullptr || (ctx->prealloc_size_x > 0 && ctx->prealloc_x->size < ctx->prealloc_size_x)) {
+        VK_LOG_MEMORY("ggml_vk_preallocate_buffers(x_size: " << ctx->prealloc_size_x << ")");
         // Resize buffer
         if (ctx->prealloc_x != nullptr) {
             ggml_vk_destroy_buffer(ctx->prealloc_x);
@@ -5416,6 +5512,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         ctx->prealloc_x = ggml_vk_create_buffer_device(ctx, ctx->prealloc_size_x);
     }
     if (ctx->prealloc_y == nullptr || (ctx->prealloc_size_y > 0 && ctx->prealloc_y->size < ctx->prealloc_size_y)) {
+        VK_LOG_MEMORY("ggml_vk_preallocate_buffers(y_size: " << ctx->prealloc_size_y << ")");
         // Resize buffer
         if (ctx->prealloc_y != nullptr) {
             ggml_vk_destroy_buffer(ctx->prealloc_y);
@@ -5423,6 +5520,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         ctx->prealloc_y = ggml_vk_create_buffer_device(ctx, ctx->prealloc_size_y);
     }
     if (ctx->prealloc_split_k == nullptr || (ctx->prealloc_size_split_k > 0 && ctx->prealloc_split_k->size < ctx->prealloc_size_split_k)) {
+        VK_LOG_MEMORY("ggml_vk_preallocate_buffers(split_k_size: " << ctx->prealloc_size_split_k << ")");
         // Resize buffer
         if (ctx->prealloc_split_k != nullptr) {
             ggml_vk_destroy_buffer(ctx->prealloc_split_k);
@@ -5430,6 +5528,7 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         ctx->prealloc_split_k = ggml_vk_create_buffer_device(ctx, ctx->prealloc_size_split_k);
     }
     if (ctx->staging == nullptr || (ctx->staging_size > 0 && ctx->staging->size < ctx->staging_size)) {
+        VK_LOG_MEMORY("ggml_vk_preallocate_buffers(staging_size: " << ctx->staging_size << ")");
         // Resize buffer
         if (ctx->staging != nullptr) {
             ggml_vk_destroy_buffer(ctx->staging);
@@ -5844,7 +5943,7 @@ GGML_CALL static bool ggml_backend_buffer_is_vk(ggml_backend_buffer_t buffer) {
 }
 
 GGML_CALL static void ggml_backend_vk_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    VK_LOG_DEBUG("ggml_backend_vk_buffer_free_buffer()");
+    VK_LOG_MEMORY("ggml_backend_vk_buffer_free_buffer()");
     ggml_backend_vk_buffer_context * ctx = (ggml_backend_vk_buffer_context *)buffer->context;
     ggml_vk_destroy_buffer(ctx->dev_buffer);
     delete ctx;
@@ -5942,7 +6041,7 @@ GGML_CALL static const char * ggml_backend_vk_buffer_type_name(ggml_backend_buff
 }
 
 GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    VK_LOG_DEBUG("ggml_backend_vk_buffer_type_alloc_buffer(" << size << ")");
+    VK_LOG_MEMORY("ggml_backend_vk_buffer_type_alloc_buffer(" << size << ")");
     ggml_backend_vk_buffer_type_context * ctx = (ggml_backend_vk_buffer_type_context *) buft->context;
 
     vk_buffer dev_buffer = nullptr;
@@ -6021,12 +6120,12 @@ GGML_CALL static const char * ggml_backend_vk_host_buffer_name(ggml_backend_buff
 }
 
 GGML_CALL static void ggml_backend_vk_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    VK_LOG_DEBUG("ggml_backend_vk_host_buffer_free_buffer()");
+    VK_LOG_MEMORY("ggml_backend_vk_host_buffer_free_buffer()");
     ggml_vk_host_free(&vk_instance.contexts[0], buffer->context);
 }
 
 GGML_CALL static ggml_backend_buffer_t ggml_backend_vk_host_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
-    VK_LOG_DEBUG("ggml_backend_vk_host_buffer_type_alloc_buffer(" << size << ")");
+    VK_LOG_MEMORY("ggml_backend_vk_host_buffer_type_alloc_buffer(" << size << ")");
     size += 32;  // Behave like the CPU buffer type
     void * ptr = nullptr;
     try {
