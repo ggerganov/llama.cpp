@@ -11702,7 +11702,6 @@ struct llm_build_context {
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].ffn_down, cur);
                 cb(cur, "ffn_down", il);
-    
             }
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "l_out", il);
@@ -11723,7 +11722,6 @@ struct llm_build_context {
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
-
         return gf;
     }
 
