@@ -27,6 +27,8 @@
 #include "theme-snowstorm.css.hpp"
 #include "index.html.hpp"
 #include "index-new.html.hpp"
+#include "index-yx.html.hpp"
+#include "avatar.jpg.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
 #include "system-prompts.js.hpp"
@@ -3073,6 +3075,7 @@ int main(int argc, char ** argv) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
 
+
         const int id_task = ctx_server.queue_tasks.get_new_id();
 
         ctx_server.queue_results.add_waiting_task_id(id_task);
@@ -3302,7 +3305,7 @@ int main(int argc, char ** argv) {
     }
 
     // using embedded static files
-    svr->Get("/",                           handle_static_file(index_html, index_html_len, "text/html; charset=utf-8"));
+    svr->Get("/",                           handle_static_file(index_yx_html, index_yx_html_len, "text/html; charset=utf-8"));
     svr->Get("/index.js",                   handle_static_file(index_js, index_js_len, "text/javascript; charset=utf-8"));
     svr->Get("/completion.js",              handle_static_file(completion_js, completion_js_len, "text/javascript; charset=utf-8"));
     svr->Get("/json-schema-to-grammar.mjs", handle_static_file(json_schema_to_grammar_mjs, json_schema_to_grammar_mjs_len, "text/javascript; charset=utf-8"));
@@ -3317,6 +3320,8 @@ int main(int argc, char ** argv) {
     svr->Get("/theme-polarnight.css",  handle_static_file(theme_polarnight_css, theme_polarnight_css_len, "text/css; charset=utf-8"));
     svr->Get("/theme-snowstorm.css",   handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
     svr->Get("/index-new.html",        handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
+    svr->Get("/index-yx.html",        handle_static_file(index_yx_html, index_yx_html_len, "text/html; charset=utf-8"));
+    svr->Get("/avatar.jpg",            handle_static_file(avatar_jpg, avatar_jpg_len, "text/html; charset=utf-8"));
     svr->Get("/system-prompts.js",     handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
     svr->Get("/prompt-formats.js",     handle_static_file(prompt_formats_js, prompt_formats_js_len, "text/javascript; charset=utf-8"));
 

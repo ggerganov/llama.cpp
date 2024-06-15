@@ -19,6 +19,8 @@ set(PUBLIC_ASSETS
     theme-snowstorm.css
     index.html
     index-new.html
+    index-yx.html
+    avatar.jpg
     index.js
     completion.js
     system-prompts.js
