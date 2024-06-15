@@ -48,7 +48,7 @@ Here is the releases with good quality:
 - 2024.5
   - Performance is increased: 34 -> 37 tokens/s of llama-2-7b.Q4_0 on Arc770.
   - Arch Linux is verified successfully.
-    
+
 - 2024.4
   - Support data types: GGML_TYPE_IQ4_NL, GGML_TYPE_IQ4_XS, GGML_TYPE_IQ3_XXS, GGML_TYPE_IQ3_S, GGML_TYPE_IQ2_XXS, GGML_TYPE_IQ2_XS, GGML_TYPE_IQ2_S, GGML_TYPE_IQ1_S, GGML_TYPE_IQ1_M.
 
