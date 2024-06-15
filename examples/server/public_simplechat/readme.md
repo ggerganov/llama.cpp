@@ -3,6 +3,13 @@
 
 by Humans for All.
 
+## quickstart
+
+To run from the build dir
+
+bin/llama-server -m path/model.gguf --path ../examples/server/public_simplechat
+
+Continue reading for the details.
 
 ## overview
 
@@ -14,7 +21,7 @@ own system prompts.
 This allows seeing the generated text / ai-model response in oneshot at the end, after it is fully generated,
 or potentially as it is being generated, in a streamed manner from the server/ai-model.
 
-![Chat and Settings screens](./simplechat_screens.png)
+![Chat and Settings screens](./simplechat_screens.png "Chat and Settings screens")
 
 Auto saves the chat session locally as and when the chat is progressing and inturn at a later time when you
 open SimpleChat, option is provided to restore the old chat session, if a matching one exists.
@@ -183,10 +190,11 @@ It is attached to the document object. Some of these can also be updated using t
     user at runtime by directly modifying gMe.chatRequestOptions, setting ui entries will be auto
     created.
 
-    cache_prompt option supported by example/server is allowed to be controlled by user. So that
-    any caching supported with system-prompt and chat history if usable can get used. If one has
-    enabled chat history sliding window, then the chat history caching may or maynot kick in at
-    the backend, based on aspects related to positional encoding, attention mechanism etal.
+    cache_prompt option supported by example/server is allowed to be controlled by user, so that
+    any caching supported wrt system-prompt and chat history, if usable can get used. When chat
+    history sliding window is enabled, cache_prompt logic may or may not kick in at the backend
+    wrt same, based on aspects related to model, positional encoding, attention mechanism etal.
+    However system prompt should ideally get the benefit of caching.
 
   headers - maintains the list of http headers sent when request is made to the server. By default
   Content-Type is set to application/json. Additionally Authorization entry is provided, which can
