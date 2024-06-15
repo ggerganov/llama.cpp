@@ -4,8 +4,7 @@ import logging
 import argparse
 import asyncio
 import os
-import sys
-from tempfile import gettempdir, NamedTemporaryFile
+from tempfile import gettempdir
 
 logger = logging.getLogger("ggml-vk-generate-shaders")
 
@@ -111,7 +110,7 @@ async def main():
 
         # mul mat vec
         data_a_key = f"DATA_A_{tname.upper()}"
-        shader = f"mul_mat_vec_{tname}.comp" if tname.endswith("_k") else f"mul_mat_vec.comp"
+        shader = f"mul_mat_vec_{tname}.comp" if tname.endswith("_k") else "mul_mat_vec.comp"
 
         tasks.append(string_to_spv(f"mul_mat_vec_{tname}_f32_f32", shader, base_dict | {data_a_key: "1", "B_TYPE": "float", "D_TYPE": "float"}))
         tasks.append(string_to_spv(f"mul_mat_vec_{tname}_f16_f32", shader, base_dict | {data_a_key: "1", "B_TYPE": "float16_t", "D_TYPE": "float"}))
