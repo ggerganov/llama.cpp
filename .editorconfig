@@ -26,3 +26,6 @@ indent_size = 2
 
 [examples/llama.swiftui/llama.swiftui.xcodeproj/*]
 indent_style = tab
+
+[examples/cvector-generator/*.txt]
+insert_final_newline = unset
