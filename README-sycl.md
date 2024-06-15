@@ -77,7 +77,7 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 *Notes:*
 
 - **Memory**
-  - The device memory is a limitation when running a large model. The loaded model size, *`llm_load_tensors: buffer_size`*, is displayed in the log when running `./bin/main`.
+  - The device memory is a limitation when running a large model. The loaded model size, *`llm_load_tensors: buffer_size`*, is displayed in the log when running `./bin/llama-cli`.
 
   - Please make sure the GPU shared memory from the host is large enough to account for the model's size. For e.g. the *llama-2-7b.Q4_0* requires at least 8.0GB for integrated GPU and 4.0GB for discrete GPU.
 
@@ -99,14 +99,14 @@ The docker build option is currently limited to *intel GPU* targets.
 ### Build image
 ```sh
 # Using FP16
-docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=ON" -f .devops/main-intel.Dockerfile .
+docker build -t llama-cpp-sycl --build-arg="LLAMA_SYCL_F16=ON" -f .devops/llama-cli-intel.Dockerfile .
 ```
 
 *Notes*:
 
 To build in default FP32 *(Slower than FP16 alternative)*, you can remove the `--build-arg="LLAMA_SYCL_F16=ON"` argument from the previous command.
 
-You can also use the `.devops/server-intel.Dockerfile`, which builds the *"server"* alternative.
+You can also use the `.devops/llama-server-intel.Dockerfile`, which builds the *"server"* alternative.
 
 ### Run container
 
@@ -275,7 +275,7 @@ source /opt/intel/oneapi/setvars.sh
 Similar to the native `sycl-ls`, available SYCL devices can be queried as follow:
 
 ```sh
-./build/bin/ls-sycl-device
+./build/bin/llama-ls-sycl-device
 ```
 A example of such log in a system with 1 *intel CPU* and 1 *intel GPU* can look like the following:
 ```
@@ -313,7 +313,7 @@ Examples:
 - Use device 0:
 
 ```sh
-ZES_ENABLE_SYSMAN=1 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm none -mg 0
+ZES_ENABLE_SYSMAN=1 ./build/bin/llama-cli -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm none -mg 0
 ```
 or run by script:
 
@@ -324,7 +324,7 @@ or run by script:
 - Use multiple devices:
 
 ```sh
-ZES_ENABLE_SYSMAN=1 ./build/bin/main -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm layer
+ZES_ENABLE_SYSMAN=1 ./build/bin/llama-cli -m models/llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33 -sm layer
 ```
 
 Otherwise, you can run the script:
@@ -427,7 +427,7 @@ Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former in
 
 *Notes:*
 
-- By default, calling `make` will build all target binary files. In case of a minimal experimental setup, the user can build the inference executable only through `make main`.
+- By default, calling `make` will build all target binary files. In case of a minimal experimental setup, the user can build the inference executable only through `make llama-cli`.
 
 ### III. Run the inference
 
@@ -488,13 +488,13 @@ Examples:
 - Use device 0:
 
 ```
-build\bin\main.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm none -mg 0
+build\bin\llama-cli.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm none -mg 0
 ```
 
 - Use multiple devices:
 
 ```
-build\bin\main.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm layer
+build\bin\llama-cli.exe -m models\llama-2-7b.Q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e -ngl 33 -s 0 -sm layer
 ```
 Otherwise, run the following wrapper script:
 

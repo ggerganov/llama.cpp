@@ -380,13 +380,13 @@ fi
 
 if [[ "$backend" == "cuda" ]]; then
     printf "[+] Building with CUDA backend\n"
-    LLAMA_CUDA=1 make -j server $log
+    LLAMA_CUDA=1 make -j llama-server $log
 elif [[ "$backend" == "cpu" ]]; then
     printf "[+] Building with CPU backend\n"
-    make -j server $log
+    make -j llama-server $log
 elif [[ "$backend" == "metal" ]]; then
     printf "[+] Building with Metal backend\n"
-    make -j server $log
+    make -j llama-server $log
 else
     printf "[-] Unknown backend: %s\n" "$backend"
     exit 1
@@ -413,6 +413,6 @@ if [[ $verbose -eq 1 ]]; then
     args="$args --verbose"
 fi
 
-./server -m "../$wfile" --host 0.0.0.0 --port "$port" -c $n_kv -np "$n_parallel" $args
+./llama-server -m "../$wfile" --host 0.0.0.0 --port "$port" -c $n_kv -np "$n_parallel" $args
 
 exit 0

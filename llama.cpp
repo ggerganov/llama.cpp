@@ -21,6 +21,10 @@
 #   include "ggml-kompute.h"
 #endif
 
+#ifdef GGML_USE_BLAS
+#  include "ggml-blas.h"
+#endif
+
 #ifdef GGML_USE_METAL
 #  include "ggml-metal.h"
 #endif
@@ -2301,7 +2305,11 @@ struct llama_context {
 #ifdef GGML_USE_METAL
     ggml_backend_t backend_metal = nullptr;
 #endif
+#ifdef GGML_USE_BLAS
+    ggml_backend_t backend_blas = nullptr;
+#endif
     ggml_backend_t backend_cpu = nullptr;
+
 
     const llama_model & model;
 
@@ -4554,35 +4562,6 @@ static void llm_load_vocab(
             vocab.special_cls_id  = -1;
             vocab.special_mask_id = -1;
 
-            // For Fill-In-the-Middle (FIM)/infill models which where converted
-            // prior to support of FIM special tokens in GGUF, the following
-            // will allow those models to continue to work. The general names
-            // of the known models are currently CodeLlama (LLM_ARCH_LLAMA) and
-            // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
-            // new versions of these models have been published.
-            std::string gen_name;
-            ml.get_key(LLM_KV_GENERAL_NAME, gen_name, false);
-
-            std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
-                [](unsigned char c){ return std::tolower(c); });
-
-            if (gen_name.find("code") != std::string::npos) {
-                if (model.arch == LLM_ARCH_LLAMA) {
-                    vocab.special_prefix_id = 32007;
-                    vocab.special_suffix_id = 32008;
-                    vocab.special_middle_id = 32009;
-                    vocab.special_eot_id    = 32010;
-                } else if (model.arch == LLM_ARCH_GEMMA) {
-                    vocab.special_prefix_id = 67;
-                    vocab.special_suffix_id = 69;
-                    vocab.special_middle_id = 68;
-                    // TODO: this is not EOT, it is "file separator" token, needs fix
-                    //       https://huggingface.co/google/codegemma-7b-it/blob/9b1d9231388358c04d90bd003458f5070d97db44/tokenizer_config.json#L565-L572
-                    //vocab.special_eot_id    = 70;
-                    vocab.special_eot_id    = 107;
-                }
-            }
-
             const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
             if (add_space_prefix_keyidx != -1) {
                 vocab.tokenizer_add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
@@ -4708,6 +4687,9 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "smaug-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMAUG;
+            } else if (
+                tokenizer_pre == "poro-chat") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_PORO;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -4720,7 +4702,7 @@ static void llm_load_vocab(
             vocab.tokenizer_add_bos = true;
             vocab.tokenizer_add_eos = false;
         } else {
-            throw std::runtime_error(format("unknown vocab type: '%d'", (int) vocab.type));
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
         }
     }
 
@@ -4773,6 +4755,45 @@ static void llm_load_vocab(
 
     // determine the newline token: LLaMA "<0x0A>" == 10 == '\n', Falcon 193 == '\n'
     if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
+        // For Fill-In-the-Middle (FIM)/infill models which where converted
+        // prior to support of FIM special tokens in GGUF, the following
+        // will allow those models to continue to work. The general names
+        // of the known models are currently CodeLlama (LLM_ARCH_LLAMA) and
+        // CodeGemma (LLM_ARCH_GEMMA). This can potentially be removed once
+        // new versions of these models have been published.
+        std::string gen_name;
+        ml.get_key(LLM_KV_GENERAL_NAME, gen_name, false);
+
+        std::transform(gen_name.begin(), gen_name.end(), gen_name.begin(),
+            [](unsigned char c){ return std::tolower(c); });
+
+        if (gen_name.find("code") != std::string::npos) {
+            if (model.arch == LLM_ARCH_LLAMA
+              && 32010 < vocab.id_to_token.size()
+              && vocab.id_to_token[32007].text == "<PRE>"
+              && vocab.id_to_token[32008].text == "<SUF>"
+              && vocab.id_to_token[32009].text == "<MID>"
+              && vocab.id_to_token[32010].text == "<EOT>") {
+                vocab.special_prefix_id = 32007;
+                vocab.special_suffix_id = 32008;
+                vocab.special_middle_id = 32009;
+                vocab.special_eot_id    = 32010;
+            } else if (model.arch == LLM_ARCH_GEMMA
+              && 107 < vocab.id_to_token.size()
+              && vocab.id_to_token[67].text == "<|fim_prefix|>"
+              && vocab.id_to_token[69].text == "<|fim_suffix|>"
+              && vocab.id_to_token[68].text == "<|fim_middle|>"
+              && vocab.id_to_token[107].text == "<end_of_turn>") {
+                vocab.special_prefix_id = 67;
+                vocab.special_suffix_id = 69;
+                vocab.special_middle_id = 68;
+                // TODO: this is not EOT, it is "file separator" token, needs fix
+                //       https://huggingface.co/google/codegemma-7b-it/blob/9b1d9231388358c04d90bd003458f5070d97db44/tokenizer_config.json#L565-L572
+                //vocab.special_eot_id    = 70;
+                vocab.special_eot_id    = 107;
+            }
+        }
+
         try {
             vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
         } catch (const std::exception & e) {
@@ -11540,7 +11561,8 @@ static struct ggml_cgraph * llama_build_graph(
         if (batch.n_tokens < 32 || full_offload) {
             if (il != -1 && strcmp(name, "norm") == 0) {
                 for (auto * backend : lctx.backends) {
-                    if (ggml_backend_buft_supports_backend(lctx.model.buft_layer[il].buft, backend)) {
+                    if (ggml_backend_supports_buft(backend, lctx.model.buft_layer[il].buft) &&
+                        (ggml_backend_supports_op(backend, cur) || ggml_backend_offload_op(backend, cur))) {
                         ggml_backend_sched_set_tensor_backend(lctx.sched, cur, backend);
                         break;
                     }
@@ -12037,6 +12059,11 @@ static void llama_graph_compute(
         ggml_backend_cpu_set_n_threads(lctx.backend_cpu, n_threads);
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
+#ifdef GGML_USE_BLAS
+    if (lctx.backend_blas != nullptr) {
+        ggml_backend_blas_set_n_threads(lctx.backend_blas, n_threads);
+    }
+#endif
 
     ggml_backend_sched_graph_compute_async(lctx.sched, gf);
 
@@ -12258,17 +12285,6 @@ static int llama_decode_internal(
             GGML_ASSERT(strcmp(res->name, "result_output") == 0 && "missing result_output tensor");
         }
         // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
-
-        // for big prompts, if BLAS is enabled, it is better to use only one thread
-        // otherwise, the threads are spin-lock waiting for the BLAS calls and are degrading the performance
-        // TODO: this is mostly important for Apple Silicon where CBLAS is still performing very well
-        //       we still need some threads to process all non-mul_mat ops, but not too much to avoid interfering
-        //       with the BLAS calls. need a better solution
-        // MoE Special Case: This logic applies when hparams.n_expert == 0, i.e. the model is NOT an MoE model. When an MoE is
-        //                   being processed then Accelerate/BLAS will not be involved, so capping would limit performance.
-        if (n_tokens >= 32 && hparams.n_expert == 0 && ggml_cpu_has_blas() && !ggml_cpu_has_gpublas()) {
-            n_threads = std::min(4, n_threads);
-        }
 
         ggml_backend_sched_alloc_graph(lctx.sched, gf);
 
@@ -13026,6 +13042,11 @@ struct llm_tokenizer_bpe {
                     // original regex from tokenizer.json
                     // "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
                     "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+                };
+                break;
+            case LLAMA_VOCAB_PRE_TYPE_PORO:
+                regex_exprs = {
+                    " ?[^(\\s|.,!?…。，、।۔،)]+",
                 };
                 break;
             default:
@@ -16286,6 +16307,16 @@ struct llama_context * llama_new_context_with_model(
             ctx->backends.push_back(backend);
         }
 #endif
+
+#ifdef GGML_USE_BLAS
+        ctx->backend_blas = ggml_backend_blas_init();
+        if (ctx->backend_blas == nullptr) {
+            LLAMA_LOG_WARN("%s: failed to initialize BLAS backend\n", __func__);
+        } else {
+            ctx->backends.push_back(ctx->backend_blas);
+        }
+#endif
+
 #if defined(GGML_USE_RPC)
         if (model->n_gpu_layers > 0) {
             for (const auto & endpoint : model->rpc_servers) {
