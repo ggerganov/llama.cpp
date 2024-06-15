@@ -8,9 +8,11 @@
 #include "json.hpp"
 
 #include <string>
+#include <cstdlib>
 #include <vector>
 #include <sstream>
 #include <random>
+#include <set>
 
 #define DEFAULT_OAICOMPAT_MODEL "gpt-3.5-turbo-0613"
 
@@ -430,7 +432,107 @@ static json oaicompat_completion_params_parse(
     return llama_params;
 }
 
-static json format_final_response_oaicompat(const json & request, json result, const std::string & completion_id, bool streaming = false) {
+
+class SWordsFilter {
+std::map<std::string, std::string> scache;
+static std::set<const char * > stoplist;
+static size_t strcmpn(const char * a, const char * b, bool & nostop) {
+    nostop = false;
+    int k = 0;
+    while(*b){
+        if(*a){
+            if(*a == *b){
+                k++;
+                a++;
+                nostop = false;
+            }else{
+                nostop = true;
+            }
+        }
+        b++;
+    }
+    return k;
+}
+static std::string replace_all(
+    const std::string & content, const std::string & from, const std::string & to
+){
+    std::string ret;
+    size_t pos = 0;
+    size_t last = 0;
+    while((pos = content.find(from, last)) != std::string::npos){
+        ret += content.substr(last, pos - last);
+        ret += to;
+        last = pos + from.size();
+    }
+    ret += content.substr(last);
+    return ret;
+}
+public:
+    static void yx_simle_filter_init(){
+        char * fname;
+        fname = getenv("LLAMA_CPP_SERVER_STOPWORDS");
+        do{
+            if(fname != NULL){
+                FILE * f = fopen(fname, "r");
+                if(f == NULL){
+                    LOG_WARNING("failed to open stopword file", {{"file", fname}});
+                    break;
+                }
+                char buf[1024];
+                while(fgets(buf, 1024, f)){
+                    buf[strlen(buf)-1] = 0;
+                    stoplist.insert(strdup(buf));
+                }
+                fclose(f);
+            }
+        }while(false);
+        LOG_INFO("initialized stopwords filter module by Y.X.",
+         {{"stoplist_size", stoplist.size()},
+         {"file", fname == NULL ? "default" : fname},}
+        );
+    }
+    void yx_simple_filter(std::string & content, const std::string & uid){
+        if(content.size()==0 || stoplist.size()==0){
+            return;
+        }
+        if(scache.find(uid) != scache.end()){
+            content = scache[uid] + content;
+            scache[uid]="";
+        }
+        bool cache = false;
+        bool g_nostop = true;
+        size_t max_allow = 0x7fffffff;
+        for(const auto * s: stoplist){
+            const char * cont = content.c_str();
+            if(strstr(cont, s)){
+                content = replace_all(content, s, "");
+                LOG_INFO("hit stopword", {{"stopword", s}});
+            }
+        }
+        for(const auto * s: stoplist){
+            bool nostop;
+            const char * cont = content.c_str();
+            auto k = strcmpn(s, cont, nostop);
+            if(k > 0){
+                g_nostop = g_nostop && nostop;
+                cache = true;
+            }
+            max_allow = std::min(max_allow, strlen(cont) - k);
+        }
+        if(cache && !g_nostop){
+            scache[uid] = content.substr(max_allow);
+            content = content.substr(0, max_allow);
+            const char * ctx2 = scache[uid].c_str();
+            LOG_INFO("cache stopword", {{"content", ctx2}});
+        }
+    }
+    SWordsFilter(){
+        yx_simle_filter_init();
+    }
+};
+extern SWordsFilter stopped_filter;
+
+static json format_final_response_oaicompat(const json & request, const json & result, const std::string & completion_id, bool streaming = false) {
     bool stopped_word        = result.count("stopped_word") != 0;
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
@@ -441,6 +543,8 @@ static json format_final_response_oaicompat(const json & request, json result, c
     if (stopped_word || stopped_eos) {
         finish_reason = "stop";
     }
+    // Add stopwords filter
+    stopped_filter.yx_simple_filter(content, completion_id);
 
     json choices =
         streaming ? json::array({json{{"finish_reason", finish_reason},
@@ -479,7 +583,7 @@ static json format_final_response_oaicompat(const json & request, json result, c
 }
 
 // return value is vector as there is one case where we might need to generate two responses
-static std::vector<json> format_partial_response_oaicompat(json result, const std::string & completion_id) {
+static std::vector<json> format_partial_response_oaicompat(const json & result, const std::string & completion_id) {
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
         return std::vector<json>({result});
     }
@@ -499,6 +603,9 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
     if (stopped_limit) {
         finish_reason = "length";
     }
+
+    // Add stopwords filter
+    stopped_filter.yx_simple_filter(content, completion_id);
 
     std::time_t t = std::time(0);
 

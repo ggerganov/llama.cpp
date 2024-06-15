@@ -4,6 +4,7 @@ option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
 set(TARGET_SRCS
     server.cpp
+    stoplist.cpp
     utils.hpp
     httplib.h
 )
