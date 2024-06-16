@@ -173,6 +173,9 @@ for model in models:
 
 src_func = f"""
     def get_vocab_base_pre(self, tokenizer) -> str:
+        if self.pre_tokenizer is not None:
+            return self.pre_tokenizer
+
         # encoding this string and hashing the resulting tokens would (hopefully) give us a unique identifier that
         # is specific for the BPE pre-tokenizer used by the model
         # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
