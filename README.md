@@ -195,6 +195,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
+- [RAGNA Desktop](https://ragna.app/) (proprietary)
 - [RecurseChat](https://recurse.chat/) (proprietary)
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
