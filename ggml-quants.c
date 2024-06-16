@@ -10832,10 +10832,9 @@ void ggml_vec_dot_iq3_s_q8_K (int n, float * restrict s, size_t bs, const void *
             idx.vec[3] = idx.vec[2];
 
             // AVX has no sllv so we have to do this
-            for (int j = 0; j <= 2; j += 2) {
+            for (int j = 0; j < 2; ++j) {
                 for (int k = 0; k < 8; ++k) {
-                    int32_t * curn = (int32_t *) &idx.vec[j] + k;
-                    *curn = *curn << (8 - k);
+                    idx.index[j*8+k] <<= 8 - k;
                 }
             }
 
