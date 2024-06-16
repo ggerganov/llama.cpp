@@ -98,7 +98,7 @@ static __global__ void sqrt_f32(const float * x, float * dst, const int k) {
     if (i >= k) {
         return;
     }
-    dst[i] = sqrt(x[i]);
+    dst[i] = sqrtf(x[i]);
 }
 
 static void gelu_f32_cuda(const float * x, float * dst, const int k, cudaStream_t stream) {
