@@ -13139,7 +13139,7 @@ static int iq1_find_best_neighbour(const uint16_t * restrict neighbours, const u
         const float * restrict xval, const float * restrict weight, float * scale, int8_t * restrict L, int ngrid) {
     int num_neighbors = neighbours[0];
     GGML_ASSERT(num_neighbors > 0);
-    float best_score = 0;
+    float best_score = -FLT_MAX;
     int grid_index = -1;
     for (int j = 1; j <= num_neighbors; ++j) {
         const int8_t * pg = (const int8_t *)(grid + neighbours[j]);
@@ -13337,7 +13337,7 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
                     sumw[j+1] = sumw[j] + weight[i];
                 }
             }
-            float best_score = 0, scale = max;
+            float best_score = -FLT_MIN, scale = max;
             int besti1 = -1, besti2 = -1, best_shift = 0;
             for (int i1 = 0; i1 <= block_size; ++i1) {
                 for (int i2 = i1; i2 <= block_size; ++i2) {
@@ -13513,7 +13513,7 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
                 idx[2*j] = j;
             }
             qsort(pairs, block_size, 2*sizeof(float), iq1_sort_helper);
-            float best_score = 0, scale = max;
+            float best_score = -FLT_MIN, scale = max;
             int besti1 = -1, besti2 = -1, best_k = -1;
             // 0: +, +
             // 1: +, -
