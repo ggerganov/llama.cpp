@@ -64,15 +64,15 @@ struct pca_model {
     struct ggml_tensor * dev_eigenvector;
 
     pca_model(struct ggml_tensor * t_input) {
-// TODO: enable GPU support when support for GGML_OP_SQRT is added
-// #ifdef GGML_USE_CUDA
-//         fprintf(stderr, "%s: using CUDA backend\n", __func__);
-//         backend = ggml_backend_cuda_init(0); // init device 0
-//         if (!backend) {
-//             fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
-//         }
-// #endif
+#ifdef GGML_USE_CUDA
+        fprintf(stderr, "%s: using CUDA backend\n", __func__);
+        backend = ggml_backend_cuda_init(0); // init device 0
+        if (!backend) {
+            fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
+        }
+#endif
 
+// TODO: enable Metal support when support for GGML_OP_SQRT is added
 // #ifdef GGML_USE_METAL
 //         fprintf(stderr, "%s: using Metal backend\n", __func__);
 //         backend = ggml_backend_metal_init();
