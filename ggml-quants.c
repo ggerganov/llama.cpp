@@ -4,8 +4,6 @@
 #include "ggml-quants.h"
 #include "ggml-impl.h"
 
-#define GGML_COMMON_IMPL_C
-#include "ggml-common.h"
 
 #include <math.h>
 #include <string.h>
