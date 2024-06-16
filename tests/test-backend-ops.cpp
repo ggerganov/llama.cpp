@@ -1081,6 +1081,13 @@ struct test_sqrt : public test_case {
         ggml_tensor * out = ggml_sqrt(ctx, a);
         return out;
     }
+
+    void initialize_tensors(ggml_context * ctx) override {
+        // fill with positive values
+        for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+            init_tensor_uniform(t, 0.0f, 100.0f);
+        }
+    }
 };
 
 // GGML_OP_CLAMP
