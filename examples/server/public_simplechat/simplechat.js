@@ -801,15 +801,15 @@ class Me {
 
             ui.el_create_append_p(`bStream:${this.bStream}`, elDiv);
 
-            ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
-
-            ui.el_create_append_p(`bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`, elDiv);
-
             ui.el_create_append_p(`bTrimGarbage:${this.bTrimGarbage}`, elDiv);
+
+            ui.el_create_append_p(`ApiEndPoint:${this.apiEP}`, elDiv);
 
             ui.el_create_append_p(`iRecentUserMsgCnt:${this.iRecentUserMsgCnt}`, elDiv);
 
-            ui.el_create_append_p(`ApiEndPoint:${this.apiEP}`, elDiv);
+            ui.el_create_append_p(`bCompletionFreshChatAlways:${this.bCompletionFreshChatAlways}`, elDiv);
+
+            ui.el_create_append_p(`bCompletionInsertStandardRolePrefix:${this.bCompletionInsertStandardRolePrefix}`, elDiv);
 
         }
 
@@ -875,6 +875,23 @@ class Me {
         });
         elDiv.appendChild(bb.div);
 
+        bb = ui.el_creatediv_boolbutton("SetTrimGarbage", "TrimGarbage", {true: "[+] yes trim", false: "[-] dont trim"}, this.bTrimGarbage, (val)=>{
+            this.bTrimGarbage = val;
+        });
+        elDiv.appendChild(bb.div);
+
+        this.show_settings_chatrequestoptions(elDiv);
+
+        let sel = ui.el_creatediv_select("SetApiEP", "ApiEndPoint", ApiEP.Type, this.apiEP, (val)=>{
+            this.apiEP = ApiEP.Type[val];
+        });
+        elDiv.appendChild(sel.div);
+
+        sel = ui.el_creatediv_select("SetChatHistoryInCtxt", "ChatHistoryInCtxt", this.sRecentUserMsgCnt, this.iRecentUserMsgCnt, (val)=>{
+            this.iRecentUserMsgCnt = this.sRecentUserMsgCnt[val];
+        });
+        elDiv.appendChild(sel.div);
+
         bb = ui.el_creatediv_boolbutton("SetCompletionFreshChatAlways", "CompletionFreshChatAlways", {true: "[+] yes fresh", false: "[-] no, with history"}, this.bCompletionFreshChatAlways, (val)=>{
             this.bCompletionFreshChatAlways = val;
         });
@@ -884,23 +901,6 @@ class Me {
             this.bCompletionInsertStandardRolePrefix = val;
         });
         elDiv.appendChild(bb.div);
-
-        bb = ui.el_creatediv_boolbutton("SetTrimGarbage", "TrimGarbage", {true: "[+] yes trim", false: "[-] dont trim"}, this.bTrimGarbage, (val)=>{
-            this.bTrimGarbage = val;
-        });
-        elDiv.appendChild(bb.div);
-
-        let sel = ui.el_creatediv_select("SetChatHistoryInCtxt", "ChatHistoryInCtxt", this.sRecentUserMsgCnt, this.iRecentUserMsgCnt, (val)=>{
-            this.iRecentUserMsgCnt = this.sRecentUserMsgCnt[val];
-        });
-        elDiv.appendChild(sel.div);
-
-        sel = ui.el_creatediv_select("SetApiEP", "ApiEndPoint", ApiEP.Type, this.apiEP, (val)=>{
-            this.apiEP = ApiEP.Type[val];
-        });
-        elDiv.appendChild(sel.div);
-
-        this.show_settings_chatrequestoptions(elDiv);
 
     }
 
