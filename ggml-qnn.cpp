@@ -2394,17 +2394,14 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
     qnn_instance *    instance          = nullptr;
     std::string       graph_name        = "ggml_op_qnn_mul_mat";
     Qnn_GraphHandle_t graph_handle      = nullptr;
-    Qnn_Tensor_t *    tensor_0          = nullptr;
     Qnn_Tensor_t *    tensor_1          = nullptr;
     Qnn_Tensor_t *    tensor_2          = nullptr;
     Qnn_Param_t qnn_params[]            = {};
     enum ggml_op   ggmlop               = GGML_OP_MUL_MAT;
-    Qnn_DataType_t src0_qnn_type        = QNN_DATATYPE_FLOAT_32;
     Qnn_DataType_t src1_qnn_type        = QNN_DATATYPE_FLOAT_32;
     Qnn_DataType_t dst_qnn_type         = QNN_DATATYPE_FLOAT_32;
 
     CHECK_PARAMS(ctx, src0, src1, dst);
-    tensor_0 = (Qnn_Tensor_t *) src0->extra;
     tensor_1 = (Qnn_Tensor_t *) src1->extra;
     tensor_2 = (Qnn_Tensor_t *) dst->extra;
     instance = ctx->instance;
@@ -2413,22 +2410,16 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
     qnn_perf perf("ggml_qnn_mul_mat");
     perf.start();
 
-    tensor_0 = (Qnn_Tensor_t *) src0->extra;
     tensor_1 = (Qnn_Tensor_t *) src1->extra;
     tensor_2 = (Qnn_Tensor_t *) dst->extra;
     instance = ctx->instance;
 
-    QNN_VER_PTR(*tensor_0)->type = QNN_TENSOR_TYPE_APP_WRITE;
     QNN_VER_PTR(*tensor_1)->type = QNN_TENSOR_TYPE_APP_WRITE;
     QNN_VER_PTR(*tensor_2)->type = QNN_TENSOR_TYPE_APP_READ;
 
-    src0_qnn_type = qnn_datatype_from_ggml_datatype(src0->type);
     src1_qnn_type = qnn_datatype_from_ggml_datatype(src1->type);
     dst_qnn_type  = qnn_datatype_from_ggml_datatype(dst->type);
 
-    uint32_t dimensions_input_0[] = {
-        (uint32_t) src0->ne[0], (uint32_t) src0->ne[1], (uint32_t) src0->ne[2],
-        (uint32_t) src0->ne[3]};
     uint32_t dimensions_input_1[] = {
         (uint32_t) src1->ne[0], (uint32_t) src1->ne[1], (uint32_t) src1->ne[2],
         (uint32_t) src1->ne[3]};
@@ -2444,7 +2435,6 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
         graph_handle      = std::get<0>(graph_item);
     }
 
-    uint32_t * tensor_0_dimensions = QNN_VER_PTR(*tensor_0)->dimensions;
     uint32_t * tensor_1_dimensions = QNN_VER_PTR(*tensor_1)->dimensions;
     uint32_t * tensor_2_dimensions = QNN_VER_PTR(*tensor_2)->dimensions;
 
@@ -2508,9 +2498,6 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
         }
 
         if (ctx->device == QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_0)->memType = QNN_TENSORMEMTYPE_MEMHANDLE;
-            QNN_VER_PTR(*tensor_0)->clientBuf= {.data=nullptr, .dataSize=0};
-
             QNN_VER_PTR(*tensor_1)->memType = QNN_TENSORMEMTYPE_MEMHANDLE;
             QNN_VER_PTR(*tensor_1)->clientBuf= {.data=nullptr, .dataSize=0};
 
@@ -2518,9 +2505,8 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
             QNN_VER_PTR(*tensor_2)->clientBuf= {.data=nullptr, .dataSize=0};
         }
 
-        error = qnn_raw_interface.tensorCreateGraphTensor(graph_handle, tensor_0);
-        if (QNN_SUCCESS != error) {
-            QNN_LOG_INFO("error = %d\n", error);
+        ggml_qnn_tensor_writer tensor_writer0(src0, graph_handle, ctx);
+        if (!tensor_writer0.is_valid()) {
             goto failure;
         }
         error = qnn_raw_interface.tensorCreateGraphTensor(graph_handle, tensor_1);
@@ -2534,9 +2520,6 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
             goto failure;
         }
 
-        QNN_VER_PTR(*tensor_0)->dimensions = dimensions_input_0;
-        QNN_VER_PTR(*tensor_0)->rank       = qnn_get_ggml_tensor_rank(src0);
-        QNN_VER_PTR(*tensor_0)->dataType   = src0_qnn_type;
         QNN_VER_PTR(*tensor_1)->dimensions = dimensions_input_1;
         QNN_VER_PTR(*tensor_1)->rank       = qnn_get_ggml_tensor_rank(src1);
         QNN_VER_PTR(*tensor_1)->dataType   = src1_qnn_type;
@@ -2545,28 +2528,14 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
         QNN_VER_PTR(*tensor_2)->dataType   = dst_qnn_type;
 
         if (ctx->device != QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_0)->clientBuf = {src0->data,
-                                                 qnn_get_ggml_tensor_data_size(src0)};
             QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data,
                                                  qnn_get_ggml_tensor_data_size(src1)};
             QNN_VER_PTR(*tensor_2)->clientBuf = {dst->data,
                                                  qnn_get_ggml_tensor_data_size(dst)};
         } else {
-            uint8_t * qnn_buffer_0 = nullptr;
             uint8_t * qnn_buffer_1 = nullptr;
             uint8_t * qnn_buffer_2 = nullptr;
             qnn_instance * instance = ctx->instance;
-
-            qnn_buffer_0 = static_cast<uint8_t *>(instance->alloc_rpcmem(
-                    ggml_nbytes(src0), 4));
-            if (nullptr == qnn_buffer_0) {
-                QNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
-                goto  failure;
-            } else {
-                QNN_LOG_INFO("alloc rpcmem successfully\n");
-            }
-            instance->register_rpcmem(qnn_buffer_0, tensor_0);
-            memcpy(qnn_buffer_0, src0->data, ggml_nbytes(src0));
 
             qnn_buffer_1 = static_cast<uint8_t *>(instance->alloc_rpcmem(
                     ggml_nbytes(src1), 4));
@@ -2590,7 +2559,7 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
             instance->register_rpcmem(qnn_buffer_2, tensor_2);
         }
 
-        Qnn_Tensor_t   tensor_inputs[]  = {*tensor_0, *tensor_1};
+        Qnn_Tensor_t   tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_1};
         Qnn_Tensor_t   tensor_outputs[] = {*tensor_2};
         Qnn_OpConfig_t op_config = {
                 (Qnn_OpConfigVersion_t) 1,
@@ -2632,27 +2601,20 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
             memcpy(dst->data, qnn_buffer_2, ggml_nbytes(dst));
         }
 
-        auto graph_item = std::make_tuple(graph_handle, tensor_0, tensor_1, tensor_2);
+        auto graph_item = std::make_tuple(graph_handle, tensor_writer0.get_qnn_tensor(), tensor_1, tensor_2);
         instance->_qnn_graph_map[map_entry] = graph_item;
     } else {
         auto & graph_item= instance->_qnn_graph_map[map_entry];
-        graph_handle     = std::get<0>(graph_item);
-        tensor_0         = std::get<1>(graph_item);
+        ggml_qnn_tensor_writer tensor_writer0(src0, std::get<1>(graph_item), ctx);
         tensor_1         = std::get<2>(graph_item);
         tensor_2         = std::get<3>(graph_item);
 
-        uint32_t dimensions_input_0[] = {
-            (uint32_t) src0->ne[0], (uint32_t) src0->ne[1],
-            (uint32_t) src0->ne[2], (uint32_t) src0->ne[3]};
         uint32_t dimensions_input_1[] = {
             (uint32_t) src1->ne[0], (uint32_t) src1->ne[1],
             (uint32_t) src1->ne[2], (uint32_t) src1->ne[3]};
         uint32_t dimensions_output[] = {
             (uint32_t) dst->ne[0], (uint32_t) dst->ne[1], (uint32_t) dst->ne[2],
             (uint32_t) dst->ne[3]};
-        QNN_VER_PTR(*tensor_0)->dimensions = dimensions_input_0;
-        QNN_VER_PTR(*tensor_0)->rank       = qnn_get_ggml_tensor_rank(src0);
-        QNN_VER_PTR(*tensor_0)->dataType   = src0_qnn_type;
         QNN_VER_PTR(*tensor_1)->dimensions = dimensions_input_1;
         QNN_VER_PTR(*tensor_1)->rank       = qnn_get_ggml_tensor_rank(src1);
         QNN_VER_PTR(*tensor_1)->dataType   = src1_qnn_type;
@@ -2661,25 +2623,18 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
         QNN_VER_PTR(*tensor_2)->dataType   = dst_qnn_type;
 
         if (ctx->device != QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_0)->clientBuf = {src0->data,
-                                                 qnn_get_ggml_tensor_data_size(src0)};
             QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data,
                                                  qnn_get_ggml_tensor_data_size(src1)};
             QNN_VER_PTR(*tensor_2)->clientBuf = {dst->data,
                                                  qnn_get_ggml_tensor_data_size(dst)};
         } else {
-            uint8_t * qnn_buffer_0 = static_cast<uint8_t *>(ctx->instance->get_rpcmem_from_memhandle(
-                    QNN_VER_PTR(*tensor_0)->memHandle));
-            if (nullptr != qnn_buffer_0)
-                memcpy(qnn_buffer_0, src0->data, ggml_nbytes(src0));
-
             uint8_t * qnn_buffer_1 = static_cast<uint8_t *>(ctx->instance->get_rpcmem_from_memhandle(
                     QNN_VER_PTR(*tensor_1)->memHandle));
             if (nullptr != qnn_buffer_1)
                 memcpy(qnn_buffer_1, src1->data, ggml_nbytes(src1));
         }
 
-        Qnn_Tensor_t tensor_inputs[]  = {*tensor_0, *tensor_1};
+        Qnn_Tensor_t tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_1};
         Qnn_Tensor_t tensor_outputs[] = {*tensor_2};
         error = qnn_raw_interface.graphExecute(graph_handle,
                                            tensor_inputs, 2,
@@ -2705,7 +2660,6 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
 
 failure:
     if (QNN_SUCCESS != error) {
-        QNN_LOG_DEBUG("tensor0 name %s", QNN_TENSOR_GET_NAME(*tensor_0));
         QNN_LOG_DEBUG("tensor1 name %s", QNN_TENSOR_GET_NAME(*tensor_1));
         QNN_LOG_DEBUG("tensor2 name %s", QNN_TENSOR_GET_NAME(*tensor_2));
         QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64
@@ -2724,7 +2678,6 @@ failure:
                       dst->ne[1], dst->ne[2], dst->nb[0], dst->nb[1], dst->nb[2]);
     }
 
-    QNN_VER_PTR(*tensor_0)->dimensions = tensor_0_dimensions;
     QNN_VER_PTR(*tensor_1)->dimensions = tensor_1_dimensions;
     QNN_VER_PTR(*tensor_2)->dimensions = tensor_2_dimensions;
     perf.info();
