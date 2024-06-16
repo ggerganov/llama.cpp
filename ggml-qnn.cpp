@@ -1991,7 +1991,6 @@ public:
         QNN_VER_PTR(*_qnn_tensor)->dimensions = _dimensions;
         QNN_VER_PTR(*_qnn_tensor)->rank = qnn_get_ggml_tensor_rank(tensor);
         QNN_VER_PTR(*_qnn_tensor)->dataType = qnn_data_type;
-        
 
         if (is_npu) {
             qnn_instance * instance = ctx->instance;
@@ -2090,26 +2089,15 @@ static void ggml_qnn_add(ggml_backend_qnn_context * ctx, const ggml_tensor * src
     qnn_instance *    instance          = nullptr;
     std::string       graph_name        = "ggml_op_qnn_add";
     Qnn_GraphHandle_t graph_handle      = nullptr;
-    Qnn_Tensor_t *    tensor_1          = nullptr;
     Qnn_Param_t       qnn_params[]      = {};
     enum ggml_op      ggmlop            = GGML_OP_ADD;
-    Qnn_DataType_t    src1_qnn_type     = QNN_DATATYPE_FLOAT_32;
 
     CHECK_PARAMS(ctx, src0, src1, dst);
-    tensor_1 = (Qnn_Tensor_t *) src1->extra;
     instance = ctx->instance;
     QNN_INTERFACE_VER_TYPE qnn_raw_interface = ctx->raw_interface;
 
     qnn_perf perf("ggml_qnn_add");
     perf.start();
-
-    QNN_VER_PTR(*tensor_1)->type = QNN_TENSOR_TYPE_APP_WRITE;
-
-    src1_qnn_type = qnn_datatype_from_ggml_datatype(src1->type);
-
-    uint32_t dimensions_input_1[] = {
-        (uint32_t) src1->ne[0], (uint32_t) src1->ne[1], (uint32_t) src1->ne[2],
-        (uint32_t) src1->ne[3]};
 
     std::string map_entry = std::string(ggml_op_name(ggmlop));
     if (instance->_qnn_graph_map.find(map_entry) !=
@@ -2118,8 +2106,6 @@ static void ggml_qnn_add(ggml_backend_qnn_context * ctx, const ggml_tensor * src
         auto & graph_item = instance->_qnn_graph_map[map_entry];
         graph_handle      = std::get<0>(graph_item);
     }
-
-    uint32_t * tensor_1_dimensions = QNN_VER_PTR(*tensor_1)->dimensions;
 
     if (!graph_initialized) {
         graph_name = graph_name + "_" + std::to_string(ctx->threads) +
@@ -2178,49 +2164,21 @@ static void ggml_qnn_add(ggml_backend_qnn_context * ctx, const ggml_tensor * src
             QNN_LOG_INFO("create qnn graph handle with graph name %s ok\n", graph_name.c_str());
         }
 
-        if (ctx->device == QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_1)->memType = QNN_TENSORMEMTYPE_MEMHANDLE;
-            QNN_VER_PTR(*tensor_1)->clientBuf= {.data=nullptr, .dataSize=0};
-        }
-
         ggml_qnn_tensor_writer tensor_writer0(src0, graph_handle, ctx);
         if (!tensor_writer0.is_valid()) {
             goto failure;
         }
-        error = qnn_raw_interface.tensorCreateGraphTensor(graph_handle, tensor_1);
-        if (QNN_SUCCESS != error) {
+        ggml_qnn_tensor_writer tensor_writer1(src1, graph_handle, ctx);
+        if (!tensor_writer1.is_valid()) {
             QNN_LOG_INFO("error = %d\n", error);
             goto failure;
         }
         ggml_qnn_tensor_reader tensor_reader(dst, graph_handle, ctx);
-        if (!tensor_writer0.is_valid()) {
+        if (!tensor_reader.is_valid()) {
             goto failure;
         }
 
-        QNN_VER_PTR(*tensor_1)->dimensions = dimensions_input_1;
-        QNN_VER_PTR(*tensor_1)->rank       = qnn_get_ggml_tensor_rank(src1);
-        QNN_VER_PTR(*tensor_1)->dataType   = src1_qnn_type;
-
-        if (ctx->device != QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data,
-                                                 qnn_get_ggml_tensor_data_size(src1)};
-        } else {
-            uint8_t * qnn_buffer_1 = nullptr;
-            qnn_instance * instance = ctx->instance;
-
-            qnn_buffer_1 = static_cast<uint8_t *>(instance->alloc_rpcmem(
-                    ggml_nbytes(src1), 4));
-            if (nullptr == qnn_buffer_1) {
-                QNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
-                goto failure;
-            } else {
-                QNN_LOG_INFO("alloc rpcmem successfully\n");
-            }
-            instance->register_rpcmem(qnn_buffer_1, tensor_1);
-            memcpy(qnn_buffer_1, src1->data, ggml_nbytes(src1));
-        }
-
-        Qnn_Tensor_t   tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_1};
+        Qnn_Tensor_t   tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_writer1.get_qnn_tensor()};
         Qnn_Tensor_t   tensor_outputs[] = {*tensor_reader.get_qnn_tensor()};
         Qnn_OpConfig_t op_config        = {
             (Qnn_OpConfigVersion_t) 1,
@@ -2256,33 +2214,18 @@ static void ggml_qnn_add(ggml_backend_qnn_context * ctx, const ggml_tensor * src
             goto failure;
         }
 
-        auto graph_item = std::make_tuple(graph_handle, tensor_writer0.get_qnn_tensor(), tensor_1, tensor_reader.get_qnn_tensor());
+        auto graph_item = std::make_tuple(graph_handle, 
+                                          tensor_writer0.get_qnn_tensor(), 
+                                          tensor_writer1.get_qnn_tensor(), 
+                                          tensor_reader.get_qnn_tensor());
         instance->_qnn_graph_map[map_entry] = graph_item;
     } else {
         auto & graph_item = instance->_qnn_graph_map[map_entry];
         ggml_qnn_tensor_writer tensor_writer0(src0, std::get<1>(graph_item), ctx);
-        tensor_1         = std::get<2>(graph_item);
+        ggml_qnn_tensor_writer tensor_writer1(src1, std::get<2>(graph_item), ctx);
         ggml_qnn_tensor_reader tensor_reader(dst, std::get<3>(graph_item), ctx);
 
-        uint32_t dimensions_input_1[] = {
-            (uint32_t) src1->ne[0], (uint32_t) src1->ne[1],
-            (uint32_t) src1->ne[2], (uint32_t) src1->ne[3]};
-
-        QNN_VER_PTR(*tensor_1)->dimensions = dimensions_input_1;
-        QNN_VER_PTR(*tensor_1)->rank       = qnn_get_ggml_tensor_rank(src1);
-        QNN_VER_PTR(*tensor_1)->dataType   = src1_qnn_type;
-
-        if (ctx->device != QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data,
-                                                 qnn_get_ggml_tensor_data_size(src1)};
-        } else {
-            uint8_t * qnn_buffer_1 = static_cast<uint8_t *>(ctx->instance->get_rpcmem_from_memhandle(
-                    QNN_VER_PTR(*tensor_1)->memHandle));
-            if (nullptr != qnn_buffer_1)
-                memcpy(qnn_buffer_1, src1->data, ggml_nbytes(src1));
-        }
-
-        Qnn_Tensor_t tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_1};
+        Qnn_Tensor_t tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_writer1.get_qnn_tensor()};
         Qnn_Tensor_t tensor_outputs[] = {*tensor_reader.get_qnn_tensor()};
         error = qnn_raw_interface.graphExecute(graph_handle,
                                            tensor_inputs,2,
@@ -2301,7 +2244,6 @@ static void ggml_qnn_add(ggml_backend_qnn_context * ctx, const ggml_tensor * src
 
 failure:
     if (QNN_SUCCESS != error) {
-        QNN_LOG_DEBUG("tensor1 name %s", QNN_TENSOR_GET_NAME(*tensor_1));
         QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64
                               " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
                       src0->name, src0->type, ggml_type_name(src0->type),
@@ -2318,8 +2260,6 @@ failure:
                       dst->ne[0], dst->ne[1], dst->ne[2], dst->nb[0],
                       dst->nb[1], dst->nb[2]);
     }
-
-    QNN_VER_PTR(*tensor_1)->dimensions = tensor_1_dimensions;
 
     perf.info();
 }
@@ -2343,29 +2283,15 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
     qnn_instance *    instance          = nullptr;
     std::string       graph_name        = "ggml_op_qnn_mul_mat";
     Qnn_GraphHandle_t graph_handle      = nullptr;
-    Qnn_Tensor_t *    tensor_1          = nullptr;
     Qnn_Param_t qnn_params[]            = {};
     enum ggml_op   ggmlop               = GGML_OP_MUL_MAT;
-    Qnn_DataType_t src1_qnn_type        = QNN_DATATYPE_FLOAT_32;
 
     CHECK_PARAMS(ctx, src0, src1, dst);
-    tensor_1 = (Qnn_Tensor_t *) src1->extra;
     instance = ctx->instance;
     QNN_INTERFACE_VER_TYPE qnn_raw_interface = ctx->raw_interface;
 
     qnn_perf perf("ggml_qnn_mul_mat");
     perf.start();
-
-    tensor_1 = (Qnn_Tensor_t *) src1->extra;
-    instance = ctx->instance;
-
-    QNN_VER_PTR(*tensor_1)->type = QNN_TENSOR_TYPE_APP_WRITE;
-
-    src1_qnn_type = qnn_datatype_from_ggml_datatype(src1->type);
-
-    uint32_t dimensions_input_1[] = {
-        (uint32_t) src1->ne[0], (uint32_t) src1->ne[1], (uint32_t) src1->ne[2],
-        (uint32_t) src1->ne[3]};
 
     std::string map_entry = std::string(ggml_op_name(ggmlop));
     if (instance->_qnn_graph_map.find(map_entry) !=
@@ -2374,8 +2300,6 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
         auto & graph_item = instance->_qnn_graph_map[map_entry];
         graph_handle      = std::get<0>(graph_item);
     }
-
-    uint32_t * tensor_1_dimensions = QNN_VER_PTR(*tensor_1)->dimensions;
 
     //TODO: for scenarios of quantized data in src0
     //      pass-1: dequantize src0 to FP32
@@ -2436,49 +2360,20 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
             goto failure;
         }
 
-        if (ctx->device == QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_1)->memType = QNN_TENSORMEMTYPE_MEMHANDLE;
-            QNN_VER_PTR(*tensor_1)->clientBuf= {.data=nullptr, .dataSize=0};
-        }
-
         ggml_qnn_tensor_writer tensor_writer0(src0, graph_handle, ctx);
         if (!tensor_writer0.is_valid()) {
             goto failure;
         }
-        error = qnn_raw_interface.tensorCreateGraphTensor(graph_handle, tensor_1);
-        if (QNN_SUCCESS != error) {
-            QNN_LOG_INFO("error = %d\n", error);
+        ggml_qnn_tensor_writer tensor_writer1(src1, graph_handle, ctx);
+        if (!tensor_writer1.is_valid()) {
             goto failure;
         }
         ggml_qnn_tensor_reader tensor_reader(dst, graph_handle, ctx);
-        if (!tensor_writer0.is_valid()) {
+        if (!tensor_reader.is_valid()) {
             goto failure;
         }
 
-        QNN_VER_PTR(*tensor_1)->dimensions = dimensions_input_1;
-        QNN_VER_PTR(*tensor_1)->rank       = qnn_get_ggml_tensor_rank(src1);
-        QNN_VER_PTR(*tensor_1)->dataType   = src1_qnn_type;
-
-        if (ctx->device != QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data,
-                                                 qnn_get_ggml_tensor_data_size(src1)};
-        } else {
-            uint8_t * qnn_buffer_1 = nullptr;
-            qnn_instance * instance = ctx->instance;
-
-            qnn_buffer_1 = static_cast<uint8_t *>(instance->alloc_rpcmem(
-                    ggml_nbytes(src1), 4));
-            if (nullptr == qnn_buffer_1) {
-                QNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
-                goto  failure;
-            } else {
-                QNN_LOG_INFO("alloc rpcmem successfully\n");
-            }
-            instance->register_rpcmem(qnn_buffer_1, tensor_1);
-            memcpy(qnn_buffer_1, src1->data, ggml_nbytes(src1));
-        }
-
-        Qnn_Tensor_t   tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_1};
+        Qnn_Tensor_t   tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_writer1.get_qnn_tensor()};
         Qnn_Tensor_t   tensor_outputs[] = {*tensor_reader.get_qnn_tensor()};
         Qnn_OpConfig_t op_config = {
                 (Qnn_OpConfigVersion_t) 1,
@@ -2514,32 +2409,18 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
             goto failure;
         }
 
-        auto graph_item = std::make_tuple(graph_handle, tensor_writer0.get_qnn_tensor(), tensor_1, tensor_reader.get_qnn_tensor());
+        auto graph_item = std::make_tuple(graph_handle, 
+                                          tensor_writer0.get_qnn_tensor(), 
+                                          tensor_writer1.get_qnn_tensor(), 
+                                          tensor_reader.get_qnn_tensor());
         instance->_qnn_graph_map[map_entry] = graph_item;
     } else {
         auto & graph_item= instance->_qnn_graph_map[map_entry];
         ggml_qnn_tensor_writer tensor_writer0(src0, std::get<1>(graph_item), ctx);
-        tensor_1         = std::get<2>(graph_item);
+        ggml_qnn_tensor_writer tensor_writer1(src1, std::get<2>(graph_item), ctx);
         ggml_qnn_tensor_reader tensor_reader(dst, std::get<3>(graph_item), ctx);
 
-        uint32_t dimensions_input_1[] = {
-            (uint32_t) src1->ne[0], (uint32_t) src1->ne[1],
-            (uint32_t) src1->ne[2], (uint32_t) src1->ne[3]};
-        QNN_VER_PTR(*tensor_1)->dimensions = dimensions_input_1;
-        QNN_VER_PTR(*tensor_1)->rank       = qnn_get_ggml_tensor_rank(src1);
-        QNN_VER_PTR(*tensor_1)->dataType   = src1_qnn_type;
-
-        if (ctx->device != QNN_BACKEND_NPU) {
-            QNN_VER_PTR(*tensor_1)->clientBuf = {src1->data,
-                                                 qnn_get_ggml_tensor_data_size(src1)};
-        } else {
-            uint8_t * qnn_buffer_1 = static_cast<uint8_t *>(ctx->instance->get_rpcmem_from_memhandle(
-                    QNN_VER_PTR(*tensor_1)->memHandle));
-            if (nullptr != qnn_buffer_1)
-                memcpy(qnn_buffer_1, src1->data, ggml_nbytes(src1));
-        }
-
-        Qnn_Tensor_t tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_1};
+        Qnn_Tensor_t tensor_inputs[]  = {*tensor_writer0.get_qnn_tensor(), *tensor_writer1.get_qnn_tensor()};
         Qnn_Tensor_t tensor_outputs[] = {*tensor_reader.get_qnn_tensor()};
         error = qnn_raw_interface.graphExecute(graph_handle,
                                            tensor_inputs, 2,
@@ -2558,7 +2439,6 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
 
 failure:
     if (QNN_SUCCESS != error) {
-        QNN_LOG_DEBUG("tensor1 name %s", QNN_TENSOR_GET_NAME(*tensor_1));
         QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64
                               " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
                       src0->name, src0->type, ggml_type_name(src0->type),
@@ -2575,7 +2455,6 @@ failure:
                       dst->ne[1], dst->ne[2], dst->nb[0], dst->nb[1], dst->nb[2]);
     }
 
-    QNN_VER_PTR(*tensor_1)->dimensions = tensor_1_dimensions;
     perf.info();
 }
 
