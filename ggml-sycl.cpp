@@ -4321,8 +4321,9 @@ static void dequantize_block_q4_K(const void * __restrict__ vx, dst_t * __restri
 
     dst_t * y = yy + i*QK_K + 64*il + n*ir;
 
-    const float dall = x[i].dm[0];
-    const float dmin = x[i].dm[1];
+    const sycl::half2 dm = x[i].dm;
+    const float dall = dm[0];
+    const float dmin = dm[1];
 
     const uint8_t * q = x[i].qs + 32*il + n*ir;
 
