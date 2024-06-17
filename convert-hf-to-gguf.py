@@ -1413,17 +1413,47 @@ class BitnetModel(Model):
         dtype = weight.dtype
         weight = weight.float()
         s = 1 / weight.abs().mean().clamp(min=1e-5)
-        result = (weight * s).round().clamp(-1, 1) / s
-        return result.type(dtype)
+        weight = (weight * s).round().clamp(-1, 1) / s
+        scale = weight.abs().max().unsqueeze(0)
+        weight = torch.where(weight.abs().less(1e-6), 0, weight).type(dtype)
+        weight = torch.sign(weight).type(dtype)
+        return weight.type(dtype), scale.type(torch.float32)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         # transform weight into 1/0/-1 (in fp32)
         if name.endswith(("q_proj.weight", "k_proj.weight", "v_proj.weight",
                           "down_proj.weight", "up_proj.weight", "gate_proj.weight",
                           "o_proj.weight")):
-            data_torch = self.weight_quant(data_torch)
+            weight_torch, scale_torch = self.weight_quant(data_torch)
 
-        return [(self.map_tensor_name(name), data_torch)]
+        tensors: list[tuple[str, Tensor]] = []
+
+        if name.endswith("q_proj.weight"):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid), weight_torch))
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q_SCALE, bid), scale_torch))
+        elif name.endswith("k_proj.weight"):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid), weight_torch))
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K_SCALE, bid), scale_torch))
+        elif name.endswith("v_proj.weight"):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V, bid), weight_torch))
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_V_SCALE, bid), scale_torch))
+        elif name.endswith("o_proj.weight"):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_OUT, bid), weight_torch))
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_OUT_SCALE, bid), scale_torch))
+        elif name.endswith("up_proj.weight"):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP, bid), weight_torch))
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP_SCALE, bid), scale_torch))
+        elif name.endswith("down_proj.weight"):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_DOWN, bid), weight_torch))
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_DOWN_SCALE, bid), scale_torch))
+        elif name.endswith("gate_proj.weight"):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE, bid), weight_torch))
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE_SCALE, bid), scale_torch))
+
+        if len(tensors) == 0:
+            tensors.append((self.map_tensor_name(name), data_torch))
+
+        return tensors
 
 
 @Model.register("GrokForCausalLM")

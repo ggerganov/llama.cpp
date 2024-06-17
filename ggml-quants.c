@@ -659,25 +659,44 @@ static inline __m128i packNibbles( __m256i bytes ) {
 }
 #endif  //__loongarch_asx
 
-void quantize_row_i8_s(const float * x, void * y, int64_t n, float* act_scales) {
-    int8_t* dst = (int8_t*)y;
-    double min = 0.00001;
-    double max = min;
-    for (int i = 0; i < n; ++i) {
-        max = MAX(max, (double)fabs((double)x[i]));
-    }
-    float s = 127 / max;
-    act_scales[0] = s;
-    float temp;
-    for (int i = 0; i < n; ++i) {
-        temp = round((double)(x[i] * s));
-        if (temp >  127) temp = 127;
-        if (temp < -128) temp = -128;
-        dst[i] = (int8_t)(temp);
+void quantize_row_q2_2_reference(const float * restrict x, block_q2_2 * restrict y, int64_t k) {
+    static const int qk = QK2_2;
+
+    assert(k % qk == 0);
+
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+
+        const float d  = 1.0f;
+
+        y[i].d = GGML_FP32_TO_FP16(d);
+
+        for (int j = 0; j < qk/4; ++j) {
+            int8_t x0 = (int8_t)x[i*qk + j*4 + 0];
+            int8_t x1 = (int8_t)x[i*qk + j*4 + 1];
+            int8_t x2 = (int8_t)x[i*qk + j*4 + 2];
+            int8_t x3 = (int8_t)x[i*qk + j*4 + 3];
+
+            const uint8_t xi0 = x0 >= 0 ? x0 : 3;
+            const uint8_t xi1 = x1 >= 0 ? x1 : 3;
+            const uint8_t xi2 = x2 >= 0 ? x2 : 3;
+            const uint8_t xi3 = x3 >= 0 ? x3 : 3;
+
+            y[i].qs[j] = 0;
+            y[i].qs[j] |= (xi0 << 6);
+            y[i].qs[j] |= (xi1 << 4);
+            y[i].qs[j] |= (xi2 << 2);
+            y[i].qs[j] |= (xi3 << 0);
+        }
     }
 }
 
 // reference implementation for deterministic creation of model files
+void quantize_row_q2_2(const float * restrict x, void * restrict y, int64_t k) {
+    quantize_row_q2_2_reference(x, y, k);
+}
+
 void quantize_row_q4_0_reference(const float * restrict x, block_q4_0 * restrict y, int64_t k) {
     static const int qk = QK4_0;
 
@@ -3324,48 +3343,11 @@ size_t quantize_q8_0(const float * restrict src, void * restrict dst, int64_t nr
     return nrow * row_size;
 }
 
-size_t quantize_i2_s(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
-    // 2 bits per weight
-    UNUSED(quant_weights);
-
-    size_t row_size = ggml_row_size(GGML_TYPE_I2_S, n_per_row);
-
-    int n = nrow * n_per_row;
-
-    // f32 -> q8
-    double max = 0;
-    for (int i = 0; i < n; ++i) {
-        max = MAX(max, (double)fabs((double)src[i]));
-    }
-    double i2_scale = max;
-
-    uint8_t* q8 = (uint8_t*)dst;
-    for (int i=0; i<n; i++) {
-        if (fabs((double)(src[i])) < 1e-6) {
-            q8[i] = 0;
-            continue;
-        }
-        q8[i] = (double)src[i] * i2_scale > 0 ? 1 : 3;
-    }
-
-    // q8 -> 0, 1, 3
-    //       |  |  |
-    //       0, 1,-1
-
-    uint8_t* i2_weight = (uint8_t*)dst;
-    for (int i=0; i<n; i++) {
-        int group_idx = i / 4;
-        int group_pos = i % 4;
-        uint8_t temp = (q8[i] << (6 - 2 * group_pos));
-        q8[i] = 0;
-        i2_weight[group_idx] |= temp;
-    }
-
-    float* scale_ptr = (float*)((char*)i2_weight + n / 4);
-    scale_ptr[0] = i2_scale;
-
-    // 32B for alignment
-    return nrow * row_size / 4 + 32;
+size_t quantize_q2_2(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
+    (void)quant_weights; // not used
+    const size_t row_size = ggml_row_size(GGML_TYPE_Q2_2, n_per_row);
+    quantize_row_q2_2_reference(src, dst, (int64_t)nrow*n_per_row);
+    return nrow * row_size;
 }
 
 // ====================== "True" 2-bit (de)-quantization
@@ -3788,83 +3770,59 @@ static inline __m128i get_scale_shuffle(int i) {
 }
 #endif
 
-//====================================== I2 ===============================================
+void ggml_vec_dot_q2_2_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
 
-void ggml_vec_dot_i2_i8_s(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
-    const uint8_t *    restrict x = vx;
-    const int8_t  *    restrict y = vy;
-
-    UNUSED(bs);
+    assert(n % qk == 0);
+    UNUSED(nrc);
     UNUSED(bx);
     UNUSED(by);
-    UNUSED(nrc);
+    UNUSED(bs);
+
+    const block_q2_2 * restrict x = vx;
+    const block_q8_0 * restrict y = vy;
 
 #if defined(__AVX2__)
-    __m256i accu = _mm256_setzero_si256();
+    __m256 acc = _mm256_setzero_ps();
 
-    // max group_size is 128 (2^8)
-    // limited by 8640 to 2 (8640 % (2 * 32) == 0)
-    int group_num = 2;
+    for (int i = 0; i < nb; ++i) {
 
-    for (int i=0; i < n / (group_num * 32); i++){
-        __m256i laccu = _mm256_setzero_si256();
-        __m256i haccu = _mm256_setzero_si256();
+        const __m256 d = _mm256_set1_ps( GGML_FP16_TO_FP32(y[i].d) );
 
-        for (int j=0; j < group_num; j++) {
-            __m256i xq8 = _mm256_set_epi32(
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 7]],
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 6]],
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 5]],
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 4]],
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 3]],
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 2]],
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 1]],
-                (int)i2s_i8s[x[i * group_num * 8 + j * 8 + 0]]
-            );
+        __m256i xq8 = _mm256_set_epi32(
+            (int)q22_grid[x[i].qs[7]],
+            (int)q22_grid[x[i].qs[6]],
+            (int)q22_grid[x[i].qs[5]],
+            (int)q22_grid[x[i].qs[4]],
+            (int)q22_grid[x[i].qs[3]],
+            (int)q22_grid[x[i].qs[2]],
+            (int)q22_grid[x[i].qs[1]],
+            (int)q22_grid[x[i].qs[0]]
+        );
 
-            __m256i yq8 = _mm256_loadu_si256((const __m256i*)(y + i * group_num * 32 + j * 32));
+        __m256i yq8 = _mm256_loadu_si256((const __m256i*)(y[i].qs));
+        const __m256 q = mul_sum_i8_pairs_float(xq8, yq8);
 
-            __m128i hxq8 = _mm256_castsi256_si128(xq8);
-            __m128i lxq8 = _mm256_extractf128_si256(xq8, 1);
-            __m128i hyq8 = _mm256_castsi256_si128(yq8);
-            __m128i lyq8 = _mm256_extractf128_si256(yq8, 1);
-
-            __m256i hxq16 = _mm256_cvtepi8_epi16(hxq8);
-            __m256i lxq16 = _mm256_cvtepi8_epi16(lxq8);
-            __m256i hyq16 = _mm256_cvtepi8_epi16(hyq8);
-            __m256i lyq16 = _mm256_cvtepi8_epi16(lyq8);
-
-            __m256i hzq16 = _mm256_sign_epi16(hyq16, hxq16);
-            __m256i lzq16 = _mm256_sign_epi16(lyq16, lxq16);
-
-            haccu = _mm256_add_epi16(haccu, hzq16);
-            laccu = _mm256_add_epi16(laccu, lzq16);
-        }
-
-        __m256i hhzq32 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(haccu));
-        __m256i hlzq32 = _mm256_cvtepi16_epi32(_mm256_extractf128_si256(haccu, 1));
-        __m256i llzq32 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(laccu));
-        __m256i lhzq32 = _mm256_cvtepi16_epi32(_mm256_extractf128_si256(laccu, 1));
-
-        accu = _mm256_add_epi32(accu, hhzq32);
-        accu = _mm256_add_epi32(accu, hlzq32);
-        accu = _mm256_add_epi32(accu, llzq32);
-        accu = _mm256_add_epi32(accu, lhzq32);
+        acc = _mm256_fmadd_ps( d, q, acc );
     }
-    int sumi = hsum_i32_8(accu);
-    *s = (float)sumi;
+
+    *s = hsum_float_8(acc);
 #else
 
-    int sumi = 0;
-
-    for (int i = 0; i < n / 4; i++) {
-        const int8_t* weight = (const int8_t *)(i2s_i8s + x[i]);
-        sumi += (int)y[i*4+0] * weight[0];
-        sumi += (int)y[i*4+1] * weight[1];
-        sumi += (int)y[i*4+2] * weight[2];
-        sumi += (int)y[i*4+3] * weight[3];
+    float sumf = 0.0;
+    for (int i = 0; i < nb; i++) {
+        int sumi = 0;
+        for (int j = 0; j < qk / 4; j++) {
+            const int8_t* weight = (const int8_t *)(q22_grid + x[i].qs[j]);
+            sumi += (int)y[i].qs[4*j+0] * weight[0];
+            sumi += (int)y[i].qs[4*j+1] * weight[1];
+            sumi += (int)y[i].qs[4*j+2] * weight[2];
+            sumi += (int)y[i].qs[4*j+3] * weight[3];
+        }
+        sumf += (float)(sumi)*(GGML_FP16_TO_FP32(y[i].d));
     }
-    *s = (float)sumi;
+    *s = sumf;
 #endif
 }
 
@@ -14411,6 +14369,10 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
                     }
                 }
             } break;
+        case GGML_TYPE_Q2_2:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q2_2, data, nb);
+            } break;
         case GGML_TYPE_Q4_0:
             {
                 VALIDATE_ROW_DATA_D_F16_IMPL(block_q4_0, data, nb);
@@ -14509,7 +14471,6 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
         case GGML_TYPE_I64:
-        case GGML_TYPE_I2_S:
             // nothing to validate
             break;
         default:

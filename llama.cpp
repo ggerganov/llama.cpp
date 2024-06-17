@@ -498,6 +498,13 @@ enum llm_tensor {
     LLM_TENSOR_ATTN_KV_A_NORM,
     LLM_TENSOR_ATTN_SUB_NORM,
     LLM_TENSOR_FFN_SUB_NORM,
+    LLM_TENSOR_ATTN_Q_SCALE,
+    LLM_TENSOR_ATTN_K_SCALE,
+    LLM_TENSOR_ATTN_V_SCALE,
+    LLM_TENSOR_ATTN_OUTPUT_SCALE,
+    LLM_TENSOR_FFN_UP_SCALE,
+    LLM_TENSOR_FFN_DOWN_SCALE,
+    LLM_TENSOR_FFN_GATE_SCALE,
 };
 
 static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
@@ -1114,19 +1121,26 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
     {
         LLM_ARCH_BITNET,
         {
-            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
-            { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
-            { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
-            { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
-            { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
-            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
-            { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
-            { LLM_TENSOR_ATTN_SUB_NORM,   "blk.%d.attn_sub_norm" },
-            { LLM_TENSOR_FFN_GATE,        "blk.%d.ffn_gate" },
-            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
-            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
-            { LLM_TENSOR_FFN_NORM,        "blk.%d.ffn_norm" },
-            { LLM_TENSOR_FFN_SUB_NORM,    "blk.%d.ffn_sub_norm" },
+            { LLM_TENSOR_TOKEN_EMBD,         "token_embd" },
+            { LLM_TENSOR_OUTPUT_NORM,        "output_norm" },
+            { LLM_TENSOR_ATTN_Q,             "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,             "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,             "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,           "blk.%d.attn_output" },
+            { LLM_TENSOR_ATTN_NORM,          "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_SUB_NORM,      "blk.%d.attn_sub_norm" },
+            { LLM_TENSOR_FFN_GATE,           "blk.%d.ffn_gate" },
+            { LLM_TENSOR_FFN_DOWN,           "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,             "blk.%d.ffn_up" },
+            { LLM_TENSOR_FFN_NORM,           "blk.%d.ffn_norm" },
+            { LLM_TENSOR_FFN_SUB_NORM,       "blk.%d.ffn_sub_norm" },
+            { LLM_TENSOR_ATTN_Q_SCALE,       "blk.%d.attn_q_scale" },
+            { LLM_TENSOR_ATTN_K_SCALE,       "blk.%d.attn_q_scale" },
+            { LLM_TENSOR_ATTN_V_SCALE,       "blk.%d.attn_q_scale" },
+            { LLM_TENSOR_ATTN_OUTPUT_SCALE,  "blk.%d.attn_output_scale" },
+            { LLM_TENSOR_FFN_UP_SCALE,       "blk.%d.ffn_up_scale" },
+            { LLM_TENSOR_FFN_DOWN_SCALE,     "blk.%d.ffn_down_scale" },
+            { LLM_TENSOR_FFN_GATE_SCALE,     "blk.%d.ffn_gate_scale" },
         },
     },
     {
@@ -2075,6 +2089,15 @@ struct llama_layer {
     // long rope factors
     struct ggml_tensor * rope_long  = nullptr;
     struct ggml_tensor * rope_short = nullptr;
+
+    // bitnet scale
+    struct ggml_tensor * wq_scale;
+    struct ggml_tensor * wk_scale;
+    struct ggml_tensor * wv_scale;
+    struct ggml_tensor * wo_scale;
+    struct ggml_tensor * ffn_gate_scale;
+    struct ggml_tensor * ffn_up_scale;
+    struct ggml_tensor * ffn_down_scale;
 };
 
 struct llama_kv_cell {
@@ -6460,16 +6483,23 @@ static bool llm_load_tensors(
                         layer.attn_sub_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_SUB_NORM, "weight", i), {n_embd});
 
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q, "weight", i), {n_embd, n_embd});
+                        layer.wq_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q_SCALE, "weight", i), {1});
                         layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K, "weight", i), {n_embd, n_embd_gqa});
+                        layer.wk_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K_SCALE, "weight", i), {1});
                         layer.wv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V, "weight", i), {n_embd, n_embd_gqa});
+                        layer.wv_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V_SCALE, "weight", i), {1});
                         layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
+                        layer.wo_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUTPUT_SCALE, "weight", i), {1});
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
                         layer.ffn_sub_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_SUB_NORM, "weight", i), {n_ff});
 
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff});
+                        layer.ffn_gate_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SCALE, "weight", i), {1});
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
+                        layer.ffn_down_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SCALE, "weight", i), {1});
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
+                        layer.ffn_up_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SCALE, "weight", i), {1});
                     }
                 } break;
             default:
@@ -11545,6 +11575,7 @@ struct llm_build_context {
             {
                 // compute Q and K and RoPE them
                 struct ggml_tensor * Qcur = ggml_mul_mat(ctx0, model.layers[il].wq, cur);
+                Qcur = ggml_mul(ctx0, Qcur, model.layers[il].wq_scale);
                 cb(Qcur, "Qcur", il);
                 if (model.layers[il].bq) {
                     Qcur = ggml_add(ctx0, Qcur, model.layers[il].bq);
@@ -11553,6 +11584,7 @@ struct llm_build_context {
 
                 // B1.K
                 struct ggml_tensor * Kcur = ggml_mul_mat(ctx0, model.layers[il].wk, cur);
+                Kcur = ggml_mul(ctx0, Kcur, model.layers[il].wk_scale);
                 cb(Kcur, "Kcur", il);
                 if (model.layers[il].bk) {
                     Kcur = ggml_add(ctx0, Kcur, model.layers[il].bk);
@@ -11561,6 +11593,7 @@ struct llm_build_context {
 
                 // B1.V
                 struct ggml_tensor * Vcur = ggml_mul_mat(ctx0, model.layers[il].wv, cur);
+                Vcur = ggml_mul(ctx0, Vcur, model.layers[il].wv_scale);
                 cb(Vcur, "Vcur", il);
                 if (model.layers[il].bv) {
                     Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
@@ -11659,6 +11692,7 @@ struct llm_build_context {
                 ggml_build_forward_expand(graph, cur_attn);
 
                 cur = ggml_mul_mat(ctx0, wo, cur_attn);
+                cur = ggml_mul(ctx0, cur, model.layers[il].wo_scale);
 
                 cb(cur, "kqv_out", il);
             }
@@ -11681,10 +11715,12 @@ struct llm_build_context {
                 cb(cur, "ffn_norm", il);
 
                 struct ggml_tensor *tmp = ggml_mul_mat(ctx0, model.layers[il].ffn_up, cur);
+                tmp = ggml_mul(ctx0, tmp, model.layers[il].ffn_up_scale);
     
                 cb(tmp, "ffn_up", il);
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].ffn_gate, cur);
+                cur = ggml_mul(ctx0, cur, model.layers[il].ffn_gate_scale);
 
                 cb(cur, "ffn_gate", il);
 
@@ -11701,6 +11737,7 @@ struct llm_build_context {
                 cb(cur, "ffn_sub_norm", il);
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].ffn_down, cur);
+                cur = ggml_mul(ctx0, cur, model.layers[il].ffn_down_scale);
                 cb(cur, "ffn_down", il);
             }
             cur = ggml_add(ctx0, cur, ffn_inp);
@@ -15444,6 +15481,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     llama_ftype ftype = params->ftype;
 
     switch (params->ftype) {
+        case LLAMA_FTYPE_MOSTLY_Q2_2: default_type = GGML_TYPE_Q2_2; break;
         case LLAMA_FTYPE_MOSTLY_Q4_0: default_type = GGML_TYPE_Q4_0; break;
         case LLAMA_FTYPE_MOSTLY_Q4_1: default_type = GGML_TYPE_Q4_1; break;
         case LLAMA_FTYPE_MOSTLY_Q5_0: default_type = GGML_TYPE_Q5_0; break;
@@ -15452,7 +15490,6 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         case LLAMA_FTYPE_MOSTLY_F16:  default_type = GGML_TYPE_F16;  break;
         case LLAMA_FTYPE_MOSTLY_BF16: default_type = GGML_TYPE_BF16; break;
         case LLAMA_FTYPE_ALL_F32:     default_type = GGML_TYPE_F32;  break;
-        case LLAMA_FTYPE_MOSTLY_I2_S: default_type = GGML_TYPE_I2_S; break;
 
         // K-quants
         case LLAMA_FTYPE_MOSTLY_Q2_K_S:

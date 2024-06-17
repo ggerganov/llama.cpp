@@ -137,6 +137,13 @@ typedef sycl::half2 ggml_half2;
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 
+#define QK2_2 32
+typedef struct {
+    ggml_half d;           // delta
+    uint8_t qs[QK2_2 / 4]; // nibbles / quants
+} block_q2_2;
+static_assert(sizeof(block_q2_2) == sizeof(ggml_half) + QK2_2 / 4, "wrong q4_0 block size/padding");
+
 #define QK4_0 32
 typedef struct {
     ggml_half d;           // delta
@@ -1022,7 +1029,7 @@ GGML_TABLE_BEGIN(uint32_t, iq3s_grid, 512)
     0x0f090307, 0x0f090501, 0x0f090b01, 0x0f0b0505, 0x0f0b0905, 0x0f0d0105, 0x0f0d0703, 0x0f0f0101,
 GGML_TABLE_END()
 
-GGML_TABLE_BEGIN(uint32_t, i2s_i8s, 256)
+GGML_TABLE_BEGIN(uint32_t, q22_grid, 256)
     0x00000000, 0x01000000, 0x00000000, 0xff000000,
     0x00010000, 0x01010000, 0x00010000, 0xff010000,
     0x00000000, 0x01000000, 0x00000000, 0xff000000,
