@@ -225,11 +225,11 @@ def translate_tensor_name(name):
 def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None:
     host_endian, file_endian = get_file_host_endian(reader)
     markdown_content = ""
-    markdown_content += f'# {args.model} - GGUF Internal File Dump\n'
-    markdown_content += f'* Endian: {file_endian} endian\n'
+    markdown_content += f'# {args.model} - GGUF Internal File Dump\n\n'
+    markdown_content += f'- Endian: {file_endian} endian\n'
     markdown_content += '\n'
     markdown_content += '## Key Value Metadata Store\n\n'
-    markdown_content += f'There is {len(reader.fields)} key/value pair(s) in this file\n'
+    markdown_content += f'There are {len(reader.fields)} key-value pairs in this file\n'
     markdown_content += '\n'
 
     kv_dump_table: list[dict[str, str | int]] = []
