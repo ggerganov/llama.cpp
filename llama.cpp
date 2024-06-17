@@ -13298,7 +13298,7 @@ struct llm_tokenizer_wpm {
         const std::vector<uint32_t> cpts_nfd = unicode_cpts_normalize_nfd(unicode_cpts_from_utf8(text));
         std::vector<std::string> words(1, "");
 
-        for (const char32_t cpt : cpts_nfd) {
+        for (const uint32_t cpt : cpts_nfd) {
             const auto flags = unicode_cpt_flags(cpt);
 
             if (flags.is_whitespace) {
