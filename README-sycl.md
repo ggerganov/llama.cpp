@@ -36,11 +36,11 @@ It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS,
 
 The SYCL backend would be broken by some PRs due to no online CI.
 
-Here is the releases with good quality:
+The following release is verified with good quality:
 
-|Commit ID|Tag|Release|
-|-|-|-|
-|fb76ec31a9914b7761c1727303ab30380fd4f05c|b3038 |[llama-b3038-bin-win-sycl-x64.zip](https://github.com/ggerganov/llama.cpp/releases/download/b3038/llama-b3038-bin-win-sycl-x64.zip) |
+|Commit ID|Tag|Release|Verify Platform|
+|-|-|-|-|
+|fb76ec31a9914b7761c1727303ab30380fd4f05c|b3038 |[llama-b3038-bin-win-sycl-x64.zip](https://github.com/ggerganov/llama.cpp/releases/download/b3038/llama-b3038-bin-win-sycl-x64.zip) |Arc770/Linux/oneAPI 2024.1<br>MTL Arc GPU/Windows 11/oneAPI 2024.1|
 
 
 ## News
