@@ -17,25 +17,10 @@ static std::vector<std::string> split_lines(const std::string & s) {
     return lines;
 }
 
-static bool needs_logit(enum llama_pooling_type pooling_type, int pos, int n_tokens) {
-    switch (pooling_type) {
-        case LLAMA_POOLING_TYPE_MEAN:
-        case LLAMA_POOLING_TYPE_NONE:
-            return true;
-        case LLAMA_POOLING_TYPE_CLS:
-            return pos == 0;
-        case LLAMA_POOLING_TYPE_LAST:
-            return pos == n_tokens - 1;
-        default:
-            GGML_ASSERT(false && "unsupported pooling type");
-    }
-}
-
-static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, llama_seq_id seq_id, enum llama_pooling_type pooling_type) {
+static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & tokens, llama_seq_id seq_id) {
     size_t n_tokens = tokens.size();
     for (size_t i = 0; i < n_tokens; i++) {
-        bool logit = needs_logit(pooling_type, i, n_tokens);
-        llama_batch_add(batch, tokens[i], i, { seq_id }, logit);
+        llama_batch_add(batch, tokens[i], i, { seq_id }, true);
     }
 }
 
@@ -192,7 +177,7 @@ int main(int argc, char ** argv) {
         }
 
         // add to batch
-        batch_add_seq(batch, inp, s, pooling_type);
+        batch_add_seq(batch, inp, s);
         s += 1;
     }
 
