@@ -1278,6 +1278,126 @@ struct no_init {
 };
 
 struct llama_file {
+
+#if defined(_WIN32)
+    // use FILE * so we don't have to re-open the file to mmap
+    FILE * fp;
+    HANDLE fp_win32;
+    size_t size;
+
+private:
+    std::string GetErrorMessageWin32(DWORD error_code) const {
+        std::string ret;
+        LPSTR lpMsgBuf = NULL;
+        DWORD bufLen = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                    NULL, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&lpMsgBuf, 0, NULL);
+        if (!bufLen) {
+            ret = format("Win32 error code: %s", error_code);
+        } else {
+            ret = lpMsgBuf;
+            LocalFree(lpMsgBuf);
+        }
+
+        return ret;
+    }
+
+public:
+
+    llama_file(const char * fname, const char * mode) {
+        fp = ggml_fopen(fname, mode);
+        if (fp == NULL) {
+            throw std::runtime_error(format("failed to open %s: %s", fname, strerror(errno)));
+        }
+        fp_win32 = (HANDLE) _get_osfhandle(_fileno(fp));
+        seek(0, SEEK_END);
+        size = tell();
+        seek(0, SEEK_SET);
+    }
+
+    size_t tell() const {
+        // SetFilePointerEx returns the current position when seeking relative 0 bytes
+        LARGE_INTEGER li;
+        li.QuadPart = 0;
+        BOOL ret = SetFilePointerEx(fp_win32, li, &li, FILE_CURRENT);
+        if (!ret) {
+            throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
+        }
+
+        return li.QuadPart;
+    }
+
+    void seek(size_t offset, int whence) const {
+        // no need to convert SEEK_* to FILE_*. The enums are the same.
+        // Still, keep static asserts to avoid failures in the future.
+        static_assert(SEEK_SET == FILE_BEGIN, "SEEK_SET != FILE_BEGIN");
+        static_assert(SEEK_CUR == FILE_CURRENT, "SEEK_CUR != FILE_CURRENT");
+        static_assert(SEEK_END == FILE_END, "SEEK_END != FILE_END");
+
+        LARGE_INTEGER li;
+        li.QuadPart = offset;
+        BOOL ret = SetFilePointerEx(fp_win32, li, NULL, whence);
+        if (!ret) {
+            throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
+        }
+    }
+
+    void read_raw(void * ptr, size_t len) const {
+        // On Win32 ReadFile is significant faster than fread which is again significant faster than std::fstream. Thus
+        // use the Win32 API to do file io instead of the C/C++ library functions.
+
+        // There are conditions under which ReadFile cannot read chunks >64MB.
+        // Thus split the operation into smaller chunks if len exceeds this limit.
+        size_t bytes_read = 0;
+        while (bytes_read < len) {
+            size_t chunk_size = std::min<size_t>(len - bytes_read, 64*1024*1024);
+            DWORD chunk_read = 0;
+            BOOL result = ReadFile(fp_win32, reinterpret_cast<char*>(ptr) + bytes_read, chunk_size, &chunk_read, NULL);
+            if (!result) {
+                throw std::runtime_error(format("read error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
+            }
+            if (chunk_read < chunk_size || chunk_read == 0) {
+                throw std::runtime_error("unexpectedly reached end of file");
+            }
+
+            bytes_read += chunk_read;
+        } ;
+    }
+
+    uint32_t read_u32() const {
+        uint32_t val;
+        read_raw(&val, sizeof(val));
+        return val;
+    }
+
+    void write_raw(const void * ptr, size_t len) const {
+        // There are conditions under which WriteFile cannot write chunks >64MB.
+        // Thus split the operation into smaller chunks if len exceeds this limit.
+        size_t bytes_written = 0;
+        while (bytes_written < len) {
+            size_t chunk_size = std::min<size_t>(len - bytes_written, 64*1024*1024);
+            DWORD chunk_written = 0;
+            BOOL result = WriteFile(fp_win32, reinterpret_cast<char const*>(ptr) + bytes_written, chunk_size, &chunk_written, NULL);
+            if (!result) {
+                throw std::runtime_error(format("write error: %s", GetErrorMessageWin32(GetLastError()).c_str()));
+            }
+            if (chunk_written < chunk_size || chunk_written == 0) {
+                throw std::runtime_error("unexpectedly failed to write bytes");
+            }
+
+            bytes_written += chunk_written;
+        }
+    }
+
+    void write_u32(std::uint32_t val) const {
+        write_raw(&val, sizeof(val));
+    }
+
+    ~llama_file() {
+        if (fp) {
+            std::fclose(fp);
+        }
+    }
+#else
     // use FILE * so we don't have to re-open the file to mmap
     FILE * fp;
     size_t size;
@@ -1298,7 +1418,10 @@ struct llama_file {
 #else
         long ret = std::ftell(fp);
 #endif
-        GGML_ASSERT(ret != -1); // this really shouldn't fail
+        if (ret == -1) {
+            throw std::runtime_error(format("ftell error: %s", strerror(errno)));
+        }
+
         return (size_t) ret;
     }
 
@@ -1308,7 +1431,9 @@ struct llama_file {
 #else
         int ret = std::fseek(fp, (long) offset, whence);
 #endif
-        GGML_ASSERT(ret == 0); // same
+        if (ret != 0) {
+            throw std::runtime_error(format("seek error: %s", strerror(errno)));
+        }
     }
 
     void read_raw(void * ptr, size_t len) const {
@@ -1351,6 +1476,7 @@ struct llama_file {
             std::fclose(fp);
         }
     }
+#endif
 };
 using llama_files = std::vector<std::unique_ptr<llama_file>>;
 
@@ -3721,6 +3847,44 @@ struct llama_model_loader {
         std::vector<no_init<uint8_t>> read_buf;
         std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
 
+#if defined(GGML_USE_CUDA)
+        // 4 staging buffers for async uploads, each sized 1MB seems to be a good default for single NVMe drives.
+        // NVMe raid configurations might require more / larger buffers.
+        constexpr size_t num_buffers = 4;
+        constexpr size_t buffer_size = 1 * 1024 * 1024; // 1MB
+
+        std::vector<ggml_backend_buffer_t> host_buffers;
+        std::vector<void*> host_ptrs;
+        std::vector<ggml_backend_event_t> events;
+        size_t buffer_idx = 0; // buffer to use for async loads
+
+        ggml_backend_t cuda_backend = nullptr;
+        if (!use_mmap && !check_tensors) {
+            // When not using mmaped io use async uploads from pinned memory to GPU memory.
+            // First determine if the CUDA backend is active, and if so, determine the device ID.
+            ggml_backend_buffer_t buf = bufs_mmap.count(0) ? bufs_mmap.at(0) : nullptr;
+            if (buf) {
+                ggml_backend_buffer_type_t buffer_type = ggml_backend_buffer_get_type(buf);
+                for (int i = 0; i < ggml_backend_cuda_get_device_count(); ++i) {
+                    auto * cuda_buffer_type = ggml_backend_cuda_buffer_type(i);
+                    if (buffer_type == cuda_buffer_type) {
+                        cuda_backend = ggml_backend_cuda_init(i);
+                        break;
+                    }
+                }
+            }
+
+            // If the cuda backend is active create pinned memory buffers and events for synchronisation.
+            if (cuda_backend) {
+                for (size_t idx = 0; idx < num_buffers; ++idx) {
+                    host_buffers.emplace_back(ggml_backend_buft_alloc_buffer(llama_default_buffer_type_cpu(true), buffer_size));
+                    host_ptrs.emplace_back(ggml_backend_buffer_get_base(host_buffers[idx]));
+                    events.emplace_back(ggml_backend_event_new(cuda_backend));
+                }
+            }
+        }
+#endif
+
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             const auto * weight = get_weight(ggml_get_name(cur));
             if (weight == nullptr) {
@@ -3776,18 +3940,54 @@ struct llama_model_loader {
                         }));
                     }
                 } else {
-                    read_buf.resize(n_size);
-                    file->seek(weight->offs, SEEK_SET);
-                    file->read_raw(read_buf.data(), n_size);
-                    ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
-                    if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
-                        throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+#if defined(GGML_USE_CUDA)
+                    // If cuda_backend is valid load the tensor in chunks to pinned memory and upload the buffers asynchronously to the GPU.
+                    if (cuda_backend) {
+                        file->seek(weight->offs, SEEK_SET);
+
+                        size_t bytes_read = 0;
+
+                        while (bytes_read < n_size) {
+                            size_t read_iteration = std::min<size_t>(buffer_size, n_size - bytes_read);
+
+                            ggml_backend_event_synchronize(events[buffer_idx]);
+                            file->read_raw(host_ptrs[buffer_idx], read_iteration);
+                            ggml_backend_tensor_set_async(cuda_backend, cur, host_ptrs[buffer_idx], bytes_read, read_iteration);
+                            ggml_backend_event_record(events[buffer_idx]);
+
+                            bytes_read += read_iteration;
+                            ++buffer_idx;
+                            buffer_idx %= num_buffers;
+                        }
+                    }
+                    else
+#endif
+                    {
+                        read_buf.resize(n_size);
+                        file->seek(weight->offs, SEEK_SET);
+                        file->read_raw(read_buf.data(), n_size);
+                        ggml_backend_tensor_set(cur, read_buf.data(), 0, n_size);
+                        if (check_tensors && !ggml_validate_row_data(cur->type, read_buf.data(), n_size)) {
+                            throw std::runtime_error(format("tensor '%s' has invalid data", ggml_get_name(cur)));
+                        }
                     }
                 }
             }
 
             size_done += n_size;
         }
+
+#if defined(GGML_USE_CUDA)
+        // free temporary resources used for async cuda uploads
+        if (cuda_backend) {
+            for (size_t idx = 0; idx < num_buffers;++idx) {
+                ggml_backend_event_synchronize(events[idx]);
+                ggml_backend_event_free(events[idx]);
+                ggml_backend_buffer_free(host_buffers[idx]);
+            }
+            ggml_backend_free(cuda_backend);
+        }
+#endif
 
         // check validation results
         bool validation_failed = false;
