@@ -569,7 +569,7 @@ class Model:
         special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _set_vocab_sentencepiece(self):
+    def _set_vocab_sentencepiece(self, special_vocab=None):
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
@@ -637,7 +637,8 @@ class Model:
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
 
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        if special_vocab is None:
+            special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def _set_vocab_llama_hf(self):
@@ -2237,7 +2238,6 @@ class GemmaModel(Model):
     model_arch = gguf.MODEL_ARCH.GEMMA
 
     def set_vocab(self):
-        self._set_vocab_sentencepiece()
 
         # TODO: these special tokens should be exported only for the CodeGemma family
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
@@ -2247,7 +2247,8 @@ class GemmaModel(Model):
         special_vocab._set_special_token("middle", 68)
         special_vocab._set_special_token("fsep",   70)
         special_vocab._set_special_token("eot",    107)
-        special_vocab.add_to_gguf(self.gguf_writer)
+
+        self._set_vocab_sentencepiece(special_vocab)
 
     def set_gguf_parameters(self):
         hparams = self.hparams
