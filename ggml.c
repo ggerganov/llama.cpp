@@ -1753,9 +1753,8 @@ struct ggml_compute_state_shared {
     int n_threads;
 
     // synchronization primitives
-    //atomic_int n_active;  // num active threads
-    //atomic_int node_n;    // active graph node
-    //atomic_int node_task; // active graph node task phase
+    atomic_int n_barrier;
+    atomic_int n_barrier_passed;
 
     ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
     void* abort_callback_data;
@@ -18972,6 +18971,43 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
     return n_tasks;
 }
 
+#ifdef GGML_USE_OPENMP
+static void ggml_barrier(struct ggml_compute_state * state) {
+    #pragma omp barrier
+    UNUSED(state);
+}
+#else
+static void ggml_barrier(struct ggml_compute_state * state) {
+    atomic_int * n_barrier = &state->shared->n_barrier;
+    atomic_int * n_barrier_passed = &state->shared->n_barrier_passed;
+
+    int n_threads = state->shared->n_threads;
+    int passed_old = atomic_load(n_barrier_passed);
+
+    if (atomic_fetch_add(n_barrier, 1) == n_threads - 1) {
+        // last thread
+        atomic_store(n_barrier, 0);
+        atomic_fetch_add(n_barrier_passed, 1);
+    } else {
+        // wait for other threads
+        //while (atomic_load(n_barrier_passed) == passed_old) {
+        //}
+        const int n_spin_before_sleep = 100;
+        while (true) {
+            for (int i = 0; i < n_spin_before_sleep; i++) {
+                if (atomic_load(n_barrier_passed) != passed_old) {
+                    return;
+                }
+            #if defined(__SSE3__)
+                _mm_pause();
+            #endif
+            }
+            sched_yield();
+        }
+    }
+}
+#endif
+
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
 
@@ -19008,7 +19044,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 params.type = GGML_TASK_TYPE_INIT;
                 ggml_compute_forward(&params, node, state);
             }
-            #pragma omp barrier
+            ggml_barrier(state);
         }
 
         /* COMPUTE */
@@ -19017,7 +19053,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             ggml_compute_forward(&params, node, state);
         }
 
-        #pragma omp barrier
+        ggml_barrier(state);
 
         /* FINALIZE */
         if (GGML_OP_HAS_FINALIZE[node->op]) {
@@ -19025,7 +19061,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 params.type = GGML_TASK_TYPE_FINALIZE;
                 ggml_compute_forward(&params, node, state);
             }
-            #pragma omp barrier
+            ggml_barrier(state);
         }
     }
 
@@ -19274,6 +19310,8 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         /*.perf_node_start_cycles  =*/ 0,
         /*.perf_node_start_time_us =*/ 0,
         /*.n_threads               =*/ n_threads,
+        /*.n_barrier               =*/ 0,
+        /*.n_barrier_passed        =*/ 0,
         /*.abort_callback          =*/ NULL,
         /*.abort_callback_data     =*/ NULL,
         /*.current_chunk;          =*/ 0,
