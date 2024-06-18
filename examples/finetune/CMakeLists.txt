@@ -1,4 +1,4 @@
-set(TARGET finetune)
+set(TARGET llama-finetune)
 add_executable(${TARGET} finetune.cpp)
 install(TARGETS ${TARGET} RUNTIME)
 target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})

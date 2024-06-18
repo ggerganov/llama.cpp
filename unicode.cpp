@@ -226,7 +226,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
         assert(offset_end <= cpts.size());
         start = offset_end;
 
-        auto _get_cpt = [&] (const size_t pos) -> char32_t {
+        auto _get_cpt = [&] (const size_t pos) -> uint32_t {
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
         };
 
@@ -253,18 +253,18 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
         };
 
         for (size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
-            const char32_t cpt = _get_cpt(pos);
+            const uint32_t cpt = _get_cpt(pos);
             const auto flags = _get_flags(pos);
 
             // regex: 's|'t|'re|'ve|'m|'ll|'d
             if (cpt == '\'' && pos+1 < offset_end) {
-                char32_t cpt_next = _get_cpt(pos+1);
+                uint32_t cpt_next = _get_cpt(pos+1);
                 if (cpt_next == 's' || cpt_next == 't' || cpt_next == 'm' || cpt_next == 'd') {
                     pos += _add_token(pos+2);
                     continue;
                 }
                 if (pos+2 < offset_end) {
-                    char32_t cpt_next_next = _get_cpt(pos+2);
+                    uint32_t cpt_next_next = _get_cpt(pos+2);
                     if ((cpt_next == 'r' && cpt_next_next == 'e') ||
                         (cpt_next == 'v' && cpt_next_next == 'e') ||
                         (cpt_next == 'l' && cpt_next_next == 'l')) {
@@ -344,7 +344,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
         assert(offset_end <= cpts.size());
         start = offset_end;
 
-        auto _get_cpt = [&] (const size_t pos) -> char32_t {
+        auto _get_cpt = [&] (const size_t pos) -> uint32_t {
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
         };
 
@@ -371,18 +371,18 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
         };
 
         for (size_t pos = offset_ini; pos < offset_end; /*pos++*/ ) {
-            const char32_t cpt = _get_cpt(pos);
+            const uint32_t cpt = _get_cpt(pos);
             const auto flags = _get_flags(pos);
 
             // regex: (?i:'s|'t|'re|'ve|'m|'ll|'d) // case insensitive
             if (cpt == '\'' && pos+1 < offset_end) {
-                char32_t cpt_next = unicode_tolower(_get_cpt(pos+1));
+                uint32_t cpt_next = unicode_tolower(_get_cpt(pos+1));
                 if (cpt_next == 's' || cpt_next == 't' || cpt_next == 'm' || cpt_next == 'd') {
                     pos += _add_token(pos+2);
                     continue;
                 }
                 if (pos+2 < offset_end) {
-                    char32_t cpt_next_next = unicode_tolower(_get_cpt(pos+2));
+                    uint32_t cpt_next_next = unicode_tolower(_get_cpt(pos+2));
                     if ((cpt_next == 'r' && cpt_next_next == 'e') ||
                         (cpt_next == 'v' && cpt_next_next == 'e') ||
                         (cpt_next == 'l' && cpt_next_next == 'l')) {
@@ -424,7 +424,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
                 while (!(flags2.is_whitespace || flags2.is_letter || flags2.is_number || flags2.is_undefined)) {
                     flags2 = _get_flags(++pos);
                 }
-                char32_t cpt2 = _get_cpt(pos);
+                uint32_t cpt2 = _get_cpt(pos);
                 while (cpt2 == '\r' || cpt2 == '\n') {
                     cpt2 = _get_cpt(++pos);
                 }
@@ -435,7 +435,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             size_t num_whitespaces = 0;
             size_t last_end_r_or_n = 0;
             while (_get_flags(pos+num_whitespaces).is_whitespace) {
-                char32_t cpt2 = _get_cpt(pos+num_whitespaces);
+                uint32_t cpt2 = _get_cpt(pos+num_whitespaces);
                 if (cpt2 == '\r' || cpt2 == '\n') {
                     last_end_r_or_n = pos + num_whitespaces + 1;
                 }
@@ -626,7 +626,7 @@ uint8_t unicode_utf8_to_byte(const std::string & utf8) {
     return map.at(utf8);
 }
 
-char32_t unicode_tolower(char32_t cp) {
+uint32_t unicode_tolower(uint32_t cp) {
     auto it = unicode_map_lowercase.find(cp);
     return it == unicode_map_lowercase.end() ? cp : it->second;
 }

@@ -73,8 +73,12 @@ struct rpc_tensor {
     uint64_t view_offs;
     uint64_t data;
     char name[GGML_MAX_NAME];
+
+    char padding[4];
 };
 #pragma pack(pop)
+
+static_assert(sizeof(rpc_tensor) % 8 == 0, "rpc_tensor size must be multiple of 8");
 
 // RPC commands
 enum rpc_cmd {
@@ -540,22 +544,12 @@ GGML_CALL static size_t ggml_backend_rpc_buffer_type_get_alloc_size(ggml_backend
     return ggml_nbytes(tensor);
 }
 
-GGML_CALL static bool ggml_backend_rpc_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
-    if (!ggml_backend_is_rpc(backend)) {
-        return false;
-    }
-    ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
-    ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
-    return buft_ctx->endpoint == rpc_ctx->endpoint;
-}
-
 static ggml_backend_buffer_type_i ggml_backend_rpc_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_rpc_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_rpc_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_rpc_buffer_type_get_alignment,
     /* .get_max_size     = */ ggml_backend_rpc_get_max_size,
     /* .get_alloc_size   = */ ggml_backend_rpc_buffer_type_get_alloc_size,
-    /* .supports_backend = */ ggml_backend_rpc_buffer_type_supports_backend,
     /* .is_host          = */ NULL,
 };
 
@@ -609,9 +603,8 @@ static void serialize_graph(const ggml_cgraph * cgraph, std::vector<uint8_t> & o
     int output_size = sizeof(uint32_t) + n_nodes * sizeof(uint64_t) + sizeof(uint32_t) + n_tensors * sizeof(rpc_tensor);
     output.resize(output_size, 0);
     memcpy(output.data(), &n_nodes, sizeof(n_nodes));
-    uint64_t * out_nodes = (uint64_t *)(output.data() + sizeof(n_nodes));
     for (uint32_t i = 0; i < n_nodes; i++) {
-        out_nodes[i] = reinterpret_cast<uint64_t>(cgraph->nodes[i]);
+        memcpy(output.data() + sizeof(n_nodes) + i * sizeof(uint64_t), &cgraph->nodes[i], sizeof(uint64_t));
     }
     uint32_t * out_ntensors = (uint32_t *)(output.data() + sizeof(n_nodes) + n_nodes * sizeof(uint64_t));
     *out_ntensors = n_tensors;
@@ -634,8 +627,17 @@ GGML_CALL static enum ggml_status ggml_backend_rpc_graph_compute(ggml_backend_t 
 GGML_CALL static bool ggml_backend_rpc_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
     UNUSED(backend);
     UNUSED(op);
-    GGML_ASSERT(false && "not implemented");
-    return false;
+    //TODO: call the remote backend and cache the results
+    return true;
+}
+
+GGML_CALL static bool ggml_backend_rpc_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
+    if (buft->iface.get_name != ggml_backend_rpc_buffer_type_name) {
+        return false;
+    }
+    ggml_backend_rpc_buffer_type_context * buft_ctx = (ggml_backend_rpc_buffer_type_context *)buft->context;
+    ggml_backend_rpc_context * rpc_ctx = (ggml_backend_rpc_context *)backend->context;
+    return buft_ctx->endpoint == rpc_ctx->endpoint;
 }
 
 static ggml_backend_i ggml_backend_rpc_interface = {
@@ -648,9 +650,11 @@ static ggml_backend_i ggml_backend_rpc_interface = {
     /* .synchronize             = */ ggml_backend_rpc_synchronize,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
+    /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_rpc_graph_compute,
     /* .supports_op             = */ ggml_backend_rpc_supports_op,
+    /* .supports_buft           = */ ggml_backend_rpc_supports_buft,
     /* .offload_op              = */ NULL,
     /* .event_new               = */ NULL,
     /* .event_free              = */ NULL,
@@ -1035,7 +1039,9 @@ bool rpc_server::graph_compute(const std::vector<uint8_t> & input, std::vector<u
     }
     std::unordered_map<uint64_t, ggml_tensor*> tensor_map;
     for (uint32_t i = 0; i < n_nodes; i++) {
-        graph->nodes[i] = create_node(nodes[i], ctx, tensor_ptrs, tensor_map);
+        int64_t id;
+        memcpy(&id, &nodes[i], sizeof(id));
+        graph->nodes[i] = create_node(id, ctx, tensor_ptrs, tensor_map);
     }
     ggml_status status = ggml_backend_graph_compute(backend, graph);
     // output serialization format: | status (1 byte) |

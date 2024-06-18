@@ -59,9 +59,13 @@ Parentheses `()` can be used to group sequences, which allows for embedding alte
 
 ## Repetition and Optional Symbols
 
-- `*` after a symbol or sequence means that it can be repeated zero or more times.
-- `+` denotes that the symbol or sequence should appear one or more times.
-- `?` makes the preceding symbol or sequence optional.
+- `*` after a symbol or sequence means that it can be repeated zero or more times (equivalent to `{0,}`).
+- `+` denotes that the symbol or sequence should appear one or more times (equivalent to `{1,}`).
+- `?` makes the preceding symbol or sequence optional (equivalent to `{0,1}`).
+- `{m}` repeats the precedent symbol or sequence exactly `m` times
+- `{m,}` repeats the precedent symbol or sequence at least `m` times
+- `{m,n}` repeats the precedent symbol or sequence at between `m` and `n` times (included)
+- `{0,n}` repeats the precedent symbol or sequence at most `n` times (included)
 
 ## Comments and newlines
 
@@ -87,8 +91,10 @@ item ::= [^\n]+ "\n"
 
 This guide provides a brief overview. Check out the GBNF files in this directory (`grammars/`) for examples of full grammars. You can try them out with:
 ```
-./main -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
+./llama-cli -m <model> --grammar-file grammars/some-grammar.gbnf -p 'Some prompt'
 ```
+
+`llama.cpp` can also convert JSON schemas to grammars either ahead of time or at each request, see below.
 
 ## Troubleshooting
 
@@ -98,4 +104,41 @@ Grammars currently have performance gotchas (see https://github.com/ggerganov/ll
 
 A common pattern is to allow repetitions of a pattern `x` up to N times.
 
-While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) will result in extremely slow inference. Instead, you can write `(x (x (x ... (x)?...)?)?)?` (w/ N-deep nesting)
+While semantically correct, the syntax `x? x? x?.... x?` (with N repetitions) may result in extremely slow sampling. Instead, you can write `x{0,N}` (or `(x (x (x ... (x)?...)?)?)?` w/ N-deep nesting in earlier llama.cpp versions).
+
+## Using GBNF grammars
+
+You can use GBNF grammars:
+
+- In [llama-server](../examples/server)'s completion endpoints, passed as the `grammar` body field
+- In [llama-cli](../examples/main), passed as the `--grammar` & `--grammar-file` flags
+- With [llama-gbnf-validator](../examples/gbnf-validator) tool, to test them against strings.
+
+## JSON Schemas → GBNF
+
+`llama.cpp` supports converting a subset of https://json-schema.org/ to GBNF grammars:
+
+- In [llama-server](../examples/server):
+    - For any completion endpoints, passed as the `json_schema` body field
+    - For the `/chat/completions` endpoint, passed inside the `result_format` body field (e.g. `{"type", "json_object", "schema": {"items": {}}}`)
+- In [llama-cli](../examples/main), passed as the `--json` / `-j` flag
+- To convert to a grammar ahead of time:
+    - in CLI, with [examples/json_schema_to_grammar.py](../examples/json_schema_to_grammar.py)
+    - in JavaScript with [json-schema-to-grammar.mjs](../examples/server/public/json-schema-to-grammar.mjs) (this is used by the [server](../examples/server)'s Web UI)
+
+Take a look at [tests](../../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/llama.cpp/pull/5978, https://github.com/ggerganov/llama.cpp/pull/6659 & https://github.com/ggerganov/llama.cpp/pull/6555).
+
+Here is also a non-exhaustive list of **unsupported** features:
+
+- `additionalProperties`: to be fixed in https://github.com/ggerganov/llama.cpp/pull/7840
+- `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`
+    - `integer` constraints to be implemented in https://github.com/ggerganov/llama.cpp/pull/7797
+- Remote `$ref`s in the C++ version (Python & JavaScript versions fetch https refs)
+- Mixing `properties` w/ `anyOf` / `oneOf` in the same type (https://github.com/ggerganov/llama.cpp/issues/7703)
+- `string` formats `uri`, `email`
+- [`contains`](https://json-schema.org/draft/2020-12/json-schema-core#name-contains) / `minContains`
+- `uniqueItems`
+- `$anchor` (cf. [dereferencing](https://json-schema.org/draft/2020-12/json-schema-core#name-dereferencing))
+- [`not`](https://json-schema.org/draft/2020-12/json-schema-core#name-not)
+- [Conditionals](https://json-schema.org/draft/2020-12/json-schema-core#name-keywords-for-applying-subsche) `if` / `then` / `else` / `dependentSchemas`
+- [`patternProperties`](https://json-schema.org/draft/2020-12/json-schema-core#name-patternproperties)
