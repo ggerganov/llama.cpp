@@ -47,6 +47,8 @@ void   ggml_sycl_get_device_description(int device, char * description, size_t d
 bool   ggml_backend_is_sycl(ggml_backend_t backend);
 int    ggml_backend_sycl_get_device(ggml_backend_t backend);
 static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer);
+static inline int get_sycl_env(const char *env_name, int default_val);
+static inline int get_work_group_size(const sycl::device& device);
 
 void dev2dev_memcpy(sycl::queue &q_dst, sycl::queue &q_src, void *ptr_dst,
                     const void *ptr_src, size_t size) {
@@ -1768,8 +1770,7 @@ static void norm_f32_sycl(const float *x, float *dst, const int ncols,
                     });
         });
     } else {
-        // FIXME: 1024 from cuda
-        const int work_group_size = GROUP_SIZE;
+        const int work_group_size = get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:17: The work-group size passed to the SYCL kernel may exceed
@@ -1815,7 +1816,7 @@ static void group_norm_f32_sycl(const float *x, float *dst,
                     });
         });
     } else {
-        const int work_group_size = GROUP_SIZE;
+        const int work_group_size = get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:18: The work-group size passed to the SYCL kernel may exceed
@@ -1904,7 +1905,7 @@ static void rms_norm_f32_sycl(const float *x, float *dst, const int ncols,
                     });
         });
     } else {
-        const int work_group_size = GROUP_SIZE;
+        const int work_group_size = get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:19: The work-group size passed to the SYCL kernel may exceed
@@ -2444,7 +2445,7 @@ static void soft_max_f32_sycl(const float * x, const float * mask,
                               const int nrows_y, const float scale, const float max_bias,
                               queue_ptr stream) {
     int nth = WARP_SIZE;
-    int max_block_size = GROUP_SIZE;
+    int max_block_size = get_work_group_size(stream->get_device());
     while (nth < ncols_x && nth < max_block_size) nth *= 2;
     if (nth>max_block_size) nth = max_block_size;
 
@@ -2596,7 +2597,7 @@ void ggml_backend_sycl_print_sycl_devices() {
     }
 }
 
-int get_sycl_env(const char *env_name, int default_val) {
+static inline int get_sycl_env(const char *env_name, int default_val) {
     char *user_device_string = getenv(env_name);
     int user_number = default_val;
 
@@ -2610,10 +2611,9 @@ int get_sycl_env(const char *env_name, int default_val) {
     return user_number;
 }
 
-int get_work_group_size(int user_device_id) {
+static inline int get_work_group_size(const sycl::device& device) {
     dpct::device_info prop;
-    dpct::get_device_info(prop,
-                          dpct::dev_mgr::instance().get_device(user_device_id));
+    dpct::get_device_info(prop, device);
     return prop.get_max_work_group_size();
 }
 
