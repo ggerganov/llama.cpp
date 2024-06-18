@@ -18992,7 +18992,7 @@ static void ggml_barrier(struct ggml_compute_state * state) {
         // wait for other threads
         //while (atomic_load(n_barrier_passed) == passed_old) {
         //}
-        const int n_spin_before_sleep = 100;
+        const int n_spin_before_sleep = 100000;
         while (true) {
             for (int i = 0; i < n_spin_before_sleep; i++) {
                 if (atomic_load(n_barrier_passed) != passed_old) {
