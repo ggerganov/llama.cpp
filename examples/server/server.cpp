@@ -2038,7 +2038,12 @@ struct server_context {
                             prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(model)); // always add BOS
                             prefix_tokens.insert(prefix_tokens.end(),   llama_token_suffix(model));
                             prefix_tokens.insert(prefix_tokens.end(),   suffix_tokens.begin(), suffix_tokens.end());
-                            prefix_tokens.push_back(llama_token_middle(model));
+
+                            const llama_token middle_token = llama_token_middle(model);
+                            if (middle_token >= 0) {
+                                prefix_tokens.push_back(middle_token);
+                            }
+
                             prompt_tokens = prefix_tokens;
                         } else {
                             prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
