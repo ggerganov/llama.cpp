@@ -101,8 +101,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
             logger.debug(f'Copying {field.name}')
 
         if val.value is not None:
-            writer.add_key(field.name)
-            writer.add_val(val.value, val.type)
+            writer.add_key_value(field.name, val.value, val.type)
 
     if gguf.Keys.Tokenizer.CHAT_TEMPLATE in new_metadata:
         logger.debug('Adding chat template(s)')
@@ -111,8 +110,7 @@ def copy_with_new_metadata(reader: gguf.GGUFReader, writer: gguf.GGUFWriter, new
 
     for key, val in new_metadata.items():
         logger.debug(f'Adding {key}: "{val.value}" {val.description}')
-        writer.add_key(key)
-        writer.add_val(val.value, val.type)
+        writer.add_key_value(key, val.value, val.type)
 
     total_bytes = 0
 
@@ -144,6 +142,7 @@ def main() -> None:
     parser.add_argument("--general-description",                       type=str,  help="The models general.description", metavar='"Description ..."')
     parser.add_argument("--chat-template",                             type=str,  help="Chat template string (or JSON string containing templates)", metavar='"{% ... %} ..."')
     parser.add_argument("--chat-template-config",                      type=Path, help="Config file containing chat template(s)", metavar='tokenizer_config.json')
+    parser.add_argument("--pre-tokenizer",                             type=str,  help="The models tokenizer.ggml.pre", metavar='"pre tokenizer"')
     parser.add_argument("--remove-metadata",      action="append",     type=str,  help="Remove metadata (by key name) from output model", metavar='general.url')
     parser.add_argument("--special-token",        action="append",     type=str,  help="Special token by value", nargs=2, metavar=(' | '.join(token_names.keys()), '"<token>"'))
     parser.add_argument("--special-token-by-id",  action="append",     type=str,  help="Special token by id", nargs=2, metavar=(' | '.join(token_names.keys()), '0'))
@@ -171,6 +170,9 @@ def main() -> None:
             template = config.get('chat_template')
             if template:
                 new_metadata[gguf.Keys.Tokenizer.CHAT_TEMPLATE] = MetadataDetails(gguf.GGUFValueType.STRING, template)
+
+    if args.pre_tokenizer:
+        new_metadata[gguf.Keys.Tokenizer.PRE] = MetadataDetails(gguf.GGUFValueType.STRING, args.pre_tokenizer)
 
     if remove_metadata:
         logger.warning('*** Warning *** Warning *** Warning **')

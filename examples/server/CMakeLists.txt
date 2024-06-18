@@ -1,4 +1,4 @@
-set(TARGET server)
+set(TARGET llama-server)
 option(LLAMA_SERVER_VERBOSE "Build verbose logging option for Server" ON)
 option(LLAMA_SERVER_SSL "Build SSL support for the server" OFF)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
@@ -8,9 +8,20 @@ set(TARGET_SRCS
     httplib.h
 )
 set(PUBLIC_ASSETS
+    colorthemes.css
+    style.css
+    theme-beeninorder.css
+    theme-ketivah.css
+    theme-mangotango.css
+    theme-playground.css
+    theme-polarnight.css
+    theme-snowstorm.css
     index.html
+    index-new.html
     index.js
     completion.js
+    system-prompts.js
+    prompt-formats.js
     json-schema-to-grammar.mjs
 )
 foreach(asset ${PUBLIC_ASSETS})

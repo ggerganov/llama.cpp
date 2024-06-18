@@ -8,5 +8,5 @@ See the following PRs for more info:
 ### Usage
 
 ```bash
-make -j && ./passkey ./models/llama-7b-v2/ggml-model-f16.gguf 250
+make -j && ./llama-passkey -m ./models/llama-7b-v2/ggml-model-f16.gguf --junk 250
 ```

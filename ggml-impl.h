@@ -17,7 +17,7 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#if defined(_WIN32)
+#if defined(_MSC_VER)
 
 #define m512bh(p) p
 #define m512i(p) p
@@ -142,6 +142,10 @@ extern "C" {
 #ifndef __SSSE3__
 #define __SSSE3__
 #endif
+#endif
+
+#if defined(__ARM_FEATURE_SVE)
+#include <arm_sve.h>
 #endif
 
 // 16-bit float

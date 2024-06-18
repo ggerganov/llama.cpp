@@ -34,9 +34,11 @@ ggml-metal-embed.metal
 lcov-report/
 gcovr-report/
 
+tags
 build*
 !build.zig
 cmake-build-*
+android-ndk-*
 out/
 tmp/
 
@@ -44,48 +46,9 @@ models/*
 models-mnt
 
 /Pipfile
-/baby-llama
-/beam-search
-/benchmark-matmult
-/convert-llama2c-to-ggml
-/embd-input-test
-/embedding
-/eval-callback
-/gguf
-/gguf-llama-simple
-/gguf-split
-/gritlm
-/imatrix
-/infill
 /libllama.so
-/llama-bench
-/llava-cli
-/lookahead
-/lookup
-/lookup-create
-/lookup-merge
-/lookup-stats
-/main
-/metal
-/passkey
-/perplexity
-/q8dot
-/quantize
-/quantize-stats
-/result
-/save-load-state
-/server
-/simple
-/batched
-/batched-bench
-/export-lora
-/finetune
-/retrieval
-/speculative
-/parallel
-/train-text-from-scratch
-/tokenize
-/vdot
+/llama-*
+llama-batched-swift
 /common/build-info.cpp
 arm_neon.h
 compile_commands.json
@@ -105,6 +68,7 @@ examples/jeopardy/results.txt
 examples/server/*.html.hpp
 examples/server/*.js.hpp
 examples/server/*.mjs.hpp
+examples/server/*.css.hpp
 
 poetry.lock
 poetry.toml
