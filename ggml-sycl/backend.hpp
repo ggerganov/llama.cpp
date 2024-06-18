@@ -14,5 +14,10 @@
 #define GGML_SYCL_BACKEND_HPP
 
 #include "common.hpp"
+#include "convert.hpp"
+#include "dequantize.hpp"
+#include "dmmv.hpp"
+#include "mmq.hpp"
+#include "mmvq.hpp"
 
 #endif // GGML_SYCL_BACKEND_HPP
