@@ -157,6 +157,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_BF16          = 32, // except 1d tensors
+        LLAMA_FTYPE_CUSTOM               = 33, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -324,6 +325,13 @@ extern "C" {
         void *              abort_callback_data;
     };
 
+    typedef struct llama_model_quantize_ftype_override {
+        enum llama_ftype default_ftype; // default type if not overriden
+        uint32_t count;                 // number of overrides
+        const char ** names;            // tensor names
+        enum ggml_type * types;   // tensor type override
+    } llama_model_quantize_custom_ftype;
+
     // model quantization parameters
     typedef struct llama_model_quantize_params {
         int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
@@ -332,11 +340,12 @@ extern "C" {
         enum ggml_type token_embedding_type; // itoken embeddings tensor type
         bool allow_requantize;               // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor;         // quantize output.weight
-        bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
+        bool only_copy;                      // only copy tensors - ftype, override_ftype, allow_requantize and quantize_output_tensor are ignored
         bool pure;                           // quantize all tensors to the default type
         bool keep_split;                     // quantize to the same number of shards
         void * imatrix;                      // pointer to importance matrix data
         void * kv_overrides;                 // pointer to vector containing overrides
+        struct llama_model_quantize_ftype_override * override_ftype; // custom quantization scheme
     } llama_model_quantize_params;
 
     // grammar types
