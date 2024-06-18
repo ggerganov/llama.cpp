@@ -394,11 +394,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.n_predict = std::stoi(argv[i]);
         return true;
     }
-    if (arg == "-n" || arg == "--predict" || arg == "--n-predict") {
-        CHECK_ARG
-        params.n_predict = std::stoi(argv[i]);
-        return true;
-    }
     if (arg == "--top-k") {
         CHECK_ARG
         sparams.top_k = std::stoi(argv[i]);
