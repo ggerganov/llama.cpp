@@ -202,13 +202,6 @@ class MODEL_TENSOR(IntEnum):
     ATTN_KV_A_NORM     = auto()
     FFN_SUB_NORM       = auto()
     ATTN_SUB_NORM      = auto()
-    ATTN_Q_SCALE       = auto()
-    ATTN_K_SCALE       = auto()
-    ATTN_V_SCALE       = auto()
-    ATTN_OUT_SCALE     = auto()
-    FFN_UP_SCALE       = auto()
-    FFN_DOWN_SCALE     = auto()
-    FFN_GATE_SCALE     = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -300,13 +293,6 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_KV_A_NORM:     "blk.{bid}.attn_kv_a_norm",
     MODEL_TENSOR.ATTN_SUB_NORM:      "blk.{bid}.attn_sub_norm",
     MODEL_TENSOR.FFN_SUB_NORM:       "blk.{bid}.ffn_sub_norm",
-    MODEL_TENSOR.ATTN_Q_SCALE:       "blk.{bid}.attn_q_scale",
-    MODEL_TENSOR.ATTN_K_SCALE:       "blk.{bid}.attn_k_scale",
-    MODEL_TENSOR.ATTN_V_SCALE:       "blk.{bid}.attn_v_scale",
-    MODEL_TENSOR.ATTN_OUT_SCALE:     "blk.{bid}.attn_output_scale",
-    MODEL_TENSOR.FFN_UP_SCALE:       "blk.{bid}.ffn_up_scale",
-    MODEL_TENSOR.FFN_DOWN_SCALE:     "blk.{bid}.ffn_down_scale",
-    MODEL_TENSOR.FFN_GATE_SCALE:     "blk.{bid}.ffn_gate_scale",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -841,13 +827,6 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_UP,
         MODEL_TENSOR.ATTN_SUB_NORM,
         MODEL_TENSOR.FFN_SUB_NORM,
-        MODEL_TENSOR.ATTN_Q_SCALE,
-        MODEL_TENSOR.ATTN_K_SCALE,
-        MODEL_TENSOR.ATTN_V_SCALE,
-        MODEL_TENSOR.ATTN_OUT_SCALE,
-        MODEL_TENSOR.FFN_UP_SCALE,
-        MODEL_TENSOR.FFN_DOWN_SCALE,
-        MODEL_TENSOR.FFN_GATE_SCALE,
     ],
     # TODO
 }

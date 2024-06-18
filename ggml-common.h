@@ -142,7 +142,7 @@ typedef struct {
     ggml_half d;           // delta
     uint8_t qs[QK2_2 / 4]; // nibbles / quants
 } block_q2_2;
-static_assert(sizeof(block_q2_2) == sizeof(ggml_half) + QK2_2 / 4, "wrong q4_0 block size/padding");
+static_assert(sizeof(block_q2_2) == sizeof(ggml_half) + QK2_2 / 4, "wrong q2_2 block size/padding");
 
 #define QK4_0 32
 typedef struct {

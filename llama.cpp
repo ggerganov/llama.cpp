@@ -498,13 +498,6 @@ enum llm_tensor {
     LLM_TENSOR_ATTN_KV_A_NORM,
     LLM_TENSOR_ATTN_SUB_NORM,
     LLM_TENSOR_FFN_SUB_NORM,
-    LLM_TENSOR_ATTN_Q_SCALE,
-    LLM_TENSOR_ATTN_K_SCALE,
-    LLM_TENSOR_ATTN_V_SCALE,
-    LLM_TENSOR_ATTN_OUTPUT_SCALE,
-    LLM_TENSOR_FFN_UP_SCALE,
-    LLM_TENSOR_FFN_DOWN_SCALE,
-    LLM_TENSOR_FFN_GATE_SCALE,
 };
 
 static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NAMES = {
@@ -1134,13 +1127,6 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_FFN_UP,             "blk.%d.ffn_up" },
             { LLM_TENSOR_FFN_NORM,           "blk.%d.ffn_norm" },
             { LLM_TENSOR_FFN_SUB_NORM,       "blk.%d.ffn_sub_norm" },
-            { LLM_TENSOR_ATTN_Q_SCALE,       "blk.%d.attn_q_scale" },
-            { LLM_TENSOR_ATTN_K_SCALE,       "blk.%d.attn_q_scale" },
-            { LLM_TENSOR_ATTN_V_SCALE,       "blk.%d.attn_q_scale" },
-            { LLM_TENSOR_ATTN_OUTPUT_SCALE,  "blk.%d.attn_output_scale" },
-            { LLM_TENSOR_FFN_UP_SCALE,       "blk.%d.ffn_up_scale" },
-            { LLM_TENSOR_FFN_DOWN_SCALE,     "blk.%d.ffn_down_scale" },
-            { LLM_TENSOR_FFN_GATE_SCALE,     "blk.%d.ffn_gate_scale" },
         },
     },
     {
@@ -6483,23 +6469,23 @@ static bool llm_load_tensors(
                         layer.attn_sub_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_SUB_NORM, "weight", i), {n_embd});
 
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q, "weight", i), {n_embd, n_embd});
-                        layer.wq_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q_SCALE, "weight", i), {1});
+                        layer.wq_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q, "scale", i), {1});
                         layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K, "weight", i), {n_embd, n_embd_gqa});
-                        layer.wk_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K_SCALE, "weight", i), {1});
+                        layer.wk_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K, "scale", i), {1});
                         layer.wv = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V, "weight", i), {n_embd, n_embd_gqa});
-                        layer.wv_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V_SCALE, "weight", i), {1});
+                        layer.wv_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_V, "scale", i), {1});
                         layer.wo = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "weight", i), {n_embd, n_embd});
-                        layer.wo_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUTPUT_SCALE, "weight", i), {1});
+                        layer.wo_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_OUT, "scale", i), {1});
 
                         layer.ffn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_NORM, "weight", i), {n_embd});
                         layer.ffn_sub_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_SUB_NORM, "weight", i), {n_ff});
 
                         layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff});
-                        layer.ffn_gate_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE_SCALE, "weight", i), {1});
+                        layer.ffn_gate_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "scale", i), {1});
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
-                        layer.ffn_down_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN_SCALE, "weight", i), {1});
+                        layer.ffn_down_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "scale", i), {1});
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
-                        layer.ffn_up_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP_SCALE, "weight", i), {1});
+                        layer.ffn_up_scale = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP, "scale", i), {1});
                     }
                 } break;
             default:
@@ -11624,14 +11610,9 @@ struct llm_build_context {
                 const int64_t n_embd_head_v         = hparams.n_embd_head_v;
                 const int64_t n_embd_v_gqa          = hparams.n_embd_v_gqa();
 
-                struct ggml_tensor *        q_cur   = Qcur;
-                struct ggml_tensor *        kq_mask = KQ_mask;
                 float                      kq_scale = 1.0f/sqrtf(float(n_embd_head));
-                struct ggml_tensor *  attn_sub_norm = model.layers[il].attn_sub_norm;
-                struct ggml_cgraph *          graph = gf;
-                struct ggml_tensor *             wo = model.layers[il].wo;
                 struct ggml_tensor *       cur_attn;
-                struct ggml_tensor *              q = ggml_permute(ctx0, q_cur, 0, 2, 1, 3);
+                struct ggml_tensor *              q = ggml_permute(ctx0, Qcur, 0, 2, 1, 3);
                 cb(q, "q", il);
 
                 struct ggml_tensor * k =
@@ -11653,14 +11634,14 @@ struct llm_build_context {
                                 0);
                     cb(v, "v", il);
 
-                    cur_attn = ggml_flash_attn_ext(ctx0, q, k, v, kq_mask, kq_scale, hparams.f_max_alibi_bias);
+                    cur_attn = ggml_flash_attn_ext(ctx0, q, k, v, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
 
                     cur_attn = ggml_reshape_2d(ctx0, cur, n_embd_head_v*n_head, n_tokens);
                 } else {
                     struct ggml_tensor * kq = ggml_mul_mat(ctx0, k, q);
                     cb(kq, "kq", il);
 
-                    kq = ggml_soft_max_ext(ctx0, kq, kq_mask, kq_scale, hparams.f_max_alibi_bias);
+                    kq = ggml_soft_max_ext(ctx0, kq, KQ_mask, kq_scale, hparams.f_max_alibi_bias);
                     cb(kq, "kq_soft_max_ext", il);
 
                     GGML_ASSERT(kv_self.size == n_ctx);
@@ -11685,13 +11666,13 @@ struct llm_build_context {
                 }
 
                 cur_attn = llm_build_norm(ctx0, cur_attn, hparams,
-                        attn_sub_norm, NULL,
+                        model.layers[il].attn_sub_norm, NULL,
                         LLM_NORM_RMS, cb, il);
                 cb(cur_attn, "attn_sub_norm", il);
 
-                ggml_build_forward_expand(graph, cur_attn);
+                ggml_build_forward_expand(gf, cur_attn);
 
-                cur = ggml_mul_mat(ctx0, wo, cur_attn);
+                cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur_attn);
                 cur = ggml_mul(ctx0, cur, model.layers[il].wo_scale);
 
                 cb(cur, "kqv_out", il);
