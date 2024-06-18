@@ -1995,7 +1995,7 @@ public:
         if (is_npu) {
             qnn_instance * instance = ctx->instance;
             uint8_t *qnn_buffer = static_cast<uint8_t *>(instance->alloc_rpcmem(
-                    ggml_nbytes(tensor), 4)); // TODO: should we get the align param from device here?
+                    ggml_nbytes(tensor), alignof(void*)));
             if (!qnn_buffer) {
                 QNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
                 QNN_LOG_DEBUG("tensor%p name %s", _qnn_tensor, QNN_TENSOR_GET_NAME(*_qnn_tensor));
