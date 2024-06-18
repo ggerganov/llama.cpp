@@ -36,6 +36,8 @@ gcovr-report/
 
 tags
 build*
+!build-info.cmake
+!build-info.sh
 !build.zig
 cmake-build-*
 android-ndk-*
