@@ -7984,7 +7984,7 @@ static void mul_mat_vec_q(const void * __restrict__ vx, const void * __restrict_
     const int blocks_per_row = ncols / qk;
     const int blocks_per_warp = vdr * WARP_SIZE / qi;
 
-// partial sum for each thread
+    // partial sum for each thread
     float tmp = 0.0f;
 
     const block_q_t  * x = (const block_q_t  *) vx;
