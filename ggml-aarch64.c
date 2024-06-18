@@ -33,11 +33,11 @@
 //               from bias offset form to pure sign form (this saves subtract
 //               operations durin unpacking)
 //
-static block_q4_0x4 make_block_q4_0x4(const block_q4_0 * const in[4], unsigned int block_len, unsigned int xor_mask) {
+static block_q4_0x4 make_block_q4_0x4(block_q4_0 * in, unsigned int block_len, unsigned int xor_mask) {
     block_q4_0x4 out;
 
     for (int i = 0; i < 4; i++) {
-        out.d[i] = in[i]->d;
+        out.d[i] = in[i].d;
     }
 
     for (int i = 0; i < QK4_0 * 2; i++) {
@@ -45,7 +45,7 @@ static block_q4_0x4 make_block_q4_0x4(const block_q4_0 * const in[4], unsigned i
         int src_id = (i % (4 * block_len)) / block_len;
         src_offset += (i % block_len);
 
-        out.qs[i] = in[src_id]->qs[src_offset] ^ xor_mask;
+        out.qs[i] = in[src_id].qs[src_offset] ^ xor_mask;
     }
 
     return out;
@@ -55,11 +55,11 @@ static block_q4_0x4 make_block_q4_0x4(const block_q4_0 * const in[4], unsigned i
 // returns an interleaved block_q4_0x8
 // in the interleaved block_q4_0x8, place deltas for 8 block_q4_0 blocks
 // first, then interleave quants from 8 block_q4_0s in blocks of block_len
-static block_q4_0x8 make_block_q4_0x8(const block_q4_0 * const in[8], unsigned int block_len, unsigned int xor_mask) {
+static block_q4_0x8 make_block_q4_0x8(block_q4_0 * in, unsigned int block_len, unsigned int xor_mask) {
     block_q4_0x8 out;
 
     for (int i = 0; i < 8; i++) {
-        out.d[i] = in[i]->d;
+        out.d[i] = in[i].d;
     }
 
     for (int i = 0; i < QK4_0 * 4; i++) {
@@ -67,7 +67,7 @@ static block_q4_0x8 make_block_q4_0x8(const block_q4_0 * const in[8], unsigned i
         int src_id = (i % (8 * block_len)) / block_len;
         src_offset += (i % block_len);
 
-        out.qs[i] = in[src_id]->qs[src_offset] ^ xor_mask;
+        out.qs[i] = in[src_id].qs[src_offset] ^ xor_mask;
     }
 
     return out;
@@ -134,6 +134,8 @@ void quantize_q8_0_4x4(const float * restrict x, void * restrict vy, int64_t k) 
             y[i].qs[16 * j + 15] = vgetq_lane_s32(vi, 3);
         }
     }
+#else
+    assert(false);
 #endif
 }
 
@@ -222,6 +224,8 @@ void quantize_q8_0_4x8(const float * restrict x, void * restrict vy, int64_t k) 
             y[i].qs[32 * j + 31] = vgetq_lane_s32(vi, 3);
         }
     }
+#else
+    assert(false);
 #endif
 }
 
@@ -229,45 +233,33 @@ static size_t quantize_q4_0_nr_bl(const float * restrict src, void * restrict ds
     assert(n_per_row % QK4_0 == 0);
     const int nb = n_per_row / QK4_0;
 
-    void * out_ptr_B = NULL;
-    void * out_ptr_B_start = NULL;
+    void * out_ptr = NULL;
     if (nrows_interleaved == 8) {
-        out_ptr_B = (block_q4_0x8 *) malloc(sizeof(block_q4_0x8) * nb);
-        out_ptr_B_start = out_ptr_B;
+        out_ptr = (block_q4_0x8 *) dst;
     }
     else if (nrows_interleaved == 4) {
-        out_ptr_B = (block_q4_0x4 *) malloc(sizeof(block_q4_0x4) * nb);
-        out_ptr_B_start = out_ptr_B;
+        out_ptr = (block_q4_0x4 *) dst;
     }
-    block_q4_0 ** in_ptrs = (block_q4_0 **) malloc(sizeof(block_q4_0 *) * nrows_interleaved);
+    block_q4_0 dst_tmp[nrows_interleaved];
 
     for (int b = 0; b < (nrow * n_per_row); b += nrows_interleaved * n_per_row) {
 
-        for (int i  = 0; i < nrows_interleaved; i++ ) {
-            in_ptrs[i] = (block_q4_0 *) dst + (b + i * n_per_row) / QK4_0;
-            quantize_row_q4_0_reference(src + b + i * n_per_row, (block_q4_0 *) in_ptrs[i], n_per_row);
-        }
-
         for (int64_t x = 0; x < nb; x++) {
+
+            for (int i  = 0; i < nrows_interleaved; i++ ) {
+                quantize_row_q4_0_reference(src + b + i * n_per_row + x * QK4_0, (block_q4_0 *) dst_tmp + i, QK4_0);
+            }
+
             if (nrows_interleaved == 8) {
-                *(block_q4_0x8 *) out_ptr_B = make_block_q4_0x8((const block_q4_0 * const *) in_ptrs, blocklen_per_row, 0x88);
-                out_ptr_B = (block_q4_0x8 *) out_ptr_B + 1;
+                *(block_q4_0x8 *) out_ptr = make_block_q4_0x8(dst_tmp, blocklen_per_row, 0x88);
+                out_ptr = (block_q4_0x8 *) out_ptr + 1;
             }
             else if (nrows_interleaved == 4) {
-                *(block_q4_0x4 *) out_ptr_B = make_block_q4_0x4((const block_q4_0 * const *) in_ptrs, blocklen_per_row, 0x88);
-                out_ptr_B = (block_q4_0x4 *) out_ptr_B + 1;
-            }
-
-            for (int i = 0; i < nrows_interleaved; i++) {
-                in_ptrs[i]++;
+                *(block_q4_0x4 *) out_ptr = make_block_q4_0x4(dst_tmp, blocklen_per_row, 0x88);
+                out_ptr = (block_q4_0x4 *) out_ptr + 1;
             }
         }
-        out_ptr_B = out_ptr_B_start;
-        if (nrows_interleaved == 8) memcpy ((block_q4_0 *) dst + b / QK4_0, out_ptr_B_start, sizeof(block_q4_0x8) * nb);
-        else if (nrows_interleaved == 4) memcpy ((block_q4_0 *) dst + b / QK4_0, out_ptr_B_start, sizeof(block_q4_0x4) * nb);
     }
-    if (out_ptr_B_start) free(out_ptr_B_start);
-    if (in_ptrs) free(in_ptrs);
 
     return ((nrow * n_per_row) / QK4_0 * sizeof(block_q4_0));
 }
@@ -302,25 +294,24 @@ size_t quantize_q4_0_8x8(const float * restrict src, void * restrict dst, int64_
     }
 }
 
-inline int64_t roundup(const int64_t a, const int64_t b) {
-    int64_t rem = a % b;
+void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, const void * restrict vy, int nr, int nc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
+    const int ncols_interleaved = 4;
+    const int blocklen = 4;
 
-    if (rem) {
-        return a + b - rem;
-    } else {
-        return a;
-    }
-}
+    assert (n % qk == 0);
+    assert (nc % ncols_interleaved == 0);
 
-void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy, int nr, int nc, int ith, int nth) {
-    UNUSED(n);
     UNUSED(s);
+    UNUSED(bs);
     UNUSED(vx);
     UNUSED(vy);
     UNUSED(nr);
     UNUSED(nc);
-    UNUSED(ith);
-    UNUSED(nth);
+    UNUSED(nb);
+    UNUSED(ncols_interleaved);
+    UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE)
     if (svcntw() == 8) {
@@ -332,19 +323,9 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx
     GGML_ASSERT(!(ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) &&
                 "__ARM_NEON and __ARM_FEATURE_MATMUL_INT8 defined, use the Q4_0_4_8 quantization format for optimal performance");
 #elif defined(__ARM_NEON)
-    int64_t x0 = roundup((ith * nc) / nth, (int64_t)4);
-    int64_t xend = roundup(((ith + 1) * nc) / nth, (int64_t)4);
-    size_t width = xend - x0;
-
-    int64_t nb = n / QK4_0;
-    const void * b_ptr = (const void *)((const block_q4_0x4 *) vx + ((x0 / 4) * nb));
+    const void * b_ptr = vx;
     const void * a_ptr = vy;
-    float * res_ptr = s + x0;
-
-    assert(n % 32 == 0);
-    assert(width % 4 == 0);
-
-    size_t num_blocks = n / 32;
+    float * res_ptr = s;
 
     __asm__ __volatile__(
         "movi v31.16b, #0x4\n"
@@ -353,7 +334,7 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx
         "1:"  // Column loop
         "add x22, %x[a_ptr], #0x2\n"
         "movi v29.16b, #0x0\n"
-        "mov x21, %x[num_blocks]\n"
+        "mov x21, %x[nb]\n"
         "2:"  // Block loop
         "ldr q28, [%x[b_ptr], #0x0]\n"
         "ldr q27, [x22, #0x0]\n"
@@ -390,26 +371,58 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx
         "scvtf v26.4s, v26.4s, #0x4\n"
         "fmla v29.4s, v26.4s, v16.4s\n"
         "cbnz x21, 2b\n"
-        "sub %x[width], %x[width], #0x4\n"
+        "sub %x[nc], %x[nc], #0x4\n"
         "str q29, [%x[res_ptr], #0x0]\n"
         "add %x[res_ptr], %x[res_ptr], #0x10\n"
-        "cbnz %x[width], 1b\n"
-        : [b_ptr] "+&r" (b_ptr), [res_ptr] "+&r" (res_ptr), [width] "+&r" (width)
-        : [a_ptr] "r" (a_ptr), [num_blocks] "r" (num_blocks)
+        "cbnz %x[nc], 1b\n"
+        : [b_ptr] "+&r" (b_ptr), [res_ptr] "+&r" (res_ptr), [nc] "+&r" (nc)
+        : [a_ptr] "r" (a_ptr), [nb] "r" (nb)
         : "memory", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "x20", "x21", "x22"
     );
+#else
+    float sumf[4];
+
+    const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
+    for (int x = 0; x < nc / ncols_interleaved; x++) {
+        const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx + (x * nb);
+
+        for (int j = 0; j < ncols_interleaved; j++) sumf[j] = 0.0;
+        for (int l = 0; l < nb; l++) {
+            for (int k = 0; k < (qk / (2 * blocklen)); k++) {
+                for (int j = 0; j < ncols_interleaved; j++) {
+                    int sumi = 0;
+                    for (int i = 0; i < blocklen; ++i) {
+                        const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
+                        const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
+                        sumi += ((v0 * a_ptr[l].qs[k * blocklen + i]) + (v1 * a_ptr[l].qs[k * blocklen + i + qk / 2])) >> 4;
+                    }
+                    sumf[j] += sumi * GGML_FP16_TO_FP32(b_ptr[l].d[j]) * GGML_FP16_TO_FP32(a_ptr[l].d);
+                }
+            }
+        }
+        for (int j = 0; j < ncols_interleaved; j++) s[x * ncols_interleaved + j] = sumf[j];
+    }
 #endif
 }
 
-void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy, int nr, int nc, int ith, int nth) {
-    UNUSED(n);
+void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, const void * restrict vy, int nr, int nc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
+    const int ncols_interleaved = 4;
+    const int blocklen = 8;
+
+    assert (n % qk == 0);
+    assert (nc % ncols_interleaved == 0);
+
     UNUSED(s);
+    UNUSED(bs);
     UNUSED(vx);
     UNUSED(vy);
     UNUSED(nr);
     UNUSED(nc);
-    UNUSED(ith);
-    UNUSED(nth);
+    UNUSED(nb);
+    UNUSED(ncols_interleaved);
+    UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE)
     if (svcntw() == 8) {
@@ -418,19 +431,9 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx
     }
 #endif
 #if defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
-    int64_t x0 = roundup((ith * nc) / nth, (int64_t)4);
-    int64_t xend = roundup(((ith + 1) * nc) / nth, (int64_t)4);
-    size_t width = xend - x0;
-
-    int64_t nb = n / QK4_0;
-    const void * b_ptr = (const void *)((const block_q4_0x4 *) vx + ((x0 / 4) * nb));
+    const void * b_ptr = vx;
     const void * a_ptr = vy;
-    float * res_ptr = s + x0;
-
-    assert(n % 32 == 0);
-    assert(width % 4 == 0);
-
-    size_t num_blocks = n / 32;
+    float * res_ptr = s;
 
     __asm__ __volatile__(
         "movi v2.16b, #0x4\n"
@@ -439,7 +442,7 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx
         "1:"  // Column loop
         "add x23, %x[a_ptr], #0x2\n"
         "movi v0.16b, #0x0\n"
-        "mov x22, %x[num_blocks]\n"
+        "mov x22, %x[nb]\n"
         "2:"  // Block loop
         "ldr q31, [%x[b_ptr], #0x0]\n"
         "ldr q30, [%x[b_ptr], #0x10]\n"
@@ -481,46 +484,68 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx
         "scvtf v29.4s, v29.4s, #0x4\n"
         "fmla v0.4s, v29.4s, v16.4s\n"
         "cbnz x22, 2b\n"
-        "sub %x[width], %x[width], #0x4\n"
+        "sub %x[nc], %x[nc], #0x4\n"
         "str q0, [%x[res_ptr], #0x0]\n"
         "add %x[res_ptr], %x[res_ptr], #0x10\n"
-        "cbnz %x[width], 1b\n"
-        : [b_ptr] "+&r" (b_ptr), [res_ptr] "+&r" (res_ptr), [width] "+&r" (width)
-        : [a_ptr] "r" (a_ptr), [num_blocks] "r" (num_blocks)
+        "cbnz %x[nc], 1b\n"
+        : [b_ptr] "+&r" (b_ptr), [res_ptr] "+&r" (res_ptr), [nc] "+&r" (nc)
+        : [a_ptr] "r" (a_ptr), [nb] "r" (nb)
         : "memory", "v0", "v1", "v2", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "x20", "x21", "x22", "x23"
     );
 #elif defined(__ARM_NEON)
     GGML_ASSERT((ggml_cpu_has_sve() || ggml_cpu_has_matmul_int8()) &&
                 "__ARM_FEATURE_SVE and __ARM_FEATURE_MATMUL_INT8 not defined, use the Q4_0_4_4 quantization format for optimal "
                 "performance");
+#else
+    float sumf[4];
+
+    const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
+    for (int x = 0; x < nc / ncols_interleaved; x++) {
+        const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx + (x * nb);
+
+        for (int j = 0; j < ncols_interleaved; j++) sumf[j] = 0.0;
+        for (int l = 0; l < nb; l++) {
+            for (int k = 0; k < (qk / (2 * blocklen)); k++) {
+                for (int j = 0; j < ncols_interleaved; j++) {
+                    int sumi = 0;
+                    for (int i = 0; i < blocklen; ++i) {
+                        const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
+                        const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
+                        sumi += ((v0 * a_ptr[l].qs[k * blocklen + i]) + (v1 * a_ptr[l].qs[k * blocklen + i + qk / 2])) >> 4;
+                    }
+                    sumf[j] += sumi * GGML_FP16_TO_FP32(b_ptr[l].d[j]) * GGML_FP16_TO_FP32(a_ptr[l].d);
+                }
+            }
+        }
+        for (int j = 0; j < ncols_interleaved; j++) s[x * ncols_interleaved + j] = sumf[j];
+    }
 #endif
 }
 
-void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy, int nr, int nc, int ith, int nth) {
-    UNUSED(n);
+void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, const void * restrict vy, int nr, int nc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
+    const int ncols_interleaved = 8;
+    const int blocklen = 8;
+
+    assert (n % qk == 0);
+    assert (nc % ncols_interleaved == 0);
+
     UNUSED(s);
+    UNUSED(bs);
     UNUSED(vx);
     UNUSED(vy);
     UNUSED(nr);
     UNUSED(nc);
-    UNUSED(ith);
-    UNUSED(nth);
+    UNUSED(nb);
+    UNUSED(ncols_interleaved);
+    UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE)
     if (svcntw() == 8) {
-        int64_t x0 = roundup((ith * nc) / nth, (int64_t)8);
-        int64_t xend = roundup(((ith + 1) * nc) / nth, (int64_t)8);
-        size_t width = xend - x0;
-
-        int64_t nb = n / QK4_0;
-        const void * b_ptr = (const void *)((const block_q4_0x8 *) vx + ((x0 / 8) * nb));
+        const void * b_ptr = vx;
         const void * a_ptr = vy;
-        float * res_ptr = s + x0;
-
-        assert(n % 32 == 0);
-        assert(width % 8 == 0);
-
-        size_t num_blocks = n / 32;
+        float * res_ptr = s;
 
         __asm__ __volatile__(
             "ptrue p0.b\n"
@@ -528,7 +553,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx
             "1:"  // Column loop
             "add x22, %x[a_ptr], #0x2\n"
             "mov z31.b, #0x0\n"
-            "mov x21, %x[num_blocks]\n"
+            "mov x21, %x[nb]\n"
             "2:"  // Block loop
             "ld1b { z30.b }, p0/Z, [%x[b_ptr]]\n"
             "ld1b { z29.b }, p0/Z, [%x[b_ptr], #1, MUL VL]\n"
@@ -572,12 +597,12 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx
             "scvtf z17.s, p0/m, z17.s\n"
             "fmla z31.s, p0/M, z17.s, z18.s\n"
             "cbnz x21, 2b\n"
-            "sub %x[width], %x[width], #0x8\n"
+            "sub %x[nc], %x[nc], #0x8\n"
             "st1w { z31.s }, p0, [%x[res_ptr]]\n"
             "add %x[res_ptr], %x[res_ptr], #0x20\n"
-            "cbnz %x[width], 1b\n"
-            : [b_ptr] "+&r" (b_ptr), [res_ptr] "+&r" (res_ptr), [width] "+&r" (width)
-            : [a_ptr] "r" (a_ptr), [num_blocks] "r" (num_blocks)
+            "cbnz %x[nc], 1b\n"
+            : [b_ptr] "+&r" (b_ptr), [res_ptr] "+&r" (res_ptr), [nc] "+&r" (nc)
+            : [a_ptr] "r" (a_ptr), [nb] "r" (nb)
             : "memory", "p0", "x20", "x21", "x22", "z16", "z17", "z18", "z19", "z20", "z21", "z22", "z23", "z24", "z25", "z26", "z27", "z28", "z29", "z30", "z31"
         );
         return;
@@ -600,18 +625,51 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx
     GGML_ASSERT((ggml_cpu_has_sve() || ggml_cpu_has_matmul_int8()) &&
                 "__ARM_FEATURE_SVE and __ARM_FEATURE_MATMUL_INT8 not defined, use the Q4_0_4_4 quantization format for optimal "
                 "performance");
+#else
+    float sumf[8];
+
+    const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
+    for (int x = 0; x < nc / ncols_interleaved; x++) {
+        const block_q4_0x8 * b_ptr = (const block_q4_0x8 *) vx + (x * nb);
+
+        for (int j = 0; j < ncols_interleaved; j++) sumf[j] = 0.0;
+        for (int l = 0; l < nb; l++) {
+            for (int k = 0; k < (qk / (2 * blocklen)); k++) {
+                for (int j = 0; j < ncols_interleaved; j++) {
+                    int sumi = 0;
+                    for (int i = 0; i < blocklen; ++i) {
+                        const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
+                        const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
+                        sumi += ((v0 * a_ptr[l].qs[k * blocklen + i]) + (v1 * a_ptr[l].qs[k * blocklen + i + qk / 2])) >> 4;
+                    }
+                    sumf[j] += sumi * GGML_FP16_TO_FP32(b_ptr[l].d[j]) * GGML_FP16_TO_FP32(a_ptr[l].d);
+                }
+            }
+        }
+        for (int j = 0; j < ncols_interleaved; j++) s[x * ncols_interleaved + j] = sumf[j];
+    }
 #endif
 }
 
-void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy, int nr, int nc, int ith, int nth) {
-    UNUSED(n);
+void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, const void * restrict vy, int nr, int nc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
+    const int ncols_interleaved = 4;
+    const int blocklen = 4;
+
+    assert (n % qk == 0);
+    assert (nr % 4 == 0);
+    assert (nc % ncols_interleaved == 0);
+
     UNUSED(s);
+    UNUSED(bs);
     UNUSED(vx);
     UNUSED(vy);
     UNUSED(nr);
     UNUSED(nc);
-    UNUSED(ith);
-    UNUSED(nth);
+    UNUSED(nb);
+    UNUSED(ncols_interleaved);
+    UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
     if (svcntw() == 8) {
@@ -623,36 +681,26 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx
     GGML_ASSERT(!(ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) &&
                 "__ARM_NEON and __ARM_FEATURE_MATMUL_INT8 defined, use the Q4_0_4_8 quantization format for optimal performance");
 #elif defined(__ARM_NEON)
-    int64_t x0 = roundup((ith * nc) / nth, (int64_t)4);
-    int64_t xend = roundup(((ith + 1) * nc) / nth, (int64_t)4);
-    size_t width = xend - x0;
-
-    int64_t nb = n / QK4_0;
-    const void * b_ptr = (const void *)((const block_q4_0x4 *) vx + ((x0/4) * nb));
+    const void * b_ptr = vx;
     const void * a_ptr = vy;
-    float * res_ptr = s + x0;
-    size_t res_stride = nc * sizeof(float);
-
-    assert(n % 32 == 0);
-    assert(width % 4 == 0);
-
-    size_t num_blocks = n / 32;
+    float * res_ptr = s;
+    size_t res_stride = bs * sizeof(float);
 
     __asm__ __volatile__(
         "mov x10, %x[nr]\n"
         "mov x9, #0x88\n"
         "cmp x10, #0x10\n"
-        "mul x9, %x[num_blocks], x9\n"
+        "mul x9, %x[nb], x9\n"
         "blt 4f\n"
         "1:"  // Row loop
         "add x28, %x[b_ptr], #0x8\n"
-        "mov x27, %x[width]\n"
+        "mov x27, %x[nc]\n"
         "add x26, %x[res_ptr], %x[res_stride], LSL #4\n"
         "2:"  // Column loop
         "add x25, %x[a_ptr], #0x8\n"
         "movi v15.16b, #0x0\n"
         "movi v19.16b, #0x0\n"
-        "mov x24, %x[num_blocks]\n"
+        "mov x24, %x[nb]\n"
         "add x23, x25, x9\n"
         "movi v18.16b, #0x0\n"
         "movi v14.16b, #0x0\n"
@@ -972,13 +1020,13 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx
         "cbz x10, 9f\n"
         "5:"  // Row tail: Row loop
         "add x24, %x[b_ptr], #0x8\n"
-        "mov x23, %x[width]\n"
+        "mov x23, %x[nc]\n"
         "add x22, %x[res_ptr], %x[res_stride], LSL #2\n"
         "6:"  // Row tail: Column loop
         "movi v15.16b, #0x0\n"
         "movi v19.16b, #0x0\n"
         "add x25, %x[a_ptr], #0x8\n"
-        "mov x21, %x[num_blocks]\n"
+        "mov x21, %x[nb]\n"
         "movi v18.16b, #0x0\n"
         "movi v14.16b, #0x0\n"
         "7:"  // Row tail: Block loop
@@ -1085,21 +1133,63 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, const void * restrict vx
         "bgt 5b\n"
         "9:"  // Row tail: Row loop skip
         : [a_ptr] "+&r" (a_ptr), [res_ptr] "+&r" (res_ptr)
-        : [b_ptr] "r" (b_ptr), [nr] "r" (nr), [num_blocks] "r" (num_blocks), [res_stride] "r" (res_stride), [width] "r" (width)
+        : [b_ptr] "r" (b_ptr), [nr] "r" (nr), [nb] "r" (nb), [res_stride] "r" (res_stride), [nc] "r" (nc)
         : "cc", "memory", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "x9", "x10", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28"
     );
+#else
+    float sumf[4][4];
+
+    for (int y = 0; y < nr / 4; y++) {
+        const block_q8_0x4 * a_ptr = (const block_q8_0x4 *) vy + (y * nb);
+        for (int x = 0; x < nc / ncols_interleaved; x++) {
+            const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx + (x * nb);
+            for (int m = 0; m < 4; m++) {
+                for (int j = 0; j < ncols_interleaved; j++) sumf[m][j] = 0.0;
+            }
+            for (int l = 0; l < nb; l++) {
+                for (int k = 0; k < (qk / (2 * blocklen)); k++) {
+                    for (int m = 0; m < 4; m++) {
+                        for (int j = 0; j < ncols_interleaved; j++) {
+                            int sumi = 0;
+                            for (int i = 0; i < blocklen; ++i) {
+                                const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
+                                const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
+                                sumi += ((v0 * a_ptr[l].qs[k * 4 * blocklen + m * blocklen + i]) +
+                                         (v1 * a_ptr[l].qs[k * 4 * blocklen + m * blocklen + i + qk / 2 * 4])) >> 4;
+                            }
+                            sumf[m][j] += sumi * GGML_FP16_TO_FP32(b_ptr[l].d[j]) * GGML_FP16_TO_FP32(a_ptr[l].d[m]);
+                        }
+                    }
+                }
+            }
+            for (int m = 0; m < 4; m++) {
+                for (int j = 0; j < ncols_interleaved; j++)
+                    s[(y * 4 + m) * bs + x * ncols_interleaved + j] = sumf[m][j];
+            }
+        }
+    }
 #endif
 }
 
-void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy, int nr, int nc, int ith, int nth) {
-    UNUSED(n);
+void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, const void * restrict vy, int nr, int nc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
+    const int ncols_interleaved = 4;
+    const int blocklen = 8;
+
+    assert (n % qk == 0);
+    assert (nr % 4 == 0);
+    assert (nc % ncols_interleaved == 0);
+
     UNUSED(s);
+    UNUSED(bs);
     UNUSED(vx);
     UNUSED(vy);
     UNUSED(nr);
     UNUSED(nc);
-    UNUSED(ith);
-    UNUSED(nth);
+    UNUSED(nb);
+    UNUSED(ncols_interleaved);
+    UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
     if (svcntw() == 8) {
@@ -1108,36 +1198,26 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx
     }
 #endif
 #if defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
-    int64_t x0 = roundup((ith * nc) / nth, (int64_t)4);
-    int64_t xend = roundup(((ith + 1) * nc) / nth, (int64_t)4);
-    size_t width = xend - x0;
-
-    int64_t nb = n / QK4_0;
-    const void * b_ptr = (const void *)((const block_q4_0x4 *) vx + ((x0 / 4) * nb));
+    const void * b_ptr = vx;
     const void * a_ptr = vy;
-    float * res_ptr = s + x0;
-    size_t res_stride = nc * sizeof(float);
-
-    assert(n % 32 == 0);
-    assert(width % 4 == 0);
-
-    size_t num_blocks = n / 32;
+    float * res_ptr = s;
+    size_t res_stride = bs * sizeof(float);
 
     __asm__ __volatile__(
         "mov x10, %x[nr]\n"
         "mov x9, #0x88\n"
         "cmp x10, #0x10\n"
-        "mul x9, %x[num_blocks], x9\n"
+        "mul x9, %x[nb], x9\n"
         "blt 4f\n"
         "1:"  // Row loop
         "add x28, %x[b_ptr], #0x8\n"
-        "mov x27, %x[width]\n"
+        "mov x27, %x[nc]\n"
         "add x26, %x[res_ptr], %x[res_stride], LSL #4\n"
         "2:"  // Column loop
         "add x25, %x[a_ptr], #0x8\n"
         "movi v2.16b, #0x0\n"
         "movi v10.16b, #0x0\n"
-        "mov x24, %x[num_blocks]\n"
+        "mov x24, %x[nb]\n"
         "add x23, x25, x9\n"
         "movi v12.16b, #0x0\n"
         "movi v28.16b, #0x0\n"
@@ -1409,13 +1489,13 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx
         "cbz x10, 9f\n"
         "5:"  // Row tail: Row loop
         "add x24, %x[b_ptr], #0x8\n"
-        "mov x23, %x[width]\n"
+        "mov x23, %x[nc]\n"
         "add x22, %x[res_ptr], %x[res_stride], LSL #2\n"
         "6:"  // Row tail: Column loop
         "movi v2.16b, #0x0\n"
         "movi v10.16b, #0x0\n"
         "add x25, %x[a_ptr], #0x8\n"
-        "mov x21, %x[num_blocks]\n"
+        "mov x21, %x[nb]\n"
         "movi v12.16b, #0x0\n"
         "movi v28.16b, #0x0\n"
         "7:"  // Row tail: Block loop
@@ -1510,42 +1590,74 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, const void * restrict vx
         "bgt 5b\n"
         "9:"  // Row tail: Row loop skip
         : [a_ptr] "+&r" (a_ptr), [res_ptr] "+&r" (res_ptr)
-        : [b_ptr] "r" (b_ptr), [nr] "r" (nr), [num_blocks] "r" (num_blocks), [res_stride] "r" (res_stride), [width] "r" (width)
+        : [b_ptr] "r" (b_ptr), [nr] "r" (nr), [nb] "r" (nb), [res_stride] "r" (res_stride), [nc] "r" (nc)
         : "cc", "memory", "v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15", "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31", "x9", "x10", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28"
     );
 #elif defined(__ARM_NEON)
     GGML_ASSERT((ggml_cpu_has_sve() || ggml_cpu_has_matmul_int8()) &&
                 "__ARM_FEATURE_SVE and __ARM_FEATURE_MATMUL_INT8 not defined, use the Q4_0_4_4 quantization format for optimal "
                 "performance");
+#else
+    float sumf[4][4];
+
+    for (int y = 0; y < nr / 4; y++) {
+        const block_q8_0x4 * a_ptr = (const block_q8_0x4 *) vy + (y * nb);
+        for (int x = 0; x < nc / ncols_interleaved; x++) {
+            const block_q4_0x4 * b_ptr = (const block_q4_0x4 *) vx + (x * nb);
+            for (int m = 0; m < 4; m++) {
+                for (int j = 0; j < ncols_interleaved; j++) sumf[m][j] = 0.0;
+            }
+            for (int l = 0; l < nb; l++) {
+                for (int k = 0; k < (qk / (2 * blocklen)); k++) {
+                    for (int m = 0; m < 4; m++) {
+                        for (int j = 0; j < ncols_interleaved; j++) {
+                            int sumi = 0;
+                            for (int i = 0; i < blocklen; ++i) {
+                                const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
+                                const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
+                                sumi += ((v0 * a_ptr[l].qs[k * 4 * blocklen + m * blocklen + i]) +
+                                         (v1 * a_ptr[l].qs[k * 4 * blocklen + m * blocklen + i + qk / 2 * 4])) >> 4;
+                            }
+                            sumf[m][j] += sumi * GGML_FP16_TO_FP32(b_ptr[l].d[j]) * GGML_FP16_TO_FP32(a_ptr[l].d[m]);
+                        }
+                    }
+                }
+            }
+            for (int m = 0; m < 4; m++) {
+                for (int j = 0; j < ncols_interleaved; j++)
+                    s[(y * 4 + m) * bs + x * ncols_interleaved + j] = sumf[m][j];
+            }
+        }
+    }
 #endif
 }
 
-void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx, const void * restrict vy, int nr, int nc, int ith, int nth) {
-    UNUSED(n);
+void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * restrict vx, const void * restrict vy, int nr, int nc) {
+    const int qk = QK8_0;
+    const int nb = n / qk;
+    const int ncols_interleaved = 8;
+    const int blocklen = 8;
+
+    assert (n % qk == 0);
+    assert (nr % 4 == 0);
+    assert (nc % ncols_interleaved == 0);
+
     UNUSED(s);
+    UNUSED(bs);
     UNUSED(vx);
     UNUSED(vy);
     UNUSED(nr);
     UNUSED(nc);
-    UNUSED(ith);
-    UNUSED(nth);
+    UNUSED(nb);
+    UNUSED(ncols_interleaved);
+    UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
     if (svcntw() == 8) {
-        int64_t x0 = roundup((ith * nc) / nth, (int64_t)8);
-        int64_t xend = roundup(((ith + 1) * nc) / nth, (int64_t)8);
-        size_t width = xend - x0;
-
-        int64_t nb = n / QK4_0;
-        const void * b_ptr = (const void *)((const block_q4_0x8 *) vx + ((x0 / 8) * nb));
+        const void * b_ptr = vx;
         const void * a_ptr = vy;
-        float * res_ptr = s + x0;
-        size_t res_stride = nc * sizeof(float);
-
-        assert(n % 32 == 0);
-        assert(width % 8 == 0);
-
-        size_t num_blocks = n / 32;
+        float * res_ptr = s;
+        size_t res_stride = bs * sizeof(float);
 
         __asm__ __volatile__(
             "mov x20, #0x4\n"
@@ -1555,17 +1667,17 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx
             "ptrue p1.b\n"
             "whilelt p0.s, XZR, x20\n"
             "cmp x13, #0x10\n"
-            "mul x12, %x[num_blocks], x12\n"
+            "mul x12, %x[nb], x12\n"
             "blt 4f\n"
             "1:"  // Row loop
             "add x11, %x[b_ptr], #0x10\n"
-            "mov x10, %x[width]\n"
+            "mov x10, %x[nc]\n"
             "add x9, %x[res_ptr], %x[res_stride], LSL #4\n"
             "2:"  // Column loop
             "add x28, %x[a_ptr], #0x8\n"
             "mov z24.b, #0x0\n"
             "mov z15.b, #0x0\n"
-            "mov x27, %x[num_blocks]\n"
+            "mov x27, %x[nb]\n"
             "add x26, x28, x12\n"
             "mov z12.b, #0x0\n"
             "mov z0.b, #0x0\n"
@@ -1844,13 +1956,13 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx
             "cbz x13, 9f\n"
             "5:"  // Row tail: Row loop
             "add x25, %x[b_ptr], #0x10\n"
-            "mov x24, %x[width]\n"
+            "mov x24, %x[nc]\n"
             "add x23, %x[res_ptr], %x[res_stride], LSL #2\n"
             "6:"  // Row tail: Column loop
             "mov z24.b, #0x0\n"
             "mov z15.b, #0x0\n"
             "add x28, %x[a_ptr], #0x8\n"
-            "mov x22, %x[num_blocks]\n"
+            "mov x22, %x[nb]\n"
             "mov z12.b, #0x0\n"
             "mov z0.b, #0x0\n"
             "7:"  // Row tail: Block loop
@@ -1946,7 +2058,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx
             "bgt 5b\n"
             "9:"  // Row tail: Row loop skip
             : [a_ptr] "+&r" (a_ptr), [res_ptr] "+&r" (res_ptr)
-            : [b_ptr] "r" (b_ptr), [nr] "r" (nr), [num_blocks] "r" (num_blocks), [res_stride] "r" (res_stride), [width] "r" (width)
+            : [b_ptr] "r" (b_ptr), [nr] "r" (nr), [nb] "r" (nb), [res_stride] "r" (res_stride), [nc] "r" (nc)
             : "cc", "memory", "p0", "p1", "x9", "x10", "x11", "x12", "x13", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27", "x28", "z0", "z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8", "z9", "z10", "z11", "z12", "z13", "z14", "z15", "z16", "z17", "z18", "z19", "z20", "z21", "z22", "z23", "z24", "z25", "z26", "z27", "z28", "z29", "z30", "z31"
         );
         return;
@@ -1969,5 +2081,37 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, const void * restrict vx
     GGML_ASSERT((ggml_cpu_has_sve() || ggml_cpu_has_matmul_int8()) &&
                 "__ARM_FEATURE_SVE and __ARM_FEATURE_MATMUL_INT8 not defined, use the Q4_0_4_4 quantization format for optimal "
                 "performance");
+#else
+    float sumf[4][8];
+
+    for (int y = 0; y < nr / 4; y++) {
+        const block_q8_0x4 * a_ptr = (const block_q8_0x4 *) vy + (y * nb);
+        for (int x = 0; x < nc / ncols_interleaved; x++) {
+            const block_q4_0x8 * b_ptr = (const block_q4_0x8 *) vx + (x * nb);
+            for (int m = 0; m < 4; m++) {
+                for (int j = 0; j < ncols_interleaved; j++) sumf[m][j] = 0.0;
+            }
+            for (int l = 0; l < nb; l++) {
+                for (int k = 0; k < (qk / (2 * blocklen)); k++) {
+                    for (int m = 0; m < 4; m++) {
+                        for (int j = 0; j < ncols_interleaved; j++) {
+                            int sumi = 0;
+                            for (int i = 0; i < blocklen; ++i) {
+                                const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
+                                const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
+                                sumi += ((v0 * a_ptr[l].qs[k * 4 * blocklen + m * blocklen + i]) +
+                                         (v1 * a_ptr[l].qs[k * 4 * blocklen + m * blocklen + i + qk / 2 * 4])) >> 4;
+                            }
+                            sumf[m][j] += sumi * GGML_FP16_TO_FP32(b_ptr[l].d[j]) * GGML_FP16_TO_FP32(a_ptr[l].d[m]);
+                        }
+                    }
+                }
+            }
+            for (int m = 0; m < 4; m++) {
+                for (int j = 0; j < ncols_interleaved; j++)
+                    s[(y * 4 + m) * bs + x * ncols_interleaved + j] = sumf[m][j];
+            }
+        }
+    }
 #endif
 }

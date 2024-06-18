@@ -21693,7 +21693,6 @@ const char * llama_print_system_info(void) {
 #else
     s += "LLAMAFILE = 0 | ";
 #endif
-    s += "SVE = "         + std::to_string(ggml_cpu_has_sve())         + " | ";
 
     return s.c_str();
 }

@@ -2397,7 +2397,6 @@ extern "C" {
     GGML_API int ggml_cpu_has_rpc        (void);
     GGML_API int ggml_cpu_has_vsx        (void);
     GGML_API int ggml_cpu_has_matmul_int8(void);
-    GGML_API int ggml_cpu_has_sve        (void);
 
     //
     // Internal types and functions exposed for tests and benchmarks
@@ -2414,10 +2413,10 @@ extern "C" {
     typedef void (*ggml_vec_dot_t)   (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x, size_t bx,
                                       const void * GGML_RESTRICT y, size_t by, int nrc);
     typedef void (*ggml_from_float_to_mat_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t k);
-    typedef void (*ggml_gemv_t)      (int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
-                                      int nr, int nc, int ith, int nth);
-    typedef void (*ggml_gemm_t)      (int n, float * GGML_RESTRICT s, const void * GGML_RESTRICT vx, const void * GGML_RESTRICT vy,
-                                      int nr, int nc, int ith, int nth);
+    typedef void (*ggml_gemv_t)      (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx,
+                                      const void * GGML_RESTRICT vy, int nr, int nc);
+    typedef void (*ggml_gemm_t)      (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx,
+                                      const void * GGML_RESTRICT vy, int nr, int nc);
 
     typedef struct {
         const char      * type_name;
@@ -2430,6 +2429,7 @@ extern "C" {
         ggml_vec_dot_t    vec_dot;
         enum ggml_type    vec_dot_type;
         int64_t           nrows; // number of rows to process simultaneously;
+        int64_t           ncols; // number of columns to process simultaneously;
         ggml_from_float_to_mat_t from_float_to_mat;
         ggml_gemv_t       gemv;
         ggml_gemm_t       gemm;

@@ -916,6 +916,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot                  = NULL,
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
+        .ncols                    = 4,
         .gemv                     = ggml_gemv_q4_0_4x4_q8_0,
         .gemm                     = ggml_gemm_q4_0_4x4_q8_0,
     },
@@ -930,6 +931,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot                  = NULL,
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
+        .ncols                    = 4,
         .gemv                     = ggml_gemv_q4_0_4x8_q8_0,
         .gemm                     = ggml_gemm_q4_0_4x8_q8_0,
     },
@@ -944,6 +946,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot                  = NULL,
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
+        .ncols                    = 8,
         .gemv                     = ggml_gemv_q4_0_8x8_q8_0,
         .gemm                     = ggml_gemm_q4_0_8x8_q8_0,
     }
@@ -12203,6 +12206,7 @@ static void ggml_compute_forward_mul_mat(
     enum ggml_type    const vec_dot_type          = type_traits[type].vec_dot_type;
     ggml_from_float_t const from_float_to_vec_dot = type_traits[vec_dot_type].from_float;
     int64_t           const vec_dot_num_rows      = type_traits[type].nrows;
+    int64_t           const matmul_num_cols       = type_traits[type].ncols;
     ggml_from_float_to_mat_t const from_float_to_mat
                                                   = type_traits[vec_dot_type].from_float_to_mat;
     ggml_gemv_t       const gemv                  = type_traits[type].gemv;
@@ -12372,32 +12376,49 @@ UseGgmlGemm2:;
 
     const void * src1_wdata = (src1->type == vec_dot_type) ? src1->data : params->wdata;
     const size_t src1_col_stride = ggml_is_contiguous(src1) || src1->type != vec_dot_type ? ggml_row_size(vec_dot_type, ne10) : nb11;
+    int64_t src0_start = (ith * ne01) / nth;
+    int64_t src0_end   = ((ith + 1) * ne01) / nth;
+    src0_start = (src0_start % matmul_num_cols) ? src0_start + matmul_num_cols - (src0_start % matmul_num_cols): src0_start;
+    src0_end = (src0_end % matmul_num_cols) ? src0_end + matmul_num_cols - (src0_end % matmul_num_cols): src0_end;
+
     if ((ggml_n_dims(src0) == 2) && gemm && gemv) {
-        if (ne11 == 1) gemv(ne00, (float *)((char *) dst->data), (const char *) src0->data, (const char *) src1_wdata, 1, ne01, ith, nth);
+        if (src0_start >= src0_end) return;
+        if (ne11 == 1)
+            gemv(ne00, (float *)((char *) dst->data) + src0_start, ne01, (const char *) src0->data + src0_start * nb01,
+                 (const char *) src1_wdata, 1, src0_end - src0_start);
         else {
             for (int iter = 0; iter < ne11 / 16; iter++) {
-                gemm(ne00, (float *)((char *) dst->data + (iter * 16 * nb1)), (const char *) src0->data, (const char *) src1_wdata + (src1_col_stride * iter * 16), 16, ne01, ith, nth);
+                gemm(ne00, (float *)((char *) dst->data + (iter * 16 * nb1)) + src0_start, ne01,
+                     (const char *) src0->data + src0_start * nb01, (const char *) src1_wdata + (src1_col_stride * iter * 16), 16,
+                     src0_end - src0_start);
             }
             int rows_processed = (ne11 / 16) * 16;
             for (int iter = 0; iter < (ne11 - rows_processed) / 8; iter++) {
-                gemm(ne00, (float *)((char *) dst->data + ((rows_processed + iter * 8) * nb1)), (const char *) src0->data, (const char *) src1_wdata + (src1_col_stride * (rows_processed + iter * 8)), 8, ne01, ith, nth);
+                gemm(ne00, (float *)((char *) dst->data + ((rows_processed + iter * 8) * nb1)) + src0_start, ne01,
+                     (const char *) src0->data + src0_start * nb01,
+                     (const char *) src1_wdata + (src1_col_stride * (rows_processed + iter * 8)), 8, src0_end - src0_start);
             }
             rows_processed = rows_processed + ((ne11 - rows_processed) / 8) * 8;
             for (int iter = 0; iter < (ne11 - rows_processed) / 4; iter++) {
-                gemm(ne00, (float *)((char *) dst->data + ((rows_processed + iter * 4) * nb1)), (const char *) src0->data, (const char *) src1_wdata + (src1_col_stride * (rows_processed + iter * 4)), 4, ne01, ith, nth);
+                gemm(ne00, (float *)((char *) dst->data + ((rows_processed + iter * 4) * nb1)) + src0_start, ne01,
+                     (const char *) src0->data + src0_start * nb01,
+                     (const char *) src1_wdata + (src1_col_stride * (rows_processed + iter * 4)), 4, src0_end - src0_start);
             }
             rows_processed = rows_processed + ((ne11 - rows_processed) / 4) * 4;
             for (int iter = rows_processed; iter < ne11; iter++) {
-                gemv(ne00, (float *)((char *) dst->data + (iter * nb1)), (const char *) src0->data, (const char *) src1_wdata + (src1_col_stride * iter), 1, ne01, ith, nth);
+                gemv(ne00, (float *)((char *) dst->data + (iter * nb1)) + src0_start, ne01,
+                     (const char *) src0->data + src0_start * nb01, (const char *) src1_wdata + (src1_col_stride * iter), 1,
+                     src0_end - src0_start);
             }
         }
-    }
-    else if ((ggml_n_dims(src0) == 2) && gemv) {
+    } else if ((ggml_n_dims(src0) == 2) && gemv) {
+        if (src0_start >= src0_end) return;
         for (int iter = 0; iter < ne11; iter++) {
-            gemv(ne00, (float *)((char *) dst->data + (iter * nb1)), (const char *) src0->data, (const char *) src1_wdata + (src1_col_stride * iter), 1, ne01, ith, nth);
+            gemv(ne00, (float *)((char *) dst->data + (iter * nb1)) + src0_start, ne01,
+                 (const char *) src0->data + src0_start * nb01, (const char *) src1_wdata + (src1_col_stride * iter), 1,
+                 src0_end - src0_start);
         }
-    }
-    else {
+    } else {
         // The first chunk comes from our thread_id, the rest will get auto-assigned.
         int current_chunk = ith;
 
