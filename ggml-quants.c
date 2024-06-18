@@ -668,10 +668,6 @@ void quantize_row_q2_2_reference(const float * restrict x, block_q2_2 * restrict
 
     for (int i = 0; i < nb; i++) {
 
-        const float d  = 1.0f;
-
-        y[i].d = GGML_FP32_TO_FP16(d);
-
         for (int j = 0; j < qk/4; ++j) {
             int8_t x0 = (int8_t)x[i*qk + j*4 + 0];
             int8_t x1 = (int8_t)x[i*qk + j*4 + 1];
@@ -14369,10 +14365,6 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
                     }
                 }
             } break;
-        case GGML_TYPE_Q2_2:
-            {
-                VALIDATE_ROW_DATA_D_F16_IMPL(block_q2_2, data, nb);
-            } break;
         case GGML_TYPE_Q4_0:
             {
                 VALIDATE_ROW_DATA_D_F16_IMPL(block_q4_0, data, nb);
@@ -14467,6 +14459,7 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
             {
                 VALIDATE_ROW_DATA_D_F16_IMPL(block_iq4_nl, data, nb);
             } break;
+        case GGML_TYPE_Q2_2:
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
