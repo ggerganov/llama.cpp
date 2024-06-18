@@ -37,6 +37,7 @@ gcovr-report/
 tags
 build*
 !build-info.cmake
+!build-info.cpp.in
 !build-info.sh
 !build.zig
 cmake-build-*
