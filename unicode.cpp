@@ -226,8 +226,9 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
         assert(offset_end <= cpts.size());
         start = offset_end;
 
+        static const uint32_t OUT_OF_RANGE = 0xFFFFFFFF;
         auto _get_cpt = [&] (const size_t pos) -> uint32_t {
-            return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
+            return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : OUT_OF_RANGE;
         };
 
         auto _get_flags = [&] (const size_t pos) -> codepoint_flags {
@@ -309,7 +310,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             }
 
             // regex: \s+(?!\S)
-            if (num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != 0) {
+            if (num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != OUT_OF_RANGE) {
                 pos += num_whitespaces - 1;
                 _add_token(pos);
                 continue;
@@ -344,8 +345,9 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
         assert(offset_end <= cpts.size());
         start = offset_end;
 
+        static const uint32_t OUT_OF_RANGE = 0xFFFFFFFF;
         auto _get_cpt = [&] (const size_t pos) -> uint32_t {
-            return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : 0;
+            return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : OUT_OF_RANGE;
         };
 
         auto _get_flags = [&] (const size_t pos) -> codepoint_flags {
@@ -450,7 +452,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             }
 
             // regex: \s+(?!\S)
-            if (num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != 0) {
+            if (num_whitespaces > 1 && _get_cpt(pos+num_whitespaces) != OUT_OF_RANGE) {
                 pos += num_whitespaces - 1;
                 _add_token(pos);
                 continue;
@@ -679,10 +681,14 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                 continue;
             }
 
-            const int cpt_flag = unicode_cpt_flags(cpts[i]).category_flag();
+            const auto flags = unicode_cpt_flags(cpts[i]);
 
-            if (k_ucat_cpt.find(cpt_flag) != k_ucat_cpt.end()) {
-                text_collapsed[i] = k_ucat_cpt.at(cpt_flag);
+            if (flags.is_whitespace) {
+                //NOTE: C++ std::regex \s does not mach 0x85, Rust and Python regex does.
+                //text_collapsed[i] = (char) 0x85;  // <Next Line> as whitespace fallback
+                text_collapsed[i] = (char) 0x0B;    // <vertical tab> as whitespace fallback
+            } else if (k_ucat_cpt.find(flags.category_flag()) != k_ucat_cpt.end()) {
+                text_collapsed[i] = k_ucat_cpt.at(flags.category_flag());
             } else {
                 text_collapsed[i] = (char) 0xD0; // fallback
             }
@@ -766,8 +772,15 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                 bpe_offsets = unicode_regex_split_stl(text_collapsed, regex_expr_collapsed, bpe_offsets);
             } else {
                 // no unicode category used, we can use std::wregex directly
-                const std::wstring wtext       = unicode_wstring_from_utf8(text);
                 const std::wstring wregex_expr = unicode_wstring_from_utf8(regex_expr);
+
+                // std::wregex \s does not mach non-ASCII whitespaces, using 0x0B as fallback
+                std::wstring wtext(cpts.begin(), cpts.end());
+                for (size_t i = 0; i < wtext.size(); ++i) {
+                    if (wtext[i] > 0x7F && unicode_cpt_flags(wtext[i]).is_whitespace) {
+                        wtext[i] = 0x0B;
+                    }
+                }
 
                 //printf("text: %s\n", text.c_str());
                 //printf("regex_expr: %s\n", regex_expr.c_str());
