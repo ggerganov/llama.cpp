@@ -23,7 +23,6 @@
 
 .cache/
 .ccls-cache/
-.clang-tidy
 .direnv/
 .DS_Store
 .envrc
