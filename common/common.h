@@ -240,6 +240,8 @@ struct gpt_params {
     std::string cvector_completions_file = "examples/cvector-generator/completions.txt";
     std::string cvector_positive_file    = "examples/cvector-generator/positive.txt";
     std::string cvector_negative_file    = "examples/cvector-generator/negative.txt";
+
+    bool spm_infill = false; // suffix/prefix/middle pattern for infill
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
