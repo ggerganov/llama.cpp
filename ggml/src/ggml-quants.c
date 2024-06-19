@@ -3917,8 +3917,8 @@ void ggml_vec_dot_q2_2_q8_0(int n, float * restrict s, size_t bs, const void * r
         __m256i xq8_0 = _mm256_packs_epi16(xq8l0, xq8h0);
         __m256i xq8_1 = _mm256_packs_epi16(xq8l1, xq8h1);
 
-        __m256i yq8_0 = _mm256_lddqu_si256((const __m256i *) (y[i + 0].qs));
-        __m256i yq8_1 = _mm256_lddqu_si256((const __m256i *) (y[i + 1].qs));
+        __m256i yq8_0 = _mm256_loadu_si256((const __m256i *) (y[i + 0].qs));
+        __m256i yq8_1 = _mm256_loadu_si256((const __m256i *) (y[i + 1].qs));
 
         const __m256 q0 = mul_sum_i8_pairs_float(xq8_0, yq8_0);
         const __m256 q1 = mul_sum_i8_pairs_float(xq8_1, yq8_1);
@@ -3951,7 +3951,7 @@ void ggml_vec_dot_q2_2_q8_0(int n, float * restrict s, size_t bs, const void * r
         xq8h = _mm256_srai_epi16(xq8h, 14);
         xq8 = _mm256_packs_epi16(xq8l, xq8h);
 
-        __m256i yq8 = _mm256_lddqu_si256((const __m256i *) (y[i].qs));
+        __m256i yq8 = _mm256_loadu_si256((const __m256i *) (y[i].qs));
         const __m256 q = mul_sum_i8_pairs_float(xq8, yq8);
 
         acc = _mm256_fmadd_ps( d, q, acc );
@@ -11371,11 +11371,12 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
     __m256 accumf = _mm256_setzero_ps();
 
     for (int i = 0; i < nb; ++i) {
-        // __m128i x12b = _mm_maskload_epi32((const int32_t *) x[i].q, _mm_set_epi32(0, -1, -1, -1));
-        // __m128i x12b = _mm_insert_epi8(x12a, x[i].qs[0], 12);
-        // WARNING: reading 3 bytes further than necessary. It's faster than the above on my CPU, though.
-        __m128i x12b = _mm_loadu_si128((const __m128i_u *) x[i].q);
-        __m256i x12 = MM256_SET_M128I(x12b, x12b);
+        // const __m128i x12b = _mm_maskload_epi32((const int32_t *) x[i].q, _mm_set_epi32(0, -1, -1, -1));
+        // const __m128i x12b = _mm_insert_epi8(x12a, x[i].qs[0], 12);
+        // WARNING: reading 3 bytes further than necessary.
+        // It's measurably faster than a masked load on an Intel Core m3-8100Y
+        const __m128i x12b = _mm_loadu_si128((const __m128i_u *) (x[i].q));
+        const __m256i x12 = MM256_SET_M128I(x12b, x12b);
 
         {
             __m256i x0l = _mm256_shuffle_epi8(x12, _mm256_set_epi8(5, -1, 5, -1, 5, -1, 5, -1,
@@ -11406,6 +11407,7 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
                                                      1, 1,  1,  1,
                                                      3, 9, 27, 81,
                                                      3, 9, 27, 81);
+            // extract ternary values
             x0l = _mm256_mullo_epi16(x0l, shift0);
             x0h = _mm256_mullo_epi16(x0h, shift0);
             x1l = _mm256_mullo_epi16(x1l, shift1l);
@@ -11414,22 +11416,22 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
             x0h = _mm256_mulhi_epu16(x0h, _mm256_set1_epi16(3));
             x1l = _mm256_mulhi_epu16(x1l, _mm256_set1_epi16(3));
             x1h = _mm256_mulhi_epu16(x1h, _mm256_set1_epi16(3));
-            x0l = _mm256_sub_epi16(x0l, _mm256_set1_epi16(1));
-            x0h = _mm256_sub_epi16(x0h, _mm256_set1_epi16(1));
-            x1l = _mm256_sub_epi16(x1l, _mm256_set1_epi16(1));
-            x1h = _mm256_sub_epi16(x1h, _mm256_set1_epi16(1));
 
             __m256i x0 = _mm256_packs_epi16(x0l, x0h);
             __m256i x1 = _mm256_packs_epi16(x1l, x1h);
 
-            __m256i y0 = _mm256_lddqu_si256((const __m256i_u *) (y[2*i + 0].qs));
-            __m256i y1 = _mm256_lddqu_si256((const __m256i_u *) (y[2*i + 1].qs));
+            // 0, 1, 2 => -1, 0, 1
+            x0 = _mm256_sub_epi8(x0, _mm256_set1_epi8(1));
+            x1 = _mm256_sub_epi8(x1, _mm256_set1_epi8(1));
 
-            __m256 d0 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[2*i].d));
-            __m256 d1 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[2*i + 1].d));
+            const __m256i y0 = _mm256_loadu_si256((const __m256i_u *) (y[2*i + 0].qs));
+            const __m256i y1 = _mm256_loadu_si256((const __m256i_u *) (y[2*i + 1].qs));
 
-            __m256 q0 = mul_sum_i8_pairs_float(x0, y0);
-            __m256 q1 = mul_sum_i8_pairs_float(x1, y1);
+            const __m256 d0 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[2*i + 0].d));
+            const __m256 d1 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[2*i + 1].d));
+
+            const __m256 q0 = mul_sum_i8_pairs_float(x0, y0);
+            const __m256 q1 = mul_sum_i8_pairs_float(x1, y1);
 
             accumf = _mm256_fmadd_ps(d0, q0, accumf);
             accumf = _mm256_fmadd_ps(d1, q1, accumf);
