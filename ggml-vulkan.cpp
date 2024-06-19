@@ -2037,7 +2037,7 @@ void ggml_vk_instance_init() {
 
 static void ggml_vk_init(ggml_backend_vk_context * ctx, size_t idx) {
     GGML_ASSERT(idx < vk_instance.device_indices.size());
-    VK_LOG_DEBUG("ggml_vk_init(" << ctx->name << ", " << dev_num << ")");
+    VK_LOG_DEBUG("ggml_vk_init(" << ctx->name << ", " << idx << ")");
     ggml_vk_instance_init();
 
     ctx->name = GGML_VK_NAME + std::to_string(idx);
