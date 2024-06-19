@@ -20,6 +20,7 @@ set(SOURCE_FILES
         ../../ggml-alloc.c
         ../../ggml-backend.c
         ../../ggml-quants.c
+        ../../ggml-qnn/logger.cpp
         ../../ggml-qnn.cpp
         ggml-qnn-ut.cpp
 )
