@@ -2051,8 +2051,8 @@ public:
     }
 
     ~ggml_qnn_tensor_readwrite() {
-        if (_context && _context->device == QNN_BACKEND_NPU && 
-            (_tensorType == QNN_TENSOR_TYPE_APP_READWRITE || _tensorType == QNN_TENSOR_TYPE_APP_READ)) {
+        if ((_tensorType == QNN_TENSOR_TYPE_APP_READWRITE || _tensorType == QNN_TENSOR_TYPE_APP_READ) &&
+            _context && _context->device == QNN_BACKEND_NPU) {
             uint8_t * qnn_buffer = static_cast<uint8_t *>(_context->instance->get_rpcmem_from_memhandle(
                     QNN_VER_PTR(*_qnn_tensor)->memHandle));
             memcpy(_tensor->data, qnn_buffer, ggml_nbytes(_tensor));
