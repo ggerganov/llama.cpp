@@ -620,6 +620,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .type_name                = "q2_2",
         .blck_size                = QK2_2,
         .type_size                = sizeof(block_q2_2),
+        .to_float                 = (ggml_to_float_t) dequantize_row_q2_2,
         .is_quantized             = true,
         .from_float               = quantize_row_q2_2,
         .from_float_reference     = (ggml_from_float_t) quantize_row_q2_2_reference,

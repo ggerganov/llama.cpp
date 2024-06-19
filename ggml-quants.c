@@ -1545,6 +1545,26 @@ void quantize_row_q8_1(const float * restrict x, void * restrict vy, int64_t k) 
 #endif
 }
 
+void dequantize_row_q2_2(const block_q2_2 * restrict x, float * restrict y, int64_t k) {
+    static const int qk = QK2_2;
+
+    assert(k % qk == 0);
+
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+
+        for (int j = 0; j < qk/4; ++j) {
+            const int8_t * q = (const int8_t *) (q22_grid + x[i].qs[j]);
+
+            *y++ = (float) q[0];
+            *y++ = (float) q[1];
+            *y++ = (float) q[2];
+            *y++ = (float) q[3];
+        }
+    }
+}
+
 void dequantize_row_q4_0(const block_q4_0 * restrict x, float * restrict y, int64_t k) {
     static const int qk = QK4_0;
 
