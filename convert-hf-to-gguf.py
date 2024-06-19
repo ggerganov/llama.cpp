@@ -296,12 +296,27 @@ class Model:
                 ))
 
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
-                    if self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
+                    if self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3 and not any(
+                        self.match_model_tensor_name(new_name, key, None)
+                        for key in [
+                            gguf.MODEL_TENSOR.TOKEN_EMBD,
+                            gguf.MODEL_TENSOR.OUTPUT,
+                        ]
+                    ):
+                        data = gguf.quantize_q1_3(data)
+                        assert data.dtype == np.uint8
+                        data_qtype = gguf.GGMLQuantizationType.Q1_3
+
+                    elif self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
                         data = gguf.quantize_bf16(data)
                         assert data.dtype == np.int16
                         data_qtype = gguf.GGMLQuantizationType.BF16
 
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0 and gguf.can_quantize_to_q8_0(data):
+                    elif (
+                        self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0
+                        or self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3
+                        and gguf.can_quantize_to_q8_0(data)
+                    ):
                         data = gguf.quantize_q8_0(data)
                         assert data.dtype == np.uint8
                         data_qtype = gguf.GGMLQuantizationType.Q8_0
@@ -1411,6 +1426,12 @@ class LlamaModel(Model):
 @Model.register("BitnetForCausalLM")
 class BitnetModel(Model):
     model_arch = gguf.MODEL_ARCH.BITNET
+
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, *args, **kwargs):
+        if ftype == gguf.LlamaFileType.GUESSED:
+            ftype = gguf.LlamaFileType.MOSTLY_Q1_3
+
+        super().__init__(dir_model, ftype, *args, **kwargs)
 
     def set_vocab(self):
         self._set_vocab_sentencepiece()

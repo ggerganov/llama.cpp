@@ -4186,6 +4186,8 @@ static std::string llama_model_ftype_name(llama_ftype ftype) {
         case LLAMA_FTYPE_ALL_F32:     return "all F32";
         case LLAMA_FTYPE_MOSTLY_F16:  return "F16";
         case LLAMA_FTYPE_MOSTLY_BF16: return "BF16";
+        case LLAMA_FTYPE_MOSTLY_Q1_3: return "Q1_3 - 1.625 bpw for BitNet 1.58b";
+        case LLAMA_FTYPE_MOSTLY_Q2_2: return "Q2_2 - 2.000 bpw for BitNet 1.58b";
         case LLAMA_FTYPE_MOSTLY_Q4_0: return "Q4_0";
         case LLAMA_FTYPE_MOSTLY_Q4_1: return "Q4_1";
         case LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16:
@@ -16287,6 +16289,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     llama_ftype ftype = params->ftype;
 
     switch (params->ftype) {
+        case LLAMA_FTYPE_MOSTLY_Q1_3: default_type = GGML_TYPE_Q1_3; break;
+        case LLAMA_FTYPE_MOSTLY_Q2_2: default_type = GGML_TYPE_Q2_2; break;
         case LLAMA_FTYPE_MOSTLY_Q4_0: default_type = GGML_TYPE_Q4_0; break;
         case LLAMA_FTYPE_MOSTLY_Q4_1: default_type = GGML_TYPE_Q4_1; break;
         case LLAMA_FTYPE_MOSTLY_Q5_0: default_type = GGML_TYPE_Q5_0; break;
