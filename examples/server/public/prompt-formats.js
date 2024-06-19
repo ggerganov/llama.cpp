@@ -327,5 +327,41 @@ export const promptFormats = {
   userMsgSuffix: "",
 
   stops: ""
+  },
+
+  // ----------------------------
+
+  "chatglm3": {
+    template: `[gMASK]sop<|system|>\n {{prompt}}{{history}}<|{{char}}|>`,
+
+    historyTemplate: `<|{{name}}|>\n {{message}}`,
+
+    char: "assistant",
+    charMsgPrefix: "",
+    charMsgSuffix: "",
+  
+    user: "user",
+    userMsgPrefix: "",
+    userMsgSuffix: "",
+
+    stops: ""
+  },
+
+  // ----------------------------
+
+  "chatglm4": {
+    template: `[gMASK]<sop><|system|>\n{{prompt}}{{history}}<|{{char}}|>`,
+  
+    historyTemplate: `<|{{name}}|>\n{{message}}`,
+  
+    char: "assistant",
+    charMsgPrefix: "",
+    charMsgSuffix: "",
+  
+    user: "user",
+    userMsgPrefix: "",
+    userMsgSuffix: "",
+  
+    stops: ""
   }
-  };
+};
