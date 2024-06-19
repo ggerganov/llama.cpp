@@ -94,7 +94,6 @@ examples/server/*.mjs.hpp
 !examples/*/*/*.kts
 !examples/sycl/*.bat
 !examples/sycl/*.sh
-!IDEWorkspaceChecks.plist
 
 # Python
 
