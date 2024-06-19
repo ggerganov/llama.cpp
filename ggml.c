@@ -18973,11 +18973,18 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads, int n_cur_
 
 #ifdef GGML_USE_OPENMP
 static void ggml_barrier(struct ggml_compute_state * state) {
+    if (state->shared->n_threads == 1) {
+        return;
+    }
+
     #pragma omp barrier
-    UNUSED(state);
 }
 #else
 static void ggml_barrier(struct ggml_compute_state * state) {
+    if (state->shared->n_threads == 1) {
+        return;
+    }
+
     atomic_int * n_barrier = &state->shared->n_barrier;
     atomic_int * n_barrier_passed = &state->shared->n_barrier_passed;
 
