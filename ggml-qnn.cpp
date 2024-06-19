@@ -2000,7 +2000,7 @@ public:
                 QNN_LOG_WARN("alloc rpcmem failure, %s\n", strerror(errno));
                 QNN_LOG_DEBUG("tensor%p name %s", _qnn_tensor, QNN_TENSOR_GET_NAME(*_qnn_tensor));
                 _context = nullptr;
-                // TODO: should we free the tensor here?
+                // No free for _qnn_tensor, because it's not registered.
                 return;
             } else {
                 QNN_LOG_INFO("alloc rpcmem successfully\n");
