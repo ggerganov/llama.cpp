@@ -148,9 +148,9 @@ def __quantize_q1_3_rows(n: np.ndarray) -> np.ndarray:
     q48 = np.sum(q48 * pow3.reshape((1, 1, 4)), axis=2, keepdims=True).reshape((n_blocks, 12))
     q4 = np.sum(q4 * pow3.reshape((1, 4)), axis=1, keepdims=True)
     q48 = q48 + (q12 * 81)
-    q = np.concatenate([q48, q4], axis=1);
+    q = np.concatenate([q48, q4], axis=1)
     q = ((q.astype(np.uint16) * 256) // 243).astype(np.uint8)
-    q = np.where(q != 0, q + 1, 0);
+    q = np.where(q != 0, q + 1, 0)
 
     return q.reshape(__quantize_q1_3_shape_change(shape))
 
@@ -170,4 +170,3 @@ def quantize_q1_3(data: np.ndarray):
         return __quantize_q1_3_lazy(data)
     else:
         return __quantize_q1_3_array(data)
-
