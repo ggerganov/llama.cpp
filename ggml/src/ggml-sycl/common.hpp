@@ -49,7 +49,7 @@ static int g_ggml_sycl_debug = 0;
 
 // #define DEBUG_SYCL_MALLOC
 
-static int g_work_group_size = 0;
+static int g_work_group_size = -1;
 // typedef sycl::half ggml_fp16_t;
 
 #define __SYCL_ARCH__ DPCT_COMPATIBILITY_TEMP
@@ -87,6 +87,11 @@ enum ggml_sycl_backend_gpu_mode {
   SYCL_UNSET_GPU_MODE = -1,
   SYCL_SINGLE_GPU_MODE = 0,
   SYCL_MUL_GPU_MODE
+};
+
+enum ggml_sycl_backend_device_filter {
+  SYCL_DEVICE_FILTER_ALL = 0,
+  SYCL_DEVICE_FILTER_TOP_LEVEL_ZERO
 };
 
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
@@ -158,18 +163,18 @@ static size_t g_scratch_offset = 0;
 
 int get_current_device_id();
 
-inline dpct::err0 ggml_sycl_set_device(const int device) try {
+inline dpct::err0 ggml_sycl_set_device(const int device_id) try {
 
   int current_device_id;
   SYCL_CHECK(CHECK_TRY_ERROR(current_device_id = get_current_device_id()));
 
-  // GGML_SYCL_DEBUG("ggml_sycl_set_device device_id=%d,
-  // current_device_id=%d\n", device, current_device);
-  if (device == current_device_id) {
+  GGML_SYCL_DEBUG("ggml_sycl_set_device device_id=%d, current_device_id=%d\n", device_id, current_device_id);
+  if (device_id == current_device_id) {
     return 0;
   }
 
-  return CHECK_TRY_ERROR(dpct::select_device(device));
+  return CHECK_TRY_ERROR(dpct::select_device(device_id));
+
 } catch (sycl::exception const& exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
             << ", line:" << __LINE__ << std::endl;
@@ -177,25 +182,218 @@ inline dpct::err0 ggml_sycl_set_device(const int device) try {
   std::exit(1);
 }
 
-//////////////////////
+class sycl_device_mgr {
+  public:
+    std::vector<int> device_ids;
+    std::vector<sycl::device> devices;
+    std::vector<int> max_compute_units;
+    std::vector<int> work_group_sizes;
+    sycl::queue *first_queue;
+    std::vector<sycl::queue *> queues;
+    std::vector<sycl::context> ctxs;
+    std::string device_list = "";
+
+    sycl_device_mgr(ggml_sycl_backend_device_filter device_filter) {
+        if (device_filter == SYCL_DEVICE_FILTER_TOP_LEVEL_ZERO) {
+            detect_sycl_gpu_list_with_max_cu();
+            create_context_for_group_gpus();
+        } else {
+            detect_all_sycl_device_list();
+            create_context_queue_for_devices();
+        }
+        get_allow_devices();
+    }
+
+    /*
+    Bind all gpus in same host with same context, for better performance in
+    device-to-device copy in the future.
+    */
+    void create_context_for_group_gpus() {
+        sycl::context ctx = sycl::context(devices);
+        assert(device_ids.size() > 0);
+        first_queue = dpct::get_current_device().create_queue(ctx, devices[0]);
+        sycl::context ctx0 = first_queue->get_context();
+        for (int i = 0; i < device_ids.size(); i++) {
+            ctxs.push_back(ctx0);
+            dpct::select_device(device_ids[i]);
+            queues.push_back(
+                dpct::get_current_device().create_queue(ctx0, devices[i]));
+        }
+    }
+
+    void create_context_queue_for_devices() {
+        for (int i = 0; i < device_ids.size(); i++) {
+            sycl::context ctx = sycl::context(devices[i]);
+            ctxs.push_back(ctx);
+            dpct::select_device(device_ids[i]);
+            queues.push_back(
+                dpct::get_current_device().create_queue(ctx, devices[i]));
+        }
+    }
+
+    void get_allow_devices() {
+        device_list = "";
+        for (size_t i = 0; i < device_ids.size(); ++i) {
+            device_list += std::to_string(device_ids[i]);
+            device_list += ",";
+        }
+        if (device_list.length() > 1) {
+            device_list.pop_back();
+        }
+    }
+
+    bool is_allowed_device(int device_id) {
+        return std::find(device_ids.begin(), device_ids.end(), device_id) != device_ids.end();
+    }
+
+    void detect_all_sycl_device_list() try {
+        int device_count = dpct::dev_mgr::instance().device_count();
+
+        for (int id = 0; id < device_count; id++) {
+            sycl::device device = dpct::dev_mgr::instance().get_device(id);
+            device_ids.push_back(id);
+            devices.push_back(device);
+            dpct::device_info prop;
+            dpct::get_device_info(prop, device);
+            work_group_sizes.push_back(prop.get_max_work_group_size());
+            max_compute_units.push_back(prop.get_max_compute_units());
+        }
+        return;
+    } catch (sycl::exception const &exc) {
+        std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+                  << ", line:" << __LINE__ << std::endl;
+        std::exit(1);
+    }
+
+    /*
+    Use all GPUs with same top max compute units
+    */
+    void detect_sycl_gpu_list_with_max_cu() try {
+        int device_count = dpct::dev_mgr::instance().device_count();
+        int local_max_compute_units = 0;
+        for (int id = 0; id < device_count; id++) {
+            sycl::device device = dpct::dev_mgr::instance().get_device(id);
+            if (!device.is_gpu())
+                continue;
+            dpct::device_info prop;
+            dpct::get_device_info(prop, device);
+            if (local_max_compute_units < prop.get_max_compute_units())
+                local_max_compute_units = prop.get_max_compute_units();
+        }
+
+        for (int id = 0; id < device_count; id++) {
+            sycl::device device = dpct::dev_mgr::instance().get_device(id);
+            if (!device.is_gpu())
+                continue;
+            dpct::device_info prop;
+            dpct::get_device_info(prop, device);
+            if (local_max_compute_units == prop.get_max_compute_units() &&
+                is_ext_oneapi_device(device)) {
+                device_ids.push_back(id);
+                devices.push_back(device);
+                work_group_sizes.push_back(prop.get_max_work_group_size());
+                max_compute_units.push_back(prop.get_max_compute_units());
+            }
+        }
+        return;
+    } catch (sycl::exception const &exc) {
+        std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+                  << ", line:" << __LINE__ << std::endl;
+        std::exit(1);
+    }
+
+    int get_device_count() { return (int)device_ids.size(); }
+
+    bool is_ext_oneapi_device(const sycl::device &dev) {
+        sycl::backend dev_backend = dev.get_backend();
+        if (dev_backend == sycl::backend::ext_oneapi_level_zero ||
+            dev_backend == sycl::backend::ext_oneapi_cuda ||
+            dev_backend == sycl::backend::ext_oneapi_hip)
+            return true;
+        return false;
+    }
+};
 
 struct ggml_sycl_device_info {
     int device_count;
-
+    int main_gpu_id = -1;
+    ggml_sycl_backend_gpu_mode use_gpu_mode = SYCL_MUL_GPU_MODE;
     struct sycl_device_info {
-        int     cc;                 // compute capability
+        int cc; // compute capability
         // int     nsm;                // number of streaming multiprocessors
         // size_t  smpb;               // max. shared memory per block
-        bool    vmm;                // virtual memory support
-        size_t  total_vram;
+        bool vmm; // virtual memory support
+        size_t total_vram;
     };
 
     sycl_device_info devices[GGML_SYCL_MAX_DEVICES] = {};
 
     std::array<float, GGML_SYCL_MAX_DEVICES> default_tensor_split = {};
-};
 
-const ggml_sycl_device_info & ggml_sycl_info();
+    sycl_device_mgr *local_sycl_device_mgr = NULL;
+
+    void print_gpu_device_list() {
+        GGML_ASSERT(local_sycl_device_mgr);
+
+        char *hint = NULL;
+        if (use_gpu_mode == SYCL_MUL_GPU_MODE) {
+            hint = "detect %d SYCL GPUs: [%s] with top Max compute units:%d\n";
+            fprintf(stderr, hint, local_sycl_device_mgr->get_device_count(),
+                    local_sycl_device_mgr->device_list.c_str(),
+                    local_sycl_device_mgr->max_compute_units[main_gpu_id]);
+        } else {
+            hint = "use main device [%d] with Max compute units:%d\n";
+            fprintf(stderr, hint, main_gpu_id,
+                    local_sycl_device_mgr->max_compute_units[main_gpu_id]);
+        }
+    }
+
+    int work_group_size(int device_id) {
+        GGML_ASSERT(local_sycl_device_mgr);
+        return local_sycl_device_mgr->work_group_sizes[device_id];
+    }
+
+    void refresh_device(ggml_sycl_backend_gpu_mode gpu_model,
+                        int p_main_gpu_id = 0) {
+        main_gpu_id = p_main_gpu_id;
+        use_gpu_mode = gpu_model;
+        if (!local_sycl_device_mgr)
+            delete local_sycl_device_mgr;
+
+        if (use_gpu_mode == SYCL_MUL_GPU_MODE) {
+            local_sycl_device_mgr =
+                new sycl_device_mgr(SYCL_DEVICE_FILTER_TOP_LEVEL_ZERO);
+        } else {
+            GGML_ASSERT(main_gpu_id >= 0);
+            local_sycl_device_mgr = new sycl_device_mgr(SYCL_DEVICE_FILTER_ALL);
+        }
+
+        device_count = local_sycl_device_mgr->get_device_count();
+
+        int64_t total_vram = 0;
+
+        for (int i = 0; i < device_count; ++i) {
+            devices[i].vmm = 0;
+            dpct::device_info prop;
+            SYCL_CHECK(CHECK_TRY_ERROR(dpct::get_device_info(
+                prop, dpct::dev_mgr::instance().get_device(i))));
+
+            default_tensor_split[i] = total_vram;
+            total_vram += prop.get_global_mem_size();
+
+            devices[i].cc =
+                100 * prop.get_major_version() + 10 * prop.get_minor_version();
+        }
+
+        for (int id = 0; id < device_count; ++id) {
+            default_tensor_split[id] /= total_vram;
+        }
+
+        g_work_group_size = work_group_size(main_gpu_id);
+        print_gpu_device_list();
+    }
+
+};
 
 struct ggml_sycl_pool {
     virtual ~ggml_sycl_pool() = default;
@@ -262,16 +460,15 @@ struct ggml_backend_sycl_context {
 
     queue_ptr qptrs[GGML_SYCL_MAX_DEVICES][GGML_SYCL_MAX_STREAMS] = { { nullptr } };
 
-    explicit ggml_backend_sycl_context(int device) :
+    explicit ggml_backend_sycl_context(struct ggml_sycl_device_info &sycl_device_info, int device) :
         device(device),
         name(GGML_SYCL_NAME + std::to_string(device)) {
+            qptrs[device][0] = sycl_device_info.local_sycl_device_mgr->queues[device];
     }
 
     queue_ptr stream(int device, int stream) {
-        if (qptrs[device][stream] == nullptr) {
-            qptrs[device][stream] = &(dpct::get_current_device().default_queue());
-        }
-        return qptrs[device][stream];
+        assert(qptrs[device][0] != nullptr);
+        return qptrs[device][0];
     }
 
     queue_ptr stream() {
