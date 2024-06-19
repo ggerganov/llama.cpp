@@ -1,6 +1,12 @@
 
 #pragma once
 
+#include "QnnTypes.h"
+#include "QnnCommon.h"
+#include "QnnInterface.h"
+#include "Saver/QnnSaver.h"
+#include "System/QnnSystemInterface.h"
+
 namespace qnn {
     // =================================================================================================
     //
@@ -30,17 +36,24 @@ namespace qnn {
         SM8650 = 57,  // v75
     };
 
+    struct qcom_socinfo {
+        uint32_t soc_model;
+        size_t htp_arch;
+        size_t vtcm_size_in_mb;
+    };
+
     using pfn_rpc_mem_init = void (*)(void);
     using pfn_rpc_mem_deinit = void (*)(void);
     using pfn_rpc_mem_alloc = void* (*) (int, uint32_t, int);
     using pfn_rpc_mem_free = void (*)(void*);
     using pfn_rpc_mem_to_fd = int (*)(void*);
 
-    struct qcom_socinfo {
-        uint32_t soc_model;
-        size_t htp_arch;
-        size_t vtcm_size_in_mb;
-    };
+    using pfn_qnnsaver_initialize = decltype(QnnSaver_initialize);
+    using pfn_qnninterface_getproviders = decltype(QnnInterface_getProviders);
+    using pfn_qnnsysteminterface_getproviders = decltype(QnnSystemInterface_getProviders);
 }
 
 #define QNN_VER_PTR(x)                      (&((x).v1)) // TODO: remove this macro after we have a separate header for QNN
+
+#define RPCMEM_DEFAULT_FLAGS                1
+#define RPCMEM_HEAP_ID_SYSTEM               25

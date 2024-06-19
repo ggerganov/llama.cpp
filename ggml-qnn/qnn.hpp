@@ -11,9 +11,6 @@
 #include "QnnGraph.h"
 #include "QnnProperty.h"
 #include "QnnTensor.h"
-#include "QnnInterface.h"
-#include "Saver/QnnSaver.h"
-#include "System/QnnSystemInterface.h"
 #include "HTP/QnnHtpDevice.h"
 #include "HTP/QnnHtpGraph.h"
 
@@ -864,7 +861,7 @@ namespace qnn_internal {
             return _qnn_mem_set.count(buf) != 0U;
         }
 
-        const qnn::qcom_socinfo &get_soc_info() { return _soc_info; }
+        const qnn::qcom_socinfo& get_soc_info() { return _soc_info; }
 
     public:
         std::map<std::string, std::tuple<Qnn_GraphHandle_t, Qnn_Tensor_t*,
@@ -886,7 +883,7 @@ namespace qnn_internal {
             }
 
             auto* get_providers =
-                reinterpret_cast<pfn_qnnsysteminterface_getproviders*>(
+                reinterpret_cast<qnn::pfn_qnnsysteminterface_getproviders*>(
                     dlsym(_system_lib_handle, "QnnSystemInterface_getProviders"));
             if (nullptr == get_providers) {
                 QNN_LOG_WARN(
@@ -988,7 +985,7 @@ namespace qnn_internal {
             }
 
             auto get_providers =
-                load_qnn_functionpointers<pfn_qnninterface_getproviders*>(
+                qnn::load_qnn_functionpointers<qnn::pfn_qnninterface_getproviders*>(
                     lib_handle, "QnnInterface_getProviders");
             if (nullptr == get_providers) {
                 QNN_LOG_WARN("can not load symbol QnnInterface_getProviders : %s", dlerror());

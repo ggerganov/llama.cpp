@@ -96,4 +96,17 @@ namespace qnn {
                 offset % static_cast<intptr_t>(alignment));
     }
 
+    uint32_t get_ggml_tensor_data_size(const ggml_tensor* tensor) {
+        /*
+        size_t data_size = ggml_row_size(tensor->type, tensor->ne[0]);
+        size_t n_dims = qnn_get_ggml_tensor_rank(tensor);
+        for (int i = 1; i < n_dims; i++) {
+            data_size *= tensor->ne[i];
+        }
+
+        return data_size;
+        */
+        return ggml_nbytes(tensor);
+    }
+
 }

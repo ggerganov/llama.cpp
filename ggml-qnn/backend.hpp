@@ -20,5 +20,5 @@ struct ggml_backend_qnn_context {
     struct ggml_backend* backend;
     QNN_INTERFACE_VER_TYPE        raw_interface;
     QNN_SYSTEM_INTERFACE_VER_TYPE raw_system_interface;
-    struct qcom_socinfo           socinfo;
+    qnn::qcom_socinfo             socinfo;
 };

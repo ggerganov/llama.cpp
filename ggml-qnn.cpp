@@ -70,27 +70,27 @@ typedef void (*ggml_qnn_func_t)(ggml_backend_qnn_context * ctx,
 
 static struct qnn::qcom_socinfo g_qnn_soc_info_table[] = {
         /* Qualcomm SnapDragon 8 Gen 1 */
-        [SM8450] = {
-                .soc_model         = SM8450,
-                .htp_arch          = V69,
+        [qnn::SM8450] = {
+                .soc_model         = qnn::SM8450,
+                .htp_arch          = qnn::V69,
                 .vtcm_size_in_mb   = 8},
 
         /* Qualcomm SnapDragon 8 Gen 1+ */
-        [SM8475] = {
-                .soc_model         = SM8475,
-                .htp_arch          = V69,
+        [qnn::SM8475] = {
+                .soc_model         = qnn::SM8475,
+                .htp_arch          = qnn::V69,
                 .vtcm_size_in_mb   = 8},
 
         /* Qualcomm SnapDragon 8 Gen 2 */
-        [SM8550] = {
-                .soc_model         = SM8550,
-                .htp_arch          = V73,
+        [qnn::SM8550] = {
+                .soc_model         = qnn::SM8550,
+                .htp_arch          = qnn::V73,
                 .vtcm_size_in_mb   = 8},
 
         /* Qualcomm SnapDragon 8 Gen 3 */
-        [SM8650] = {
-                .soc_model         = SM8650,
-                .htp_arch          = V75,
+        [qnn::SM8650] = {
+                .soc_model         = qnn::SM8650,
+                .htp_arch          = qnn::V75,
                 .vtcm_size_in_mb   = 8},
 
 };
@@ -198,19 +198,6 @@ static const char * qnn_opname_from_ggmlop(enum ggml_op ggmlop) {
     return nullptr;
 }
 
-static uint32_t qnn_get_ggml_tensor_data_size(const ggml_tensor * tensor) {
-    /*
-    size_t data_size = ggml_row_size(tensor->type, tensor->ne[0]);
-    size_t n_dims = qnn_get_ggml_tensor_rank(tensor);
-    for (int i = 1; i < n_dims; i++) {
-        data_size *= tensor->ne[i];
-    }
-
-    return data_size;
-    */
-    return ggml_nbytes(tensor);
-}
-
 static bool qnn_is_valid_params(ggml_backend_qnn_context * ctx, const ggml_tensor * src0,
                             const ggml_tensor * src1, ggml_tensor * dst) {
     if ((nullptr == ctx) || (nullptr == src0) || (nullptr == src1) || (nullptr == dst)) {
@@ -218,10 +205,10 @@ static bool qnn_is_valid_params(ggml_backend_qnn_context * ctx, const ggml_tenso
         return false;
     }
 
-    qnn_instance * instance = nullptr;
-    Qnn_Tensor_t * tensor_0 = nullptr;
-    Qnn_Tensor_t * tensor_1 = nullptr;
-    Qnn_Tensor_t * tensor_2 = nullptr;
+    qnn_internal::qnn_instance *instance = nullptr;
+    Qnn_Tensor_t               *tensor_0 = nullptr;
+    Qnn_Tensor_t               *tensor_1 = nullptr;
+    Qnn_Tensor_t               *tensor_2 = nullptr;
     tensor_0 = (Qnn_Tensor_t *) src0->extra;
     tensor_1 = (Qnn_Tensor_t *) src1->extra;
     tensor_2 = (Qnn_Tensor_t *) dst->extra;
@@ -282,13 +269,6 @@ public:
     void info() {}
 };
 #endif
-
-using pfn_qnnsaver_initialize               = decltype(QnnSaver_initialize);
-using pfn_qnninterface_getproviders         = decltype(QnnInterface_getProviders);
-using pfn_qnnsysteminterface_getproviders   = decltype(QnnSystemInterface_getProviders);
-
-#define RPCMEM_DEFAULT_FLAGS                1
-#define RPCMEM_HEAP_ID_SYSTEM               25
 
 #define VALIDATE(value, status)                                                \
     do {                                                                       \
@@ -625,11 +605,11 @@ static void ggml_qnn_add(ggml_backend_qnn_context * ctx, const ggml_tensor * src
                          const ggml_tensor * src1, ggml_tensor * dst) {
     Qnn_ErrorHandle_t error             = QNN_SUCCESS;
     bool              graph_initialized = false;
-    qnn_instance *    instance          = nullptr;
-    std::string       graph_name        = "ggml_op_qnn_add";
-    Qnn_GraphHandle_t graph_handle      = nullptr;
-    Qnn_Param_t       qnn_params[]      = {};
-    enum ggml_op      ggmlop            = GGML_OP_ADD;
+    qnn_internal::qnn_instance *instance = nullptr;
+    std::string       graph_name         = "ggml_op_qnn_add";
+    Qnn_GraphHandle_t graph_handle       = nullptr;
+    Qnn_Param_t       qnn_params[]       = {};
+    enum ggml_op      ggmlop             = GGML_OP_ADD;
 
     CHECK_PARAMS(ctx, src0, src1, dst);
     instance = ctx->instance;
@@ -817,13 +797,13 @@ failure:
 static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
                              const ggml_tensor * src0, const ggml_tensor * src1,
                              ggml_tensor * dst) {
-    Qnn_ErrorHandle_t error             = QNN_SUCCESS;
-    bool              graph_initialized = false;
-    qnn_instance *    instance          = nullptr;
-    std::string       graph_name        = "ggml_op_qnn_mul_mat";
-    Qnn_GraphHandle_t graph_handle      = nullptr;
-    Qnn_Param_t qnn_params[]            = {};
-    enum ggml_op   ggmlop               = GGML_OP_MUL_MAT;
+    Qnn_ErrorHandle_t error              = QNN_SUCCESS;
+    bool              graph_initialized  = false;
+    qnn_internal::qnn_instance *instance = nullptr;
+    std::string       graph_name         = "ggml_op_qnn_mul_mat";
+    Qnn_GraphHandle_t graph_handle       = nullptr;
+    Qnn_Param_t qnn_params[]             = {};
+    enum ggml_op   ggmlop                = GGML_OP_MUL_MAT;
 
     CHECK_PARAMS(ctx, src0, src1, dst);
     instance = ctx->instance;
@@ -1492,8 +1472,9 @@ GGML_CALL static void ggml_backend_qnn_free(ggml_backend_t backend) {
     ggml_backend_qnn_context * ctx = (ggml_backend_qnn_context *) backend->context;
     QNN_LOG_INFO("idx %d, name:%s", ctx->device, g_qnn_mgr[ctx->device].name);
 
-    qnn_instance * instance = (qnn_instance *)g_qnn_mgr[ctx->device].instance;
+    auto *instance = g_qnn_mgr[ctx->device].instance;
     if (instance != nullptr) {
+        // TODO: this should be done inside the destructor
         std::map<std::string,
                  std::tuple<Qnn_GraphHandle_t, Qnn_Tensor_t *, Qnn_Tensor_t *,
                             Qnn_Tensor_t *>>::iterator graph_it;
@@ -1721,9 +1702,8 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char * qnn_lib_path) {
         }
     }
 
-    qnn_instance * instance = nullptr;
-    instance = new qnn_instance(qnn_lib_path, g_qnn_mgr[device].lib, "");
-    result   = instance->qnn_init(nullptr);
+    auto *instance = new qnn_internal::qnn_instance(qnn_lib_path, g_qnn_mgr[device].lib, "");
+    result = instance->qnn_init(nullptr);
     if (0 != result) {
         QNN_LOG_WARN(
             "init qnn subsystem failed with qnn backend %s, pls check why\n",

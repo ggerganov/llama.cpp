@@ -45,7 +45,7 @@ namespace qnn {
             QNN_VER_PTR(*_qnn_tensor)->dataType = qnn_data_type;
 
             if (is_npu) {
-                qnn_instance* instance = ctx->instance;
+                auto* instance = ctx->instance;
                 uint8_t* qnn_buffer = static_cast<uint8_t*>(
                     instance->alloc_rpcmem(ggml_nbytes(tensor), alignof(void*)));
                 if (!qnn_buffer) {
@@ -68,7 +68,7 @@ namespace qnn {
             }
             else {
                 QNN_VER_PTR(*_qnn_tensor)->clientBuf = {
-                    tensor->data, qnn_get_ggml_tensor_data_size(tensor) };
+                    tensor->data, get_ggml_tensor_data_size(tensor) };
             }
         }
 
@@ -76,7 +76,7 @@ namespace qnn {
             ggml_backend_qnn_context* ctx)
             : _tensor(tensor), _qnn_tensor(qnn_tensor), _context(ctx) {
             _old_dimensions = QNN_VER_PTR(*_qnn_tensor)->dimensions;
-            const auto qnn_data_type = qnn_datatype_from_ggml_datatype(tensor->type);
+            const auto qnn_data_type = qnn::datatype_from_ggml_datatype(tensor->type);
             const bool is_npu = ctx->device == QNN_BACKEND_NPU;
 
             _dimensions[0] = (uint32_t)tensor->ne[0];
@@ -84,7 +84,7 @@ namespace qnn {
             _dimensions[2] = (uint32_t)tensor->ne[2];
             _dimensions[3] = (uint32_t)tensor->ne[3];
             QNN_VER_PTR(*_qnn_tensor)->dimensions = _dimensions;
-            QNN_VER_PTR(*_qnn_tensor)->rank = qnn_get_ggml_tensor_rank(tensor);
+            QNN_VER_PTR(*_qnn_tensor)->rank = get_ggml_tensor_rank(tensor);
             QNN_VER_PTR(*_qnn_tensor)->dataType = qnn_data_type;
 
             if (is_npu) {
@@ -104,7 +104,7 @@ namespace qnn {
             }
             else {
                 QNN_VER_PTR(*_qnn_tensor)->clientBuf = {
-                    tensor->data, qnn_get_ggml_tensor_data_size(tensor) };
+                    tensor->data, get_ggml_tensor_data_size(tensor) };
             }
         }
 
