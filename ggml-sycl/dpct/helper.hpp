@@ -91,22 +91,22 @@ namespace dpct
 
     /// SYCL default exception handler
     inline auto exception_handler = [](sycl::exception_list exceptions)
+    {
+        for (std::exception_ptr const &e : exceptions)
         {
-            for (std::exception_ptr const &e : exceptions)
+            try
             {
-                try
-                {
-                    std::rethrow_exception(e);
-                }
-                catch (sycl::exception const &e)
-                {
-                    std::cerr << "Caught asynchronous SYCL exception:" << std::endl
-                        << e.what() << std::endl
-                        << "Exception caught at file:" << __FILE__
-                        << ", line:" << __LINE__ << std::endl;
-                }
+                std::rethrow_exception(e);
             }
-        };
+            catch (sycl::exception const &e)
+            {
+                std::cerr << "Caught asynchronous SYCL exception:" << std::endl
+                          << e.what() << std::endl
+                          << "Exception caught at file:" << __FILE__
+                          << ", line:" << __LINE__ << std::endl;
+            }
+        }
+    };
 
     enum error_code
     {
@@ -206,23 +206,23 @@ namespace dpct
             ver = dev.get_info<sycl::info::device::version>();
             std::string::size_type i = 0;
             while (i < ver.size()) {
-                if (isdigit(ver[i]))
-                    break;
-                i++;
+              if (isdigit(ver[i]))
+                break;
+              i++;
             }
             major = std::stoi(&(ver[i]));
             while (i < ver.size()) {
-                if (ver[i] == '.')
-                    break;
-                i++;
+              if (ver[i] == '.')
+                break;
+              i++;
             }
             if (i < ver.size()) {
-                // a. and b.
-                i++;
-                minor = std::stoi(&(ver[i]));
+              // a. and b.
+              i++;
+              minor = std::stoi(&(ver[i]));
             } else {
-                // c.
-                minor = 0;
+              // c.
+              minor = 0;
             }
         }
 
@@ -240,7 +240,7 @@ namespace dpct
 
     } // namespace detail
 
-      /// Pitched 2D/3D memory data.
+    /// Pitched 2D/3D memory data.
     class pitched_data
     {
     public:
@@ -272,30 +272,30 @@ namespace dpct
         const char *get_name() const { return _name; }
         char *get_name() { return _name; }
         template <typename WorkItemSizesTy = sycl::range<3>,
-            std::enable_if_t<std::is_same_v<WorkItemSizesTy, sycl::range<3>> ||
-            std::is_same_v<WorkItemSizesTy, int *>,
-            int> = 0>
+                  std::enable_if_t<std::is_same_v<WorkItemSizesTy, sycl::range<3>> ||
+                                       std::is_same_v<WorkItemSizesTy, int *>,
+                                   int> = 0>
         auto get_max_work_item_sizes() const
         {
             if constexpr (std::is_same_v<WorkItemSizesTy, sycl::range<3>>)
                 return sycl::range<3>(_max_work_item_sizes_i[0],
-                    _max_work_item_sizes_i[1],
-                    _max_work_item_sizes_i[2]);
+                                      _max_work_item_sizes_i[1],
+                                      _max_work_item_sizes_i[2]);
             else
             {
                 return _max_work_item_sizes_i;
             }
         }
         template <typename WorkItemSizesTy = sycl::range<3>,
-            std::enable_if_t<std::is_same_v<WorkItemSizesTy, sycl::range<3>> ||
-            std::is_same_v<WorkItemSizesTy, int *>,
-            int> = 0>
+                  std::enable_if_t<std::is_same_v<WorkItemSizesTy, sycl::range<3>> ||
+                                       std::is_same_v<WorkItemSizesTy, int *>,
+                                   int> = 0>
         auto get_max_work_item_sizes()
         {
             if constexpr (std::is_same_v<WorkItemSizesTy, sycl::range<3>>)
                 return sycl::range<3>(_max_work_item_sizes_i[0],
-                    _max_work_item_sizes_i[1],
-                    _max_work_item_sizes_i[2]);
+                                      _max_work_item_sizes_i[1],
+                                      _max_work_item_sizes_i[2]);
             else
             {
                 return _max_work_item_sizes_i;
@@ -318,9 +318,9 @@ namespace dpct
             return _max_register_size_per_work_group;
         }
         template <typename NDRangeSizeTy = size_t *,
-            std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t *> ||
-            std::is_same_v<NDRangeSizeTy, int *>,
-            int> = 0>
+                  std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t *> ||
+                                       std::is_same_v<NDRangeSizeTy, int *>,
+                                   int> = 0>
         auto get_max_nd_range_size() const
         {
             if constexpr (std::is_same_v<NDRangeSizeTy, size_t *>)
@@ -329,9 +329,9 @@ namespace dpct
                 return _max_nd_range_size_i;
         }
         template <typename NDRangeSizeTy = size_t *,
-            std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t *> ||
-            std::is_same_v<NDRangeSizeTy, int *>,
-            int> = 0>
+                  std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t *> ||
+                                       std::is_same_v<NDRangeSizeTy, int *>,
+                                   int> = 0>
         auto get_max_nd_range_size()
         {
             if constexpr (std::is_same_v<NDRangeSizeTy, size_t *>)
@@ -376,7 +376,7 @@ namespace dpct
                 _max_work_item_sizes_i[i] = max_work_item_sizes[i];
         }
         [[deprecated]] void
-            set_max_work_item_sizes(const sycl::id<3> max_work_item_sizes)
+        set_max_work_item_sizes(const sycl::id<3> max_work_item_sizes)
         {
             for (int i = 0; i < 3; ++i)
             {
@@ -416,7 +416,7 @@ namespace dpct
             _max_sub_group_size = max_sub_group_size;
         }
         void
-            set_max_work_items_per_compute_unit(int max_work_items_per_compute_unit)
+        set_max_work_items_per_compute_unit(int max_work_items_per_compute_unit)
         {
             _max_work_items_per_compute_unit = max_work_items_per_compute_unit;
         }
@@ -437,7 +437,7 @@ namespace dpct
             _memory_bus_width = memory_bus_width;
         }
         void
-            set_max_register_size_per_work_group(int max_register_size_per_work_group)
+        set_max_register_size_per_work_group(int max_register_size_per_work_group)
         {
             _max_register_size_per_work_group = max_register_size_per_work_group;
         }
@@ -556,13 +556,13 @@ namespace dpct
         Use 3200000 kHz as memory_clock_rate default value. \
         Use 64 bits as memory_bus_width default value.")
 #else
-        #warning "get_device_info: querying memory_clock_rate and \
+#warning "get_device_info: querying memory_clock_rate and \
         memory_bus_width are not supported by the compiler used. \
         Use 3200000 kHz as memory_clock_rate default value. \
         Use 64 bits as memory_bus_width default value."
 #endif
 
-            size_t max_sub_group_size = 1;
+        size_t max_sub_group_size = 1;
         std::vector<size_t> sub_group_sizes =
             dev.get_info<sycl::info::device::sub_group_sizes>();
 
@@ -588,220 +588,221 @@ namespace dpct
         out = prop;
     }
 
-    /// dpct device extension
+   /// dpct device extension
     class device_ext : public sycl::device {
-        typedef std::mutex mutex_type;
+      typedef std::mutex mutex_type;
 
-    public:
-        device_ext() : sycl::device() {}
-        ~device_ext() {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            clear_queues();
-        }
-        device_ext(const sycl::device &base) : sycl::device(base) {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            init_queues();
-        }
+     public:
+      device_ext() : sycl::device() {}
+      ~device_ext() {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        clear_queues();
+      }
+      device_ext(const sycl::device &base) : sycl::device(base) {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        init_queues();
+      }
 
-        int is_native_atomic_supported() { return 0; }
-        int get_major_version() const { return dpct::get_major_version(*this); }
+      int is_native_atomic_supported() { return 0; }
+      int get_major_version() const { return dpct::get_major_version(*this); }
 
-        int get_minor_version() const { return dpct::get_minor_version(*this); }
+      int get_minor_version() const { return dpct::get_minor_version(*this); }
 
-        int get_max_compute_units() const {
-            return get_device_info().get_max_compute_units();
-        }
+      int get_max_compute_units() const {
+        return get_device_info().get_max_compute_units();
+      }
 
-        /// Return the maximum clock frequency of this device in KHz.
-        int get_max_clock_frequency() const {
-            return get_device_info().get_max_clock_frequency();
-        }
+      /// Return the maximum clock frequency of this device in KHz.
+      int get_max_clock_frequency() const {
+        return get_device_info().get_max_clock_frequency();
+      }
 
-        int get_integrated() const { return get_device_info().get_integrated(); }
+      int get_integrated() const { return get_device_info().get_integrated(); }
 
-        int get_max_sub_group_size() const {
-            return get_device_info().get_max_sub_group_size();
-        }
+      int get_max_sub_group_size() const {
+        return get_device_info().get_max_sub_group_size();
+      }
 
-        int get_max_register_size_per_work_group() const {
-            return get_device_info().get_max_register_size_per_work_group();
-        }
+      int get_max_register_size_per_work_group() const {
+        return get_device_info().get_max_register_size_per_work_group();
+      }
 
-        int get_max_work_group_size() const {
-            return get_device_info().get_max_work_group_size();
-        }
+      int get_max_work_group_size() const {
+        return get_device_info().get_max_work_group_size();
+      }
 
-        int get_mem_base_addr_align() const {
-            return get_info<sycl::info::device::mem_base_addr_align>();
-        }
+      int get_mem_base_addr_align() const {
+        return get_info<sycl::info::device::mem_base_addr_align>();
+      }
 
-        size_t get_global_mem_size() const {
-            return get_device_info().get_global_mem_size();
-        }
+      size_t get_global_mem_size() const {
+        return get_device_info().get_global_mem_size();
+      }
 
-        size_t get_max_mem_alloc_size() const {
-            return get_device_info().get_max_mem_alloc_size();
-        }
+      size_t get_max_mem_alloc_size() const {
+        return get_device_info().get_max_mem_alloc_size();
+      }
 
-        /// Get the number of bytes of free and total memory on the SYCL device.
-        /// \param [out] free_memory The number of bytes of free memory on the
-        /// SYCL device. \param [out] total_memory The number of bytes of total
-        /// memory on the SYCL device.
-        void get_memory_info(size_t &free_memory, size_t &total_memory) {
-            total_memory = get_device_info().get_global_mem_size();
-            const char *warning_info =
-                "get_memory_info: [warning] ext_intel_free_memory is not "
-                "supported (export/set ZES_ENABLE_SYSMAN=1 to support), "
-                "use total memory as free memory";
+      /// Get the number of bytes of free and total memory on the SYCL device.
+      /// \param [out] free_memory The number of bytes of free memory on the
+      /// SYCL device. \param [out] total_memory The number of bytes of total
+      /// memory on the SYCL device.
+      void get_memory_info(size_t &free_memory, size_t &total_memory) {
+        total_memory = get_device_info().get_global_mem_size();
+        const char *warning_info =
+            "get_memory_info: [warning] ext_intel_free_memory is not "
+            "supported (export/set ZES_ENABLE_SYSMAN=1 to support), "
+            "use total memory as free memory";
 #if (defined(__SYCL_COMPILER_VERSION) && __SYCL_COMPILER_VERSION >= 20221105)
-            if (!has(sycl::aspect::ext_intel_free_memory)) {
-                std::cerr << warning_info << std::endl;
-                free_memory = total_memory;
-            } else {
-                free_memory = get_info<sycl::ext::intel::info::device::free_memory>();
-            }
+        if (!has(sycl::aspect::ext_intel_free_memory)) {
+          std::cerr << warning_info << std::endl;
+          free_memory = total_memory;
+        } else {
+          free_memory = get_info<sycl::ext::intel::info::device::free_memory>();
+        }
 #else
-            std::cerr << warning_info << std::endl;
-            free_memory = total_memory;
+        std::cerr << warning_info << std::endl;
+        free_memory = total_memory;
 #if defined(_MSC_VER) && !defined(__clang__)
 #pragma message("Querying the number of bytes of free memory is not supported")
 #else
-            #warning "Querying the number of bytes of free memory is not supported"
+#warning "Querying the number of bytes of free memory is not supported"
 #endif
 #endif
+      }
+
+      void get_device_info(device_info &out) const {
+        dpct::get_device_info(out, *this);
+      }
+
+      device_info get_device_info() const {
+        device_info prop;
+        dpct::get_device_info(prop, *this);
+        return prop;
+      }
+
+      void reset() {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        clear_queues();
+        init_queues();
+      }
+
+      sycl::queue &in_order_queue() { return _q_in_order; }
+
+      sycl::queue &out_of_order_queue() { return _q_out_of_order; }
+
+      sycl::queue &default_queue() { return in_order_queue(); }
+
+      void queues_wait_and_throw() {
+        std::unique_lock<mutex_type> lock(m_mutex);
+        lock.unlock();
+        for (auto &q : _queues) {
+          q.wait_and_throw();
         }
+        // Guard the destruct of current_queues to make sure the ref count is
+        // safe.
+        lock.lock();
+      }
 
-        void get_device_info(device_info &out) const {
-            dpct::get_device_info(out, *this);
+      sycl::queue create_queue(bool enable_exception_handler = false) {
+        return create_in_order_queue(enable_exception_handler);
+      }
+
+      sycl::queue create_queue(sycl::device device,
+                               bool enable_exception_handler = false) {
+        return create_in_order_queue(device, enable_exception_handler);
+      }
+
+      sycl::queue create_in_order_queue(bool enable_exception_handler = false) {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        return create_queue_impl(enable_exception_handler,
+                                 sycl::property::queue::in_order());
+      }
+
+      sycl::queue create_in_order_queue(sycl::device device,
+                                        bool enable_exception_handler = false) {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        return create_queue_impl(device, enable_exception_handler,
+                                 sycl::property::queue::in_order());
+      }
+
+      sycl::queue create_out_of_order_queue(
+          bool enable_exception_handler = false) {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        return create_queue_impl(enable_exception_handler);
+      }
+
+      void destroy_queue(sycl::queue queue) {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        _queues.clear();
+      }
+      void set_saved_queue(sycl::queue q) {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        _saved_queue = q;
+      }
+      sycl::queue get_saved_queue() const {
+        std::lock_guard<mutex_type> lock(m_mutex);
+        return _saved_queue;
+      }
+
+     private:
+      void clear_queues() { _queues.clear(); }
+
+      void init_queues() {
+        _q_in_order =
+            create_queue_impl(true, sycl::property::queue::in_order());
+        _q_out_of_order = create_queue_impl(true);
+        _saved_queue = default_queue();
+      }
+
+      /// Caller should acquire resource \p m_mutex before calling this
+      /// function.
+      template <class... Properties>
+      sycl::queue create_queue_impl(bool enable_exception_handler,
+                                    Properties... properties) {
+        sycl::async_handler eh = {};
+        if (enable_exception_handler) {
+          eh = exception_handler;
         }
-
-        device_info get_device_info() const {
-            device_info prop;
-            dpct::get_device_info(prop, *this);
-            return prop;
-        }
-
-        void reset() {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            clear_queues();
-            init_queues();
-        }
-
-        sycl::queue &in_order_queue() { return _q_in_order; }
-
-        sycl::queue &out_of_order_queue() { return _q_out_of_order; }
-
-        sycl::queue &default_queue() { return in_order_queue(); }
-
-        void queues_wait_and_throw() {
-            std::unique_lock<mutex_type> lock(m_mutex);
-            lock.unlock();
-            for (auto &q : _queues) {
-                q.wait_and_throw();
-            }
-            // Guard the destruct of current_queues to make sure the ref count is
-            // safe.
-            lock.lock();
-        }
-
-        sycl::queue create_queue(bool enable_exception_handler = false) {
-            return create_in_order_queue(enable_exception_handler);
-        }
-
-        sycl::queue create_queue(sycl::device device,
-            bool enable_exception_handler = false) {
-            return create_in_order_queue(device, enable_exception_handler);
-        }
-
-        sycl::queue create_in_order_queue(bool enable_exception_handler = false) {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            return create_queue_impl(enable_exception_handler,
-                sycl::property::queue::in_order());
-        }
-
-        sycl::queue create_in_order_queue(sycl::device device,
-            bool enable_exception_handler = false) {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            return create_queue_impl(device, enable_exception_handler,
-                sycl::property::queue::in_order());
-        }
-
-        sycl::queue create_out_of_order_queue(
-            bool enable_exception_handler = false) {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            return create_queue_impl(enable_exception_handler);
-        }
-
-        void destroy_queue(sycl::queue queue) {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            _queues.clear();
-        }
-        void set_saved_queue(sycl::queue q) {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            _saved_queue = q;
-        }
-        sycl::queue get_saved_queue() const {
-            std::lock_guard<mutex_type> lock(m_mutex);
-            return _saved_queue;
-        }
-
-    private:
-        void clear_queues() { _queues.clear(); }
-
-        void init_queues() {
-            _q_in_order =
-                create_queue_impl(true, sycl::property::queue::in_order());
-            _q_out_of_order = create_queue_impl(true);
-            _saved_queue = default_queue();
-        }
-
-        /// Caller should acquire resource \p m_mutex before calling this
-        /// function.
-        template <class... Properties>
-        sycl::queue create_queue_impl(bool enable_exception_handler,
-            Properties... properties) {
-            sycl::async_handler eh = {};
-            if (enable_exception_handler) {
-                eh = exception_handler;
-            }
-            auto q = sycl::queue(*this, eh,
-                sycl::property_list(
+        auto q = sycl::queue(*this, eh,
+                             sycl::property_list(
 #ifdef DPCT_PROFILING_ENABLED
-                    sycl::property::queue::enable_profiling(),
+                                 sycl::property::queue::enable_profiling(),
 #endif
-                    properties...));
-            _queues.push_back(q);
+                                 properties...));
+        _queues.push_back(q);
 
-            return _queues.back();
+        return _queues.back();
+      }
+
+      template <class... Properties>
+      sycl::queue create_queue_impl(sycl::device device,
+                                    bool enable_exception_handler,
+                                    Properties... properties) {
+        sycl::async_handler eh = {};
+        if (enable_exception_handler) {
+          eh = exception_handler;
         }
-
-        template <class... Properties>
-        sycl::queue create_queue_impl(sycl::device device,
-            bool enable_exception_handler,
-            Properties... properties) {
-            sycl::async_handler eh = {};
-            if (enable_exception_handler) {
-                eh = exception_handler;
-            }
-            _queues.push_back(
-                sycl::queue(device, eh,
-                    sycl::property_list(
+        _queues.push_back(
+            sycl::queue(device, eh,
+                        sycl::property_list(
 #ifdef DPCT_PROFILING_ENABLED
-                        sycl::property::queue::enable_profiling(),
+                            sycl::property::queue::enable_profiling(),
 #endif
-                        properties...)));
+                            properties...)));
 
-            return _queues.back();
-        }
+        return _queues.back();
+      }
 
-        void get_version(int &major, int &minor) const {
-            detail::get_version(*this, major, minor);
-        }
-        sycl::queue _q_in_order, _q_out_of_order;
-        sycl::queue _saved_queue;
-        std::vector<sycl::queue> _queues;
-        mutable mutex_type m_mutex;
+      void get_version(int &major, int &minor) const {
+        detail::get_version(*this, major, minor);
+      }
+      sycl::queue _q_in_order, _q_out_of_order;
+      sycl::queue _saved_queue;
+      std::vector<sycl::queue> _queues;
+      mutable mutex_type m_mutex;
     };
+
 
     /// device manager
     class dev_mgr
@@ -868,7 +869,7 @@ namespace dpct
         template <class DeviceSelector>
         std::enable_if_t<
             std::is_invocable_r_v<int, DeviceSelector, const sycl::device &>>
-            select_device(const DeviceSelector &selector = sycl::gpu_selector_v)
+        select_device(const DeviceSelector &selector = sycl::gpu_selector_v)
         {
             sycl::device selected_device = sycl::device(selector);
             unsigned int selected_device_id = get_device_id(selected_device);
@@ -1000,7 +1001,7 @@ namespace dpct
         };
 
         static pointer_access_attribute get_pointer_attribute(sycl::queue &q,
-            const void *ptr)
+                                                              const void *ptr)
         {
             switch (sycl::get_pointer_type(ptr, q.get_context()))
             {
@@ -1018,19 +1019,19 @@ namespace dpct
         inline constexpr std::uint64_t get_type_combination_id(ArgT Val)
         {
             static_assert((unsigned char)library_data_t::library_data_t_size <=
-                std::numeric_limits<unsigned char>::max() &&
-                "library_data_t size exceeds limit.");
+                              std::numeric_limits<unsigned char>::max() &&
+                          "library_data_t size exceeds limit.");
             static_assert(std::is_same_v<ArgT, library_data_t>, "Unsupported ArgT");
             return (std::uint64_t)Val;
         }
 
         template <typename FirstT, typename... RestT>
         inline constexpr std::uint64_t get_type_combination_id(FirstT FirstVal,
-            RestT... RestVal)
+                                                               RestT... RestVal)
         {
             static_assert((std::uint8_t)library_data_t::library_data_t_size <=
-                std::numeric_limits<unsigned char>::max() &&
-                "library_data_t size exceeds limit.");
+                              std::numeric_limits<unsigned char>::max() &&
+                          "library_data_t size exceeds limit.");
             static_assert(sizeof...(RestT) <= 8 && "Too many parameters");
             static_assert(std::is_same_v<FirstT, library_data_t>, "Unsupported FirstT");
             return get_type_combination_id(RestVal...) << 8 | ((std::uint64_t)FirstVal);
@@ -1044,7 +1045,7 @@ namespace dpct
 #if defined(__linux__)
                 mapped_address_space =
                     (byte_t *)mmap(nullptr, mapped_region_size, PROT_NONE,
-                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+                                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #elif defined(_WIN64)
                 mapped_address_space = (byte_t *)VirtualAlloc(
                     NULL,               // NULL specified as the base address parameter
@@ -1129,7 +1130,7 @@ namespace dpct
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
                 return (mapped_address_space <= ptr) &&
-                    (ptr < mapped_address_space + mapped_region_size);
+                       (ptr < mapped_address_space + mapped_region_size);
             }
 
             /// Returns the instance of memory manager singleton.
@@ -1180,7 +1181,7 @@ namespace dpct
                 sycl::access::target::device;
             static constexpr sycl::access_mode mode =
                 (Memory == constant) ? sycl::access_mode::read
-                : sycl::access_mode::read_write;
+                                     : sycl::access_mode::read_write;
             static constexpr size_t type_size = sizeof(T);
             using element_t =
                 typename std::conditional<Memory == constant, const T, T>::type;
@@ -1199,41 +1200,41 @@ namespace dpct
 
 #define PITCH_DEFAULT_ALIGN(x) (((x) + 31) & ~(0x1F))
         static inline void *dpct_malloc(size_t &pitch, size_t x, size_t y, size_t z,
-            sycl::queue &q)
+                                        sycl::queue &q)
         {
             pitch = PITCH_DEFAULT_ALIGN(x);
             return dpct_malloc(pitch * y * z, q);
         }
 
         /**
-        * @brief Sets \p value to the first \p size elements starting from \p dev_ptr in \p q.
-        * @tparam valueT The type of the element to be set.
-        * @param [in] q The queue in which the operation is done.
-        * @param [in] dev_ptr Pointer to the virtual device memory address.
-        * @param [in] value The value to be set.
-        * @param [in] size Number of elements to be set to the value.
-        * @return An event representing the memset operation.
-        */
+         * @brief Sets \p value to the first \p size elements starting from \p dev_ptr in \p q.
+         * @tparam valueT The type of the element to be set.
+         * @param [in] q The queue in which the operation is done.
+         * @param [in] dev_ptr Pointer to the virtual device memory address.
+         * @param [in] value The value to be set.
+         * @param [in] size Number of elements to be set to the value.
+         * @return An event representing the memset operation.
+         */
         template <typename valueT>
         static inline sycl::event dpct_memset(sycl::queue &q, void *dev_ptr,
-            valueT value, size_t size)
+                                              valueT value, size_t size)
         {
             return q.fill(dev_ptr, value, size);
         }
 
         /**
-        * @brief Sets \p value to the 3D memory region pointed by \p data in \p q.
-        * @tparam valueT The type of the element to be set.
-        * @param [in] q The queue in which the operation is done.
-        * @param [in] data Pointer to the pitched device memory region.
-        * @param [in] value The value to be set.
-        * @param [in] size 3D memory region by number of elements.
-        * @return An event list representing the memset operations.
-        */
+         * @brief Sets \p value to the 3D memory region pointed by \p data in \p q.
+         * @tparam valueT The type of the element to be set.
+         * @param [in] q The queue in which the operation is done.
+         * @param [in] data Pointer to the pitched device memory region.
+         * @param [in] value The value to be set.
+         * @param [in] size 3D memory region by number of elements.
+         * @return An event list representing the memset operations.
+         */
         template <typename valueT>
         static inline std::vector<sycl::event>
-            dpct_memset(sycl::queue &q, pitched_data data, valueT value,
-                sycl::range<3> size)
+        dpct_memset(sycl::queue &q, pitched_data data, valueT value,
+                    sycl::range<3> size)
         {
             std::vector<sycl::event> event_list;
             size_t slice = data.get_pitch() * data.get_y();
@@ -1252,28 +1253,28 @@ namespace dpct
         }
 
         /**
-        * @brief Sets \p val to the pitched 2D memory region pointed by \p ptr in \p q.
-        * @tparam valueT The type of the element to be set.
-        * @param [in] q The queue in which the operation is done.
-        * @param [in] ptr Pointer to the virtual device memory.
-        * @param [in] pitch The pitch size by number of elements, including padding.
-        * @param [in] val The value to be set.
-        * @param [in] x The width of memory region by number of elements.
-        * @param [in] y The height of memory region by number of elements.
-        * @return An event list representing the memset operations.
-        */
+         * @brief Sets \p val to the pitched 2D memory region pointed by \p ptr in \p q.
+         * @tparam valueT The type of the element to be set.
+         * @param [in] q The queue in which the operation is done.
+         * @param [in] ptr Pointer to the virtual device memory.
+         * @param [in] pitch The pitch size by number of elements, including padding.
+         * @param [in] val The value to be set.
+         * @param [in] x The width of memory region by number of elements.
+         * @param [in] y The height of memory region by number of elements.
+         * @return An event list representing the memset operations.
+         */
         template <typename valueT>
         static inline std::vector<sycl::event>
-            dpct_memset(sycl::queue &q, void *ptr, size_t pitch, valueT val, size_t x,
-                size_t y)
+        dpct_memset(sycl::queue &q, void *ptr, size_t pitch, valueT val, size_t x,
+                    size_t y)
         {
             return dpct_memset(q, pitched_data(ptr, pitch, x, 1), val,
-                sycl::range<3>(x, y, 1));
+                               sycl::range<3>(x, y, 1));
         }
 
         static memcpy_direction deduce_memcpy_direction(sycl::queue &q, void *to_ptr,
-            const void *from_ptr,
-            memcpy_direction dir)
+                                                        const void *from_ptr,
+                                                        memcpy_direction dir)
         {
             switch (dir)
             {
@@ -1283,20 +1284,20 @@ namespace dpct
             case memcpy_direction::device_to_device:
                 return dir;
             case memcpy_direction::automatic:
-                {
+            {
                 // table[to_attribute][from_attribute]
                 static const memcpy_direction
                     direction_table[static_cast<unsigned>(pointer_access_attribute::end)]
-                    [static_cast<unsigned>(pointer_access_attribute::end)] =
-                {{memcpy_direction::host_to_host,
-                    memcpy_direction::device_to_host,
-                    memcpy_direction::host_to_host},
-                    {memcpy_direction::host_to_device,
-                    memcpy_direction::device_to_device,
-                    memcpy_direction::device_to_device},
-                    {memcpy_direction::host_to_host,
-                    memcpy_direction::device_to_device,
-                    memcpy_direction::device_to_device}};
+                                   [static_cast<unsigned>(pointer_access_attribute::end)] =
+                                       {{memcpy_direction::host_to_host,
+                                         memcpy_direction::device_to_host,
+                                         memcpy_direction::host_to_host},
+                                        {memcpy_direction::host_to_device,
+                                         memcpy_direction::device_to_device,
+                                         memcpy_direction::device_to_device},
+                                        {memcpy_direction::host_to_host,
+                                         memcpy_direction::device_to_device,
+                                         memcpy_direction::device_to_device}};
                 return direction_table[static_cast<unsigned>(get_pointer_attribute(
                     q, to_ptr))][static_cast<unsigned>(get_pointer_attribute(q, from_ptr))];
             }
@@ -1306,9 +1307,9 @@ namespace dpct
         }
 
         static sycl::event
-            dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr, size_t size,
-                memcpy_direction direction,
-                const std::vector<sycl::event> &dep_events = {})
+        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr, size_t size,
+                    memcpy_direction direction,
+                    const std::vector<sycl::event> &dep_events = {})
         {
             if (!size)
                 return sycl::event{};
@@ -1318,13 +1319,13 @@ namespace dpct
 
         // Get actual copy range and make sure it will not exceed range.
         static inline size_t get_copy_range(sycl::range<3> size, size_t slice,
-            size_t pitch)
+                                            size_t pitch)
         {
             return slice * (size.get(2) - 1) + pitch * (size.get(1) - 1) + size.get(0);
         }
 
         static inline size_t get_offset(sycl::id<3> id, size_t slice,
-            size_t pitch)
+                                        size_t pitch)
         {
             return slice * id.get(2) + pitch * id.get(1) + id.get(0);
         }
@@ -1332,11 +1333,11 @@ namespace dpct
         /// copy 3D matrix specified by \p size from 3D matrix specified by \p from_ptr
         /// and \p from_range to another specified by \p to_ptr and \p to_range.
         static inline std::vector<sycl::event>
-            dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
-                sycl::range<3> to_range, sycl::range<3> from_range,
-                sycl::id<3> to_id, sycl::id<3> from_id,
-                sycl::range<3> size, memcpy_direction direction,
-                const std::vector<sycl::event> &dep_events = {})
+        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
+                    sycl::range<3> to_range, sycl::range<3> from_range,
+                    sycl::id<3> to_id, sycl::id<3> from_id,
+                    sycl::range<3> size, memcpy_direction direction,
+                    const std::vector<sycl::event> &dep_events = {})
         {
             // RAII for host pointer
             class host_buffer
@@ -1348,7 +1349,7 @@ namespace dpct
 
             public:
                 host_buffer(size_t size, sycl::queue &q,
-                    const std::vector<sycl::event> &deps)
+                            const std::vector<sycl::event> &deps)
                     : _buf(std::malloc(size)), _size(size), _q(q), _deps(deps) {}
                 void *get_ptr() const { return _buf; }
                 size_t get_size() const { return _size; }
@@ -1357,16 +1358,16 @@ namespace dpct
                     if (_buf)
                     {
                         _q.submit([&](sycl::handler &cgh)
-                            {
-                                cgh.depends_on(_deps);
-                                cgh.host_task([buf = _buf] { std::free(buf); }); });
+                                  {
+        cgh.depends_on(_deps);
+        cgh.host_task([buf = _buf] { std::free(buf); }); });
                     }
                 }
             };
             std::vector<sycl::event> event_list;
 
             size_t to_slice = to_range.get(1) * to_range.get(0),
-                from_slice = from_range.get(1) * from_range.get(0);
+                   from_slice = from_range.get(1) * from_range.get(0);
             unsigned char *to_surface =
                 (unsigned char *)to_ptr + get_offset(to_id, to_slice, to_range.get(0));
             const unsigned char *from_surface =
@@ -1376,7 +1377,7 @@ namespace dpct
             if (to_slice == from_slice && to_slice == size.get(1) * size.get(0))
             {
                 return {dpct_memcpy(q, to_surface, from_surface, to_slice * size.get(2),
-                    direction, dep_events)};
+                                    direction, dep_events)};
             }
             direction = deduce_memcpy_direction(q, to_ptr, from_ptr, direction);
             size_t size_slice = size.get(1) * size.get(0);
@@ -1391,14 +1392,14 @@ namespace dpct
                         to_range.get(0) == size.get(0))
                     {
                         event_list.push_back(dpct_memcpy(q, to_ptr, from_ptr, size_slice,
-                            direction, dep_events));
+                                                         direction, dep_events));
                     }
                     else
                     {
                         for (size_t y = 0; y < size.get(1); ++y)
                         {
                             event_list.push_back(dpct_memcpy(q, to_ptr, from_ptr, size.get(0),
-                                direction, dep_events));
+                                                             direction, dep_events));
                             to_ptr += to_range.get(0);
                             from_ptr += from_range.get(0);
                         }
@@ -1408,17 +1409,17 @@ namespace dpct
                 }
                 break;
             case host_to_device:
-                {
+            {
                 host_buffer buf(get_copy_range(size, to_slice, to_range.get(0)), q,
-                    event_list);
+                                event_list);
                 std::vector<sycl::event> host_events;
                 if (to_slice == size_slice)
                 {
                     // Copy host data to a temp host buffer with the shape of target.
                     host_events =
                         dpct_memcpy(q, buf.get_ptr(), from_surface, to_range, from_range,
-                            sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0), size,
-                            host_to_host, dep_events);
+                                    sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0), size,
+                                    host_to_host, dep_events);
                 }
                 else
                 {
@@ -1429,39 +1430,39 @@ namespace dpct
                         // If has padding data, not sure whether it is useless. So fill temp
                         // buffer with it.
                         std::vector<sycl::event>{
-                        dpct_memcpy(q, buf.get_ptr(), to_surface, buf.get_size(),
-                            device_to_host, dep_events)});
+                            dpct_memcpy(q, buf.get_ptr(), to_surface, buf.get_size(),
+                                        device_to_host, dep_events)});
                 }
                 // Copy from temp host buffer to device with only one submit.
                 event_list.push_back(dpct_memcpy(q, to_surface, buf.get_ptr(),
-                    buf.get_size(), host_to_device,
-                    host_events));
+                                                 buf.get_size(), host_to_device,
+                                                 host_events));
                 break;
             }
             case device_to_host:
-                {
+            {
                 host_buffer buf(get_copy_range(size, from_slice, from_range.get(0)), q,
-                    event_list);
+                                event_list);
                 // Copy from host temp buffer to host target with reshaping.
                 event_list = dpct_memcpy(
                     q, to_surface, buf.get_ptr(), to_range, from_range, sycl::id<3>(0, 0, 0),
                     sycl::id<3>(0, 0, 0), size, host_to_host,
                     // Copy from device to temp host buffer with only one submit.
                     std::vector<sycl::event>{dpct_memcpy(q, buf.get_ptr(), from_surface,
-                        buf.get_size(),
-                        device_to_host, dep_events)});
+                                                         buf.get_size(),
+                                                         device_to_host, dep_events)});
                 break;
             }
             case device_to_device:
                 event_list.push_back(q.submit([&](sycl::handler &cgh){
-                    cgh.depends_on(dep_events);
-                    cgh.parallel_for<class dpct_memcpy_3d_detail>(
-                        size,
-                        [=](sycl::id<3> id) {
-                            to_surface[get_offset(id, to_slice, to_range.get(0))] =
-                                from_surface[get_offset(id, from_slice, from_range.get(0))];
-                        }); }));
-                    break;
+                cgh.depends_on(dep_events);
+                cgh.parallel_for<class dpct_memcpy_3d_detail>(
+                    size,
+                    [=](sycl::id<3> id) {
+                        to_surface[get_offset(id, to_slice, to_range.get(0))] =
+                            from_surface[get_offset(id, from_slice, from_range.get(0))];
+                    }); }));
+                break;
             default:
                 throw std::runtime_error("dpct_memcpy: invalid direction value");
             }
@@ -1470,26 +1471,26 @@ namespace dpct
 
         /// memcpy 2D/3D matrix specified by pitched_data.
         static inline std::vector<sycl::event>
-            dpct_memcpy(sycl::queue &q, pitched_data to, sycl::id<3> to_id,
-                pitched_data from, sycl::id<3> from_id, sycl::range<3> size,
-                memcpy_direction direction = automatic)
+        dpct_memcpy(sycl::queue &q, pitched_data to, sycl::id<3> to_id,
+                    pitched_data from, sycl::id<3> from_id, sycl::range<3> size,
+                    memcpy_direction direction = automatic)
         {
             return dpct_memcpy(q, to.get_data_ptr(), from.get_data_ptr(),
-                sycl::range<3>(to.get_pitch(), to.get_y(), 1),
-                sycl::range<3>(from.get_pitch(), from.get_y(), 1), to_id, from_id,
-                size, direction);
+                               sycl::range<3>(to.get_pitch(), to.get_y(), 1),
+                               sycl::range<3>(from.get_pitch(), from.get_y(), 1), to_id, from_id,
+                               size, direction);
         }
 
         /// memcpy 2D matrix with pitch.
         static inline std::vector<sycl::event>
-            dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
-                size_t to_pitch, size_t from_pitch, size_t x, size_t y,
-                memcpy_direction direction = automatic)
+        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
+                    size_t to_pitch, size_t from_pitch, size_t x, size_t y,
+                    memcpy_direction direction = automatic)
         {
             return dpct_memcpy(q, to_ptr, from_ptr, sycl::range<3>(to_pitch, y, 1),
-                sycl::range<3>(from_pitch, y, 1),
-                sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0),
-                sycl::range<3>(x, y, 1), direction);
+                               sycl::range<3>(from_pitch, y, 1),
+                               sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0),
+                               sycl::range<3>(x, y, 1), direction);
         }
 
         namespace deprecated
@@ -1555,7 +1556,7 @@ namespace dpct
         } // namespace deprecated
 
         inline void dpct_free(void *ptr,
-            const sycl::queue &q)
+                              const sycl::queue &q)
         {
             if (ptr)
             {
@@ -1577,7 +1578,7 @@ namespace dpct
             Ty s_h;
             if (get_pointer_attribute(q, s) == pointer_access_attribute::device_only)
                 detail::dpct_memcpy(q, (void *)&s_h, (const void *)s, sizeof(T), device_to_host)
-                .wait();
+                    .wait();
             else
                 s_h = *reinterpret_cast<const Ty *>(s);
             return s_h;
@@ -1595,9 +1596,9 @@ namespace dpct
     {
         template <class Ta, class Tb, class Tc, class Ts>
         inline void gemm_impl(sycl::queue &q, oneapi::mkl::transpose a_trans,
-            oneapi::mkl::transpose b_trans, int m, int n, int k,
-            const void *alpha, const void *a, int lda, const void *b,
-            int ldb, const void *beta, void *c, int ldc)
+                              oneapi::mkl::transpose b_trans, int m, int n, int k,
+                              const void *alpha, const void *a, int lda, const void *b,
+                              int ldb, const void *beta, void *c, int ldc)
         {
             Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts *>(alpha), q);
             Ts beta_value = dpct::get_value(reinterpret_cast<const Ts *>(beta), q);
@@ -1638,10 +1639,10 @@ namespace dpct
 
         template <class Ta, class Tb, class Tc, class Ts>
         inline void gemm_batch_impl(sycl::queue &q, oneapi::mkl::transpose a_trans,
-            oneapi::mkl::transpose b_trans, int m, int n, int k,
-            const void *alpha, const void **a, int lda,
-            const void **b, int ldb, const void *beta, void **c,
-            int ldc, int batch_size)
+                                    oneapi::mkl::transpose b_trans, int m, int n, int k,
+                                    const void *alpha, const void **a, int lda,
+                                    const void **b, int ldb, const void *beta, void **c,
+                                    int ldc, int batch_size)
         {
             struct matrix_info_t
             {
@@ -1679,19 +1680,19 @@ namespace dpct
                 matrix_info->ld_info + 2, 1, &(matrix_info->groupsize_info));
 
             q.submit([&](sycl::handler &cgh)
-                {
-                    cgh.depends_on(e);
-                    cgh.host_task([=] { std::free(matrix_info); }); });
+                     {
+    cgh.depends_on(e);
+    cgh.host_task([=] { std::free(matrix_info); }); });
         }
 
         template <class Ta, class Tb, class Tc, class Ts>
         inline void
-            gemm_batch_impl(sycl::queue &q, oneapi::mkl::transpose a_trans,
-                oneapi::mkl::transpose b_trans, int m, int n,
-                int k, const void *alpha, const void *a, int lda,
-                long long int stride_a, const void *b, int ldb,
-                long long int stride_b, const void *beta, void *c,
-                int ldc, long long int stride_c, int batch_size)
+        gemm_batch_impl(sycl::queue &q, oneapi::mkl::transpose a_trans,
+                        oneapi::mkl::transpose b_trans, int m, int n,
+                        int k, const void *alpha, const void *a, int lda,
+                        long long int stride_a, const void *b, int ldb,
+                        long long int stride_b, const void *beta, void *c,
+                        int ldc, long long int stride_c, int batch_size)
         {
             Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts *>(alpha), q);
             Ts beta_value = dpct::get_value(reinterpret_cast<const Ts *>(beta), q);
@@ -1708,7 +1709,7 @@ namespace dpct
 
     template <typename VecT, class BinaryOperation>
     inline unsigned vectorized_binary(unsigned a, unsigned b,
-        const BinaryOperation binary_op)
+                                      const BinaryOperation binary_op)
     {
         sycl::vec<unsigned, 1> v0{a}, v1{b};
         auto v2 = v0.as<VecT>();
@@ -1720,8 +1721,8 @@ namespace dpct
     }
 
     static void async_dpct_memcpy(void *to_ptr, const void *from_ptr, size_t size,
-        memcpy_direction direction = automatic,
-        sycl::queue &q = dpct::get_default_queue())
+                                  memcpy_direction direction = automatic,
+                                  sycl::queue &q = dpct::get_default_queue())
     {
         detail::dpct_memcpy(q, to_ptr, from_ptr, size, direction);
     }
@@ -1734,16 +1735,16 @@ namespace dpct
 
     template <typename T>
     T permute_sub_group_by_xor(sycl::sub_group g, T x, unsigned int mask,
-        unsigned int logical_sub_group_size = 32)
+                               unsigned int logical_sub_group_size = 32)
     {
         unsigned int id = g.get_local_linear_id();
         unsigned int start_index =
             id / logical_sub_group_size * logical_sub_group_size;
         unsigned int target_offset = (id % logical_sub_group_size) ^ mask;
         return sycl::select_from_group(g, x,
-            target_offset < logical_sub_group_size
-            ? start_index + target_offset
-            : id);
+                                       target_offset < logical_sub_group_size
+                                           ? start_index + target_offset
+                                           : id);
     }
 
     template <typename T>
@@ -1751,14 +1752,14 @@ namespace dpct
     {
         return sycl::vec<T, 1>(val)
             .template as<sycl::vec<
-            std::conditional_t<std::is_signed_v<T>, int8_t, uint8_t>, 4>>()
+                std::conditional_t<std::is_signed_v<T>, int8_t, uint8_t>, 4>>()
             .template convert<T>();
     }
 
     template <typename T1, typename T2>
     using dot_product_acc_t =
         std::conditional_t<std::is_unsigned_v<T1> && std::is_unsigned_v<T2>,
-        uint32_t, int32_t>;
+                           uint32_t, int32_t>;
 
     template <typename T1, typename T2, typename T3>
     inline auto dp4a(T1 a, T2 b, T3 c)
@@ -1799,13 +1800,13 @@ namespace dpct
     inline double pow(const double a, const double b) { return sycl::pow(a, b); }
     template <typename T, typename U>
     inline typename std::enable_if_t<std::is_floating_point_v<T>, T>
-        pow(const T a, const U b)
+    pow(const T a, const U b)
     {
         return sycl::pow(a, static_cast<T>(b));
     }
     template <typename T, typename U>
     inline typename std::enable_if_t<!std::is_floating_point_v<T>, double>
-        pow(const T a, const U b)
+    pow(const T a, const U b)
     {
         return sycl::pow(static_cast<double>(a), static_cast<double>(b));
     }
@@ -1932,8 +1933,8 @@ namespace dpct
     }
 
     inline void
-        has_capability_or_fail(const sycl::device &dev,
-            const std::initializer_list<sycl::aspect> &props)
+    has_capability_or_fail(const sycl::device &dev,
+                           const std::initializer_list<sycl::aspect> &props)
     {
         for (const auto &it : props)
         {
@@ -1943,13 +1944,13 @@ namespace dpct
             {
             case sycl::aspect::fp64:
                 throw std::runtime_error("'double' is not supported in '" +
-                    dev.get_info<sycl::info::device::name>() +
-                    "' device");
+                                         dev.get_info<sycl::info::device::name>() +
+                                         "' device");
                 break;
             case sycl::aspect::fp16:
                 throw std::runtime_error("'half' is not supported in '" +
-                    dev.get_info<sycl::info::device::name>() +
-                    "' device");
+                                         dev.get_info<sycl::info::device::name>() +
+                                         "' device");
                 break;
             default:
 #define __SYCL_ASPECT(ASPECT, ID) \
@@ -1958,15 +1959,15 @@ namespace dpct
 #define __SYCL_ASPECT_DEPRECATED(ASPECT, ID, MESSAGE) __SYCL_ASPECT(ASPECT, ID)
 #define __SYCL_ASPECT_DEPRECATED_ALIAS(ASPECT, ID, MESSAGE)
                 auto getAspectNameStr = [](sycl::aspect AspectNum) -> std::string
+                {
+                    switch (AspectNum)
                     {
-                        switch (AspectNum)
-                        {
 #include <sycl/info/aspects.def>
 #include <sycl/info/aspects_deprecated.def>
-                        default:
-                            return "unknown aspect";
-                        }
-                    };
+                    default:
+                        return "unknown aspect";
+                    }
+                };
 #undef __SYCL_ASPECT_DEPRECATED_ALIAS
 #undef __SYCL_ASPECT_DEPRECATED
 #undef __SYCL_ASPECT
@@ -1994,9 +1995,9 @@ namespace dpct
     }
 
     static sycl::event
-        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr, size_t size,
-            memcpy_direction direction,
-            const std::vector<sycl::event> &dep_events = {})
+    dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr, size_t size,
+                memcpy_direction direction,
+                const std::vector<sycl::event> &dep_events = {})
     {
         if (!size)
             return sycl::event{};
@@ -2006,13 +2007,13 @@ namespace dpct
 
     // Get actual copy range and make sure it will not exceed range.
     static inline size_t get_copy_range(sycl::range<3> size, size_t slice,
-        size_t pitch)
+                                        size_t pitch)
     {
         return slice * (size.get(2) - 1) + pitch * (size.get(1) - 1) + size.get(0);
     }
 
     static inline size_t get_offset(sycl::id<3> id, size_t slice,
-        size_t pitch)
+                                    size_t pitch)
     {
         return slice * id.get(2) + pitch * id.get(1) + id.get(0);
     }
@@ -2020,11 +2021,11 @@ namespace dpct
     /// copy 3D matrix specified by \p size from 3D matrix specified by \p from_ptr
     /// and \p from_range to another specified by \p to_ptr and \p to_range.
     static inline std::vector<sycl::event>
-        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
-            sycl::range<3> to_range, sycl::range<3> from_range,
-            sycl::id<3> to_id, sycl::id<3> from_id,
-            sycl::range<3> size, memcpy_direction direction,
-            const std::vector<sycl::event> &dep_events = {})
+    dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
+                sycl::range<3> to_range, sycl::range<3> from_range,
+                sycl::id<3> to_id, sycl::id<3> from_id,
+                sycl::range<3> size, memcpy_direction direction,
+                const std::vector<sycl::event> &dep_events = {})
     {
         // RAII for host pointer
         class host_buffer
@@ -2036,7 +2037,7 @@ namespace dpct
 
         public:
             host_buffer(size_t size, sycl::queue &q,
-                const std::vector<sycl::event> &deps)
+                        const std::vector<sycl::event> &deps)
                 : _buf(std::malloc(size)), _size(size), _q(q), _deps(deps) {}
             void *get_ptr() const { return _buf; }
             size_t get_size() const { return _size; }
@@ -2045,16 +2046,16 @@ namespace dpct
                 if (_buf)
                 {
                     _q.submit([&](sycl::handler &cgh)
-                        {
-                            cgh.depends_on(_deps);
-                            cgh.host_task([buf = _buf] { std::free(buf); }); });
+                              {
+            cgh.depends_on(_deps);
+            cgh.host_task([buf = _buf] { std::free(buf); }); });
                 }
             }
         };
         std::vector<sycl::event> event_list;
 
         size_t to_slice = to_range.get(1) * to_range.get(0),
-            from_slice = from_range.get(1) * from_range.get(0);
+               from_slice = from_range.get(1) * from_range.get(0);
         unsigned char *to_surface =
             (unsigned char *)to_ptr + get_offset(to_id, to_slice, to_range.get(0));
         const unsigned char *from_surface =
@@ -2064,7 +2065,7 @@ namespace dpct
         if (to_slice == from_slice && to_slice == size.get(1) * size.get(0))
         {
             return {dpct_memcpy(q, to_surface, from_surface, to_slice * size.get(2),
-                direction, dep_events)};
+                                direction, dep_events)};
         }
         direction = detail::deduce_memcpy_direction(q, to_ptr, from_ptr, direction);
         size_t size_slice = size.get(1) * size.get(0);
@@ -2079,14 +2080,14 @@ namespace dpct
                     to_range.get(0) == size.get(0))
                 {
                     event_list.push_back(dpct_memcpy(q, to_ptr, from_ptr, size_slice,
-                        direction, dep_events));
+                                                     direction, dep_events));
                 }
                 else
                 {
                     for (size_t y = 0; y < size.get(1); ++y)
                     {
                         event_list.push_back(dpct_memcpy(q, to_ptr, from_ptr, size.get(0),
-                            direction, dep_events));
+                                                         direction, dep_events));
                         to_ptr += to_range.get(0);
                         from_ptr += from_range.get(0);
                     }
@@ -2096,17 +2097,17 @@ namespace dpct
             }
             break;
         case host_to_device:
-            {
+        {
             host_buffer buf(get_copy_range(size, to_slice, to_range.get(0)), q,
-                event_list);
+                            event_list);
             std::vector<sycl::event> host_events;
             if (to_slice == size_slice)
             {
                 // Copy host data to a temp host buffer with the shape of target.
                 host_events =
                     dpct_memcpy(q, buf.get_ptr(), from_surface, to_range, from_range,
-                        sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0), size,
-                        host_to_host, dep_events);
+                                sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0), size,
+                                host_to_host, dep_events);
             }
             else
             {
@@ -2117,40 +2118,40 @@ namespace dpct
                     // If has padding data, not sure whether it is useless. So fill temp
                     // buffer with it.
                     std::vector<sycl::event>{
-                    dpct_memcpy(q, buf.get_ptr(), to_surface, buf.get_size(),
-                        device_to_host, dep_events)});
+                        dpct_memcpy(q, buf.get_ptr(), to_surface, buf.get_size(),
+                                    device_to_host, dep_events)});
             }
             // Copy from temp host buffer to device with only one submit.
             event_list.push_back(dpct_memcpy(q, to_surface, buf.get_ptr(),
-                buf.get_size(), host_to_device,
-                host_events));
+                                             buf.get_size(), host_to_device,
+                                             host_events));
             break;
         }
         case device_to_host:
-            {
+        {
             host_buffer buf(get_copy_range(size, from_slice, from_range.get(0)), q,
-                event_list);
+                            event_list);
             // Copy from host temp buffer to host target with reshaping.
             event_list = dpct_memcpy(
                 q, to_surface, buf.get_ptr(), to_range, from_range, sycl::id<3>(0, 0, 0),
                 sycl::id<3>(0, 0, 0), size, host_to_host,
                 // Copy from device to temp host buffer with only one submit.
                 std::vector<sycl::event>{dpct_memcpy(q, buf.get_ptr(), from_surface,
-                    buf.get_size(),
-                    device_to_host, dep_events)});
+                                                     buf.get_size(),
+                                                     device_to_host, dep_events)});
             break;
         }
         case device_to_device:
             event_list.push_back(q.submit([&](sycl::handler &cgh)
-                {
-                    cgh.depends_on(dep_events);
-                    cgh.parallel_for<class dpct_memcpy_3d_detail>(
-                        size,
-                        [=](sycl::id<3> id) {
-                            to_surface[get_offset(id, to_slice, to_range.get(0))] =
-                                from_surface[get_offset(id, from_slice, from_range.get(0))];
-                        }); }));
-                    break;
+                                          {
+        cgh.depends_on(dep_events);
+        cgh.parallel_for<class dpct_memcpy_3d_detail>(
+            size,
+            [=](sycl::id<3> id) {
+                to_surface[get_offset(id, to_slice, to_range.get(0))] =
+                    from_surface[get_offset(id, from_slice, from_range.get(0))];
+            }); }));
+        break;
         default:
             throw std::runtime_error("dpct_memcpy: invalid direction value");
         }
@@ -2159,34 +2160,34 @@ namespace dpct
 
     /// memcpy 2D/3D matrix specified by pitched_data.
     static inline std::vector<sycl::event>
-        dpct_memcpy(sycl::queue &q, pitched_data to, sycl::id<3> to_id,
-            pitched_data from, sycl::id<3> from_id, sycl::range<3> size,
-            memcpy_direction direction = automatic)
+    dpct_memcpy(sycl::queue &q, pitched_data to, sycl::id<3> to_id,
+                pitched_data from, sycl::id<3> from_id, sycl::range<3> size,
+                memcpy_direction direction = automatic)
     {
         return dpct_memcpy(q, to.get_data_ptr(), from.get_data_ptr(),
-            sycl::range<3>(to.get_pitch(), to.get_y(), 1),
-            sycl::range<3>(from.get_pitch(), from.get_y(), 1), to_id, from_id,
-            size, direction);
+                           sycl::range<3>(to.get_pitch(), to.get_y(), 1),
+                           sycl::range<3>(from.get_pitch(), from.get_y(), 1), to_id, from_id,
+                           size, direction);
     }
 
     /// memcpy 2D matrix with pitch.
     static inline std::vector<sycl::event>
-        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
-            size_t to_pitch, size_t from_pitch, size_t x, size_t y,
-            memcpy_direction direction = automatic)
+    dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
+                size_t to_pitch, size_t from_pitch, size_t x, size_t y,
+                memcpy_direction direction = automatic)
     {
         return dpct_memcpy(q, to_ptr, from_ptr, sycl::range<3>(to_pitch, y, 1),
-            sycl::range<3>(from_pitch, y, 1),
-            sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0),
-            sycl::range<3>(x, y, 1), direction);
+                           sycl::range<3>(from_pitch, y, 1),
+                           sycl::id<3>(0, 0, 0), sycl::id<3>(0, 0, 0),
+                           sycl::range<3>(x, y, 1), direction);
     }
 
     inline void gemm(sycl::queue &q, oneapi::mkl::transpose a_trans,
-        oneapi::mkl::transpose b_trans, int m, int n, int k,
-        const void *alpha, const void *a, library_data_t a_type,
-        int lda, const void *b, library_data_t b_type, int ldb,
-        const void *beta, void *c, library_data_t c_type, int ldc,
-        library_data_t scaling_type)
+                     oneapi::mkl::transpose b_trans, int m, int n, int k,
+                     const void *alpha, const void *a, library_data_t a_type,
+                     int lda, const void *b, library_data_t b_type, int ldb,
+                     const void *beta, void *c, library_data_t c_type, int ldc,
+                     library_data_t scaling_type)
     {
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
@@ -2194,7 +2195,7 @@ namespace dpct
             scaling_type = library_data_t::complex_float;
         }
         else if (scaling_type == library_data_t::real_double &&
-            c_type == library_data_t::complex_double)
+                 c_type == library_data_t::complex_double)
         {
             scaling_type = library_data_t::complex_double;
         }
@@ -2203,17 +2204,17 @@ namespace dpct
             detail::get_type_combination_id(a_type, b_type, c_type, scaling_type);
         switch (key)
         {
-            case detail::get_type_combination_id(
-                library_data_t::real_float, library_data_t::real_float,
+        case detail::get_type_combination_id(
+            library_data_t::real_float, library_data_t::real_float,
             library_data_t::real_float, library_data_t::real_float):
         {
-                detail::gemm_impl<float, float, float, float>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
-                break;
-            }
+            detail::gemm_impl<float, float, float, float>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
+            break;
+        }
         case detail::get_type_combination_id(
             library_data_t::real_double, library_data_t::real_double,
-        library_data_t::real_double, library_data_t::real_double):
+            library_data_t::real_double, library_data_t::real_double):
         {
             detail::gemm_impl<double, double, double, double>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
@@ -2221,44 +2222,44 @@ namespace dpct
         }
         case detail::get_type_combination_id(
             library_data_t::complex_float, library_data_t::complex_float,
-        library_data_t::complex_float, library_data_t::complex_float):
+            library_data_t::complex_float, library_data_t::complex_float):
         {
             detail::gemm_impl<std::complex<float>, std::complex<float>,
-                std::complex<float>, std::complex<float>>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
+                              std::complex<float>, std::complex<float>>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::complex_double, library_data_t::complex_double,
-        library_data_t::complex_double, library_data_t::complex_double):
+            library_data_t::complex_double, library_data_t::complex_double):
         {
             detail::gemm_impl<std::complex<double>, std::complex<double>,
-                std::complex<double>, std::complex<double>>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
+                              std::complex<double>, std::complex<double>>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_half, library_data_t::real_half):
+            library_data_t::real_half, library_data_t::real_half):
         {
             detail::gemm_impl<sycl::half, sycl::half, sycl::half,
-                sycl::half>(q, a_trans, b_trans, m, n, k, alpha, a,
-                    lda, b, ldb, beta, c, ldc);
+                              sycl::half>(q, a_trans, b_trans, m, n, k, alpha, a,
+                                          lda, b, ldb, beta, c, ldc);
             break;
         }
 #ifdef __INTEL_MKL__
         case detail::get_type_combination_id(
             library_data_t::real_bfloat16, library_data_t::real_bfloat16,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16, float,
-                float>(q, a_trans, b_trans, m, n, k, alpha, a, lda, b,
-                    ldb, beta, c, ldc);
+                              float>(q, a_trans, b_trans, m, n, k, alpha, a, lda, b,
+                                     ldb, beta, c, ldc);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_impl<sycl::half, sycl::half, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
@@ -2266,7 +2267,7 @@ namespace dpct
         }
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_half, library_data_t::real_float):
+            library_data_t::real_half, library_data_t::real_float):
         {
             float alpha_value =
                 dpct::get_value(reinterpret_cast<const float *>(alpha), q);
@@ -2275,13 +2276,13 @@ namespace dpct
             sycl::half alpha_half(alpha_value);
             sycl::half beta_half(beta_value);
             detail::gemm_impl<sycl::half, sycl::half, sycl::half,
-                sycl::half>(q, a_trans, b_trans, m, n, k, &alpha_half,
-                    a, lda, b, ldb, &beta_half, c, ldc);
+                              sycl::half>(q, a_trans, b_trans, m, n, k, &alpha_half,
+                                          a, lda, b, ldb, &beta_half, c, ldc);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_impl<std::int8_t, std::int8_t, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
@@ -2289,16 +2290,16 @@ namespace dpct
         }
         case detail::get_type_combination_id(
             library_data_t::real_bfloat16, library_data_t::real_bfloat16,
-        library_data_t::real_bfloat16, library_data_t::real_float):
+            library_data_t::real_bfloat16, library_data_t::real_float):
         {
             detail::gemm_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16,
-                oneapi::mkl::bfloat16, float>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
+                              oneapi::mkl::bfloat16, float>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
-        library_data_t::real_int32, library_data_t::real_int32):
+            library_data_t::real_int32, library_data_t::real_int32):
         {
             float alpha_float =
                 dpct::get_value(reinterpret_cast<const std::int32_t *>(alpha), q);
@@ -2314,33 +2315,33 @@ namespace dpct
         }
     } // gemm()
 
-      /// Computes a batch of matrix-matrix product with general matrices.
-      /// \param [in] q The queue where the routine should be executed.
-      /// \param [in] a_trans Specifies the operation applied to A.
-      /// \param [in] b_trans Specifies the operation applied to B.
-      /// \param [in] m Specifies the number of rows of the matrix op(A) and of the matrix C.
-      /// \param [in] n Specifies the number of columns of the matrix op(B) and of the matrix C.
-      /// \param [in] k Specifies the number of columns of the matrix op(A) and the number of rows of the matrix op(B).
-      /// \param [in] alpha Scaling factor for the matrix-matrix product.
-      /// \param [in] a Input matrix A.
-      /// \param [in] a_type Data type of the matrix A.
-      /// \param [in] lda Leading dimension of A.
-      /// \param [in] b Input matrix B.
-      /// \param [in] b_type Data type of the matrix B.
-      /// \param [in] ldb Leading dimension of B.
-      /// \param [in] beta Scaling factor for matrix C.
-      /// \param [in, out] c Input/Output matrix C.
-      /// \param [in] c_type Data type of the matrix C.
-      /// \param [in] ldc Leading dimension of C.
-      /// \param [in] batch_size Specifies the number of matrix multiply operations to perform.
-      /// \param [in] scaling_type Data type of the scaling factors.
+    /// Computes a batch of matrix-matrix product with general matrices.
+    /// \param [in] q The queue where the routine should be executed.
+    /// \param [in] a_trans Specifies the operation applied to A.
+    /// \param [in] b_trans Specifies the operation applied to B.
+    /// \param [in] m Specifies the number of rows of the matrix op(A) and of the matrix C.
+    /// \param [in] n Specifies the number of columns of the matrix op(B) and of the matrix C.
+    /// \param [in] k Specifies the number of columns of the matrix op(A) and the number of rows of the matrix op(B).
+    /// \param [in] alpha Scaling factor for the matrix-matrix product.
+    /// \param [in] a Input matrix A.
+    /// \param [in] a_type Data type of the matrix A.
+    /// \param [in] lda Leading dimension of A.
+    /// \param [in] b Input matrix B.
+    /// \param [in] b_type Data type of the matrix B.
+    /// \param [in] ldb Leading dimension of B.
+    /// \param [in] beta Scaling factor for matrix C.
+    /// \param [in, out] c Input/Output matrix C.
+    /// \param [in] c_type Data type of the matrix C.
+    /// \param [in] ldc Leading dimension of C.
+    /// \param [in] batch_size Specifies the number of matrix multiply operations to perform.
+    /// \param [in] scaling_type Data type of the scaling factors.
     inline void gemm_batch(sycl::queue &q, oneapi::mkl::transpose a_trans,
-        oneapi::mkl::transpose b_trans, int m, int n, int k,
-        const void *alpha, const void *a[],
-        library_data_t a_type, int lda, const void *b[],
-        library_data_t b_type, int ldb, const void *beta,
-        void *c[], library_data_t c_type, int ldc,
-        int batch_size, library_data_t scaling_type)
+                           oneapi::mkl::transpose b_trans, int m, int n, int k,
+                           const void *alpha, const void *a[],
+                           library_data_t a_type, int lda, const void *b[],
+                           library_data_t b_type, int ldb, const void *beta,
+                           void *c[], library_data_t c_type, int ldc,
+                           int batch_size, library_data_t scaling_type)
     {
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
@@ -2348,7 +2349,7 @@ namespace dpct
             scaling_type = library_data_t::complex_float;
         }
         else if (scaling_type == library_data_t::real_double &&
-            c_type == library_data_t::complex_double)
+                 c_type == library_data_t::complex_double)
         {
             scaling_type = library_data_t::complex_double;
         }
@@ -2357,18 +2358,18 @@ namespace dpct
             detail::get_type_combination_id(a_type, b_type, c_type, scaling_type);
         switch (key)
         {
-            case detail::get_type_combination_id(
-                library_data_t::real_float, library_data_t::real_float,
+        case detail::get_type_combination_id(
+            library_data_t::real_float, library_data_t::real_float,
             library_data_t::real_float, library_data_t::real_float):
         {
-                detail::gemm_batch_impl<float, float, float, float>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                    batch_size);
-                break;
-            }
+            detail::gemm_batch_impl<float, float, float, float>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
+                batch_size);
+            break;
+        }
         case detail::get_type_combination_id(
             library_data_t::real_double, library_data_t::real_double,
-        library_data_t::real_double, library_data_t::real_double):
+            library_data_t::real_double, library_data_t::real_double):
         {
             detail::gemm_batch_impl<double, double, double, double>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
@@ -2377,71 +2378,71 @@ namespace dpct
         }
         case detail::get_type_combination_id(
             library_data_t::complex_float, library_data_t::complex_float,
-        library_data_t::complex_float, library_data_t::complex_float):
+            library_data_t::complex_float, library_data_t::complex_float):
         {
             detail::gemm_batch_impl<std::complex<float>, std::complex<float>,
-                std::complex<float>, std::complex<float>>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                    batch_size);
+                                    std::complex<float>, std::complex<float>>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
+                batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::complex_double, library_data_t::complex_double,
-        library_data_t::complex_double, library_data_t::complex_double):
+            library_data_t::complex_double, library_data_t::complex_double):
         {
             detail::gemm_batch_impl<std::complex<double>, std::complex<double>,
-                std::complex<double>, std::complex<double>>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                    batch_size);
+                                    std::complex<double>, std::complex<double>>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
+                batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_half, library_data_t::real_half):
+            library_data_t::real_half, library_data_t::real_half):
         {
             detail::gemm_batch_impl<sycl::half, sycl::half, sycl::half,
-                sycl::half>(q, a_trans, b_trans, m, n, k, alpha,
-                    a, lda, b, ldb, beta, c, ldc,
-                    batch_size);
+                                    sycl::half>(q, a_trans, b_trans, m, n, k, alpha,
+                                                a, lda, b, ldb, beta, c, ldc,
+                                                batch_size);
             break;
         }
 #ifdef __INTEL_MKL__
         case detail::get_type_combination_id(
             library_data_t::real_bfloat16, library_data_t::real_bfloat16,
-        library_data_t::real_bfloat16, library_data_t::real_float):
+            library_data_t::real_bfloat16, library_data_t::real_float):
         {
             detail::gemm_batch_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16,
-                oneapi::mkl::bfloat16, float>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
-                    batch_size);
+                                    oneapi::mkl::bfloat16, float>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
+                batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_bfloat16, library_data_t::real_bfloat16,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_batch_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16, float,
-                float>(q, a_trans, b_trans, m, n, k, alpha, a, lda,
-                    b, ldb, beta, c, ldc, batch_size);
+                                    float>(q, a_trans, b_trans, m, n, k, alpha, a, lda,
+                                           b, ldb, beta, c, ldc, batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
-        library_data_t::real_int32, library_data_t::real_int32):
+            library_data_t::real_int32, library_data_t::real_int32):
         {
             float alpha_float =
                 dpct::get_value(reinterpret_cast<const std::int32_t *>(alpha), q);
             float beta_float =
                 dpct::get_value(reinterpret_cast<const std::int32_t *>(beta), q);
             detail::gemm_batch_impl<std::int8_t, std::int8_t, std::int32_t,
-                float>(q, a_trans, b_trans, m, n, k, &alpha_float,
-                    a, lda, b, ldb, &beta_float, c, ldc,
-                    batch_size);
+                                    float>(q, a_trans, b_trans, m, n, k, &alpha_float,
+                                           a, lda, b, ldb, &beta_float, c, ldc,
+                                           batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_batch_impl<std::int8_t, std::int8_t, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
@@ -2450,7 +2451,7 @@ namespace dpct
         }
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_batch_impl<sycl::half, sycl::half, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, b, ldb, beta, c, ldc,
@@ -2460,7 +2461,7 @@ namespace dpct
 #endif
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_half, library_data_t::real_float):
+            library_data_t::real_half, library_data_t::real_float):
         {
             float alpha_value =
                 dpct::get_value(reinterpret_cast<const float *>(alpha), q);
@@ -2502,13 +2503,13 @@ namespace dpct
     /// \param [in] batch_size Specifies the number of matrix multiply operations to perform.
     /// \param [in] scaling_type Data type of the scaling factors.
     inline void gemm_batch(sycl::queue &q, oneapi::mkl::transpose a_trans,
-        oneapi::mkl::transpose b_trans, int m, int n, int k,
-        const void *alpha, const void *a, library_data_t a_type,
-        int lda, long long int stride_a, const void *b,
-        library_data_t b_type, int ldb, long long int stride_b,
-        const void *beta, void *c, library_data_t c_type,
-        int ldc, long long int stride_c, int batch_size,
-        library_data_t scaling_type)
+                           oneapi::mkl::transpose b_trans, int m, int n, int k,
+                           const void *alpha, const void *a, library_data_t a_type,
+                           int lda, long long int stride_a, const void *b,
+                           library_data_t b_type, int ldb, long long int stride_b,
+                           const void *beta, void *c, library_data_t c_type,
+                           int ldc, long long int stride_c, int batch_size,
+                           library_data_t scaling_type)
     {
         if (scaling_type == library_data_t::real_float &&
             c_type == library_data_t::complex_float)
@@ -2516,7 +2517,7 @@ namespace dpct
             scaling_type = library_data_t::complex_float;
         }
         else if (scaling_type == library_data_t::real_double &&
-            c_type == library_data_t::complex_double)
+                 c_type == library_data_t::complex_double)
         {
             scaling_type = library_data_t::complex_double;
         }
@@ -2525,18 +2526,18 @@ namespace dpct
             detail::get_type_combination_id(a_type, b_type, c_type, scaling_type);
         switch (key)
         {
-            case detail::get_type_combination_id(
-                library_data_t::real_float, library_data_t::real_float,
+        case detail::get_type_combination_id(
+            library_data_t::real_float, library_data_t::real_float,
             library_data_t::real_float, library_data_t::real_float):
         {
-                detail::gemm_batch_impl<float, float, float, float>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
-                    beta, c, ldc, stride_c, batch_size);
-                break;
-            }
+            detail::gemm_batch_impl<float, float, float, float>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
+                beta, c, ldc, stride_c, batch_size);
+            break;
+        }
         case detail::get_type_combination_id(
             library_data_t::real_double, library_data_t::real_double,
-        library_data_t::real_double, library_data_t::real_double):
+            library_data_t::real_double, library_data_t::real_double):
         {
             detail::gemm_batch_impl<double, double, double, double>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
@@ -2545,68 +2546,68 @@ namespace dpct
         }
         case detail::get_type_combination_id(
             library_data_t::complex_float, library_data_t::complex_float,
-        library_data_t::complex_float, library_data_t::complex_float):
+            library_data_t::complex_float, library_data_t::complex_float):
         {
             detail::gemm_batch_impl<std::complex<float>, std::complex<float>,
-                std::complex<float>, std::complex<float>>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
-                    beta, c, ldc, stride_c, batch_size);
+                                    std::complex<float>, std::complex<float>>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
+                beta, c, ldc, stride_c, batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::complex_double, library_data_t::complex_double,
-        library_data_t::complex_double, library_data_t::complex_double):
+            library_data_t::complex_double, library_data_t::complex_double):
         {
             detail::gemm_batch_impl<std::complex<double>, std::complex<double>,
-                std::complex<double>, std::complex<double>>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
-                    beta, c, ldc, stride_c, batch_size);
+                                    std::complex<double>, std::complex<double>>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
+                beta, c, ldc, stride_c, batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_half, library_data_t::real_half):
+            library_data_t::real_half, library_data_t::real_half):
         {
             detail::gemm_batch_impl<sycl::half, sycl::half, sycl::half,
-                sycl::half>(q, a_trans, b_trans, m, n, k, alpha,
-                    a, lda, stride_a, b, ldb, stride_b,
-                    beta, c, ldc, stride_c, batch_size);
+                                    sycl::half>(q, a_trans, b_trans, m, n, k, alpha,
+                                                a, lda, stride_a, b, ldb, stride_b,
+                                                beta, c, ldc, stride_c, batch_size);
             break;
         }
 #ifdef __INTEL_MKL__
         case detail::get_type_combination_id(
             library_data_t::real_bfloat16, library_data_t::real_bfloat16,
-        library_data_t::real_bfloat16, library_data_t::real_float):
+            library_data_t::real_bfloat16, library_data_t::real_float):
         {
             detail::gemm_batch_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16,
-                oneapi::mkl::bfloat16, float>(
-                    q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
-                    beta, c, ldc, stride_c, batch_size);
+                                    oneapi::mkl::bfloat16, float>(
+                q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
+                beta, c, ldc, stride_c, batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_bfloat16, library_data_t::real_bfloat16,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_batch_impl<oneapi::mkl::bfloat16, oneapi::mkl::bfloat16, float,
-                float>(q, a_trans, b_trans, m, n, k, alpha, a, lda,
-                    stride_a, b, ldb, stride_b, beta, c, ldc,
-                    stride_c, batch_size);
+                                    float>(q, a_trans, b_trans, m, n, k, alpha, a, lda,
+                                           stride_a, b, ldb, stride_b, beta, c, ldc,
+                                           stride_c, batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
-        library_data_t::real_int32, library_data_t::real_int32):
+            library_data_t::real_int32, library_data_t::real_int32):
         {
             detail::gemm_batch_impl<std::int8_t, std::int8_t, std::int32_t,
-                std::int32_t>(q, a_trans, b_trans, m, n, k, alpha,
-                    a, lda, stride_a, b, ldb, stride_b,
-                    beta, c, ldc, stride_c, batch_size);
+                                    std::int32_t>(q, a_trans, b_trans, m, n, k, alpha,
+                                                  a, lda, stride_a, b, ldb, stride_b,
+                                                  beta, c, ldc, stride_c, batch_size);
             break;
         }
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_batch_impl<std::int8_t, std::int8_t, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
@@ -2615,7 +2616,7 @@ namespace dpct
         }
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_float, library_data_t::real_float):
+            library_data_t::real_float, library_data_t::real_float):
         {
             detail::gemm_batch_impl<sycl::half, sycl::half, float, float>(
                 q, a_trans, b_trans, m, n, k, alpha, a, lda, stride_a, b, ldb, stride_b,
@@ -2625,7 +2626,7 @@ namespace dpct
 #endif
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
-        library_data_t::real_half, library_data_t::real_float):
+            library_data_t::real_half, library_data_t::real_float):
         {
             float alpha_value =
                 dpct::get_value(reinterpret_cast<const float *>(alpha), q);
@@ -2644,13 +2645,13 @@ namespace dpct
     }
 
     static inline void
-        async_dpct_memcpy(void *to_ptr, size_t to_pitch, const void *from_ptr,
-            size_t from_pitch, size_t x, size_t y,
-            memcpy_direction direction = automatic,
-            sycl::queue &q = get_default_queue())
+    async_dpct_memcpy(void *to_ptr, size_t to_pitch, const void *from_ptr,
+                      size_t from_pitch, size_t x, size_t y,
+                      memcpy_direction direction = automatic,
+                      sycl::queue &q = get_default_queue())
     {
         detail::dpct_memcpy(q, to_ptr, from_ptr, to_pitch, from_pitch, x, y,
-            direction);
+                            direction);
     }
 
     using err0 = detail::generic_error_type<struct err0_tag, int>;
@@ -2717,7 +2718,7 @@ namespace dpct
         public:
             using accessor_t =
                 typename detail::memory_traits<Memory,
-                T>::template accessor_t<Dimension>;
+                                            T>::template accessor_t<Dimension>;
             using value_t = typename detail::memory_traits<Memory, T>::value_t;
             using dpct_accessor_t = dpct::accessor<T, Memory, Dimension>;
 
@@ -2725,7 +2726,7 @@ namespace dpct
 
             /// Constructor of 1-D array with initializer list
             device_memory(const sycl::range<Dimension> &in_range,
-                std::initializer_list<value_t> &&init_list)
+                        std::initializer_list<value_t> &&init_list)
                 : device_memory(in_range) {
                 assert(init_list.size() <= in_range.size());
                 _host_ptr = (value_t *)std::malloc(_size);
@@ -2746,7 +2747,7 @@ namespace dpct
                 for (auto sub_list : init_list) {
                     assert(sub_list.size() <= in_range[1]);
                     std::memcpy(tmp_data, sub_list.begin(),
-                        sub_list.size() * sizeof(T));
+                                sub_list.size() * sizeof(T));
                     tmp_data += in_range[1];
                 }
             }
@@ -2789,7 +2790,7 @@ namespace dpct
                 allocate_device(q);
                 if (_host_ptr)
                     detail::dpct_memcpy(q, _device_ptr, _host_ptr, _size,
-                        host_to_device);
+                                        host_to_device);
             }
 
             /// The variable is assigned to a device pointer.
@@ -2821,7 +2822,7 @@ namespace dpct
             /// when usm is used and dimension is greater than 1.
             template <size_t D = Dimension>
             typename std::enable_if<D != 1, dpct_accessor_t>::type
-                get_access([[maybe_unused]] sycl::handler &cgh) {
+            get_access([[maybe_unused]] sycl::handler &cgh) {
                 return dpct_accessor_t((T *)_device_ptr, _range);
             }
 
@@ -2831,21 +2832,21 @@ namespace dpct
                 _device_ptr(memory_ptr) {}
 
             void allocate_device(sycl::queue &q) {
-#ifndef DPCT_USM_LEVEL_NONE
+        #ifndef DPCT_USM_LEVEL_NONE
                 if (Memory == shared) {
                     _device_ptr = (value_t *)sycl::malloc_shared(_size, q.get_device(),
-                        q.get_context());
+                                                                q.get_context());
                     return;
                 }
-#ifdef SYCL_EXT_ONEAPI_USM_DEVICE_READ_ONLY
+        #ifdef SYCL_EXT_ONEAPI_USM_DEVICE_READ_ONLY
                 if (Memory == constant) {
                     _device_ptr = (value_t *)sycl::malloc_device(
                         _size, q.get_device(), q.get_context(),
                         sycl::ext::oneapi::property::usm::device_read_only());
                     return;
                 }
-#endif
-#endif
+        #endif
+        #endif
                 _device_ptr = (value_t *)detail::dpct_malloc(_size, q);
             }
 
@@ -2869,7 +2870,7 @@ namespace dpct
             /// Default constructor
             device_memory() : base(1) {}
         };
-    } // namespace detail
+        } // namespace detail
 
     template <class T, size_t Dimension>
     using global_memory = detail::device_memory<T, global, Dimension>;
@@ -2880,54 +2881,54 @@ namespace dpct
 
 
     template <typename T,
-        sycl::access::address_space addressSpace =
-        sycl::access::address_space::global_space,
-        sycl::memory_order memoryOrder = sycl::memory_order::relaxed,
-        sycl::memory_scope memoryScope = sycl::memory_scope::device>
+            sycl::access::address_space addressSpace =
+                sycl::access::address_space::global_space,
+            sycl::memory_order memoryOrder = sycl::memory_order::relaxed,
+            sycl::memory_scope memoryScope = sycl::memory_scope::device>
     inline T atomic_fetch_add(T *addr, T operand) {
-        auto atm =
-            sycl::atomic_ref<T, memoryOrder, memoryScope, addressSpace>(addr[0]);
-        return atm.fetch_add(operand);
+    auto atm =
+        sycl::atomic_ref<T, memoryOrder, memoryScope, addressSpace>(addr[0]);
+    return atm.fetch_add(operand);
     }
 
     template <sycl::access::address_space addressSpace =
-        sycl::access::address_space::global_space,
-        sycl::memory_order memoryOrder = sycl::memory_order::relaxed,
-        sycl::memory_scope memoryScope = sycl::memory_scope::device,
-        typename T1, typename T2>
+                sycl::access::address_space::global_space,
+            sycl::memory_order memoryOrder = sycl::memory_order::relaxed,
+            sycl::memory_scope memoryScope = sycl::memory_scope::device,
+            typename T1, typename T2>
     inline T1 atomic_fetch_add(T1 *addr, T2 operand) {
-        auto atm =
-            sycl::atomic_ref<T1, memoryOrder, memoryScope, addressSpace>(addr[0]);
-        return atm.fetch_add(operand);
+    auto atm =
+        sycl::atomic_ref<T1, memoryOrder, memoryScope, addressSpace>(addr[0]);
+    return atm.fetch_add(operand);
     }
 
     template <typename T, sycl::access::address_space addressSpace =
-        sycl::access::address_space::global_space>
+                            sycl::access::address_space::global_space>
     inline T atomic_fetch_add(T *addr, T operand,
-        sycl::memory_order memoryOrder) {
-        switch (memoryOrder) {
+                            sycl::memory_order memoryOrder) {
+    switch (memoryOrder) {
         case sycl::memory_order::relaxed:
             return atomic_fetch_add<T, addressSpace, sycl::memory_order::relaxed,
-                sycl::memory_scope::device>(addr, operand);
+                                    sycl::memory_scope::device>(addr, operand);
         case sycl::memory_order::acq_rel:
             return atomic_fetch_add<T, addressSpace, sycl::memory_order::acq_rel,
-                sycl::memory_scope::device>(addr, operand);
+                                    sycl::memory_scope::device>(addr, operand);
         case sycl::memory_order::seq_cst:
             return atomic_fetch_add<T, addressSpace, sycl::memory_order::seq_cst,
-                sycl::memory_scope::device>(addr, operand);
+                                    sycl::memory_scope::device>(addr, operand);
         default:
             assert(false && "Invalid memory_order for atomics. Valid memory_order for "
-                "atomics are: sycl::memory_order::relaxed, "
-                "sycl::memory_order::acq_rel, sycl::memory_order::seq_cst!");
+                            "atomics are: sycl::memory_order::relaxed, "
+                            "sycl::memory_order::acq_rel, sycl::memory_order::seq_cst!");
         }
     }
 
     template <sycl::access::address_space addressSpace =
-        sycl::access::address_space::global_space,
-        typename T1, typename T2>
+                sycl::access::address_space::global_space,
+            typename T1, typename T2>
     inline T1 atomic_fetch_add(T1 *addr, T2 operand,
-        sycl::memory_order memoryOrder) {
-        atomic_fetch_add<T1, addressSpace>(addr, operand, memoryOrder);
+                            sycl::memory_order memoryOrder) {
+    atomic_fetch_add<T1, addressSpace>(addr, operand, memoryOrder);
     }
 
 } // COPY from DPCT head files
