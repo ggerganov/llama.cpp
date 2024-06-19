@@ -17,7 +17,7 @@
 #include "utils.hpp"
 #include "logger.hpp"
 
-namespace qnn_internal {
+namespace qnn {
 
     // =================================================================================================
     //

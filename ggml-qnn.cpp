@@ -205,10 +205,10 @@ static bool qnn_is_valid_params(ggml_backend_qnn_context * ctx, const ggml_tenso
         return false;
     }
 
-    qnn_internal::qnn_instance *instance = nullptr;
-    Qnn_Tensor_t               *tensor_0 = nullptr;
-    Qnn_Tensor_t               *tensor_1 = nullptr;
-    Qnn_Tensor_t               *tensor_2 = nullptr;
+    qnn::qnn_instance *instance = nullptr;
+    Qnn_Tensor_t      *tensor_0 = nullptr;
+    Qnn_Tensor_t      *tensor_1 = nullptr;
+    Qnn_Tensor_t      *tensor_2 = nullptr;
     tensor_0 = (Qnn_Tensor_t *) src0->extra;
     tensor_1 = (Qnn_Tensor_t *) src1->extra;
     tensor_2 = (Qnn_Tensor_t *) dst->extra;
@@ -603,13 +603,13 @@ static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context * ctx,
 //      keep it for illustrate how to implement a specified GGMPL OP using QNN API + QNN RPC
 static void ggml_qnn_add(ggml_backend_qnn_context * ctx, const ggml_tensor * src0,
                          const ggml_tensor * src1, ggml_tensor * dst) {
-    Qnn_ErrorHandle_t error             = QNN_SUCCESS;
-    bool              graph_initialized = false;
-    qnn_internal::qnn_instance *instance = nullptr;
-    std::string       graph_name         = "ggml_op_qnn_add";
-    Qnn_GraphHandle_t graph_handle       = nullptr;
-    Qnn_Param_t       qnn_params[]       = {};
-    enum ggml_op      ggmlop             = GGML_OP_ADD;
+    Qnn_ErrorHandle_t  error             = QNN_SUCCESS;
+    bool               graph_initialized = false;
+    qnn::qnn_instance *instance          = nullptr;
+    std::string        graph_name        = "ggml_op_qnn_add";
+    Qnn_GraphHandle_t  graph_handle      = nullptr;
+    Qnn_Param_t        qnn_params[]      = {};
+    enum ggml_op       ggmlop            = GGML_OP_ADD;
 
     CHECK_PARAMS(ctx, src0, src1, dst);
     instance = ctx->instance;
@@ -797,13 +797,13 @@ failure:
 static void ggml_qnn_mul_mat(ggml_backend_qnn_context * ctx,
                              const ggml_tensor * src0, const ggml_tensor * src1,
                              ggml_tensor * dst) {
-    Qnn_ErrorHandle_t error              = QNN_SUCCESS;
-    bool              graph_initialized  = false;
-    qnn_internal::qnn_instance *instance = nullptr;
-    std::string       graph_name         = "ggml_op_qnn_mul_mat";
-    Qnn_GraphHandle_t graph_handle       = nullptr;
-    Qnn_Param_t qnn_params[]             = {};
-    enum ggml_op   ggmlop                = GGML_OP_MUL_MAT;
+    Qnn_ErrorHandle_t  error              = QNN_SUCCESS;
+    bool               graph_initialized  = false;
+    qnn::qnn_instance *instance           = nullptr;
+    std::string        graph_name         = "ggml_op_qnn_mul_mat";
+    Qnn_GraphHandle_t  graph_handle       = nullptr;
+    Qnn_Param_t        qnn_params[]             = {};
+    enum ggml_op       ggmlop             = GGML_OP_MUL_MAT;
 
     CHECK_PARAMS(ctx, src0, src1, dst);
     instance = ctx->instance;
@@ -1702,7 +1702,7 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char * qnn_lib_path) {
         }
     }
 
-    auto *instance = new qnn_internal::qnn_instance(qnn_lib_path, g_qnn_mgr[device].lib, "");
+    auto *instance = new qnn::qnn_instance(qnn_lib_path, g_qnn_mgr[device].lib, "");
     result = instance->qnn_init(nullptr);
     if (0 != result) {
         QNN_LOG_WARN(
