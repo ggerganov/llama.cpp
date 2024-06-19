@@ -19033,8 +19033,11 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             state->ec = GGML_STATUS_ABORTED;
             return 0;
         }
-
+#ifdef GGML_USE_OPENMP
+        if (state->ith == 0) {
+#else
         if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
+#endif
             // all other threads are finished and spinning
             // do finalize and init here so we don't have synchronize again
             struct ggml_compute_params params = {
@@ -19094,6 +19097,15 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             }
 
             task_phase = GGML_TASK_TYPE_INIT;
+#ifdef GGML_USE_OPENMP
+            state->shared->n_active = n_threads;
+            state->shared->node_n = node_n;
+            state->shared->node_task = task_phase;
+        }
+        #pragma omp barrier
+        node_n = state->shared->node_n;
+        task_phase = state->shared->node_task;
+#else
             atomic_store(&state->shared->n_active,  n_threads);
             atomic_store(&state->shared->node_n,    node_n);
             atomic_store(&state->shared->node_task, task_phase);
@@ -19101,6 +19113,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             ggml_graph_compute_thread_sync_node(&node_n,     state, false);
             ggml_graph_compute_thread_sync_task(&task_phase, state, false);
         }
+#endif
 
         // check if we should stop
         if (node_n >= cgraph->n_nodes) break;
@@ -19122,7 +19135,15 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
                 ggml_compute_forward(&params, node, state);
             }
         }
-
+#ifdef GGML_USE_OPENMP
+        if (state->ith == 0) {
+            task_phase = GGML_TASK_TYPE_COMPUTE;
+            state->shared->n_active = n_threads;
+            state->shared->node_task = task_phase;
+        }
+        #pragma omp barrier
+        task_phase = state->shared->node_task;
+#else
         if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
             task_phase = GGML_TASK_TYPE_COMPUTE;
             atomic_store(&state->shared->n_active,  n_threads);
@@ -19137,12 +19158,21 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
             const bool do_yield = node_n < 0 || cgraph->nodes[node_n]->op == GGML_OP_MUL_MAT;
             ggml_graph_compute_thread_sync_task(&task_phase, state, do_yield);
         }
+#endif
 
         if (state->ith < n_tasks) {
             params.type = GGML_TASK_TYPE_COMPUTE;
             ggml_compute_forward(&params, node, state);
         }
-
+#ifdef GGML_USE_OPENMP
+        if (state->ith == 0) {
+            task_phase = GGML_TASK_TYPE_FINALIZE;
+            state->shared->n_active = n_threads;
+            state->shared->node_task = task_phase;
+        }
+        #pragma omp barrier
+        task_phase = state->shared->node_task;
+#else
         if (atomic_fetch_sub(&state->shared->n_active, 1) == 1) {
             task_phase = GGML_TASK_TYPE_FINALIZE;
             atomic_store(&state->shared->n_active,  n_threads);
@@ -19151,6 +19181,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         else {
             ggml_graph_compute_thread_sync_task(&task_phase, state, false);
         }
+#endif
     }
 
     return 0;
