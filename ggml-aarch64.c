@@ -381,6 +381,7 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     );
 #else
     float sumf[4];
+    int sumi;
 
     const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
     for (int x = 0; x < nc / ncols_interleaved; x++) {
@@ -390,7 +391,7 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
         for (int l = 0; l < nb; l++) {
             for (int k = 0; k < (qk / (2 * blocklen)); k++) {
                 for (int j = 0; j < ncols_interleaved; j++) {
-                    int sumi = 0;
+                    sumi = 0;
                     for (int i = 0; i < blocklen; ++i) {
                         const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
                         const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
@@ -498,6 +499,7 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 "performance");
 #else
     float sumf[4];
+    int sumi;
 
     const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
     for (int x = 0; x < nc / ncols_interleaved; x++) {
@@ -507,7 +509,7 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         for (int l = 0; l < nb; l++) {
             for (int k = 0; k < (qk / (2 * blocklen)); k++) {
                 for (int j = 0; j < ncols_interleaved; j++) {
-                    int sumi = 0;
+                    sumi = 0;
                     for (int i = 0; i < blocklen; ++i) {
                         const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
                         const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
@@ -627,6 +629,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 "performance");
 #else
     float sumf[8];
+    int sumi;
 
     const block_q8_0 * a_ptr = (const block_q8_0 *) vy;
     for (int x = 0; x < nc / ncols_interleaved; x++) {
@@ -636,7 +639,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         for (int l = 0; l < nb; l++) {
             for (int k = 0; k < (qk / (2 * blocklen)); k++) {
                 for (int j = 0; j < ncols_interleaved; j++) {
-                    int sumi = 0;
+                    sumi = 0;
                     for (int i = 0; i < blocklen; ++i) {
                         const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
                         const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
@@ -1138,6 +1141,7 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     );
 #else
     float sumf[4][4];
+    int sumi;
 
     for (int y = 0; y < nr / 4; y++) {
         const block_q8_0x4 * a_ptr = (const block_q8_0x4 *) vy + (y * nb);
@@ -1150,7 +1154,7 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
                 for (int k = 0; k < (qk / (2 * blocklen)); k++) {
                     for (int m = 0; m < 4; m++) {
                         for (int j = 0; j < ncols_interleaved; j++) {
-                            int sumi = 0;
+                            sumi = 0;
                             for (int i = 0; i < blocklen; ++i) {
                                 const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
                                 const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
@@ -1599,6 +1603,7 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 "performance");
 #else
     float sumf[4][4];
+    int sumi;
 
     for (int y = 0; y < nr / 4; y++) {
         const block_q8_0x4 * a_ptr = (const block_q8_0x4 *) vy + (y * nb);
@@ -1611,7 +1616,7 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 for (int k = 0; k < (qk / (2 * blocklen)); k++) {
                     for (int m = 0; m < 4; m++) {
                         for (int j = 0; j < ncols_interleaved; j++) {
-                            int sumi = 0;
+                            sumi = 0;
                             for (int i = 0; i < blocklen; ++i) {
                                 const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
                                 const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
@@ -2083,6 +2088,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 "performance");
 #else
     float sumf[4][8];
+    int sumi;
 
     for (int y = 0; y < nr / 4; y++) {
         const block_q8_0x4 * a_ptr = (const block_q8_0x4 *) vy + (y * nb);
@@ -2095,7 +2101,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
                 for (int k = 0; k < (qk / (2 * blocklen)); k++) {
                     for (int m = 0; m < 4; m++) {
                         for (int j = 0; j < ncols_interleaved; j++) {
-                            int sumi = 0;
+                            sumi = 0;
                             for (int i = 0; i < blocklen; ++i) {
                                 const int v0 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] << 4);
                                 const int v1 = (int8_t) (b_ptr[l].qs[k * ncols_interleaved * blocklen + j * blocklen + i] & 0xF0);
