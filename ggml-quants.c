@@ -3806,18 +3806,27 @@ void ggml_vec_dot_q2_2_q8_0(int n, float * restrict s, size_t bs, const void * r
 
         const __m256 d = _mm256_set1_ps( GGML_FP16_TO_FP32(y[i].d) );
 
-        __m256i xq8 = _mm256_set_epi32(
-            (int)q22_grid[x[i].qs[7]],
-            (int)q22_grid[x[i].qs[6]],
-            (int)q22_grid[x[i].qs[5]],
-            (int)q22_grid[x[i].qs[4]],
-            (int)q22_grid[x[i].qs[3]],
-            (int)q22_grid[x[i].qs[2]],
-            (int)q22_grid[x[i].qs[1]],
-            (int)q22_grid[x[i].qs[0]]
-        );
+        __m128i xq8b = _mm_loadu_si64(x[i].qs);
+        __m256i xq8 = MM256_SET_M128I(xq8b, xq8b);
+        __m256i xq8l = _mm256_shuffle_epi8(xq8, _mm256_set_epi8(5, -1, 5, -1, 5, -1, 5, -1,
+                                                                4, -1, 4, -1, 4, -1, 4, -1,
+                                                                1, -1, 1, -1, 1, -1, 1, -1,
+                                                                0, -1, 0, -1, 0, -1, 0, -1));
+        __m256i xq8h = _mm256_shuffle_epi8(xq8, _mm256_set_epi8(7, -1, 7, -1, 7, -1, 7, -1,
+                                                                6, -1, 6, -1, 6, -1, 6, -1,
+                                                                3, -1, 3, -1, 3, -1, 3, -1,
+                                                                2, -1, 2, -1, 2, -1, 2, -1));
+        __m256i shift = _mm256_set_epi16(64, 16, 4, 1,
+                                         64, 16, 4, 1,
+                                         64, 16, 4, 1,
+                                         64, 16, 4, 1);
+        xq8l = _mm256_mullo_epi16(xq8l, shift);
+        xq8h = _mm256_mullo_epi16(xq8h, shift);
+        xq8l = _mm256_srai_epi16(xq8l, 14);
+        xq8h = _mm256_srai_epi16(xq8h, 14);
+        xq8 = _mm256_packs_epi16(xq8l, xq8h);
 
-        __m256i yq8 = _mm256_loadu_si256((const __m256i*)(y[i].qs));
+        __m256i yq8 = _mm256_lddqu_si256((const __m256i*)(y[i].qs));
         const __m256 q = mul_sum_i8_pairs_float(xq8, yq8);
 
         acc = _mm256_fmadd_ps( d, q, acc );
