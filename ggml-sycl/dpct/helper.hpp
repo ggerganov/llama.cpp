@@ -58,7 +58,7 @@
 #define __dpct_noinline__ __attribute__((noinline))
 #endif
 
-inline std::string get_device_type_name(const sycl::device& Device) {
+inline std::string get_device_type_name(const sycl::device &Device) {
     auto DeviceType = Device.get_info<sycl::info::device::device_type>();
     switch (DeviceType) {
     case sycl::info::device_type::cpu:
@@ -74,7 +74,7 @@ inline std::string get_device_type_name(const sycl::device& Device) {
     }
 }
 
-inline std::string get_device_backend_and_type(const sycl::device& device) {
+inline std::string get_device_backend_and_type(const sycl::device &device) {
     std::stringstream device_type;
     sycl::backend backend = device.get_backend();
     device_type << backend << ":" << get_device_type_name(device);
@@ -83,22 +83,22 @@ inline std::string get_device_backend_and_type(const sycl::device& device) {
 
 namespace dpct
 {
-    typedef sycl::queue* queue_ptr;
-    typedef sycl::event* event_ptr;
-    typedef char* device_ptr;
+    typedef sycl::queue *queue_ptr;
+    typedef sycl::event *event_ptr;
+    typedef char *device_ptr;
     typedef uint8_t byte_t;
     typedef sycl::buffer<byte_t> buffer_t;
 
     /// SYCL default exception handler
     inline auto exception_handler = [](sycl::exception_list exceptions)
         {
-            for (std::exception_ptr const& e : exceptions)
+            for (std::exception_ptr const &e : exceptions)
             {
                 try
                 {
                     std::rethrow_exception(e);
                 }
-                catch (sycl::exception const& e)
+                catch (sycl::exception const &e)
                 {
                     std::cerr << "Caught asynchronous SYCL exception:" << std::endl
                         << e.what() << std::endl
@@ -196,7 +196,7 @@ namespace dpct
 
     namespace detail
     {
-        static void get_version(const sycl::device& dev, int& major, int& minor)
+        static void get_version(const sycl::device &dev, int &major, int &minor)
         {
             // Version string has the following format:
             // a. OpenCL<space><major.minor><space><vendor-specific-information>
@@ -246,11 +246,11 @@ namespace dpct
     {
     public:
         pitched_data() : pitched_data(nullptr, 0, 0, 0) {}
-        pitched_data(void* data, size_t pitch, size_t x, size_t y)
+        pitched_data(void *data, size_t pitch, size_t x, size_t y)
             : _data(data), _pitch(pitch), _x(x), _y(y) {}
 
-        void* get_data_ptr() { return _data; }
-        void set_data_ptr(void* data) { _data = data; }
+        void *get_data_ptr() { return _data; }
+        void set_data_ptr(void *data) { _data = data; }
 
         size_t get_pitch() { return _pitch; }
         void set_pitch(size_t pitch) { _pitch = pitch; }
@@ -262,7 +262,7 @@ namespace dpct
         void set_y(size_t y) { _y = y; }
 
     private:
-        void* _data;
+        void *_data;
         size_t _pitch, _x, _y;
     };
 
@@ -270,11 +270,11 @@ namespace dpct
     {
     public:
         // get interface
-        const char* get_name() const { return _name; }
-        char* get_name() { return _name; }
+        const char *get_name() const { return _name; }
+        char *get_name() { return _name; }
         template <typename WorkItemSizesTy = sycl::range<3>,
             std::enable_if_t<std::is_same_v<WorkItemSizesTy, sycl::range<3>> ||
-            std::is_same_v<WorkItemSizesTy, int*>,
+            std::is_same_v<WorkItemSizesTy, int *>,
             int> = 0>
         auto get_max_work_item_sizes() const
         {
@@ -289,7 +289,7 @@ namespace dpct
         }
         template <typename WorkItemSizesTy = sycl::range<3>,
             std::enable_if_t<std::is_same_v<WorkItemSizesTy, sycl::range<3>> ||
-            std::is_same_v<WorkItemSizesTy, int*>,
+            std::is_same_v<WorkItemSizesTy, int *>,
             int> = 0>
         auto get_max_work_item_sizes()
         {
@@ -318,24 +318,24 @@ namespace dpct
         {
             return _max_register_size_per_work_group;
         }
-        template <typename NDRangeSizeTy = size_t*,
-            std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t*> ||
-            std::is_same_v<NDRangeSizeTy, int*>,
+        template <typename NDRangeSizeTy = size_t *,
+            std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t *> ||
+            std::is_same_v<NDRangeSizeTy, int *>,
             int> = 0>
         auto get_max_nd_range_size() const
         {
-            if constexpr (std::is_same_v<NDRangeSizeTy, size_t*>)
+            if constexpr (std::is_same_v<NDRangeSizeTy, size_t *>)
                 return _max_nd_range_size;
             else
                 return _max_nd_range_size_i;
         }
-        template <typename NDRangeSizeTy = size_t*,
-            std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t*> ||
-            std::is_same_v<NDRangeSizeTy, int*>,
+        template <typename NDRangeSizeTy = size_t *,
+            std::enable_if_t<std::is_same_v<NDRangeSizeTy, size_t *> ||
+            std::is_same_v<NDRangeSizeTy, int *>,
             int> = 0>
         auto get_max_nd_range_size()
         {
-            if constexpr (std::is_same_v<NDRangeSizeTy, size_t*>)
+            if constexpr (std::is_same_v<NDRangeSizeTy, size_t *>)
                 return _max_nd_range_size;
             else
                 return _max_nd_range_size_i;
@@ -358,7 +358,7 @@ namespace dpct
         }
 
         // set interface
-        void set_name(const char* name)
+        void set_name(const char *name)
         {
             size_t length = strlen(name);
             if (length < 256)
@@ -482,21 +482,21 @@ namespace dpct
         std::array<unsigned char, 16> _uuid;
     };
 
-    static int get_major_version(const sycl::device& dev)
+    static int get_major_version(const sycl::device &dev)
     {
         int major, minor;
         detail::get_version(dev, major, minor);
         return major;
     }
 
-    static int get_minor_version(const sycl::device& dev)
+    static int get_minor_version(const sycl::device &dev)
     {
         int major, minor;
         detail::get_version(dev, major, minor);
         return minor;
     }
 
-    static void get_device_info(device_info& out, const sycl::device& dev)
+    static void get_device_info(device_info &out, const sycl::device &dev)
     {
         device_info prop;
         prop.set_name(dev.get_info<sycl::info::device::name>().c_str());
@@ -567,7 +567,7 @@ namespace dpct
         std::vector<size_t> sub_group_sizes =
             dev.get_info<sycl::info::device::sub_group_sizes>();
 
-        for (const auto& sub_group_size : sub_group_sizes)
+        for (const auto &sub_group_size : sub_group_sizes)
         {
             if (max_sub_group_size < sub_group_size)
                 max_sub_group_size = sub_group_size;
@@ -601,7 +601,7 @@ namespace dpct
             std::lock_guard<mutex_type> lock(m_mutex);
             clear_queues();
         }
-        device_ext(const sycl::device& base) : sycl::device(base)
+        device_ext(const sycl::device &base) : sycl::device(base)
         {
             std::lock_guard<mutex_type> lock(m_mutex);
             init_queues();
@@ -664,10 +664,10 @@ namespace dpct
         /// Get the number of bytes of free and total memory on the SYCL device.
         /// \param [out] free_memory The number of bytes of free memory on the SYCL device.
         /// \param [out] total_memory The number of bytes of total memory on the SYCL device.
-        void get_memory_info(size_t& free_memory, size_t& total_memory)
+        void get_memory_info(size_t &free_memory, size_t &total_memory)
         {
             total_memory = get_device_info().get_global_mem_size();
-            const char* warning_info = "get_memory_info: [warning] ext_intel_free_memory is not "
+            const char *warning_info = "get_memory_info: [warning] ext_intel_free_memory is not "
                 "supported (export/set ZES_ENABLE_SYSMAN=1 to support), "
                 "use total memory as free memory";
 #if (defined(__SYCL_COMPILER_VERSION) && __SYCL_COMPILER_VERSION >= 20221105)
@@ -691,7 +691,7 @@ namespace dpct
 #endif
         }
 
-        void get_device_info(device_info& out) const
+        void get_device_info(device_info &out) const
         {
             dpct::get_device_info(out, *this);
         }
@@ -710,11 +710,11 @@ namespace dpct
             init_queues();
         }
 
-        sycl::queue& in_order_queue() { return _q_in_order; }
+        sycl::queue &in_order_queue() { return _q_in_order; }
 
-        sycl::queue& out_of_order_queue() { return _q_out_of_order; }
+        sycl::queue &out_of_order_queue() { return _q_out_of_order; }
 
-        sycl::queue& default_queue()
+        sycl::queue &default_queue()
         {
             return in_order_queue();
         }
@@ -723,7 +723,7 @@ namespace dpct
         {
             std::unique_lock<mutex_type> lock(m_mutex);
             lock.unlock();
-            for (auto& q : _queues)
+            for (auto &q : _queues)
             {
                 q.wait_and_throw();
             }
@@ -829,7 +829,7 @@ namespace dpct
             return _queues.back();
         }
 
-        void get_version(int& major, int& minor) const
+        void get_version(int &major, int &minor) const
         {
             detail::get_version(*this, major, minor);
         }
@@ -843,13 +843,13 @@ namespace dpct
     class dev_mgr
     {
     public:
-        device_ext& current_device()
+        device_ext &current_device()
         {
             unsigned int dev_id = current_device_id();
             check_id(dev_id);
             return *_devs[dev_id];
         }
-        device_ext& cpu_device() const
+        device_ext &cpu_device() const
         {
             std::lock_guard<std::recursive_mutex> lock(m_mutex);
             if (_cpu_device == -1)
@@ -861,7 +861,7 @@ namespace dpct
                 return *_devs[_cpu_device];
             }
         }
-        device_ext& get_device(unsigned int id) const
+        device_ext &get_device(unsigned int id) const
         {
             std::lock_guard<std::recursive_mutex> lock(m_mutex);
             check_id(id);
@@ -887,7 +887,7 @@ namespace dpct
         }
         unsigned int device_count() { return _devs.size(); }
 
-        unsigned int get_device_id(const sycl::device& dev)
+        unsigned int get_device_id(const sycl::device &dev)
         {
             unsigned int id = 0;
             for (auto dev_item : _devs)
@@ -903,8 +903,8 @@ namespace dpct
 
         template <class DeviceSelector>
         std::enable_if_t<
-            std::is_invocable_r_v<int, DeviceSelector, const sycl::device&>>
-            select_device(const DeviceSelector& selector = sycl::gpu_selector_v)
+            std::is_invocable_r_v<int, DeviceSelector, const sycl::device &>>
+            select_device(const DeviceSelector &selector = sycl::gpu_selector_v)
         {
             sycl::device selected_device = sycl::device(selector);
             unsigned int selected_device_id = get_device_id(selected_device);
@@ -912,19 +912,19 @@ namespace dpct
         }
 
         /// Returns the instance of device manager singleton.
-        static dev_mgr& instance()
+        static dev_mgr &instance()
         {
             static dev_mgr d_m;
             return d_m;
         }
-        dev_mgr(const dev_mgr&) = delete;
-        dev_mgr& operator=(const dev_mgr&) = delete;
-        dev_mgr(dev_mgr&&) = delete;
-        dev_mgr& operator=(dev_mgr&&) = delete;
+        dev_mgr(const dev_mgr &) = delete;
+        dev_mgr &operator=(const dev_mgr &) = delete;
+        dev_mgr(dev_mgr &&) = delete;
+        dev_mgr &operator=(dev_mgr &&) = delete;
 
     private:
         mutable std::recursive_mutex m_mutex;
-        static bool compare_dev(sycl::device& device1, sycl::device& device2)
+        static bool compare_dev(sycl::device &device1, sycl::device &device2)
         {
             sycl::backend backend1 = device1.get_backend();
             sycl::backend backend2 = device2.get_backend();
@@ -937,7 +937,7 @@ namespace dpct
             dpct::get_device_info(prop2, device2);
             return prop1.get_max_compute_units() > prop2.get_max_compute_units();
         }
-        static int convert_backend_index(std::string& backend) {
+        static int convert_backend_index(std::string &backend) {
             if (backend == "ext_oneapi_level_zero:gpu") return 0;
             if (backend == "opencl:gpu") return 1;
             if (backend == "ext_oneapi_cuda:gpu") return 2;
@@ -947,7 +947,7 @@ namespace dpct
             printf("convert_backend_index: can't handle backend=%s\n", backend.c_str());
             GGML_ASSERT(false);
         }
-        static bool compare_backend(std::string& backend1, std::string& backend2) {
+        static bool compare_backend(std::string &backend1, std::string &backend2) {
             return convert_backend_index(backend1) < convert_backend_index(backend2);
         }
         dev_mgr()
@@ -971,7 +971,7 @@ namespace dpct
                 Platforms.pop_back();
                 auto devices = Platform.get_devices();
                 std::string backend_type = get_device_backend_and_type(devices[0]);
-                for (const auto& device : devices) {
+                for (const auto &device : devices) {
                     backend_devices[backend_type].push_back(device);
                 }
             }
@@ -982,15 +982,15 @@ namespace dpct
             }
             std::sort(keys.begin(), keys.end(), compare_backend);
 
-            for (auto& key : keys) {
+            for (auto &key : keys) {
                 std::vector<sycl::device> devs = backend_devices[key];
                 std::sort(devs.begin(), devs.end(), compare_dev);
-                for (const auto& dev : devs) {
+                for (const auto &dev : devs) {
                     sycl_all_devs.push_back(dev);
                 }
             }
 
-            for (auto& dev : sycl_all_devs)
+            for (auto &dev : sycl_all_devs)
             {
                 if (dev == default_device)
                 {
@@ -1020,7 +1020,7 @@ namespace dpct
         int _cpu_device = -1;
     };
 
-    static inline sycl::queue& get_default_queue()
+    static inline sycl::queue &get_default_queue()
     {
         return dev_mgr::instance().current_device().default_queue();
     }
@@ -1035,8 +1035,8 @@ namespace dpct
             end
         };
 
-        static pointer_access_attribute get_pointer_attribute(sycl::queue& q,
-            const void* ptr)
+        static pointer_access_attribute get_pointer_attribute(sycl::queue &q,
+            const void *ptr)
         {
             switch (sycl::get_pointer_type(ptr, q.get_context()))
             {
@@ -1079,10 +1079,10 @@ namespace dpct
                 // Reserved address space, no real memory allocation happens here.
 #if defined(__linux__)
                 mapped_address_space =
-                    (byte_t*)mmap(nullptr, mapped_region_size, PROT_NONE,
+                    (byte_t *)mmap(nullptr, mapped_region_size, PROT_NONE,
                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 #elif defined(_WIN64)
-                mapped_address_space = (byte_t*)VirtualAlloc(
+                mapped_address_space = (byte_t *)VirtualAlloc(
                     NULL,               // NULL specified as the base address parameter
                     mapped_region_size, // Size of allocation
                     MEM_RESERVE,        // Allocate reserved pages
@@ -1099,7 +1099,7 @@ namespace dpct
             struct allocation
             {
                 buffer_t buffer;
-                byte_t* alloc_ptr;
+                byte_t *alloc_ptr;
                 size_t size;
             };
 
@@ -1114,13 +1114,13 @@ namespace dpct
 #endif
             };
 
-            mem_mgr(const mem_mgr&) = delete;
-            mem_mgr& operator=(const mem_mgr&) = delete;
-            mem_mgr(mem_mgr&&) = delete;
-            mem_mgr& operator=(mem_mgr&&) = delete;
+            mem_mgr(const mem_mgr &) = delete;
+            mem_mgr &operator=(const mem_mgr &) = delete;
+            mem_mgr(mem_mgr &&) = delete;
+            mem_mgr &operator=(mem_mgr &&) = delete;
 
             /// Allocate
-            void* mem_alloc(size_t size)
+            void *mem_alloc(size_t size)
             {
                 if (!size)
                     return nullptr;
@@ -1134,7 +1134,7 @@ namespace dpct
                 buffer_t buf(r);
                 allocation A{ buf, next_free, size };
                 // Map allocation to device pointer
-                void* result = next_free;
+                void *result = next_free;
                 m_map.emplace(next_free + size, A);
                 // Update pointer to the next free space.
                 next_free += (size + extra_padding + alignment - 1) & ~(alignment - 1);
@@ -1143,7 +1143,7 @@ namespace dpct
             }
 
             /// Deallocate
-            void mem_free(const void* ptr)
+            void mem_free(const void *ptr)
             {
                 if (!ptr)
                     return;
@@ -1153,7 +1153,7 @@ namespace dpct
             }
 
             /// map: device pointer -> allocation(buffer, alloc_ptr, size)
-            allocation translate_ptr(const void* ptr)
+            allocation translate_ptr(const void *ptr)
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
                 auto it = get_map_iterator(ptr);
@@ -1161,7 +1161,7 @@ namespace dpct
             }
 
             /// Check if the pointer represents device pointer or not.
-            bool is_device_ptr(const void* ptr) const
+            bool is_device_ptr(const void *ptr) const
             {
                 std::lock_guard<std::mutex> lock(m_mutex);
                 return (mapped_address_space <= ptr) &&
@@ -1169,32 +1169,32 @@ namespace dpct
             }
 
             /// Returns the instance of memory manager singleton.
-            static mem_mgr& instance()
+            static mem_mgr &instance()
             {
                 static mem_mgr m;
                 return m;
             }
 
         private:
-            std::map<byte_t*, allocation> m_map;
+            std::map<byte_t *, allocation> m_map;
             mutable std::mutex m_mutex;
-            byte_t* mapped_address_space;
-            byte_t* next_free;
+            byte_t *mapped_address_space;
+            byte_t *next_free;
             const size_t mapped_region_size = 128ull * 1024 * 1024 * 1024;
             const size_t alignment = 256;
             /// This padding may be defined to some positive value to debug
             /// out of bound accesses.
             const size_t extra_padding = 0;
 
-            std::map<byte_t*, allocation>::iterator get_map_iterator(const void* ptr)
+            std::map<byte_t *, allocation>::iterator get_map_iterator(const void *ptr)
             {
-                auto it = m_map.upper_bound((byte_t*)ptr);
+                auto it = m_map.upper_bound((byte_t *)ptr);
                 if (it == m_map.end())
                 {
                     // Not a virtual pointer.
                     throw std::runtime_error("can not get buffer from non-virtual pointer");
                 }
-                const allocation& alloc = it->second;
+                const allocation &alloc = it->second;
                 if (ptr < alloc.alloc_ptr)
                 {
                     // Out of bound.
@@ -1225,17 +1225,17 @@ namespace dpct
             using accessor_t = typename std::conditional<
                 Memory == local, sycl::local_accessor<value_t, Dimension>,
                 sycl::accessor<T, Dimension, mode, target>>::type;
-            using pointer_t = T*;
+            using pointer_t = T *;
         };
 
-        static inline void* dpct_malloc(size_t size, sycl::queue& q)
+        static inline void *dpct_malloc(size_t size, sycl::queue &q)
         {
             return sycl::malloc_device(size, q.get_device(), q.get_context());
         }
 
 #define PITCH_DEFAULT_ALIGN(x) (((x) + 31) & ~(0x1F))
-        static inline void* dpct_malloc(size_t& pitch, size_t x, size_t y, size_t z,
-            sycl::queue& q)
+        static inline void *dpct_malloc(size_t &pitch, size_t x, size_t y, size_t z,
+            sycl::queue &q)
         {
             pitch = PITCH_DEFAULT_ALIGN(x);
             return dpct_malloc(pitch * y * z, q);
@@ -1251,7 +1251,7 @@ namespace dpct
          * @return An event representing the memset operation.
          */
         template <typename valueT>
-        static inline sycl::event dpct_memset(sycl::queue& q, void* dev_ptr,
+        static inline sycl::event dpct_memset(sycl::queue &q, void *dev_ptr,
             valueT value, size_t size)
         {
             return q.fill(dev_ptr, value, size);
@@ -1268,15 +1268,15 @@ namespace dpct
          */
         template <typename valueT>
         static inline std::vector<sycl::event>
-            dpct_memset(sycl::queue& q, pitched_data data, valueT value,
+            dpct_memset(sycl::queue &q, pitched_data data, valueT value,
                 sycl::range<3> size)
         {
             std::vector<sycl::event> event_list;
             size_t slice = data.get_pitch() * data.get_y();
-            unsigned char* data_surface = (unsigned char*)data.get_data_ptr();
+            unsigned char *data_surface = (unsigned char *)data.get_data_ptr();
             for (size_t z = 0; z < size.get(2); ++z)
             {
-                unsigned char* data_ptr = data_surface;
+                unsigned char *data_ptr = data_surface;
                 for (size_t y = 0; y < size.get(1); ++y)
                 {
                     event_list.push_back(dpct_memset(q, data_ptr, value, size.get(0)));
@@ -1300,15 +1300,15 @@ namespace dpct
          */
         template <typename valueT>
         static inline std::vector<sycl::event>
-            dpct_memset(sycl::queue& q, void* ptr, size_t pitch, valueT val, size_t x,
+            dpct_memset(sycl::queue &q, void *ptr, size_t pitch, valueT val, size_t x,
                 size_t y)
         {
             return dpct_memset(q, pitched_data(ptr, pitch, x, 1), val,
                 sycl::range<3>(x, y, 1));
         }
 
-        static memcpy_direction deduce_memcpy_direction(sycl::queue& q, void* to_ptr,
-            const void* from_ptr,
+        static memcpy_direction deduce_memcpy_direction(sycl::queue &q, void *to_ptr,
+            const void *from_ptr,
             memcpy_direction dir)
         {
             switch (dir)
@@ -1342,9 +1342,9 @@ namespace dpct
         }
 
         static sycl::event
-            dpct_memcpy(sycl::queue& q, void* to_ptr, const void* from_ptr, size_t size,
+            dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr, size_t size,
                 memcpy_direction direction,
-                const std::vector<sycl::event>& dep_events = {})
+                const std::vector<sycl::event> &dep_events = {})
         {
             if (!size)
                 return sycl::event{};
@@ -1368,31 +1368,31 @@ namespace dpct
         /// copy 3D matrix specified by \p size from 3D matrix specified by \p from_ptr
         /// and \p from_range to another specified by \p to_ptr and \p to_range.
         static inline std::vector<sycl::event>
-            dpct_memcpy(sycl::queue& q, void* to_ptr, const void* from_ptr,
+            dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
                 sycl::range<3> to_range, sycl::range<3> from_range,
                 sycl::id<3> to_id, sycl::id<3> from_id,
                 sycl::range<3> size, memcpy_direction direction,
-                const std::vector<sycl::event>& dep_events = {})
+                const std::vector<sycl::event> &dep_events = {})
         {
             // RAII for host pointer
             class host_buffer
             {
-                void* _buf;
+                void *_buf;
                 size_t _size;
-                sycl::queue& _q;
-                const std::vector<sycl::event>& _deps; // free operation depends
+                sycl::queue &_q;
+                const std::vector<sycl::event> &_deps; // free operation depends
 
             public:
-                host_buffer(size_t size, sycl::queue& q,
-                    const std::vector<sycl::event>& deps)
+                host_buffer(size_t size, sycl::queue &q,
+                    const std::vector<sycl::event> &deps)
                     : _buf(std::malloc(size)), _size(size), _q(q), _deps(deps) {}
-                void* get_ptr() const { return _buf; }
+                void *get_ptr() const { return _buf; }
                 size_t get_size() const { return _size; }
                 ~host_buffer()
                 {
                     if (_buf)
                     {
-                        _q.submit([&](sycl::handler& cgh)
+                        _q.submit([&](sycl::handler &cgh)
                             {
                                 cgh.depends_on(_deps);
                                 cgh.host_task([buf = _buf] { std::free(buf); }); });
@@ -1403,10 +1403,10 @@ namespace dpct
 
             size_t to_slice = to_range.get(1) * to_range.get(0),
                 from_slice = from_range.get(1) * from_range.get(0);
-            unsigned char* to_surface =
-                (unsigned char*)to_ptr + get_offset(to_id, to_slice, to_range.get(0));
-            const unsigned char* from_surface =
-                (const unsigned char*)from_ptr +
+            unsigned char *to_surface =
+                (unsigned char *)to_ptr + get_offset(to_id, to_slice, to_range.get(0));
+            const unsigned char *from_surface =
+                (const unsigned char *)from_ptr +
                 get_offset(from_id, from_slice, from_range.get(0));
 
             if (to_slice == from_slice && to_slice == size.get(1) * size.get(0))
@@ -1421,8 +1421,8 @@ namespace dpct
             case host_to_host:
                 for (size_t z = 0; z < size.get(2); ++z)
                 {
-                    unsigned char* to_ptr = to_surface;
-                    const unsigned char* from_ptr = from_surface;
+                    unsigned char *to_ptr = to_surface;
+                    const unsigned char *from_ptr = from_surface;
                     if (to_range.get(0) == from_range.get(0) &&
                         to_range.get(0) == size.get(0))
                     {
@@ -1489,7 +1489,7 @@ namespace dpct
                 break;
             }
             case device_to_device:
-                event_list.push_back(q.submit([&](sycl::handler& cgh) {
+                event_list.push_back(q.submit([&](sycl::handler &cgh) {
                     cgh.depends_on(dep_events);
                     cgh.parallel_for<class dpct_memcpy_3d_detail>(
                         size,
@@ -1506,7 +1506,7 @@ namespace dpct
 
         /// memcpy 2D/3D matrix specified by pitched_data.
         static inline std::vector<sycl::event>
-            dpct_memcpy(sycl::queue& q, pitched_data to, sycl::id<3> to_id,
+            dpct_memcpy(sycl::queue &q, pitched_data to, sycl::id<3> to_id,
                 pitched_data from, sycl::id<3> from_id, sycl::range<3> size,
                 memcpy_direction direction = automatic)
         {
@@ -1518,7 +1518,7 @@ namespace dpct
 
         /// memcpy 2D matrix with pitch.
         static inline std::vector<sycl::event>
-            dpct_memcpy(sycl::queue& q, void* to_ptr, const void* from_ptr,
+            dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
                 size_t to_pitch, size_t from_pitch, size_t x, size_t y,
                 memcpy_direction direction = automatic)
         {
@@ -1545,9 +1545,9 @@ namespace dpct
                 using void_pointer = typename std::allocator_traits<Alloc>::void_pointer;
                 using const_void_pointer =
                     typename std::allocator_traits<Alloc>::const_void_pointer;
-                using reference = typename std::allocator_traits<Alloc>::value_type&;
+                using reference = typename std::allocator_traits<Alloc>::value_type &;
                 using const_reference =
-                    const typename std::allocator_traits<Alloc>::value_type&;
+                    const typename std::allocator_traits<Alloc>::value_type &;
                 using difference_type =
                     typename std::allocator_traits<Alloc>::difference_type;
                 using size_type = typename std::allocator_traits<Alloc>::size_type;
@@ -1568,8 +1568,8 @@ namespace dpct
 
                 usm_allocator() : _impl(dpct::get_default_queue()) {}
                 ~usm_allocator() {}
-                usm_allocator(const usm_allocator& other) : _impl(other._impl) {}
-                usm_allocator(usm_allocator&& other) : _impl(std::move(other._impl)) {}
+                usm_allocator(const usm_allocator &other) : _impl(other._impl) {}
+                usm_allocator(usm_allocator &&other) : _impl(std::move(other._impl)) {}
                 pointer address(reference r) { return &r; }
                 const_pointer address(const_reference r) { return &r; }
                 pointer allocate(size_type cnt, const_void_pointer hint = nullptr)
@@ -1584,14 +1584,14 @@ namespace dpct
                 {
                     return std::allocator_traits<Alloc>::max_size(_impl);
                 }
-                bool operator==(const usm_allocator& other) const { return _impl == other._impl; }
-                bool operator!=(const usm_allocator& other) const { return _impl != other._impl; }
+                bool operator==(const usm_allocator &other) const { return _impl == other._impl; }
+                bool operator!=(const usm_allocator &other) const { return _impl != other._impl; }
             };
 
         } // namespace deprecated
 
-        inline void dpct_free(void* ptr,
-            const sycl::queue& q)
+        inline void dpct_free(void *ptr,
+            const sycl::queue &q)
         {
             if (ptr)
             {
@@ -1600,29 +1600,29 @@ namespace dpct
         }
 
         template <typename T>
-        inline auto get_memory(const void* x)
+        inline auto get_memory(const void *x)
         {
-            T* new_x = reinterpret_cast<T*>(const_cast<void*>(x));
+            T *new_x = reinterpret_cast<T *>(const_cast<void *>(x));
             return new_x;
         }
 
         template <typename T>
-        inline typename DataType<T>::T2 get_value(const T* s, sycl::queue& q)
+        inline typename DataType<T>::T2 get_value(const T *s, sycl::queue &q)
         {
             using Ty = typename DataType<T>::T2;
             Ty s_h;
             if (get_pointer_attribute(q, s) == pointer_access_attribute::device_only)
-                detail::dpct_memcpy(q, (void*)&s_h, (const void*)s, sizeof(T), device_to_host)
+                detail::dpct_memcpy(q, (void *)&s_h, (const void *)s, sizeof(T), device_to_host)
                 .wait();
             else
-                s_h = *reinterpret_cast<const Ty*>(s);
+                s_h = *reinterpret_cast<const Ty *>(s);
             return s_h;
         }
 
     } // namespace detail
 
     template <typename T>
-    inline auto get_value(const T* s, sycl::queue& q)
+    inline auto get_value(const T *s, sycl::queue &q)
     {
         return detail::get_value(s, q);
     }
@@ -1630,13 +1630,13 @@ namespace dpct
     namespace detail
     {
         template <class Ta, class Tb, class Tc, class Ts>
-        inline void gemm_impl(sycl::queue& q, oneapi::mkl::transpose a_trans,
+        inline void gemm_impl(sycl::queue &q, oneapi::mkl::transpose a_trans,
             oneapi::mkl::transpose b_trans, int m, int n, int k,
-            const void* alpha, const void* a, int lda, const void* b,
-            int ldb, const void* beta, void* c, int ldc)
+            const void *alpha, const void *a, int lda, const void *b,
+            int ldb, const void *beta, void *c, int ldc)
         {
-            Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts*>(alpha), q);
-            Ts beta_value = dpct::get_value(reinterpret_cast<const Ts*>(beta), q);
+            Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts *>(alpha), q);
+            Ts beta_value = dpct::get_value(reinterpret_cast<const Ts *>(beta), q);
             auto data_a = get_memory<const Ta>(a);
             auto data_b = get_memory<const Tb>(b);
             auto data_c = get_memory<Tc>(c);
@@ -1673,10 +1673,10 @@ namespace dpct
         };
 
         template <class Ta, class Tb, class Tc, class Ts>
-        inline void gemm_batch_impl(sycl::queue& q, oneapi::mkl::transpose a_trans,
+        inline void gemm_batch_impl(sycl::queue &q, oneapi::mkl::transpose a_trans,
             oneapi::mkl::transpose b_trans, int m, int n, int k,
-            const void* alpha, const void** a, int lda,
-            const void** b, int ldb, const void* beta, void** c,
+            const void *alpha, const void **a, int lda,
+            const void **b, int ldb, const void *beta, void **c,
             int ldc, int batch_size)
         {
             struct matrix_info_t
@@ -1688,11 +1688,11 @@ namespace dpct
                 std::int64_t groupsize_info;
             };
 
-            Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts*>(alpha), q);
-            Ts beta_value = dpct::get_value(reinterpret_cast<const Ts*>(beta), q);
+            Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts *>(alpha), q);
+            Ts beta_value = dpct::get_value(reinterpret_cast<const Ts *>(beta), q);
 
-            matrix_info_t* matrix_info =
-                (matrix_info_t*)std::malloc(sizeof(matrix_info_t));
+            matrix_info_t *matrix_info =
+                (matrix_info_t *)std::malloc(sizeof(matrix_info_t));
             matrix_info->transpose_info[0] = a_trans;
             matrix_info->transpose_info[1] = b_trans;
             matrix_info->value_info[0] = alpha_value;
@@ -1709,12 +1709,12 @@ namespace dpct
                 q, matrix_info->transpose_info, matrix_info->transpose_info + 1,
                 matrix_info->size_info, matrix_info->size_info + 1,
                 matrix_info->size_info + 2, matrix_info->value_info,
-                reinterpret_cast<const Ta**>(a), matrix_info->ld_info,
-                reinterpret_cast<const Tb**>(b), matrix_info->ld_info + 1,
-                matrix_info->value_info + 1, reinterpret_cast<Tc**>(c),
+                reinterpret_cast<const Ta **>(a), matrix_info->ld_info,
+                reinterpret_cast<const Tb **>(b), matrix_info->ld_info + 1,
+                matrix_info->value_info + 1, reinterpret_cast<Tc **>(c),
                 matrix_info->ld_info + 2, 1, &(matrix_info->groupsize_info));
 
-            q.submit([&](sycl::handler& cgh)
+            q.submit([&](sycl::handler &cgh)
                 {
                     cgh.depends_on(e);
                     cgh.host_task([=] { std::free(matrix_info); }); });
@@ -1722,15 +1722,15 @@ namespace dpct
 
         template <class Ta, class Tb, class Tc, class Ts>
         inline void
-            gemm_batch_impl(sycl::queue& q, oneapi::mkl::transpose a_trans,
+            gemm_batch_impl(sycl::queue &q, oneapi::mkl::transpose a_trans,
                 oneapi::mkl::transpose b_trans, int m, int n,
-                int k, const void* alpha, const void* a, int lda,
-                long long int stride_a, const void* b, int ldb,
-                long long int stride_b, const void* beta, void* c,
+                int k, const void *alpha, const void *a, int lda,
+                long long int stride_a, const void *b, int ldb,
+                long long int stride_b, const void *beta, void *c,
                 int ldc, long long int stride_c, int batch_size)
         {
-            Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts*>(alpha), q);
-            Ts beta_value = dpct::get_value(reinterpret_cast<const Ts*>(beta), q);
+            Ts alpha_value = dpct::get_value(reinterpret_cast<const Ts *>(alpha), q);
+            Ts beta_value = dpct::get_value(reinterpret_cast<const Ts *>(beta), q);
             auto data_a = get_memory<const Ta>(a);
             auto data_b = get_memory<const Tb>(b);
             auto data_c = get_memory<Tc>(c);
@@ -1755,9 +1755,9 @@ namespace dpct
         return v0;
     }
 
-    static void async_dpct_memcpy(void* to_ptr, const void* from_ptr, size_t size,
+    static void async_dpct_memcpy(void *to_ptr, const void *from_ptr, size_t size,
         memcpy_direction direction = automatic,
-        sycl::queue& q = dpct::get_default_queue())
+        sycl::queue &q = dpct::get_default_queue())
     {
         detail::dpct_memcpy(q, to_ptr, from_ptr, size, direction);
     }
@@ -1793,7 +1793,7 @@ namespace dpct
 
     template <typename T1, typename T2>
     using dot_product_acc_t =
-        std::conditional_t<std::is_unsigned_v<T1>&& std::is_unsigned_v<T2>,
+        std::conditional_t<std::is_unsigned_v<T1> &&std::is_unsigned_v<T2>,
         uint32_t, int32_t>;
 
     template <typename T1, typename T2, typename T3>
@@ -1968,10 +1968,10 @@ namespace dpct
     }
 
     inline void
-        has_capability_or_fail(const sycl::device& dev,
-            const std::initializer_list<sycl::aspect>& props)
+        has_capability_or_fail(const sycl::device &dev,
+            const std::initializer_list<sycl::aspect> &props)
     {
-        for (const auto& it : props)
+        for (const auto &it : props)
         {
             if (dev.has(it))
                 continue;
@@ -2019,20 +2019,20 @@ namespace dpct
         return dev_mgr::instance().current_device_id();
     }
 
-    static inline device_ext& get_current_device()
+    static inline device_ext &get_current_device()
     {
         return dev_mgr::instance().current_device();
     }
 
-    static inline sycl::queue& get_in_order_queue()
+    static inline sycl::queue &get_in_order_queue()
     {
         return dev_mgr::instance().current_device().in_order_queue();
     }
 
     static sycl::event
-        dpct_memcpy(sycl::queue& q, void* to_ptr, const void* from_ptr, size_t size,
+        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr, size_t size,
             memcpy_direction direction,
-            const std::vector<sycl::event>& dep_events = {})
+            const std::vector<sycl::event> &dep_events = {})
     {
         if (!size)
             return sycl::event{};
@@ -2056,31 +2056,31 @@ namespace dpct
     /// copy 3D matrix specified by \p size from 3D matrix specified by \p from_ptr
     /// and \p from_range to another specified by \p to_ptr and \p to_range.
     static inline std::vector<sycl::event>
-        dpct_memcpy(sycl::queue& q, void* to_ptr, const void* from_ptr,
+        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
             sycl::range<3> to_range, sycl::range<3> from_range,
             sycl::id<3> to_id, sycl::id<3> from_id,
             sycl::range<3> size, memcpy_direction direction,
-            const std::vector<sycl::event>& dep_events = {})
+            const std::vector<sycl::event> &dep_events = {})
     {
         // RAII for host pointer
         class host_buffer
         {
-            void* _buf;
+            void *_buf;
             size_t _size;
-            sycl::queue& _q;
-            const std::vector<sycl::event>& _deps; // free operation depends
+            sycl::queue &_q;
+            const std::vector<sycl::event> &_deps; // free operation depends
 
         public:
-            host_buffer(size_t size, sycl::queue& q,
-                const std::vector<sycl::event>& deps)
+            host_buffer(size_t size, sycl::queue &q,
+                const std::vector<sycl::event> &deps)
                 : _buf(std::malloc(size)), _size(size), _q(q), _deps(deps) {}
-            void* get_ptr() const { return _buf; }
+            void *get_ptr() const { return _buf; }
             size_t get_size() const { return _size; }
             ~host_buffer()
             {
                 if (_buf)
                 {
-                    _q.submit([&](sycl::handler& cgh)
+                    _q.submit([&](sycl::handler &cgh)
                         {
                             cgh.depends_on(_deps);
                             cgh.host_task([buf = _buf] { std::free(buf); }); });
@@ -2091,10 +2091,10 @@ namespace dpct
 
         size_t to_slice = to_range.get(1) * to_range.get(0),
             from_slice = from_range.get(1) * from_range.get(0);
-        unsigned char* to_surface =
-            (unsigned char*)to_ptr + get_offset(to_id, to_slice, to_range.get(0));
-        const unsigned char* from_surface =
-            (const unsigned char*)from_ptr +
+        unsigned char *to_surface =
+            (unsigned char *)to_ptr + get_offset(to_id, to_slice, to_range.get(0));
+        const unsigned char *from_surface =
+            (const unsigned char *)from_ptr +
             get_offset(from_id, from_slice, from_range.get(0));
 
         if (to_slice == from_slice && to_slice == size.get(1) * size.get(0))
@@ -2109,8 +2109,8 @@ namespace dpct
         case host_to_host:
             for (size_t z = 0; z < size.get(2); ++z)
             {
-                unsigned char* to_ptr = to_surface;
-                const unsigned char* from_ptr = from_surface;
+                unsigned char *to_ptr = to_surface;
+                const unsigned char *from_ptr = from_surface;
                 if (to_range.get(0) == from_range.get(0) &&
                     to_range.get(0) == size.get(0))
                 {
@@ -2177,7 +2177,7 @@ namespace dpct
             break;
         }
         case device_to_device:
-            event_list.push_back(q.submit([&](sycl::handler& cgh)
+            event_list.push_back(q.submit([&](sycl::handler &cgh)
                 {
                     cgh.depends_on(dep_events);
                     cgh.parallel_for<class dpct_memcpy_3d_detail>(
@@ -2195,7 +2195,7 @@ namespace dpct
 
     /// memcpy 2D/3D matrix specified by pitched_data.
     static inline std::vector<sycl::event>
-        dpct_memcpy(sycl::queue& q, pitched_data to, sycl::id<3> to_id,
+        dpct_memcpy(sycl::queue &q, pitched_data to, sycl::id<3> to_id,
             pitched_data from, sycl::id<3> from_id, sycl::range<3> size,
             memcpy_direction direction = automatic)
     {
@@ -2207,7 +2207,7 @@ namespace dpct
 
     /// memcpy 2D matrix with pitch.
     static inline std::vector<sycl::event>
-        dpct_memcpy(sycl::queue& q, void* to_ptr, const void* from_ptr,
+        dpct_memcpy(sycl::queue &q, void *to_ptr, const void *from_ptr,
             size_t to_pitch, size_t from_pitch, size_t x, size_t y,
             memcpy_direction direction = automatic)
     {
@@ -2217,11 +2217,11 @@ namespace dpct
             sycl::range<3>(x, y, 1), direction);
     }
 
-    inline void gemm(sycl::queue& q, oneapi::mkl::transpose a_trans,
+    inline void gemm(sycl::queue &q, oneapi::mkl::transpose a_trans,
         oneapi::mkl::transpose b_trans, int m, int n, int k,
-        const void* alpha, const void* a, library_data_t a_type,
-        int lda, const void* b, library_data_t b_type, int ldb,
-        const void* beta, void* c, library_data_t c_type, int ldc,
+        const void *alpha, const void *a, library_data_t a_type,
+        int lda, const void *b, library_data_t b_type, int ldb,
+        const void *beta, void *c, library_data_t c_type, int ldc,
         library_data_t scaling_type)
     {
         if (scaling_type == library_data_t::real_float &&
@@ -2305,9 +2305,9 @@ namespace dpct
             library_data_t::real_half, library_data_t::real_float):
             {
                 float alpha_value =
-                    dpct::get_value(reinterpret_cast<const float*>(alpha), q);
+                    dpct::get_value(reinterpret_cast<const float *>(alpha), q);
                 float beta_value =
-                    dpct::get_value(reinterpret_cast<const float*>(beta), q);
+                    dpct::get_value(reinterpret_cast<const float *>(beta), q);
                 sycl::half alpha_half(alpha_value);
                 sycl::half beta_half(beta_value);
                 detail::gemm_impl<sycl::half, sycl::half, sycl::half,
@@ -2337,9 +2337,9 @@ namespace dpct
             library_data_t::real_int32, library_data_t::real_int32):
             {
                 float alpha_float =
-                    dpct::get_value(reinterpret_cast<const std::int32_t*>(alpha), q);
+                    dpct::get_value(reinterpret_cast<const std::int32_t *>(alpha), q);
                 float beta_float =
-                    dpct::get_value(reinterpret_cast<const std::int32_t*>(beta), q);
+                    dpct::get_value(reinterpret_cast<const std::int32_t *>(beta), q);
                 detail::gemm_impl<std::int8_t, std::int8_t, std::int32_t, float>(
                     q, a_trans, b_trans, m, n, k, &alpha_float, a, lda, b, ldb, &beta_float, c, ldc);
                 break;
@@ -2370,12 +2370,12 @@ namespace dpct
     /// \param [in] ldc Leading dimension of C.
     /// \param [in] batch_size Specifies the number of matrix multiply operations to perform.
     /// \param [in] scaling_type Data type of the scaling factors.
-    inline void gemm_batch(sycl::queue& q, oneapi::mkl::transpose a_trans,
+    inline void gemm_batch(sycl::queue &q, oneapi::mkl::transpose a_trans,
         oneapi::mkl::transpose b_trans, int m, int n, int k,
-        const void* alpha, const void* a[],
-        library_data_t a_type, int lda, const void* b[],
-        library_data_t b_type, int ldb, const void* beta,
-        void* c[], library_data_t c_type, int ldc,
+        const void *alpha, const void *a[],
+        library_data_t a_type, int lda, const void *b[],
+        library_data_t b_type, int ldb, const void *beta,
+        void *c[], library_data_t c_type, int ldc,
         int batch_size, library_data_t scaling_type)
     {
         if (scaling_type == library_data_t::real_float &&
@@ -2466,9 +2466,9 @@ namespace dpct
             library_data_t::real_int32, library_data_t::real_int32):
             {
                 float alpha_float =
-                    dpct::get_value(reinterpret_cast<const std::int32_t*>(alpha), q);
+                    dpct::get_value(reinterpret_cast<const std::int32_t *>(alpha), q);
                 float beta_float =
-                    dpct::get_value(reinterpret_cast<const std::int32_t*>(beta), q);
+                    dpct::get_value(reinterpret_cast<const std::int32_t *>(beta), q);
                 detail::gemm_batch_impl<std::int8_t, std::int8_t, std::int32_t,
                     float>(q, a_trans, b_trans, m, n, k, &alpha_float,
                         a, lda, b, ldb, &beta_float, c, ldc,
@@ -2499,9 +2499,9 @@ namespace dpct
             library_data_t::real_half, library_data_t::real_float):
             {
                 float alpha_value =
-                    dpct::get_value(reinterpret_cast<const float*>(alpha), q);
+                    dpct::get_value(reinterpret_cast<const float *>(alpha), q);
                 float beta_value =
-                    dpct::get_value(reinterpret_cast<const float*>(beta), q);
+                    dpct::get_value(reinterpret_cast<const float *>(beta), q);
                 sycl::half alpha_half(alpha_value);
                 sycl::half beta_half(beta_value);
                 detail::gemm_batch_impl<sycl::half, sycl::half, sycl::half, sycl::half>(
@@ -2537,12 +2537,12 @@ namespace dpct
     /// \param [in] stride_c Stride between the different C matrices.
     /// \param [in] batch_size Specifies the number of matrix multiply operations to perform.
     /// \param [in] scaling_type Data type of the scaling factors.
-    inline void gemm_batch(sycl::queue& q, oneapi::mkl::transpose a_trans,
+    inline void gemm_batch(sycl::queue &q, oneapi::mkl::transpose a_trans,
         oneapi::mkl::transpose b_trans, int m, int n, int k,
-        const void* alpha, const void* a, library_data_t a_type,
-        int lda, long long int stride_a, const void* b,
+        const void *alpha, const void *a, library_data_t a_type,
+        int lda, long long int stride_a, const void *b,
         library_data_t b_type, int ldb, long long int stride_b,
-        const void* beta, void* c, library_data_t c_type,
+        const void *beta, void *c, library_data_t c_type,
         int ldc, long long int stride_c, int batch_size,
         library_data_t scaling_type)
     {
@@ -2664,9 +2664,9 @@ namespace dpct
             library_data_t::real_half, library_data_t::real_float):
             {
                 float alpha_value =
-                    dpct::get_value(reinterpret_cast<const float*>(alpha), q);
+                    dpct::get_value(reinterpret_cast<const float *>(alpha), q);
                 float beta_value =
-                    dpct::get_value(reinterpret_cast<const float*>(beta), q);
+                    dpct::get_value(reinterpret_cast<const float *>(beta), q);
                 sycl::half alpha_half(alpha_value);
                 sycl::half beta_half(beta_value);
                 detail::gemm_batch_impl<sycl::half, sycl::half, sycl::half, sycl::half>(
@@ -2680,10 +2680,10 @@ namespace dpct
     }
 
     static inline void
-        async_dpct_memcpy(void* to_ptr, size_t to_pitch, const void* from_ptr,
+        async_dpct_memcpy(void *to_ptr, size_t to_pitch, const void *from_ptr,
             size_t from_pitch, size_t x, size_t y,
             memcpy_direction direction = automatic,
-            sycl::queue& q = get_default_queue())
+            sycl::queue &q = get_default_queue())
     {
         detail::dpct_memcpy(q, to_ptr, from_ptr, to_pitch, from_pitch, x, y,
             direction);
@@ -2692,7 +2692,7 @@ namespace dpct
     using err0 = detail::generic_error_type<struct err0_tag, int>;
     using err1 = detail::generic_error_type<struct err1_tag, int>;
 
-    static inline void dpct_free(void* ptr, sycl::queue& q = get_default_queue()) {
+    static inline void dpct_free(void *ptr, sycl::queue &q = get_default_queue()) {
         detail::dpct_free(ptr, q);
     }
 
@@ -2704,12 +2704,12 @@ namespace dpct
         using element_t = typename memory_t::element_t;
         using pointer_t = typename memory_t::pointer_t;
         using accessor_t = typename memory_t::template accessor_t<3>;
-        accessor(pointer_t data, const sycl::range<3>& in_range)
+        accessor(pointer_t data, const sycl::range<3> &in_range)
             : _data(data), _range(in_range) {}
         template <memory_region M = Memory>
-        accessor(typename std::enable_if<M != local, const accessor_t>::type& acc)
+        accessor(typename std::enable_if<M != local, const accessor_t>::type &acc)
             : accessor(acc, acc.get_range()) {}
-        accessor(const accessor_t& acc, const sycl::range<3>& in_range)
+        accessor(const accessor_t &acc, const sycl::range<3> &in_range)
             : accessor(acc.get_pointer(), in_range) {}
         accessor<T, Memory, 2> operator[](size_t index) const {
             sycl::range<2> sub(_range.get(1), _range.get(2));
@@ -2728,12 +2728,12 @@ namespace dpct
         using element_t = typename memory_t::element_t;
         using pointer_t = typename memory_t::pointer_t;
         using accessor_t = typename memory_t::template accessor_t<2>;
-        accessor(pointer_t data, const sycl::range<2>& in_range)
+        accessor(pointer_t data, const sycl::range<2> &in_range)
             : _data(data), _range(in_range) {}
         template <memory_region M = Memory>
-        accessor(typename std::enable_if<M != local, const accessor_t>::type& acc)
+        accessor(typename std::enable_if<M != local, const accessor_t>::type &acc)
             : accessor(acc, acc.get_range()) {}
-        accessor(const accessor_t& acc, const sycl::range<2>& in_range)
+        accessor(const accessor_t &acc, const sycl::range<2> &in_range)
             : accessor(acc.get_pointer(), in_range) {}
 
         pointer_t operator[](size_t index) const {
@@ -2760,11 +2760,11 @@ namespace dpct
             device_memory() : device_memory(sycl::range<Dimension>(1)) {}
 
             /// Constructor of 1-D array with initializer list
-            device_memory(const sycl::range<Dimension>& in_range,
-                std::initializer_list<value_t>&& init_list)
+            device_memory(const sycl::range<Dimension> &in_range,
+                std::initializer_list<value_t> &&init_list)
                 : device_memory(in_range) {
                 assert(init_list.size() <= in_range.size());
-                _host_ptr = (value_t*)std::malloc(_size);
+                _host_ptr = (value_t *)std::malloc(_size);
                 std::memset(_host_ptr, 0, _size);
                 std::memcpy(_host_ptr, init_list.begin(), init_list.size() * sizeof(T));
             }
@@ -2772,11 +2772,11 @@ namespace dpct
             /// Constructor of 2-D array with initializer list
             template <size_t D = Dimension>
             device_memory(
-                const typename std::enable_if<D == 2, sycl::range<2>>::type& in_range,
-                std::initializer_list<std::initializer_list<value_t>>&& init_list)
+                const typename std::enable_if<D == 2, sycl::range<2>>::type &in_range,
+                std::initializer_list<std::initializer_list<value_t>> &&init_list)
                 : device_memory(in_range) {
                 assert(init_list.size() <= in_range[0]);
-                _host_ptr = (value_t*)std::malloc(_size);
+                _host_ptr = (value_t *)std::malloc(_size);
                 std::memset(_host_ptr, 0, _size);
                 auto tmp_data = _host_ptr;
                 for (auto sub_list : init_list) {
@@ -2788,7 +2788,7 @@ namespace dpct
             }
 
             /// Constructor with range
-            device_memory(const sycl::range<Dimension>& range_in)
+            device_memory(const sycl::range<Dimension> &range_in)
                 : _size(range_in.size() * sizeof(T)), _range(range_in),
                 _reference(false), _host_ptr(nullptr), _device_ptr(nullptr) {
                 static_assert(
@@ -2817,7 +2817,7 @@ namespace dpct
             void init() { init(dpct::get_default_queue()); }
             /// Allocate memory with specified queue, and init memory if has initial
             /// value.
-            void init(sycl::queue& q) {
+            void init(sycl::queue &q) {
                 if (_device_ptr)
                     return;
                 if (!_size)
@@ -2829,17 +2829,17 @@ namespace dpct
             }
 
             /// The variable is assigned to a device pointer.
-            void assign(value_t* src, size_t size) {
+            void assign(value_t *src, size_t size) {
                 this->~device_memory();
                 new (this) device_memory(src, size);
             }
 
             /// Get memory pointer of the memory object, which is virtual pointer when
             /// usm is not used, and device pointer when usm is used.
-            value_t* get_ptr() { return get_ptr(get_default_queue()); }
+            value_t *get_ptr() { return get_ptr(get_default_queue()); }
             /// Get memory pointer of the memory object, which is virtual pointer when
             /// usm is not used, and device pointer when usm is used.
-            value_t* get_ptr(sycl::queue& q) {
+            value_t *get_ptr(sycl::queue &q) {
                 init(q);
                 return _device_ptr;
             }
@@ -2848,7 +2848,7 @@ namespace dpct
             size_t get_size() { return _size; }
 
             template <size_t D = Dimension>
-            typename std::enable_if<D == 1, T>::type& operator[](size_t index) {
+            typename std::enable_if<D == 1, T>::type &operator[](size_t index) {
                 init();
                 return _device_ptr[index];
             }
@@ -2857,39 +2857,39 @@ namespace dpct
             /// when usm is used and dimension is greater than 1.
             template <size_t D = Dimension>
             typename std::enable_if<D != 1, dpct_accessor_t>::type
-                get_access([[maybe_unused]] sycl::handler& cgh) {
-                return dpct_accessor_t((T*)_device_ptr, _range);
+                get_access([[maybe_unused]] sycl::handler &cgh) {
+                return dpct_accessor_t((T *)_device_ptr, _range);
             }
 
         private:
-            device_memory(value_t* memory_ptr, size_t size)
+            device_memory(value_t *memory_ptr, size_t size)
                 : _size(size), _range(size / sizeof(T)), _reference(true),
                 _device_ptr(memory_ptr) {}
 
-            void allocate_device(sycl::queue& q) {
+            void allocate_device(sycl::queue &q) {
 #ifndef DPCT_USM_LEVEL_NONE
                 if (Memory == shared) {
-                    _device_ptr = (value_t*)sycl::malloc_shared(_size, q.get_device(),
+                    _device_ptr = (value_t *)sycl::malloc_shared(_size, q.get_device(),
                         q.get_context());
                     return;
                 }
 #ifdef SYCL_EXT_ONEAPI_USM_DEVICE_READ_ONLY
                 if (Memory == constant) {
-                    _device_ptr = (value_t*)sycl::malloc_device(
+                    _device_ptr = (value_t *)sycl::malloc_device(
                         _size, q.get_device(), q.get_context(),
                         sycl::ext::oneapi::property::usm::device_read_only());
                     return;
                 }
 #endif
 #endif
-                _device_ptr = (value_t*)detail::dpct_malloc(_size, q);
+                _device_ptr = (value_t *)detail::dpct_malloc(_size, q);
             }
 
             size_t _size;
             sycl::range<Dimension> _range;
             bool _reference;
-            value_t* _host_ptr;
-            value_t* _device_ptr;
+            value_t *_host_ptr;
+            value_t *_device_ptr;
         };
         template <class T, memory_region Memory>
         class device_memory<T, Memory, 0> : public device_memory<T, Memory, 1> {
@@ -2900,7 +2900,7 @@ namespace dpct
                 typename detail::memory_traits<Memory, T>::template accessor_t<0>;
 
             /// Constructor with initial value.
-            device_memory(const value_t& val) : base(sycl::range<1>(1), { val }) {}
+            device_memory(const value_t &val) : base(sycl::range<1>(1), { val }) {}
 
             /// Default constructor
             device_memory() : base(1) {}
@@ -2920,7 +2920,7 @@ namespace dpct
         sycl::access::address_space::global_space,
         sycl::memory_order memoryOrder = sycl::memory_order::relaxed,
         sycl::memory_scope memoryScope = sycl::memory_scope::device>
-    inline T atomic_fetch_add(T* addr, T operand) {
+    inline T atomic_fetch_add(T *addr, T operand) {
         auto atm =
             sycl::atomic_ref<T, memoryOrder, memoryScope, addressSpace>(addr[0]);
         return atm.fetch_add(operand);
@@ -2931,7 +2931,7 @@ namespace dpct
         sycl::memory_order memoryOrder = sycl::memory_order::relaxed,
         sycl::memory_scope memoryScope = sycl::memory_scope::device,
         typename T1, typename T2>
-    inline T1 atomic_fetch_add(T1* addr, T2 operand) {
+    inline T1 atomic_fetch_add(T1 *addr, T2 operand) {
         auto atm =
             sycl::atomic_ref<T1, memoryOrder, memoryScope, addressSpace>(addr[0]);
         return atm.fetch_add(operand);
@@ -2939,7 +2939,7 @@ namespace dpct
 
     template <typename T, sycl::access::address_space addressSpace =
         sycl::access::address_space::global_space>
-    inline T atomic_fetch_add(T* addr, T operand,
+    inline T atomic_fetch_add(T *addr, T operand,
         sycl::memory_order memoryOrder) {
         switch (memoryOrder) {
         case sycl::memory_order::relaxed:
@@ -2961,7 +2961,7 @@ namespace dpct
     template <sycl::access::address_space addressSpace =
         sycl::access::address_space::global_space,
         typename T1, typename T2>
-    inline T1 atomic_fetch_add(T1* addr, T2 operand,
+    inline T1 atomic_fetch_add(T1 *addr, T2 operand,
         sycl::memory_order memoryOrder) {
         atomic_fetch_add<T1, addressSpace>(addr, operand, memoryOrder);
     }

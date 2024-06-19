@@ -57,7 +57,7 @@
     { "name": "x64-windows-msvc-debug"  , "inherits": [ "base", "debug"   ] },
     { "name": "x64-windows-msvc-release", "inherits": [ "base", "reldbg" ] },
     { "name": "x64-windows-msvc+static-release", "inherits": [ "base", "reldbg", "static" ] },
-    
+
     { "name": "x64-windows-sycl-debug"  , "inherits": [ "sycl-base", "debug"   ] },
     { "name": "x64-windows-sycl-release", "inherits": [ "sycl-base", "release" ] }
   ]
