@@ -1743,6 +1743,7 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char * qnn_lib_path) {
     g_qnn_mgr[device].instance             = instance;
     g_qnn_mgr[device].raw_interface        = instance->get_qnn_raw_interface();
     g_qnn_mgr[device].raw_system_interface = instance->get_qnn_raw_system_interface();
+    g_qnn_mgr[device].socinfo              = instance->get_soc_info();
 
     ggml_backend_t qnn_backend =
         new ggml_backend{/* .guid      = */ ggml_backend_qnn_guid(),

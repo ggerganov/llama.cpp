@@ -262,7 +262,7 @@ namespace qnn_internal {
                     QNN_LOG_INFO("qualcomm soc_model:%d(%s), htp_arch:%d(%s), vtcm_size:%d MB",
                         chipinfo.socModel, qnn::get_chipset_desc(chipinfo.socModel),
                         htp_arch, qnn::get_htparch_desc(htp_arch), chipinfo.vtcmSize);
-                    g_qnn_mgr[QNN_BACKEND_NPU].socinfo = { chipinfo.socModel, htp_arch, chipinfo.vtcmSize };
+                    _soc_info = { chipinfo.socModel, htp_arch, chipinfo.vtcmSize };
                 }
                 _qnn_raw_interface.deviceFreePlatformInfo(nullptr, p_info);
 
@@ -864,6 +864,7 @@ namespace qnn_internal {
             return _qnn_mem_set.count(buf) != 0U;
         }
 
+        const qnn::qcom_socinfo &get_soc_info() { return _soc_info; }
 
     public:
         std::map<std::string, std::tuple<Qnn_GraphHandle_t, Qnn_Tensor_t*,
@@ -1079,7 +1080,6 @@ namespace qnn_internal {
     private:
         static constexpr const int _required_num_providers = 1;
 
-    private:
         std::string   _lib_path;
         std::string   _backend_name;
         std::string   _model_name; // Qualcomm's dedicated prebuilt model name, keep it for further usage
@@ -1134,6 +1134,8 @@ namespace qnn_internal {
         size_t                             _rpcmem_capacity = 512;
 
         std::string _graph_name;
+
+        qnn::qcom_socinfo _soc_info = {};
     };
 
 }
