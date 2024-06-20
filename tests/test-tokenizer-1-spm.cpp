@@ -80,10 +80,10 @@ int main(int argc, char ** argv) {
 
         for (int i = 0; i < nthread; ++i) {
             threads[i] = std::thread([i, nthread, ctx]() {
-                for (uint32_t cp = i; cp < 0x0010ffff; cp += nthread) {
-                    if (cp >= 0xd800 && cp <= 0xdfff) {
-                        continue;
-                    }
+                for (uint32_t cp = i; cp < 0x00110000; cp += nthread) {
+                    //if (cp >= 0xd800 && cp <= 0xdfff) {
+                    //    continue;
+                    //}
 
                     std::string str = unicode_cpt_to_utf8(cp);
                     std::vector<llama_token> tokens = llama_tokenize(ctx, str, false, true);
