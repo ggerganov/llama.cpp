@@ -1802,9 +1802,11 @@ enum e_model {
     MODEL_2_8B,
     MODEL_3B,
     MODEL_4B,
+    MODEL_6B,
     MODEL_6_9B,
     MODEL_7B,
     MODEL_8B,
+    MODEL_9B,
     MODEL_12B,
     MODEL_13B,
     MODEL_14B,
@@ -3918,9 +3920,11 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_2_8B:          return "2.8B";
         case MODEL_3B:            return "3B";
         case MODEL_4B:            return "4B";
+        case MODEL_6B:            return "6B";
         case MODEL_6_9B:          return "6.9B";
         case MODEL_7B:            return "7B";
         case MODEL_8B:            return "8B";
+        case MODEL_9B:            return "9B";
         case MODEL_12B:           return "12B";
         case MODEL_13B:           return "13B";
         case MODEL_14B:           return "14B";
@@ -4507,8 +4511,8 @@ static void llm_load_hparams(
         {
             ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
             switch (hparams.n_layer) {
-                case 28: model.type = e_model::MODEL_7B; break;
-                case 40: model.type = e_model::MODEL_8B; break;
+                case 28: model.type = e_model::MODEL_6B; break;
+                case 40: model.type = e_model::MODEL_9B; break;
                 default: model.type = e_model::MODEL_UNKNOWN;
             }
         } break;
@@ -18362,6 +18366,19 @@ llama_token_type llama_token_get_type(const struct llama_model * model, llama_to
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
+    auto arch_name = llama_model_arch_name(model->arch);
+    auto vocab_type = model->vocab.type;
+    if (strcmp(arch_name, "chatglm") == 0) {
+        if (LLAMA_VOCAB_TYPE_BPE == vocab_type) { // glm4
+            return token != -1 && (
+                token == llama_token_eos(model) ||
+                token == llama_token_eot(model) ||
+                token == 151329 ||
+                token == 151336 ||
+                token == 151338
+            );
+        }
+    }
     return token != -1 && (
         token == llama_token_eos(model) ||
         token == llama_token_eot(model)
@@ -18424,8 +18441,18 @@ int32_t llama_tokenize(
                      int32_t   n_tokens_max,
                         bool   add_special,
                         bool   parse_special) {
-    auto res = llama_tokenize_internal(model->vocab, std::string(text, text_len), add_special, parse_special);
-
+    auto arch_name = llama_model_arch_name(model->arch);
+    auto prompt = std::move(std::string(text, text_len));
+    auto vocab_type = model->vocab.type;
+    if (strcmp(arch_name, "chatglm") == 0) {
+        // chatglm3
+        if (LLAMA_VOCAB_TYPE_SPM == vocab_type) {
+            prompt = "[gMASK]sop<|user|>\n" + prompt + "<|assistant|>";
+        } else if (LLAMA_VOCAB_TYPE_BPE == vocab_type) { // glm4
+            prompt = "[gMASK]<sop><|user|>\n" + prompt + "<|assistant|>";
+        }
+    }
+    auto res = llama_tokenize_internal(model->vocab, prompt, add_special, parse_special);
     if (n_tokens_max < (int) res.size()) {
         // LLAMA_LOG_ERROR("%s: too many tokens\n", __func__);
         return -((int) res.size());

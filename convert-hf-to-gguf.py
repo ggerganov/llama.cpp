@@ -2728,6 +2728,8 @@ class ChatGLMModel(Model):
         tokenizer = AutoTokenizer.from_pretrained(dir_model, trust_remote_code=True)
         vocab_size = hparams.get("padded_vocab_size", len(tokenizer.get_vocab()))
         assert max(tokenizer.get_vocab().values()) < vocab_size
+        role_special_tokens = ["<|system|>", "<|user|>", "<|assistant|>", "<|observation|>"]
+        special_tokens = ["[MASK]", "[gMASK]", "[sMASK]", "sop", "eop"] + role_special_tokens
         print(vocab_size)
         print(max(tokenizer.get_vocab().values()))
         for token_id in range(vocab_size):
@@ -2750,7 +2752,12 @@ class ChatGLMModel(Model):
                 text = f"[PAD{token_id}]".encode("utf-8")
 
             if token_id >= tokenizer.tokenizer.sp_model.vocab_size():
-                toktype = SentencePieceTokenTypes.UNKNOWN
+                if piece in special_tokens:
+                    # show special tokens in prompt
+                    toktype = SentencePieceTokenTypes.USER_DEFINED
+                else:
+                    print(f"unknow token: {piece}")
+                    toktype = SentencePieceTokenTypes.UNKNOWN
                 tokens.append(text)
                 scores.append(score)
                 toktypes.append(toktype)
@@ -2856,9 +2863,9 @@ class ChatGLMModel(Model):
         special_vocab.chat_template = "ChatGLM4"
         special_vocab.merges = merges
         # only add special tokens when they were not already loaded from config.json
-        if len(special_vocab.special_token_ids) == 0:
-            special_vocab._set_special_token("bos", tokenizer.get_added_vocab()["<|endoftext|>"])
-            special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
+        # if len(special_vocab.special_token_ids) == 0:
+        special_vocab._set_special_token("bos", tokenizer.get_added_vocab()["<|endoftext|>"])
+        special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
         # this one is usually not in config.json anyway
         special_vocab._set_special_token("unk", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)
@@ -2955,7 +2962,7 @@ def parse_args() -> argparse.Namespace:
         help="model is executed on big endian machine",
     )
     parser.add_argument(
-        "model", type=Path,
+        "--model", type=Path,
         help="directory containing model file",
     )
     parser.add_argument(
