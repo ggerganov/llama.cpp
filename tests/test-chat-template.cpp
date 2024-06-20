@@ -33,6 +33,8 @@ int main(void) {
         "{% if messages[0]['role'] == 'system' %}{{ raise_exception('System role not supported') }}{% endif %}{% for message in messages %}{% if (message['role'] == 'user') != (loop.index0 % 2 == 0) %}{{ raise_exception('Conversation roles must alternate user/assistant/user/assistant/...') }}{% endif %}{% if (message['role'] == 'assistant') %}{% set role = 'model' %}{% else %}{% set role = message['role'] %}{% endif %}{{ '<start_of_turn>' + role + '\\n' + message['content'] | trim + '<end_of_turn>\\n' }}{% endfor %}{% if add_generation_prompt %}{{'<start_of_turn>model\\n'}}{% endif %}",
         // OrionStarAI/Orion-14B-Chat
         "{% for message in messages %}{% if loop.first %}{{ bos_token }}{% endif %}{% if message['role'] == 'user' %}{{ 'Human: ' + message['content'] + '\\n\\nAssistant: ' + eos_token }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token }}{% endif %}{% endfor %}",
+        // openbmb/MiniCPM-2B-dpo-fp32
+        "{% for message in messages %}{% if message['role'] == 'user' %}{{'<\xe7\x94\xa8\xe6\x88\xb7>' + message['content'].strip() + '<AI>'}}{% else %}{{message['content'].strip()}}{% endif %}{% endfor %}",
         // openchat/openchat-3.5-0106
         // The included chat_template differs from the author's suggestions here: https://huggingface.co/openchat/openchat_3.5/discussions/5#65448109b4a3f3a2f486fd9d
         // So we match against the included template but implement the suggested version.
@@ -73,6 +75,8 @@ int main(void) {
         "<start_of_turn>user\nYou are a helpful assistant\n\nHello<end_of_turn>\n<start_of_turn>model\nHi there<end_of_turn>\n<start_of_turn>user\nWho are you<end_of_turn>\n<start_of_turn>model\nI am an assistant<end_of_turn>\n<start_of_turn>user\nAnother question<end_of_turn>\n<start_of_turn>model\n",
         // OrionStarAI/Orion-14B-Chat
         "Human: You are a helpful assistant\n\nHello\n\nAssistant: </s>Hi there</s>Human: Who are you\n\nAssistant: </s>   I am an assistant   </s>Human: Another question\n\nAssistant: </s>",
+        // openbmb/MiniCPM-2B-dpo-fp32
+        "You are a helpful assistant<\xe7\x94\xa8\xe6\x88\xb7>Hello<AI>Hi there<\xe7\x94\xa8\xe6\x88\xb7>Who are you<AI>I am an assistant<\xe7\x94\xa8\xe6\x88\xb7>Another question<AI>",
         // openchat/openchat-3.5-0106
         "You are a helpful assistant<|end_of_turn|>GPT4 Correct User: Hello<|end_of_turn|>GPT4 Correct Assistant: Hi there<|end_of_turn|>GPT4 Correct User: Who are you<|end_of_turn|>GPT4 Correct Assistant:    I am an assistant   <|end_of_turn|>GPT4 Correct User: Another question<|end_of_turn|>GPT4 Correct Assistant:",
         // deepseek-ai/deepseek-coder-33b-instruct
