@@ -199,7 +199,7 @@ int main(int argc, char **argv) {
 
         printf("\n");
         printf("src: '%s'\n", test_kv.first.c_str());
-        printf("res: '%s'\n", llama_detokenize_bpe(ctx, res).c_str());
+        printf("res: '%s'\n", llama_detokenize(ctx, res).c_str());
         printf("tok: ");
         for (const auto & tok : res) {
             printf("%d ", tok);
@@ -216,8 +216,8 @@ int main(int argc, char **argv) {
         if (!correct) {
             fprintf(stderr, "%s : failed test:    '%s'\n", __func__, test_kv.first.c_str());
             fprintf(stderr, "%s : detokenized to: '%s' instead of '%s'\n", __func__,
-                llama_detokenize_bpe(ctx, res).c_str(),
-                llama_detokenize_bpe(ctx, test_kv.second).c_str());
+                llama_detokenize(ctx, res).c_str(),
+                llama_detokenize(ctx, test_kv.second).c_str());
             fprintf(stderr, "%s : expected tokens: ", __func__);
             for (const auto & t : test_kv.second) {
                 fprintf(stderr, "%6d '%s', ", t, llama_token_to_piece(ctx, t).c_str());
@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
             }
 
             for (const auto & tok : res) {
-                //ofs << tok << " '" << string_strip(llama_detokenize_bpe(ctx, std::vector<int>{tok})) << "'" << std::endl;
+                //ofs << tok << " '" << string_strip(llama_detokenize(ctx, std::vector<int>{tok})) << "'" << std::endl;
                 ofs << tok << "\n";
             }
         }
