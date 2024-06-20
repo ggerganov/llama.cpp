@@ -137,12 +137,6 @@ typedef sycl::half2 ggml_half2;
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 
-#define QK2_2 32
-typedef struct {
-    uint8_t qs[QK2_2 / 4]; // nibbles / quants
-} block_q2_2;
-static_assert(sizeof(block_q2_2) == QK2_2 / 4, "wrong q2_2 block size/padding");
-
 #define QK4_0 32
 typedef struct {
     ggml_half d;           // delta
