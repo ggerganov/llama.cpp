@@ -18509,6 +18509,32 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
     return 0;
 }
 
+int32_t llama_detokenize(
+        const struct llama_model * model,
+               const llama_token * tokens,
+                         int32_t   n_tokens,
+                            char * text,
+                         int32_t   text_len_max,
+                            bool   special) {
+    int32_t avail = text_len_max;
+    int32_t total = 0;
+
+    for (int32_t i = 0; i < n_tokens; ++i) {
+        GGML_ASSERT(avail >= 0);
+        int32_t n_chars = llama_token_to_piece(model, tokens[i], text, avail, special);
+        if (n_chars < 0) {
+            avail = 0;
+            total -= n_chars;
+        } else if (n_chars > 0) {
+            avail -= n_chars;
+            text  += n_chars;
+            total += n_chars;
+        }
+    }
+
+    return total <= text_len_max ? total : -total;
+}
+
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
     size_t start = 0;
