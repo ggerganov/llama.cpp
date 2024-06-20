@@ -2756,7 +2756,6 @@ class ChatGLMModel(Model):
                     # show special tokens in prompt
                     toktype = SentencePieceTokenTypes.USER_DEFINED
                 else:
-                    print(f"unknow token: {piece}")
                     toktype = SentencePieceTokenTypes.UNKNOWN
                 tokens.append(text)
                 scores.append(score)
