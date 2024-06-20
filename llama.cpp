@@ -2317,7 +2317,7 @@ struct llama_vocab {
     id special_eot_id    = -1; // TODO: move above after "eos_id", and here add "file separator" token
 
     // tokenizer flags
-    bool tokenizer_add_space_prefix = true;
+    bool tokenizer_add_space_prefix = false;
     bool tokenizer_add_bos          = false;
     bool tokenizer_add_eos          = false;
     bool tokenizer_ignore_merges    = false;
@@ -4768,11 +4768,6 @@ static void llm_load_vocab(
             vocab.special_pad_id  = -1;
             vocab.special_cls_id  = -1;
             vocab.special_mask_id = -1;
-
-            const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
-            if (add_space_prefix_keyidx != -1) {
-                vocab.tokenizer_add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
-            } // The default value of add_space_prefix is true.
         } else if (tokenizer_model == "bert") {
             vocab.type = LLAMA_VOCAB_TYPE_WPM;
 
@@ -4784,14 +4779,8 @@ static void llm_load_vocab(
             vocab.special_pad_id  = 0;
             vocab.special_cls_id  = 101;
             vocab.special_mask_id = 103;
-            vocab.tokenizer_add_space_prefix = false;
         } else if (tokenizer_model == "gpt2") {
             vocab.type = LLAMA_VOCAB_TYPE_BPE;
-
-            const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
-            if (add_space_prefix_keyidx != -1) {
-                vocab.tokenizer_add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
-            }
 
             // read bpe merges and populate bpe ranks
             const int merges_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_MERGES).c_str());
@@ -4832,6 +4821,7 @@ static void llm_load_vocab(
 
         // for now, only BPE models have pre-tokenizers
         if (vocab.type == LLAMA_VOCAB_TYPE_BPE) {
+            vocab.tokenizer_add_space_prefix = false;
             if (tokenizer_pre.empty()) {
                 LLAMA_LOG_WARN("%s: missing pre-tokenizer type, using: 'default'\n", __func__);
                 LLAMA_LOG_WARN("%s:                                             \n", __func__);
@@ -4902,14 +4892,21 @@ static void llm_load_vocab(
             }
         } else if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            vocab.tokenizer_add_space_prefix = true;
             vocab.tokenizer_add_bos = true;
             vocab.tokenizer_add_eos = false;
         } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            vocab.tokenizer_add_space_prefix = false;
             vocab.tokenizer_add_bos = true;
             vocab.tokenizer_add_eos = false;
         } else {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+        }
+
+        const int add_space_prefix_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_ADD_PREFIX).c_str());
+        if (add_space_prefix_keyidx != -1) {
+            vocab.tokenizer_add_space_prefix = gguf_get_val_bool(ctx, add_space_prefix_keyidx);
         }
     }
 
@@ -13717,7 +13714,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 // tokenizer.encode('', add_special_tokens=True)  returns [1]
                 // tokenizer.encode('', add_special_tokens=False) returns []
 
-                bool is_prev_special = false;
+                bool is_prev_special = true;  // prefix with space if first token
 
                 if (add_special && vocab.tokenizer_add_bos) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
@@ -13729,10 +13726,9 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
                         auto raw_text = fragment.raw_text.substr(fragment.offset, fragment.length);
 
-                        if (vocab.tokenizer_add_space_prefix) {
-                            if (!output.size() || is_prev_special) {  // prefix with space if first token
-                                raw_text = " " + raw_text;
-                            }
+                        // prefix with space if previous is special
+                        if (vocab.tokenizer_add_space_prefix && is_prev_special) {
+                            raw_text = " " + raw_text;
                         }
 
 #ifdef PRETOKENIZERDEBUG
@@ -13741,6 +13737,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         llm_tokenizer_spm tokenizer(vocab);
                         llama_escape_whitespace(raw_text);
                         tokenizer.tokenize(raw_text, output);
+                        is_prev_special = false;
                     } else { // if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_TOKEN)
                         output.push_back(fragment.token);
                         is_prev_special = true;
