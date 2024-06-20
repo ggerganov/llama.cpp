@@ -230,6 +230,10 @@ extern "C" {
     GGML_API void ggml_backend_tensor_alloc(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, void * addr);
     GGML_API void ggml_backend_view_init(struct ggml_tensor * tensor);
 
+    // Tensor Debug
+    // visualize the tensor - extended adds more information - when printing sample content extended will also print src0 and src1 content
+    GGML_API void ggml_tensor_printf(const struct ggml_tensor *tensor, char *prefix, int line,  bool extended, bool print_sample);
+
 
 #ifdef  __cplusplus
 }

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -2223,3 +2224,263 @@ bool ggml_backend_compare_graph_backend(ggml_backend_t backend1, ggml_backend_t 
 
     return true;
 }
+
+// printf one number from a tensor (cont only) like an array index[0][1][2][3]
+void ggml_print_f32_index(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3) {
+    void * data;
+    if (!ggml_is_contiguous(tensor)) {
+        int64_t id[4] = {i0, i1, i2, i3};
+        int index_cont = i0*tensor->ne[3]*tensor->ne[2]*tensor->ne[1]*tensor->nb[0] + i1*tensor->ne[3]*tensor->ne[2]*tensor->nb[1] + i2*tensor->ne[3]*tensor->nb[2] + i3*tensor->nb[3];
+        ggml_unravel_index(tensor, index_cont, &id[0], &id[1], &id[2], &id[3]); // untested
+        printf("NONCONT");
+        return;
+        i0 = id[0];
+        i1 = id[1];
+        i2 = id[2];
+        i3 = id[3];
+        data = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3]; // untested
+    } else
+    {
+        data = (char *) tensor->data + i0*tensor->ne[3]*tensor->ne[2]*tensor->ne[1]*tensor->nb[0] + i1*tensor->ne[3]*tensor->ne[2]*tensor->nb[1] + i2*tensor->ne[3]*tensor->nb[2] + i3*tensor->nb[3];
+        // void * data = (char *) tensor->data + i0*tensor->nb[0] + i1*tensor->nb[1] + i2*tensor->nb[2] + i3*tensor->nb[3];
+    }
+    
+    
+    switch (tensor->type) {
+        case GGML_TYPE_I8:
+            printf("%8d", *((int8_t *) data));
+            break;
+        case GGML_TYPE_I16:
+            printf("%8d", *((int16_t *) data));
+            break;
+        case GGML_TYPE_I32:
+            printf("%8d", *((int32_t *) data));
+
+            break;
+        case GGML_TYPE_F16:
+            printf("%8.4f", GGML_FP16_TO_FP32(*((ggml_fp16_t *) data)));
+            break;
+        case GGML_TYPE_F32:
+            printf("%8.4f", *((float *) data));
+            break;
+        default:
+            printf("UNKTYPE");
+            break;
+    }
+}
+void ggml_printTensorSample(const char *prefix, const struct ggml_tensor * tensor_in) {
+    struct ggml_tensor tensor_dummy; // avoid any ctx
+    struct ggml_tensor * tensor = &tensor_dummy;
+
+    if (tensor_in->backend != GGML_BACKEND_CPU) {
+        // for any mmap solution we can actually set the CPU data of a tensor during load even if it's GPU offloaded
+        // this shouldn't have a negative effect, worked well in ggllm, saves the need of tensor_get operations for weights
+        if (tensor_in->buffer == NULL) {
+            printf("ggml_printTensorSample: tensor buffer is NULL\n");
+            return;
+        }
+        tensor->data = (char *) malloc(ggml_nbytes(tensor_in));
+        ggml_backend_tensor_get(tensor_in, tensor->data, 0, ggml_nbytes(tensor_in));
+        memcpy(tensor->name, tensor_in->name, sizeof(tensor->name));
+        tensor->type = tensor_in->type;
+        tensor->ne[0] = tensor_in->ne[0];
+        tensor->ne[1] = tensor_in->ne[1];
+        tensor->ne[2] = tensor_in->ne[2];
+        tensor->ne[3] = tensor_in->ne[3];
+        tensor->nb[0] = tensor_in->nb[0];
+        tensor->nb[1] = tensor_in->nb[1];
+        tensor->nb[2] = tensor_in->nb[2];
+        tensor->nb[3] = tensor_in->nb[3];
+        tensor->backend = GGML_BACKEND_CPU;
+        tensor->op = tensor_in->op;
+        tensor->view_offs = tensor_in->view_offs;
+        tensor->view_src = tensor_in->view_src;
+    } else
+    {
+        tensor = tensor_in;
+        if (tensor->data == NULL) {
+            printf("ggml_printTensorSample: tensor data is NULL\n");
+            return;
+        }
+    }
+
+    const char *sep = "+-------------------------------------------------------------------------------------------+\n";
+
+    const int MAX_ELEMENTS_ROW = 10;
+    const int MAX_ELEMENTS_COL = 6;
+    const int MAX_ELEMENTS_LAYER = 3;  // layered
+    const int MAX_ELEMENTS_BATCH = 2;   // repeated display
+    const char *dimensionLabels[] = {"Row", "Col", "Layer", "Batch"};
+
+    printf("\n%s| Content of %s \"%s\" (%d dim)\n", sep, prefix, tensor->name, ggml_n_dims(tensor));
+    printf("| Total Elements : [ ");
+    for (int i = 0; i < ggml_n_dims(tensor); i++)
+        printf("%s:%-3" PRId64 " ", dimensionLabels[i], tensor->ne[i]);
+    printf("]\n%s", sep);
+
+    int n_dims = ggml_n_dims(tensor);
+
+    if (n_dims == 1) {
+        printf("| 1: ");
+        for(int i = 0; i < tensor->ne[0] && i < MAX_ELEMENTS_ROW; i++){
+            ggml_print_f32_index(tensor, i, 0, 0, 0);
+            if(i == MAX_ELEMENTS_ROW - 1 && tensor->ne[0] > MAX_ELEMENTS_ROW) printf(", ..");
+        }
+        if(MAX_ELEMENTS_ROW < tensor->ne[0]) printf(", ..");
+        printf("\n%s", sep);
+    }
+    else if (n_dims == 2) {
+        for(int i = 0; i < tensor->ne[0] && i < MAX_ELEMENTS_ROW; i++){
+            printf("| %d: ", i+1);
+            for(int j = 0; j < tensor->ne[1] && j < MAX_ELEMENTS_COL; j++){
+                ggml_print_f32_index(tensor, i, j, 0, 0);
+                if(j == MAX_ELEMENTS_COL - 1 && tensor->ne[1] > MAX_ELEMENTS_COL) printf(", ..");
+            }
+            printf("\n");
+        }
+        if(MAX_ELEMENTS_ROW < tensor->ne[0]) printf("     .. additional rows\n");
+        printf("%s", sep);
+    } else if(n_dims == 3) {
+        for(int i = 0; i < tensor->ne[0] && i < MAX_ELEMENTS_ROW; i++){
+            printf("| Row %d: ", i+1);
+            for(int j = 0; j < tensor->ne[1] && j < MAX_ELEMENTS_COL; j++){
+                printf("[");
+                for(int k = 0; k < tensor->ne[2] && k < MAX_ELEMENTS_LAYER; k++){
+                    ggml_print_f32_index(tensor, i, j, k, 0);
+                    if(k < tensor->ne[2] - 1 && k < MAX_ELEMENTS_LAYER - 1)
+                        printf(", ");
+                }
+                if(MAX_ELEMENTS_LAYER < tensor->ne[2]) printf(", ..");
+                printf("] ");
+            }
+            printf("\n");
+        }
+        if(MAX_ELEMENTS_ROW < tensor->ne[0]) printf("     ... additional layers\n");
+        printf("%s", sep);
+    } else if(n_dims == 4) {
+        for(int batch = 0; batch < tensor->ne[0] && batch < MAX_ELEMENTS_BATCH; batch++){
+            printf("Batch %d\n", batch+1);
+            for(int i = 0; i < tensor->ne[1] && i < MAX_ELEMENTS_ROW; i++){
+                printf("| Row %d: ", i+1);
+                for(int j = 0; j < tensor->ne[2] && j < MAX_ELEMENTS_COL; j++){
+                    printf("[");
+                    for(int k = 0; k < tensor->ne[3] && k < MAX_ELEMENTS_LAYER; k++){
+                        ggml_print_f32_index(tensor, batch, i, j, k);
+                        if(k < tensor->ne[3] - 1 && k < MAX_ELEMENTS_LAYER - 1)
+                            printf(", ");
+                    }
+                    if(MAX_ELEMENTS_LAYER < tensor->ne[3]) printf(", ..");
+                    printf("] ");
+                }
+                printf("\n");
+            }
+            if(MAX_ELEMENTS_BATCH < tensor->ne[0]) printf("     ... additional batches\n");
+            printf("%s", sep);
+        }
+    }
+    if (tensor->backend != GGML_BACKEND_CPU)
+        free(tensor->data);
+}
+
+void ggml_tensor_printf(const struct ggml_tensor *tensor, char *prefix, int line,  bool extended, bool print_sample) {
+    char tmp_str[256] = {0};
+    int pos=0;
+    const char *sep = "+----------------------+----------------------+----------------------+----------------------+";
+    const char *sep_border = "+======================+======================+======================+======================+";
+    printf("%s\n",  sep_border);
+    printf("| %s:%d\n", prefix,line);
+    printf("| %-32s [%s type]\n",  tensor->name, ggml_type_name(tensor->type));
+    printf("%s\n",  sep);
+    char strides[256] = {0};
+    /**
+        // nb[0] = sizeof(type)
+        // nb[1] = nb[0]   * ne[0] + padding
+        // nb[i] = nb[i-1] * ne[i-1]
+    */
+    {
+        strides[0] = '\0';
+        for (int i = 0; i < ggml_n_dims(tensor); i++) {
+            char dim_str[20];
+            snprintf(dim_str, sizeof(dim_str), "%" PRId64, tensor->nb[i]);
+            strncat(strides, dim_str, sizeof(strides) - strlen(strides) - 1);
+            if (i != ggml_n_dims(tensor) - 1) {
+                strncat(strides, "x", sizeof(strides) - strlen(strides) - 1);
+            }
+        }
+    }
+
+    printf("| %-20s | %-20s | %-20s | %-20s |\n",  "Dimensions", "Strides", "Layer id", "Backend");
+    int layer_id=-1; // tensor->meta structure not available
+    printf("| %-20d | %-20s | %-20d | %-20s |\n",  ggml_n_dims(tensor), strides, layer_id, tensor->backend == GGML_BACKEND_CPU ? "CPU" : ((tensor->backend == GGML_BACKEND_GPU) ? "GPU" : "GPU_SPLIT"));
+    printf("%s\n",  sep);
+    pos = 0;
+    for (int i = 0; i < ggml_n_dims(tensor); i++) {
+        pos += snprintf(tmp_str + pos, sizeof(tmp_str) - pos, "%" PRId64, tensor->ne[i]);
+        if (i != ggml_n_dims(tensor) - 1) {
+            pos += snprintf(tmp_str + pos, sizeof(tmp_str) - pos, " x ");
+        }
+    }
+    printf("| %-20s | %-20s | %-20s | %-20s |\n",  "Elements", "Src0", "Src1","Operation");
+    printf("| %-20s |",  tmp_str);
+
+    if (tensor->src[0]) {
+        pos = 0;
+        for (int i = 0; i < ggml_n_dims(tensor->src[0]); i++) {
+            pos += snprintf(tmp_str + pos, sizeof(tmp_str) - pos, "%" PRId64, tensor->src[0]->ne[i]);
+            if (i != ggml_n_dims(tensor->src[0]) - 1) {
+                pos += snprintf(tmp_str + pos, sizeof(tmp_str) - pos, " x ");
+            }
+        }
+        printf(" %-20s |", tmp_str);
+    } else {
+        printf(" %-20s |", "N/A");
+    }
+    if (tensor->src[1]) {
+        pos = 0;
+        for (int i = 0; i < ggml_n_dims(tensor->src[1]); i++) {
+            pos += snprintf(tmp_str + pos, sizeof(tmp_str) - pos, "%" PRId64, tensor->src[1]->ne[i]);
+            if (i != ggml_n_dims(tensor->src[1]) - 1) {
+                pos += snprintf(tmp_str + pos, sizeof(tmp_str) - pos, " x ");
+            }
+        }
+        printf(" %-20s |", tmp_str);
+    } else {
+        printf(" %-20s |", "N/A");
+    }
+    printf(" %-20s |", tensor->op > 0 ? ggml_op_name(tensor->op) : "N/A");
+    printf("\n");
+    printf("%s\n",  sep);
+
+    if (extended) {
+        bool is_transposed = ggml_is_transposed(tensor);
+        bool is_permuted = ggml_is_permuted(tensor);
+        bool is_cont = ggml_is_contiguous(tensor);
+        printf("| %-17s%s | %-17s%s | %-17s%s | %-6s%11.2f MB |\n", "Transposed:", is_transposed ? "Yes" : "No ", "Permuted:", is_permuted ? "Yes" : "No ", "Contiguous:", is_cont ? "Yes" : "No ","Size:", ggml_nbytes(tensor)/(1024.0*1024.0));
+    }
+
+    if (extended) {
+        if (tensor->src[0] && strlen(tensor->src[0]->name)) {
+            printf("| %-20s | ", "Src0 name:");
+            printf("%-66s |\n", tensor->src[0]->name);
+        }
+        if (tensor->src[1] && strlen(tensor->src[1]->name)) {
+            printf("| %-20s | ", "Src1 name:");
+            printf("%-66s |\n", tensor->src[1]->name);
+        }
+        printf("%s\n\n",  sep);
+    }
+
+    if (print_sample) {
+        if (extended) {
+            if (tensor->src[0] && tensor->src[0]->ne[0]) {
+                ggml_printTensorSample("src0", tensor->src[0]);
+            }
+            if (tensor->src[1] && tensor->src[1]->ne[0]) {
+                ggml_printTensorSample("src1", tensor->src[1]);
+            }
+        }
+        ggml_printTensorSample("dst", tensor);
+    }
+    printf("%s\n",  sep_border);
+}
+
