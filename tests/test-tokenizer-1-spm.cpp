@@ -89,7 +89,7 @@ int main(int argc, char ** argv) {
                     std::vector<llama_token> tokens = llama_tokenize(ctx, str, false, true);
                     std::string check = llama_detokenize(ctx, tokens);
                     if (cp != 9601 && str != check) {
-                        fprintf(stderr, "error: codepoint %x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
+                        fprintf(stderr, "error: codepoint 0x%x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
                                 cp, check.c_str(), check.length(), str.c_str(), str.length());
                         std::exit(3);
                     }
