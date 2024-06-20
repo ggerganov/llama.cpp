@@ -2663,7 +2663,7 @@ static bool llama_download_file(const std::string & url, const std::string & pat
             }
         };
 
-        std::unique_ptr<FILE, FILE_deleter> outfile(fopen(path_temporary.c_str(), "wb"), FILE_deleter());
+        std::unique_ptr<FILE, FILE_deleter> outfile(fopen(path_temporary.c_str(), "wb"));
         if (!outfile) {
             fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path.c_str());
             return false;
