@@ -296,6 +296,8 @@ class Model:
                 ))
 
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
+                    # TODO: cleaner model-specific per-tensor types
+                    # NOTE: Q1_3 is only relevant for BitNet 1.58b
                     if self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3 and not any(
                         self.match_model_tensor_name(new_name, key, None)
                         for key in [
