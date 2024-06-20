@@ -30,34 +30,34 @@ void ggml_cuda_op_mul_mat_q(
 
     switch (src0->type) {
         case GGML_TYPE_Q4_0:
-            mul_mat_q_case<GGML_TYPE_Q4_0>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q4_0>(ctx, args, stream);
             break;
         case GGML_TYPE_Q4_1:
-            mul_mat_q_case<GGML_TYPE_Q4_1>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q4_1>(ctx, args, stream);
             break;
         case GGML_TYPE_Q5_0:
-            mul_mat_q_case<GGML_TYPE_Q5_0>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q5_0>(ctx, args, stream);
             break;
         case GGML_TYPE_Q5_1:
-            mul_mat_q_case<GGML_TYPE_Q5_1>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q5_1>(ctx, args, stream);
             break;
         case GGML_TYPE_Q8_0:
-            mul_mat_q_case<GGML_TYPE_Q8_0>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q8_0>(ctx, args, stream);
             break;
         case GGML_TYPE_Q2_K:
-            mul_mat_q_case<GGML_TYPE_Q2_K>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q2_K>(ctx, args, stream);
             break;
         case GGML_TYPE_Q3_K:
-            mul_mat_q_case<GGML_TYPE_Q3_K>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q3_K>(ctx, args, stream);
             break;
         case GGML_TYPE_Q4_K:
-            mul_mat_q_case<GGML_TYPE_Q4_K>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q4_K>(ctx, args, stream);
             break;
         case GGML_TYPE_Q5_K:
-            mul_mat_q_case<GGML_TYPE_Q5_K>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q5_K>(ctx, args, stream);
             break;
         case GGML_TYPE_Q6_K:
-            mul_mat_q_case<GGML_TYPE_Q6_K>(args, stream);
+            mul_mat_q_case<GGML_TYPE_Q6_K>(ctx, args, stream);
             break;
         default:
             GGML_ASSERT(false);

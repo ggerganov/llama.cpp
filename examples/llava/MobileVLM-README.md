@@ -9,12 +9,12 @@ The implementation is based on llava, and is compatible with llava and mobileVLM
 Notice: The overall process of model inference for both **MobileVLM** and **MobileVLM_V2** models is the same, but the process of model conversion is a little different. Therefore, using **MobileVLM-1.7B** as an example, the different conversion step will be shown.
 
 ## Usage
-Build with cmake or run `make llava-cli` to build it.
+Build with cmake or run `make llama-llava-cli` to build it.
 
-After building, run: `./llava-cli` to see the usage. For example:
+After building, run: `./llama-llava-cli` to see the usage. For example:
 
 ```sh
-./llava-cli -m MobileVLM-1.7B/ggml-model-q4_k.gguf \
+./llama-llava-cli -m MobileVLM-1.7B/ggml-model-q4_k.gguf \
     --mmproj MobileVLM-1.7B/mmproj-model-f16.gguf \
     --image path/to/an/image.jpg \
     -p "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: <image>\nWho is the author of this book? Answer the question using a single word or phrase. ASSISTANT:"
@@ -62,7 +62,7 @@ python ./examples/convert-legacy-llama.py path/to/MobileVLM-1.7B
 
 5. Use `quantize` to convert LLaMA part's DataType from `fp16` to `q4_k`
 ```sh
-./quantize path/to/MobileVLM-1.7B/ggml-model-f16.gguf path/to/MobileVLM-1.7B/ggml-model-q4_k.gguf q4_k_s
+./llama-quantize path/to/MobileVLM-1.7B/ggml-model-f16.gguf path/to/MobileVLM-1.7B/ggml-model-q4_k.gguf q4_k_s
 ```
 
 Now both the LLaMA part and the image encoder is in the `MobileVLM-1.7B` directory.
@@ -82,7 +82,7 @@ refer to `android/adb_run.sh`, modify resources' `name` and `path`
 ### case 1
 **input**
 ```sh
-/data/local/tmp/llava-cli \
+/data/local/tmp/llama-llava-cli \
     -m /data/local/tmp/ggml-model-q4_k.gguf \
     --mmproj /data/local/tmp/mmproj-model-f16.gguf \
     -t 4 \
@@ -102,7 +102,7 @@ llama_print_timings:       total time =   34731.93 ms
 ### case 2
 **input**
 ```sh
-/data/local/tmp/llava-cli \
+/data/local/tmp/llama-llava-cli \
     -m /data/local/tmp/ggml-model-q4_k.gguf \
     --mmproj /data/local/tmp/mmproj-model-f16.gguf \
     -t 4 \
@@ -126,7 +126,7 @@ llama_print_timings:       total time =   34570.79 ms
 #### llava-cli release-b2005
 **input**
 ```sh
-/data/local/tmp/llava-cli \
+/data/local/tmp/llama-llava-cli \
     -m /data/local/tmp/ggml-model-q4_k.gguf \
     --mmproj /data/local/tmp/mmproj-model-f16.gguf \
     -t 4 \
@@ -200,7 +200,7 @@ make LLAMA_CUDA=1 CUDA_DOCKER_ARCH=sm_87 LLAMA_CUDA_F16=1 -j 32
 ### case 1
 **input**
 ```sh
-./llava-cli \
+./llama-llava-cli \
     -m /data/local/tmp/ggml-model-q4_k.gguf \
     --mmproj /data/local/tmp/mmproj-model-f16.gguf \
     --image /data/local/tmp/demo.jpeg \
@@ -224,7 +224,7 @@ llama_print_timings:       total time =    1352.63 ms /   252 tokens
 ### case 2
 **input**
 ```sh
-./llava-cli \
+./llama-llava-cli \
     -m /data/local/tmp/ggml-model-q4_k.gguf \
     --mmproj /data/local/tmp/mmproj-model-f16.gguf \
     -p "A chat between a curious user and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the user's questions. USER: <image>\nWhat is in the image? ASSISTANT:" \

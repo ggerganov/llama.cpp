@@ -477,6 +477,9 @@ class Model:
         if chkhsh == "c136ed14d01c2745d4f60a9596ae66800e2b61fa45643e72436041855ad4089d":
             # ref: https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct
             res = "smaug-bpe"
+        if chkhsh == "c7ea5862a53e4272c035c8238367063e2b270d51faa48c0f09e9d5b54746c360":
+            # ref: https://huggingface.co/LumiOpen/Poro-34B-chat
+            res = "poro-chat"
         if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
             res = "jina-v2-code"
@@ -1671,6 +1674,12 @@ class Qwen2MoeModel(Model):
         super().set_gguf_parameters()
         if (n_experts := self.hparams.get("num_experts")) is not None:
             self.gguf_writer.add_expert_count(n_experts)
+        if (moe_intermediate_size := self.hparams.get("moe_intermediate_size")) is not None:
+            self.gguf_writer.add_expert_feed_forward_length(moe_intermediate_size)
+            logger.info(f"gguf: expert feed forward length = {moe_intermediate_size}")
+        if (shared_expert_intermediate_size := self.hparams.get('shared_expert_intermediate_size')) is not None:
+            self.gguf_writer.add_expert_shared_feed_forward_length(shared_expert_intermediate_size)
+            logger.info(f"gguf: expert shared feed forward length = {shared_expert_intermediate_size}")
 
     _experts: list[dict[str, Tensor]] | None = None
 
