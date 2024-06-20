@@ -2908,10 +2908,10 @@ std::vector<llama_token> llama_tokenize(
 std::string llama_token_to_piece(const struct llama_context * ctx, llama_token token, bool special) {
     std::string piece;
     piece.resize(piece.capacity());  // using string internal cache, 15 bytes + '\n'
-    const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), special);
+    const int n_chars = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
     if (n_chars < 0) {
         piece.resize(-n_chars);
-        int check = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), special);
+        int check = llama_token_to_piece(llama_get_model(ctx), token, &piece[0], piece.size(), 0, special);
         GGML_ASSERT(check == -n_chars);
     }
     else {
