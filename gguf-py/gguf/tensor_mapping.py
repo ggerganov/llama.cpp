@@ -24,6 +24,7 @@ class TensorNameMap:
             "backbone.embedding",                        # mamba
             "backbone.embeddings",                       # mamba-hf
             "transformer.in_out_embed",                  # Grok
+            "embedding.word_embeddings",                 # chatglm
         ),
 
         # Token type embeddings
@@ -52,6 +53,7 @@ class TensorNameMap:
             "output",                    # llama-pth bloom internlm2
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
+            "output_layer",              # chatglm
         ),
 
         # Output norm
@@ -68,11 +70,13 @@ class TensorNameMap:
             "model.norm_f",                            # mamba-qbert
             "backbone.norm_f",                         # mamba
             "transformer.rms_norm",                    # Grok
+            "encoder.final_layernorm",                 # chatglm
         ),
 
         # Rope frequencies
         MODEL_TENSOR.ROPE_FREQS: (
             "rope.freqs",  # llama-pth
+            "rotary_pos_emb.inv_freq",  # chatglm
         ),
     }
 
@@ -97,6 +101,7 @@ class TensorNameMap:
             "backbone.layers.{bid}.norm",                           # mamba
             "transformer.decoder_layer.{bid}.rms_norm",             # Grok
             "transformer.blocks.{bid}.norm_attn_norm.norm_1",       # dbrx
+            "encoder.layers.{bid}.input_layernorm",                 # chatglm
         ),
 
         # Attention norm 2
@@ -118,7 +123,8 @@ class TensorNameMap:
             "h.{bid}.attn.c_attn",                                                 # gpt2
             "transformer.h.{bid}.mixer.Wqkv",                                      # phi2
             "encoder.layers.{bid}.attn.Wqkv",                                      # nomic-bert
-            "model.layers.{bid}.self_attn.qkv_proj"                                # phi3
+            "model.layers.{bid}.self_attn.qkv_proj",                               # phi3
+            "encoder.layers.{bid}.self_attention.query_key_value",                 # chatglm
         ),
 
         # Attention query
@@ -129,7 +135,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.q_proj",                           # gpt-j
             "model.layers.layers.{bid}.self_attn.q_proj",                # plamo
             "model.layers.{bid}.attention.wq",                           # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.query" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.query",# Grok
         ),
 
         # Attention key
@@ -141,7 +147,7 @@ class TensorNameMap:
             "transformer.h.{bid}.attn.k",                              # refact
             "model.layers.layers.{bid}.self_attn.k_proj",              # plamo
             "model.layers.{bid}.attention.wk",                         # internlm2
-            "transformer.decoder_layer.{bid}.multi_head_attention.key" # Grok
+            "transformer.decoder_layer.{bid}.multi_head_attention.key",# Grok
         ),
 
         # Attention value
@@ -176,6 +182,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.attn.out_proj",                           # nomic-bert
             "transformer.decoder_layer.{bid}.multi_head_attention.linear",  # Grok
             "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj",        # dbrx
+            "encoder.layers.{bid}.self_attention.dense",                    # chatglm
         ),
 
         # Attention output norm
@@ -207,6 +214,7 @@ class TensorNameMap:
             "h.{bid}.ln_2",                                                  # gpt2
             "model.layers.{bid}.ffn_norm",                                   # internlm2
             "transformer.decoder_layer.{bid}.rms_norm_2",                    # Grok
+            "encoder.layers.{bid}.post_attention_layernorm",                 # chatglm
         ),
 
         MODEL_TENSOR.FFN_GATE_INP: (
@@ -246,6 +254,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.c_fc",                            # starcoder2
             "encoder.layer.{bid}.mlp.gated_layers_v",                 # jina-bert-v2
             "model.layers.{bid}.residual_mlp.w3",                     # arctic
+            "encoder.layers.{bid}.mlp.dense_h_to_4h",                 # chatglm
         ),
 
         MODEL_TENSOR.FFN_UP_EXP: (
@@ -313,6 +322,7 @@ class TensorNameMap:
             "encoder.layer.{bid}.mlp.wo",                             # jina-bert-v2
             "model.layers.{bid}.residual_mlp.w2",                     # arctic
             "encoder.layer.{bid}.mlp.down_layer",                     # jina-bert-v2
+            "encoder.layers.{bid}.mlp.dense_4h_to_h",                 # chatglm
         ),
 
         MODEL_TENSOR.FFN_DOWN_EXP: (
