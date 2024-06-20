@@ -11932,12 +11932,10 @@ struct llm_build_context {
 
                 struct ggml_tensor *tmp = ggml_mul_mat(ctx0, model.layers[il].ffn_up, cur);
                 tmp = ggml_mul(ctx0, tmp, model.layers[il].ffn_up_scale);
-    
                 cb(tmp, "ffn_up", il);
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].ffn_gate, cur);
                 cur = ggml_mul(ctx0, cur, model.layers[il].ffn_gate_scale);
-
                 cb(cur, "ffn_gate", il);
 
                 cur = ggml_silu(ctx0, cur);
