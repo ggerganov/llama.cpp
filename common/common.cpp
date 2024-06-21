@@ -6,7 +6,6 @@
 #include "llama.h"
 
 #include <algorithm>
-#include <cassert>
 #include <cinttypes>
 #include <cmath>
 #include <codecvt>
@@ -1576,6 +1575,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.out_file = argv[i];
+        params.cvector_outfile = argv[i];
         return true;
     }
     if (arg == "-ofreq" || arg == "--output-frequency") {
@@ -1608,6 +1608,55 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
             return true;
         }
         params.i_chunk = std::stoi(argv[i]);
+        return true;
+    }
+    // cvector params
+    if (arg == "--completions-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.cvector_completions_file = argv[i];
+        return true;
+    }
+    if (arg == "--positive-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.cvector_positive_file = argv[i];
+        return true;
+    }
+    if (arg == "--negative-file") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.cvector_negative_file = argv[i];
+        return true;
+    }
+    if (arg == "--completions") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_completions = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--pca-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_pca_batch = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--pca-iter") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.n_pca_iterations = std::stoi(argv[i]);
         return true;
     }
 #ifndef LOG_DISABLE_LOGS
@@ -1930,6 +1979,16 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "Each log file will have unique name: \"<name>.<ID>.log\"" });
     options.push_back({ "logging",     "       --log-append",           "Don't truncate the old log file." });
 #endif // LOG_DISABLE_LOGS
+
+    options.push_back({ "cvector" });
+    options.push_back({ "cvector",     "-o,    --output FNAME",         "output file (default: '%s')", params.cvector_outfile.c_str() });
+    options.push_back({ "cvector",     "       --positive-file FNAME",  "positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str() });
+    options.push_back({ "cvector",     "       --negative-file FNAME",  "negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str() });
+    options.push_back({ "cvector",     "       --completions-file FNAME",
+                                                                        "completions file (default: '%s')", params.cvector_completions_file.c_str() });
+    options.push_back({ "cvector",     "       --completions N",        "number of lines of completions file to use (default: %d)", params.n_completions });
+    options.push_back({ "cvector",     "       --batch-pca N",          "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
+    options.push_back({ "cvector",     "       --iter-pca N",           "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
 
     printf("usage: %s [options]\n", argv[0]);
 
@@ -2597,7 +2656,14 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         }
 
         // Set the output file
-        std::unique_ptr<FILE, decltype(&fclose)> outfile(fopen(path_temporary.c_str(), "wb"), fclose);
+
+        struct FILE_deleter {
+            void operator()(FILE * f) const {
+                fclose(f);
+            }
+        };
+
+        std::unique_ptr<FILE, FILE_deleter> outfile(fopen(path_temporary.c_str(), "wb"));
         if (!outfile) {
             fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path.c_str());
             return false;

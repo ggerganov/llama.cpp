@@ -42,7 +42,6 @@ build:
             - cmake/**
             - CMakeLists.txt
             - CMakePresets.json
-            - codecov.yml
 examples:
     - changed-files:
         - any-glob-to-any-file: examples/**
