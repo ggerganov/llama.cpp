@@ -4313,6 +4313,52 @@ struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * nam
     return NULL;
 }
 
+//////// LORA
+
+struct lora_tensor_pair* build_lora_weights_map(struct ggml_context* ctx) {
+    struct lora_tensor_pair* pair = malloc(sizeof(struct lora_tensor_pair));
+    if (!pair) return NULL;
+    pair->pairs = NULL;
+    pair->count = 0;
+    pair->capacity = 0;
+
+    struct ggml_object * obj = ctx->objects_begin;
+    char * const mem_buffer = ctx->mem_buffer;
+
+    while (obj != NULL) {
+        if (obj->type == GGML_OBJECT_TYPE_TENSOR) {
+            struct ggml_tensor * tensor = (struct ggml_tensor *)(mem_buffer + obj->offs);
+            char * tensor_name = tensor->name;
+
+            if (strlen(tensor_name) > 6 && (strcmp(tensor_name + strlen(tensor_name) - 6, ".loraA") == 0 ||
+                                            strcmp(tensor_name + strlen(tensor_name) - 6, ".loraB") == 0)) {
+                if (pair->count == pair->capacity) {
+                    pair->capacity = pair->capacity > 0 ? pair->capacity * 2 : 4;
+                    pair->pairs = realloc(pair->pairs, pair->capacity * sizeof(struct lora_tensor_info));
+                }
+
+                pair->pairs[pair->count].name = strdup(tensor_name);
+                pair->pairs[pair->count].tensor = tensor;
+                pair->count++;
+            }
+        }
+        obj = obj->next;
+    }
+
+    return pair;
+}
+
+void free_lora_tensor_pair(struct lora_tensor_pair* pair) {
+    if (!pair) return;
+    for (int i = 0; i < pair->count; i++) {
+        free(pair->pairs[i].name);
+    }
+    free(pair->pairs);
+    free(pair);
+}
+
+//////// LORA
+
 ////////////////////////////////////////////////////////////////////////////////
 
 // ggml_dup

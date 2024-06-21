@@ -789,6 +789,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.model = argv[i];
         return true;
     }
+    if (arg == "-hl" || arg == "--hot-lora") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.hot_lora = argv[i];
+        return true;
+    }
     if (arg == "-md" || arg == "--model-draft") {
         if (++i >= argc) {
             invalid_param = true;

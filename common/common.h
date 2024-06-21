@@ -100,6 +100,7 @@ struct gpt_params {
 
     std::string model                = ""; // model path
     std::string model_draft          = ""; // draft model for speculative decoding
+    std::string hot_lora             = ""; // lora model path for hot swapping
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = ""; // model url to download
     std::string hf_repo              = ""; // HF repo

@@ -835,6 +835,25 @@ extern "C" {
     GGML_API struct ggml_tensor * ggml_get_next_tensor (const struct ggml_context * ctx, struct ggml_tensor * tensor);
     GGML_API struct ggml_tensor * ggml_get_tensor(struct ggml_context * ctx, const char * name);
 
+    struct lora_tensor_info {
+        char* name;
+        struct ggml_tensor* tensor;
+        };
+
+        struct lora_tensor_pair {
+        struct lora_tensor_info* pairs; // Dynamic array of tensor pairs
+        int count;
+        int capacity;
+        };
+
+        // Function to build tensor pairs
+        struct lora_tensor_pair* build_lora_weights_map(struct ggml_context* ctx);
+
+        // Cleanup function for lora_tensor_pair
+        void free_lora_tensor_pair(struct lora_tensor_pair* pair);
+
+
+
     GGML_API struct ggml_tensor * ggml_set_zero(struct ggml_tensor * tensor);
     GGML_API struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value);
     GGML_API struct ggml_tensor * ggml_set_f32 (struct ggml_tensor * tensor, float value);
