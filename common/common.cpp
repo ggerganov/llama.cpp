@@ -6,7 +6,6 @@
 #include "llama.h"
 
 #include <algorithm>
-#include <cassert>
 #include <cinttypes>
 #include <cmath>
 #include <codecvt>
@@ -542,6 +541,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         /**/ if (value == "none") { params.pooling_type = LLAMA_POOLING_TYPE_NONE; }
         else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
         else if (value == "cls") { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
+        else if (value == "last") { params.pooling_type = LLAMA_POOLING_TYPE_LAST; }
         else { invalid_param = true; }
         return true;
     }
@@ -1870,6 +1870,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
 
     options.push_back({ "backend" });
     options.push_back({ "*",           "       --rpc SERVERS",          "comma separated list of RPC servers" });
+
     if (llama_supports_mlock()) {
         options.push_back({ "*",           "       --mlock",                "force system to keep model in RAM rather than swapping or compressing" });
     }
@@ -2657,7 +2658,14 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         }
 
         // Set the output file
-        std::unique_ptr<FILE, decltype(&fclose)> outfile(fopen(path_temporary.c_str(), "wb"), fclose);
+
+        struct FILE_deleter {
+            void operator()(FILE * f) const {
+                fclose(f);
+            }
+        };
+
+        std::unique_ptr<FILE, FILE_deleter> outfile(fopen(path_temporary.c_str(), "wb"));
         if (!outfile) {
             fprintf(stderr, "%s: error opening local file for writing: %s\n", __func__, path.c_str());
             return false;
