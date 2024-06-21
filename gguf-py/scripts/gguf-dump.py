@@ -364,6 +364,7 @@ def main() -> None:
     parser.add_argument("--no-tensors", action="store_true", help="Don't dump tensor metadata")
     parser.add_argument("--json",       action="store_true", help="Produce JSON output")
     parser.add_argument("--json-array", action="store_true", help="Include full array values in JSON output (long)")
+    parser.add_argument("--data-offset", action="store_true", help="Start of data offset")
     parser.add_argument("--markdown",   action="store_true", help="Produce markdown output")
     parser.add_argument("--verbose",    action="store_true", help="increase output verbosity")
 
@@ -371,7 +372,7 @@ def main() -> None:
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
-    if not args.json and not args.markdown:
+    if not args.json and not args.markdown and not args.data_offset:
         logger.info(f'* Loading: {args.model}')
 
     reader = GGUFReader(args.model, 'r')
@@ -380,6 +381,8 @@ def main() -> None:
         dump_metadata_json(reader, args)
     elif args.markdown:
         dump_markdown_metadata(reader, args)
+    elif args.data_offset:
+        print(reader.start_data_offset)
     else:
         dump_metadata(reader, args)
 

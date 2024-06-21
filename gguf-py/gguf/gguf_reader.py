@@ -69,6 +69,7 @@ class GGUFReader:
     # I - same as host, S - swapped
     byte_order: Literal['I'] | Literal['S'] = 'I'
     alignment: int = GGUF_DEFAULT_ALIGNMENT
+    start_data_offset: int
 
     # Note: Internal helper, API may change.
     gguf_scalar_to_np: dict[GGUFValueType, type[np.generic]] = {
@@ -117,6 +118,7 @@ class GGUFReader:
         padding = offs % self.alignment
         if padding != 0:
             offs += self.alignment - padding
+        self.start_data_offset = offs
         self._build_tensors(offs, tensors_fields)
 
     _DT = TypeVar('_DT', bound = npt.DTypeLike)
