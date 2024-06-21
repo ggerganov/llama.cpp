@@ -1760,6 +1760,7 @@ void ggml_vk_instance_init() {
                     [&devices, &new_id](const size_t k){
                         vk::PhysicalDeviceProperties2 old_props;
                         vk::PhysicalDeviceIDProperties old_id;
+                        old_props.pNext = &old_id;
                         devices[k].getProperties2(&old_props);
                         return std::equal(std::begin(old_id.deviceUUID), std::end(old_id.deviceUUID), std::begin(new_id.deviceUUID));
                     }
