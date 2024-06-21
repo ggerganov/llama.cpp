@@ -16322,7 +16322,6 @@ struct llama_context * llama_new_context_with_model(
     /// LORA
     struct export_lora_params * lora_params = new struct export_lora_params;
     struct lora_info lora;
-    // lora.filename = "./models/open-llama/lora-ggml-model-q8_0-hot-lora-LATEST.bin";
     lora.filename = params.hot_lora;
     if (strlen(params.hot_lora) > 0) {
             
