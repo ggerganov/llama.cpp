@@ -1745,31 +1745,37 @@ void ggml_vk_instance_init() {
 
         // Default to using all dedicated GPUs
         for (size_t i = 0; i < devices.size(); i++) {
-            vk::PhysicalDeviceProperties props = devices[i].getProperties();
+            vk::PhysicalDeviceProperties2 new_props;
+            vk::PhysicalDeviceDriverProperties new_driver;
+            vk::PhysicalDeviceIDProperties new_id;
+            new_props.pNext = &new_driver;
+            new_driver.pNext = &new_id;
+            devices[i].getProperties2(&new_props);
 
-            if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
+            if (new_props.properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
                 // Check if there are two physical devices corresponding to the same GPU
                 auto old_device = std::find_if(
                     vk_instance.device_indices.begin(),
                     vk_instance.device_indices.end(),
-                    [&devices, &props](const size_t k){ return devices[k].getProperties().deviceID == props.deviceID; }
+                    [&devices, &new_id](const size_t k){
+                        vk::PhysicalDeviceProperties2 old_props;
+                        vk::PhysicalDeviceIDProperties old_id;
+                        old_props.pNext = &old_id;
+                        devices[k].getProperties2(&old_props);
+                        return std::equal(std::begin(old_id.deviceUUID), std::end(old_id.deviceUUID), std::begin(new_id.deviceUUID));
+                    }
                 );
                 if (old_device == vk_instance.device_indices.end()) {
                     vk_instance.device_indices.push_back(i);
                 } else {
                     // There can be two physical devices corresponding to the same GPU if there are 2 different drivers
                     // This can cause error when splitting layers aross the devices, need to keep only 1
-                    VK_LOG_DEBUG("Device " << i << " and device " << *old_device << " have the same device id");
+                    VK_LOG_DEBUG("Device " << i << " and device " << *old_device << " have the same deviceUUID");
 
-                    vk::PhysicalDeviceProperties2 old_prop;
+                    vk::PhysicalDeviceProperties2 old_props;
                     vk::PhysicalDeviceDriverProperties old_driver;
-                    old_prop.pNext = &old_driver;
-                    devices[*old_device].getProperties2(&old_prop);
-
-                    vk::PhysicalDeviceProperties2 new_prop;
-                    vk::PhysicalDeviceDriverProperties new_driver;
-                    new_prop.pNext = &new_driver;
-                    devices[i].getProperties2(&new_prop);
+                    old_props.pNext = &old_driver;
+                    devices[*old_device].getProperties2(&old_props);
 
                     std::map<vk::DriverId, int> driver_priorities {};
                     int old_priority = std::numeric_limits<int>::max();
@@ -1777,7 +1783,7 @@ void ggml_vk_instance_init() {
 
                     // Check https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VkDriverId.html for the list of driver id
                     // Smaller number -> higher priority
-                    switch (old_prop.properties.vendorID) {
+                    switch (old_props.properties.vendorID) {
                         case VK_VENDOR_ID_AMD:
                             driver_priorities[vk::DriverId::eMesaRadv] = 1;
                             driver_priorities[vk::DriverId::eAmdOpenSource] = 2;
