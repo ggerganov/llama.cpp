@@ -49,6 +49,7 @@ class Keys:
         EXPERT_WEIGHTS_SCALE              = "{arch}.expert_weights_scale"
         POOLING_TYPE                      = "{arch}.pooling_type"
         LOGIT_SCALE                       = "{arch}.logit_scale"
+        DECODER_START_TOKEN_ID            = "{arch}.decoder_start_token_id"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -62,6 +63,7 @@ class Keys:
         CAUSAL            = "{arch}.attention.causal"
         Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
+        REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
@@ -97,6 +99,8 @@ class Keys:
         ADD_BOS          = "tokenizer.ggml.add_bos_token"
         ADD_EOS          = "tokenizer.ggml.add_eos_token"
         ADD_PREFIX       = "tokenizer.ggml.add_space_prefix"
+        REMOVE_EXTRA_WS  = "tokenizer.ggml.remove_extra_whitespaces"
+        PRECOMPILED_CHARSMAP = "tokenizer.ggml.precompiled_charsmap"
         HF_JSON          = "tokenizer.huggingface.json"
         RWKV             = "tokenizer.rwkv.world"
         CHAT_TEMPLATE    = "tokenizer.chat_template"
@@ -149,6 +153,7 @@ class MODEL_ARCH(IntEnum):
     OLMO       = auto()
     ARCTIC     = auto()
     DEEPSEEK2  = auto()
+    T5         = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -200,6 +205,32 @@ class MODEL_TENSOR(IntEnum):
     ATTN_KV_B          = auto()
     ATTN_Q_A_NORM      = auto()
     ATTN_KV_A_NORM     = auto()
+    DEC_ATTN_NORM      = auto()
+    DEC_ATTN_Q         = auto()
+    DEC_ATTN_K         = auto()
+    DEC_ATTN_V         = auto()
+    DEC_ATTN_OUT       = auto()
+    DEC_ATTN_REL_B     = auto()
+    DEC_CROSS_ATTN_NORM = auto()
+    DEC_CROSS_ATTN_Q   = auto()
+    DEC_CROSS_ATTN_K   = auto()
+    DEC_CROSS_ATTN_V   = auto()
+    DEC_CROSS_ATTN_OUT = auto()
+    DEC_CROSS_ATTN_REL_B = auto()
+    DEC_FFN_NORM       = auto()
+    DEC_FFN_DOWN       = auto()
+    DEC_FFN_UP         = auto()
+    DEC_OUTPUT_NORM    = auto()
+    ENC_ATTN_NORM      = auto()
+    ENC_ATTN_Q         = auto()
+    ENC_ATTN_K         = auto()
+    ENC_ATTN_V         = auto()
+    ENC_ATTN_OUT       = auto()
+    ENC_ATTN_REL_B     = auto()
+    ENC_FFN_NORM       = auto()
+    ENC_FFN_DOWN       = auto()
+    ENC_FFN_UP         = auto()
+    ENC_OUTPUT_NORM    = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -237,6 +268,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.OLMO:           "olmo",
     MODEL_ARCH.ARCTIC:         "arctic",
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
+    MODEL_ARCH.T5:             "t5",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -288,6 +320,32 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_KV_B:          "blk.{bid}.attn_kv_b",
     MODEL_TENSOR.ATTN_Q_A_NORM:      "blk.{bid}.attn_q_a_norm",
     MODEL_TENSOR.ATTN_KV_A_NORM:     "blk.{bid}.attn_kv_a_norm",
+    MODEL_TENSOR.DEC_ATTN_NORM:        "dec.blk.{bid}.attn_norm",
+    MODEL_TENSOR.DEC_ATTN_Q:           "dec.blk.{bid}.attn_q",
+    MODEL_TENSOR.DEC_ATTN_K:           "dec.blk.{bid}.attn_k",
+    MODEL_TENSOR.DEC_ATTN_V:           "dec.blk.{bid}.attn_v",
+    MODEL_TENSOR.DEC_ATTN_OUT:         "dec.blk.{bid}.attn_o",
+    MODEL_TENSOR.DEC_ATTN_REL_B:       "dec.blk.{bid}.attn_rel_b",
+    MODEL_TENSOR.DEC_CROSS_ATTN_NORM:  "dec.blk.{bid}.cross_attn_norm",
+    MODEL_TENSOR.DEC_CROSS_ATTN_Q:     "dec.blk.{bid}.cross_attn_q",
+    MODEL_TENSOR.DEC_CROSS_ATTN_K:     "dec.blk.{bid}.cross_attn_k",
+    MODEL_TENSOR.DEC_CROSS_ATTN_V:     "dec.blk.{bid}.cross_attn_v",
+    MODEL_TENSOR.DEC_CROSS_ATTN_OUT:   "dec.blk.{bid}.cross_attn_o",
+    MODEL_TENSOR.DEC_CROSS_ATTN_REL_B: "dec.blk.{bid}.cross_attn_rel_b",
+    MODEL_TENSOR.DEC_FFN_NORM:         "dec.blk.{bid}.ffn_norm",
+    MODEL_TENSOR.DEC_FFN_DOWN:         "dec.blk.{bid}.ffn_down",
+    MODEL_TENSOR.DEC_FFN_UP:           "dec.blk.{bid}.ffn_up",
+    MODEL_TENSOR.DEC_OUTPUT_NORM:      "dec.output_norm",
+    MODEL_TENSOR.ENC_ATTN_NORM:        "enc.blk.{bid}.attn_norm",
+    MODEL_TENSOR.ENC_ATTN_Q:           "enc.blk.{bid}.attn_q",
+    MODEL_TENSOR.ENC_ATTN_K:           "enc.blk.{bid}.attn_k",
+    MODEL_TENSOR.ENC_ATTN_V:           "enc.blk.{bid}.attn_v",
+    MODEL_TENSOR.ENC_ATTN_OUT:         "enc.blk.{bid}.attn_o",
+    MODEL_TENSOR.ENC_ATTN_REL_B:       "enc.blk.{bid}.attn_rel_b",
+    MODEL_TENSOR.ENC_FFN_NORM:         "enc.blk.{bid}.ffn_norm",
+    MODEL_TENSOR.ENC_FFN_DOWN:         "enc.blk.{bid}.ffn_down",
+    MODEL_TENSOR.ENC_FFN_UP:           "enc.blk.{bid}.ffn_up",
+    MODEL_TENSOR.ENC_OUTPUT_NORM:      "enc.output_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -807,6 +865,35 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_SHEXP,
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
+    ],
+    MODEL_ARCH.T5: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.DEC_ATTN_NORM,
+        MODEL_TENSOR.DEC_ATTN_Q,
+        MODEL_TENSOR.DEC_ATTN_K,
+        MODEL_TENSOR.DEC_ATTN_V,
+        MODEL_TENSOR.DEC_ATTN_OUT,
+        MODEL_TENSOR.DEC_ATTN_REL_B,
+        MODEL_TENSOR.DEC_CROSS_ATTN_NORM,
+        MODEL_TENSOR.DEC_CROSS_ATTN_Q,
+        MODEL_TENSOR.DEC_CROSS_ATTN_K,
+        MODEL_TENSOR.DEC_CROSS_ATTN_V,
+        MODEL_TENSOR.DEC_CROSS_ATTN_OUT,
+        MODEL_TENSOR.DEC_CROSS_ATTN_REL_B,
+        MODEL_TENSOR.DEC_FFN_NORM,
+        MODEL_TENSOR.DEC_FFN_DOWN,
+        MODEL_TENSOR.DEC_FFN_UP,
+        MODEL_TENSOR.DEC_OUTPUT_NORM,
+        MODEL_TENSOR.ENC_ATTN_NORM,
+        MODEL_TENSOR.ENC_ATTN_Q,
+        MODEL_TENSOR.ENC_ATTN_K,
+        MODEL_TENSOR.ENC_ATTN_V,
+        MODEL_TENSOR.ENC_ATTN_OUT,
+        MODEL_TENSOR.ENC_ATTN_REL_B,
+        MODEL_TENSOR.ENC_FFN_NORM,
+        MODEL_TENSOR.ENC_FFN_DOWN,
+        MODEL_TENSOR.ENC_FFN_UP,
+        MODEL_TENSOR.ENC_OUTPUT_NORM,
     ],
     # TODO
 }
