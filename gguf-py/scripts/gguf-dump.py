@@ -313,6 +313,27 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
 
         markdown_content += "\n"
 
+        markdown_content += "### Tensor Data Offset\n"
+        markdown_content += '\n'
+        markdown_content += 'This table contains the offset and data segment relative to start of file\n'
+        markdown_content += '\n'
+
+        tensor_mapping_table: list[dict[str, str | int]] = []
+        for key, tensor in enumerate(reader.tensors):
+            data_offset_pretty = '{0:#16x}'.format(tensor.data_offset)
+            data_size_pretty = '{0:#16x}'.format(tensor.n_bytes)
+            tensor_mapping_table.append({"t_id":key, "layer_name":tensor.name, "data_offset":data_offset_pretty, "data_size":data_size_pretty})
+
+        tensors_mapping_table_header_map = [
+            {'key_name':'t_id',         'header_name':'T_ID',               'align':'right'},
+            {'key_name':'layer_name',   'header_name':'Tensor Layer Name',  'align':'left'},
+            {'key_name':'data_offset',  'header_name':'Data Offset (B)',    'align':'right'},
+            {'key_name':'data_size',    'header_name':'Data Size (B)',      'align':'right'},
+        ]
+
+        markdown_content += markdown_table_with_alignment_support(tensors_mapping_table_header_map, tensor_mapping_table)
+        markdown_content += "\n"
+
         for group in tensor_prefix_order:
             tensors = tensor_groups[group]
             group_elements = sum(tensor.n_elements for tensor in tensors)
