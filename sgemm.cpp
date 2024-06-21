@@ -238,8 +238,10 @@ template <> inline __m512 load(const ggml_fp16_t *p) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // CONSTANTS
 
+#if defined(__AVX__) || defined(__AVX2__) || defined(__AVX512F__)
 static const int8_t kvalues_iq4nl[16] = {-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 static const __m128i iq4nlt = _mm_loadu_si128((const __m128i*)kvalues_iq4nl);
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // FLOATING POINT MATRIX MULTIPLICATION
