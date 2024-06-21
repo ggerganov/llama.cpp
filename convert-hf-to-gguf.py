@@ -2792,6 +2792,9 @@ class ChatGLMModel(Model):
             toktypes.append(toktype)
 
         self.gguf_writer.add_tokenizer_model("llama")
+        # glm3 needs prefix and suffix formatted as:
+        # prompt = "[gMASK]sop<|user|>\n" + prompt + "<|assistant|>"
+        self.gguf_writer.add_tokenizer_pre("chatglm-spm")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
         self.gguf_writer.add_token_types(toktypes)
