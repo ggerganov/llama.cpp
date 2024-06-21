@@ -793,7 +793,7 @@ class tinyBLAS_Q0_AVX {
     }
 
     inline __m256i load(const block_iq4_nl *b) {
-        return = MM256_SET_M128I(load1(b), load0(b));
+        return MM256_SET_M128I(load1(b), load0(b));
     }
 
     inline __m128i load0(const block_iq4_nl *b) {
