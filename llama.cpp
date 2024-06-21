@@ -145,7 +145,7 @@ struct lora_info {
     std::string filename;
     float scale;
 };
-// TODO lora_data should maybe sub lora_weights in llama.cpp
+// TODO lora_data should maybe sub lora_weights
 struct lora_data {
     struct lora_info     info;
     std::vector<uint8_t> data;
@@ -2502,7 +2502,7 @@ struct llama_context {
 
     llama_cparams cparams;
     bool lora_loaded = false;
-    std::map<std::string, lora_weights> lora_weights_map;
+    std::map<std::string, lora_weights> lora_weights_map; // only one LoRA adapter at the moment
     lora_data llora_data;
     float lora_scale = 1.0f;
 
@@ -16109,6 +16109,7 @@ struct llama_context_params llama_context_default_params() {
         /*.n_seq_max                   =*/ 1,
         /*.n_threads                   =*/ GGML_DEFAULT_N_THREADS, // TODO: better default
         /*.n_threads_batch             =*/ GGML_DEFAULT_N_THREADS,
+        /*.hot_lora               =*/ "",
         /*.rope_scaling_type           =*/ LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED,
         /*.pooling_type                =*/ LLAMA_POOLING_TYPE_UNSPECIFIED,
         /*.rope_freq_base              =*/ 0.0f,
@@ -16321,33 +16322,35 @@ struct llama_context * llama_new_context_with_model(
     /// LORA
     struct export_lora_params * lora_params = new struct export_lora_params;
     struct lora_info lora;
-    lora.filename = "./models/open-llama/lora-ggml-model-q8_0-shakespeare-LATEST.bin";
-    lora.scale = 1.0f; // redundant as already inside lora_context, but should be here for multiple loras
-    lora_params->lora.push_back(lora);
-    // load all loras
-    std::vector<struct lora_data *> loras;
-    for (size_t i = 0; i < lora_params->lora.size(); ++i) {
-        struct lora_data * llora_data = load_lora(&lora_params->lora[i]);
-        if (llora_data != NULL) {
-            loras.push_back(llora_data);
+    // lora.filename = "./models/open-llama/lora-ggml-model-q8_0-hot-lora-LATEST.bin";
+    lora.filename = params.hot_lora;
+    if (strlen(params.hot_lora) > 0) {
+            
+        lora.scale = 1.0f; // redundant as already inside lora_context, but should be here for multiple loras?
+        lora_params->lora.push_back(lora);
+        // load all loras
+        std::vector<struct lora_data *> loras;
+        for (size_t i = 0; i < lora_params->lora.size(); ++i) {
+            struct lora_data * llora_data = load_lora(&lora_params->lora[i]);
+            if (llora_data != NULL) {
+                loras.push_back(llora_data);
+            }
+        }
+        if (loras.size() == 0) {
+            fprintf(stderr, "warning: no lora adapters will be applied.\n");
+        }
+        // Assign data 
+        ctx->llora_data = *loras[0];
+
+        // build the map?
+        ctx->lora_weights_map = get_lora_weights_map_cpp((ctx->llora_data).ctx);
+        std::vector<std::string> keys;
+        for (const auto& pair : ctx->lora_weights_map) {
+            keys.push_back(pair.first);
         }
     }
-    if (loras.size() == 0) {
-        fprintf(stderr, "warning: no lora adapters will be applied.\n");
-    }
-    // Assign data 
-    ctx->llora_data = *loras[0];
 
-    // build the map?
-    ctx->lora_weights_map = get_lora_weights_map_cpp((ctx->llora_data).ctx);
-    std::vector<std::string> keys;
-    for (const auto& pair : ctx->lora_weights_map) {
-        keys.push_back(pair.first);
-    }
-
-
-
-    /// END LORA
+    /// LORA
 
     const auto & hparams = model->hparams;
     auto       & cparams = ctx->cparams;

@@ -30,19 +30,21 @@
 
 Run main with base model and lora adapter to hot-swap
 ```bash
-./main ./models/open-llama/ggml-model-f16.gguf \
---hot-lora models/open-llama/lora-ggml-model-q8_0-hot-lora-ITERATION.bin \
+./main -m ./models/open-llama/ggml-model-f16.gguf \
+--hot-lora models/open-llama/lora-ggml-model-q8_0-hot-lora-LATEST.bin \
 -ngl 0 \
 -n 128
 ```
 
-With `ngl > 0` the code breaks. Probably because the Lora tensors try to interact with the base tensors (`lora_mul_mat`), but they are not moved to the buffer of the base tensors.
+With `ngl > 0` the code breaks. Probably because the Lora tensors try to interact with the base tensors (as in `lora_mul_mat`), but the lora tensors are not moved to the gpu buffer of the base tensors.
 
 # Logic
 
 
 
+
 # Current status
 
-- Only ony Lora adapter can be passed. 
+- Only one Lora adapter can be passed. 
+- Applying only adapter to Q, K, V matrices to keep the code contained (fintuning trained lora tensors for all linear layers)
 - GPU not supported

@@ -2443,6 +2443,10 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_ubatch          = params.n_ubatch;
     cparams.n_threads         = params.n_threads;
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
+    const char* c_string = params.hot_lora.c_str();
+    strncpy(cparams.hot_lora, c_string, sizeof(cparams.hot_lora) - 1);
+    cparams.hot_lora[sizeof(cparams.hot_lora) - 1] = '\0';  // Ensure null-termination
+
     cparams.seed              = params.seed;
     cparams.logits_all        = params.logits_all;
     cparams.embeddings        = params.embedding;
