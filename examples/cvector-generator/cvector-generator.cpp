@@ -378,7 +378,7 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
     std::vector<std::string> completions = ctrlvec_load_prompt_file(params.cvector_completions_file, false);
     auto format_template = [](std::string persona, std::string suffix) {
         // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
-        return persona + " " + suffix;
+        return persona + suffix;
     };
     for (size_t i = 0; i < positive_prompts.size(); ++i) {
         for (int j = 0; j < std::min((int) completions.size(), params.n_completions); ++j) {
