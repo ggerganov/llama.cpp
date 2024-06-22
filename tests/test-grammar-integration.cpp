@@ -922,7 +922,6 @@ static void test_json_schema() {
         }
     );
 
-
     test_schema(
         "min+max items",
         // Schema
@@ -946,6 +945,165 @@ static void test_json_schema() {
             "[1, 2]",
             "[1, 2, 3, 4, 5, 6]",
             "1"
+        }
+    );
+
+    test_schema(
+        "min -123 max 42",
+        // Schema
+        R"""({
+            "type": "integer",
+            "minimum": -123,
+            "maximum": 42
+        })""",
+        // Passing strings
+        {
+            "-123",
+            "-13",
+            "-12",
+            "-2",
+            "-1",
+            "0",
+            "1",
+            "5",
+            "40",
+            "42",
+        },
+        // Failing strings
+        {
+            "-0123",
+            "-124",
+            "-1123",
+            "-200",
+            "43",
+            "123",
+            "0123",
+        }
+    );
+
+    test_schema(
+        "min 5 max 30",
+        // Schema
+        R"""({
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 30
+        })""",
+        // Passing strings
+        {
+            "5",
+            "10",
+            "30",
+        },
+        // Failing strings
+        {
+            "05",
+            "4",
+            "-1",
+            "31",
+            "123",
+            "0123",
+        }
+    );
+
+    test_schema(
+        "min 2",
+        // Schema
+        R"""({
+            "type": "integer",
+            "minimum": 2
+        })""",
+        // Passing strings
+        {
+            "2",
+            "1234567890000000",
+        },
+        // Failing strings
+        {
+            "0",
+            "1",
+            "12345678900000000",
+        }
+    );
+
+    test_schema(
+        "min 0",
+        // Schema
+        R"""({
+            "type": "integer",
+            "minimum": 0
+        })""",
+        // Passing strings
+        {
+            "0",
+            "12",
+        },
+        // Failing strings
+        {
+            "-1",
+            "01",
+        }
+    );
+
+    test_schema(
+        "max 9999",
+        // Schema
+        R"""({
+            "type": "integer",
+            "maximum": 9999
+        })""",
+        // Passing strings
+        {
+            "-99999",
+            "0",
+            "9999",
+        },
+        // Failing strings
+        {
+            "10000",
+            "99991",
+        }
+    );
+
+    test_schema(
+        "max -9999",
+        // Schema
+        R"""({
+            "type": "integer",
+            "maximum": -9999
+        })""",
+        // Passing strings
+        {
+            "-10000",
+            "-9999",
+        },
+        // Failing strings
+        {
+            "-9998",
+            "0",
+            "9999",
+        }
+    );
+
+    test_schema(
+        "exclusive min / max",
+        // Schema
+        R"""({
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 10000
+        })""",
+        // Passing strings
+        {
+            "1",
+            "9999",
+        },
+        // Failing strings
+        {
+            "0",
+            "01",
+            "10000",
+            "99999",
         }
     );
 
