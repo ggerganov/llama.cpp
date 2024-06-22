@@ -1814,7 +1814,10 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "main",        "       --cfg-negative-prompt-file FNAME",
                                                                         "negative prompt file to use for guidance" });
     options.push_back({ "main",        "       --cfg-scale N",          "strength of guidance (default: %.1f, 1.0 = disable)", (double)sparams.cfg_scale });
-
+    options.push_back({ "main",        "       --chat-template JINJA_TEMPLATE",
+                                                                        "set custom jinja chat template (default: template taken from model's metadata)\n"
+                                                                        "only commonly used templates are accepted:\n"
+                                                                        "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
     options.push_back({ "grammar" });
     options.push_back({ "*",           "       --grammar GRAMMAR",      "BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", sparams.grammar.c_str() });
     options.push_back({ "*",           "       --grammar-file FNAME",   "file to read grammar from" });
