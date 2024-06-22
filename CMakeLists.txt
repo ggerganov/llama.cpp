@@ -39,8 +39,12 @@ endif()
 
 if (APPLE)
     set(LLAMA_METAL_DEFAULT ON)
+    set(LLAMA_BLAS_DEFAULT ON)
+    set(LLAMA_BLAS_VENDOR_DEFAULT "Apple")
 else()
     set(LLAMA_METAL_DEFAULT OFF)
+    set(LLAMA_BLAS_DEFAULT OFF)
+    set(LLAMA_BLAS_VENDOR_DEFAULT "Generic")
 endif()
 
 set(LLAMA_LLAMAFILE_DEFAULT ON)
@@ -91,9 +95,10 @@ endif()
 
 # 3rd party libs
 option(LLAMA_ACCELERATE                      "llama: enable Accelerate framework"               ON)
-option(LLAMA_BLAS                            "llama: use BLAS"                                  OFF)
+option(LLAMA_BLAS                            "llama: use BLAS"                                  ${LLAMA_BLAS_DEFAULT})
+set(LLAMA_BLAS_VENDOR ${LLAMA_BLAS_VENDOR_DEFAULT} CACHE STRING
+                                             "llama: BLAS library vendor")
 option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"                       ${LLAMA_LLAMAFILE_DEFAULT})
-set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
 option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
 option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
@@ -114,6 +119,7 @@ option(LLAMA_HIP_UMA                         "llama: use HIP unified memory arch
 option(LLAMA_VULKAN                          "llama: use Vulkan"                                OFF)
 option(LLAMA_VULKAN_CHECK_RESULTS            "llama: run Vulkan op checks"                      OFF)
 option(LLAMA_VULKAN_DEBUG                    "llama: enable Vulkan debug output"                OFF)
+option(LLAMA_VULKAN_MEMORY_DEBUG             "llama: enable Vulkan memory debug output"         OFF)
 option(LLAMA_VULKAN_VALIDATE                 "llama: enable Vulkan validation"                  OFF)
 option(LLAMA_VULKAN_RUN_TESTS                "llama: run Vulkan tests"                          OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
@@ -311,9 +317,9 @@ if (LLAMA_BLAS)
     if (LLAMA_STATIC)
         set(BLA_STATIC ON)
     endif()
-    if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
-        set(BLA_SIZEOF_INTEGER 8)
-    endif()
+    #if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
+    #    set(BLA_SIZEOF_INTEGER 8)
+    #endif()
 
     set(BLA_VENDOR ${LLAMA_BLAS_VENDOR})
     find_package(BLAS)
@@ -321,7 +327,7 @@ if (LLAMA_BLAS)
     if (BLAS_FOUND)
         message(STATUS "BLAS found, Libraries: ${BLAS_LIBRARIES}")
 
-        if ("${BLAS_INCLUDE_DIRS}" STREQUAL "")
+        if (("${BLAS_INCLUDE_DIRS}" STREQUAL "") AND NOT (${LLAMA_BLAS_VENDOR} MATCHES "Apple"))
             # BLAS_INCLUDE_DIRS is missing in FindBLAS.cmake.
             # see https://gitlab.kitware.com/cmake/cmake/-/issues/20268
             find_package(PkgConfig REQUIRED)
@@ -374,11 +380,14 @@ if (LLAMA_BLAS)
 
         add_compile_options(${BLAS_LINKER_FLAGS})
 
-        add_compile_definitions(GGML_USE_OPENBLAS)
+        add_compile_definitions(GGML_USE_BLAS)
 
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${LLAMA_BLAS_VENDOR} MATCHES "Generic" OR ${LLAMA_BLAS_VENDOR} MATCHES "Intel"))
             add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
+
+        set(GGML_HEADERS_BLAS ggml-blas.h)
+        set(GGML_SOURCES_BLAS ggml-blas.cpp)
 
         set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS}     ${BLAS_LIBRARIES})
         set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${BLAS_INCLUDE_DIRS})
@@ -526,6 +535,10 @@ if (LLAMA_VULKAN)
             add_compile_definitions(GGML_VULKAN_DEBUG)
         endif()
 
+        if (LLAMA_VULKAN_MEMORY_DEBUG)
+            add_compile_definitions(GGML_VULKAN_MEMORY_DEBUG)
+        endif()
+
         if (LLAMA_VULKAN_VALIDATE)
             add_compile_definitions(GGML_VULKAN_VALIDATE)
         endif()
@@ -652,6 +665,7 @@ if (LLAMA_SYCL)
     #todo: AOT
 
     find_package(IntelSYCL REQUIRED)
+    find_package(MKL REQUIRED)
 
     message(STATUS "SYCL found")
 
@@ -666,21 +680,22 @@ if (LLAMA_SYCL)
     endif()
 
     add_compile_options(-I./) #include DPCT
-    add_compile_options(-I/${SYCL_INCLUDE_DIR})
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
     if (LLAMA_SYCL_TARGET STREQUAL "NVIDIA")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
     endif()
 
     set(GGML_HEADERS_SYCL ggml-sycl.h)
-    set(GGML_SOURCES_SYCL ggml-sycl.cpp)
+    file(GLOB GGML_SOURCES_SYCL "ggml-sycl/*.cpp")
+    list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
 
     if (WIN32)
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl sycl7 OpenCL mkl_sycl_blas_dll.lib mkl_intel_ilp64_dll.lib mkl_sequential_dll.lib mkl_core_dll.lib)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
     else()
+        add_compile_options(-I/${SYCL_INCLUDE_DIR})
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
         if (LLAMA_SYCL_TARGET STREQUAL "INTEL")
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
         elseif (LLAMA_SYCL_TARGET STREQUAL "NVIDIA")
@@ -1258,6 +1273,7 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_KOMPUTE}   ${GGML_HEADERS_KOMPUTE}
             ${GGML_SOURCES_VULKAN}    ${GGML_HEADERS_VULKAN}
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
+            ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
             )
 
