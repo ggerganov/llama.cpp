@@ -1,6 +1,7 @@
 # llama.cpp for SYCL
 
 - [Background](#background)
+- [Recommended Release](#recommended-release)
 - [News](#news)
 - [OS](#os)
 - [Hardware](#hardware)
@@ -31,7 +32,22 @@ When targeting **Intel CPU**, it is recommended to use llama.cpp for [Intel oneM
 
 It has the similar design of other llama.cpp BLAS-based paths such as *OpenBLAS, cuBLAS, etc..*. In beginning work, the oneAPI's [SYCLomatic](https://github.com/oneapi-src/SYCLomatic) open-source migration tool (Commercial release [Intel® DPC++ Compatibility Tool](https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-compatibility-tool.html)) was used for this purpose.
 
+## Recommended Release
+
+The SYCL backend would be broken by some PRs due to no online CI.
+
+The following release is verified with good quality:
+
+|Commit ID|Tag|Release|Verified  Platform|
+|-|-|-|-|
+|fb76ec31a9914b7761c1727303ab30380fd4f05c|b3038 |[llama-b3038-bin-win-sycl-x64.zip](https://github.com/ggerganov/llama.cpp/releases/download/b3038/llama-b3038-bin-win-sycl-x64.zip) |Arc770/Linux/oneAPI 2024.1<br>MTL Arc GPU/Windows 11/oneAPI 2024.1|
+
+
 ## News
+
+- 2024.5
+  - Performance is increased: 34 -> 37 tokens/s of llama-2-7b.Q4_0 on Arc770.
+  - Arch Linux is verified successfully.
 
 - 2024.4
   - Support data types: GGML_TYPE_IQ4_NL, GGML_TYPE_IQ4_XS, GGML_TYPE_IQ3_XXS, GGML_TYPE_IQ3_S, GGML_TYPE_IQ2_XXS, GGML_TYPE_IQ2_XS, GGML_TYPE_IQ2_S, GGML_TYPE_IQ1_S, GGML_TYPE_IQ1_M.
@@ -394,15 +410,9 @@ Output (example):
 
 4. Install build tools
 
-a. Download & install cmake for Windows: https://cmake.org/download/
+a. Download & install cmake for Windows: https://cmake.org/download/ (CMake can also be installed from Visual Studio Installer)
+b. The new Visual Studio will install Ninja as default. (If not, please install it manually: https://ninja-build.org/)
 
-b. Download & install mingw-w64 make for Windows provided by w64devkit
-
-- Download the 1.19.0 version of [w64devkit](https://github.com/skeeto/w64devkit/releases/download/v1.19.0/w64devkit-1.19.0.zip).
-
-- Extract `w64devkit` on your pc.
-
-- Add the **bin** folder path in the Windows system PATH environment (for e.g. `C:\xxx\w64devkit\bin\`).
 
 ### II. Build llama.cpp
 
@@ -412,10 +422,10 @@ On the oneAPI command line window, step into the llama.cpp main directory and ru
 @call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 --force
 
 # Option 1: Use FP32 (recommended for better performance in most cases)
-cmake -B build -G "MinGW Makefiles" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
+cmake -B build -G "Ninja" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release
 
 # Option 2: Or FP16
-cmake -B build -G "MinGW Makefiles" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
+cmake -B build -G "Ninja" -DLLAMA_SYCL=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=icx  -DCMAKE_BUILD_TYPE=Release -DLLAMA_SYCL_F16=ON
 
 cmake --build build --config Release -j
 ```
@@ -425,9 +435,23 @@ Otherwise, run the `win-build-sycl.bat` wrapper which encapsulates the former in
 .\examples\sycl\win-build-sycl.bat
 ```
 
+Or, use CMake presets to build:
+```sh
+cmake --preset x64-windows-sycl-release
+cmake --build build-x64-windows-sycl-release -j --target llama-cli
+
+cmake -DLLAMA_SYCL_F16=ON --preset x64-windows-sycl-release
+cmake --build build-x64-windows-sycl-release -j --target llama-cli
+
+cmake --preset x64-windows-sycl-debug
+cmake --build build-x64-windows-sycl-debug -j --target llama-cli
+```
+
+Or, you can use Visual Studio to open llama.cpp folder as a CMake project. Choose the sycl CMake presets (`x64-windows-sycl-release` or `x64-windows-sycl-debug`) before you compile the project.
+
 *Notes:*
 
-- By default, calling `make` will build all target binary files. In case of a minimal experimental setup, the user can build the inference executable only through `make llama-cli`.
+- In case of a minimal experimental setup, the user can build the inference executable only through `cmake --build build --config Release -j --target llama-cli`.
 
 ### III. Run the inference
 

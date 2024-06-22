@@ -84,7 +84,7 @@ jobs:
           name: llama-bin-macos-arm64.zip
 
   macOS-latest-cmake-x64:
-    runs-on: macos-latest
+    runs-on: macos-12
 
     steps:
       - name: Clone
