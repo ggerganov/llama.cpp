@@ -1001,13 +1001,15 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
-    /// @details Dynamic temperature implementation described in the paper https://arxiv.org/abs/2309.02772.
+    /// @details Dynamic temperature implementation + Smooth Sampling implementations wrapped into one function, no research papers available
     LLAMA_API void llama_sample_entropy(
             struct llama_context * ctx,
           llama_token_data_array * candidates_p,
                            float   min_temp,
                            float   max_temp,
-                           float   exponent_val);
+                           float   exponent_val,
+                           float   smoothing_factor,
+                           float   smoothing_curve);
 
     LLAMA_API void llama_sample_temp(
             struct llama_context * ctx,

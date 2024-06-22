@@ -906,6 +906,8 @@ struct server_context {
         slot.sparams.temp              = json_value(data, "temperature",       default_sparams.temp);
         slot.sparams.dynatemp_range    = json_value(data, "dynatemp_range",    default_sparams.dynatemp_range);
         slot.sparams.dynatemp_exponent = json_value(data, "dynatemp_exponent", default_sparams.dynatemp_exponent);
+        slot.sparams.smoothing_factor  = json_value(data, "smoothing_factor",  default_sparams.smoothing_factor);
+        slot.sparams.smoothing_curve   = json_value(data, "smoothing_curve",   default_sparams.smoothing_curve);
         slot.sparams.penalty_last_n    = json_value(data, "repeat_last_n",     default_sparams.penalty_last_n);
         slot.sparams.penalty_repeat    = json_value(data, "repeat_penalty",    default_sparams.penalty_repeat);
         slot.sparams.penalty_freq      = json_value(data, "frequency_penalty", default_sparams.penalty_freq);
