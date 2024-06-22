@@ -81,11 +81,6 @@ GGML_METAL := 1
 DEPRECATE_WARNING := 1
 endif
 
-ifdef LLAMA_METAL_EMBED_LIBRARY
-GGML_METAL_EMBED_LIBRARY := 1
-DEPRECATE_WARNING := 1
-endif
-
 ifdef LLAMA_OPENMP
 GGML_OPENMP := 1
 DEPRECATE_WARNING := 1
@@ -181,6 +176,10 @@ ifeq ($(UNAME_S),Darwin)
 			warn := $(warning Your arch is announced as x86_64, but it seems to actually be ARM64. Not fixing that can lead to bad performance. For more info see: https://github.com/ggerganov/whisper.cpp/issues/66\#issuecomment-1282546789)
 		endif
 	endif
+endif
+
+ifdef GGML_METAL
+	GGML_METAL_EMBED_LIBRARY := 1
 endif
 
 ifdef GGML_RPC
@@ -1064,11 +1063,10 @@ $(LIB_COMMON_S): \
 	ar rcs $(LIB_COMMON_S) $^
 
 clean:
-	rm -vrf ggml/src/*.o src/*.o tests/*.o common/*.o *.a *.so ggml*.so *.dll common/build-info.cpp *.dot $(BUILD_TARGETS) $(TEST_TARGETS)
-	rm -vrf ggml/src/*.o
+	rm -vrf *.dot $(BUILD_TARGETS) $(TEST_TARGETS)
 	rm -rvf src/*.o
 	rm -rvf tests/*.o
-	rm -rvf common/*.o
+	rm -rvf examples/*.o
 	rm -rvf *.a
 	rm -rvf *.dll
 	rm -rvf *.so
@@ -1076,6 +1074,7 @@ clean:
 	rm -rvf ggml/*.a
 	rm -rvf ggml/*.dll
 	rm -rvf ggml/*.so
+	rm -vrf ggml/src/*.o
 	rm -rvf common/build-info.cpp
 	rm -vrf ggml/src/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o
