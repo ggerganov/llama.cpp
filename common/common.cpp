@@ -1989,7 +1989,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "completions file (default: '%s')", params.cvector_completions_file.c_str() });
     options.push_back({ "cvector",     "       --completions N",        "number of lines of completions file to use (default: %d)", params.n_completions });
     options.push_back({ "cvector",     "       --pca-batch N",          "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
-    options.push_back({ "cvector",     "       --iter-pca N",           "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
+    options.push_back({ "cvector",     "       --pca-iter N",           "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
 
     printf("usage: %s [options]\n", argv[0]);
 
