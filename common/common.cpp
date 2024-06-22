@@ -2980,7 +2980,7 @@ bool llama_chat_verify_template(const std::string & tmpl) {
     return res >= 0;
 }
 
-std::string llama_chat_format(const struct llama_model * model,
+std::string llama_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & msgs,
         bool add_ass) {
@@ -3010,10 +3010,10 @@ std::string llama_chat_format_single(const struct llama_model * model,
         const std::vector<llama_chat_msg> & past_msg,
         const llama_chat_msg & new_msg,
         bool add_ass) {
-    auto fmt_past_msg = llama_chat_format(model, tmpl, past_msg, false);
+    auto fmt_past_msg = llama_chat_apply_template(model, tmpl, past_msg, false);
     std::vector<llama_chat_msg> chat_new(past_msg);
     chat_new.push_back(new_msg);
-    auto fmt_new_msg = llama_chat_format(model, tmpl, chat_new, add_ass);
+    auto fmt_new_msg = llama_chat_apply_template(model, tmpl, chat_new, add_ass);
     auto formatted = fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
     return formatted;
 }

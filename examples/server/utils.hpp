@@ -127,7 +127,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
         chat.push_back({role, content});
     }
 
-    auto formatted_chat = llama_chat_format(model, tmpl, chat, true);
+    auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true);
     LOG_VERBOSE("formatted_chat", {{"text", formatted_chat.c_str()}});
     return formatted_chat;
 }

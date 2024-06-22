@@ -370,7 +370,7 @@ struct llama_chat_msg {
 bool llama_chat_verify_template(const std::string & tmpl);
 
 // CPP wrapper for llama_chat_apply_template
-std::string llama_chat_format(const struct llama_model * model,
+std::string llama_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & chat,
         bool add_ass);
