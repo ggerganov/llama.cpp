@@ -38,9 +38,9 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
     gpt_params_print_usage(argc, argv, params);
 
     printf("\nexample usage:\n");
-    printf("\n    CPU only:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf\n", argv[0]);
-    printf("\n    with GPU:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99\n", argv[0]);
-    printf("\n    advanced:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --pca-batch 100\n", argv[0]);
+    printf("\n    CPU only:   %s -m ./llama-3.Q4_K_M.gguf\n", argv[0]);
+    printf("\n    with GPU:   %s -m ./llama-3.Q4_K_M.gguf -ngl 99\n", argv[0]);
+    printf("\n    advanced:   %s -m ./llama-3.Q4_K_M.gguf -ngl 99 --pca-iter 2000 --pca-batch 100\n", argv[0]);
     printf("\n");
 }
 
@@ -263,8 +263,8 @@ struct tokenized_prompt {
 
     tokenized_prompt(llama_context * ctx, std::string pos, std::string neg) {
         const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
-        tokens_pos = ::llama_tokenize(ctx, pos, add_bos);
-        tokens_neg = ::llama_tokenize(ctx, neg, add_bos);
+        tokens_pos = ::llama_tokenize(ctx, pos, add_bos, true);
+        tokens_neg = ::llama_tokenize(ctx, neg, add_bos, true);
         max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
         padding_seq(ctx, tokens_pos, max_seq_len);
         padding_seq(ctx, tokens_neg, max_seq_len);
@@ -373,20 +373,8 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
         fprintf(stderr, "must provide at least one prompt pair\n");
         return 1;
     }
-
-    // create templated prompts
-    std::vector<std::string> completions = ctrlvec_load_prompt_file(params.cvector_completions_file, false);
-    auto format_template = [](std::string persona, std::string suffix) {
-        // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST] "
-        return persona + suffix;
-    };
-    for (size_t i = 0; i < positive_prompts.size(); ++i) {
-        for (int j = 0; j < std::min((int) completions.size(), params.n_completions); ++j) {
-            // TODO replicate the truncations done by the python implementation
-            ctx_train.positive_entries.push_back(format_template(positive_prompts[i], completions[j]));
-            ctx_train.negative_entries.push_back(format_template(negative_prompts[i], completions[j]));
-        }
-    }
+    ctx_train.positive_entries = positive_prompts;
+    ctx_train.negative_entries = negative_prompts;
     return 0;
 }
 

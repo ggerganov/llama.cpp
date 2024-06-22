@@ -233,11 +233,9 @@ struct gpt_params {
     bool compute_ppl    = true;  // whether to compute perplexity
 
     // cvector-generator params
-    int n_completions = 64;
     int n_pca_batch = 20;
     int n_pca_iterations = 1000;
     std::string cvector_outfile          = "control_vector.gguf";
-    std::string cvector_completions_file = "examples/cvector-generator/completions.txt";
     std::string cvector_positive_file    = "examples/cvector-generator/positive.txt";
     std::string cvector_negative_file    = "examples/cvector-generator/negative.txt";
 };

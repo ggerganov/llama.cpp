@@ -290,7 +290,7 @@ static void power_iteration(
         }
 
         printf("%s: layer %d/%d, iteration: %d / total: %d (batch = %d) ...\n",
-            __func__, params.i_layer+1, params.n_layers, iter, n_iters, params.n_batch);
+            __func__, params.i_layer+1, params.n_layers, iter+1, n_iters, params.n_batch);
     }
 
     // get output tensor
