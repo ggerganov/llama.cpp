@@ -11047,6 +11047,13 @@ struct llm_build_context {
             // add together residual + FFN + self-attention
             cur = ggml_add(ctx0, cur, inpL);
             cur = ggml_add(ctx0, cur, attn_out);
+
+            // add control vector
+            ggml_tensor * layer_dir = lctx.cvec.tensor_for(il);
+            if (layer_dir != nullptr) {
+                cur = ggml_add(ctx0, cur, layer_dir);
+            }
+
             cb(cur, "l_out", il);
 
             // input for next layer
