@@ -9442,6 +9442,13 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
+
+            // add control vector
+            ggml_tensor * layer_dir = lctx.cvec.tensor_for(il);
+            if (layer_dir != nullptr) {
+                cur = ggml_add(ctx0, cur, layer_dir);
+            }
+
             cb(cur, "l_out", il);
 
             // input for next layer
