@@ -38,6 +38,7 @@ BUILD_TARGETS = \
 	llama-tokenize \
 	llama-train-text-from-scratch \
 	llama-vdot \
+	llama-cvector-generator \
 	tests/test-c.o
 
 # Binaries only useful for tests
@@ -440,10 +441,11 @@ ifndef LLAMA_NO_ACCELERATE
 	# Mac OS - include Accelerate framework.
 	# `-framework Accelerate` works both with Apple Silicon and Mac Intel
 	ifeq ($(UNAME_S),Darwin)
-		MK_CPPFLAGS += -DGGML_USE_ACCELERATE
+		MK_CPPFLAGS += -DGGML_USE_ACCELERATE -DGGML_USE_BLAS
 		MK_CPPFLAGS += -DACCELERATE_NEW_LAPACK
 		MK_CPPFLAGS += -DACCELERATE_LAPACK_ILP64
 		MK_LDFLAGS  += -framework Accelerate
+		OBJS        += ggml-blas.o
 	endif
 endif # LLAMA_NO_ACCELERATE
 
@@ -454,20 +456,29 @@ ifndef LLAMA_NO_OPENMP
 endif # LLAMA_NO_OPENMP
 
 ifdef LLAMA_OPENBLAS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS $(shell pkg-config --cflags-only-I openblas)
+	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas)
 	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas)
 	MK_LDFLAGS  += $(shell pkg-config --libs openblas)
+	OBJS        += ggml-blas.o
 endif # LLAMA_OPENBLAS
+
+ifdef LLAMA_OPENBLAS64
+	MK_CPPFLAGS += -DGGML_USE_BLAS $(shell pkg-config --cflags-only-I openblas64)
+	MK_CFLAGS   += $(shell pkg-config --cflags-only-other openblas64)
+	MK_LDFLAGS  += $(shell pkg-config --libs openblas64)
+	OBJS        += ggml-blas.o
+endif # LLAMA_OPENBLAS64
+
+ifdef LLAMA_BLIS
+	MK_CPPFLAGS += -DGGML_USE_BLAS -I/usr/local/include/blis -I/usr/include/blis
+	MK_LDFLAGS  += -lblis -L/usr/local/lib
+	OBJS        += ggml-blas.o
+endif # LLAMA_BLIS
 
 ifndef LLAMA_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
 	OBJS        += sgemm.o
 endif
-
-ifdef LLAMA_BLIS
-	MK_CPPFLAGS += -DGGML_USE_OPENBLAS -I/usr/local/include/blis -I/usr/include/blis
-	MK_LDFLAGS  += -lblis -L/usr/local/lib
-endif # LLAMA_BLIS
 
 ifdef LLAMA_RPC
 	MK_CPPFLAGS   += -DGGML_USE_RPC
@@ -496,7 +507,7 @@ ifdef LLAMA_CUDA
 		CUDA_PATH ?= /usr/local/cuda
 	endif
 	MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include -DGGML_CUDA_USE_GRAPHS
-	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L/usr/lib/wsl/lib
+	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L$(CUDA_PATH)/lib64/stubs -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
 	OBJS         += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
 	OBJS         += $(OBJS_CUDA_TEMP_INST)
@@ -595,6 +606,10 @@ endif
 
 ifdef LLAMA_VULKAN_DEBUG
 	MK_CPPFLAGS  += -DGGML_VULKAN_DEBUG
+endif
+
+ifdef LLAMA_VULKAN_MEMORY_DEBUG
+	MK_CPPFLAGS  += -DGGML_VULKAN_MEMORY_DEBUG
 endif
 
 ifdef LLAMA_VULKAN_VALIDATE
@@ -776,6 +791,9 @@ ggml-backend.o: ggml-backend.c ggml.h ggml-backend.h
 ggml-quants.o: ggml-quants.c ggml.h ggml-quants.h ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
+ggml-blas.o: ggml-blas.cpp ggml-blas.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 unicode.o: unicode.cpp unicode.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -909,6 +927,10 @@ llama-eval-callback: examples/eval-callback/eval-callback.cpp ggml.o llama.o $(C
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
+llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
 llama-train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1029,7 +1051,7 @@ tests/test-grammar-parser: tests/test-grammar-parser.cpp ggml.o llama.o grammar-
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-grammar-integration: tests/test-grammar-integration.cpp ggml.o llama.o grammar-parser.o json-schema-to-grammar.o $(OBJS)
+tests/test-grammar-integration: tests/test-grammar-integration.cpp json-schema-to-grammar.o ggml.o llama.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

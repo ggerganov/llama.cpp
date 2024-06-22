@@ -1902,18 +1902,12 @@ static size_t ggml_backend_vk_buffer_type_get_max_size(ggml_backend_buffer_type_
     return ctx->max_alloc;
 }
 
-static bool ggml_backend_kompute_buffer_type_supports_backend(ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
-    GGML_UNUSED(buft);
-    return ggml_backend_is_kompute(backend);
-}
-
 static ggml_backend_buffer_type_i ggml_backend_kompute_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_kompute_buffer_type_get_name,
     /* .alloc_buffer     = */ ggml_backend_kompute_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_kompute_buffer_type_get_alignment,
     /* .get_max_size     = */ ggml_backend_vk_buffer_type_get_max_size,
     /* .get_alloc_size   = */ NULL, // defaults to ggml_nbytes
-    /* .supports_backend = */ ggml_backend_kompute_buffer_type_supports_backend,
     /* .is_host          = */ NULL,
 };
 
@@ -1973,6 +1967,11 @@ static bool ggml_backend_kompute_supports_op(ggml_backend_t backend, const struc
     return ggml_vk_supports_op(op);
 }
 
+static bool ggml_backend_kompute_supports_buft(ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
+    GGML_UNUSED(backend);
+    return buft->iface.get_name == ggml_backend_kompute_buffer_type_get_name;
+}
+
 static struct ggml_backend_i kompute_backend_i = {
     /* .get_name                = */ ggml_backend_kompute_name,
     /* .free                    = */ ggml_backend_kompute_free,
@@ -1983,9 +1982,11 @@ static struct ggml_backend_i kompute_backend_i = {
     /* .synchronize             = */ NULL,
     /* .graph_plan_create       = */ NULL,
     /* .graph_plan_free         = */ NULL,
+    /* .graph_plan_update       = */ NULL,
     /* .graph_plan_compute      = */ NULL,
     /* .graph_compute           = */ ggml_backend_kompute_graph_compute,
     /* .supports_op             = */ ggml_backend_kompute_supports_op,
+    /* .supports_buft           = */ ggml_backend_kompute_supports_buft,
     /* .offload_op              = */ NULL,
     /* .event_new               = */ NULL,
     /* .event_free              = */ NULL,
