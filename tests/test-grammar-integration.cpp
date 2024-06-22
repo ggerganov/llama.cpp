@@ -428,10 +428,11 @@ static void test_quantifiers() {
 static void test_failure_missing_root() {
     fprintf(stderr, "⚫ Testing missing root node:\n");
     // Test case for a grammar that is missing a root rule
-    const std::string grammar_str = R"""(rot ::= expr
-expr ::= term ("+" term)*
-term ::= number
-number ::= [0-9]+)""";
+    const std::string grammar_str = R"""(
+        rot ::= expr
+        expr ::= term ("+" term)*
+        term ::= number
+        number ::= [0-9]+)""";
 
     grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
 
@@ -448,10 +449,10 @@ static void test_failure_missing_reference() {
 
     // Test case for a grammar that is missing a referenced rule
     const std::string grammar_str =
-R"""(root ::= expr
-expr ::= term ("+" term)*
-term ::= numero
-number ::= [0-9]+)""";
+        R"""(root ::= expr
+        expr ::= term ("+" term)*
+        term ::= numero
+        number ::= [0-9]+)""";
 
     fprintf(stderr, "    Expected error:  ");
 
@@ -473,24 +474,24 @@ static void test_failure_left_recursion() {
 
     // Test more complicated left recursion detection
     const std::string medium_str = R"""(
-root ::= asdf
-asdf ::= "a" | asdf "a"
-)""";
+        root ::= asdf
+        asdf ::= "a" | asdf "a"
+        )""";
     assert(test_build_grammar_fails(medium_str));
 
     // Test even more complicated left recursion detection
     const std::string hard_str = R"""(
-root ::= asdf
-asdf ::= "a" | foo "b"
-foo ::= "c" | asdf "d" | "e")""";
+        root ::= asdf
+        asdf ::= "a" | foo "b"
+        foo ::= "c" | asdf "d" | "e")""";
     assert(test_build_grammar_fails(hard_str));
 
     // Test yet even more complicated left recursion detection
     const std::string hardest_str = R"""(
-root ::= asdf
-asdf ::= "a" | foo "b"
-foo ::= "c" | empty asdf "d" | "e"
-empty ::= "blah" | )""";
+        root ::= asdf
+        asdf ::= "a" | foo "b"
+        foo ::= "c" | empty asdf "d" | "e"
+        empty ::= "blah" | )""";
     assert(test_build_grammar_fails(hardest_str));
 
     fprintf(stderr, "  ✅︎ Passed\n");
@@ -505,7 +506,7 @@ static void test_json_schema() {
         "empty schema (object)",
         // Schema
         R"""(
-{}
+            {}
         )""",
         // Passing strings
         {
@@ -526,14 +527,14 @@ static void test_json_schema() {
         "exotic formats (list)",
         // Schema
         R"""(
-{
-  "items": [
-    { "format": "date" },
-    { "format": "uuid" },
-    { "format": "time" },
-    { "format": "date-time" }
-  ]
-}
+            {
+            "items": [
+                { "format": "date" },
+                { "format": "uuid" },
+                { "format": "time" },
+                { "format": "date-time" }
+            ]
+            }
         )""",
         // Passing strings
         {
@@ -554,9 +555,9 @@ static void test_json_schema() {
         "string",
         // Schema
         R"""(
-{
-    "type": "string"
-}
+            {
+                "type": "string"
+            }
         )""",
         // Passing strings
         {
@@ -575,10 +576,10 @@ static void test_json_schema() {
         "string w/ min length 1",
         // Schema
         R"""(
-{
-    "type": "string",
-    "minLength": 1
-}
+            {
+                "type": "string",
+                "minLength": 1
+            }
         )""",
         // Passing strings
         {
@@ -597,10 +598,10 @@ static void test_json_schema() {
         "string w/ min length 3",
         // Schema
         R"""(
-{
-    "type": "string",
-    "minLength": 3
-}
+            {
+                "type": "string",
+                "minLength": 3
+            }
         )""",
         // Passing strings
         {
@@ -620,10 +621,10 @@ static void test_json_schema() {
         "string w/ max length",
         // Schema
         R"""(
-{
-    "type": "string",
-    "maxLength": 3
-}
+            {
+                "type": "string",
+                "maxLength": 3
+            }
         )""",
         // Passing strings
         {
@@ -643,11 +644,11 @@ static void test_json_schema() {
         "string w/ min & max length",
         // Schema
         R"""(
-{
-    "type": "string",
-    "minLength": 1,
-    "maxLength": 4
-}
+            {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4
+            }
         )""",
         // Passing strings
         {
@@ -668,9 +669,9 @@ static void test_json_schema() {
         "boolean",
         // Schema
         R"""(
-{
-    "type": "boolean"
-}
+            {
+                "type": "boolean"
+            }
         )""",
         // Passing strings
         {
@@ -690,9 +691,9 @@ static void test_json_schema() {
         "integer",
         // Schema
         R"""(
-{
-    "type": "integer"
-}
+            {
+                "type": "integer"
+            }
         )""",
         // Passing strings
         {
@@ -713,9 +714,9 @@ static void test_json_schema() {
         "string const",
         // Schema
         R"""(
-{
-    "const": "foo"
-}
+            {
+                "const": "foo"
+            }
         )""",
         // Passing strings
         {
@@ -732,9 +733,9 @@ static void test_json_schema() {
         "non-string const",
         // Schema
         R"""(
-{
-    "const": true
-}
+            {
+                "const": true
+            }
         )""",
         // Passing strings
         {
@@ -752,9 +753,9 @@ static void test_json_schema() {
         "non-string const",
         // Schema
         R"""(
-{
-    "enum": ["red", "amber", "green", null, 42, ["foo"]]
-}
+            {
+                "enum": ["red", "amber", "green", null, 42, ["foo"]]
+            }
         )""",
         // Passing strings
         {
@@ -777,13 +778,13 @@ static void test_json_schema() {
         "min+max items",
         // Schema
         R"""(
-{
-    "items": {
-        "type": ["number", "integer"]
-    },
-    "minItems": 3,
-    "maxItems": 5
-}
+            {
+                "items": {
+                    "type": ["number", "integer"]
+                },
+                "minItems": 3,
+                "maxItems": 5
+            }
         )""",
         // Passing strings
         {
@@ -804,14 +805,14 @@ static void test_json_schema() {
         "object properties",
         // Schema
         R"""(
-{
-  "type": "object",
-  "properties": {
-    "number": { "type": "number" },
-    "street_name": { "type": "string" },
-    "street_type": { "enum": ["Street", "Avenue", "Boulevard"] }
-  }
-}
+            {
+            "type": "object",
+            "properties": {
+                "number": { "type": "number" },
+                "street_name": { "type": "string" },
+                "street_type": { "enum": ["Street", "Avenue", "Boulevard"] }
+            }
+            }
         )""",
         // Passing strings
         {
@@ -846,15 +847,15 @@ static void test_json_schema() {
         "object properties, additionalProperties: true",
         // Schema
         R"""(
-{
-  "type": "object",
-  "properties": {
-    "number": { "type": "number" },
-    "street_name": { "type": "string" },
-    "street_type": { "enum": ["Street", "Avenue", "Boulevard"] }
-  },
-  "additionalProperties": true
-}
+            {
+            "type": "object",
+            "properties": {
+                "number": { "type": "number" },
+                "street_name": { "type": "string" },
+                "street_type": { "enum": ["Street", "Avenue", "Boulevard"] }
+            },
+            "additionalProperties": true
+            }
         )""",
         // Passing strings
         {
@@ -889,15 +890,15 @@ static void test_json_schema() {
         "required + optional props each in original order",
         // Schema
         R"""(
-{
-  "type": "object",
-  "properties": {
-    "number": { "type": "number" },
-    "street_name": { "type": "string" },
-    "street_type": { "enum": ["Street", "Avenue", "Boulevard"] }
-  },
-  "additionalProperties": false
-}
+            {
+            "type": "object",
+            "properties": {
+                "number": { "type": "number" },
+                "street_name": { "type": "string" },
+                "street_type": { "enum": ["Street", "Avenue", "Boulevard"] }
+            },
+            "additionalProperties": false
+            }
         )""",
         // Passing strings
         {
@@ -923,16 +924,16 @@ static void test_json_schema() {
         "required + optional props each in original order",
         // Schema
         R"""(
-{
-    "properties": {
-        "b": {"type": "string"},
-        "a": {"type": "string"},
-        "d": {"type": "string"},
-        "c": {"type": "string"}
-    },
-    "required": ["a", "b"],
-    "additionalProperties": false
-}
+            {
+                "properties": {
+                    "b": {"type": "string"},
+                    "a": {"type": "string"},
+                    "d": {"type": "string"},
+                    "c": {"type": "string"}
+                },
+                "required": ["a", "b"],
+                "additionalProperties": false
+            }
         )""",
         // Passing strings
         {
@@ -954,53 +955,53 @@ static void test_json_schema() {
         "required props",
         // Schema
         R"""(
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/product.schema.json",
-  "title": "Product",
-  "description": "A product from Acme's catalog",
-  "type": "object",
-  "properties": {
-    "productId": {
-      "description": "The unique identifier for a product",
-      "type": "integer"
-    },
-    "productName": {
-      "description": "Name of the product",
-      "type": "string"
-    },
-    "price": {
-      "description": "The price of the product",
-      "type": "number",
-      "exclusiveMinimum": 0
-    },
-    "tags": {
-      "description": "Tags for the product",
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "minItems": 1,
-      "uniqueItems": true
-    },
-    "dimensions": {
-      "type": "object",
-      "properties": {
-        "length": {
-          "type": "number"
-        },
-        "width": {
-          "type": "number"
-        },
-        "height": {
-          "type": "number"
-        }
-      },
-      "required": [ "length", "width", "height" ]
-    }
-  },
-  "required": [ "productId", "productName", "price" ]
-}
+            {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://example.com/product.schema.json",
+            "title": "Product",
+            "description": "A product from Acme's catalog",
+            "type": "object",
+            "properties": {
+                "productId": {
+                "description": "The unique identifier for a product",
+                "type": "integer"
+                },
+                "productName": {
+                "description": "Name of the product",
+                "type": "string"
+                },
+                "price": {
+                "description": "The price of the product",
+                "type": "number",
+                "exclusiveMinimum": 0
+                },
+                "tags": {
+                "description": "Tags for the product",
+                "type": "array",
+                "items": {
+                    "type": "string"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+                },
+                "dimensions": {
+                "type": "object",
+                "properties": {
+                    "length": {
+                    "type": "number"
+                    },
+                    "width": {
+                    "type": "number"
+                    },
+                    "height": {
+                    "type": "number"
+                    }
+                },
+                "required": [ "length", "width", "height" ]
+                }
+            },
+            "required": [ "productId", "productName", "price" ]
+            }
         )""",
         // Passing strings
         {
