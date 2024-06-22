@@ -106,7 +106,7 @@ static void test(const std::string & test_desc, const std::string & grammar_str,
                 fclose(string_file);
             }
 
-            fprintf(stderr, "\n NOTE: Debug grammar file generated. To analyze this failure in detail, run the following command:     ./gbnf-validator test-grammar-integration.grammar.gbnf test-grammar-integration.string.txt\n\n");
+            fprintf(stderr, "\n NOTE: Debug grammar file generated. To analyze this failure in detail, run the following command:     ./llama-gbnf-validator test-grammar-integration.grammar.gbnf test-grammar-integration.string.txt\n\n");
         } else {
             fprintf(stdout, "✅︎\n");
         }
@@ -510,11 +510,15 @@ static void test_json_schema() {
         // Passing strings
         {
             "{}",
-            "{\"foo\": \"bar\"}",
+            R"""({"foo": "bar"})""",
         },
         // Failing strings
         {
             "",
+            "[]",
+            "null",
+            "\"\"",
+            "true",
         }
     );
 
@@ -932,16 +936,16 @@ static void test_json_schema() {
         )""",
         // Passing strings
         {
-            "{\"b\": \"foo\", \"a\": \"bar\"}",
-            "{\"b\":\"foo\",\"a\":\"bar\",\"d\":\"qux\"}",
-            "{\"b\":\"foo\", \"a\":\"bar\", \"d\":\"qux\", \"c\":\"baz\"}",
+            R"""({"b": "foo", "a": "bar"})""",
+            R"""({"b":"foo","a":"bar","d":"qux"})""",
+            R"""({"b":"foo", "a":"bar", "d":"qux", "c":"baz"})""",
         },
         // Failing strings
         {
-            "{\"a\": \"foo\", \"b\": \"bar\"}",
-            "{\"b\": \"bar\"}",
-            "{\"a\": \"foo\", \"c\": \"baz\"}",
-            "{\"a\":\"foo\", \"b\":\"bar\", \"c\":\"baz\", \"d\":\"qux\"}",
+            R"""({"a": "foo", "b": "bar"})""",
+            R"""({"b": "bar"})""",
+            R"""({"a": "foo", "c": "baz"})""",
+            R"""({"a":"foo", "b":"bar", "c":"baz", "d":"qux"})""",
         }
     );
 
@@ -1000,24 +1004,23 @@ static void test_json_schema() {
         )""",
         // Passing strings
         {
-            "{\"productId\": 1, \"productName\": \"A green door\", \"price\": 12.50}",
-            "{\"productId\": 1, \"productName\": \"A green door\", \"price\": 12.50, \"tags\": [\"home\", \"green\"]}",
-            "{\"productId\": 1, \"productName\": \"A green door\", \"price\": 12.50, \"tags\": [\"home\", \"green\"], \"dimensions\": {\"length\": 785, \"width\": 250.5, \"height\": -0.359}}",
+            R"""({"productId": 1, "productName": "A green door", "price": 12.50})""",
+            R"""({"productId": 1, "productName": "A green door", "price": 12.50, "tags": ["home", "green"]})""",
+            R"""({"productId": 1, "productName": "A green door", "price": 12.50, "tags": ["home", "green"], "dimensions": {"length": 785, "width": 250.5, "height": -0.359}})""",
         },
         // Failing strings
         {
-            "{}", // Missing all required properties
-            "{\"productName\": \"A green door\", \"price\": 12.50, \"productId\": 1}", // Out of order properties
+            R"""({})""", // Missing all required properties
+            R"""({"productName": "A green door", "price": 12.50, "productId": 1})""", // Out of order properties
             // TODO: The following line should fail, but currently it passes. `exclusiveMinimum` is not supported, as it would likely be too difficult to implement.
             //  Perhaps special checks for minimum and maximum values of 0 could be added (since that's relatively easy to do with grammars), but anything else would likely be too complex.
-            // "{\"productId\": 1, \"productName\": \"A green door\", \"price\": -12.50}",
-            "{\"productId\": 1, \"productName\": \"A green door\"}", // Missing required property (price)
-            "{\"productName\": \"A green door\", \"price\": 12.50}", // Missing required property (productId)
-            "{\"productId\": 1, \"productName\": \"A green door\", \"price\": 12.50, \"tags\": []}", // tags is empty, but minItems is 1
-            "{\"productId\": 1, \"productName\": \"A green door\", \"price\": 12.50, \"dimensions\": {\"length\": 785, \"width\": 250.5, \"height\": -0.359}, \"tags\": [\"home\", \"green\"]}", // Tags and dimensions are out of order
+            // R"""({"productId": 1, "productName": "A green door", "price": -12.50})""",
+            R"""({"productId": 1, "productName": "A green door"})""", // Missing required property (price)
+            R"""({"productName": "A green door", "price": 12.50})""", // Missing required property (productId)
+            R"""({"productId": 1, "productName": "A green door", "price": 12.50, "tags": []})""", // tags is empty, but minItems is 1
+            R"""({"productId": 1, "productName": "A green door", "price": 12.50, "dimensions": {"length": 785, "width": 250.5, "height": -0.359}, "tags": ["home", "green"]})""", // Tags and dimensions are out of order
             // TODO: The following line should fail, but currently it passes. `uniqueItems` is not supported, as it would likely be too difficult to implement.
-            // "{\"productId\": 1, \"productName\": \"A green door\", \"price\": 12.50, \"tags\": [\"home\", \"green\", \"home\"]}",
-
+            // R"""({"productId": 1, "productName": "A green door", "price": 12.50, "tags": ["home", "green", "home"]})""",
         }
     );
 }
