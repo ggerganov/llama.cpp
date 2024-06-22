@@ -40,7 +40,7 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
     printf("\nexample usage:\n");
     printf("\n    CPU only:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf\n", argv[0]);
     printf("\n    with GPU:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99\n", argv[0]);
-    printf("\n    advanced:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --batch-pca 100\n", argv[0]);
+    printf("\n    advanced:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --pca-batch 100\n", argv[0]);
     printf("\n");
 }
 
