@@ -21,7 +21,7 @@ own system prompts.
 This allows seeing the generated text / ai-model response in oneshot at the end, after it is fully generated,
 or potentially as it is being generated, in a streamed manner from the server/ai-model.
 
-![Chat and Settings screens](./simplechat_screens.png "Chat and Settings screens")
+![Chat and Settings screens](./simplechat_screens.webp "Chat and Settings screens")
 
 Auto saves the chat session locally as and when the chat is progressing and inturn at a later time when you
 open SimpleChat, option is provided to restore the old chat session, if a matching one exists.
