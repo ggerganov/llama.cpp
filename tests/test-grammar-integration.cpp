@@ -835,6 +835,29 @@ static void test_json_schema() {
         }
     );
 
+    test_schema(
+        "additional properties can't override other properties",
+        R"""({
+            "properties": {
+                "a": {"type": "integer"},
+                "b": {"type": "integer"}
+            },
+            "additionalProperties": true
+        })""",
+        // Passing strings
+        {
+            "{\"a\": 42}",
+            "{\"c\": \"\"}",
+            "{\"a\": 42, \"c\": \"\"}",
+            "{\"a_\": \"\"}",
+        },
+        // Failing strings
+        {
+            "",
+            "{\"a\": \"\"}",
+            "{\"a\": \"\", \"b\": \"\"}",
+        }
+    );
 
     // Properties (from: https://json-schema.org/understanding-json-schema/reference/object#properties)
     test_schema(
