@@ -298,6 +298,11 @@ static void power_iteration(
     ggml_backend_tensor_get(last_eigenvector, output->data, 0, ggml_nbytes(last_eigenvector));
     //print_debug_tensor(output);
     ggml_gallocr_free(allocr);
+
+    // TODO @ngxson : The output vector is inverted. Don't know why, but here is quick fix
+    for (int i = 0; i < output->ne[0]; i++) {
+        ggml_set_f32_1d(output, i, -ggml_get_f32_1d(output, i));
+    }
 }
 
 static void run_pca(

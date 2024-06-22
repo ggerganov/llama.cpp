@@ -17,7 +17,7 @@ Related PRs:
 ./cvector-generator -m ./llama-3.Q4_K_M.gguf -ngl 99
 
 # With advanced options
-./cvector-generator -m ./llama-3.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --pca-batch 100
+./cvector-generator -m ./llama-3.Q4_K_M.gguf -ngl 99 --pca-iter 2000 --pca-batch 100
 
 # To see help message
 ./cvector-generator -h
