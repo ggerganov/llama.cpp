@@ -401,6 +401,8 @@ private:
             std::map<char, TrieNode> children;
             bool is_end_of_string;
 
+            TrieNode() : is_end_of_string(false) {}
+
             void insert(const std::string & string) {
                 auto node = this;
                 for (char c : string) {
@@ -491,7 +493,7 @@ private:
             }
             prop_names.push_back(prop_name);
         }
-        if (additional_properties.is_object() || (additional_properties.is_boolean() && additional_properties.get<bool>())) {
+        if (additional_properties.is_null() || additional_properties.is_object() || (additional_properties.is_boolean() && additional_properties.get<bool>())) {
             std::string sub_name = name + (name.empty() ? "" : "-") + "additional";
             std::string value_rule =
                 additional_properties.is_object() ? visit(additional_properties, sub_name + "-value")
@@ -695,7 +697,7 @@ public:
             return _add_rule(rule_name,
                 _build_object_rule(
                     properties, required, name,
-                    schema.contains("additionalProperties") ? schema["additionalProperties"] : json::object()));
+                    schema.contains("additionalProperties") ? schema["additionalProperties"] : json()));
         } else if ((schema_type.is_null() || schema_type == "object") && schema.contains("allOf")) {
             std::unordered_set<std::string> required;
             std::vector<std::pair<std::string, json>> properties;

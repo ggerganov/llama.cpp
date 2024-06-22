@@ -4,7 +4,7 @@ import itertools
 import json
 import re
 import sys
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 
 def _build_repetition(item_rule, min_items, max_items, separator_rule=None):
@@ -416,10 +416,7 @@ class SchemaConverter:
               ('additionalProperties' in schema and schema['additionalProperties'] is not True)):
             required = set(schema.get('required', []))
             properties = list(schema.get('properties', {}).items())
-            additional_properties = schema.get('additionalProperties', True)
-            if additional_properties is None:
-                additional_properties = True
-            return self._add_rule(rule_name, self._build_object_rule(properties, required, name, additional_properties))
+            return self._add_rule(rule_name, self._build_object_rule(properties, required, name, schema.get('additionalProperties')))
 
         elif schema_type in (None, 'object') and 'allOf' in schema:
             required = set()
@@ -498,7 +495,7 @@ class SchemaConverter:
                 self._add_primitive(dep, dep_rule)
         return n
 
-    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str, additional_properties: Union[bool, Any]):
+    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str, additional_properties: Optional[Union[bool, Any]]):
         prop_order = self._prop_order
         # sort by position in prop_order (if specified) then by original order
         sorted_props = [kv[0] for _, kv in sorted(enumerate(properties), key=lambda ikv: (prop_order.get(ikv[1][0], len(prop_order)), ikv[0]))]
@@ -513,9 +510,10 @@ class SchemaConverter:
         required_props = [k for k in sorted_props if k in required]
         optional_props = [k for k in sorted_props if k not in required]
 
-        if additional_properties == True or isinstance(additional_properties, dict):
+        if additional_properties != False:
             sub_name = f'{name}{"-" if name else ""}additional'
-            value_rule = self.visit({} if additional_properties == True else additional_properties, f'{sub_name}-value')
+            value_rule = self.visit(additional_properties, f'{sub_name}-value') if isinstance(additional_properties, dict) else \
+                self._add_primitive('value', PRIMITIVE_RULES['value'])
             key_rule = self._add_primitive('string', PRIMITIVE_RULES['string']) if not sorted_props \
                 else self._add_rule(f'{sub_name}-k', self._not_strings(sorted_props))
 

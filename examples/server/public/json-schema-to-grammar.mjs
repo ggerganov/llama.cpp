@@ -432,11 +432,7 @@ export class SchemaConverter {
                 ('additionalProperties' in schema && schema.additionalProperties !== true))) {
       const required = new Set(schema.required || []);
       const properties = Object.entries(schema.properties ?? {});
-      let additionalProperties = schema.additionalProperties;
-      if (additionalProperties === undefined) {
-        additionalProperties = true;
-      }
-      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, additionalProperties));
+      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, schema.additionalProperties));
     } else if ((schemaType === undefined || schemaType === 'object') && 'allOf' in schema) {
       const required = new Set();
       const properties = [];
@@ -466,7 +462,7 @@ export class SchemaConverter {
         }
       }
 
-      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, /* additionalProperties= */ false));
+      return this._addRule(ruleName, this._buildObjectRule(properties, required, name, null));
     } else if ((schemaType === undefined || schemaType === 'array') && ('items' in schema || 'prefixItems' in schema)) {
       const items = schema.items ?? schema.prefixItems;
       if (Array.isArray(items)) {
@@ -542,9 +538,11 @@ export class SchemaConverter {
     const requiredProps = sortedProps.filter(k => required.has(k));
     const optionalProps = sortedProps.filter(k => !required.has(k));
 
-    if (typeof additionalProperties === 'object' || additionalProperties === true) {
+    if (additionalProperties !== false) {
       const subName = `${name ?? ''}${name ? '-' : ''}additional`;
-      const valueRule = this.visit(additionalProperties === true ? {} : additionalProperties, `${subName}-value`);
+      const valueRule =
+        additionalProperties != null && typeof additionalProperties === 'object' ? this.visit(additionalProperties, `${subName}-value`)
+        : this._addPrimitive('value', PRIMITIVE_RULES['value']);
 
       const key_rule =
         sortedProps.length === 0 ? this._addPrimitive('string', PRIMITIVE_RULES['string'])

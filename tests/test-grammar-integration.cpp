@@ -15,8 +15,6 @@
 
 using json = nlohmann::ordered_json;
 
-//#define INCLUDE_FAILING_TESTS 1
-
 static llama_grammar* build_grammar(const std::string & grammar_str) {
     auto parsed_grammar = grammar_parser::parse(grammar_str.c_str());
 
@@ -823,12 +821,8 @@ static void test_json_schema() {
             // "By extension, even an empty object is valid"
             R"""({})""",
             // "By default, providing additional properties is valid"
-#ifdef INCLUDE_FAILING_TESTS
-            // TODO: The following should pass, but currently FAILS. Additional properties should be permitted by default.
             R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue", "direction":"NW"})""",
-            // TODO: Spaces should be permitted around enum values, but currently they fail to pass.
             R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" })""",
-#endif
         },
         // Failing strings
         {
@@ -861,20 +855,13 @@ static void test_json_schema() {
         {
             // "By extension, even an empty object is valid"
             R"""({})""",
-#ifdef INCLUDE_FAILING_TESTS
-            // TODO: Following line should pass and doesn't
             R"""({"number":1600,"street_name":"Pennsylvania","street_type":"Avenue"})""",
             // "By default, leaving out properties is valid"
-            // TODO: Following line should pass and doesn't
             R"""({ "street_name": "Pennsylvania" })""",
-            // TODO: Following line should pass and doesn't
             R"""({ "number": 1600, "street_name": "Pennsylvania" })""",
             // "By default, providing additional properties is valid"
-            // TODO: The following should pass, but currently FAILS. Additional properties should be permitted by default.
             R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue", "direction":"NW"})""",
-            // TODO: Spaces should be permitted around enum values, but currently they fail to pass.
             R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" })""",
-#endif
         },
         // Failing strings
         {
@@ -906,10 +893,8 @@ static void test_json_schema() {
             R"""({ "number": 1600, "street_type":"Avenue"})""",
             R"""({ "number": 1600, "street_name": "Pennsylvania" })""",
             R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue"})""",
-#ifdef INCLUDE_FAILING_TESTS
-            // TODO: Spaces should be permitted around enum values, but currently they fail to pass.
+            // Spaces are permitted around enum values
             R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type": "Avenue" })""",
-#endif
         },
         // Failing strings
         {
