@@ -1,6 +1,9 @@
 include(CheckCXXCompilerFlag)
 
-add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
+unset(GGML_CDEF_PRIVATE)
+unset(GGML_CDEF_PUBLIC)
+
+list(APPEND GGML_CDEF_PRIVATE GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
 # enable libstdc++ assertions for debug builds
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -29,9 +32,10 @@ if (APPLE AND GGML_ACCELERATE)
     if (ACCELERATE_FRAMEWORK)
         message(STATUS "Accelerate framework found")
 
-        add_compile_definitions(GGML_USE_ACCELERATE)
-        add_compile_definitions(ACCELERATE_NEW_LAPACK)
-        add_compile_definitions(ACCELERATE_LAPACK_ILP64)
+        list(APPEND GGML_CDEF_PRIVATE GGML_USE_ACCELERATE)
+        list(APPEND GGML_CDEF_PRIVATE ACCELERATE_NEW_LAPACK)
+        list(APPEND GGML_CDEF_PRIVATE ACCELERATE_LAPACK_ILP64)
+
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} ${ACCELERATE_FRAMEWORK})
     else()
         message(WARNING "Accelerate framework not found")
@@ -47,9 +51,9 @@ if (GGML_METAL)
     set(GGML_HEADERS_METAL ggml-metal.h)
     set(GGML_SOURCES_METAL ggml-metal.m)
 
-    add_compile_definitions(GGML_USE_METAL)
+    list(APPEND GGML_CDEF_PUBLIC GGML_USE_METAL)
     if (GGML_METAL_NDEBUG)
-        add_compile_definitions(GGML_METAL_NDEBUG)
+        list(APPEND GGML_CDEF_PRIVATE GGML_METAL_NDEBUG)
     endif()
 
     # copy ggml-common.h and ggml-metal.metal to bin directory
@@ -58,7 +62,8 @@ if (GGML_METAL)
 
     if (GGML_METAL_EMBED_LIBRARY)
         enable_language(ASM)
-        add_compile_definitions(GGML_METAL_EMBED_LIBRARY)
+
+        list(APPEND GGML_CDEF_PRIVATE GGML_METAL_EMBED_LIBRARY)
 
         set(METALLIB_COMMON "${CMAKE_CURRENT_SOURCE_DIR}/ggml-common.h")
         set(METALLIB_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
@@ -139,7 +144,9 @@ if (GGML_OPENMP)
     find_package(OpenMP)
     if (OpenMP_FOUND)
         message(STATUS "OpenMP found")
-        add_compile_definitions(GGML_USE_OPENMP)
+
+        list(APPEND GGML_CDEF_PRIVATE GGML_USE_OPENMP)
+
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
     else()
         message(WARNING "OpenMP not found")
@@ -213,10 +220,10 @@ if (GGML_BLAS)
 
         add_compile_options(${BLAS_LINKER_FLAGS})
 
-        add_compile_definitions(GGML_USE_BLAS)
+        list(APPEND GGML_CDEF_PUBLIC GGML_USE_BLAS)
 
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${GGML_BLAS_VENDOR} MATCHES "Generic" OR ${GGML_BLAS_VENDOR} MATCHES "Intel"))
-            add_compile_definitions(GGML_BLAS_USE_MKL)
+            list(APPEND GGML_CDEF_PRIVATE GGML_BLAS_USE_MKL)
         endif()
 
         set(GGML_HEADERS_BLAS ggml-blas.h)
@@ -234,7 +241,7 @@ endif()
 if (GGML_LLAMAFILE)
     message(STATUS "Using ggml SGEMM")
 
-    add_compile_definitions(GGML_USE_LLAMAFILE)
+    list(APPEND GGML_CDEF_PRIVATE GGML_USE_LLAMAFILE)
 
     set(GGML_HEADERS_LLAMAFILE sgemm.h)
     set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
@@ -244,6 +251,7 @@ if (GGML_CUDA)
     cmake_minimum_required(VERSION 3.18)  # for CMAKE_CUDA_ARCHITECTURES
 
     find_package(CUDAToolkit)
+
     if (CUDAToolkit_FOUND)
         message(STATUS "CUDA found")
 
@@ -276,7 +284,7 @@ if (GGML_CUDA)
         if (GGML_CUDA_FA_ALL_QUANTS)
             file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
             list(APPEND GGML_SOURCES_CUDA ${SRCS})
-            add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
+            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FA_ALL_QUANTS)
         else()
             file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
             list(APPEND GGML_SOURCES_CUDA ${SRCS})
@@ -286,32 +294,40 @@ if (GGML_CUDA)
             list(APPEND GGML_SOURCES_CUDA ${SRCS})
         endif()
 
-        add_compile_definitions(GGML_USE_CUDA)
-        add_compile_definitions(GGML_CUDA_USE_GRAPHS)
-        add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
-        add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-        add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER}) # TODO: remove
-        add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
+        list(APPEND GGML_CDEF_PUBLIC GGML_USE_CUDA)
+
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_USE_GRAPHS)
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
+        list(APPEND GGML_CDEF_PRIVATE K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
+
         if (GGML_CUDA_FORCE_DMMV)
-            add_compile_definitions(GGML_CUDA_FORCE_DMMV)
+            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_DMMV)
         endif()
+
         if (GGML_CUDA_FORCE_MMQ)
-            add_compile_definitions(GGML_CUDA_FORCE_MMQ)
+            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_MMQ)
         endif()
+
         if (GGML_CUDA_FORCE_CUBLAS)
             add_compile_definitions(GGML_CUDA_FORCE_CUBLAS)
         endif()
+
         if (GGML_CUDA_NO_VMM)
-            add_compile_definitions(GGML_CUDA_NO_VMM)
+            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_NO_VMM)
         endif()
+
         if (DEFINED GGML_CUDA_DMMV_Y)
-            add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_DMMV_Y}) # for backwards compatibility
+            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_MMV_Y=${GGML_CUDA_DMMV_Y}) # for backwards compatibility
         endif()
+
         if (GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
-            add_compile_definitions(GGML_CUDA_F16)
+            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_F16)
         endif()
+
         if (GGML_CUDA_NO_PEER_COPY)
-            add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_NO_PEER_COPY)
         endif()
 
         if (GGML_STATIC)
@@ -345,6 +361,7 @@ if (GGML_HIPBLAS)
     else()
         set(ROCM_PATH $ENV{ROCM_PATH})
     endif()
+
     list(APPEND CMAKE_PREFIX_PATH  ${ROCM_PATH})
     list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib64/cmake")
 
@@ -372,6 +389,7 @@ if (GGML_HIPBLAS)
         cmake_minimum_required(VERSION 3.21)
         enable_language(HIP)
     endif()
+
     find_package(hip     REQUIRED)
     find_package(hipblas REQUIRED)
     find_package(rocblas REQUIRED)
@@ -391,7 +409,7 @@ if (GGML_HIPBLAS)
     if (GGML_CUDA_FA_ALL_QUANTS)
         file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
         list(APPEND GGML_SOURCES_ROCM ${SRCS})
-        add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FA_ALL_QUANTS)
     else()
         file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
         list(APPEND GGML_SOURCES_ROCM ${SRCS})
@@ -401,26 +419,27 @@ if (GGML_HIPBLAS)
         list(APPEND GGML_SOURCES_ROCM ${SRCS})
     endif()
 
+    list(APPEND GGML_CDEF_PUBLIC GGML_USE_CUDA)
 
-    add_compile_definitions(GGML_USE_HIPBLAS GGML_USE_CUDA)
-    add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
-    add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-    add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
+    list(APPEND GGML_CDEF_PRIVATE GGML_USE_HIPBLAS)
+    list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
+    list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
+    list(APPEND GGML_CDEF_PRIVATE K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
 
     if (GGML_HIP_UMA)
-        add_compile_definitions(GGML_HIP_UMA)
+        list(APPEND GGML_CDEF_PRIVATE GGML_HIP_UMA)
     endif()
 
     if (GGML_CUDA_FORCE_DMMV)
-        add_compile_definitions(GGML_CUDA_FORCE_DMMV)
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_DMMV)
     endif()
 
     if (GGML_CUDA_FORCE_MMQ)
-        add_compile_definitions(GGML_CUDA_FORCE_MMQ)
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_MMQ)
     endif()
 
     if (GGML_CUDA_NO_PEER_COPY)
-        add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
+        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_NO_PEER_COPY)
     endif()
 
     if (CXX_IS_HIPCC)
@@ -452,14 +471,14 @@ if (GGML_SYCL)
 
     message(STATUS "SYCL found")
 
-    add_compile_definitions(GGML_USE_SYCL)
+    list(APPEND GGML_CDEF_PUBLIC GGML_USE_SYCL)
 
     if (GGML_SYCL_F16)
-        add_compile_definitions(GGML_SYCL_F16)
+        list(APPEND GGML_CDEF_PRIVATE GGML_SYCL_F16)
     endif()
 
     if (GGML_CUDA_FORCE_MMQ)
-        add_compile_definitions(GGML_SYCL_FORCE_MMQ)
+        list(APPEND GGML_CDEF_PRIVATE GGML_SYCL_FORCE_MMQ)
     endif()
 
     add_compile_options(-I./) #include DPCT
@@ -493,7 +512,7 @@ endif()
 if (GGML_RPC)
     message(STATUS "RPC found")
 
-    add_compile_definitions(GGML_USE_RPC)
+    list(APPEND GGML_CDEF_PUBLIC GGML_USE_RPC)
 
     if (WIN32)
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} ws2_32)
@@ -512,7 +531,7 @@ if (GGML_VULKAN)
         set(GGML_HEADERS_VULKAN ggml-vulkan.h)
         set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
 
-        add_compile_definitions(GGML_USE_VULKAN)
+        list(APPEND GGML_CDEF_PUBLIC GGML_USE_VULKAN)
 
         # Workaround to the "can't dereference invalidated vector iterator" bug in clang-cl debug build
         # Posssibly relevant: https://stackoverflow.com/questions/74748276/visual-studio-no-displays-the-correct-length-of-stdvector
@@ -521,23 +540,23 @@ if (GGML_VULKAN)
         endif()
 
         if (GGML_VULKAN_CHECK_RESULTS)
-            add_compile_definitions(GGML_VULKAN_CHECK_RESULTS)
+            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_CHECK_RESULTS)
         endif()
 
         if (GGML_VULKAN_DEBUG)
-            add_compile_definitions(GGML_VULKAN_DEBUG)
+            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_DEBUG)
         endif()
 
         if (GGML_VULKAN_MEMORY_DEBUG)
-            add_compile_definitions(GGML_VULKAN_MEMORY_DEBUG)
+            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_MEMORY_DEBUG)
         endif()
 
         if (GGML_VULKAN_VALIDATE)
-            add_compile_definitions(GGML_VULKAN_VALIDATE)
+            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_VALIDATE)
         endif()
 
         if (GGML_VULKAN_RUN_TESTS)
-            add_compile_definitions(GGML_VULKAN_RUN_TESTS)
+            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_RUN_TESTS)
         endif()
 
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} Vulkan::Vulkan)
@@ -548,6 +567,7 @@ endif()
 
 if (GGML_KOMPUTE)
     add_compile_definitions(VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1)
+
     find_package(Vulkan COMPONENTS glslc REQUIRED)
     find_program(glslc_executable NAMES glslc HINTS Vulkan::glslc)
     if (NOT glslc_executable)
@@ -695,9 +715,9 @@ if (GGML_KOMPUTE)
         set(GGML_SOURCES_KOMPUTE ggml-kompute.cpp ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
         set(GGML_HEADERS_KOMPUTE ggml-kompute.h   ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
 
-        add_compile_definitions(GGML_USE_KOMPUTE)
+        list(APPEND GGML_CDEF_PUBLIC GGML_USE_KOMPUTE)
 
-        set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} kompute)
+        set(GGML_EXTRA_LIBS     ${GGML_EXTRA_LIBS}     kompute)
         set(GGML_EXTRA_INCLUDES ${GGML_EXTRA_INCLUDES} ${CMAKE_BINARY_DIR})
     else()
         message(WARNING "Kompute not found")
@@ -709,7 +729,7 @@ if (GGML_CPU_HBM)
 
     message(STATUS "Using memkind for CPU HBM")
 
-    add_compile_definitions(GGML_USE_CPU_HBM)
+    list(APPEND GGML_CDEF_PRIVATE GGML_USE_CPU_HBM)
 
     target_link_libraries(ggml PUBLIC memkind)
 endif()
@@ -822,14 +842,6 @@ if (GGML_CUDA)
     endif()
 endif()
 
-if (WIN32)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
-
-    if (BUILD_SHARED_LIBS)
-        set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
-    endif()
-endif()
-
 if (GGML_LTO)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT result OUTPUT output)
@@ -844,6 +856,7 @@ if (GGML_CCACHE)
     find_program(GGML_CCACHE_FOUND ccache)
 
     if (GGML_CCACHE_FOUND)
+        # TODO: should not be set globally
         set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
         set(ENV{CCACHE_SLOPPINESS} time_macros)
         message(STATUS "ccache found, compilation results will be cached. Disable with GGML_CCACHE=OFF.")
@@ -860,7 +873,7 @@ execute_process(
 )
 
 if (output MATCHES "dyld-1015\.7")
-    add_compile_definitions(HAVE_BUGGY_APPLE_LINKER)
+    list(APPEND GGML_CDEF_PRIVATE HAVE_BUGGY_APPLE_LINKER)
 endif()
 
 # architecture specific
@@ -903,11 +916,14 @@ if (CMAKE_OSX_ARCHITECTURES      STREQUAL "arm64" OR
 
         set(CMAKE_REQUIRED_FLAGS_PREV ${CMAKE_REQUIRED_FLAGS})
         string(JOIN " " CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS} "/arch:armv8.2")
+
         check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vdotq_s32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_DOTPROD)
         if (GGML_COMPILER_SUPPORT_DOTPROD)
             add_compile_definitions(__ARM_FEATURE_DOTPROD)
         endif ()
+
         check_cxx_source_compiles("#include <arm_neon.h>\nint main() { int8x16_t _a, _b; int32x4_t _s = vmlaq_f32(_s, _a, _b); return 0; }" GGML_COMPILER_SUPPORT_MATMUL_INT8)
+
         if (GGML_COMPILER_SUPPORT_MATMUL_INT8)
             add_compile_definitions(__ARM_FEATURE_MATMUL_INT8)
         endif ()
@@ -916,6 +932,7 @@ if (CMAKE_OSX_ARCHITECTURES      STREQUAL "arm64" OR
         if (GGML_COMPILER_SUPPORT_FP16_VECTOR_ARITHMETIC)
             add_compile_definitions(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC)
         endif ()
+
         set(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS_PREV})
     else()
         check_cxx_compiler_flag(-mfp16-format=ieee COMPILER_SUPPORTS_FP16_FORMAT_I3E)
@@ -1097,6 +1114,15 @@ if (CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
     add_compile_definitions(_BSD_SOURCE)
 endif()
 
+if (WIN32)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+
+    if (BUILD_SHARED_LIBS)
+        # TODO: should not use this
+        set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    endif()
+endif()
+
 #
 # libraries
 #
@@ -1123,6 +1149,13 @@ add_library(ggml OBJECT
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
             )
+
+if (EMSCRIPTEN)
+    set_target_properties(ggml PROPERTIES COMPILE_FLAGS "-msimd128")
+endif()
+
+target_compile_definitions(ggml PUBLIC  ${GGML_CDEF_PUBLIC})
+target_compile_definitions(ggml PRIVATE ${GGML_CDEF_PRIVATE})
 
 target_include_directories(ggml PUBLIC . ../include ${GGML_EXTRA_INCLUDES})
 target_compile_features   (ggml PUBLIC c_std_11) # don't bump
