@@ -89,7 +89,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([0] | [1-9] [0-9]{0,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -102,7 +102,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([1-9] [0-9]{0,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -115,7 +115,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([1-2] [0-9]{1,15} | [3-9] [0-9]{0,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -128,7 +128,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([1-8] [0-9]{1,15} | [9] [0-9]{0,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -141,7 +141,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([1] ([0-9]{1,15}) | [2-9] [0-9]{1,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -154,7 +154,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([1] [0-9]{2,15} | [2] ([0-4] [0-9]{1,14} | [5-9] [0-9]{0,14}) | [3-9] [0-9]{1,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -167,7 +167,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | ([1-2] [0-9] | [3] "0")) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -180,7 +180,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" ([0-5]) | [0] | [1-9] [0-9]{0,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -193,7 +193,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" ([0-9] | ([1-8] [0-9] | [9] [0-9]) | "1" ([0-1] [0-9] | [2] [0-3])) | [0] | [1-9] [0-9]{0,15}) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -206,7 +206,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" ([0-4] [0-9]{1,15} | [5-9] [0-9]{0,15})) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -219,7 +219,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" [1-9] [0-9]{0,15} | [0-1]) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -232,7 +232,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" [1-9] [0-9]{0,15} | [0-9] | ([1-8] [0-9] | [9] [0-9]) | "100") space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -246,7 +246,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([0-9] | ([1] [0-9] | [2] [0-3])) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -260,7 +260,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= (([1] ([5-9]) | [2-9] [0-9]) | ([1-2] [0-9]{2} | [3] "00")) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -274,7 +274,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ([5-9] | ([1-2] [0-9] | [3] "0")) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -288,7 +288,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" ([0-9] | ([1-8] [0-9] | [9] [0-9]) | "1" ([0-1] [0-9] | [2] [0-3])) | [0-9] | ([1-3] [0-9] | [4] [0-2])) space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -302,7 +302,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             root ::= ("-" ([0-9] | "10") | [0-9] | "10") space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -631,7 +631,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             item ::= ("-" ([0-9] | "1" [0-2]) | [0-9] | ([1-8] [0-9] | [9] [0-9]) | ([1] [0-9]{2} | [2] "0" [0-7])) space
             root ::= "[" space item ("," space item){2,4} "]" space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
@@ -650,7 +650,7 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             item ::= (([1] ([2-9]) | [2-9] [0-9]) | ([1] [0-9]{2} | [2] "0" [0-7])) space
             root ::= "[" space item ("," space item){2,4} "]" space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
         )"""
     });
 
