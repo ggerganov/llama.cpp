@@ -30,7 +30,7 @@ jobs:
 
     strategy:
       matrix:
-        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        sanitizer: [ADDRESS, UNDEFINED] # THREAD is broken
         build_type: [RelWithDebInfo]
         include:
           - build_type: Release
