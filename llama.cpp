@@ -18430,7 +18430,9 @@ static std::string llama_decode_text(const std::string & text) {
 // does not write null-terminator to buf
 int32_t llama_token_to_piece(const struct llama_model * model, llama_token token, char * buf, int32_t length, int32_t lstrip, bool special) {
     // ref: https://github.com/ggerganov/llama.cpp/pull/7587#discussion_r1620983843
-    if (!special && llama_is_control_token(model->vocab, token)) {
+    static const int attr_special = LLAMA_TOKEN_ATTR_UNKNOWN | LLAMA_TOKEN_ATTR_CONTROL;
+    const llama_token_attr attr = llama_token_get_attr(model, token);
+    if (!special && (attr & attr_special)) {
         return 0;
     }
 
@@ -18459,38 +18461,31 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
     }
 
     if (0 <= token && token < llama_n_vocab(model)) {
+        const std::string & token_text = model->vocab.id_to_token[token].text;
         switch (llama_vocab_get_type(model->vocab)) {
             case LLAMA_VOCAB_TYPE_WPM:
             case LLAMA_VOCAB_TYPE_SPM: {
                 // NOTE: we accept all unsupported token types,
                 // suppressing them like CONTROL tokens.
-                if (llama_is_normal_token(model->vocab, token)) {
-                    std::string result = model->vocab.id_to_token[token].text;
+                if (attr & (attr_special | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
+                    return _try_copy(token_text.data(), token_text.size());
+                } else if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
+                    std::string result = token_text;
                     llama_unescape_whitespace(result);
                     return _try_copy(result.data(), result.size());
-                } else if (
-                        (llama_is_user_defined_token(model->vocab, token)) ||
-                        (llama_is_control_token     (model->vocab, token) && special)) {
-                    const std::string & result = model->vocab.id_to_token[token].text;
-                    return _try_copy(result.data(), result.size());
-/**/            } else if (llama_is_unknown_token(model->vocab, token)) { // NOLINT
-/**/                return _try_copy("\xe2\x96\x85", 3);
-                } else if (llama_is_byte_token(model->vocab, token)) {
+                } else if (attr & LLAMA_TOKEN_ATTR_BYTE) {
                     char byte = (char) llama_token_to_byte(model->vocab, token);
-                    return _try_copy((char*)&byte, 1);
+                    return _try_copy((char*) &byte, 1);
                 }
                 break;
             }
             case LLAMA_VOCAB_TYPE_BPE: {
                 // NOTE: we accept all unsupported token types,
                 // suppressing them like CONTROL tokens.
-                if (llama_is_normal_token(model->vocab, token)) {
-                    std::string result = llama_decode_text(model->vocab.id_to_token[token].text);
-                    return _try_copy(result.data(), result.size());
-                } else if (
-                        (llama_is_user_defined_token(model->vocab, token)) ||
-                        (llama_is_control_token     (model->vocab, token) && special)) {
-                    const std::string & result = model->vocab.id_to_token[token].text;
+                if (attr & (attr_special | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
+                    return _try_copy(token_text.data(), token_text.size());
+                } else if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
+                    std::string result = llama_decode_text(token_text);
                     return _try_copy(result.data(), result.size());
                 }
                 break;
@@ -18510,6 +18505,7 @@ int32_t llama_detokenize(
                          int32_t   text_len_max,
                             bool   special) {
     // remove the leading space of the first non-control token
+    static const int attr_special = LLAMA_TOKEN_ATTR_UNKNOWN | LLAMA_TOKEN_ATTR_CONTROL;
     bool remove_space = model->vocab.tokenizer_add_space_prefix;
     int32_t avail = text_len_max;
     int32_t total = 0;
@@ -18517,7 +18513,8 @@ int32_t llama_detokenize(
     for (int32_t i = 0; i < n_tokens; ++i) {
         GGML_ASSERT(avail >= 0);
         int32_t n_chars = llama_token_to_piece(model, tokens[i], text, avail, remove_space, special);
-        remove_space = remove_space && llama_is_control_token(model->vocab, tokens[i]);  // until non-control token
+        const llama_token_attr attr = llama_token_get_attr(model, tokens[i]);
+        remove_space = remove_space && (attr & attr_special);  // until non-control token
         if (n_chars < 0) {
             avail = 0;
             total -= n_chars;
