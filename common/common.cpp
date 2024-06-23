@@ -1644,6 +1644,21 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.n_pca_iterations = std::stoi(argv[i]);
         return true;
     }
+    if (arg == "--method") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string arg = argv[i];
+        if (arg == "pca") {
+            params.cvector_dimre_method = DIMRE_METHOD_PCA;
+        } else if (arg == "mean") {
+            params.cvector_dimre_method = DIMRE_METHOD_MEAN;
+        } else {
+            invalid_param = true;
+        }
+        return true;
+    }
 #ifndef LOG_DISABLE_LOGS
     // Parse args for logging parameters
     if (log_param_single_parse(argv[i])) {
@@ -1972,6 +1987,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "cvector",     "       --negative-file FNAME",  "negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str() });
     options.push_back({ "cvector",     "       --pca-batch N",          "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
     options.push_back({ "cvector",     "       --pca-iter N",           "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
+    options.push_back({ "cvector",     "       --method {pca,mean}",    "dimensionality reduction method to be used (default: pca)" });
 
     printf("usage: %s [options]\n", argv[0]);
 

@@ -19,6 +19,9 @@ Related PRs:
 # With advanced options
 ./cvector-generator -m ./llama-3.Q4_K_M.gguf -ngl 99 --pca-iter 2000 --pca-batch 100
 
+# Using mean value instead of PCA
+./cvector-generator -m ./llama-3.Q4_K_M.gguf --method mean
+
 # To see help message
 ./cvector-generator -h
 # Then, have a look at "cvector" section
