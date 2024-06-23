@@ -12,7 +12,7 @@ FROM ${BASE_CUDA_DEV_CONTAINER} as build
 ARG CUDA_DOCKER_ARCH=all
 
 RUN apt-get update && \
-    apt-get install -y build-essential git libcurl4-openssl-dev
+    apt-get install -y build-essential git libcurl4-openssl-dev curl
 
 WORKDIR /app
 
@@ -33,5 +33,7 @@ RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev libgomp1
 
 COPY --from=build /app/llama-server /llama-server
+
+HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
 ENTRYPOINT [ "/llama-server" ]
