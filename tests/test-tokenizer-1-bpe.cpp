@@ -11,6 +11,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <atomic>
 
 int main(int argc, char **argv) {
     if (argc < 2 || argc > 3) {
@@ -111,9 +112,11 @@ int main(int argc, char **argv) {
 
         std::vector<std::thread> threads(nthread);
 
+        std::atomic_int errcode = {};
+
         for (int i = 0; i < nthread; ++i) {
-            threads[i] = std::thread([i, nthread, ctx]() {
-                for (uint32_t cp = i; cp < 0x00110000; cp += nthread) {
+            threads[i] = std::thread([i, nthread, ctx, &errcode]() {
+                for (uint32_t cp = i; !errcode && cp < 0x00110000; cp += nthread) {
                     //if (!( // NOLINT
                     //            (cp < 0x03       || cp >  0x05)   && cp != 0x0b && cp != 0x11 &&
                     //            (cp < 0x13       || cp >  0x17)   && cp != 0x19 &&
@@ -130,7 +133,7 @@ int main(int argc, char **argv) {
                     if (cp != 9601 && str != check) {
                         fprintf(stderr, "error: codepoint 0x%x detokenizes to '%s'(%zu) instead of '%s'(%zu)\n",
                                 cp, check.c_str(), check.length(), str.c_str(), str.length());
-                        std::exit(3);
+                        errcode = 3;
                     }
                 }
             });
@@ -138,6 +141,10 @@ int main(int argc, char **argv) {
 
         for (auto & t : threads) {
             t.join();
+        }
+
+        if(errcode) {
+            return errcode;
         }
     }
 
