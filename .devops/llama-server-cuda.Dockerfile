@@ -12,7 +12,7 @@ FROM ${BASE_CUDA_DEV_CONTAINER} as build
 ARG CUDA_DOCKER_ARCH=all
 
 RUN apt-get update && \
-    apt-get install -y build-essential git libcurl4-openssl-dev curl
+    apt-get install -y build-essential git libcurl4-openssl-dev
 
 WORKDIR /app
 
@@ -30,7 +30,7 @@ RUN make -j$(nproc) llama-server
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
 RUN apt-get update && \
-    apt-get install -y libcurl4-openssl-dev libgomp1
+    apt-get install -y libcurl4-openssl-dev libgomp1 curl
 
 COPY --from=build /app/llama-server /llama-server
 
