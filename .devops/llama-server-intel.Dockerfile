@@ -4,7 +4,7 @@ FROM intel/oneapi-basekit:$ONEAPI_VERSION as build
 
 ARG LLAMA_SYCL_F16=OFF
 RUN apt-get update && \
-    apt-get install -y git libcurl4-openssl-dev curl
+    apt-get install -y git libcurl4-openssl-dev
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN if [ "${LLAMA_SYCL_F16}" = "ON" ]; then \
 FROM intel/oneapi-basekit:$ONEAPI_VERSION as runtime
 
 RUN apt-get update && \
-    apt-get install -y libcurl4-openssl-dev
+    apt-get install -y libcurl4-openssl-dev curl
 
 COPY --from=build /app/build/bin/llama-server /llama-server
 
