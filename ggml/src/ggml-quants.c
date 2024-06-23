@@ -3424,48 +3424,6 @@ void dequantize_row_q1_3(const block_q1_3 * restrict x, float * restrict y, int6
     const int64_t nb = k / QK1_3;
     static_assert(sizeof(x->q) % 4 == 0, "bad block_q1_3.q size");
 
-// #if defined(__SSE2__)
-//     __m128 vscale = _mm_set1_ps(scale);
-
-//     for (int64_t i = 0; i < nb; ++i) {
-//         for (size_t j = 0; j < sizeof(x->q); j += 4) {
-//             __m128 q1 = _mm_cvtpi8_ps(_m_from_int(q1_3_grid[x[i].q[j + 0]]));
-//             __m128 q2 = _mm_cvtpi8_ps(_m_from_int(q1_3_grid[x[i].q[j + 1]]));
-//             __m128 q3 = _mm_cvtpi8_ps(_m_from_int(q1_3_grid[x[i].q[j + 2]]));
-//             __m128 q4 = _mm_cvtpi8_ps(_m_from_int(q1_3_grid[x[i].q[j + 3]]));
-//             q1 = _mm_mul_ps(q1, vscale);
-//             q2 = _mm_mul_ps(q2, vscale);
-//             q3 = _mm_mul_ps(q3, vscale);
-//             q4 = _mm_mul_ps(q4, vscale);
-
-//             _mm_store_ps(y +  0, q1);
-//             _mm_store_ps(y +  4, q2);
-//             _mm_store_ps(y +  8, q3);
-//             _mm_store_ps(y + 12, q4);
-//             y += 16;
-//         }
-
-//         for (size_t j = 0; j < sizeof(x->q); j += 4) {
-//             __m128i q5i = _mm_loadu_si32(x[i].q + j);
-//             q5i = _mm_cvtepi8_epi16(q5i);
-//             q5i = _mm_add_epi16(q5i, _mm_add_epi16(q5i, q5i));
-//             q5i = _mm_srli_epi16(q5i, 8);
-//             q5i = _mm_sub_epi16(q5i, _mm_set1_epi16(1));
-//             __m128 q5 = _mm_cvtepi32_ps(_mm_cvtepi16_epi32(q5i));
-//             q5 = _mm_mul_ps(q5, vscale);
-
-//             _mm_store_ps(y, q5);
-//             y += 4;
-//         }
-
-//         for (size_t j = 0; j < sizeof(x->qs); ++j) {
-//             __m128 q = _mm_cvtpi8_ps(_m_from_int(q1_3_grid[x[i].qs[j]]));
-//             q = _mm_mul_ps(q, vscale);
-//             _mm_store_ps(y, q);
-//             y += 4;
-//         }
-//     }
-// #else
     for (int64_t i = 0; i < nb; ++i) {
         for (size_t j = 0; j < sizeof(x->q); ++j) {
             const int8_t * q = (const int8_t *) (q1_3_grid + x[i].q[j]);
@@ -3486,7 +3444,6 @@ void dequantize_row_q1_3(const block_q1_3 * restrict x, float * restrict y, int6
             }
         }
     }
-// #endif
 }
 
 // ====================== "True" 2-bit (de)-quantization
@@ -11356,14 +11313,15 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
     __m256 accumf = _mm256_setzero_ps();
 
     for (int i = 0; i < nb; ++i) {
-        // const __m128i x12b = _mm_maskload_epi32((const int32_t *) x[i].q, _mm_set_epi32(0, -1, -1, -1));
-        // const __m128i x12b = _mm_insert_epi8(x12a, x[i].qs[0], 12);
+        // const __m128i x12a = _mm_maskload_epi32((const int32_t *) x, _mm_set_epi32(0, -1, -1, -1));
+        // const __m128i x12b = _mm_insert_epi8(x12a, x->qs[0], 12);
         // WARNING: reading 3 bytes further than necessary.
         // It's measurably faster than a masked load on an Intel Core m3-8100Y
-        const __m128i x12b = _mm_loadu_si128((const __m128i_u *) (x[i].q));
+        const __m128i x12b = _mm_loadu_si128((const __m128i_u *) x);
         const __m256i x12 = MM256_SET_M128I(x12b, x12b);
 
         {
+            // pre-shift the values by 8 bits, and prepare the layout for later packing
             __m256i x0l = _mm256_shuffle_epi8(x12, _mm256_set_epi8(5, -1, 5, -1, 5, -1, 5, -1,
                                                                    4, -1, 4, -1, 4, -1, 4, -1,
                                                                    1, -1, 1, -1, 1, -1, 1, -1,
@@ -11384,8 +11342,8 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
                                                     3, 9, 27, 81,
                                                     3, 9, 27, 81,
                                                     3, 9, 27, 81);
-            const __m256i shift1l = _mm256_set_epi16(1, 1, 1, 1,
-                                                     1, 1, 1, 1,
+            const __m256i shift1l = _mm256_set_epi16(1, 1,  1,  1,
+                                                     1, 1,  1,  1,
                                                      3, 9, 27, 81,
                                                      3, 9, 27, 81);
             const __m256i shift1h = _mm256_set_epi16(3, 9, 27, 81,
@@ -11409,18 +11367,21 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
             x0 = _mm256_sub_epi8(x0, _mm256_set1_epi8(1));
             x1 = _mm256_sub_epi8(x1, _mm256_set1_epi8(1));
 
-            const __m256i y0 = _mm256_loadu_si256((const __m256i_u *) (y[2*i + 0].qs));
-            const __m256i y1 = _mm256_loadu_si256((const __m256i_u *) (y[2*i + 1].qs));
+            const __m256i y0 = _mm256_loadu_si256((const __m256i_u *) (y[0].qs));
+            const __m256i y1 = _mm256_loadu_si256((const __m256i_u *) (y[1].qs));
 
-            const __m256 d0 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[2*i + 0].d));
-            const __m256 d1 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[2*i + 1].d));
+            const __m256 d0 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[0].d));
+            const __m256 d1 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[1].d));
 
-            const __m256 q0 = mul_sum_i8_pairs_float(x0, y0);
-            const __m256 q1 = mul_sum_i8_pairs_float(x1, y1);
+            const __m256 q0 = mul_sum_i8_pairs_float(y0, x0);
+            const __m256 q1 = mul_sum_i8_pairs_float(y1, x1);
 
             accumf = _mm256_fmadd_ps(d0, q0, accumf);
             accumf = _mm256_fmadd_ps(d1, q1, accumf);
         }
+
+        x += 1;
+        y += 2;
     }
 
     *s = hsum_float_8(accumf);
