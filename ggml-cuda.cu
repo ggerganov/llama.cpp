@@ -1911,7 +1911,7 @@ static void ggml_cuda_mul_mat(ggml_backend_cuda_context & ctx, const ggml_tensor
 
 #if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 
-    const bool fp16_performance_good = min_compute_capability >= CC_RDNA1;
+    const bool fp16_performance_good = min_compute_capability >= CC_GCN4;
 
 #ifdef CUDA_USE_TENSOR_CORES
     use_mul_mat_q = use_mul_mat_q && min_compute_capability < CC_RDNA3;

@@ -142,6 +142,9 @@
 #define CC_TURING     750
 #define CC_AMPERE     800
 #define CC_OFFSET_AMD 1000000
+#define CC_GCN4      (CC_OFFSET_AMD + 803)
+#define CC_VEGA      (CC_OFFSET_AMD + 900)
+#define CC_CDNA      (CC_OFFSET_AMD + 908)
 #define CC_RDNA1      (CC_OFFSET_AMD + 1010)
 #define CC_RDNA2      (CC_OFFSET_AMD + 1030)
 #define CC_RDNA3      (CC_OFFSET_AMD + 1100)
@@ -232,6 +235,14 @@ typedef float2 dfloat2;
 
 #if defined(GGML_USE_HIPBLAS)
 #define __CUDA_ARCH__ 1300
+
+#if defined(__gfx908__) || defined(__gfx90a__)
+#define CDNA
+#endif
+
+#if defined(__gfx803__) || defined(__gfx900__) || defined(__gfx906__)
+#define GCN
+#endif
 
 #if defined(__gfx1100__) || defined(__gfx1101__) || defined(__gfx1102__) || defined(__gfx1103__) || \
     defined(__gfx1150__) || defined(__gfx1151__)

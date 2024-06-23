@@ -56,13 +56,21 @@ static __global__ void mul_mat_vec_q(
 
     constexpr vec_dot_q_cuda_t vec_dot_q_cuda = get_vec_dot_q_cuda(type);
 
-#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__) && (defined(RDNA2) || defined(RDNA3))
+#if defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
+#if defined(RDNA2) || defined(RDNA3)
     constexpr int nwarps              = 1;
     constexpr int rows_per_cuda_block = 1;
+#elif defined(CDNA)
+    constexpr int nwarps              = ncols_y <= 4 ? 4 : 2;
+    constexpr int rows_per_cuda_block = ncols_y == 4 ? ncols_y : 4;
 #else
     constexpr int nwarps              = ncols_y <= 4 ? 4 : 2;
     constexpr int rows_per_cuda_block = ncols_y == 1 ? 1 : 2;
-#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__) && !defined(RDNA2) && !defined(RDNA3)
+#endif
+#else
+    constexpr int nwarps              = ncols_y <= 4 ? 4 : 2;
+    constexpr int rows_per_cuda_block = ncols_y == 1 ? 1 : 2;
+#endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
 
     const     int tid = WARP_SIZE*threadIdx.y + threadIdx.x;
     const     int row0 = rows_per_cuda_block*blockIdx.x;
