@@ -218,6 +218,7 @@ class MODEL_TENSOR(IntEnum):
     DEC_CROSS_ATTN_OUT = auto()
     DEC_CROSS_ATTN_REL_B = auto()
     DEC_FFN_NORM       = auto()
+    DEC_FFN_GATE       = auto()
     DEC_FFN_DOWN       = auto()
     DEC_FFN_UP         = auto()
     DEC_OUTPUT_NORM    = auto()
@@ -228,6 +229,7 @@ class MODEL_TENSOR(IntEnum):
     ENC_ATTN_OUT       = auto()
     ENC_ATTN_REL_B     = auto()
     ENC_FFN_NORM       = auto()
+    ENC_FFN_GATE       = auto()
     ENC_FFN_DOWN       = auto()
     ENC_FFN_UP         = auto()
     ENC_OUTPUT_NORM    = auto()
@@ -333,6 +335,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.DEC_CROSS_ATTN_OUT:   "dec.blk.{bid}.cross_attn_o",
     MODEL_TENSOR.DEC_CROSS_ATTN_REL_B: "dec.blk.{bid}.cross_attn_rel_b",
     MODEL_TENSOR.DEC_FFN_NORM:         "dec.blk.{bid}.ffn_norm",
+    MODEL_TENSOR.DEC_FFN_GATE:         "dec.blk.{bid}.ffn_gate",
     MODEL_TENSOR.DEC_FFN_DOWN:         "dec.blk.{bid}.ffn_down",
     MODEL_TENSOR.DEC_FFN_UP:           "dec.blk.{bid}.ffn_up",
     MODEL_TENSOR.DEC_OUTPUT_NORM:      "dec.output_norm",
@@ -343,6 +346,7 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ENC_ATTN_OUT:         "enc.blk.{bid}.attn_o",
     MODEL_TENSOR.ENC_ATTN_REL_B:       "enc.blk.{bid}.attn_rel_b",
     MODEL_TENSOR.ENC_FFN_NORM:         "enc.blk.{bid}.ffn_norm",
+    MODEL_TENSOR.ENC_FFN_GATE:         "enc.blk.{bid}.ffn_gate",
     MODEL_TENSOR.ENC_FFN_DOWN:         "enc.blk.{bid}.ffn_down",
     MODEL_TENSOR.ENC_FFN_UP:           "enc.blk.{bid}.ffn_up",
     MODEL_TENSOR.ENC_OUTPUT_NORM:      "enc.output_norm",
@@ -868,6 +872,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     ],
     MODEL_ARCH.T5: [
         MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT,
         MODEL_TENSOR.DEC_ATTN_NORM,
         MODEL_TENSOR.DEC_ATTN_Q,
         MODEL_TENSOR.DEC_ATTN_K,
@@ -881,6 +886,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.DEC_CROSS_ATTN_OUT,
         MODEL_TENSOR.DEC_CROSS_ATTN_REL_B,
         MODEL_TENSOR.DEC_FFN_NORM,
+        MODEL_TENSOR.DEC_FFN_GATE,
         MODEL_TENSOR.DEC_FFN_DOWN,
         MODEL_TENSOR.DEC_FFN_UP,
         MODEL_TENSOR.DEC_OUTPUT_NORM,
@@ -891,6 +897,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ENC_ATTN_OUT,
         MODEL_TENSOR.ENC_ATTN_REL_B,
         MODEL_TENSOR.ENC_FFN_NORM,
+        MODEL_TENSOR.ENC_FFN_GATE,
         MODEL_TENSOR.ENC_FFN_DOWN,
         MODEL_TENSOR.ENC_FFN_UP,
         MODEL_TENSOR.ENC_OUTPUT_NORM,

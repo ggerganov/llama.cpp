@@ -2834,6 +2834,17 @@ class T5Model(Model):
         self.gguf_writer.add_decoder_start_token_id(self.hparams["decoder_start_token_id"])
         self.gguf_writer.add_file_type(self.ftype)
 
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        # flan-t5-xxl contains "decoder.embed_tokens.weight" tensor that is the same as "shared.weight" tensor
+        # To prevent errors caused by an unnecessary unmapped tensor, skip "decoder.embed_tokens.weight".
+        if name == "decoder.embed_tokens.weight":
+            logger.debug(f"Skipping tensor {name!r} in safetensors so that convert can end normally.")
+            return []
+
+        return [(self.map_tensor_name(name), data_torch)]
+
 
 ###### CONVERSION LOGIC ######
 

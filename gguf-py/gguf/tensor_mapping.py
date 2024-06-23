@@ -467,8 +467,13 @@ class TensorNameMap:
             "decoder.block.{bid}.layer.2.layer_norm", # t5
         ),
 
+        MODEL_TENSOR.DEC_FFN_GATE: (
+            "decoder.block.{bid}.layer.2.DenseReluDense.wi_0", # flan-t5
+        ),
+
         MODEL_TENSOR.DEC_FFN_UP: (
-            "decoder.block.{bid}.layer.2.DenseReluDense.wi", # t5
+            "decoder.block.{bid}.layer.2.DenseReluDense.wi",   # t5
+            "decoder.block.{bid}.layer.2.DenseReluDense.wi_1", # flan-t5
         ),
 
         MODEL_TENSOR.DEC_FFN_DOWN: (
@@ -507,8 +512,13 @@ class TensorNameMap:
             "encoder.block.{bid}.layer.1.layer_norm", # t5
         ),
 
+        MODEL_TENSOR.ENC_FFN_GATE: (
+            "encoder.block.{bid}.layer.1.DenseReluDense.wi_0", # flan-t5
+        ),
+
         MODEL_TENSOR.ENC_FFN_UP: (
-            "encoder.block.{bid}.layer.1.DenseReluDense.wi", # t5
+            "encoder.block.{bid}.layer.1.DenseReluDense.wi",   # t5
+            "encoder.block.{bid}.layer.1.DenseReluDense.wi_1", # flan-t5
         ),
 
         MODEL_TENSOR.ENC_FFN_DOWN: (
