@@ -13,7 +13,7 @@ layout (constant_id = 0) const uint BLOCK_SIZE = 32;
 shared FLOAT_TYPE tmp[BLOCK_SIZE];
 
 void main() {
-    const uint row = gl_WorkGroupID.x;
+    const uint row = gl_WorkGroupID.x + gl_NumWorkGroups.x * gl_WorkGroupID.z;
     const uint tid = gl_LocalInvocationID.x;
 
     uint a_offset, b_offset, d_offset;

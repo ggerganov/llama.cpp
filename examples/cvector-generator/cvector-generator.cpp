@@ -40,7 +40,7 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
     printf("\nexample usage:\n");
     printf("\n    CPU only:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf\n", argv[0]);
     printf("\n    with GPU:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99\n", argv[0]);
-    printf("\n    advanced:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --batch-pca 100\n", argv[0]);
+    printf("\n    advanced:   %s -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --pca-batch 100\n", argv[0]);
     printf("\n");
 }
 
@@ -377,8 +377,8 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
     // create templated prompts
     std::vector<std::string> completions = ctrlvec_load_prompt_file(params.cvector_completions_file, false);
     auto format_template = [](std::string persona, std::string suffix) {
-        // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST]"
-        return persona + " " + suffix;
+        // entry in positive/negative.txt must already be formatted i.e. "[INST] Act as if you're extremely happy. [/INST] "
+        return persona + suffix;
     };
     for (size_t i = 0; i < positive_prompts.size(); ++i) {
         for (int j = 0; j < std::min((int) completions.size(), params.n_completions); ++j) {
