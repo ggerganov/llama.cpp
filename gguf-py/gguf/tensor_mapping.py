@@ -413,6 +413,14 @@ class TensorNameMap:
         MODEL_TENSOR.ATTN_KV_A_NORM: (
             "model.layers.{bid}.self_attn.kv_a_layernorm", # deepseek2
         ),
+
+        MODEL_TENSOR.ATTN_SUB_NORM: (
+            "model.layers.{bid}.self_attn.inner_attn_ln",  # bitnet
+        ),
+
+        MODEL_TENSOR.FFN_SUB_NORM: (
+            "model.layers.{bid}.mlp.ffn_layernorm",  # bitnet
+        ),
     }
 
     # architecture-specific block mappings
