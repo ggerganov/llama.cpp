@@ -1404,6 +1404,48 @@ class LlamaModel(Model):
                 raise ValueError(f"Unprocessed experts: {experts}")
 
 
+@Model.register("BitnetForCausalLM")
+class BitnetModel(Model):
+    model_arch = gguf.MODEL_ARCH.BITNET
+
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+        self.gguf_writer.add_rope_scaling_factor(1.0)
+
+    def weight_quant(self, weight):
+        dtype = weight.dtype
+        weight = weight.float()
+        s = 1 / weight.abs().mean().clamp(min=1e-5)
+        weight = (weight * s).round().clamp(-1, 1) / s
+        scale = weight.abs().max().unsqueeze(0)
+        weight = torch.where(weight.abs().less(1e-6), 0, weight).type(dtype)
+        weight = torch.sign(weight).type(dtype)
+        return weight.type(dtype), scale.type(torch.float32)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        new_name = self.map_tensor_name(name)
+
+        if any(self.match_model_tensor_name(new_name, key, bid) for key in [
+            gguf.MODEL_TENSOR.ATTN_Q,
+            gguf.MODEL_TENSOR.ATTN_K,
+            gguf.MODEL_TENSOR.ATTN_V,
+            gguf.MODEL_TENSOR.ATTN_OUT,
+            gguf.MODEL_TENSOR.FFN_UP,
+            gguf.MODEL_TENSOR.FFN_DOWN,
+            gguf.MODEL_TENSOR.FFN_GATE,
+        ]):
+            # transform weight into 1/0/-1 (in fp32)
+            weight_torch, scale_torch = self.weight_quant(data_torch)
+            yield (new_name, weight_torch)
+            yield (new_name.removesuffix(".weight") + ".scale", scale_torch)
+        else:
+            yield (new_name, data_torch)
+
+
 @Model.register("GrokForCausalLM")
 class GrokModel(Model):
     model_arch = gguf.MODEL_ARCH.GROK

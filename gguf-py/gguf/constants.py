@@ -153,6 +153,7 @@ class MODEL_ARCH(IntEnum):
     OLMO         = auto()
     ARCTIC       = auto()
     DEEPSEEK2    = auto()
+    BITNET       = auto()
     T5           = auto()
 
 
@@ -205,6 +206,8 @@ class MODEL_TENSOR(IntEnum):
     ATTN_KV_B            = auto()
     ATTN_Q_A_NORM        = auto()
     ATTN_KV_A_NORM       = auto()
+    FFN_SUB_NORM         = auto()
+    ATTN_SUB_NORM        = auto()
     DEC_ATTN_NORM        = auto()
     DEC_ATTN_Q           = auto()
     DEC_ATTN_K           = auto()
@@ -270,6 +273,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.OLMO:           "olmo",
     MODEL_ARCH.ARCTIC:         "arctic",
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
+    MODEL_ARCH.BITNET:         "bitnet",
     MODEL_ARCH.T5:             "t5",
 }
 
@@ -322,6 +326,8 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_KV_B:            "blk.{bid}.attn_kv_b",
     MODEL_TENSOR.ATTN_Q_A_NORM:        "blk.{bid}.attn_q_a_norm",
     MODEL_TENSOR.ATTN_KV_A_NORM:       "blk.{bid}.attn_kv_a_norm",
+    MODEL_TENSOR.ATTN_SUB_NORM:        "blk.{bid}.attn_sub_norm",
+    MODEL_TENSOR.FFN_SUB_NORM:         "blk.{bid}.ffn_sub_norm",
     MODEL_TENSOR.DEC_ATTN_NORM:        "dec.blk.{bid}.attn_norm",
     MODEL_TENSOR.DEC_ATTN_Q:           "dec.blk.{bid}.attn_q",
     MODEL_TENSOR.DEC_ATTN_K:           "dec.blk.{bid}.attn_k",
@@ -869,6 +875,21 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_SHEXP,
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
+    ],
+    MODEL_ARCH.BITNET: [
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.ATTN_SUB_NORM,
+        MODEL_TENSOR.FFN_SUB_NORM,
     ],
     MODEL_ARCH.T5: [
         MODEL_TENSOR.TOKEN_EMBD,
