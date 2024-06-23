@@ -11861,7 +11861,7 @@ struct llm_build_context {
                 cb(Kcur, "Kcur", il);
 
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
-                        nullptr, model.layers[il].bo,
+                        nullptr, nullptr,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
                 cur = llm_build_norm(ctx0, cur, hparams,
@@ -11871,6 +11871,9 @@ struct llm_build_context {
 
                 cur = ggml_mul_mat(ctx0, model.layers[il].wo, cur);
                 cur = ggml_mul(ctx0, cur, model.layers[il].wo_scale);
+                if (model.layers[il].bo) {
+                    cur = ggml_add(ctx0, cur, model.layers[il].bo);
+                }
                 cb(cur, "attn_o_out", il);
             }
 
