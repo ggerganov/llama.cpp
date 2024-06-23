@@ -63,7 +63,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_BPE);
+    //GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_BPE);
+    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
+        return 99;
+    }
 
 #ifdef _WIN32
     // We need this for unicode console support
