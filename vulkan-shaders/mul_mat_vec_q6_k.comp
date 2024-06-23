@@ -7,7 +7,7 @@ layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 shared FLOAT_TYPE tmp[32];
 
 void main() {
-    const uint row = gl_WorkGroupID.x;
+    const uint row = gl_WorkGroupID.x + gl_NumWorkGroups.x * gl_WorkGroupID.z;
 
     uint a_offset, b_offset, d_offset;
     get_offsets(a_offset, b_offset, d_offset);
