@@ -2837,9 +2837,10 @@ class T5Model(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
-        # flan-t5-xxl contains "decoder.embed_tokens.weight" tensor that is the same as "shared.weight" tensor
-        # To prevent errors caused by an unnecessary unmapped tensor, skip "decoder.embed_tokens.weight".
-        if name == "decoder.embed_tokens.weight":
+        # Sometimes T5 and Flan-T5 based models contain "encoder.embed_tokens.weight" tensor or
+        # "decoder.embed_tokens.weight" tensors that are duplicates of "shared.weight" tensor
+        # To prevent errors caused by an unnecessary unmapped tensor, skip both of them and use only "shared.weight".
+        if name == "decoder.embed_tokens.weight" or name == "encoder.embed_tokens.weight":
             logger.debug(f"Skipping tensor {name!r} in safetensors so that convert can end normally.")
             return []
 
