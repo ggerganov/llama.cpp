@@ -117,15 +117,10 @@ int main(int argc, char **argv) {
         for (int i = 0; i < nthread; ++i) {
             threads[i] = std::thread([i, nthread, ctx, &errcode]() {
                 for (uint32_t cp = i; !errcode && cp < 0x00110000; cp += nthread) {
-                    //if (!( // NOLINT
-                    //            (cp < 0x03       || cp >  0x05)   && cp != 0x0b && cp != 0x11 &&
-                    //            (cp < 0x13       || cp >  0x17)   && cp != 0x19 &&
-                    //            (cp < 0x1c       || cp >  0x1e)   &&
-                    //            (cp < 0xd800     || cp >  0xdfff) &&
-                    //            (cp < 0x00040000 || cp >= 0x000e0000)
-                    //    )) {
-                    //    continue;
-                    //}
+                    if ((0x0000D800 <= cp && cp <= 0x0000DFFF) ||  // surrogates \p{Cs}
+                        (0x00040000 <= cp && cp <= 0x000E0000)) {  // undefined  \p{Cn}
+                        continue;
+                    }
 
                     std::string str = unicode_cpt_to_utf8(cp);
                     std::vector<llama_token> tokens = llama_tokenize(ctx, str, false);

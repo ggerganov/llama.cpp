@@ -87,9 +87,10 @@ int main(int argc, char ** argv) {
         for (int i = 0; i < nthread; ++i) {
             threads[i] = std::thread([i, nthread, ctx, &errcode]() {
                 for (uint32_t cp = i; !errcode && cp < 0x00110000; cp += nthread) {
-                    //if (cp >= 0xd800 && cp <= 0xdfff) {
-                    //    continue;
-                    //}
+                    if ((0x0000D800 <= cp && cp <= 0x0000DFFF) ||  // surrogates \p{Cs}
+                        (0x00040000 <= cp && cp <= 0x000E0000)) {  // undefined \p{Cn}
+                        continue;
+                    }
 
                     std::string str = unicode_cpt_to_utf8(cp);
                     std::vector<llama_token> tokens = llama_tokenize(ctx, str, false, true);
