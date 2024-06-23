@@ -284,9 +284,9 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
             "prefixItems": { "type": "string" }
         })""",
         R"""(
-            char ::= [^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
+            char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
             root ::= "[" space (string ("," space string)*)? "]" space
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
             string ::= "\"" char* "\"" space
         )"""
     });
@@ -300,10 +300,10 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             alternative-0 ::= "[" space (string ("," space string)*)? "]" space
-            char ::= [^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
+            char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
             null ::= "null" space
             root ::= alternative-0 | null
-            space ::= " "?
+            space ::= | " " | "\n" [ \t]{0,20}
             string ::= "\"" char* "\"" space
         )"""
     });
