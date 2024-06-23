@@ -652,8 +652,8 @@ static int get_mmq_x_max_host(const int cc) {
 }
 
 // Round rows to this value for --split-mode row:
-static int get_mmq_y_host(const int cc, const int mmq_x) {
-    return cc >= CC_VOLTA && mmq_x >= 32 ? 128 : 64;
+static int get_mmq_y_host(const int cc) {
+    return cc >= CC_VOLTA ? 128 : 64;
 }
 
 //////////////////////
