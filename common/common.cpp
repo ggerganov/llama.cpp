@@ -3020,6 +3020,17 @@ std::string llama_chat_format_single(const struct llama_model * model,
     return formatted;
 }
 
+std::string llama_chat_format_example(const struct llama_model * model,
+        const std::string & tmpl) {
+    std::vector<llama_chat_msg> msgs = {
+        {"system",    "You are a helpful assistant"},
+        {"user",      "Hello"},
+        {"assistant", "Hi there"},
+        {"user",      "How are you?"},
+    };
+    return llama_chat_apply_template(model, tmpl, msgs, true);
+}
+
 //
 // KV cache utils
 //

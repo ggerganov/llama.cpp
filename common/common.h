@@ -382,6 +382,10 @@ std::string llama_chat_format_single(const struct llama_model * model,
         const llama_chat_msg & new_msg,
         bool add_ass);
 
+// Returns an example of formatted chat
+std::string llama_chat_format_example(const struct llama_model * model,
+        const std::string & tmpl);
+
 //
 // KV cache utils
 //
