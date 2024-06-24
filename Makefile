@@ -19,6 +19,7 @@ BUILD_TARGETS = \
 	llama-imatrix \
 	llama-infill \
 	llama-llava-cli \
+  llama-minicpmv-cli\
 	llama-lookahead \
 	llama-lookup \
 	llama-lookup-create \
@@ -949,6 +950,13 @@ llama-llava-cli: examples/llava/llava-cli.cpp examples/llava/clip.h examples/lla
 	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) -o $@ $(LDFLAGS)
 
+llama-minicpmv-cli: examples/llava/minicpmv-cli.cpp examples/llava/clip.h examples/llava/clip.cpp examples/llava/llava.h examples/llava/llava.cpp examples/llava/minicpmv_wrapper.h examples/llava/minicpmv_wrapper.cpp ggml.o llama.o $(COMMON_DEPS) $(OBJS)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) -c examples/llava/clip.cpp  -o $(call GET_OBJ_FILE, examples/llava/clip.cpp) -Wno-cast-qual
+	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
+	$(CXX) $(CXXFLAGS) -c examples/llava/minicpmv_wrapper.cpp  -o $(call GET_OBJ_FILE, examples/llava/minicpmv_wrapper.cpp)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp examples/llava/minicpmv_wrapper.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) $(call GET_OBJ_FILE, examples/llava/minicpmv_wrapper.cpp) -o $@ $(LDFLAGS)
+	
 llama-baby-llama: examples/baby-llama/baby-llama.cpp ggml.o llama.o $(COMMON_DEPS) train.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
