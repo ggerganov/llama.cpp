@@ -18540,7 +18540,7 @@ int32_t llama_detokenize(
             if (text[i - 1] == ' ') {
                 if (x == '?' || x == '!' || x == '.' || x == ',') {  // " ?", " !", " .", " ,"
                     total--;  // remove space
-                } 
+                }
             }
             text[total++] = x;
         }
