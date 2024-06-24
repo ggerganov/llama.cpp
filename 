@@ -1,0 +1,28 @@
+export PATH=/usr/local/cuda-12.2/bin${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-12.2/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export PATH=/local/mnt/workspace/miniconda3/bin:$PATH
+export CUDA_VISIBLE_DEVICES=0,1,2,3ii:
+:
+:
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/local/mnt/workspace/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/local/mnt/workspace/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/local/mnt/workspace/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/local/mnt/workspace/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
+
+# proxy setting
+export http_proxy=http://secure-proxy-aprdc2-1.qualcomm.com:9090/
+export https_proxy=http://secure-proxy-aprdc2-1.qualcomm.com:9090/
+export ftp_proxy=http://secure-proxy-aprdc2-1.qualcomm.com:9090/
+
+# HF cache
+export HF_HOME=/local/mnt/zzx/.cache/huggingface
