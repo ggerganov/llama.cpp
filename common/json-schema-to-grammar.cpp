@@ -16,7 +16,7 @@ static std::string join(Iterator begin, Iterator end, const std::string & separa
 
 static std::string repeat(const std::string & str, size_t n);
 
-static std::string build_repetition(const std::string & item_rule, const int min_items, int max_items, const std::string & separator_rule = "") {
+static std::string build_repetition(const std::string & item_rule, int min_items, int max_items, const std::string & separator_rule = "") {
     auto has_max = max_items != std::numeric_limits<int>::max();
 
     if (min_items == 0 && max_items == 1) {

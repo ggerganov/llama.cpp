@@ -12,9 +12,6 @@
 #include <cassert>
 #include <string>
 #include <vector>
-#include <json-schema-to-grammar.h>
-
-using json = nlohmann::ordered_json;
 
 using json = nlohmann::ordered_json;
 
