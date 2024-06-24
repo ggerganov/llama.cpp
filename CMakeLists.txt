@@ -119,6 +119,7 @@ option(LLAMA_HIP_UMA                         "llama: use HIP unified memory arch
 option(LLAMA_VULKAN                          "llama: use Vulkan"                                OFF)
 option(LLAMA_VULKAN_CHECK_RESULTS            "llama: run Vulkan op checks"                      OFF)
 option(LLAMA_VULKAN_DEBUG                    "llama: enable Vulkan debug output"                OFF)
+option(LLAMA_VULKAN_MEMORY_DEBUG             "llama: enable Vulkan memory debug output"         OFF)
 option(LLAMA_VULKAN_VALIDATE                 "llama: enable Vulkan validation"                  OFF)
 option(LLAMA_VULKAN_RUN_TESTS                "llama: run Vulkan tests"                          OFF)
 option(LLAMA_METAL                           "llama: use Metal"                                 ${LLAMA_METAL_DEFAULT})
@@ -142,9 +143,6 @@ option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STA
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 option(LLAMA_LASX                            "llama: enable lasx"                               ON)
 option(LLAMA_LSX                             "llama: enable lsx"                                ON)
-
-# add perf arguments
-option(LLAMA_PERF                            "llama: enable perf"                               OFF)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
@@ -534,6 +532,10 @@ if (LLAMA_VULKAN)
             add_compile_definitions(GGML_VULKAN_DEBUG)
         endif()
 
+        if (LLAMA_VULKAN_MEMORY_DEBUG)
+            add_compile_definitions(GGML_VULKAN_MEMORY_DEBUG)
+        endif()
+
         if (LLAMA_VULKAN_VALIDATE)
             add_compile_definitions(GGML_VULKAN_VALIDATE)
         endif()
@@ -660,6 +662,7 @@ if (LLAMA_SYCL)
     #todo: AOT
 
     find_package(IntelSYCL REQUIRED)
+    find_package(MKL REQUIRED)
 
     message(STATUS "SYCL found")
 
@@ -674,11 +677,9 @@ if (LLAMA_SYCL)
     endif()
 
     add_compile_options(-I./) #include DPCT
-    add_compile_options(-I/${SYCL_INCLUDE_DIR})
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
     if (LLAMA_SYCL_TARGET STREQUAL "NVIDIA")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
     endif()
@@ -688,8 +689,10 @@ if (LLAMA_SYCL)
     list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
 
     if (WIN32)
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl sycl7 OpenCL mkl_sycl_blas_dll.lib mkl_intel_ilp64_dll.lib mkl_sequential_dll.lib mkl_core_dll.lib)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
     else()
+        add_compile_options(-I/${SYCL_INCLUDE_DIR})
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
         if (LLAMA_SYCL_TARGET STREQUAL "INTEL")
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
         elseif (LLAMA_SYCL_TARGET STREQUAL "NVIDIA")
@@ -862,10 +865,6 @@ if (LLAMA_CPU_HBM)
     add_compile_definitions(GGML_USE_CPU_HBM)
 
     target_link_libraries(ggml PUBLIC memkind)
-endif()
-
-if (LLAMA_PERF)
-    add_compile_definitions(GGML_PERF)
 endif()
 
 function(get_flags CCID CCVER)

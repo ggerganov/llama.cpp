@@ -344,9 +344,6 @@ ifdef LLAMA_GPROF
 	MK_CFLAGS   += -pg
 	MK_CXXFLAGS += -pg
 endif
-ifdef LLAMA_PERF
-	MK_CPPFLAGS += -DGGML_PERF
-endif
 
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
@@ -507,7 +504,7 @@ ifdef LLAMA_CUDA
 		CUDA_PATH ?= /usr/local/cuda
 	endif
 	MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include -DGGML_CUDA_USE_GRAPHS
-	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L/usr/lib/wsl/lib
+	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L$(CUDA_PATH)/lib64/stubs -L/usr/lib/wsl/lib
 	OBJS         += ggml-cuda.o
 	OBJS         += $(patsubst %.cu,%.o,$(wildcard ggml-cuda/*.cu))
 	OBJS         += $(OBJS_CUDA_TEMP_INST)
@@ -606,6 +603,10 @@ endif
 
 ifdef LLAMA_VULKAN_DEBUG
 	MK_CPPFLAGS  += -DGGML_VULKAN_DEBUG
+endif
+
+ifdef LLAMA_VULKAN_MEMORY_DEBUG
+	MK_CPPFLAGS  += -DGGML_VULKAN_MEMORY_DEBUG
 endif
 
 ifdef LLAMA_VULKAN_VALIDATE
@@ -1047,7 +1048,7 @@ tests/test-grammar-parser: tests/test-grammar-parser.cpp ggml.o llama.o grammar-
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-grammar-integration: tests/test-grammar-integration.cpp ggml.o llama.o grammar-parser.o $(OBJS)
+tests/test-grammar-integration: tests/test-grammar-integration.cpp json-schema-to-grammar.o ggml.o llama.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 

@@ -73,7 +73,6 @@ struct gpt_params {
     int32_t n_gpu_layers_draft    =    -1; // number of layers to store in VRAM for the draft model (-1 - use default)
     int32_t main_gpu              =     0; // the GPU that is used for scratch and small tensors
     float   tensor_split[128]     =   {0}; // how split tensors should be distributed across GPUs
-    int32_t n_beams               =     0; // if non-zero then use beam search of given width.
     int32_t grp_attn_n            =     1; // group-attention factor
     int32_t grp_attn_w            =   512; // group-attention width
     int32_t n_print               =    -1; // print token count every n tokens (-1 = disabled)
@@ -153,7 +152,6 @@ struct gpt_params {
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
-    bool embedding         = false; // get only sentence embedding
     bool escape            = true;  // escape "\n", "\r", "\t", "\'", "\"", and "\\"
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
@@ -179,6 +177,12 @@ struct gpt_params {
     // multimodal models (see examples/llava)
     std::string mmproj = "";        // path to multimodal projector
     std::vector<std::string> image; // path to image file(s)
+
+    // embedding
+    bool embedding         = false; // get only sentence embedding
+    int32_t embd_normalize = 2;     // normalisation for embendings (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)
+    std::string embd_out   = "";    // empty = default, "array" = [[],[]...], "json" = openai style, "json+" = same "json" + cosine similarity matrix
+    std::string embd_sep   = "\n";  // separator of embendings
 
     // server params
     int32_t port           = 8080;         // server listens on this network port
@@ -378,7 +382,7 @@ void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_siz
 // Embedding utils
 //
 
-void llama_embd_normalize(const float * inp, float * out, int n);
+void llama_embd_normalize(const float * inp, float * out, int n, int embd_norm = 2);
 
 float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n);
 

@@ -30,7 +30,7 @@ jobs:
 
     strategy:
       matrix:
-        sanitizer: [ADDRESS, THREAD, UNDEFINED]
+        sanitizer: [ADDRESS, UNDEFINED] # THREAD is broken
         build_type: [RelWithDebInfo]
         include:
           - build_type: Release
@@ -87,8 +87,22 @@ jobs:
             exit 1
           fi
 
+      - name: Build (no OpenMP)
+        id: cmake_build_no_openmp
+        if: ${{ matrix.sanitizer == 'THREAD' }}
+        run: |
+          cmake -B build \
+              -DLLAMA_NATIVE=OFF \
+              -DLLAMA_BUILD_SERVER=ON \
+              -DLLAMA_CURL=ON \
+              -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+              -DLLAMA_SANITIZE_${{ matrix.sanitizer }}=ON \
+              -DLLAMA_OPENMP=OFF ;
+          cmake --build build --config ${{ matrix.build_type }} -j $(nproc) --target llama-server
+
       - name: Build
         id: cmake_build
+        if: ${{ matrix.sanitizer != 'THREAD' }}
         run: |
           cmake -B build \
               -DLLAMA_NATIVE=OFF \

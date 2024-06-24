@@ -73,8 +73,12 @@ struct rpc_tensor {
     uint64_t view_offs;
     uint64_t data;
     char name[GGML_MAX_NAME];
+
+    char padding[4];
 };
 #pragma pack(pop)
+
+static_assert(sizeof(rpc_tensor) % 8 == 0, "rpc_tensor size must be multiple of 8");
 
 // RPC commands
 enum rpc_cmd {
@@ -599,9 +603,8 @@ static void serialize_graph(const ggml_cgraph * cgraph, std::vector<uint8_t> & o
     int output_size = sizeof(uint32_t) + n_nodes * sizeof(uint64_t) + sizeof(uint32_t) + n_tensors * sizeof(rpc_tensor);
     output.resize(output_size, 0);
     memcpy(output.data(), &n_nodes, sizeof(n_nodes));
-    uint64_t * out_nodes = (uint64_t *)(output.data() + sizeof(n_nodes));
     for (uint32_t i = 0; i < n_nodes; i++) {
-        out_nodes[i] = reinterpret_cast<uint64_t>(cgraph->nodes[i]);
+        memcpy(output.data() + sizeof(n_nodes) + i * sizeof(uint64_t), &cgraph->nodes[i], sizeof(uint64_t));
     }
     uint32_t * out_ntensors = (uint32_t *)(output.data() + sizeof(n_nodes) + n_nodes * sizeof(uint64_t));
     *out_ntensors = n_tensors;
@@ -1036,7 +1039,9 @@ bool rpc_server::graph_compute(const std::vector<uint8_t> & input, std::vector<u
     }
     std::unordered_map<uint64_t, ggml_tensor*> tensor_map;
     for (uint32_t i = 0; i < n_nodes; i++) {
-        graph->nodes[i] = create_node(nodes[i], ctx, tensor_ptrs, tensor_map);
+        int64_t id;
+        memcpy(&id, &nodes[i], sizeof(id));
+        graph->nodes[i] = create_node(id, ctx, tensor_ptrs, tensor_map);
     }
     ggml_status status = ggml_backend_graph_compute(backend, graph);
     // output serialization format: | status (1 byte) |
