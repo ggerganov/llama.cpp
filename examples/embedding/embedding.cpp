@@ -184,16 +184,17 @@ int main(int argc, char ** argv) {
     float * out = emb + p * n_embd;
     batch_decode(ctx, batch, out, s, n_embd, params.embd_normalize);
 
-    if (params.embd_out=="") {
+    if (params.embd_out.empty()) {
         // print the first part of the embeddings or for a single prompt, the full embedding
         fprintf(stdout, "\n");
         for (int j = 0; j < n_prompts; j++) {
             fprintf(stdout, "embedding %d: ", j);
             for (int i = 0; i < (n_prompts > 1 ? std::min(16, n_embd) : n_embd); i++) {
-                if (params.embd_normalize==0)
+                if (params.embd_normalize == 0) {
                     fprintf(stdout, "%6.0f ", emb[j * n_embd + i]);
-                else
+                } else {
                     fprintf(stdout, "%9.6f ", emb[j * n_embd + i]);
+                }
             }
             fprintf(stdout, "\n");
         }
@@ -211,31 +212,31 @@ int main(int argc, char ** argv) {
                     float sim = llama_embd_similarity_cos(emb + i * n_embd, emb + j * n_embd, n_embd);
                     fprintf(stdout, "%6.2f ", sim);
                 }
-                fprintf(stdout, "%1.10s",prompts[i].c_str());
+                fprintf(stdout, "%1.10s", prompts[i].c_str());
                 fprintf(stdout, "\n");
             }
         }
     }
 
-    if (params.embd_out=="json" || params.embd_out=="json+" || params.embd_out=="array") {
-        const bool notArray = params.embd_out!="array";
+    if (params.embd_out == "json" || params.embd_out == "json+" || params.embd_out == "array") {
+        const bool notArray = params.embd_out != "array";
 
-        fprintf(stdout, notArray?"{\n  \"object\": \"list\",\n  \"data\": [\n":"[");
+        fprintf(stdout, notArray ? "{\n  \"object\": \"list\",\n  \"data\": [\n" : "[");
         for (int j = 0;;) { // at least one iteration (one prompt)
             if (notArray) fprintf(stdout, "    {\n      \"object\": \"embedding\",\n      \"index\": %d,\n      \"embedding\": ",j);
             fprintf(stdout, "[");
             for (int i = 0;;) { // at least one iteration (n_embd > 0)
-                fprintf(stdout, params.embd_normalize==0?"%1.0f":"%1.7f", emb[j * n_embd + i]);
+                fprintf(stdout, params.embd_normalize == 0 ? "%1.0f" : "%1.7f", emb[j * n_embd + i]);
                 i++;
                 if (i < n_embd) fprintf(stdout, ","); else break;
             }
-            fprintf(stdout, notArray?"]\n    }":"]");
+            fprintf(stdout, notArray ? "]\n    }" : "]");
             j++;
-            if (j < n_prompts) fprintf(stdout, notArray?",\n":","); else break;
+            if (j < n_prompts) fprintf(stdout, notArray ? ",\n" : ","); else break;
         }
-        fprintf(stdout, notArray?"\n  ]":"]\n");
+        fprintf(stdout, notArray ? "\n  ]" : "]\n");
 
-        if (params.embd_out=="json+" && n_prompts > 1) {
+        if (params.embd_out == "json+" && n_prompts > 1) {
             fprintf(stdout, ",\n  \"cosineSimilarity\": [\n");
             for (int i = 0;;) { // at least two iteration (n_prompts > 1)
                 fprintf(stdout, "    [");
