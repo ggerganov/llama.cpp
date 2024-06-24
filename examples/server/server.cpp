@@ -2563,6 +2563,13 @@ int main(int argc, char ** argv) {
     svr->set_read_timeout (params.timeout_read);
     svr->set_write_timeout(params.timeout_write);
 
+#ifndef _WIN32
+    if (params.hostname.substr(0, 7) == "unix://") {
+        svr->set_address_family(AF_UNIX);
+        params.hostname = params.hostname.substr(7);
+    }
+#endif
+
     if (!svr->bind_to_port(params.hostname, params.port)) {
         fprintf(stderr, "\ncouldn't bind to server socket: hostname=%s port=%d\n\n", params.hostname.c_str(), params.port);
         return 1;
