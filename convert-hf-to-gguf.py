@@ -65,7 +65,7 @@ class Model:
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool, model_name: str | None):
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool, model_name: str | None, pre_tokenizer: str | None):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
@@ -73,6 +73,7 @@ class Model:
         self.is_big_endian = is_big_endian
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
+        self.pre_tokenizer = pre_tokenizer
         self.lazy = not eager
         self.model_name = model_name
         self.part_names = Model.get_model_part_names(self.dir_model, "model", ".safetensors")
@@ -405,6 +406,8 @@ class Model:
     # ref:  https://github.com/ggerganov/llama.cpp/pull/6920
     # Marker: Start get_vocab_base_pre
     def get_vocab_base_pre(self, tokenizer) -> str:
+        if self.pre_tokenizer is not None:
+            return self.pre_tokenizer
         # encoding this string and hashing the resulting tokens would (hopefully) give us a unique identifier that
         # is specific for the BPE pre-tokenizer used by the model
         # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
@@ -2971,6 +2974,10 @@ def parse_args() -> argparse.Namespace:
         help="name of the model",
     )
     parser.add_argument(
+        "--pre-tokenizer", type=str, default=None,
+        help="overwrite pre-tokenizer, if not specified this script will try to detect it automatically"
+    )
+    parser.add_argument(
         "--verbose", action="store_true",
         help="increase output verbosity",
     )
@@ -3027,7 +3034,7 @@ def main() -> None:
             logger.error(f"Model {hparams['architectures'][0]} is not supported")
             sys.exit(1)
 
-        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file, args.no_lazy, args.model_name)
+        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file, args.no_lazy, args.model_name, args.pre_tokenizer)
 
         logger.info("Set model parameters")
         model_instance.set_gguf_parameters()
