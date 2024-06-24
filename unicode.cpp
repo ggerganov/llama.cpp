@@ -596,6 +596,7 @@ std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & c
 
 std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
     std::vector<uint32_t> result;
+    result.reserve(utf8.size());
     size_t offset = 0;
     while (offset < utf8.size()) {
         result.push_back(unicode_cpt_from_utf8(utf8, offset));

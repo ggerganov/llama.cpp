@@ -967,7 +967,11 @@ class XverseModel(Model):
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model)
         vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
-        assert max(tokenizer.vocab.values()) < vocab_size
+        # Since we are checking the maximum index, we need to ensure it's strictly less than vocab_size,
+        # because vocab_size is the count of items, and indexes start at 0.
+        max_vocab_index = max(tokenizer.get_vocab().values())
+        if max_vocab_index >= vocab_size:
+            raise ValueError("Vocabulary size exceeds expected maximum size.")
 
         reverse_vocab: dict[int, str] = {id_: encoded_tok for encoded_tok, id_ in tokenizer.vocab.items()}
         added_vocab = tokenizer.get_added_vocab()
@@ -1398,6 +1402,48 @@ class LlamaModel(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
+
+
+@Model.register("BitnetForCausalLM")
+class BitnetModel(Model):
+    model_arch = gguf.MODEL_ARCH.BITNET
+
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+        self.gguf_writer.add_rope_scaling_factor(1.0)
+
+    def weight_quant(self, weight):
+        dtype = weight.dtype
+        weight = weight.float()
+        s = 1 / weight.abs().mean().clamp(min=1e-5)
+        weight = (weight * s).round().clamp(-1, 1) / s
+        scale = weight.abs().max().unsqueeze(0)
+        weight = torch.where(weight.abs().less(1e-6), 0, weight).type(dtype)
+        weight = torch.sign(weight).type(dtype)
+        return weight.type(dtype), scale.type(torch.float32)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        new_name = self.map_tensor_name(name)
+
+        if any(self.match_model_tensor_name(new_name, key, bid) for key in [
+            gguf.MODEL_TENSOR.ATTN_Q,
+            gguf.MODEL_TENSOR.ATTN_K,
+            gguf.MODEL_TENSOR.ATTN_V,
+            gguf.MODEL_TENSOR.ATTN_OUT,
+            gguf.MODEL_TENSOR.FFN_UP,
+            gguf.MODEL_TENSOR.FFN_DOWN,
+            gguf.MODEL_TENSOR.FFN_GATE,
+        ]):
+            # transform weight into 1/0/-1 (in fp32)
+            weight_torch, scale_torch = self.weight_quant(data_torch)
+            yield (new_name, weight_torch)
+            yield (new_name.removesuffix(".weight") + ".scale", scale_torch)
+        else:
+            yield (new_name, data_torch)
 
 
 @Model.register("GrokForCausalLM")
