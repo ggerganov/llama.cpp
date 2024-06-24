@@ -2785,10 +2785,6 @@ class T5Model(Model):
 
         tokenizer_path = self.dir_model / 'spiece.model'
 
-        tokens: list[bytes] = []
-        scores: list[float] = []
-        toktypes: list[int] = []
-
         if not tokenizer_path.is_file():
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
