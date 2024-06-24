@@ -344,9 +344,6 @@ ifdef LLAMA_GPROF
 	MK_CFLAGS   += -pg
 	MK_CXXFLAGS += -pg
 endif
-ifdef LLAMA_PERF
-	MK_CPPFLAGS += -DGGML_PERF
-endif
 
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
@@ -540,6 +537,9 @@ endif # LLAMA_CUDA_FORCE_DMMV
 ifdef LLAMA_CUDA_FORCE_MMQ
 	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_MMQ
 endif # LLAMA_CUDA_FORCE_MMQ
+ifdef LLAMA_CUDA_FORCE_CUBLAS
+	MK_NVCCFLAGS += -DGGML_CUDA_FORCE_CUBLAS
+endif # LLAMA_CUDA_FORCE_CUBLAS
 ifdef LLAMA_CUDA_DMMV_X
 	MK_NVCCFLAGS += -DGGML_CUDA_DMMV_X=$(LLAMA_CUDA_DMMV_X)
 else
