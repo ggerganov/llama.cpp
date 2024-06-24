@@ -33,21 +33,22 @@ class Keys:
         FILE_TYPE            = "general.file_type"
 
     class LLM:
-        VOCAB_SIZE                 = "{arch}.vocab_size"
-        CONTEXT_LENGTH             = "{arch}.context_length"
-        EMBEDDING_LENGTH           = "{arch}.embedding_length"
-        BLOCK_COUNT                = "{arch}.block_count"
-        LEADING_DENSE_BLOCK_COUNT  = "{arch}.leading_dense_block_count"
-        FEED_FORWARD_LENGTH        = "{arch}.feed_forward_length"
-        EXPERT_FEED_FORWARD_LENGTH = "{arch}.expert_feed_forward_length"
-        USE_PARALLEL_RESIDUAL      = "{arch}.use_parallel_residual"
-        TENSOR_DATA_LAYOUT         = "{arch}.tensor_data_layout"
-        EXPERT_COUNT               = "{arch}.expert_count"
-        EXPERT_USED_COUNT          = "{arch}.expert_used_count"
-        EXPERT_SHARED_COUNT        = "{arch}.expert_shared_count"
-        EXPERT_WEIGHTS_SCALE       = "{arch}.expert_weights_scale"
-        POOLING_TYPE               = "{arch}.pooling_type"
-        LOGIT_SCALE                = "{arch}.logit_scale"
+        VOCAB_SIZE                        = "{arch}.vocab_size"
+        CONTEXT_LENGTH                    = "{arch}.context_length"
+        EMBEDDING_LENGTH                  = "{arch}.embedding_length"
+        BLOCK_COUNT                       = "{arch}.block_count"
+        LEADING_DENSE_BLOCK_COUNT         = "{arch}.leading_dense_block_count"
+        FEED_FORWARD_LENGTH               = "{arch}.feed_forward_length"
+        EXPERT_FEED_FORWARD_LENGTH        = "{arch}.expert_feed_forward_length"
+        EXPERT_SHARED_FEED_FORWARD_LENGTH = "{arch}.expert_shared_feed_forward_length"
+        USE_PARALLEL_RESIDUAL             = "{arch}.use_parallel_residual"
+        TENSOR_DATA_LAYOUT                = "{arch}.tensor_data_layout"
+        EXPERT_COUNT                      = "{arch}.expert_count"
+        EXPERT_USED_COUNT                 = "{arch}.expert_used_count"
+        EXPERT_SHARED_COUNT               = "{arch}.expert_shared_count"
+        EXPERT_WEIGHTS_SCALE              = "{arch}.expert_weights_scale"
+        POOLING_TYPE                      = "{arch}.pooling_type"
+        LOGIT_SCALE                       = "{arch}.logit_scale"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -148,6 +149,7 @@ class MODEL_ARCH(IntEnum):
     OLMO       = auto()
     ARCTIC     = auto()
     DEEPSEEK2  = auto()
+    BITNET     = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -199,6 +201,8 @@ class MODEL_TENSOR(IntEnum):
     ATTN_KV_B          = auto()
     ATTN_Q_A_NORM      = auto()
     ATTN_KV_A_NORM     = auto()
+    FFN_SUB_NORM       = auto()
+    ATTN_SUB_NORM      = auto()
 
 
 MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
@@ -236,6 +240,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.OLMO:           "olmo",
     MODEL_ARCH.ARCTIC:         "arctic",
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
+    MODEL_ARCH.BITNET:         "bitnet",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -287,6 +292,8 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.ATTN_KV_B:          "blk.{bid}.attn_kv_b",
     MODEL_TENSOR.ATTN_Q_A_NORM:      "blk.{bid}.attn_q_a_norm",
     MODEL_TENSOR.ATTN_KV_A_NORM:     "blk.{bid}.attn_kv_a_norm",
+    MODEL_TENSOR.ATTN_SUB_NORM:      "blk.{bid}.attn_sub_norm",
+    MODEL_TENSOR.FFN_SUB_NORM:       "blk.{bid}.ffn_sub_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -415,6 +422,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.TOKEN_TYPES,
+        MODEL_TENSOR.ATTN_NORM_2,
         MODEL_TENSOR.ATTN_OUT_NORM,
         MODEL_TENSOR.ATTN_Q,
         MODEL_TENSOR.ATTN_Q_NORM,
@@ -805,6 +813,21 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_GATE_SHEXP,
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
+    ],
+    MODEL_ARCH.BITNET: [
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.ATTN_SUB_NORM,
+        MODEL_TENSOR.FFN_SUB_NORM,
     ],
     # TODO
 }

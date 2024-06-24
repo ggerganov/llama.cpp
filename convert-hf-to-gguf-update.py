@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 # This script downloads the tokenizer models of the specified models from Huggingface and
 # generates the get_vocab_base_pre() function for convert-hf-to-gguf.py
@@ -82,6 +83,8 @@ models = [
     {"name": "jina-v2-es",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-es", },
     {"name": "jina-v2-de",     "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-de", },
     {"name": "smaug-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct", },
+    {"name": "poro-chat",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Poro-34B-chat", },
+    {"name": "jina-v2-code",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-code", },
 ]
 
 
@@ -211,7 +214,7 @@ src_func = f"""
 """
 
 convert_py_pth = pathlib.Path("convert-hf-to-gguf.py")
-convert_py = convert_py_pth.read_text()
+convert_py = convert_py_pth.read_text(encoding="utf-8")
 convert_py = re.sub(
     r"(# Marker: Start get_vocab_base_pre)(.+?)( +# Marker: End get_vocab_base_pre)",
     lambda m: m.group(1) + src_func + m.group(3),
@@ -219,7 +222,7 @@ convert_py = re.sub(
     flags=re.DOTALL | re.MULTILINE,
 )
 
-convert_py_pth.write_text(convert_py)
+convert_py_pth.write_text(convert_py, encoding="utf-8")
 
 logger.info("+++ convert-hf-to-gguf.py was updated")
 

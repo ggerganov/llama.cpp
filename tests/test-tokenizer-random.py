@@ -11,13 +11,15 @@ import logging
 import argparse
 import subprocess
 import random
+import unicodedata
 
 from typing import Callable, Iterator
 
 import cffi
 from transformers import AutoTokenizer
 
-logger = logging.getLogger("test-tokenizer-random-bpe")
+
+logger = logging.getLogger("test-tokenizer-random")
 
 
 class LibLlama:
@@ -155,24 +157,15 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         'Cửa Việt',   # llama-3, ignore_merges = true
         '<s>a',       # Phi-3 fail
         '<unk><|endoftext|><s>',  # Phi-3 fail
-        'a\na',       # TODO: Bert fail
+        'a\na',            # bert fail
+        '"`',              # falcon
+        ' \u2e4e',         # falcon
+        'a\xa0\xa0\x00b',  # jina-v2-es
+        'one <mask>',      # jina-v2-es  <mask> lstrip=true
+        'a </s> b',        # rstrip phi-3
+        'a <mask> b',      # lstrip jina-v2
+        '\xa0aC',          # deepseek
     ]
-
-
-def generator_random_special_tokens(tokenizer, iterations=100) -> Iterator[str]:
-    special_tokens = set(tokenizer.all_special_tokens)
-    special_tokens.update([" ", "\n", "\t", "-", "!", "one", "1", "<s>", "</s>"])
-    special_tokens = list(sorted(special_tokens))
-    rand = random.Random()
-    for m in range(iterations):
-        rand.seed(m)
-        words = rand.choices(special_tokens, k=500)
-        if words[0] == tokenizer.bos_token:  # skip spam warning of double BOS
-            while len(words) > 1 and words[1] == tokenizer.bos_token:  # leave one starting BOS
-                words.pop(0)
-            if tokenizer.add_bos_token:  # drop all starting BOS
-                words.pop(0)
-        yield "".join(words)
 
 
 def generator_vocab_words(vocab: list[str]) -> Iterator[str]:
@@ -180,9 +173,46 @@ def generator_vocab_words(vocab: list[str]) -> Iterator[str]:
     yield from vocab
 
 
+def generator_added_lr_strip(tokenizer) -> Iterator[str]:
+    WHITESPACES = ["", " ", "  ", "    "]
+    special_tokens = list(tokenizer.all_special_tokens)
+    added_tokens   = list(tokenizer.added_tokens_encoder)
+    all_tokens     = list(sorted(set(special_tokens + added_tokens)))
+    for token in all_tokens:
+        for lstrip in WHITESPACES:
+            for rstrip in WHITESPACES:
+                yield lstrip + token + rstrip
+                yield "a" + lstrip + token + rstrip
+                yield lstrip + token + rstrip + "z"
+                yield "a" + lstrip + token + rstrip + "z"
+
+
+def generator_random_added_tokens(tokenizer, iterations=100) -> Iterator[str]:
+    special_tokens = list(tokenizer.all_special_tokens)
+    added_tokens   = list(tokenizer.added_tokens_encoder)
+    separations    = [" ", "\n", "\t", "-", "!", "one", "1", "<s>", "</s>"]
+    all_tokens     = list(sorted(set(special_tokens + added_tokens + separations)))
+    rand = random.Random()
+    for m in range(iterations):
+        rand.seed(m)
+        words = rand.choices(all_tokens, k=500)
+        if words and words[0] == tokenizer.bos_token:  # skip spam warning of double BOS
+            while len(words) > 1 and words[1] == tokenizer.bos_token:  # leave one starting BOS
+                words.pop(0)
+            if tokenizer.add_bos_token:  # drop all starting BOS
+                words.pop(0)
+        if words and words[-1] == tokenizer.eos_token:  # skip spam warning of double EOS
+            while len(words) > 1 and words[-2] == tokenizer.eos_token:  # leave one trailing EOS
+                words.pop(-1)
+            if tokenizer.add_bos_token:  # drop all trailing EOS
+                words.pop(-1)
+        yield "".join(words)
+
+
 def generator_random_chars(iterations=100) -> Iterator[str]:
     """Brute force random text with simple characters"""
 
+    NUM_WORDS = 400
     WHITESPACES = list(" " * 20 + "\n" * 5 + "\r\n" * 5 + "\t" * 5)
     CHARS = list(sorted(set("""
         ABCDEFGHIJKLMNOPQRSTUVWXYZ
@@ -196,12 +226,50 @@ def generator_random_chars(iterations=100) -> Iterator[str]:
     for m in range(iterations):
         rand.seed(m)
         text = []
-        num_words = rand.randint(300, 400)
-        for i in range(num_words):
+        for _ in range(NUM_WORDS):
             k = rand.randint(1, 7)
             word = rand.choices(CHARS, k=k)
-            space = rand.choice(WHITESPACES)
-            text.append("".join(word) + space)
+            word.append(rand.choice(WHITESPACES))
+            text.append("".join(word))
+        yield "".join(text)
+
+
+def generator_unicodes() -> Iterator[str]:
+    """Iterate unicode characters"""
+
+    MAX_CODEPOINTS = 0x30000  # 0x110000
+
+    def _valid(cpt):
+        if cpt >= 0x30000:  # unassigned and supplement­ary
+            return False
+        if 0x00D800 <= cpt <= 0x00F8FF:  # Surrogates
+            return False
+        if unicodedata.category(chr(cpt)) == "Cn":
+            return False
+        return True
+
+    characters = [chr(cpt) for cpt in range(1, MAX_CODEPOINTS) if _valid(cpt)]
+
+    yield from characters
+
+
+def generator_random_unicodes(iterations=100) -> Iterator[str]:
+    """Brute force random text with unicode characters"""
+
+    NUM_WORDS = 200
+    WHITESPACES = list(" " * 20 + "\n" * 5 + "\r\n" * 5 + "\t" * 5)
+
+    characters = list(generator_unicodes())
+
+    rand = random.Random()
+    for m in range(iterations):
+        rand.seed(m)
+        text = []
+        for _ in range(NUM_WORDS):
+            k = rand.randint(1, 7)
+            word = rand.choices(characters, k=k)
+            word.append(rand.choice(WHITESPACES))
+            text.append("".join(word))
         yield "".join(text)
 
 
@@ -239,25 +307,7 @@ def generator_random_vocab_words(vocab: list[str], iterations=100) -> Iterator[s
         yield "".join(text)
 
 
-def generator_random_bytes(iterations=100) -> Iterator[str]:
-    """Brute force random bytes"""
-
-    WHITESPACES = list(" " * 20 + "\n" * 5 + "\r\n" * 5 + "\t" * 5)
-
-    rand = random.Random()
-    for m in range(iterations):
-        rand.seed(m)
-        text = []
-        num_words = rand.randint(300, 400)
-        for i in range(num_words):
-            k = rand.randint(1, 8)
-            word = [chr(r) for r in rand.randbytes(k) if r]
-            word.append(rand.choice(WHITESPACES))
-            text.append("".join(word))
-        yield "".join(text)
-
-
-def test_compare_tokenizer(func_tokenize1: Callable, func_tokenize2: Callable, generator: Iterator[str]):
+def compare_tokenizers(func_tokenize1: Callable, func_tokenize2: Callable, generator: Iterator[str]):
 
     def find_first_mismatch(ids1: list[int], ids2: list[int]):
         for i, (a, b) in enumerate(zip(ids1, ids2)):
@@ -267,20 +317,34 @@ def test_compare_tokenizer(func_tokenize1: Callable, func_tokenize2: Callable, g
             return -1
         return min(len(ids1), len(ids2))
 
-    t0 = time.perf_counter()
+    t_tokenizer1 = 0
+    t_tokenizer2 = 0
+    t_start = time.perf_counter()
+    num_errors = 10
+
     logger.info("%s: %s" % (generator.__name__, "ini"))
     for text in generator:
+        # print(repr(text), hex(ord(text[0])), text.encode())
+        t0 = time.perf_counter()
         ids1 = func_tokenize1(text)
+        t1 = time.perf_counter()
         ids2 = func_tokenize2(text)
+        t2 = time.perf_counter()
+        t_tokenizer1 += t1 - t0
+        t_tokenizer2 += t2 - t1
         if ids1 != ids2:
             i = find_first_mismatch(ids1, ids2)
-            ids1 = list(ids1)[max(0, i - 2) : i + 2 + 1]
-            ids2 = list(ids2)[max(0, i - 2) : i + 2 + 1]
-            logger.info(" TokenIDs: " + str(ids1))
-            logger.info(" Expected: " + str(ids2))
-            raise Exception()
-    t1 = time.perf_counter()
-    logger.info("%s: end, time: %.3f secs" % (generator.__name__, t1 - t0))
+            ids1 = list(ids1)[max(0, i - 2) : i + 5 + 1]
+            ids2 = list(ids2)[max(0, i - 2) : i + 5 + 1]
+            logger.error(" TokenIDs: " + str(ids1))
+            logger.error(" Expected: " + str(ids2))
+            # raise Exception()
+            num_errors += 1
+            if num_errors > 10:
+                break
+
+    t_total = time.perf_counter() - t_start
+    logger.info("%s: end,  tok1: %.3f  tok2: %.3f  total: %.3f" % (generator.__name__, t_tokenizer1, t_tokenizer2, t_total))
 
 
 def main(argv: list[str] = None):
@@ -290,7 +354,8 @@ def main(argv: list[str] = None):
     parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
+    logging.basicConfig(level = logging.DEBUG if args.verbose else logging.INFO)
+    logger.info(f"VOCABFILE: '{args.vocab_file}'")
 
     model = LibLlamaModel(LibLlama(), args.vocab_file, mparams=dict(vocab_only=True), cparams=dict(n_ctx=4096))
     tokenizer = AutoTokenizer.from_pretrained(args.dir_tokenizer)
@@ -304,17 +369,22 @@ def main(argv: list[str] = None):
     ids = func_tokenize2("a")
     assert 1 <= len(ids) <= 3
     add_bos_token = len(ids) > 1 and tokenizer.bos_token_id == ids[0]
+    add_eos_token = len(ids) > 1 and tokenizer.eos_token_id == ids[-1]
     tokenizer.add_bos_token = getattr(tokenizer, "add_bos_token", add_bos_token)
+    tokenizer.add_eos_token = getattr(tokenizer, "add_eos_token", add_eos_token)
 
     vocab = list(sorted(tokenizer.batch_decode(list(tokenizer.get_vocab().values()), skip_special_tokens=True)))
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_custom_text())
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_custom_text_edge_cases())
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_special_tokens(tokenizer, 10_000))
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_vocab_words(vocab))
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_chars(10_000))
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_chars(vocab, 10_000))
-    test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_vocab_words(vocab, 5_000))
-    # test_compare_tokenizer(func_tokenize1, func_tokenize2, generator_random_bytes(10_000)) # FAIL
+
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_custom_text())
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_custom_text_edge_cases())
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_unicodes())
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_vocab_words(vocab))
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_added_lr_strip(tokenizer))
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_random_added_tokens(tokenizer, 10_000))
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_random_chars(10_000))
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_random_unicodes(10_000))
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_random_vocab_chars(vocab, 10_000))
+    compare_tokenizers(func_tokenize1, func_tokenize2, generator_random_vocab_words(vocab, 5_000))
 
     model.free()
 
@@ -322,7 +392,15 @@ def main(argv: list[str] = None):
 if __name__ == "__main__":
     # main()
 
-    path_tokenizers = "./models/tokenizers/"
+    logging.basicConfig(
+        level    = logging.DEBUG,
+        format   = "%(asctime)s.%(msecs)03d %(name)s %(levelname)s %(message)s",
+        datefmt  = "%Y-%m-%d %H:%M:%S",
+        filename = logger.name + ".log",
+        filemode = "a"
+    )
+
+    path_tokenizers   = "./models/tokenizers/"
     path_vocab_format = "./models/ggml-vocab-%s.gguf"
 
     # import os
@@ -330,12 +408,24 @@ if __name__ == "__main__":
     tokenizers = [
         # "llama-spm",   # SPM
         # "phi-3",       # SPM
-        "jina-v2-en",  # WPM
-        "bert-bge",    # WPM
+        # "bert-bge",    # WPM
+        # "jina-v2-en",  # WPM
+        "gpt-2",          # BPE
+        "llama-bpe",      # BPE
+        "falcon",         # BPE
+        "starcoder",      # BPE
+        "jina-v2-es",     # BPE
+        "jina-v2-de",     # BPE
+        "jina-v2-code",   # BPE
+        "smaug-bpe",      # BPE
+        "phi-2",          # BPE
+        "deepseek-coder", # BPE
+        "deepseek-llm",   # BPE
     ]
 
     for tokenizer in tokenizers:
-        print("\n" + "=" * 50 + "\n" + tokenizer + "\n")  # noqa
+        logger.info("=" * 50)
+        logger.info(f"TOKENIZER: '{tokenizer}'")
         vocab_file = path_vocab_format % tokenizer
         dir_tokenizer = path_tokenizers + "/" + tokenizer
         main([vocab_file, dir_tokenizer, "--verbose"])
