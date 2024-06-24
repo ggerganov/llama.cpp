@@ -123,7 +123,7 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
         model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
     return formatted;
-};
+}
 
 int main(int argc, char ** argv) {
     gpt_params params;
