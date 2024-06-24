@@ -69,7 +69,7 @@ class GGUFReader:
     # I - same as host, S - swapped
     byte_order: Literal['I'] | Literal['S'] = 'I'
     alignment: int = GGUF_DEFAULT_ALIGNMENT
-    start_data_offset: int
+    data_offset: int
 
     # Note: Internal helper, API may change.
     gguf_scalar_to_np: dict[GGUFValueType, type[np.generic]] = {
@@ -117,7 +117,7 @@ class GGUFReader:
         offs = self._build_fields(offs, kv_count)
 
         # Build Tensor Info Fields
-        offs, tensors_fields = self._build_tensors_info_fields(offs, tensor_count)
+        offs, tensors_fields = self._build_tensor_info(offs, tensor_count)
         new_align = self.fields.get('general.alignment')
         if new_align is not None:
             if new_align.types != [GGUFValueType.UINT32]:
@@ -126,7 +126,7 @@ class GGUFReader:
         padding = offs % self.alignment
         if padding != 0:
             offs += self.alignment - padding
-        self.start_data_offset = offs
+        self.data_offset = offs
         self._build_tensors(offs, tensors_fields)
 
     _DT = TypeVar('_DT', bound = npt.DTypeLike)
@@ -206,23 +206,23 @@ class GGUFReader:
     def _get_tensor_info_field(self, orig_offs: int) -> ReaderField:
         offs = orig_offs
 
-        # Tensor Info Name
+        # Get Tensor Name
         name_len, name_data = self._get_str(offs)
         offs += int(name_len.nbytes + name_data.nbytes)
 
-        # Tensor Info Dimensions Count
+        # Get Tensor Dimensions Count
         n_dims = self._get(offs, np.uint32)
         offs += int(n_dims.nbytes)
 
-        # Tensor Info Dimension Array
+        # Get Tensor Dimension Array
         dims = self._get(offs, np.uint64, n_dims[0])
         offs += int(dims.nbytes)
 
-        # Tensor Info Tensor Type
+        # Get Tensor Encoding Scheme Type
         raw_dtype = self._get(offs, np.uint32)
         offs += int(raw_dtype.nbytes)
 
-        # Tensor Info Offset
+        # Get Tensor Offset
         offset_tensor = self._get(offs, np.uint64)
         offs += int(offset_tensor.nbytes)
 
@@ -254,7 +254,7 @@ class GGUFReader:
             offs += field_size
         return offs
 
-    def _build_tensors_info_fields(self, offs: int, count: int) -> tuple[int, list[ReaderField]]:
+    def _build_tensor_info(self, offs: int, count: int) -> tuple[int, list[ReaderField]]:
         tensor_fields = []
         for _ in range(count):
             field = self._get_tensor_info_field(offs)

@@ -404,7 +404,7 @@ def main() -> None:
     elif args.markdown:
         dump_markdown_metadata(reader, args)
     elif args.data_offset:
-        print(reader.start_data_offset)  # noqa: NP100
+        print(reader.data_offset)  # noqa: NP100
     elif args.data_alignment:
         print(reader.alignment)  # noqa: NP100
     else:
