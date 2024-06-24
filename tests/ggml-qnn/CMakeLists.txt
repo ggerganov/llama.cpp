@@ -21,6 +21,8 @@ set(SOURCE_FILES
         ../../ggml-backend.c
         ../../ggml-quants.c
         ../../ggml-qnn/logger.cpp
+        ../../ggml-qnn/utils.cpp
+        ../../ggml-qnn/backend-ops.cpp
         ../../ggml-qnn.cpp
         ggml-qnn-ut.cpp
 )

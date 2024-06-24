@@ -1,21 +1,27 @@
 #pragma once
 
+#include <math.h>
 #include <mutex>
+#include <string>
+#include <unordered_map>
+#include <map>
 
 // header file of Qualcomm QNN(Qualcomm Neural Network, aka Qualcomm AI Engine Direct) SDK
 // https://qpm.qualcomm.com/#/main/tools/details/qualcomm_ai_engine_direct
 #include "QnnTypes.h"
 #include "QnnCommon.h"
+#include "QnnInterface.h"
 #include "QnnContext.h"
 #include "QnnBackend.h"
 #include "QnnGraph.h"
 #include "QnnProperty.h"
 #include "QnnTensor.h"
+#include "System/QnnSystemInterface.h"
 #include "HTP/QnnHtpDevice.h"
 #include "HTP/QnnHtpGraph.h"
 
+#include "qnn-types.hpp"
 #include "utils.hpp"
-#include "logger.hpp"
 
 namespace qnn {
 
@@ -864,9 +870,8 @@ namespace qnn {
         const qnn::qcom_socinfo& get_soc_info() { return _soc_info; }
 
     public:
-        std::map<std::string, std::tuple<Qnn_GraphHandle_t, Qnn_Tensor_t*,
-            Qnn_Tensor_t*, Qnn_Tensor_t*>>
-            _qnn_graph_map;
+        std::map<std::string,
+            std::tuple<Qnn_GraphHandle_t, Qnn_Tensor_t*, Qnn_Tensor_t*, Qnn_Tensor_t*>> _qnn_graph_map;
 
     private:
         int load_system() {

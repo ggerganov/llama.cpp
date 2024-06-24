@@ -4,6 +4,7 @@
 #include "QnnTensor.h"
 #include "System/QnnSystemInterface.h"
 
+#include "ggml-qnn.h"
 #include "backend.hpp"
 #include "qnn.hpp"
 

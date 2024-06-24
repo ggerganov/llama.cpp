@@ -1,11 +1,6 @@
 
 #pragma once
 
-#include "QnnTypes.h"
-#include "QnnCommon.h"
-#include "QnnContext.h"
-#include "QnnBackend.h"
-
 #include "ggml.h"
 #include "ggml-backend.h"
 
