@@ -1123,6 +1123,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 hparams.image_grid_pinpoints[n] = 0;
         } catch (std::runtime_error & e) {
             hparams.image_grid_pinpoints[0]=0;
+            GGML_UNUSED(e);
         }
 
         try {
@@ -1130,12 +1131,14 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             strcpy(hparams.mm_patch_merge_type, gguf_get_val_str(ctx, idx));
         } catch (std::runtime_error & e) {
             strcpy(hparams.mm_patch_merge_type, "flat");
+            GGML_UNUSED(e);
         }
 
         try {
             hparams.image_crop_resolution = get_u32(ctx, KEY_IMAGE_CROP_RESOLUTION); // llava-1.6
         } catch(const std::exception& e) {
             hparams.image_crop_resolution = hparams.image_size;
+            GGML_UNUSED(e);
         }
 
         int idx_mean = get_key_idx(ctx, KEY_IMAGE_MEAN);
@@ -1175,6 +1178,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             new_clip->has_class_embedding = true;
         } catch (const std::exception& e) {
             new_clip->has_class_embedding = false;
+            GGML_UNUSED(e);
         }
 
         try {
@@ -1183,6 +1187,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             new_clip->has_pre_norm = true;
         } catch (std::exception & e) {
             new_clip->has_pre_norm = false;
+            GGML_UNUSED(e);
         }
 
         try {
@@ -1191,6 +1196,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             new_clip->has_post_norm = true;
         } catch (std::exception & e) {
             new_clip->has_post_norm = false;
+            GGML_UNUSED(e);
         }
 
         try {
@@ -1198,6 +1204,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             new_clip->has_patch_bias = true;
         } catch (std::exception & e) {
             new_clip->has_patch_bias = false;
+            GGML_UNUSED(e);
         }
 
         try {
@@ -1205,6 +1212,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.position_embeddings = get_tensor(new_clip->ctx_data, format(TN_POS_EMBD, "v"));
         } catch(const std::exception& e) {
             LOG_TEE("%s: failed to load vision model tensors\n", __func__);
+            GGML_UNUSED(e);
         }
 
         // LLaVA projection
@@ -1215,26 +1223,26 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
                 // Yi-type llava
                 vision_model.mm_1_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 1, "weight"));
                 vision_model.mm_1_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 1, "bias"));
-            } catch (std::runtime_error & e) {  }
+            } catch (std::runtime_error & e) { GGML_UNUSED(e); }
             try {
                 // missing in Yi-type llava
                 vision_model.mm_2_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "weight"));
                 vision_model.mm_2_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 2, "bias"));
-            } catch (std::runtime_error & e) {  }
+            } catch (std::runtime_error & e) { GGML_UNUSED(e); }
             try {
                 // Yi-type llava
                 vision_model.mm_3_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 3, "weight"));
                 vision_model.mm_3_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 3, "bias"));
-            } catch (std::runtime_error & e) {  }
+            } catch (std::runtime_error & e) { GGML_UNUSED(e); }
             try {
                 // Yi-type llava
                 vision_model.mm_4_w = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "weight"));
                 vision_model.mm_4_b = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 4, "bias"));
-            } catch (std::runtime_error & e) {  }
+            } catch (std::runtime_error & e) { GGML_UNUSED(e); }
             try {
                 vision_model.image_newline = get_tensor(new_clip->ctx_data, TN_IMAGE_NEWLINE);
                 // LOG_TEE("%s: image_newline tensor (llava-1.6) found\n", __func__);
-            } catch (std::runtime_error & e) {  }
+            } catch (std::runtime_error & e) { GGML_UNUSED(e); }
         } else if (new_clip->proj_type == PROJECTOR_TYPE_LDP) {
             // MobileVLM projection
             vision_model.mm_model_mlp_1_w               = get_tensor(new_clip->ctx_data, format(TN_MVLM_PROJ_MLP, 1, "weight"));
