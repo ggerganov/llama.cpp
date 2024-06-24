@@ -18506,7 +18506,7 @@ int32_t llama_detokenize(
                             bool   special) {
     // remove the leading space of the first non-control token
     static const int attr_special = LLAMA_TOKEN_ATTR_UNKNOWN | LLAMA_TOKEN_ATTR_CONTROL;
-    bool remove_space = model->vocab.tokenizer_add_space_prefix;
+    bool remove_space = !special && model->vocab.tokenizer_add_space_prefix;
     int32_t avail = text_len_max;
     int32_t total = 0;
 
