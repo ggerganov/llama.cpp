@@ -12,6 +12,7 @@ set(LLAMA_VULKAN_CHECK_RESULTS @LLAMA_VULKAN_CHECK_RESULTS@)
 set(LLAMA_VULKAN_DEBUG @LLAMA_VULKAN_DEBUG@)
 set(LLAMA_VULKAN_MEMORY_DEBUG @LLAMA_VULKAN_MEMORY_DEBUG@)
 set(LLAMA_VULKAN_VALIDATE @LLAMA_VULKAN_VALIDATE@)
+set(LLAMA_SYCL @LLAMA_SYCL@)
 
 @PACKAGE_INIT@
 
@@ -41,13 +42,18 @@ if (LLAMA_METAL)
 endif()
 
 if (LLAMA_VULKAN)
-    find_package(Vulkan)
+    find_package(Vulkan REQUIRED)
 endif()
 
 if (LLAMA_HIPBLAS)
     find_package(hip REQUIRED)
     find_package(hipblas REQUIRED)
     find_package(rocblas REQUIRED)
+endif()
+
+if (LLAMA_SYCL)
+    find_package(IntelSYCL REQUIRED)
+    find_package(MKL REQUIRED)
 endif()
 
 find_library(llama_LIBRARY llama
