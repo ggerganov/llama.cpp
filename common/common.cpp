@@ -2984,13 +2984,15 @@ std::string llama_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & msgs,
         bool add_ass) {
+    int alloc_size = 0;
     std::vector<llama_chat_message> chat;
     for (auto & msg : msgs) {
         chat.push_back({msg.role.c_str(), msg.content.c_str()});
+        alloc_size += (msg.role.size() + msg.content.size()) * 1.25;
     }
 
     const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
-    std::vector<char> buf;
+    std::vector<char> buf(alloc_size);
 
     // run the first time to get the total output length
     int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
@@ -3001,7 +3003,7 @@ std::string llama_chat_apply_template(const struct llama_model * model,
         res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
     }
 
-    const std::string formatted_chat(buf.data(), res);
+    std::string formatted_chat(buf.data(), res);
     return formatted_chat;
 }
 
