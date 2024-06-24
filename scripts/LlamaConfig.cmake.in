@@ -13,6 +13,7 @@ set(LLAMA_VULKAN_DEBUG @LLAMA_VULKAN_DEBUG@)
 set(LLAMA_VULKAN_MEMORY_DEBUG @LLAMA_VULKAN_MEMORY_DEBUG@)
 set(LLAMA_VULKAN_VALIDATE @LLAMA_VULKAN_VALIDATE@)
 set(LLAMA_SYCL @LLAMA_SYCL@)
+set(LLAMA_OPENMP @LLAMA_OPENMP@)
 
 @PACKAGE_INIT@
 
@@ -54,6 +55,10 @@ endif()
 if (LLAMA_SYCL)
     find_package(IntelSYCL REQUIRED)
     find_package(MKL REQUIRED)
+endif()
+
+if (LLAMA_OPENMP)
+    find_package(OpenMP REQUIRED)
 endif()
 
 find_library(llama_LIBRARY llama
