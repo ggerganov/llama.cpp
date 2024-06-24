@@ -337,7 +337,7 @@ enum llm_kv {
     LLM_KV_TOKENIZER_SCORES,
     LLM_KV_TOKENIZER_MERGES,
     LLM_KV_TOKENIZER_BOS_ID,
-    LLM_KV_TOKENIZER_EOS_ID,
+    LLM_KV_TOKENIZER_EOS_ID, //compatibility with previous versions
     LLM_KV_TOKENIZER_UNK_ID,
     LLM_KV_TOKENIZER_SEP_ID,
     LLM_KV_TOKENIZER_PAD_ID,
@@ -352,6 +352,7 @@ enum llm_kv {
     LLM_KV_TOKENIZER_SUFFIX_ID,
     LLM_KV_TOKENIZER_MIDDLE_ID,
     LLM_KV_TOKENIZER_EOT_ID,
+    LLM_KV_TOKENIZER_EOS_ID_LIST
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -438,6 +439,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TOKENIZER_SUFFIX_ID,           "tokenizer.ggml.suffix_token_id"    },
     { LLM_KV_TOKENIZER_MIDDLE_ID,           "tokenizer.ggml.middle_token_id"    },
     { LLM_KV_TOKENIZER_EOT_ID,              "tokenizer.ggml.eot_token_id"       },
+    { LLM_KV_TOKENIZER_EOS_ID_LIST,         "tokenizer.ggml.eos_token_id_list"  },
 };
 
 struct LLM_KV {
@@ -2328,6 +2330,7 @@ struct llama_vocab {
     id special_pad_id  = -1;
     id special_cls_id  = -1;
     id special_mask_id = -1;
+    std::set<id> special_eos_id_list;
 
     id linefeed_id       = 13;
     id special_prefix_id = -1;
@@ -5084,6 +5087,24 @@ static void llm_load_vocab(
             }
         }
 
+        const int eos_idx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_EOS_ID_LIST).c_str());
+        if (eos_idx == -1) {
+            vocab.special_eos_id_list.clear();
+            vocab.special_eos_id_list.insert(vocab.special_eos_id);
+        } else {
+            const uint32_t n_eos = gguf_get_arr_n(ctx, eos_idx);
+            const int* eos_tokens = (const int*)gguf_get_arr_data(ctx, eos_idx);
+            if (n_eos > 0) {
+                vocab.special_eos_id_list.clear();
+            } else {
+                vocab.special_eos_id_list.clear();
+                vocab.special_eos_id_list.insert(vocab.special_eos_id);
+            }
+            for (uint32_t i = 0; i < n_eos; ++i) {
+                vocab.special_eos_id_list.insert(eos_tokens[i]);
+            }
+        }
+
         // Handle add_bos_token and add_eos_token
         {
             bool temp = true;
@@ -5273,7 +5294,11 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
 
     // special tokens
     if (vocab.special_bos_id    != -1) { LLAMA_LOG_INFO( "%s: BOS token        = %d '%s'\n", __func__, vocab.special_bos_id,  vocab.id_to_token[vocab.special_bos_id].text.c_str() );  }
-    if (vocab.special_eos_id    != -1) { LLAMA_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, vocab.special_eos_id,  vocab.id_to_token[vocab.special_eos_id].text.c_str() );  }
+    if (!vocab.special_eos_id_list.empty()) {
+        for (auto it = vocab.special_eos_id_list.begin(); it != vocab.special_eos_id_list.end(); ++it) {
+            LLAMA_LOG_INFO( "%s: EOS token        = %d '%s'\n", __func__, *it,  vocab.id_to_token[*it].text.c_str() );
+        }
+    }
     if (vocab.special_unk_id    != -1) { LLAMA_LOG_INFO( "%s: UNK token        = %d '%s'\n", __func__, vocab.special_unk_id,  vocab.id_to_token[vocab.special_unk_id].text.c_str() );  }
     if (vocab.special_sep_id    != -1) { LLAMA_LOG_INFO( "%s: SEP token        = %d '%s'\n", __func__, vocab.special_sep_id,  vocab.id_to_token[vocab.special_sep_id].text.c_str() );  }
     if (vocab.special_pad_id    != -1) { LLAMA_LOG_INFO( "%s: PAD token        = %d '%s'\n", __func__, vocab.special_pad_id,  vocab.id_to_token[vocab.special_pad_id].text.c_str() );  }
@@ -13482,8 +13507,8 @@ struct llm_tokenizer_bpe {
 
     bool append_eos(std::vector<llama_vocab::id> & output) const {
         if (vocab.tokenizer_add_eos) {
-            GGML_ASSERT(vocab.special_eos_id != -1);
-            output.push_back(vocab.special_eos_id);
+            GGML_ASSERT(!vocab.special_eos_id_list.empty());
+            output.insert(output.end(), vocab.special_eos_id_list.begin(), vocab.special_eos_id_list.end());
             return true;
         }
         return false;
@@ -13496,7 +13521,7 @@ struct llm_tokenizer_bpe {
                 "also starts with a BOS token. So now the final prompt starts with 2 BOS tokens. "
                 "Are you sure this is what you want?\n", __FUNCTION__);
         }
-        if (vocab.tokenizer_add_eos && output.size() >= 2 && *(output.end()-2) == vocab.special_eos_id) {
+        if (vocab.tokenizer_add_eos && output.size() >= 2 && vocab.special_eos_id_list.find(*(output.end()-2)) != vocab.special_eos_id_list.end()) {
             LLAMA_LOG_WARN(
                 "%s: Added a EOS token to the prompt as specified by the model but the prompt "
                 "also ends with a EOS token. So now the final prompt ends with 2 EOS tokens. "
@@ -13966,8 +13991,8 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 }
 
                 if (add_special && vocab.tokenizer_add_eos) {
-                    GGML_ASSERT(vocab.special_eos_id != -1);
-                    output.push_back(vocab.special_eos_id);
+                    GGML_ASSERT(!vocab.special_eos_id_list.empty());
+                    output.insert(output.end(), vocab.special_eos_id_list.begin(), vocab.special_eos_id_list.end());
                 }
                 // add suffix to chatglm3
                 if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM3) {
@@ -16966,6 +16991,10 @@ int32_t llama_n_vocab(const struct llama_model * model) {
     return model->hparams.n_vocab;
 }
 
+int32_t llama_n_eos(const struct llama_model * model) {
+    return model->vocab.special_eos_id_list.size();
+}
+
 int32_t llama_n_ctx_train(const struct llama_model * model) {
     return model->hparams.n_ctx_train;
 }
@@ -18550,21 +18579,8 @@ llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_to
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
-    auto arch_name = llama_model_arch_name(model->arch);
-    auto vocab_type = model->vocab.type;
-    if (strcmp(arch_name, "chatglm") == 0) {
-        if (LLAMA_VOCAB_TYPE_BPE == vocab_type) { // glm4
-            return token != -1 && (
-                token == llama_token_eos(model) ||
-                token == llama_token_eot(model) ||
-                token == 151329 ||
-                token == 151336 ||
-                token == 151338
-            );
-        }
-    }
     return token != -1 && (
-        token == llama_token_eos(model) ||
+        model->vocab.special_eos_id_list.count(token) ||
         token == llama_token_eot(model)
     );
 }
@@ -18577,8 +18593,11 @@ llama_token llama_token_bos(const struct llama_model * model) {
     return model->vocab.special_bos_id;
 }
 
-llama_token llama_token_eos(const struct llama_model * model) {
-    return model->vocab.special_eos_id;
+void llama_token_eos(const struct llama_model * model, llama_token* token_list) {
+    int ind = 0;
+    for (auto it = model->vocab.special_eos_id_list.begin(); it != model->vocab.special_eos_id_list.end(); ++it) {
+        token_list[ind++] = *it;
+    }
 }
 
 llama_token llama_token_cls(const struct llama_model * model) {
@@ -18952,10 +18971,7 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
         }
-    } else if (tmpl == "chatglm3" ||
-        (tmpl.find("add_generation_prompt") != std::string::npos &&
-        tmpl.find("for message in messages") != std::string::npos &&
-        tmpl.find("loop.first") != std::string::npos)) {
+    } else if (tmpl == "chatglm3" || tmpl.find("[gMASK]sop") != std::string::npos) {
         // chatglm3-6b
         ss << "[gMASK]" << "sop";
         for (auto message : chat) {
@@ -18965,7 +18981,7 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|assistant|>";
         }
-    } else if (tmpl == "ChatGLM4") {
+    } else if (tmpl == "chatglm4" || tmpl.find("[gMASK]<sop>") != std::string::npos) {
         ss << "[gMASK]" << "<sop>";
         for (auto message : chat) {
             std::string role(message->role);
