@@ -576,7 +576,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     const int hidden_size          = hparams.hidden_size;
     const int n_head               = hparams.n_head;
     const int d_head               = hidden_size / n_head;
-    const int n_layer              = hparams.n_layer;
+    int n_layer                    = hparams.n_layer;
     const float eps                = hparams.eps;
 
     const int batch_size = imgs->size;
@@ -647,7 +647,10 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // loop over layers
-    for (int il = 0; il < n_layer; il++) {
+    if (ctx->has_minicpmv_projector){
+        n_layer += 1;
+    }
+    for (int il = 0; il < n_layer-1; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
         //const size_t nb_q_w = model.layers[il].q_w->nb[0];
