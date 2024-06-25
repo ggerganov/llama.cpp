@@ -77,7 +77,7 @@ typedef void (*ggml_sycl_op_flatten_t)(ggml_backend_sycl_context & ctx, const gg
 static __dpct_inline__ float warp_reduce_sum(float x,
                                              const sycl::nd_item<3> &item_ct1) {
 #pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
         /*
         DPCT1096:98: The right-most dimension of the work-group used in the SYCL
         kernel that calls this function may be less than "32". The function
@@ -93,7 +93,7 @@ static __dpct_inline__ float warp_reduce_sum(float x,
 static __dpct_inline__ sycl::float2
 warp_reduce_sum(sycl::float2 a, const sycl::nd_item<3> &item_ct1) {
 #pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
         a.x() += dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), a.x(),
                                                 mask);
         a.y() += dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), a.y(),
@@ -105,7 +105,7 @@ warp_reduce_sum(sycl::float2 a, const sycl::nd_item<3> &item_ct1) {
 static __dpct_inline__ float warp_reduce_max(float x,
                                              const sycl::nd_item<3> &item_ct1) {
 #pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
         /*
         DPCT1096:97: The right-most dimension of the work-group used in the SYCL
         kernel that calls this function may be less than "32". The function
@@ -1649,19 +1649,16 @@ static void norm_f32_sycl(const float *x, float *dst, const int ncols,
     GGML_ASSERT(ncols % WARP_SIZE == 0);
     if (ncols < 1024) {
         const sycl::range<3> block_dims(1, 1, WARP_SIZE);
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::local_accessor<sycl::float2, 1> s_sum_acc_ct1(
-                sycl::range<1>(32), cgh);
-
+        stream->submit([&](sycl::handler& cgh) {
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, nrows) * block_dims,
-                                  block_dims),
+                    block_dims),
                 [=](sycl::nd_item<3> item_ct1)
-                    [[intel::reqd_sub_group_size(32)]] {
-                        norm_f32(x, dst, ncols, eps, item_ct1,
-                                            s_sum_acc_ct1.get_pointer(), WARP_SIZE);
-                    });
-        });
+                [[intel::reqd_sub_group_size(WARP_SIZE)]] {
+                    norm_f32(x, dst, ncols, eps, item_ct1,
+                        nullptr, WARP_SIZE);
+                });
+            });
     } else {
         const int work_group_size = get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
@@ -1670,19 +1667,19 @@ static void norm_f32_sycl(const float *x, float *dst, const int ncols,
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
+        stream->submit([&](sycl::handler& cgh) {
             sycl::local_accessor<sycl::float2, 1> s_sum_acc_ct1(
-                sycl::range<1>(32), cgh);
+                sycl::range<1>(work_group_size / WARP_SIZE), cgh);
 
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, nrows) * block_dims,
-                                  block_dims),
+                    block_dims),
                 [=](sycl::nd_item<3> item_ct1)
-                    [[intel::reqd_sub_group_size(32)]] {
-                        norm_f32(x, dst, ncols, eps, item_ct1,
-                                       s_sum_acc_ct1.get_pointer(), work_group_size);
-                    });
-        });
+                [[intel::reqd_sub_group_size(WARP_SIZE)]] {
+                    norm_f32(x, dst, ncols, eps, item_ct1,
+                        s_sum_acc_ct1.get_pointer(), work_group_size);
+                });
+            });
     }
 }
 
@@ -1693,20 +1690,16 @@ static void group_norm_f32_sycl(const float *x, float *dst,
     if (group_size < 1024) {
         const sycl::range<3> block_dims(1, 1, WARP_SIZE);
         stream->submit([&](sycl::handler &cgh) {
-            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(32),
-                                                         cgh);
-
             const float eps_ct4 = eps;
-
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, num_groups) * block_dims,
-                                  block_dims),
+                    block_dims),
                 [=](sycl::nd_item<3> item_ct1)
-                    [[intel::reqd_sub_group_size(32)]] {
-                        group_norm_f32(
-                            x, dst, group_size, ne_elements, eps_ct4, item_ct1,
-                            s_sum_acc_ct1.get_pointer(), WARP_SIZE);
-                    });
+                [[intel::reqd_sub_group_size(WARP_SIZE)]] {
+                    group_norm_f32(
+                        x, dst, group_size, ne_elements, eps_ct4, item_ct1,
+                        nullptr, WARP_SIZE);
+                });
         });
     } else {
         const int work_group_size = get_work_group_size(stream->get_device());
@@ -1717,22 +1710,22 @@ static void group_norm_f32_sycl(const float *x, float *dst,
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
 
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(32),
-                                                         cgh);
+        stream->submit([&](sycl::handler& cgh) {
+            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(work_group_size / WARP_SIZE),
+                cgh);
 
             const float eps_ct4 = eps;
 
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, num_groups) * block_dims,
-                                  block_dims),
+                    block_dims),
                 [=](sycl::nd_item<3> item_ct1)
-                    [[intel::reqd_sub_group_size(32)]] {
-                        group_norm_f32(x, dst, group_size, ne_elements,
-                                             eps_ct4, item_ct1,
-                                             s_sum_acc_ct1.get_pointer(), work_group_size);
-                    });
-        });
+                [[intel::reqd_sub_group_size(WARP_SIZE)]] {
+                    group_norm_f32(x, dst, group_size, ne_elements,
+                        eps_ct4, item_ct1,
+                        s_sum_acc_ct1.get_pointer(), work_group_size);
+                });
+            });
     }
 }
 
@@ -1784,19 +1777,16 @@ static void rms_norm_f32_sycl(const float *x, float *dst, const int ncols,
     // printf("%s ncols=%d, nrows=%d, WARP_SIZE=%d\n", __func__, ncols, nrows, WARP_SIZE);
     if (ncols < 1024) {
         const sycl::range<3> block_dims(1, 1, WARP_SIZE);
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(32),
-                                                         cgh);
-
+        stream->submit([&](sycl::handler& cgh) {
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, nrows) * block_dims,
-                                  block_dims),
+                    block_dims),
                 [=](sycl::nd_item<3> item_ct1)
-                    [[intel::reqd_sub_group_size(32)]] {
-                        rms_norm_f32(x, dst, ncols, eps, item_ct1,
-                                                s_sum_acc_ct1.get_pointer(), WARP_SIZE);
-                    });
-        });
+                [[intel::reqd_sub_group_size(WARP_SIZE)]] {
+                    rms_norm_f32(x, dst, ncols, eps, item_ct1,
+                        nullptr, WARP_SIZE);
+                });
+            });
     } else {
         const int work_group_size = get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
@@ -1805,19 +1795,18 @@ static void rms_norm_f32_sycl(const float *x, float *dst, const int ncols,
         the limit. To get the device limit, query
         info::device::max_work_group_size. Adjust the work-group size if needed.
         */
-        stream->submit([&](sycl::handler &cgh) {
-            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(32),
-                                                         cgh);
-
+        stream->submit([&](sycl::handler& cgh) {
+            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(work_group_size / WARP_SIZE),
+                cgh);
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, nrows) * block_dims,
-                                  block_dims),
+                    block_dims),
                 [=](sycl::nd_item<3> item_ct1)
-                    [[intel::reqd_sub_group_size(32)]] {
-                        rms_norm_f32(x, dst, ncols, eps, item_ct1,
-                                           s_sum_acc_ct1.get_pointer(), work_group_size);
-                    });
-        });
+                [[intel::reqd_sub_group_size(WARP_SIZE)]] {
+                    rms_norm_f32(x, dst, ncols, eps, item_ct1,
+                        s_sum_acc_ct1.get_pointer(), work_group_size);
+                });
+            });
     }
 }
 
@@ -1833,7 +1822,7 @@ static void quantize_row_q8_1_sycl(const float *x, void *vy, const int kx,
 
         stream->parallel_for(
             sycl::nd_range<3>(num_blocks * block_size, block_size),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                 quantize_q8_1(x, vy, kx, kx_padded, item_ct1);
             });
     }
@@ -1854,7 +1843,7 @@ static void ggml_mul_mat_p021_f16_f32_sycl(const void *vx, const float *y,
 
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                 mul_mat_p021_f16_f32(vx, y, dst, ncols_x, nrows_x, nchannels_x,
                                      nchannels_y, item_ct1);
             });
@@ -1874,7 +1863,7 @@ static void ggml_mul_mat_vec_nc_f16_f32_sycl(
 
         stream->parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                 mul_mat_vec_nc_f16_f32(vx, y, dst, ncols_x, nrows_x,
                                        row_stride_x, channel_stride_x,
                                        nchannels_y / nchannels_x, item_ct1);
@@ -2139,7 +2128,7 @@ static void sum_rows_f32_sycl(const float *x, float *dst, const int ncols,
     const sycl::range<3> block_nums(1, nrows, 1);
     stream->parallel_for(sycl::nd_range<3>(block_nums * block_dims, block_dims),
                          [=](sycl::nd_item<3> item_ct1)
-                             [[intel::reqd_sub_group_size(32)]] {
+                             [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                                  k_sum_rows_f32(x, dst, ncols, item_ct1);
                              });
 }
@@ -2220,7 +2209,7 @@ static void soft_max_f32_submitter(const float * x, const float * mask, float * 
 
         cgh.parallel_for(
             sycl::nd_range<3>(block_nums * block_dims, block_dims),
-            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(32)]] {
+            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                 soft_max_f32<vals_smem, ncols_template, block_size_template>(x, mask, dst, ncols_par,
                                                                              nrows_y, scale, max_bias, m0,
                                                                              m1, n_head_log2, item_ct1,

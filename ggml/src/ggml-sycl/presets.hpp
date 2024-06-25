@@ -16,7 +16,11 @@
 #define GGML_SYCL_MAX_STREAMS       8
 #define GGML_SYCL_MAX_BUFFERS       256
 
+#ifdef GGML_SYCL_NV_ARCH
 #define WARP_SIZE 32
+#else
+#define WARP_SIZE 16
+#endif
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
 
 #define SYCL_GELU_BLOCK_SIZE 256
