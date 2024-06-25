@@ -67,6 +67,7 @@ extern "C" {
         LLAMA_VOCAB_TYPE_SPM  = 1, // LLaMA tokenizer based on byte-level BPE with byte fallback
         LLAMA_VOCAB_TYPE_BPE  = 2, // GPT-2 tokenizer based on byte-level BPE
         LLAMA_VOCAB_TYPE_WPM  = 3, // BERT tokenizer based on WordPiece
+        LLAMA_VOCAB_TYPE_UGM  = 4, // T5 tokenizer based on Unigram
     };
 
     // pre-tokenization types
@@ -857,6 +858,7 @@ extern "C" {
     LLAMA_API llama_token llama_token_cls(const struct llama_model * model); // classification
     LLAMA_API llama_token llama_token_sep(const struct llama_model * model); // sentence separator
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
+    LLAMA_API llama_token llama_token_pad(const struct llama_model * model); // padding
 
     // Returns -1 if unknown, 1 for true or 0 for false.
     LLAMA_API int32_t         llama_add_bos_token(const struct llama_model * model);
@@ -924,6 +926,12 @@ extern "C" {
     // Grammar
     //
 
+    /// Initialize a llama_grammar.
+    ///
+    /// @param rules The rule elements of the grammar to initialize.
+    /// @param n_rules The number of rules.
+    /// @param start_rule_index The index of the root rule (the starting point of the grammar).
+    /// @return The initialized llama_grammar or nullptr if initialization failed.
     LLAMA_API struct llama_grammar * llama_grammar_init(
             const llama_grammar_element ** rules,
                                  size_t    n_rules,
