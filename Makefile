@@ -344,9 +344,6 @@ ifdef LLAMA_GPROF
 	MK_CFLAGS   += -pg
 	MK_CXXFLAGS += -pg
 endif
-ifdef LLAMA_PERF
-	MK_CPPFLAGS += -DGGML_PERF
-endif
 
 # Architecture specific
 # TODO: probably these flags need to be tweaked on some architectures
@@ -1051,7 +1048,7 @@ tests/test-grammar-parser: tests/test-grammar-parser.cpp ggml.o llama.o grammar-
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-tests/test-grammar-integration: tests/test-grammar-integration.cpp ggml.o llama.o grammar-parser.o $(OBJS)
+tests/test-grammar-integration: tests/test-grammar-integration.cpp json-schema-to-grammar.o ggml.o llama.o grammar-parser.o $(OBJS)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
