@@ -584,7 +584,7 @@ static void quantize_q8_1(const float * __restrict__ x, void * __restrict__ vy, 
     float sum = xi;
 
 #pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
         amax = sycl::fmax(amax, dpct::permute_sub_group_by_xor(
                                     item_ct1.get_sub_group(), amax, mask));
         sum +=
@@ -728,7 +728,7 @@ static void mul_mat_p021_f16_f32(
 
     // sum up partial sums and write back result
 #pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
@@ -781,7 +781,7 @@ static void mul_mat_vec_nc_f16_f32( // nc == non-contiguous
 
     // sum up partial sums and write back result
 #pragma unroll
-    for (int mask = 16; mask > 0; mask >>= 1) {
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
         tmp +=
             dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), tmp, mask);
     }
