@@ -4792,10 +4792,6 @@ static void llm_load_vocab(
             return;
         } else if (tokenizer_model == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
-            // chatglm3 needs to preprocess prefix and suffix
-            if (tokenizer_pre == "chatglm-spm") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM3;
-            }
 
             // default special tokens
             vocab.special_bos_id  = 1;
@@ -4944,6 +4940,13 @@ static void llm_load_vocab(
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_bos = true;
             vocab.tokenizer_add_eos = false;
+            // chatglm3 needs to preprocess prefix and suffix
+            if (tokenizer_pre == "chatglm-spm") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM3;
+                vocab.tokenizer_add_bos = false;
+                vocab.tokenizer_add_eos = false;
+                vocab.tokenizer_add_space_prefix = false;
+            }
         } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_bos = true;
@@ -5040,7 +5043,7 @@ static void llm_load_vocab(
                 vocab.special_eot_id    = 107;
             }
         }
-
+        
         try {
             vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
         } catch (const std::exception & e) {
@@ -13946,7 +13949,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 // tokenizer.encode('', add_special_tokens=False) returns []
 
                 bool is_prev_special = false;
-
                 if (add_special && vocab.tokenizer_add_bos) {
                     GGML_ASSERT(vocab.special_bos_id != -1);
                     output.push_back(vocab.special_bos_id);
