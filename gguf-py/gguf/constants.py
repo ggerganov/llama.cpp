@@ -119,7 +119,6 @@ class Keys:
         EOS_ID_LIST      = "tokenizer.ggml.eos_token_id_list"
 
 
-
 #
 # recommended mapping of model tensor names for storage in gguf
 #
@@ -163,6 +162,7 @@ class MODEL_ARCH(IntEnum):
     CHATGLM    = auto()
     BITNET       = auto()
     T5           = auto()
+
 
 class MODEL_TENSOR(IntEnum):
     TOKEN_EMBD           = auto()

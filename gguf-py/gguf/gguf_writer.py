@@ -608,7 +608,7 @@ class GGUFWriter:
 
     def add_bos_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.BOS_ID, id)
-    
+
     def add_eos_token_id_list(self, id: Sequence[str] | Sequence[bytes] | Sequence[bytearray]) -> None:
         self.add_array(Keys.Tokenizer.EOS_ID_LIST, id)
 

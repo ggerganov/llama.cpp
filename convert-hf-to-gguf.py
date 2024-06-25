@@ -2895,6 +2895,7 @@ class T5Model(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
+
 @Model.register("ChatGLMModel")
 class ChatGLMModel(Model):
     model_arch = gguf.MODEL_ARCH.CHATGLM
@@ -3079,7 +3080,6 @@ class ChatGLMModel(Model):
 
         name = name.removeprefix("transformer.")
         return [(self.map_tensor_name(name), data_torch)]
-
 
 
 ###### CONVERSION LOGIC ######
