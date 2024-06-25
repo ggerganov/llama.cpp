@@ -128,11 +128,35 @@ You can use GBNF grammars:
 
 Take a look at [tests](../../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/llama.cpp/pull/5978, https://github.com/ggerganov/llama.cpp/pull/6659 & https://github.com/ggerganov/llama.cpp/pull/6555).
 
+```bash
+llama-cli \
+  -hfr bartowski/Phi-3-medium-128k-instruct-GGUF \
+  -hff Phi-3-medium-128k-instruct-Q8_0.gguf \
+  -j '{
+    "items": {
+        "properties": {
+            "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+            },
+            "age": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 150
+            }
+        },
+        "required": ["name", "age"],
+        "additionalProperties": false
+    },
+    "minItems": 10,
+    "maxItems": 100
+  }' \
+  -p 'Generate a {name, age}[] JSON array with famous actors of all ages.'
+```
+
 Here is also a non-exhaustive list of **unsupported** features:
 
-- `additionalProperties`: to be fixed in https://github.com/ggerganov/llama.cpp/pull/7840
-- `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`
-    - `integer` constraints to be implemented in https://github.com/ggerganov/llama.cpp/pull/7797
 - Remote `$ref`s in the C++ version (Python & JavaScript versions fetch https refs)
 - Mixing `properties` w/ `anyOf` / `oneOf` in the same type (https://github.com/ggerganov/llama.cpp/issues/7703)
 - `string` formats `uri`, `email`
@@ -142,3 +166,96 @@ Here is also a non-exhaustive list of **unsupported** features:
 - [`not`](https://json-schema.org/draft/2020-12/json-schema-core#name-not)
 - [Conditionals](https://json-schema.org/draft/2020-12/json-schema-core#name-keywords-for-applying-subsche) `if` / `then` / `else` / `dependentSchemas`
 - [`patternProperties`](https://json-schema.org/draft/2020-12/json-schema-core#name-patternproperties)
+
+### A word about additionalProperties
+
+> [!WARNING]
+> By default, `object`s accept additional properties, which you might not want / not expect, and which will make sampling slower (not just because of the extra tokens, but also requires a slower grammar).
+> You can set `"additionalProperties": false` on the schema of any object to ensure only properties listed in `properties` are generated (not needed for non-`object` types, e.g. `array` or `string`).
+
+If you're using [Pydantic](https://pydantic.dev/) to generate schemas, you can disable additional properties with the `extra` config on each model class:
+
+```python
+# pip install pydantic
+import json
+from pydantic import BaseModel, Extra
+class QAPair(BaseModel):
+    class Config:
+        extra = 'forbid'  # triggers additionalProperties: false in the JSON schema
+    question: str
+    concise_answer: str
+    justification: str
+
+print(json.dumps(QAPair.model_json_schema()))
+```
+
+<details>
+<summary>Show output</summary>
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "question": {
+      "title": "Question",
+      "type": "string"
+    },
+    "concise_answer": {
+      "title": "Concise Answer",
+      "type": "string"
+    },
+    "justification": {
+      "title": "Justification",
+      "type": "string"
+    }
+  },
+  "required": [
+    "question",
+    "concise_answer",
+    "justification"
+  ],
+  "title": "QAPair",
+  "type": "object"
+}
+```
+</details>
+
+If you're using [Zod](https://zod.dev/), you can make your objects explicitly strict w/ `z.object(...).strict()` or `z.strictObject(...)`.
+
+Note however that [zod-to-json-schema](https://github.com/StefanTerdell/zod-to-json-schema) currently always seems to set `"additionalProperties": false` anyway (even w/ zod schemas on which `nonstrict()` / `passthrough()` was called).
+
+```js
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+const Foo = z.object({
+  age: z.number().positive(),
+  email: z.string().email(),
+}).strict();
+
+console.log(zodToJsonSchema(Foo));
+```
+
+<details>
+<summary>Show output</summary>
+```json
+{
+  "type": "object",
+  "properties": {
+    "age": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "email": {
+      "type": "string",
+      "format": "email"
+    }
+  },
+  "required": [
+    "age",
+    "email"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
+```
+</details>
