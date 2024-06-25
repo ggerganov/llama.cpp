@@ -299,10 +299,8 @@ static void power_iteration(
     //print_debug_tensor(output);
     ggml_gallocr_free(allocr);
 
-    // TODO @ngxson : The output vector is inverted. Don't know why, but here is quick fix
-    for (int i = 0; i < output->ne[0]; i++) {
-        ggml_set_f32_1d(output, i, -ggml_get_f32_1d(output, i));
-    }
+    // TODO @ngxson : The output vector is randomly inverted
+    // Solution: https://github.com/ggerganov/llama.cpp/pull/8069#issuecomment-2185328171
 }
 
 static void run_pca(
