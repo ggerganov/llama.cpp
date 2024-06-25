@@ -148,6 +148,12 @@ ifndef UNAME_M
 UNAME_M := $(shell uname -m)
 endif
 
+MK_CFLAGS     += -O3
+MK_CXXFLAGS   += -O3
+ifndef LLAMA_DEBUG
+MK_NVCCFLAGS  += -O3
+endif # LLAMA_DEBUG
+
 # In GNU make default CXX is g++ instead of c++.  Let's fix that so that users
 # of non-gcc compilers don't have to provide g++ alias or wrapper.
 DEFCC  := cc
@@ -859,7 +865,7 @@ override NVCCFLAGS := $(MK_NVCCFLAGS) $(NVCCFLAGS)
 override LDFLAGS   := $(MK_LDFLAGS) $(LDFLAGS)
 
 # identify CUDA host compiler
-ifdef LLAMA_CUDA
+ifdef GGML_CUDA
 GF_CC := $(NVCC) $(NVCCFLAGS) 2>/dev/null .c -Xcompiler
 include scripts/get-flags.mk
 CUDA_CXXFLAGS := $(BASE_CXXFLAGS) $(GF_CXXFLAGS) -Wno-pedantic
@@ -884,7 +890,7 @@ $(info I NVCCFLAGS: $(NVCCFLAGS))
 $(info I LDFLAGS:   $(LDFLAGS))
 $(info I CC:        $(shell $(CC)   --version | head -n 1))
 $(info I CXX:       $(shell $(CXX)  --version | head -n 1))
-ifdef LLAMA_CUDA
+ifdef GGML_CUDA
 $(info I NVCC:      $(shell $(NVCC) --version | tail -n 1))
 CUDA_VERSION := $(shell $(NVCC) --version | grep -oP 'release (\K[0-9]+\.[0-9])')
 ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
@@ -896,7 +902,7 @@ endif # CUDA_POWER_ARCH
 endif # CUDA_DOCKER_ARCH
 
 endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
-endif # LLAMA_CUDA
+endif # GGML_CUDA
 $(info )
 
 ifdef DEPRECATE_WARNING

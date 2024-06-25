@@ -31,7 +31,7 @@ Makefile:
 
 ```bash
 make GGML_BLIS=1 -j
-# make GGML_BLIS=1 benchmark-matmult
+# make GGML_BLIS=1 llama-benchmark-matmult
 ```
 
 CMake:
