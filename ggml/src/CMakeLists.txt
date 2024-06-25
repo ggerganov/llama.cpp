@@ -719,7 +719,7 @@ if (GGML_KOMPUTE)
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_KOMPUTE)
 
         set(GGML_EXTRA_LIBS     ${GGML_EXTRA_LIBS}     kompute)
-        set(GGML_EXTRA_INCLUDES ${GGML_EXTRA_INCLUDES} ${CMAKE_BINARY_DIR})
+        set(GGML_EXTRA_INCLUDES ${GGML_EXTRA_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR})
     else()
         message(WARNING "Kompute not found")
     endif()
