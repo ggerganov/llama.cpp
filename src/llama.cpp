@@ -6977,6 +6977,8 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_JAIS:
                 {
+                    model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+
                     // Output
                     {
                         model.output_norm   = ml.create_tensor(ctx_output,       tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
@@ -7009,7 +7011,6 @@ static bool llm_load_tensors(
 
                         layer.ffn_up     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
                         layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
-
                     }
                 } break;
             default:
@@ -12384,22 +12385,12 @@ struct llm_build_context {
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
 
         struct ggml_tensor * cur;
-        //struct ggml_tensor * pos;
         struct ggml_tensor * inpL;
 
         inpL = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
 
-        // // inp_pos - contains the positions
-        // struct ggml_tensor * inp_pos = build_inp_pos();
-
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
         struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
-
-        // pos = ggml_get_rows(ctx0, model.pos_embd, inp_pos);
-        // cb(pos, "pos_embd", -1);
-
-        // inpL = ggml_add(ctx0, inpL, pos);
-        // cb(inpL, "inpL", -1);
 
         for (int il = 0; il < n_layer; ++il) {
             cur = llm_build_norm(ctx0, inpL, hparams,
