@@ -1162,6 +1162,11 @@ target_compile_features   (ggml PUBLIC c_std_11) # don't bump
 
 target_link_libraries(ggml PRIVATE Threads::Threads ${GGML_EXTRA_LIBS})
 
+find_library(MATH_LIBRARY m)
+if (MATH_LIBRARY)
+    target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
+endif()
+
 add_library(ggml_static STATIC $<TARGET_OBJECTS:ggml>)
 
 if (BUILD_SHARED_LIBS)
