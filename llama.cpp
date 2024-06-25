@@ -2295,11 +2295,19 @@ struct llama_control_vector {
     int32_t layer_start = -1;
     int32_t layer_end   = -1;
 
-    ggml_tensor * tensor_for(int il) const {
+    struct ggml_tensor * tensor_for(int il) const {
         if (il < 0 || il < layer_start || il > layer_end || (size_t) il >= tensors.size()) {
             return nullptr;
         }
         return tensors[il];
+    }
+
+    struct ggml_tensor * apply_to(struct ggml_context * ctx, struct ggml_tensor * cur, int  il) const {
+        ggml_tensor * layer_dir = tensor_for(il);
+        if (layer_dir != nullptr) {
+            cur = ggml_add(ctx, cur, layer_dir);
+        }
+        return cur;
     }
 
     ~llama_control_vector() {
@@ -7901,9 +7909,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -8018,9 +8024,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -8125,9 +8129,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -8244,9 +8246,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cur = ggml_add(ctx0, cur, inpL);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -8398,9 +8398,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -8531,9 +8529,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -8640,9 +8636,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -8734,9 +8728,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9033,9 +9025,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9173,9 +9163,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9324,9 +9312,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9439,9 +9425,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9553,9 +9537,7 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9701,9 +9683,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9825,9 +9805,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, ffn_output);
             cur = ggml_add(ctx0, cur, inpL);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -9962,9 +9940,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, residual, cur);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10067,9 +10043,7 @@ struct llm_build_context {
 
             cur = ggml_add(ctx0, cur, sa_out);
             cur = ggml_add(ctx0, cur, inpL);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10176,9 +10150,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10289,9 +10261,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10407,9 +10377,7 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10527,9 +10495,7 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10671,9 +10637,7 @@ struct llm_build_context {
             cb(cur, "hidden_scaled_ffn", -1);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10786,9 +10750,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, sa_out);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -10907,9 +10869,7 @@ struct llm_build_context {
             cb(cur, "ffn_out", il);
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -11058,9 +11018,7 @@ struct llm_build_context {
 
             // residual
             cur = ggml_add(ctx0, cur, inpL);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -11202,9 +11160,7 @@ struct llm_build_context {
             // add together residual + FFN + self-attention
             cur = ggml_add(ctx0, cur, inpL);
             cur = ggml_add(ctx0, cur, attn_out);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -11340,9 +11296,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
 
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -11457,11 +11411,9 @@ struct llm_build_context {
                 cb(cur, "ffn_out", il);
 
                 cur = ggml_add(ctx0, cur, attn_out);
-                if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                    cur = ggml_add(ctx0, cur, layer_dir);
-                }
+                cur = lctx.cvec.apply_to(ctx0, cur, il);
                 cb(cur, "l_out", il);
-    
+
                 // input for next layer
                 inpL = cur;
             } else {
@@ -11487,11 +11439,9 @@ struct llm_build_context {
                 cb(cur, "ffn_out", il);
 
                 cur = ggml_add(ctx0, cur, ffn_inp);
-                if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                    cur = ggml_add(ctx0, cur, layer_dir);
-                }
+                cur = lctx.cvec.apply_to(ctx0, cur, il);
                 cb(cur, "l_out", il);
-    
+
                 // input for next layer
                 inpL = cur;
             }
@@ -11620,9 +11570,7 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, ffn_out);
             cb(cur, "ffn_out", il);
 
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
@@ -11855,9 +11803,7 @@ struct llm_build_context {
             }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
-            if (ggml_tensor * layer_dir = lctx.cvec.tensor_for(il)) {
-                cur = ggml_add(ctx0, cur, layer_dir);
-            }
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
