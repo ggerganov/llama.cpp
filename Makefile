@@ -19,7 +19,7 @@ BUILD_TARGETS = \
 	llama-imatrix \
 	llama-infill \
 	llama-llava-cli \
-  llama-minicpmv-cli\
+    llama-minicpmv-cli\
 	llama-lookahead \
 	llama-lookup \
 	llama-lookup-create \

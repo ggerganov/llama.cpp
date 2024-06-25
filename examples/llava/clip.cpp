@@ -647,7 +647,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // loop over layers
-    for (int il = 0; il < n_layer - 1; il++) {
+    for (int il = 0; il < n_layer; il++) {
         struct ggml_tensor * cur = embeddings; // embeddings = residual, cur = hidden_states
 
         //const size_t nb_q_w = model.layers[il].q_w->nb[0];
@@ -2077,7 +2077,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     }
 
     // build the inference graph
-    ggml_cgraph * gf = clip_image_build_graph(ctx, imgs);
+    ggml_cgraph * gf = clip_image_build_graph(ctx, imgs, load_image_size);
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
 
     // set inputs

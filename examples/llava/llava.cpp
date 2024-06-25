@@ -657,7 +657,7 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
         for (size_t j = 0; j < imgs[i].size(); ++j) {
             float* image_embed = NULL;
             int n_image_pos = 0;
-            bool image_embed_result = llava_image_embed_make_with_clip_img(ctx_clip, n_threads, imgs[i][j], &image_embed, &n_image_pos);
+            bool image_embed_result = llava_image_embed_make_with_clip_img_uhd(ctx_clip, n_threads, imgs[i][j], &image_embed, &n_image_pos);
             if (!image_embed_result) {
                 LOG_TEE("%s: coulnd't embed the image\n", __func__);
                 return NULL;
@@ -670,6 +670,25 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
         }
     }
     return results;
+}
+
+bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
+    float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*6); // TODO: base on gridsize/llava model
+    if (!image_embd) {
+        LOG_TEE("Unable to allocate memory for image embeddings\n");
+        return false;
+    }
+
+    int n_img_pos;
+    if (!encode_image_with_clip_uhd(ctx_clip, n_threads, img, image_embd, &n_img_pos)) {
+        LOG_TEE("%s: cannot encode image, aborting\n", __func__);
+        free(image_embd);
+        return false;
+    }
+    *image_embd_out = image_embd;
+    *n_img_pos_out = n_img_pos;
+
+    return true;
 }
 
 bool llava_image_embed_make_with_clip_img_ollama(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
