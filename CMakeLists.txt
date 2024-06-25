@@ -509,12 +509,14 @@ if (LLAMA_RPC)
 endif()
 
 if (LLAMA_VULKAN)
+    find_package(Python COMPONENTS Interpreter)
+    if (NOT Python_FOUND)
+        message(FATAL_ERROR "python is required to compile Vulkan shaders")
+    endif()
+
     find_package(Vulkan)
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
-
-        set(GGML_HEADERS_VULKAN ggml-vulkan.h)
-        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
 
         add_compile_definitions(GGML_USE_VULKAN)
 
@@ -544,7 +546,35 @@ if (LLAMA_VULKAN)
             add_compile_definitions(GGML_VULKAN_RUN_TESTS)
         endif()
 
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} Vulkan::Vulkan)
+        set (_llama_vk_genshaders_cmd ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ggml_vk_generate_shaders.py)
+        set (_llama_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
+	set (_llama_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
+	set (_llama_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
+	set (_llama_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
+
+        file(GLOB _llama_vk_shader_deps "${_llama_vk_input_dir}/*.comp")
+
+        add_custom_command(
+	    OUTPUT ${_llama_vk_header}
+	           ${_llama_vk_source}
+
+            COMMAND ${_llama_vk_genshaders_cmd}
+	        --glslc      ${Vulkan_GLSLC_EXECUTABLE}
+		--input-dir  ${_llama_vk_input_dir}
+		--output-dir ${_llama_vk_output_dir}
+		--target-hpp ${_llama_vk_header}
+		--target-cpp ${_llama_vk_source}
+		--no-clean
+
+	    DEPENDS ${_llama_vk_shader_deps}
+	    COMMENT "Generate vulkan shaders"
+	)
+
+        set(GGML_HEADERS_VULKAN ggml-vulkan.h   ${_llama_vk_header})
+        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp ${_llama_vk_source})
+
+        set(LLAMA_EXTRA_LIBS     ${LLAMA_EXTRA_LIBS} Vulkan::Vulkan)
+	set(LLAMA_EXTRA_INCLUDES ${LLAMA_EXTRA_INCLUDES} ${CMAKE_BINARY_DIR})
     else()
         message(WARNING "Vulkan not found")
     endif()
