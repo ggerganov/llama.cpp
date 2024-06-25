@@ -1596,7 +1596,7 @@ struct server_context {
                     } else {
                         std::string prompt;
                         if (task.data.contains("prompt") && task.data.at("prompt").is_string()) {
-                            json_value(task.data, "prompt", std::string());
+                            prompt = json_value(task.data, "prompt", std::string());
                         }
 
                         slot = get_available_slot(prompt);

@@ -17,7 +17,7 @@ Related PRs:
 ./cvector-generator -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99
 
 # With advanced options
-./cvector-generator -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --batch-pca 100
+./cvector-generator -m ./dolphin-2.0-mistral-7b.Q4_K_M.gguf -ngl 99 --completions 128 --pca-iter 2000 --pca-batch 100
 
 # To see help message
 ./cvector-generator -h

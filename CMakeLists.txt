@@ -102,7 +102,8 @@ option(LLAMA_LLAMAFILE                       "llama: use llamafile SGEMM"       
 option(LLAMA_CUDA                            "llama: use CUDA"                                  OFF)
 option(LLAMA_CUBLAS                          "llama: use CUDA (deprecated, use LLAMA_CUDA)"     OFF)
 option(LLAMA_CUDA_FORCE_DMMV                 "llama: use dmmv instead of mmvq CUDA kernels"     OFF)
-option(LLAMA_CUDA_FORCE_MMQ                  "llama: use mmq kernels instead of cuBLAS"         OFF)
+option(LLAMA_CUDA_FORCE_MMQ                  "llama: always use mmq kernels instead of cuBLAS"  OFF)
+option(LLAMA_CUDA_FORCE_CUBLAS               "llama: always use cuBLAS instead of mmq kernels"  OFF)
 set(LLAMA_CUDA_DMMV_X      "32" CACHE STRING "llama: x stride for dmmv CUDA kernels")
 set(LLAMA_CUDA_MMV_Y        "1" CACHE STRING "llama: y block size for mmv CUDA kernels")
 option(LLAMA_CUDA_F16                        "llama: use 16 bit floats for some calculations"   OFF)
@@ -143,9 +144,6 @@ option(LLAMA_BUILD_EXAMPLES                  "llama: build examples" ${LLAMA_STA
 option(LLAMA_BUILD_SERVER                    "llama: build server example"                      ON)
 option(LLAMA_LASX                            "llama: enable lasx"                               ON)
 option(LLAMA_LSX                             "llama: enable lsx"                                ON)
-
-# add perf arguments
-option(LLAMA_PERF                            "llama: enable perf"                               OFF)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/scripts/build-info.cmake)
@@ -419,13 +417,14 @@ if (LLAMA_CUDA)
 
         if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
             # 52 == lowest CUDA 12 standard
-            # 60 == f16 CUDA intrinsics
+            # 60 == FP16 CUDA intrinsics
             # 61 == integer CUDA intrinsics
-            # 70 == compute capability at which unrolling a loop in mul_mat_q kernels is faster
+            # 70 == FP16 tensor cores
+            # 75 == int8 tensor cores
             if (LLAMA_CUDA_F16 OR LLAMA_CUDA_DMMV_F16)
-                set(CMAKE_CUDA_ARCHITECTURES "60;61;70") # needed for f16 CUDA intrinsics
+                set(CMAKE_CUDA_ARCHITECTURES "60;61;70;75")
             else()
-                set(CMAKE_CUDA_ARCHITECTURES "52;61;70") # lowest CUDA 12 standard + lowest for integer intrinsics
+                set(CMAKE_CUDA_ARCHITECTURES "52;61;70;75")
                 #set(CMAKE_CUDA_ARCHITECTURES "OFF") # use this to compile much faster, but only F16 models work
             endif()
         endif()
@@ -449,6 +448,9 @@ if (LLAMA_CUDA)
         endif()
         if (LLAMA_CUDA_FORCE_MMQ)
             add_compile_definitions(GGML_CUDA_FORCE_MMQ)
+        endif()
+        if (LLAMA_CUDA_FORCE_CUBLAS)
+            add_compile_definitions(GGML_CUDA_FORCE_CUBLAS)
         endif()
         if (LLAMA_CUDA_NO_VMM)
             add_compile_definitions(GGML_CUDA_NO_VMM)
@@ -665,6 +667,7 @@ if (LLAMA_SYCL)
     #todo: AOT
 
     find_package(IntelSYCL REQUIRED)
+    find_package(MKL REQUIRED)
 
     message(STATUS "SYCL found")
 
@@ -679,11 +682,9 @@ if (LLAMA_SYCL)
     endif()
 
     add_compile_options(-I./) #include DPCT
-    add_compile_options(-I/${SYCL_INCLUDE_DIR})
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
     if (LLAMA_SYCL_TARGET STREQUAL "NVIDIA")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
     endif()
@@ -693,8 +694,10 @@ if (LLAMA_SYCL)
     list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
 
     if (WIN32)
-        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl sycl7 OpenCL mkl_sycl_blas_dll.lib mkl_intel_ilp64_dll.lib mkl_sequential_dll.lib mkl_core_dll.lib)
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
     else()
+        add_compile_options(-I/${SYCL_INCLUDE_DIR})
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
         if (LLAMA_SYCL_TARGET STREQUAL "INTEL")
             set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} -fsycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
         elseif (LLAMA_SYCL_TARGET STREQUAL "NVIDIA")
@@ -867,10 +870,6 @@ if (LLAMA_CPU_HBM)
     add_compile_definitions(GGML_USE_CPU_HBM)
 
     target_link_libraries(ggml PUBLIC memkind)
-endif()
-
-if (LLAMA_PERF)
-    add_compile_definitions(GGML_PERF)
 endif()
 
 function(get_flags CCID CCVER)
