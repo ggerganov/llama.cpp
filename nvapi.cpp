@@ -1,5 +1,8 @@
 #include "nvapi.h"
 
+// TODO: remove
+#include <stdio.h>
+
 #ifdef _WIN32
   #include <libloaderapi.h>
 #elif __linux__
@@ -84,7 +87,7 @@ void nvapi_free() {
     if (lib) {
       FreeLibrary(lib);
     }
-  #else
+  #elif __linux__
     if (lib) {
       dlclose(lib);
     }
@@ -101,6 +104,7 @@ void nvapi_set_pstate(int ids[], int ids_size, int pstate) {
   }
 
   // TODO
+  printf("nvapi_set_pstate: %d", pstate);
 }
 
 void nvapi_set_pstate_high() {
