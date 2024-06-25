@@ -104,6 +104,9 @@ void nvapi_set_pstate(int ids[], int ids_size, int pstate) {
   }
 
   // TODO
+  (void) ids;
+  (void) ids_size;
+  (void) pstate;
   printf("nvapi_set_pstate: %d", pstate);
 }
 
