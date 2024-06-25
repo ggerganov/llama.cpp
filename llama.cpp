@@ -2433,8 +2433,7 @@ struct llama_vocab {
     bool tokenizer_escape_whitespaces         = true;
     bool tokenizer_treat_whitespace_as_suffix = false;
 
-    uint32_t n_precompiled_charsmap = 0;
-    char * precompiled_charsmap = NULL;
+    std::vector<char> precompiled_charsmap;
 
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const {
         GGML_ASSERT(token_left.find(' ') == std::string::npos);
@@ -4974,9 +4973,20 @@ static void llm_load_vocab(
 
             const int precompiled_charsmap_keyidx = gguf_find_key(ctx, kv(LLM_KV_TOKENIZER_PRECOMPILED_CHARSMAP).c_str());
             if (precompiled_charsmap_keyidx != -1) {
-                vocab.n_precompiled_charsmap = gguf_get_arr_n(ctx, precompiled_charsmap_keyidx);
-                vocab.precompiled_charsmap = (char *) malloc(vocab.n_precompiled_charsmap);
-                memcpy((void*) vocab.precompiled_charsmap, gguf_get_arr_data(ctx, precompiled_charsmap_keyidx), vocab.n_precompiled_charsmap);
+                size_t n_precompiled_charsmap = gguf_get_arr_n(ctx, precompiled_charsmap_keyidx);
+                const char * precompiled_charsmap = (const char *) gguf_get_arr_data(ctx, precompiled_charsmap_keyidx);
+                vocab.precompiled_charsmap.assign(precompiled_charsmap, precompiled_charsmap + n_precompiled_charsmap);
+#ifdef IS_BIG_ENDIAN
+                // correct endiannes of data in precompiled_charsmap binary blob
+                uint32_t * xcda_blob_size = (uint32_t *) &vocab.precompiled_charsmap[0];
+                *xcda_blob_size = __builtin_bswap32(*xcda_blob_size);
+                assert(*xcda_blob_size + sizeof(uint32_t) < n_precompiled_charsmap);
+                size_t xcda_array_size = *xcda_blob_size / sizeof(uint32_t);
+                uint32_t * xcda_array = (uint32_t *) &vocab.precompiled_charsmap[sizeof(uint32_t)];
+                for (size_t i = 0; i < xcda_array_size; ++i) {
+                    xcda_array[i] = __builtin_bswap32(xcda_array[i]);
+                }
+#endif
             }
         } else {
             throw std::runtime_error(format("unknown tokenizer: '%s'", tokenizer_model.c_str()));
@@ -13990,33 +14000,27 @@ struct naive_trie {
 
 struct llm_tokenizer_ugm {
     llm_tokenizer_ugm(const llama_vocab & vocab) : vocab(vocab) {
-        if (vocab.n_precompiled_charsmap > 0) {
+        if (vocab.precompiled_charsmap.size() > 0) {
             size_t charsmap_offset = 0;
 
             // First four bytes of precompiled_charsmap contains length of binary
             // blob containing XOR-compressed compact double array (XCDA) entries
-            uint32_t xcda_blob_size = *(uint32_t *) vocab.precompiled_charsmap;
-#ifdef IS_BIG_ENDIAN
-            xcda_blob_size = __builtin_bswap32(xcda_blob_size);
-#endif
+            uint32_t xcda_blob_size = *(const uint32_t *) &vocab.precompiled_charsmap[0];
             charsmap_offset += sizeof(xcda_blob_size);
-            if (xcda_blob_size + charsmap_offset >= vocab.n_precompiled_charsmap) {
+            if (xcda_blob_size + charsmap_offset >= vocab.precompiled_charsmap.size()) {
                 throw std::runtime_error("Index out of array bounds in precompiled charsmap!");
             }
 
             // Next xcda_blob_size bytes contain entries of XOR-compressed compact
             // double array (XCDA). Each entry is bit-packed into a 32-bit integer.
-            xcda_array = (uint32_t *) (vocab.precompiled_charsmap + charsmap_offset);
+            xcda_array = (const uint32_t *) &vocab.precompiled_charsmap[charsmap_offset];
             xcda_array_size = xcda_blob_size / sizeof(uint32_t);
-#ifdef IS_BIG_ENDIAN
-            for (int i = 0; i < xcda_array_size; ++i) xcda_array[i] = __builtin_bswap32(xcda_array[i]);
-#endif
             charsmap_offset += xcda_blob_size;
 
             // Remaining bytes of precompiled charsmap contain null-terminated
             // replacement strings for prefixes matched by the XCDA.
-            prefix_replacements = vocab.precompiled_charsmap + charsmap_offset;
-            prefix_replacements_size = vocab.n_precompiled_charsmap - charsmap_offset;
+            prefix_replacements = &vocab.precompiled_charsmap[charsmap_offset];
+            prefix_replacements_size = vocab.precompiled_charsmap.size() - charsmap_offset;
         }
 
         for (unsigned int id = 0; id < vocab.id_to_token.size(); ++id) {
@@ -14201,7 +14205,7 @@ private:
      */
     struct xcda_array_view {
     public:
-        xcda_array_view(uint32_t * xcda_array, size_t xcda_array_size) : xcda_array(xcda_array), xcda_array_size(xcda_array_size) {
+        xcda_array_view(const uint32_t * xcda_array, size_t xcda_array_size) : xcda_array(xcda_array), xcda_array_size(xcda_array_size) {
         }
         uint32_t get_base(size_t index) {
             uint32_t packed_node = get_node(index);
@@ -14226,7 +14230,7 @@ private:
             }
             return xcda_array[index];
         }
-        uint32_t * xcda_array;
+        const uint32_t * xcda_array;
         size_t xcda_array_size;
     };
 
@@ -14303,10 +14307,10 @@ private:
     // escaped space symbol - U+2581 (Lower One Eighth Block)
     const std::string escaped_space = "\xE2\x96\x81";
 
-    char * prefix_replacements = NULL;
+    const char * prefix_replacements = NULL;
     size_t prefix_replacements_size = 0;
 
-    uint32_t * xcda_array = NULL;
+    const uint32_t * xcda_array = NULL;
     size_t xcda_array_size = 0;
 
     struct naive_trie user_defined_token_matcher;
