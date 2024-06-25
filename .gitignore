@@ -58,6 +58,8 @@ ggml-metal-embed.metal
 llama-batched-swift
 out/
 tmp/
+ggml-vulkan-shaders.hpp
+ggml-vulkan-shaders.cpp
 
 # CI
 

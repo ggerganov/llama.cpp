@@ -620,8 +620,26 @@ ifdef LLAMA_VULKAN_RUN_TESTS
 	MK_CPPFLAGS  += -DGGML_VULKAN_RUN_TESTS
 endif
 
-ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h
+PYTHON_CMD = python
+GLSLC_CMD  = glslc
+_llama_vk_genshaders_cmd = $(PYTHON_CMD) ggml_vk_generate_shaders.py
+_llama_vk_header = ggml-vulkan-shaders.hpp
+_llama_vk_source = ggml-vulkan-shaders.cpp
+_llama_vk_input_dir = vulkan-shaders
+_llama_vk_shader_deps = $(echo $(_llama_vk_input_dir)/*.comp)
+
+ggml-vulkan.o: ggml-vulkan.cpp ggml-vulkan.h $(_llama_vk_header) $(_llama_vk_source)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(_llama_vk_header): $(_llama_vk_source)
+
+$(_llama_vk_source): $(_llama_vk_shader_deps)
+	$(_llama_vk_genshaders_cmd) \
+		--glslc      $(GLSLC_CMD) \
+		--input-dir  $(_llama_vk_input_dir) \
+		--target-hpp $(_llama_vk_header) \
+		--target-cpp $(_llama_vk_source)
+
 endif # LLAMA_VULKAN
 
 ifdef LLAMA_HIPBLAS
