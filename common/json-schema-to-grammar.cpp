@@ -69,6 +69,10 @@ public:
     }
 
     char operator[](size_t pos) const {
+        auto index = _start + pos;
+        if (index >= _end) {
+            throw std::out_of_range("string_view index out of range");
+        }
         return _str[_start + pos];
     }
 
@@ -110,13 +114,13 @@ static void _build_min_max_int(int min_value, int max_value, std::stringstream &
     std::function<void(const string_view &, const string_view &)> uniform_range =
         [&](const string_view & from, const string_view & to) {
             size_t i = 0;
-            while (from[i] == to[i]) {
+            while (i < from.length() && i < to.length() && from[i] == to[i]) {
                 i++;
             }
             if (i > 0) {
                 out << "\"" << from.substr(0, i).str() << "\"";
             }
-            if (i < from.length()) {
+            if (i < from.length() && i < to.length()) {
                 if (i > 0) {
                     out << " ";
                 }
