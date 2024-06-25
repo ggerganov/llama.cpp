@@ -1,6 +1,7 @@
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
+#include "nvapi.h"
 #include "unicode.h"
 
 #include "ggml.h"
@@ -16490,6 +16491,11 @@ void llama_backend_init(void) {
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
     }
+
+#ifdef GGML_USE_CUDA
+    // initalize NvAPI library
+    nvapi_init();
+#endif
 }
 
 void llama_numa_init(enum ggml_numa_strategy numa) {
@@ -16500,6 +16506,11 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
 
 void llama_backend_free(void) {
     ggml_quantize_free();
+
+#ifdef GGML_USE_CUDA
+    // free NvAPI library
+    nvapi_free();
+#endif
 }
 
 int64_t llama_time_us(void) {

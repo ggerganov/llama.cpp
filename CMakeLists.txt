@@ -1294,6 +1294,8 @@ endif()
 add_library(llama
             llama.cpp
             llama.h
+            nvapi.cpp
+            nvapi.h
             unicode.h
             unicode.cpp
             unicode-data.cpp
