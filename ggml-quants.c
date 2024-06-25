@@ -13884,6 +13884,8 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
         uint16_t * index,
         int8_t   * shifts) {
 
+    float waux[IQ1S_BLOCK_SIZE];
+
     const int gindex = iq2_data_index(GGML_TYPE_IQ1_S);
 
     const uint64_t * kgrid_q2xs      = iq2_data[gindex].grid;
@@ -13919,12 +13921,13 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
         const float * xbl = x + QK_K*ibl;
         float sumx2 = 0;
         for (int i = 0; i < QK_K; ++i) sumx2 += xbl[i]*xbl[i];
-        float sigma2 = 2*sumx2/QK_K;
+        float sigma2 = sumx2/QK_K;
 
         for (int ib = 0; ib < QK_K/block_size; ++ib) {
             const float * xb = xbl + block_size*ib;
             const float * qw = quant_weights + QK_K*ibl + block_size*ib;
             for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+            for (int i = 0; i < block_size; ++i) waux[i] = sqrtf(weight[i]);
             float max = fabsf(xb[0]);
             for (int i = 1; i < block_size; ++i) max = MAX(max, fabsf(xb[i]));
             if (max < GROUP_MAX_EPS_IQ1_S) {
@@ -13986,7 +13989,7 @@ static void quantize_row_iq1_s_impl(const float * restrict x, void * restrict vy
                 if (grid_index < 0) {
                     all_on_grid = false;
                     const uint16_t * neighbours = kneighbors_q2xs - kmap_q2xs[u] - 1;
-                    grid_index = iq1_find_best_neighbour2(neighbours, kgrid_q2xs, xb + 8*k, weight + 8*k, scale, xx, L + 8*k, NGRID_IQ1S);
+                    grid_index = iq1_find_best_neighbour2(neighbours, kgrid_q2xs, xb + 8*k, waux + 8*k, scale, xx, L + 8*k, NGRID_IQ1S);
                     GGML_ASSERT(grid_index >= 0);
                 }
                 index[k] = grid_index;
@@ -14060,6 +14063,8 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
         uint16_t * index,
         int8_t   * shifts) {
 
+    float waux[IQ1M_BLOCK_SIZE];
+
     const int gindex = iq2_data_index(GGML_TYPE_IQ1_M);
 
     const uint64_t * kgrid_q2xs      = iq2_data[gindex].grid;
@@ -14099,13 +14104,14 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
         const float * xbl = x + QK_K*ibl;
         float sumx2 = 0;
         for (int i = 0; i < QK_K; ++i) sumx2 += xbl[i]*xbl[i];
-        float sigma2 = 2*sumx2/QK_K;
+        float sigma2 = sumx2/QK_K;
 
         for (int ib = 0; ib < QK_K/block_size; ++ib) {
             const float * xb = xbl + block_size*ib;
             if (quant_weights) {
                 const float * qw = quant_weights + QK_K*ibl + block_size*ib;
                 for (int i = 0; i < block_size; ++i) weight[i] = qw[i] * sqrtf(sigma2 + xb[i]*xb[i]);
+                for (int i = 0; i < block_size; ++i) waux[i] = sqrtf(weight[i]);
             } else {
                 for (int i = 0; i < block_size; ++i) weight[i] = xb[i]*xb[i];
             }
@@ -14230,7 +14236,7 @@ static void quantize_row_iq1_m_impl(const float * restrict x, void * restrict vy
                 if (grid_index < 0) {
                     all_on_grid = false;
                     const uint16_t * neighbours = kneighbors_q2xs - kmap_q2xs[u] - 1;
-                    grid_index = iq1_find_best_neighbour2(neighbours, kgrid_q2xs, xb + 8*k, weight + 8*k, scale, xx, L + 8*k, NGRID_IQ1S);
+                    grid_index = iq1_find_best_neighbour2(neighbours, kgrid_q2xs, xb + 8*k, (quant_weights ? waux : weight) + 8*k, scale, xx, L + 8*k, NGRID_IQ1S);
                     GGML_ASSERT(grid_index >= 0);
                 }
                 index[k] = grid_index;
