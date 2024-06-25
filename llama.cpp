@@ -4768,14 +4768,14 @@ static void llm_load_hparams(
                 }
             } break;
         case LLM_ARCH_CHATGLM:
-        {
-            ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
-            switch (hparams.n_layer) {
-                case 28: model.type = e_model::MODEL_6B; break;
-                case 40: model.type = e_model::MODEL_9B; break;
-                default: model.type = e_model::MODEL_UNKNOWN;
-            }
-        } break;
+            {
+                ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
+                switch (hparams.n_layer) {
+                    case 28: model.type = e_model::MODEL_6B; break;
+                    case 40: model.type = e_model::MODEL_9B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
+            } break;
         case LLM_ARCH_BITNET:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
@@ -11966,6 +11966,11 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
+                cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
+                        nullptr, nullptr,
+                        Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+
+                cur = llm_build_norm(ctx0, cur, hparams,
                         model.layers[il].attn_sub_norm, NULL,
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "attn_sub_norm", il);
@@ -12153,7 +12158,6 @@ struct llm_build_context {
 
         return gf;
     }
-
 };
 
 static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const std::vector<uint32_t> & ids) {
