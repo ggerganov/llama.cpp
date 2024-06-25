@@ -18503,16 +18503,30 @@ int32_t llama_detokenize(
                          int32_t   n_tokens,
                             char * text,
                          int32_t   text_len_max,
-                            bool   special) {
+                            bool   remove_special,
+                            bool   unparse_special) {
     // remove the leading space of the first non-control token
     static const int attr_special = LLAMA_TOKEN_ATTR_UNKNOWN | LLAMA_TOKEN_ATTR_CONTROL;
-    bool remove_space = !special && model->vocab.tokenizer_add_space_prefix;
+    bool remove_space = !unparse_special && model->vocab.tokenizer_add_space_prefix;
     int32_t avail = text_len_max;
     int32_t total = 0;
 
+    if (remove_special && model->vocab.tokenizer_add_bos) {
+        if (n_tokens > 0 && tokens[0] == model->vocab.special_bos_id) {
+            n_tokens--;
+            tokens++;
+        }
+    }
+
+    if (remove_special && model->vocab.tokenizer_add_eos) {
+        if (n_tokens > 0 && tokens[n_tokens-1] == model->vocab.special_eos_id) {
+            n_tokens--;
+        }
+    }
+
     for (int32_t i = 0; i < n_tokens; ++i) {
         GGML_ASSERT(avail >= 0);
-        int32_t n_chars = llama_token_to_piece(model, tokens[i], text, avail, remove_space, special);
+        int32_t n_chars = llama_token_to_piece(model, tokens[i], text, avail, remove_space, unparse_special);
         const llama_token_attr attr = llama_token_get_attr(model, tokens[i]);
         remove_space = remove_space && (attr & attr_special);  // until non-control token
         if (n_chars < 0) {

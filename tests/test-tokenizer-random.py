@@ -98,15 +98,15 @@ class LibLlamaModel:
             num = self.lib.llama_tokenize(self.model, text, len(text), self.token_ids, len(self.token_ids), add_special, parse_special)
         return list(self.token_ids[0:num])
 
-    def detokenize(self, ids: list[int], special: bool = False) -> str:
+    def detokenize(self, ids: list[int], remove_special: bool = False, unparse_special: bool = False) -> str:
         if len(self.token_ids) < len(ids):
             self.token_ids = self.ffi.new("llama_token[]", 2 * len(ids))
         for i, id in enumerate(ids):
             self.token_ids[i] = id
-        num = self.lib.llama_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), special)
+        num = self.lib.llama_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), remove_special, unparse_special)
         while num < 0 and len(self.text_buff) < (16 << 20):
             self.text_buff = self.ffi.new("uint8_t[]", -2 * num)
-            num = self.lib.llama_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), special)
+            num = self.lib.llama_detokenize(self.model, self.token_ids, len(ids), self.text_buff, len(self.text_buff), remove_special, unparse_special)
         return str(self.ffi.buffer(self.text_buff, num), encoding="utf-8", errors="replace")  # replace errors with '\uFFFD'
 
 
@@ -160,7 +160,7 @@ class TokenizerLlamaCpp (Tokenizer):
         return self.model.tokenize(text, add_special=True, parse_special=True)
 
     def decode(self, ids: list[int]) -> str:
-        return self.model.detokenize(ids, special=True)
+        return self.model.detokenize(ids, remove_special=False, unparse_special=True)
 
 
 def generator_custom_text() -> Iterator[str]:
