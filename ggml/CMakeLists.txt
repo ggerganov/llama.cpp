@@ -207,7 +207,7 @@ set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 install(TARGETS ggml PUBLIC_HEADER)
 
 if (BUILD_SHARED_LIBS)
-    install(TARGETS ggml_shared LIBRARY)
+    install(TARGETS ggml LIBRARY)
 endif()
 
 if (GGML_METAL)
