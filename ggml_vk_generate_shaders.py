@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import os
 from tempfile import gettempdir
+import sys
 
 logger = logging.getLogger("ggml-vk-generate-shaders")
 
@@ -26,9 +27,6 @@ type_names = [
 ]
 
 ASYNCIO_CONCURRENCY = 64
-
-input_dir = "vulkan-shaders"
-output_dir = gettempdir()
 
 lock = asyncio.Lock()
 shader_fnames = []
@@ -184,30 +182,37 @@ async def main():
     sem = asyncio.Semaphore(ASYNCIO_CONCURRENCY)
     await asyncio.gather(*(withSemaphore(sem, task) for task in tasks))
 
-    with open("ggml-vulkan-shaders.hpp", "w") as f:
-        f.write("#include <cstdint>\n\n")
+    with open(target_hpp, "w") as hdr, open(target_cpp, "w") as src:
+        hdr.write("#include <cstdint>\n\n")
+        src.write(f"#include \"{os.path.basename(target_hpp)}\"\n\n")
         for name, path in sorted(shader_fnames):
-
             with open(path, "rb") as spv:
                 counter = 0
                 newline_counter = 0
-                f.write(f"unsigned char {name}_data[] = {{\n")
+                data = ""
                 for val in spv.read():
-                    f.write(f"0x{val:02x},")
+                    data += f"0x{val:02x},"
                     newline_counter += 1
                     counter += 1
                     if newline_counter >= 12:
                         newline_counter = 0
-                        f.write("\n")
-            f.write("\n};\n")
-            f.write(f"const uint64_t {name}_len = {counter};\n\n")
-            os.remove(path)
+                        data += "\n"
+            hdr.write(f"extern unsigned char {name}_data[{counter}];\n")
+            hdr.write(f"const uint64_t {name}_len = {counter};\n\n")
+            src.write(f"unsigned char {name}_data[{counter}] = {{\n{data}\n}};\n\n")
+            if not no_clean:
+                os.remove(path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GGML Vulkan Shader Generator")
 
     parser.add_argument("--glslc", help="Path to glslc")
+    parser.add_argument("--input-dir", default="vulkan-shaders", help="Directory containing shader sources")
+    parser.add_argument("--output-dir", default=gettempdir(), help="Directory for containing SPIR-V output")
+    parser.add_argument("--target-hpp", default="ggml-vulkan-shaders.hpp", help="Path to generated header file")
+    parser.add_argument("--target-cpp", default="ggml-vulkan-shaders.cpp", help="Path to generated cpp file")
+    parser.add_argument("--no-clean", action="store_true", help="Keep temporary SPIR-V files in output-dir after build")
     parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
 
     args = parser.parse_args()
@@ -216,5 +221,17 @@ if __name__ == "__main__":
 
     if args.glslc:
         GLSLC = args.glslc
+
+    input_dir = args.input_dir
+    if not os.path.isdir(input_dir):
+        sys.exit(f"\"{input_dir}\" must be a valid directory containing shader sources")
+
+    output_dir = args.output_dir
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
+
+    target_hpp = args.target_hpp
+    target_cpp = args.target_cpp
+    no_clean = args.no_clean
 
     asyncio.run(main())
