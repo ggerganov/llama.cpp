@@ -157,6 +157,7 @@ llama-cli \
 
 Here is also a non-exhaustive list of **unsupported** features:
 
+- `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`: only supported for `"type": "integer"` for now
 - Remote `$ref`s in the C++ version (Python & JavaScript versions fetch https refs)
 - Mixing `properties` w/ `anyOf` / `oneOf` in the same type (https://github.com/ggerganov/llama.cpp/issues/7703)
 - `string` formats `uri`, `email`
@@ -170,7 +171,7 @@ Here is also a non-exhaustive list of **unsupported** features:
 ### A word about additionalProperties
 
 > [!WARNING]
-> By default, `object`s accept additional properties, which you might not want / not expect, and which will make sampling slower (not just because of the extra tokens, but also requires a slower grammar).
+> By default, `object`s accept [additional properties](https://json-schema.org/understanding-json-schema/reference/object#additionalproperties), which you might not want / not expect, and which will make sampling slower (not just because of the extra tokens, but also generates a slower grammar).
 > You can set `"additionalProperties": false` on the schema of any object to ensure only properties listed in `properties` are generated (not needed for non-`object` types, e.g. `array` or `string`).
 
 If you're using [Pydantic](https://pydantic.dev/) to generate schemas, you can disable additional properties with the `extra` config on each model class:
