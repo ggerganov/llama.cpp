@@ -95,7 +95,7 @@ class Keys:
         SCORES           = "tokenizer.ggml.scores"
         MERGES           = "tokenizer.ggml.merges"
         BOS_ID           = "tokenizer.ggml.bos_token_id"
-        EOS_ID           = "tokenizer.ggml.eos_token_id" # recommand eos_id_list
+        EOS_ID           = "tokenizer.ggml.eos_token_id"
         UNK_ID           = "tokenizer.ggml.unknown_token_id"
         SEP_ID           = "tokenizer.ggml.seperator_token_id"
         PAD_ID           = "tokenizer.ggml.padding_token_id"
@@ -116,8 +116,6 @@ class Keys:
         SUFFIX_ID        = "tokenizer.ggml.suffix_token_id"
         MIDDLE_ID        = "tokenizer.ggml.middle_token_id"
         EOT_ID           = "tokenizer.ggml.eot_token_id"
-        EOS_ID_LIST      = "tokenizer.ggml.eos_token_id_list"
-
 
 #
 # recommended mapping of model tensor names for storage in gguf
@@ -1212,7 +1210,7 @@ KEY_TOKENIZER_TOKEN_TYPE = Keys.Tokenizer.TOKEN_TYPE
 KEY_TOKENIZER_SCORES     = Keys.Tokenizer.SCORES
 KEY_TOKENIZER_MERGES     = Keys.Tokenizer.MERGES
 KEY_TOKENIZER_BOS_ID     = Keys.Tokenizer.BOS_ID
-KEY_TOKENIZER_EOS_ID_LIST= Keys.Tokenizer.EOS_ID_LIST
+KEY_TOKENIZER_EOS_ID     = Keys.Tokenizer.EOS_ID
 KEY_TOKENIZER_UNK_ID     = Keys.Tokenizer.UNK_ID
 KEY_TOKENIZER_SEP_ID     = Keys.Tokenizer.SEP_ID
 KEY_TOKENIZER_PAD_ID     = Keys.Tokenizer.PAD_ID

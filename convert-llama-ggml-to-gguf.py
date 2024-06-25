@@ -331,7 +331,7 @@ class GGMLToGGUF:
         gguf_writer.add_token_types(toktypes)
         gguf_writer.add_unk_token_id(0)
         gguf_writer.add_bos_token_id(1)
-        gguf_writer.add_eos_token_id_list([2])
+        gguf_writer.add_eos_token_id(2)
 
     def add_tensors(self, gguf_writer):
         tensor_map = self.name_map

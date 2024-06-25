@@ -191,13 +191,8 @@ int main(int argc, char ** argv) {
             return 1;
         }
         // add eos if not present
-        const int n_eos = llama_n_eos(model);
-        std::vector<int32_t> eos_tokens(n_eos, 0);
-        int32_t* eos_ptr = eos_tokens.data();
-        llama_token_eos(model, eos_ptr);
-
-        if (!eos_tokens.empty() && (inp.empty() || std::count(eos_tokens.begin(), eos_tokens.end(), inp.back()))) {
-            inp.insert(inp.end(), eos_tokens.begin(), eos_tokens.end());
+        if (llama_token_eos(model) >= 0 && (inp.empty() || inp.back() != llama_token_eos(model))) {
+            inp.push_back(llama_token_eos(model));
         }
         chunk.tokens = inp;
     }

@@ -96,6 +96,7 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
     std::string result;
 
     const llama_model * mdl = llama_get_model(ctx);
+    llama_token eos_token = llama_token_eos(mdl);
 
     llama_kv_cache_clear(ctx);
     llama_set_embeddings(ctx, false);
@@ -125,7 +126,7 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
         auto candidates_p = llama_token_data_array{ candidates.data(), candidates.size(), false };
 
         llama_token token = llama_sample_token_greedy(ctx, &candidates_p);
-        if (llama_token_is_eog(mdl, token)) {
+        if (token == eos_token) {
             break;
         }
 

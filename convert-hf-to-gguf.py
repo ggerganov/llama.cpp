@@ -805,7 +805,7 @@ class MPTModel(Model):
             self._set_vocab_sentencepiece()
             self.gguf_writer.add_add_bos_token(False)
             self.gguf_writer.add_pad_token_id(3)
-            self.gguf_writer.add_eos_token_id_list([1])
+            self.gguf_writer.add_eos_token_id(1)
             self.gguf_writer.add_unk_token_id(0)
 
     def set_gguf_parameters(self):
@@ -2389,8 +2389,8 @@ class MambaModel(Model):
             field = neox_reader.get_field(gguf.Keys.Tokenizer.BOS_ID)
             self.gguf_writer.add_bos_token_id(field.parts[-1].tolist()[0] if field else 1)
 
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.EOS_ID_LIST)
-            self.gguf_writer.add_eos_token_id_list([field.parts[-1].tolist()[0] if field else 0])
+            field = neox_reader.get_field(gguf.Keys.Tokenizer.EOS_ID)
+            self.gguf_writer.add_eos_token_id(field.parts[-1].tolist()[0] if field else 0)
 
             field = neox_reader.get_field(gguf.Keys.Tokenizer.UNK_ID)
             self.gguf_writer.add_unk_token_id(field.parts[-1].tolist()[0] if field else 0)
@@ -3043,10 +3043,9 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
-        self.gguf_writer.add_eos_token_id_list([151329, 151336, 151338])
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
-        special_vocab.chat_template = "chatglm4"
+        special_vocab.chat_template = "ChatGLM4"
         special_vocab.merges = merges
         # only add special tokens when they were not already loaded from config.json
         # if len(special_vocab.special_token_ids) == 0:
