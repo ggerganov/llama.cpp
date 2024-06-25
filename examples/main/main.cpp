@@ -873,7 +873,7 @@ int main(int argc, char ** argv) {
                     }
 
                     std::string user_inp = params.conversation
-                        ? chat_add_and_format(model, chat_msgs, "user", buffer)
+                        ? chat_add_and_format(model, chat_msgs, "user", std::move(buffer))
                         : std::move(buffer);
                     // TODO: one inconvenient of current chat template implementation is that we can't distinguish between user input and special tokens (prefix/postfix)
                     const auto line_pfx = ::llama_tokenize(ctx, params.input_prefix, false, true);
