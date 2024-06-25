@@ -1,9 +1,8 @@
 include(CheckCXXCompilerFlag)
 
-unset(GGML_CDEF_PRIVATE)
 unset(GGML_CDEF_PUBLIC)
 
-list(APPEND GGML_CDEF_PRIVATE GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
+add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
 # enable libstdc++ assertions for debug builds
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -32,9 +31,9 @@ if (APPLE AND GGML_ACCELERATE)
     if (ACCELERATE_FRAMEWORK)
         message(STATUS "Accelerate framework found")
 
-        list(APPEND GGML_CDEF_PRIVATE GGML_USE_ACCELERATE)
-        list(APPEND GGML_CDEF_PRIVATE ACCELERATE_NEW_LAPACK)
-        list(APPEND GGML_CDEF_PRIVATE ACCELERATE_LAPACK_ILP64)
+        add_compile_definitions(GGML_USE_ACCELERATE)
+        add_compile_definitions(ACCELERATE_NEW_LAPACK)
+        add_compile_definitions(ACCELERATE_LAPACK_ILP64)
 
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} ${ACCELERATE_FRAMEWORK})
     else()
@@ -53,7 +52,7 @@ if (GGML_METAL)
 
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_METAL)
     if (GGML_METAL_NDEBUG)
-        list(APPEND GGML_CDEF_PRIVATE GGML_METAL_NDEBUG)
+        add_compile_definitions(GGML_METAL_NDEBUG)
     endif()
 
     # copy ggml-common.h and ggml-metal.metal to bin directory
@@ -63,7 +62,7 @@ if (GGML_METAL)
     if (GGML_METAL_EMBED_LIBRARY)
         enable_language(ASM)
 
-        list(APPEND GGML_CDEF_PRIVATE GGML_METAL_EMBED_LIBRARY)
+        add_compile_definitions(GGML_METAL_EMBED_LIBRARY)
 
         set(METALLIB_COMMON "${CMAKE_CURRENT_SOURCE_DIR}/ggml-common.h")
         set(METALLIB_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ggml-metal.metal")
@@ -145,7 +144,7 @@ if (GGML_OPENMP)
     if (OpenMP_FOUND)
         message(STATUS "OpenMP found")
 
-        list(APPEND GGML_CDEF_PRIVATE GGML_USE_OPENMP)
+        add_compile_definitions(GGML_USE_OPENMP)
 
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
     else()
@@ -223,7 +222,7 @@ if (GGML_BLAS)
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_BLAS)
 
         if (${BLAS_INCLUDE_DIRS} MATCHES "mkl" AND (${GGML_BLAS_VENDOR} MATCHES "Generic" OR ${GGML_BLAS_VENDOR} MATCHES "Intel"))
-            list(APPEND GGML_CDEF_PRIVATE GGML_BLAS_USE_MKL)
+            add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
 
         set(GGML_HEADERS_BLAS ggml-blas.h)
@@ -241,7 +240,7 @@ endif()
 if (GGML_LLAMAFILE)
     message(STATUS "Using ggml SGEMM")
 
-    list(APPEND GGML_CDEF_PRIVATE GGML_USE_LLAMAFILE)
+    add_compile_definitions(GGML_USE_LLAMAFILE)
 
     set(GGML_HEADERS_LLAMAFILE sgemm.h)
     set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
@@ -284,7 +283,7 @@ if (GGML_CUDA)
         if (GGML_CUDA_FA_ALL_QUANTS)
             file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
             list(APPEND GGML_SOURCES_CUDA ${SRCS})
-            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FA_ALL_QUANTS)
+            add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
         else()
             file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
             list(APPEND GGML_SOURCES_CUDA ${SRCS})
@@ -296,18 +295,18 @@ if (GGML_CUDA)
 
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_CUDA)
 
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_USE_GRAPHS)
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-        list(APPEND GGML_CDEF_PRIVATE K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
+        add_compile_definitions(GGML_CUDA_USE_GRAPHS)
+        add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
+        add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
+        add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
+        add_compile_definitions(GGML_CUDA_PEER_MAX_BATCH_SIZE=${GGML_CUDA_PEER_MAX_BATCH_SIZE})
 
         if (GGML_CUDA_FORCE_DMMV)
-            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_DMMV)
+            add_compile_definitions(GGML_CUDA_FORCE_DMMV)
         endif()
 
         if (GGML_CUDA_FORCE_MMQ)
-            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_MMQ)
+            add_compile_definitions(GGML_CUDA_FORCE_MMQ)
         endif()
 
         if (GGML_CUDA_FORCE_CUBLAS)
@@ -315,19 +314,19 @@ if (GGML_CUDA)
         endif()
 
         if (GGML_CUDA_NO_VMM)
-            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_NO_VMM)
+            add_compile_definitions(GGML_CUDA_NO_VMM)
         endif()
 
         if (DEFINED GGML_CUDA_DMMV_Y)
-            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_MMV_Y=${GGML_CUDA_DMMV_Y}) # for backwards compatibility
+            add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_DMMV_Y}) # for backwards compatibility
         endif()
 
         if (GGML_CUDA_F16 OR GGML_CUDA_DMMV_F16)
-            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_F16)
+            add_compile_definitions(GGML_CUDA_F16)
         endif()
 
         if (GGML_CUDA_NO_PEER_COPY)
-            list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_NO_PEER_COPY)
+            add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
         endif()
 
         if (GGML_STATIC)
@@ -409,7 +408,7 @@ if (GGML_HIPBLAS)
     if (GGML_CUDA_FA_ALL_QUANTS)
         file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*.cu")
         list(APPEND GGML_SOURCES_ROCM ${SRCS})
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FA_ALL_QUANTS)
+        add_compile_definitions(GGML_CUDA_FA_ALL_QUANTS)
     else()
         file(GLOB   SRCS "ggml-cuda/template-instances/fattn-vec*q4_0-q4_0.cu")
         list(APPEND GGML_SOURCES_ROCM ${SRCS})
@@ -421,25 +420,25 @@ if (GGML_HIPBLAS)
 
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_CUDA)
 
-    list(APPEND GGML_CDEF_PRIVATE GGML_USE_HIPBLAS)
-    list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
-    list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
-    list(APPEND GGML_CDEF_PRIVATE K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
+    add_compile_definitions(GGML_USE_HIPBLAS)
+    add_compile_definitions(GGML_CUDA_DMMV_X=${GGML_CUDA_DMMV_X})
+    add_compile_definitions(GGML_CUDA_MMV_Y=${GGML_CUDA_MMV_Y})
+    add_compile_definitions(K_QUANTS_PER_ITERATION=${GGML_CUDA_KQUANTS_ITER})
 
     if (GGML_HIP_UMA)
-        list(APPEND GGML_CDEF_PRIVATE GGML_HIP_UMA)
+        add_compile_definitions(GGML_HIP_UMA)
     endif()
 
     if (GGML_CUDA_FORCE_DMMV)
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_DMMV)
+        add_compile_definitions(GGML_CUDA_FORCE_DMMV)
     endif()
 
     if (GGML_CUDA_FORCE_MMQ)
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_FORCE_MMQ)
+        add_compile_definitions(GGML_CUDA_FORCE_MMQ)
     endif()
 
     if (GGML_CUDA_NO_PEER_COPY)
-        list(APPEND GGML_CDEF_PRIVATE GGML_CUDA_NO_PEER_COPY)
+        add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
     endif()
 
     if (CXX_IS_HIPCC)
@@ -474,11 +473,11 @@ if (GGML_SYCL)
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_SYCL)
 
     if (GGML_SYCL_F16)
-        list(APPEND GGML_CDEF_PRIVATE GGML_SYCL_F16)
+        add_compile_definitions(GGML_SYCL_F16)
     endif()
 
     if (GGML_CUDA_FORCE_MMQ)
-        list(APPEND GGML_CDEF_PRIVATE GGML_SYCL_FORCE_MMQ)
+        add_compile_definitions(GGML_SYCL_FORCE_MMQ)
     endif()
 
     add_compile_options(-I./) #include DPCT
@@ -540,23 +539,23 @@ if (GGML_VULKAN)
         endif()
 
         if (GGML_VULKAN_CHECK_RESULTS)
-            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_CHECK_RESULTS)
+            add_compile_definitions(GGML_VULKAN_CHECK_RESULTS)
         endif()
 
         if (GGML_VULKAN_DEBUG)
-            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_DEBUG)
+            add_compile_definitions(GGML_VULKAN_DEBUG)
         endif()
 
         if (GGML_VULKAN_MEMORY_DEBUG)
-            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_MEMORY_DEBUG)
+            add_compile_definitions(GGML_VULKAN_MEMORY_DEBUG)
         endif()
 
         if (GGML_VULKAN_VALIDATE)
-            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_VALIDATE)
+            add_compile_definitions(GGML_VULKAN_VALIDATE)
         endif()
 
         if (GGML_VULKAN_RUN_TESTS)
-            list(APPEND GGML_CDEF_PRIVATE GGML_VULKAN_RUN_TESTS)
+            add_compile_definitions(GGML_VULKAN_RUN_TESTS)
         endif()
 
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} Vulkan::Vulkan)
@@ -730,7 +729,7 @@ if (GGML_CPU_HBM)
 
     message(STATUS "Using memkind for CPU HBM")
 
-    list(APPEND GGML_CDEF_PRIVATE GGML_USE_CPU_HBM)
+    add_compile_definitions(GGML_USE_CPU_HBM)
 
     target_link_libraries(ggml PUBLIC memkind)
 endif()
@@ -874,7 +873,7 @@ execute_process(
 )
 
 if (output MATCHES "dyld-1015\.7")
-    list(APPEND GGML_CDEF_PRIVATE HAVE_BUGGY_APPLE_LINKER)
+    add_compile_definitions(HAVE_BUGGY_APPLE_LINKER)
 endif()
 
 # architecture specific
@@ -1156,8 +1155,6 @@ if (EMSCRIPTEN)
 endif()
 
 target_compile_definitions(ggml PUBLIC  ${GGML_CDEF_PUBLIC})
-target_compile_definitions(ggml PRIVATE ${GGML_CDEF_PRIVATE})
-
 target_include_directories(ggml PUBLIC . ../include ${GGML_EXTRA_INCLUDES})
 target_compile_features   (ggml PUBLIC c_std_11) # don't bump
 
