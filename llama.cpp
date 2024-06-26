@@ -16555,14 +16555,14 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             new_type = default_type;
 
             // get more optimal quantization type based on the tensor shape, layer, etc.
-            if (!params->pure && ggml_is_quantized(default_type)) {
-                new_type = llama_tensor_get_type(qs, new_type, tensor, ftype);
-            }
             if (params->token_embedding_type < GGML_TYPE_COUNT && strcmp(tensor->name, "token_embd.weight") == 0) {
                 new_type = params->token_embedding_type;
             }
             if (params->output_tensor_type < GGML_TYPE_COUNT && strcmp(tensor->name, "output.weight") == 0) {
                 new_type = params->output_tensor_type;
+            }
+            if (!params->pure && ggml_is_quantized(default_type)) {
+                new_type = llama_tensor_get_type(qs, new_type, tensor, ftype);
             }
 
             // If we've decided to quantize to the same type the tensor is already

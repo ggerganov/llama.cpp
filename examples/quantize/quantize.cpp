@@ -46,9 +46,9 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "Q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M, " 5.33G, +0.0569 ppl @ Llama-3-8B",  },
     { "Q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K,   " 6.14G, +0.0217 ppl @ Llama-3-8B",  },
     { "Q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0,   " 7.96G, +0.0026 ppl @ Llama-3-8B",  },
-    { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "14.00G, +0.0020 ppl @ Mistral-7B",  },
-    { "BF16",   LLAMA_FTYPE_MOSTLY_BF16,   "14.00G, -0.0050 ppl @ Mistral-7B",  },
-    { "F32",    LLAMA_FTYPE_ALL_F32,       "26.00G              @ 7B",          },
+    { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "15.02G, +0.0000 ppl @ Llama-3-8B",  },
+    { "BF16",   LLAMA_FTYPE_MOSTLY_BF16,   "15.02G, -0.0025 ppl @ Llama-3-8B",  },
+    { "F32",    LLAMA_FTYPE_ALL_F32,       "30.06G              @ Llama-3-8B",  },
     // Note: Ensure COPY comes after F32 to avoid ftype 0 from matching.
     { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing",  },
 };
@@ -101,9 +101,9 @@ static void usage(const char * executable) {
     printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
     printf("  --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor\n");
     printf("  --token-embedding-type ggml_type: use this ggml_type for the token embeddings tensor\n");
-    printf("  --keep-split: will generate quatized model in the same shards as input");
+    printf("  --keep-split: will generate quatized model in the same shards as input\n");
     printf("  --override-kv KEY=TYPE:VALUE\n");
-    printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n");
+    printf("  : Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
