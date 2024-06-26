@@ -8104,6 +8104,9 @@ struct llm_build_context {
         pos_bias = ggml_permute(ctx0, pos_bias, 2, 0, 1, 3);
         cb(pos_bias, "pos_bias", -1);
 
+        pos_bias = ggml_cont(ctx0, pos_bias);
+        cb(pos_bias, "pos_bias", -1);
+
         return pos_bias;
     }
 
