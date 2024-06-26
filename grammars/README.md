@@ -133,6 +133,7 @@ llama-cli \
   -hfr bartowski/Phi-3-medium-128k-instruct-GGUF \
   -hff Phi-3-medium-128k-instruct-Q8_0.gguf \
   -j '{
+    "type": "array",
     "items": {
         "properties": {
             "name": {
