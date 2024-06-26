@@ -2869,7 +2869,7 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
         const float * src = (const float *) tensor->data;
         float * dst = result.data.data() + result.n_embd * (layer_idx - 1);  // layer 1 at [0]
         for (int j = 0; j < result.n_embd; j++) {
-            dst[j] = src[j] * load_info.strength;
+            dst[j] += src[j] * load_info.strength;  // allow multiple for same layer in same file
         }
 
     }
