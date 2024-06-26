@@ -116,15 +116,15 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-sycl.cpp       -> ggml/src/ggml-sycl.cpp
     # src/ggml-vulkan.cpp     -> ggml/src/ggml-vulkan.cpp
     #
-    # include/ggml/ggml.h         -> ggml/include/ggml.h
-    # include/ggml/ggml-alloc.h   -> ggml/include/ggml-alloc.h
-    # include/ggml/ggml-backend.h -> ggml/include/ggml-backend.h
-    # include/ggml-cuda.h         -> ggml/include/ggml-cuda.h
-    # include/ggml-kompute.h      -> ggml/include/ggml-kompute.h
-    # include/ggml-metal.h        -> ggml/include/ggml-metal.h
-    # include/ggml-rpc.h          -> ggml/include/ggml-rpc.h
-    # include/ggml-sycl.h         -> ggml/include/ggml-sycl.h
-    # include/ggml-vulkan.h       -> ggml/include/ggml-vulkan.h
+    # include/ggml.h         -> ggml/include/ggml.h
+    # include/ggml-alloc.h   -> ggml/include/ggml-alloc.h
+    # include/ggml-backend.h -> ggml/include/ggml-backend.h
+    # include/ggml-cuda.h    -> ggml/include/ggml-cuda.h
+    # include/ggml-kompute.h -> ggml/include/ggml-kompute.h
+    # include/ggml-metal.h   -> ggml/include/ggml-metal.h
+    # include/ggml-rpc.h     -> ggml/include/ggml-rpc.h
+    # include/ggml-sycl.h    -> ggml/include/ggml-sycl.h
+    # include/ggml-vulkan.h  -> ggml/include/ggml-vulkan.h
     #
     # tests/test-opt.cpp           -> tests/test-opt.cpp
     # tests/test-grad0.cpp         -> tests/test-grad0.cpp
@@ -154,15 +154,15 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/src\/ggml-rpc\.cpp/ggml/src/ggml-rpc.cpp/g' \
         -e 's/src\/ggml-sycl\.cpp/ggml/src/ggml-sycl.cpp/g' \
         -e 's/src\/ggml-vulkan\.cpp/ggml/src/ggml-vulkan.cpp/g' \
+        -e 's/include\/ggml\.h/ggml/include/ggml.h/g' \
+        -e 's/include\/ggml-alloc\.h/ggml/include/ggml-alloc.h/g' \
+        -e 's/include\/ggml-backend\.h/ggml/include/ggml-backend.h/g' \
         -e 's/include\/ggml-cuda\.h/ggml/include/ggml-cuda.h/g' \
         -e 's/include\/ggml-kompute\.h/ggml/include/ggml-kompute.h/g' \
         -e 's/include\/ggml-metal\.h/ggml/include/ggml-metal.h/g' \
         -e 's/include\/ggml-rpc\.h/ggml/include/ggml-rpc.h/g' \
         -e 's/include\/ggml-sycl\.h/ggml/include/ggml-sycl.h/g' \
         -e 's/include\/ggml-vulkan\.h/ggml/include/ggml-vulkan.h/g' \
-        -e 's/include\/ggml\/ggml\.h/ggml/include/ggml.h/g' \
-        -e 's/include\/ggml\/ggml-alloc\.h/ggml/include/ggml-alloc.h/g' \
-        -e 's/include\/ggml\/ggml-backend\.h/ggml/include/ggml-backend.h/g' \
         -e 's/tests\/test-opt\.cpp/tests\/test-opt.cpp/g' \
         -e 's/tests\/test-grad0\.cpp/tests\/test-grad0.cpp/g' \
         -e 's/tests\/test-quantize-fns\.cpp/tests\/test-quantize-fns.cpp/g' \

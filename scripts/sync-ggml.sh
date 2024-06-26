@@ -1,8 +1,8 @@
 #!/bin/bash
 
-cp -rpv ../ggml/CMakeLists.txt           ./ggml/CMakeLists.txt
-cp -rpv ../ggml/src/CMakeLists.txt       ./ggml/src/CMakeLists.txt
-cp -rpv ../ggml/cmake/FindSIMD.cmake.txt ./ggml/cmake/FindSIMD.cmake
+cp -rpv ../ggml/CMakeLists.txt       ./ggml/CMakeLists.txt
+cp -rpv ../ggml/src/CMakeLists.txt   ./ggml/src/CMakeLists.txt
+cp -rpv ../ggml/cmake/FindSIMD.cmake ./ggml/cmake/FindSIMD.cmake
 
 cp -rpv ../ggml/src/ggml.c              ./ggml/src/ggml.c
 cp -rpv ../ggml/src/ggml-alloc.c        ./ggml/src/ggml-alloc.c
