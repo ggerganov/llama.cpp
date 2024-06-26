@@ -149,8 +149,7 @@ def __quantize_q1_3_rows(n: np.ndarray) -> np.ndarray:
     q4 = np.sum(q4 * pow3.reshape((1, 4)), axis=1, keepdims=True)
     q48 = q48 + (q12 * 81)
     q = np.concatenate([q48, q4], axis=1)
-    q = ((q.astype(np.uint16) * 256) // 243).astype(np.uint8)
-    q = np.where(q != 0, q + 1, 0)
+    q = (((q.astype(np.uint16) * 256) + (243 - 1)) // 243).astype(np.uint8)
 
     return q.reshape(__quantize_q1_3_shape_change(shape))
 

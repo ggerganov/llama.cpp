@@ -336,7 +336,7 @@ class Model:
                 shape = gguf.quant_shape_from_byte_shape(data.shape, data_qtype) if data.dtype == np.uint8 else data.shape
 
                 # reverse shape to make it similar to the internal ggml dimension order
-                shape_str = f"{{{', '.join(str(n) for n in reversed(shape))}}}"
+                shape_str = f"{{{', '.join(str(n) for n in reversed(shape)) or '1'}}}"
 
                 # n_dims is implicit in the shape
                 logger.info(f"{f'%-{max_name_len}s' % f'{new_name},'} {old_dtype} --> {data_qtype.name}, shape = {shape_str}")

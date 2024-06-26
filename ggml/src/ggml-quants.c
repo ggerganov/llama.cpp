@@ -3389,8 +3389,8 @@ void quantize_row_q1_3_reference(const float * restrict x, block_q1_3 * restrict
             int xi = nearest_int(x[j]);
             uint8_t xt = xi < 0 ? 0 : xi == 0 ? 1 : 2;
             q[j] += xt * pow3[4];
-            q[j] = ((uint16_t)q[j] * 256) / pow3[5];
-            q[j] += (uint8_t)(q[j] != 0);
+            // ceiling division
+            q[j] = ((uint16_t)q[j] * 256 + (pow3[5] - 1)) / pow3[5];
             y[i].q[j] = q[j];
         }
         x += sizeof(y->q);
@@ -3403,8 +3403,8 @@ void quantize_row_q1_3_reference(const float * restrict x, block_q1_3 * restrict
                 qb += xt * pow3[m];
             }
             x += 4;
-            qb = ((uint16_t)qb * 256) / pow3[5];
-            qb += (uint8_t)(qb != 0);
+            // ceiling division
+            qb = ((uint16_t)qb * 256 + (pow3[5] - 1)) / pow3[5];
             y[i].qs[j] = qb;
         }
     }
