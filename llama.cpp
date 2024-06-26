@@ -19801,10 +19801,7 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
         }
-    } else if (tmpl == "chatglm3" ||
-        (tmpl.find("add_generation_prompt") != std::string::npos &&
-        tmpl.find("for message in messages") != std::string::npos &&
-        tmpl.find("loop.first") != std::string::npos)) {
+    } else if (tmpl == "chatglm3" || tmpl.find("[gMASK]sop") != std::string::npos) {
         // chatglm3-6b
         ss << "[gMASK]" << "sop";
         for (auto message : chat) {
@@ -19814,7 +19811,7 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|assistant|>";
         }
-    } else if (tmpl == "ChatGLM4") {
+    } else if (tmpl == "chatglm4" || tmpl.find("[gMASK]<sop>") != std::string::npos) {
         ss << "[gMASK]" << "<sop>";
         for (auto message : chat) {
             std::string role(message->role);
