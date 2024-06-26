@@ -160,9 +160,9 @@ effectiveStdenv.mkDerivation (
     };
 
     postPatch = ''
-      substituteInPlace ./ggml-metal.m \
+      substituteInPlace ./ggml/src/ggml-metal.m \
         --replace '[bundle pathForResource:@"ggml-metal" ofType:@"metal"];' "@\"$out/bin/ggml-metal.metal\";"
-      substituteInPlace ./ggml-metal.m \
+      substituteInPlace ./ggml/src/ggml-metal.m \
         --replace '[bundle pathForResource:@"default" ofType:@"metallib"];' "@\"$out/bin/default.metallib\";"
     '';
 
@@ -244,7 +244,7 @@ effectiveStdenv.mkDerivation (
     # if they haven't been added yet.
     postInstall = ''
       mkdir -p $out/include
-      cp $src/llama.h $out/include/
+      cp $src/include/llama.h $out/include/
     '';
 
     # Define the shells here, but don't add in the inputsFrom to avoid recursion.
