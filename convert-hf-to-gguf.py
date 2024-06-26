@@ -3048,9 +3048,9 @@ class ChatGLMModel(Model):
         special_vocab.chat_template = "ChatGLM4"
         special_vocab.merges = merges
         # only add special tokens when they were not already loaded from config.json
-        # if len(special_vocab.special_token_ids) == 0:
         special_vocab._set_special_token("bos", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
+        special_vocab._set_special_token("eot", tokenizer.get_added_vocab()["<|user|>"])
         # this one is usually not in config.json anyway
         special_vocab._set_special_token("unk", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)

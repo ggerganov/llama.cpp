@@ -18832,19 +18832,6 @@ llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_to
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
-    auto arch_name = llama_model_arch_name(model->arch);
-    auto vocab_type = model->vocab.type;
-    if (strcmp(arch_name, "chatglm") == 0) {
-        if (LLAMA_VOCAB_TYPE_BPE == vocab_type) { // glm4
-            return token != -1 && (
-                token == llama_token_eos(model) ||
-                token == llama_token_eot(model) ||
-                token == 151329 ||
-                token == 151336 ||
-                token == 151338
-            );
-        }
-    }
     return token != -1 && (
         token == llama_token_eos(model) ||
         token == llama_token_eot(model)
