@@ -597,8 +597,8 @@ endif # LLAMA_CUDA
 
 ifdef LLAMA_VULKAN
 	MK_CPPFLAGS  += -DGGML_USE_VULKAN
-	MK_LDFLAGS += -lvulkan
-	OBJS    += ggml-vulkan.o
+	MK_LDFLAGS += $(shell pkg-config --libs vulkan)
+	OBJS    += ggml-vulkan.o ggml-vulkan-shaders.o
 
 ifdef LLAMA_VULKAN_CHECK_RESULTS
 	MK_CPPFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
@@ -852,6 +852,7 @@ clean:
 	rm -vrf *.o tests/*.o *.so *.a *.dll common/build-info.cpp *.dot $(COV_TARGETS) $(BUILD_TARGETS) $(TEST_TARGETS)
 	rm -vrf ggml-cuda/*.o
 	rm -vrf ggml-cuda/template-instances/*.o
+	rm -f ggml-vulkan-shaders.hpp ggml-vulkan-shaders.cpp
 	find examples pocs -type f -name "*.o" -delete
 
 #
