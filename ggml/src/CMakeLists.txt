@@ -47,7 +47,7 @@ if (GGML_METAL)
     find_library(METALKIT_FRAMEWORK MetalKit   REQUIRED)
 
     message(STATUS "Metal framework found")
-    set(GGML_HEADERS_METAL ggml-metal.h)
+    set(GGML_HEADERS_METAL ../include/ggml-metal.h)
     set(GGML_SOURCES_METAL ggml-metal.m)
 
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_METAL)
@@ -225,7 +225,7 @@ if (GGML_BLAS)
             add_compile_definitions(GGML_BLAS_USE_MKL)
         endif()
 
-        set(GGML_HEADERS_BLAS ggml-blas.h)
+        set(GGML_HEADERS_BLAS ../include/ggml-blas.h)
         set(GGML_SOURCES_BLAS ggml-blas.cpp)
 
         set(GGML_EXTRA_LIBS     ${GGML_EXTRA_LIBS}     ${BLAS_LIBRARIES})
@@ -271,7 +271,7 @@ if (GGML_CUDA)
         enable_language(CUDA)
 
         file(GLOB   GGML_HEADERS_CUDA "ggml-cuda/*.cuh")
-        list(APPEND GGML_HEADERS_CUDA "ggml-cuda.h")
+        list(APPEND GGML_HEADERS_CUDA "../include/ggml-cuda.h")
 
         file(GLOB   GGML_SOURCES_CUDA "ggml-cuda/*.cu")
         list(APPEND GGML_SOURCES_CUDA "ggml-cuda.cu")
@@ -396,7 +396,7 @@ if (GGML_HIPBLAS)
     message(STATUS "HIP and hipBLAS found")
 
     file(GLOB   GGML_HEADERS_ROCM "ggml-cuda/*.cuh")
-    list(APPEND GGML_HEADERS_ROCM "ggml-cuda.h")
+    list(APPEND GGML_HEADERS_ROCM "../include/ggml-cuda.h")
 
     file(GLOB   GGML_SOURCES_ROCM "ggml-cuda/*.cu")
     list(APPEND GGML_SOURCES_ROCM "ggml-cuda.cu")
@@ -489,7 +489,7 @@ if (GGML_SYCL)
     endif()
 
     file(GLOB   GGML_HEADERS_SYCL "ggml-sycl/*.hpp")
-    list(APPEND GGML_HEADERS_SYCL "ggml-sycl.h")
+    list(APPEND GGML_HEADERS_SYCL "../include/ggml-sycl.h")
 
     file(GLOB   GGML_SOURCES_SYCL "ggml-sycl/*.cpp")
     list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
@@ -517,7 +517,7 @@ if (GGML_RPC)
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} ws2_32)
     endif()
 
-    set(GGML_HEADERS_RPC ggml-rpc.h)
+    set(GGML_HEADERS_RPC ../include/ggml-rpc.h)
     set(GGML_SOURCES_RPC ggml-rpc.cpp)
 endif()
 
@@ -527,7 +527,7 @@ if (GGML_VULKAN)
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
 
-        set(GGML_HEADERS_VULKAN ggml-vulkan.h)
+        set(GGML_HEADERS_VULKAN ../include/ggml-vulkan.h)
         set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
 
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_VULKAN)
@@ -712,8 +712,8 @@ if (GGML_KOMPUTE)
         )
 
         # Add the stamp to the main sources to ensure dependency tracking
-        set(GGML_SOURCES_KOMPUTE ggml-kompute.cpp ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
-        set(GGML_HEADERS_KOMPUTE ggml-kompute.h   ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
+        set(GGML_SOURCES_KOMPUTE ggml-kompute.cpp           ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
+        set(GGML_HEADERS_KOMPUTE ../include/ggml-kompute.h  ${CMAKE_CURRENT_BINARY_DIR}/ggml-kompute.stamp)
 
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_KOMPUTE)
 
@@ -1155,8 +1155,9 @@ if (EMSCRIPTEN)
 endif()
 
 target_compile_definitions(ggml PUBLIC  ${GGML_CDEF_PUBLIC})
-target_include_directories(ggml PUBLIC . ../include ${GGML_EXTRA_INCLUDES})
-target_compile_features   (ggml PUBLIC c_std_11) # don't bump
+target_include_directories(ggml PUBLIC ../include)
+target_include_directories(ggml PRIVATE . ${GGML_EXTRA_INCLUDES})
+target_compile_features   (ggml PRIVATE c_std_11) # don't bump
 
 target_link_libraries(ggml PRIVATE Threads::Threads ${GGML_EXTRA_LIBS})
 

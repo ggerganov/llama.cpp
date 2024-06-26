@@ -2,25 +2,25 @@
 Kompute:
     - changed-files:
         - any-glob-to-any-file:
-            - ggml/src/ggml-kompute.h
+            - ggml/include/ggml-kompute.h
             - ggml/src/ggml-kompute.cpp
             - README-kompute.md
 Apple Metal:
     - changed-files:
         - any-glob-to-any-file:
-            - ggml/src/ggml-metal.h
+            - ggml/include/ggml-metal.h
             - ggml/src/ggml-metal.cpp
             - README-metal.md
 SYCL:
     - changed-files:
         - any-glob-to-any-file:
-            - ggml/src/ggml-sycl.h
+            - ggml/include/ggml-sycl.h
             - ggml/src/ggml-sycl.cpp
             - README-sycl.md
 Nvidia GPU:
     - changed-files:
         - any-glob-to-any-file:
-            - ggml/src/ggml-cuda.h
+            - ggml/include/ggml-cuda.h
             - ggml/src/ggml-cuda/**
 Vulkan:
     - changed-files:
