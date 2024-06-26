@@ -199,8 +199,6 @@ Here is also a non-exhaustive list of **unsupported** features:
 > By default, `object`s accept [additional properties](https://json-schema.org/understanding-json-schema/reference/object#additionalproperties), which you might not want / not expect, and which will make sampling slower (not just because of the extra tokens, but also generates a slower grammar).
 > You can set `"additionalProperties": false` on the schema of any object to ensure only properties listed in `properties` are generated (not needed for non-`object` types, e.g. `array` or `string`).
 
-#### Python
-
 If you're using [Pydantic](https://pydantic.dev/) to generate schemas, you can disable additional properties with the `extra` config on each model class:
 
 ```python
@@ -307,8 +305,6 @@ string ::= "\"" char* "\"" space
 ```
 
 </details>
-
-#### JavaScript
 
 If you're using [Zod](https://zod.dev/), you can make your objects explicitly strict w/ `z.object(...).strict()` or `z.strictObject(...)`.
 
