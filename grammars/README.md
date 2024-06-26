@@ -181,6 +181,7 @@ space ::= | " " | "\n" [ \t]{0,20}
 
 Here is also a non-exhaustive list of limitations & **unsupported** features:
 
+- [prefixItems](https://json-schema.org/draft/2020-12/json-schema-core#name-prefixitems) is broken (but [items](https://json-schema.org/draft/2020-12/json-schema-core#name-items) works)
 - `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`: only supported for `"type": "integer"` for now, not `number`
 - `$ref` handling is a bit buggy (https://github.com/ggerganov/llama.cpp/issues/8073)
 - [pattern](https://json-schema.org/draft/2020-12/json-schema-validation#name-pattern)s must start with `^` and end with `$`
