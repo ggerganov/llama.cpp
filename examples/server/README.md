@@ -266,6 +266,8 @@ node index.js
 
     `json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
 
+    `token_healing`: Set token healing strategy. Default: `0`, which is disabled.
+
     `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
     `ignore_eos`: Ignore end of stream token and continue generating.  Default: `false`
