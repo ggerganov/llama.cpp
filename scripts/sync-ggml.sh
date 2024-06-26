@@ -24,6 +24,7 @@ cp -rpv ../ggml/src/ggml-vulkan.cpp     ./ggml/src/ggml-vulkan.cpp
 cp -rpv ../ggml/include/ggml.h         ./ggml/include/ggml.h
 cp -rpv ../ggml/include/ggml-alloc.h   ./ggml/include/ggml-alloc.h
 cp -rpv ../ggml/include/ggml-backend.h ./ggml/include/ggml-backend.h
+cp -rpv ../ggml/include/ggml-blas.h    ./ggml/include/ggml-blas.h
 cp -rpv ../ggml/include/ggml-cuda.h    ./ggml/include/ggml-cuda.h
 cp -rpv ../ggml/include/ggml-kompute.h ./ggml/include/ggml-kompute.h
 cp -rpv ../ggml/include/ggml-metal.h   ./ggml/include/ggml-metal.h

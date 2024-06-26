@@ -119,6 +119,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # include/ggml.h         -> ggml/include/ggml.h
     # include/ggml-alloc.h   -> ggml/include/ggml-alloc.h
     # include/ggml-backend.h -> ggml/include/ggml-backend.h
+    # include/ggml-blas.h    -> ggml/include/ggml-blas.h
     # include/ggml-cuda.h    -> ggml/include/ggml-cuda.h
     # include/ggml-kompute.h -> ggml/include/ggml-kompute.h
     # include/ggml-metal.h   -> ggml/include/ggml-metal.h
@@ -157,6 +158,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/include\/ggml\.h/ggml/include/ggml.h/g' \
         -e 's/include\/ggml-alloc\.h/ggml/include/ggml-alloc.h/g' \
         -e 's/include\/ggml-backend\.h/ggml/include/ggml-backend.h/g' \
+        -e 's/include\/ggml-blas\.h/ggml/include/ggml-blas.h/g' \
         -e 's/include\/ggml-cuda\.h/ggml/include/ggml-cuda.h/g' \
         -e 's/include\/ggml-kompute\.h/ggml/include/ggml-kompute.h/g' \
         -e 's/include\/ggml-metal\.h/ggml/include/ggml-metal.h/g' \
