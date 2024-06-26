@@ -576,6 +576,11 @@ GGML_CALL static size_t ggml_backend_cuda_buffer_type_get_alignment(ggml_backend
     GGML_UNUSED(buft);
 }
 
+GGML_CALL static size_t ggml_backend_cuda_buffer_type_get_max_size(ggml_backend_buffer_type_t buft) {
+    ggml_backend_cuda_buffer_type_context * buft_ctx = (ggml_backend_cuda_buffer_type_context *)buft->context;
+    return ggml_cuda_info().devices[buft_ctx->device].vmm_granularity;
+}
+
 GGML_CALL static size_t ggml_backend_cuda_buffer_type_get_alloc_size(ggml_backend_buffer_type_t buft, const ggml_tensor * tensor) {
     size_t size = ggml_nbytes(tensor);
     int64_t ne0 = tensor->ne[0];
@@ -595,7 +600,7 @@ static ggml_backend_buffer_type_i ggml_backend_cuda_buffer_type_interface = {
     /* .get_name         = */ ggml_backend_cuda_buffer_type_name,
     /* .alloc_buffer     = */ ggml_backend_cuda_buffer_type_alloc_buffer,
     /* .get_alignment    = */ ggml_backend_cuda_buffer_type_get_alignment,
-    /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
+    /* .get_max_size     = */ ggml_backend_cuda_buffer_type_get_max_size,
     /* .get_alloc_size   = */ ggml_backend_cuda_buffer_type_get_alloc_size,
     /* .is_host          = */ NULL,
 };
