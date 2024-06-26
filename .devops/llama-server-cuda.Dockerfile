@@ -21,7 +21,7 @@ COPY . .
 # Set nvcc architecture
 ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 # Enable CUDA
-ENV LLAMA_CUDA=1
+ENV GGML_CUDA=1
 # Enable cURL
 ENV LLAMA_CURL=1
 
@@ -30,8 +30,10 @@ RUN make -j$(nproc) llama-server
 FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
 
 RUN apt-get update && \
-    apt-get install -y libcurl4-openssl-dev libgomp1
+    apt-get install -y libcurl4-openssl-dev libgomp1 curl
 
 COPY --from=build /app/llama-server /llama-server
+
+HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
 ENTRYPOINT [ "/llama-server" ]

@@ -1594,7 +1594,7 @@ struct server_context {
                     } else {
                         std::string prompt;
                         if (task.data.contains("prompt") && task.data.at("prompt").is_string()) {
-                            json_value(task.data, "prompt", std::string());
+                            prompt = json_value(task.data, "prompt", std::string());
                         }
 
                         slot = get_available_slot(prompt);
@@ -2612,17 +2612,9 @@ int main(int argc, char ** argv) {
 
     // print sample chat example to make it clear which template is used
     {
-        json chat;
-        chat.push_back({{"role", "system"},    {"content", "You are a helpful assistant"}});
-        chat.push_back({{"role", "user"},      {"content", "Hello"}});
-        chat.push_back({{"role", "assistant"}, {"content", "Hi there"}});
-        chat.push_back({{"role", "user"},      {"content", "How are you?"}});
-
-        const std::string chat_example = format_chat(ctx_server.model, params.chat_template, chat);
-
         LOG_INFO("chat template", {
-            {"chat_example", chat_example},
-            {"built_in", params.chat_template.empty()},
+            {"chat_example", llama_chat_format_example(ctx_server.model, params.chat_template)},
+            {"built_in",     params.chat_template.empty()},
         });
     }
 
