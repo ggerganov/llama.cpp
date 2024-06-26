@@ -135,6 +135,7 @@ llama-cli \
   -j '{
     "type": "array",
     "items": {
+        "type": "object",
         "properties": {
             "name": {
                 "type": "string",
