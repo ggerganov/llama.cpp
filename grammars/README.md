@@ -156,6 +156,30 @@ llama-cli \
   -p 'Generate a {name, age}[] JSON array with famous actors of all ages.'
 ```
 
+<details>
+
+<summary>Show grammar</summary>
+
+You can convert any schema in command-line with:
+
+```bash
+examples/json_schema_to_grammar.py name-age-schema.json
+```
+
+```json
+char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
+item ::= "{" space item-name-kv "," space item-age-kv "}" space
+item-age ::= ([0-9] | ([1-8] [0-9] | [9] [0-9]) | "1" ([0-4] [0-9] | [5] "0")) space
+item-age-kv ::= "\"age\"" space ":" space item-age
+item-name ::= "\"" char{1,100} "\"" space
+item-name-kv ::= "\"name\"" space ":" space item-name
+root ::= "[" space item ("," space item){9,99} "]" space
+space ::= | " " | "\n" [ \t]{0,20}
+```
+
+</details>
+
+
 Here is also a non-exhaustive list of **unsupported** features:
 
 - `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`: only supported for `"type": "integer"` for now
@@ -180,7 +204,8 @@ If you're using [Pydantic](https://pydantic.dev/) to generate schemas, you can d
 ```python
 # pip install pydantic
 import json
-from pydantic import BaseModel, Extra
+from typing import Annotated, List
+from pydantic import BaseModel, Extra, Field
 class QAPair(BaseModel):
     class Config:
         extra = 'forbid'  # triggers additionalProperties: false in the JSON schema
@@ -188,37 +213,97 @@ class QAPair(BaseModel):
     concise_answer: str
     justification: str
 
-print(json.dumps(QAPair.model_json_schema()))
+class Summary(BaseModel):
+    class Config:
+        extra = 'forbid' 
+    key_facts: List[Annotated[str, Field(pattern='- .{5,}')]]
+    question_answers: List[Annotated[List[QAPair], Field(min_items=5)]]
+
+print(json.dumps(Summary.model_json_schema(), indent=2))
 ```
 
 <details>
-<summary>Show output</summary>
+<summary>Show JSON schema & grammar</summary>
+
 ```json
 {
+  "$defs": {
+    "QAPair": {
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "concise_answer": {
+          "title": "Concise Answer",
+          "type": "string"
+        },
+        "justification": {
+          "title": "Justification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "concise_answer",
+        "justification"
+      ],
+      "title": "QAPair",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "properties": {
-    "question": {
-      "title": "Question",
-      "type": "string"
+    "key_facts": {
+      "items": {
+        "pattern": "^- .{5,}$",
+        "type": "string"
+      },
+      "title": "Key Facts",
+      "type": "array"
     },
-    "concise_answer": {
-      "title": "Concise Answer",
-      "type": "string"
-    },
-    "justification": {
-      "title": "Justification",
-      "type": "string"
+    "question_answers": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/QAPair"
+        },
+        "minItems": 5,
+        "type": "array"
+      },
+      "title": "Question Answers",
+      "type": "array"
     }
   },
   "required": [
-    "question",
-    "concise_answer",
-    "justification"
+    "key_facts",
+    "question_answers"
   ],
-  "title": "QAPair",
+  "title": "Summary",
   "type": "object"
 }
 ```
+
+```js
+QAPair ::= "{" space QAPair-question-kv "," space QAPair-concise-answer-kv "," space QAPair-justification-kv "}" space
+QAPair-concise-answer-kv ::= "\"concise_answer\"" space ":" space string
+QAPair-justification-kv ::= "\"justification\"" space ":" space string
+QAPair-question-kv ::= "\"question\"" space ":" space string
+char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
+dot ::= [^\x0A\x0D]
+key-facts ::= "[" space (key-facts-item ("," space key-facts-item)*)? "]" space
+key-facts-item ::= "\"" "- " key-facts-item-1{5,} "\"" space
+key-facts-item-1 ::= dot
+key-facts-kv ::= "\"key_facts\"" space ":" space key-facts
+question-answers ::= "[" space (question-answers-item ("," space question-answers-item)*)? "]" space
+question-answers-item ::= "[" space question-answers-item-item ("," space question-answers-item-item){4,} "]" space
+question-answers-item-item ::= QAPair
+question-answers-kv ::= "\"question_answers\"" space ":" space question-answers
+root ::= "{" space key-facts-kv "," space question-answers-kv "}" space
+space ::= | " " | "\n" [ \t]{0,20}
+string ::= "\"" char* "\"" space
+```
+
 </details>
 
 If you're using [Zod](https://zod.dev/), you can make your objects explicitly strict w/ `z.object(...).strict()` or `z.strictObject(...)`.
@@ -238,7 +323,8 @@ console.log(zodToJsonSchema(Foo));
 ```
 
 <details>
-<summary>Show output</summary>
+<summary>Show JSON schema & grammar</summary>
+
 ```json
 {
   "type": "object",
@@ -260,4 +346,17 @@ console.log(zodToJsonSchema(Foo));
   "$schema": "http://json-schema.org/draft-07/schema#"
 }
 ```
+
+```js
+age-kv ::= "\"age\"" space ":" space number
+char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
+decimal-part ::= [0-9]{1,16}
+email-kv ::= "\"email\"" space ":" space string
+integral-part ::= [0] | [1-9] [0-9]{0,15}
+number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
+root ::= "{" space age-kv "," space email-kv "}" space
+space ::= | " " | "\n" [ \t]{0,20}
+string ::= "\"" char* "\"" space
+```
+
 </details>
