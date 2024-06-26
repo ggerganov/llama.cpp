@@ -52,6 +52,12 @@ int32_t cpu_get_num_math();
 // CLI argument parsing
 //
 
+// dimensionality reduction methods, used by cvector-generator
+enum dimre_method {
+    DIMRE_METHOD_PCA,
+    DIMRE_METHOD_MEAN,
+};
+
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
@@ -238,13 +244,12 @@ struct gpt_params {
     bool compute_ppl    = true;  // whether to compute perplexity
 
     // cvector-generator params
-    int n_completions = 64;
-    int n_pca_batch = 20;
+    int n_pca_batch = 100;
     int n_pca_iterations = 1000;
-    std::string cvector_outfile          = "control_vector.gguf";
-    std::string cvector_completions_file = "examples/cvector-generator/completions.txt";
-    std::string cvector_positive_file    = "examples/cvector-generator/positive.txt";
-    std::string cvector_negative_file    = "examples/cvector-generator/negative.txt";
+    dimre_method cvector_dimre_method = DIMRE_METHOD_PCA;
+    std::string cvector_outfile       = "control_vector.gguf";
+    std::string cvector_positive_file = "examples/cvector-generator/positive.txt";
+    std::string cvector_negative_file = "examples/cvector-generator/negative.txt";
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
@@ -365,8 +370,31 @@ bool llama_should_add_bos_token(const llama_model * model);
 // Chat template utils
 //
 
+// same with llama_chat_message, but uses std::string
+struct llama_chat_msg {
+    std::string role;
+    std::string content;
+};
+
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
 bool llama_chat_verify_template(const std::string & tmpl);
+
+// CPP wrapper for llama_chat_apply_template
+std::string llama_chat_apply_template(const struct llama_model * model,
+        const std::string & tmpl,
+        const std::vector<llama_chat_msg> & chat,
+        bool add_ass);
+
+// Format single message, while taking into account the position of that message in chat history
+std::string llama_chat_format_single(const struct llama_model * model,
+        const std::string & tmpl,
+        const std::vector<llama_chat_msg> & past_msg,
+        const llama_chat_msg & new_msg,
+        bool add_ass);
+
+// Returns an example of formatted chat
+std::string llama_chat_format_example(const struct llama_model * model,
+        const std::string & tmpl);
 
 //
 // KV cache utils
