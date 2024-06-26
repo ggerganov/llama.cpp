@@ -12395,9 +12395,9 @@ struct llm_build_context {
 
                     // T5 uses relu, flan-T5 uses gelu-gated
                     cur = llm_build_ffn(ctx0, cur,
-                            model.layers[il].enc_ffn_up,   NULL,
-                            model.layers[il].enc_ffn_gate, NULL,
-                            model.layers[il].enc_ffn_down, NULL,
+                            model.layers[il].enc_ffn_up,   NULL, NULL,
+                            model.layers[il].enc_ffn_gate, NULL, NULL,
+                            model.layers[il].enc_ffn_down, NULL, NULL,
                             NULL,
                             model.layers[il].enc_ffn_gate ? LLM_FFN_GELU : LLM_FFN_RELU,
                             model.layers[il].enc_ffn_gate ? LLM_FFN_PAR : LLM_FFN_SEQ,
@@ -12573,9 +12573,9 @@ struct llm_build_context {
 
                     // T5 uses relu, flan-T5 uses gelu-gated
                     cur = llm_build_ffn(ctx0, cur,
-                            model.layers[il].ffn_up,   NULL,
-                            model.layers[il].ffn_gate, NULL,
-                            model.layers[il].ffn_down, NULL,
+                            model.layers[il].ffn_up,   NULL, NULL,
+                            model.layers[il].ffn_gate, NULL, NULL,
+                            model.layers[il].ffn_down, NULL, NULL,
                             NULL,
                             model.layers[il].enc_ffn_gate ? LLM_FFN_GELU : LLM_FFN_RELU,
                             model.layers[il].enc_ffn_gate ? LLM_FFN_PAR : LLM_FFN_SEQ,
