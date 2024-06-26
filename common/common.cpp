@@ -2923,6 +2923,8 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
         }
     }
 
+    ggml_free(ctx);
+    gguf_free(ctx_gguf);
     return result;
 }
 
@@ -2933,16 +2935,17 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
         auto cur = llama_control_vector_load_one(info);
 
         if (cur.n_embd == -1) {
-            return result;
+            continue;
         }
-        if (result.n_embd != -1 && (result.n_embd != cur.n_embd || result.data.size() != cur.data.size())) {
+        if (result.n_embd != -1 && result.n_embd != cur.n_embd) {
             fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
-            return result;
+            continue;
         }
 
         if (result.n_embd == -1) {
             result = std::move(cur);
         } else {
+            result.data.resize(std::max(result.data.size(), cur.data.size()), 0.0f);  // extend if necessary
             for (size_t i = 0; i < cur.data.size(); i++) {
                 result.data[i] += cur.data[i];
             }
@@ -2950,7 +2953,7 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
     }
 
     if (result.n_embd == -1) {
-        fprintf(stderr, "%s: no vectors passed\n", __func__);
+        fprintf(stderr, "%s: no valid vectors passed\n", __func__);
     }
 
     return result;
