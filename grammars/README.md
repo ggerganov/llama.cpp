@@ -126,7 +126,7 @@ You can use GBNF grammars:
     - in CLI, with [examples/json_schema_to_grammar.py](../examples/json_schema_to_grammar.py)
     - in JavaScript with [json-schema-to-grammar.mjs](../examples/server/public/json-schema-to-grammar.mjs) (this is used by the [server](../examples/server)'s Web UI)
 
-Take a look at [tests](../../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/llama.cpp/pull/5978, https://github.com/ggerganov/llama.cpp/pull/6659 & https://github.com/ggerganov/llama.cpp/pull/6555).
+Take a look at [tests](../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/llama.cpp/pull/5978, https://github.com/ggerganov/llama.cpp/pull/6659 & https://github.com/ggerganov/llama.cpp/pull/6555).
 
 ```bash
 llama-cli \
@@ -179,22 +179,25 @@ space ::= | " " | "\n" [ \t]{0,20}
 
 </details>
 
-Here is also a non-exhaustive list of limitations & **unsupported** features:
+Here is also a list of known limitations (contributions welcome):
 
 - Unsupported features are skipped silently. It is currently advised to use the command-line Python converter (see above) to see any warnings, and to inspect the resulting grammar.
+- Can't mix `properties` w/ `anyOf` / `oneOf` in the same type (https://github.com/ggerganov/llama.cpp/issues/7703)
 - [prefixItems](https://json-schema.org/draft/2020-12/json-schema-core#name-prefixitems) is broken (but [items](https://json-schema.org/draft/2020-12/json-schema-core#name-items) works)
 - `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`: only supported for `"type": "integer"` for now, not `number`
-- `$ref` handling is a bit buggy (https://github.com/ggerganov/llama.cpp/issues/8073)
+- Nested `$ref`s are broken (https://github.com/ggerganov/llama.cpp/issues/8073)
 - [pattern](https://json-schema.org/draft/2020-12/json-schema-validation#name-pattern)s must start with `^` and end with `$`
-- Remote `$ref`s in the C++ version (Python & JavaScript versions fetch https refs)
-- Mixing `properties` w/ `anyOf` / `oneOf` in the same type (https://github.com/ggerganov/llama.cpp/issues/7703)
-- `string` formats `uri`, `email`
+- Remote `$ref`s not supported in the C++ version (Python & JavaScript versions fetch https refs)
+- `string` [formats](https://json-schema.org/draft/2020-12/json-schema-validation#name-defined-formats) lack `uri`, `email`
+- No [`patternProperties`](https://json-schema.org/draft/2020-12/json-schema-core#name-patternproperties)
+
+And a non-exhaustive list of other unsupported features that are unlikely to be implemented (hard and/or too slow to support w/ stateless grammars):
+
+- [`uniqueItems`](https://json-schema.org/draft/2020-12/json-schema-validation#name-uniqueitems)
 - [`contains`](https://json-schema.org/draft/2020-12/json-schema-core#name-contains) / `minContains`
-- `uniqueItems`
 - `$anchor` (cf. [dereferencing](https://json-schema.org/draft/2020-12/json-schema-core#name-dereferencing))
 - [`not`](https://json-schema.org/draft/2020-12/json-schema-core#name-not)
 - [Conditionals](https://json-schema.org/draft/2020-12/json-schema-core#name-keywords-for-applying-subsche) `if` / `then` / `else` / `dependentSchemas`
-- [`patternProperties`](https://json-schema.org/draft/2020-12/json-schema-core#name-patternproperties)
 
 ### A word about additionalProperties
 
