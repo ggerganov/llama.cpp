@@ -218,7 +218,7 @@ class QAPair(BaseModel):
 
 class Summary(BaseModel):
     class Config:
-        extra = 'forbid' 
+        extra = 'forbid'
     key_facts: List[Annotated[str, Field(pattern='- .{5,}')]]
     question_answers: List[Annotated[List[QAPair], Field(min_items=5)]]
 
