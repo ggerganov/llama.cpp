@@ -166,7 +166,7 @@ You can convert any schema in command-line with:
 examples/json_schema_to_grammar.py name-age-schema.json
 ```
 
-```json
+```
 char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
 item ::= "{" space item-name-kv "," space item-age-kv "}" space
 item-age ::= ([0-9] | ([1-8] [0-9] | [9] [0-9]) | "1" ([0-4] [0-9] | [5] "0")) space
@@ -284,7 +284,7 @@ print(json.dumps(Summary.model_json_schema(), indent=2))
 }
 ```
 
-```js
+```
 QAPair ::= "{" space QAPair-question-kv "," space QAPair-concise-answer-kv "," space QAPair-justification-kv "}" space
 QAPair-concise-answer-kv ::= "\"concise_answer\"" space ":" space string
 QAPair-justification-kv ::= "\"justification\"" space ":" space string
@@ -347,7 +347,7 @@ console.log(zodToJsonSchema(Foo));
 }
 ```
 
-```js
+```
 age-kv ::= "\"age\"" space ":" space number
 char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
 decimal-part ::= [0-9]{1,16}
