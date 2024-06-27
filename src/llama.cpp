@@ -19550,6 +19550,21 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "ASSISTANT:";
         }
+    } else if (tmpl == "alpaca" || (tmpl.find("### Instruction:") != std::string::npos && tmpl.find("<|EOT|>") == std::string::npos)) {
+        // meta-math/MetaMath-7B-V1.0
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << message->content << "\n\n";
+            } else if (role == "user") {
+                ss << "### Instruction:\n" << message->content << "\n\n";
+            } else if (role == "assistant") {
+                ss << "### Response:\n" << message->content << "\n\n";
+            }
+        }
+        if (add_ass) {
+            ss << "### Response:\n";
+        }
     } else if (tmpl == "deepseek" || (tmpl.find("### Instruction:") != std::string::npos && tmpl.find("<|EOT|>") != std::string::npos)) {
         // deepseek-ai/deepseek-coder-33b-instruct
         for (auto message : chat) {
