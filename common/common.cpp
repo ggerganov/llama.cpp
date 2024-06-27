@@ -2814,7 +2814,6 @@ static llama_control_vector_data llama_control_vector_load_one(const llama_contr
     struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
     if (!ctx_gguf) {
         fprintf(stderr, "%s: failed to load control vector file from %s\n", __func__, load_info.fname.c_str());
-        ggml_free(ctx);
         return result;
     }
 
