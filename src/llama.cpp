@@ -19614,8 +19614,8 @@ static int32_t llama_chat_apply_template_internal(
                 ss << trim(message->content);
             }
         }
-    } else if (tmpl == "deepseek-lite" || tmpl_contains("'Assistant: ' + message['content'] + eos_token")) {
-        // DeepSeek-Coder-V2-Lite-Instruct-GGUF
+    } else if (tmpl == "deepseek2" || tmpl_contains("'Assistant: ' + message['content'] + eos_token")) {
+        // DeepSeek-V2
         std::string eos_token = u8"<｜end▁of▁sentence｜>";
         for (auto message : chat) {
             std::string role(message->role);
@@ -19628,7 +19628,7 @@ static int32_t llama_chat_apply_template_internal(
             }
         }
         if (add_ass) {
-            ss << "Assistant: ";
+            ss << "Assistant:";
         }
     } else {
         // template not supported
