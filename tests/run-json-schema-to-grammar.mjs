@@ -3,8 +3,7 @@ import { SchemaConverter } from "../examples/server/public/json-schema-to-gramma
 
 const [, , file] = process.argv
 const url = `file://${file}`
-let schema = JSON.parse(readFileSync(file, "utf8"));
+const schema = JSON.parse(readFileSync(file, "utf8"));
 const converter = new SchemaConverter({})
-schema = await converter.resolveRefs(schema, url)
 converter.visit(schema, '')
 console.log(converter.formatGrammar())

@@ -1266,6 +1266,48 @@ static void test_json_schema() {
             // R"""({"productId": 1, "productName": "A green door", "price": 12.50, "tags": ["home", "green", "home"]})""",
         }
     );
+
+    test_schema(
+        "refs",
+        // Schema
+        R"""({
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 15,
+            "items": { "$ref": "#/$defs/TALK" },
+
+            "$defs": {
+                "characters": { "enum": ["Biff", "Alice"] },
+                "emotes": { "enum": ["EXCLAMATION", "CONFUSION", "CHEERFUL", "LOVE", "ANGRY"] },
+
+                "TALK": {
+                    "type": "object",
+                    "required": [ "character", "emote", "dialog" ],
+                    "properties": {
+                        "character": { "$ref": "#/$defs/characters" },
+                        "emote": { "$ref": "#/$defs/emotes" },
+                        "dialog": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            }
+        })""",
+        // Passing strings
+        {
+            R"""([{
+            "character": "Alice",
+            "emote": "EXCLAMATION",
+            "dialog": "Hello, world!"
+            }])""",
+        },
+        // Failing strings
+        {
+        }
+    );
 }
 
 int main() {
