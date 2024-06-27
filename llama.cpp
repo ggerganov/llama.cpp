@@ -14745,10 +14745,10 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 }
                 // add prefix to chatglm3
                 if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM3) {
-                    output.push_back(64790);
-                    output.push_back(64792);
-                    output.push_back(64795);
-                    output.push_back(30910);
+                    output.push_back(64790); // [gMask]
+                    output.push_back(64792); // sop
+                    output.push_back(64795); // <|user|>
+                    output.push_back(30910); // \n
                     output.push_back(13);
                 }
 
@@ -14787,7 +14787,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 }
                 // add suffix to chatglm3
                 if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM3) {
-                    output.push_back(64796);
+                    output.push_back(64796); // <|assistant|>
                 }
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
@@ -14799,10 +14799,10 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 }
                 // add prefix to chatglm4
                 if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM4) {
-                    output.push_back(151331);
-                    output.push_back(151333);
-                    output.push_back(151336);
-                    output.push_back(198);
+                    output.push_back(151331); // [gMASK]
+                    output.push_back(151333); // <sop>
+                    output.push_back(151336); // <|user|>
+                    output.push_back(198); // \n
                 }
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
@@ -14823,7 +14823,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 }
                 // add suffix to chatglm4
                 if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM4) {
-                    output.push_back(151337);
+                    output.push_back(151337); // <|assistant|>
                 }
             } break;
         case LLAMA_VOCAB_TYPE_WPM:

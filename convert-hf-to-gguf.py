@@ -3043,12 +3043,12 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
+        self.gguf_writer.add_add_bos_token(False)
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
         special_vocab.chat_template = "chatglm4"
         special_vocab.merges = merges
         # only add special tokens when they were not already loaded from config.json
-        special_vocab._set_special_token("bos", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
         special_vocab._set_special_token("eot", tokenizer.get_added_vocab()["<|user|>"])
         # this one is usually not in config.json anyway
