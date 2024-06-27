@@ -1687,7 +1687,11 @@ struct XXH64_state_s {
 
 #ifndef XXH_NO_XXH3
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) /* >= C11 */
+/* Windows SDK under 10.0.22000 check is missing stdalign.h so we add a check
+   before allowing the windows compiler to use the C11 form.
+   Reference: https://github.com/Cyan4973/xxHash/issues/955 */
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L) \
+    && (defined(_MSC_VER) && (_MSC_VER >= 1000) || !defined(_MSC_VER)) /* >= C11 */
 #  include <stdalign.h>
 #  define XXH_ALIGN(n)      alignas(n)
 #elif defined(__cplusplus) && (__cplusplus >= 201103L) /* >= C++11 */
