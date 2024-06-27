@@ -301,12 +301,16 @@ class Model:
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
                     # TODO: cleaner model-specific per-tensor types
                     # NOTE: Q1_3 is only relevant for BitNet 1.58b
-                    if self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3 and not any(
-                        self.match_model_tensor_name(new_name, key, None)
-                        for key in [
-                            gguf.MODEL_TENSOR.TOKEN_EMBD,
-                            gguf.MODEL_TENSOR.OUTPUT,
-                        ]
+                    if (
+                        self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3
+                        and gguf.can_quantize_to_q1_3(data)
+                        and not any(
+                            self.match_model_tensor_name(new_name, key, None)
+                            for key in [
+                                gguf.MODEL_TENSOR.TOKEN_EMBD,
+                                gguf.MODEL_TENSOR.OUTPUT,
+                            ]
+                        )
                     ):
                         data = gguf.quantize_q1_3(data)
                         assert data.dtype == np.uint8

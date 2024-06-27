@@ -126,6 +126,10 @@ def quantize_q8_0(data: np.ndarray):
 __q1_3_block_size, __q1_3_type_size = GGML_QUANT_SIZES[GGMLQuantizationType.Q1_3]
 
 
+def can_quantize_to_q1_3(n: np.ndarray) -> bool:
+    return n.shape[-1] % __q1_3_block_size == 0
+
+
 def __quantize_q1_3_shape_change(s: tuple[int, ...]) -> tuple[int, ...]:
     return (*s[:-1], s[-1] // __q1_3_block_size * __q1_3_type_size)
 
