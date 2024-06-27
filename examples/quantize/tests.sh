@@ -18,9 +18,9 @@ fi
 
 set -x
 
-SPLIT=$1/gguf-split
-QUANTIZE=$1/quantize
-MAIN=$1/main
+SPLIT=$1/llama-gguf-split
+QUANTIZE=$1/llama-quantize
+MAIN=$1/llama-cli
 WORK_PATH=$TMP_DIR/quantize
 ROOT_DIR=$(realpath $(dirname $0)/../../)
 

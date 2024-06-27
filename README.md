@@ -10,8 +10,12 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
+> [!IMPORTANT]
+[2024 Jun 12] Binaries have been renamed w/ a `llama-` prefix. `main` is now `llama-cli`, `server` is `llama-server`, etc (https://github.com/ggerganov/llama.cpp/pull/7809)
+
 ### Recent API changes
 
+- [2024 Jun 26] The source code and CMake build scripts have been restructured https://github.com/ggerganov/llama.cpp/pull/8006
 - [2024 Apr 21] `llama_token_to_piece` can now optionally render special tokens https://github.com/ggerganov/llama.cpp/pull/6807
 - [2024 Apr 4] State and session file functions reorganized under `llama_state_*` https://github.com/ggerganov/llama.cpp/pull/6341
 - [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
@@ -192,6 +196,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [cztomsik/ava](https://github.com/cztomsik/ava) (MIT)
 - [ptsochantaris/emeltal](https://github.com/ptsochantaris/emeltal)
 - [pythops/tenere](https://github.com/pythops/tenere) (AGPL)
+- [RAGNA Desktop](https://ragna.app/) (proprietary)
 - [RecurseChat](https://recurse.chat/) (proprietary)
 - [semperai/amica](https://github.com/semperai/amica)
 - [withcatai/catai](https://github.com/withcatai/catai)
@@ -205,6 +210,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [eva](https://github.com/ylsdamxssjxxdd/eva) (MIT)
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
 - [AIKit](https://github.com/sozercan/aikit) (MIT)
+- [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LARS) (AGPL)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
@@ -217,7 +223,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 Here is a typical run using LLaMA v2 13B on M2 Ultra:
 
 ```
-$ make -j && ./main -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
+$ make -j && ./llama-cli -m models/llama-13b-v2/ggml-model-q4_0.gguf -p "Building a website can be done in 10 simple steps:\nStep 1:" -n 400 -e
 I llama.cpp build info:
 I UNAME_S:  Darwin
 I UNAME_P:  arm
@@ -383,10 +389,34 @@ brew install llama.cpp
 ```
 The formula is automatically updated with new `llama.cpp` releases. More info: https://github.com/ggerganov/llama.cpp/discussions/7668
 
+### Nix
+
+On Mac and Linux, the Nix package manager can be used via
+```
+nix profile install nixpkgs#llama-cpp
+```
+For flake enabled installs.
+
+Or
+```
+nix-env --file '<nixpkgs>' --install --attr llama-cpp
+```
+For non-flake enabled installs.
+
+This expression is automatically updated within the [nixpkgs repo](https://github.com/NixOS/nixpkgs/blob/nixos-24.05/pkgs/by-name/ll/llama-cpp/package.nix#L164).
+
+#### Flox
+
+On Mac and Linux, Flox can be used to install llama.cpp within a Flox environment via
+```
+flox install llama-cpp
+```
+Flox follows the nixpkgs build of llama.cpp.
+
 ### Metal Build
 
 On MacOS, Metal is enabled by default. Using Metal makes the computation run on the GPU.
-To disable the Metal build at compile time use the `LLAMA_NO_METAL=1` flag or the `LLAMA_METAL=OFF` cmake option.
+To disable the Metal build at compile time use the `GGML_NO_METAL=1` flag or the `GGML_METAL=OFF` cmake option.
 
 When built with Metal support, you can explicitly disable GPU inference with the `--n-gpu-layers|-ngl 0` command-line
 argument.
@@ -406,7 +436,7 @@ Building the program with BLAS support may lead to some performance improvements
   - Using `make`:
     - On Linux:
       ```bash
-      make LLAMA_OPENBLAS=1
+      make GGML_OPENBLAS=1
       ```
 
     - On Windows:
@@ -421,13 +451,13 @@ Building the program with BLAS support may lead to some performance improvements
       8. From here you can run:
 
           ```bash
-          make LLAMA_OPENBLAS=1
+          make GGML_OPENBLAS=1
           ```
 
   - Using `CMake` on Linux:
 
       ```bash
-      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS
+      cmake -B build -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS
       cmake --build build --config Release
       ```
 
@@ -446,10 +476,10 @@ Building the program with BLAS support may lead to some performance improvements
   Building through oneAPI compilers will make avx_vnni instruction set available for intel processors that do not support avx512 and avx512_vnni. Please note that this build config **does not support Intel GPU**. For Intel GPU support, please refer to [llama.cpp for SYCL](./README-sycl.md).
 
   - Using manual oneAPI installation:
-    By default, `LLAMA_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DLLAMA_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
+    By default, `GGML_BLAS_VENDOR` is set to `Generic`, so if you already sourced intel environment script and assign `-DGGML_BLAS=ON` in cmake, the mkl version of Blas will automatically been selected. Otherwise please install oneAPI and follow the below steps:
       ```bash
       source /opt/intel/oneapi/setvars.sh # You can skip this step if  in oneapi-basekit docker image, only required for manual installation
-      cmake -B build -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_NATIVE=ON
+      cmake -B build -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=Intel10_64lp -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_NATIVE=ON
       cmake --build build --config Release
       ```
 
@@ -466,27 +496,28 @@ Building the program with BLAS support may lead to some performance improvements
 
   - Using `make`:
     ```bash
-    make LLAMA_CUDA=1
+    make GGML_CUDA=1
     ```
   - Using `CMake`:
 
     ```bash
-    cmake -B build -DLLAMA_CUDA=ON
+    cmake -B build -DGGML_CUDA=ON
     cmake --build build --config Release
     ```
 
   The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
 
-  | Option                         | Legal values           | Default | Description                                                                                                                                                                                                                                                                             |
-  |--------------------------------|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-  | LLAMA_CUDA_FORCE_DMMV          | Boolean                | false   | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
-  | LLAMA_CUDA_DMMV_X              | Positive integer >= 32 | 32      | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants.                                         |
-  | LLAMA_CUDA_MMV_Y               | Positive integer       | 1       | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended.                                               |
-  | LLAMA_CUDA_FORCE_MMQ           | Boolean                | false   | Force the use of dequantization + matrix multiplication kernels instead of leveraging Math libraries. |                                                                                                                                         |
-  | LLAMA_CUDA_F16                 | Boolean                | false   | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs.                                                           |
-  | LLAMA_CUDA_KQUANTS_ITER        | 1 or 2                 | 2       | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                                                                     |
-  | LLAMA_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       | 128     | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial.                                                                         |
-  | LLAMA_CUDA_FA_ALL_QUANTS       | Boolean                | false   | Compile support for all KV cache quantization type (combinations) for the FlashAttention CUDA kernels. More fine-grained control over KV cache size but compilation takes much longer.                                                                                                  |
+  | Option                        | Legal values           | Default | Description                                                                                                                                                                                                                                                                             |
+  |-------------------------------|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+  | GGML_CUDA_FORCE_DMMV          | Boolean                | false   | Force the use of dequantization + matrix vector multiplication kernels instead of using kernels that do matrix vector multiplication on quantized data. By default the decision is made based on compute capability (MMVQ for 6.1/Pascal/GTX 1000 or higher). Does not affect k-quants. |
+  | GGML_CUDA_DMMV_X              | Positive integer >= 32 | 32      | Number of values in x direction processed by the CUDA dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants.                                         |
+  | GGML_CUDA_MMV_Y               | Positive integer       | 1       | Block size in y direction for the CUDA mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended.                                                                                                                                         |
+  | GGML_CUDA_FORCE_MMQ           | Boolean                | false   | Force the use of custom matrix multiplication kernels for quantized models instead of FP16 cuBLAS even if there is no int8 tensor core implementation available (affects V100, RDNA3). MMQ kernels are enabled by default on GPUs with int8 tensor core support. With MMQ force enabled, speed for large batch sizes will be worse but VRAM consumption will be lower.                       |
+  | GGML_CUDA_FORCE_CUBLAS        | Boolean                | false   | Force the use of FP16 cuBLAS instead of custom matrix multiplication kernels for quantized models                                                                                                                                                                                       |
+  | GGML_CUDA_F16                 | Boolean                | false   | If enabled, use half-precision floating point arithmetic for the CUDA dequantization + mul mat vec kernels and for the q4_1 and q5_1 matrix matrix multiplication kernels. Can improve performance on relatively recent GPUs.                                                           |
+  | GGML_CUDA_KQUANTS_ITER        | 1 or 2                 | 2       | Number of values processed per iteration and per CUDA thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                                                                     |
+  | GGML_CUDA_PEER_MAX_BATCH_SIZE | Positive integer       | 128     | Maximum batch size for which to enable peer access between multiple GPUs. Peer access requires either Linux or NVLink. When using NVLink enabling peer access for larger batch sizes is potentially beneficial.                                                                         |
+  | GGML_CUDA_FA_ALL_QUANTS       | Boolean                | false   | Compile support for all KV cache quantization type (combinations) for the FlashAttention CUDA kernels. More fine-grained control over KV cache size but compilation takes much longer.                                                                                                  |
 
 - #### hipBLAS
 
@@ -496,15 +527,15 @@ Building the program with BLAS support may lead to some performance improvements
 
   - Using `make`:
     ```bash
-    make LLAMA_HIPBLAS=1
+    make GGML_HIPBLAS=1
     ```
   - Using `CMake` for Linux (assuming a gfx1030-compatible AMD GPU):
     ```bash
     HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -R)" \
-        cmake -S . -B build -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+        cmake -S . -B build -DGGML_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
         && cmake --build build --config Release -- -j 16
     ```
-    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DLLAMA_HIP_UMA=ON`.
+    On Linux it is also possible to use unified memory architecture (UMA) to share main memory between the CPU and integrated GPU by setting `-DGGML_HIP_UMA=ON`.
     However, this hurts performance for non-integrated GPUs (but enables working with integrated GPUs).
 
     Note that if you get the following error:
@@ -518,19 +549,19 @@ Building the program with BLAS support may lead to some performance improvements
     ```bash
     HIPCXX="$(hipconfig -l)/clang" HIP_PATH="$(hipconfig -p)" \
     HIP_DEVICE_LIB_PATH=<directory-you-just-found> \
-        cmake -S . -B build -DLLAMA_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
+        cmake -S . -B build -DGGML_HIPBLAS=ON -DAMDGPU_TARGETS=gfx1030 -DCMAKE_BUILD_TYPE=Release \
         && cmake --build build -- -j 16
     ```
 
   - Using `make` (example for target gfx1030, build with 16 CPU threads):
     ```bash
-    make -j16 LLAMA_HIPBLAS=1 LLAMA_HIP_UMA=1 AMDGPU_TARGETS=gfx1030
+    make -j16 GGML_HIPBLAS=1 GGML_HIP_UMA=1 AMDGPU_TARGETS=gfx1030
     ```
 
   - Using `CMake` for Windows (using x64 Native Tools Command Prompt for VS, and assuming a gfx1100-compatible AMD GPU):
     ```bash
     set PATH=%HIP_PATH%\bin;%PATH%
-    cmake -S . -B build -G Ninja -DAMDGPU_TARGETS=gfx1100 -DLLAMA_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
+    cmake -S . -B build -G Ninja -DAMDGPU_TARGETS=gfx1100 -DGGML_HIPBLAS=ON -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
     cmake --build build
     ```
     Make sure that `AMDGPU_TARGETS` is set to the GPU arch you want to compile for. The above example uses `gfx1100` that corresponds to Radeon RX 7900XTX/XT/GRE. You can find a list of targets [here](https://llvm.org/docs/AMDGPUUsage.html#processors)
@@ -541,11 +572,11 @@ Building the program with BLAS support may lead to some performance improvements
   If your GPU is not officially supported you can use the environment variable [`HSA_OVERRIDE_GFX_VERSION`] set to a similar GPU, for example 10.3.0 on RDNA2 (e.g. gfx1030, gfx1031, or gfx1035) or 11.0.0 on RDNA3.
   The following compilation options are also available to tweak performance (yes, they refer to CUDA, not HIP, because it uses the same code as the cuBLAS version above):
 
-  | Option                  | Legal values           | Default | Description                                                                                                                                                                                                                                    |
-  |-------------------------|------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-  | LLAMA_CUDA_DMMV_X       | Positive integer >= 32 | 32      | Number of values in x direction processed by the HIP dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
-  | LLAMA_CUDA_MMV_Y        | Positive integer       | 1       | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants.                                                                       |
-  | LLAMA_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
+  | Option                 | Legal values           | Default | Description                                                                                                                                                                                                                                    |
+  |------------------------|------------------------|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+  | GGML_CUDA_DMMV_X       | Positive integer >= 32 | 32      | Number of values in x direction processed by the HIP dequantization + matrix vector multiplication kernel per iteration. Increasing this value can improve performance on fast GPUs. Power of 2 heavily recommended. Does not affect k-quants. |
+  | GGML_CUDA_MMV_Y        | Positive integer       | 1       | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants.                                                                       |
+  | GGML_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
 
 - #### Vulkan
 
@@ -555,7 +586,7 @@ Building the program with BLAS support may lead to some performance improvements
 
   ```sh
   # Build the image
-  docker build -t llama-cpp-vulkan -f .devops/main-vulkan.Dockerfile .
+  docker build -t llama-cpp-vulkan -f .devops/llama-cli-vulkan.Dockerfile .
 
   # Then, use it:
   docker run -it --rm -v "$(pwd):/app:Z" --device /dev/dri/renderD128:/dev/dri/renderD128 --device /dev/dri/card1:/dev/dri/card1 llama-cpp-vulkan -m "/app/models/YOUR_MODEL_FILE" -p "Building a website can be done in 10 simple steps:" -n 400 -e -ngl 33
@@ -583,10 +614,10 @@ Building the program with BLAS support may lead to some performance improvements
   Then, build llama.cpp using the cmake command below:
 
   ```bash
-  cmake -B build -DLLAMA_VULKAN=1
+  cmake -B build -DGGML_VULKAN=1
   cmake --build build --config Release
   # Test the output binary (with "-ngl 33" to offload all layers to GPU)
-  ./bin/main -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
+  ./bin/llama-cli -m "PATH_TO_MODEL" -p "Hi you how are you" -n 50 -e -ngl 33 -t 4
 
   # You should see in the output, ggml_vulkan detected your GPU. For example:
   # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
@@ -619,21 +650,18 @@ python3 -m pip install -r requirements.txt
 # convert the model to ggml FP16 format
 python3 convert-hf-to-gguf.py models/mymodel/
 
-# [Optional] for models using BPE tokenizers
-python convert-hf-to-gguf.py models/mymodel/ --vocab-type bpe
-
 # quantize the model to 4-bits (using Q4_K_M method)
-./quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
+./llama-quantize ./models/mymodel/ggml-model-f16.gguf ./models/mymodel/ggml-model-Q4_K_M.gguf Q4_K_M
 
 # update the gguf filetype to current version if older version is now unsupported
-./quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
+./llama-quantize ./models/mymodel/ggml-model-Q4_K_M.gguf ./models/mymodel/ggml-model-Q4_K_M-v2.gguf COPY
 ```
 
 ### Run the quantized model
 
 ```bash
 # start inference on a gguf model
-./main -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
+./llama-cli -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -708,7 +736,7 @@ The time per token is measured on a MacBook M1 Pro 32GB RAM using 4 and 8 thread
 #### How to run
 
 1. Download/extract: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-2. Run `./perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
+2. Run `./llama-perplexity -m models/7B/ggml-model-q4_0.gguf -f wiki.test.raw`
 3. Output:
 ```
 perplexity : calculating perplexity over 655 chunks
@@ -732,16 +760,16 @@ Here is an example of a few-shot interaction, invoked with the command
 ./examples/chat-13B.sh
 
 # custom arguments using a 13B model
-./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
+./llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
-Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `main` example program.
+Note the use of `--color` to distinguish between user input and generated text. Other parameters are explained in more detail in the [README](examples/main/README.md) for the `llama-cli` example program.
 
 ![image](https://user-images.githubusercontent.com/1991296/224575029-2af3c7dc-5a65-4f64-a6bb-517a532aea38.png)
 
 ### Persistent Interaction
 
-The prompt, user inputs, and model generations can be saved and resumed across calls to `./main` by leveraging `--prompt-cache` and `--prompt-cache-all`. The `./examples/chat-persistent.sh` script demonstrates this with support for long-running, resumable chat sessions. To use this example, you must provide a file to cache the initial chat prompt and a directory to save the chat session, and may optionally provide the same variables as `chat-13B.sh`. The same prompt cache can be reused for new chat sessions. Note that both prompt cache and chat directory are tied to the initial prompt (`PROMPT_TEMPLATE`) and the model file.
+The prompt, user inputs, and model generations can be saved and resumed across calls to `./llama-cli` by leveraging `--prompt-cache` and `--prompt-cache-all`. The `./examples/chat-persistent.sh` script demonstrates this with support for long-running, resumable chat sessions. To use this example, you must provide a file to cache the initial chat prompt and a directory to save the chat session, and may optionally provide the same variables as `chat-13B.sh`. The same prompt cache can be reused for new chat sessions. Note that both prompt cache and chat directory are tied to the initial prompt (`PROMPT_TEMPLATE`) and the model file.
 
 ```bash
 # Start a new chat
@@ -763,7 +791,7 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
 `llama.cpp` supports grammars to constrain model output. For example, you can force the model to output JSON only:
 
 ```bash
-./main -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
+./llama-cli -m ./models/13B/ggml-model-q4_0.gguf -n 256 --grammar-file grammars/json.gbnf -p 'Request: schedule a call at 8pm; Command:'
 ```
 
 The `grammars/` folder contains a handful of sample grammars. To write your own, check out the [GBNF Guide](./grammars/README.md).
@@ -842,7 +870,7 @@ $mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/ho
 Now, you can start chatting:
 ```
 $cd /data/data/com.termux/files/home/bin
-$./main -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+$./llama-cli -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
 ```
 
 Here's a demo of an interactive session running on Pixel 5 phone:
@@ -909,8 +937,8 @@ Assuming one has the [nvidia-container-toolkit](https://github.com/NVIDIA/nvidia
 
 ```bash
 docker build -t local/llama.cpp:full-cuda -f .devops/full-cuda.Dockerfile .
-docker build -t local/llama.cpp:light-cuda -f .devops/main-cuda.Dockerfile .
-docker build -t local/llama.cpp:server-cuda -f .devops/server-cuda.Dockerfile .
+docker build -t local/llama.cpp:light-cuda -f .devops/llama-cli-cuda.Dockerfile .
+docker build -t local/llama.cpp:server-cuda -f .devops/llama-server-cuda.Dockerfile .
 ```
 
 You may want to pass in some different `ARGS`, depending on the CUDA environment supported by your container host, as well as the GPU architecture.
@@ -960,7 +988,7 @@ docker run --gpus all -v /path/to/models:/models local/llama.cpp:server-cuda -m 
 
 ### Docs
 
-- [main](./examples/main/README.md)
+- [main (cli)](./examples/main/README.md)
 - [server](./examples/server/README.md)
 - [jeopardy](./examples/jeopardy/README.md)
 - [BLIS](./docs/BLIS.md)
