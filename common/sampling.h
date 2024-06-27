@@ -19,6 +19,13 @@ enum class llama_sampler_type : char {
     TEMPERATURE = 't'
 };
 
+enum class llama_token_healing_type : uint8_t {
+    ROLLBACK_LAST,   // roll back last token with a single constrained decoding step
+    ROLLBACK_MULTI,  // roll back a fixed amount of tokens, multiple constrained decoding steps
+    DYNAMIC_ONCE,    // dynamic roll back, single constrained decoding step
+    DYNAMIC_MULTI    // dynamic roll back, multiple constrained decoding steps
+};
+
 // sampling parameters
 typedef struct llama_sampling_params {
     int32_t     n_prev                = 64;                 // number of previous tokens to remember
@@ -62,6 +69,10 @@ typedef struct llama_sampling_params {
 
     std::vector<llama_token> penalty_prompt_tokens;
     bool                     use_penalty_prompt_tokens = false;
+
+    llama_token_healing_type token_healing_type       = llama_token_healing_type::ROLLBACK_LAST;
+    bool                     token_healing_enabled    = false;
+    int                      token_healing_n_rollback = -1;  // number of tokens to roll back
 } llama_sampling_params;
 
 // general sampler context
@@ -77,6 +88,8 @@ struct llama_sampling_context {
 
     // internal
     grammar_parser::parse_state parsed_grammar;
+
+    std::string token_healing_prefix;  // remaining prefix to constrain sampling
 
     // TODO: replace with ring-buffer
     std::vector<llama_token>      prev;
@@ -158,3 +171,18 @@ void llama_sampling_accept(
         struct llama_context * ctx_main,
         llama_token id,
         bool apply_grammar);
+
+//
+// Token healing
+//
+
+// Roll back `tokens` for constrained generation according to the token healing
+// strategy. Returns the prefix for constrained generation.
+std::string llama_token_healing_rollback(
+            const llama_context * ctx_main,
+            llama_token_healing_type th_type,
+            std::vector<llama_token> & tokens,
+            int max_to_remove = -1,
+            int * n_removed = nullptr);
+
+void llama_token_healing_set_prefix(llama_sampling_context * ctx_sampling, const std::string & prefix);

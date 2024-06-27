@@ -246,6 +246,19 @@ A more practical use case might be to prevent the generation of `\code{begin}` a
 
 Example usage: `--logit-bias 29905-inf`
 
+### Token healing
+
+-   `-th {0,1,d1,d,r{N}}, --token-healing {0,1,d1,d,r{N}}`: Set the token healing strategy (default: 0, 0 = disabled).
+
+Token healing (a.k.a. token alignment) alleviates tokenization artifacts for text completion.
+
+- `-th 1`: Roll back the last token and constrain the bytes of the next token to start with the chopped off last token [0, 2].
+- `-th d1`: Roll back multiple tokens until there doesn't exist a token which can cover the prompt's suffix and do a single constrained decoding step [2].
+- `-th d`: Like `d1` but allow multiple decoding steps until the removed suffix is generated.
+- `-th r{N}`: Like `d` but roll back `N` tokens, where `-th r3` is recommended [1].
+
+Sources: [0](https://github.com/guidance-ai/guidance/blob/main/notebooks/art_of_prompt_design/prompt_boundaries_and_token_healing.ipynb), [1](https://arxiv.org/abs/2403.08688), [2](https://arxiv.org/abs/2402.01035).
+
 ### RNG Seed
 
 -   `-s SEED, --seed SEED`: Set the random number generator (RNG) seed (default: -1, -1 = random seed).
