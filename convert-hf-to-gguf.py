@@ -2896,7 +2896,7 @@ class T5Model(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
-@Model.register("ChatGLMModel")
+@Model.register("ChatGLMModel", "ChatGLMForConditionalGeneration")
 class ChatGLMModel(Model):
     model_arch = gguf.MODEL_ARCH.CHATGLM
 
@@ -3043,7 +3043,6 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
-        self.gguf_writer.add_add_bos_token(False)
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
         special_vocab.chat_template = "chatglm4"
@@ -3070,6 +3069,8 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_rope_dimension_count(64)
         self.gguf_writer.add_add_bos_token(False)
+        self.gguf_writer.add_rope_freq_base(self.hparams.get("rope_ratio", 10000))
+
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
