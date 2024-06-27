@@ -86,7 +86,7 @@ set(GGML_CUDA_USE_GRAPHS    ON)
 function (llama_option_depr TYPE OLD NEW)
     if (${OLD})
         message(${TYPE} "${OLD} is deprecated and will be removed in the future.\nUse ${NEW} instead\n")
-        set(${NEW} ON)
+        set(${NEW} ON PARENT_SCOPE)
     endif()
 endfunction()
 
