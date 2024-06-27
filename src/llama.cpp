@@ -17085,7 +17085,7 @@ void llama_backend_init(void) {
     }
 
 #ifdef LLAMA_NVAPI
-    // initalize NvAPI library
+    // initalize NVAPI library
     nvapi_init();
 #endif
 }
@@ -17100,7 +17100,7 @@ void llama_backend_free(void) {
     ggml_quantize_free();
 
 #ifdef LLAMA_NVAPI
-    // free NvAPI library
+    // free NVAPI library
     nvapi_free();
 #endif
 }

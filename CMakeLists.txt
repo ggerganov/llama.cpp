@@ -68,7 +68,7 @@ option(LLAMA_BUILD_SERVER   "llama: build server example" ${LLAMA_STANDALONE})
 
 # 3rd party libs
 option(LLAMA_CURL "llama: use libcurl to download model from an URL" OFF)
-option(LLAMA_NVAPI "llama: use NvAPI to control performance states on NVIDIA GPUs" ON)
+option(LLAMA_NVAPI "llama: use NvAPI to control performance states on NVIDIA GPUs" OFF)
 
 # Required for relocatable CMake package
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)
@@ -101,6 +101,11 @@ llama_option_depr(WARNING     LLAMA_OPENMP              GGML_OPENMP)
 llama_option_depr(WARNING     LLAMA_RPC                 GGML_RPC)
 llama_option_depr(WARNING     LLAMA_SYCL                GGML_SYCL)
 llama_option_depr(WARNING     LLAMA_SYCL_F16            GGML_SYCL_F16)
+
+# enable NVAPI for CUDA builds
+if (GGML_CUDA)
+    set(LLAMA_NVAPI ON)
+endif()
 
 #
 # build the library

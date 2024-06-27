@@ -6,17 +6,24 @@
 #  include <dlfcn.h>
 #endif
 
+#include <cstdio>
+#include <set>
+#include <sstream>
+#include <string>
+
 /////
-
-static void * lib;
-
-static bool  load_success;
 
 typedef void * (*nvapi_QueryInterface_t)(int);
 typedef int    (*NvAPI_EnumPhysicalGPUs_t)(void *, void *);
 typedef int    (*NvAPI_GPU_SetForcePstate_t)(void *, int, int);
 typedef int    (*NvAPI_Initialize_t)();
 typedef int    (*NvAPI_Unload_t)();
+
+/////
+
+static bool   load_success;
+
+static void * lib;
 
 static nvapi_QueryInterface_t     nvapi_QueryInterface;
 static NvAPI_EnumPhysicalGPUs_t   NvAPI_EnumPhysicalGPUs;
@@ -43,7 +50,7 @@ static std::set<int> parse_visible_devices() {
     std::string item;
 
     // iterate over the comma-separated device IDs in the environment variable
-    while (std::getline(ss, item, ",")) {
+    while (std::getline(ss, item, ',')) {
         try {
             // convert the current item to an integer and insert it into the set
             devices.insert(std::stoi(item));
@@ -97,8 +104,10 @@ void nvapi_init() {
     }
 
     // initialize the NVAPI library
-    if (NvAPI_Initialize()) {
-        load_success = true;
+    if (NvAPI_Initialize) {
+        if (NvAPI_Initialize()) {
+            load_success = true;
+        }
     }
 }
 
@@ -118,8 +127,13 @@ void nvapi_free() {
     }
 
     // reset the pointers and flags
-    lib = nullptr;
     load_success = false;
+    lib = nullptr;
+    nvapi_QueryInterface = nullptr;
+    NvAPI_EnumPhysicalGPUs = nullptr;
+    NvAPI_GPU_SetForcePstate = nullptr;
+    NvAPI_Initialize = nullptr;
+    NvAPI_Unload = nullptr;
 }
 
 void nvapi_set_pstate(int pstate) {
@@ -146,13 +160,13 @@ void nvapi_set_pstate(int pstate) {
     // iterate over each GPU
     for (int i = 0; i < gpu_count; i++) {
         // if the set of visible devices is not empty and the current GPU ID is not in this set, skip this iteration
-        if (!devices.empty() && !devices.find(i)) {
+        if (!devices.empty() && devices.find(i) == devices.end()) {
             continue;
         }
 
         // attempt to set the performance state for the current GPU
-        if (NvAPI_GPU_SetForcePstate(gpu_array[gpu_id], pstate, 2) != 0) {
-            fprintf(stderr, "Failed to set performance state for gpu #%d\n", gpu_id);
+        if (NvAPI_GPU_SetForcePstate(gpu_array[i], pstate, 2) != 0) {
+            fprintf(stderr, "Failed to set performance state for gpu #%d\n", i);
         }
     }
 }
