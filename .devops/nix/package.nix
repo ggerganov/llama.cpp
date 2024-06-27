@@ -17,6 +17,7 @@
   rocmPackages,
   vulkan-headers,
   vulkan-loader,
+  shaderc,
   clblast,
   useBlas ? builtins.all (x: !x) [
     useCuda
@@ -132,6 +133,7 @@ let
   vulkanBuildInputs = [
     vulkan-headers
     vulkan-loader
+    shaderc
   ];
 in
 
