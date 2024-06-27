@@ -56,9 +56,9 @@ export const promptFormats = {
   // ----------------------------
 
   "llama2": {
-  template: `<s>[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\nTest Message [/INST] Test Successfull </s>{{history}}{{char}}`,
+  template: `<s>[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\nTest Message [/INST] Test Successful </s>{{history}}`,
 
-  historyTemplate: `{{name}}: {{message}}`,
+  historyTemplate: `{{message}}`,
 
   char: "Assistant",
   charMsgPrefix: "",
@@ -75,9 +75,9 @@ export const promptFormats = {
   // ----------------------------
 
   "llama3": {
-  template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{{prompt}}{{history}}{{char}}`,
+  template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{{prompt}}<|eot_id|>\n{{history}}<|start_header_id|>{{char}}<|end_header_id|>\n\n`,
 
-  historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>\n\n{{message}}<|eot_id|>`,
+  historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>\n\n{{message}}<|eot_id|>\n`,
 
   char: "assistant",
   charMsgPrefix: "",
@@ -314,7 +314,7 @@ export const promptFormats = {
   // ----------------------------
 
   "zephyr": {
-  template: `<|system|>\n{{prompt}}</s>\n{{history}}{{char}}`,
+  template: `<|system|>\n{{prompt}}</s>\n{{history}}<|{{char}}|>\n`,
 
   historyTemplate: `<|{{name}}|>\n{{message}}</s>\n`,
 
@@ -328,4 +328,6 @@ export const promptFormats = {
 
   stops: ""
   }
+  // ref: https://huggingface.co/HuggingFaceH4/zephyr-7b-alpha
+
   };
