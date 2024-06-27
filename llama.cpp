@@ -16492,7 +16492,7 @@ void llama_backend_init(void) {
         ggml_free(ctx);
     }
 
-#ifdef GGML_USE_CUDA
+#if defined(GGML_USE_CUDA) && defined(LLAMA_NVAPI)
     // initalize NvAPI library
     nvapi_init();
 #endif
@@ -16507,7 +16507,7 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
 void llama_backend_free(void) {
     ggml_quantize_free();
 
-#ifdef GGML_USE_CUDA
+#if defined(GGML_USE_CUDA) && defined(LLAMA_NVAPI)
     // free NvAPI library
     nvapi_free();
 #endif

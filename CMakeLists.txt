@@ -872,6 +872,18 @@ if (LLAMA_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
 
+if (LLAMA_CUDA)
+    if (LLAMA_NVAPI)
+        add_library(nvapi nvapi.cpp nvapi.h)
+
+        if (LINUX)
+            target_link_libraries(nvapi PUBLIC dl)
+        endif()
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} nvapi)
+    endif()
+endif()
+
 function(get_flags CCID CCVER)
     set(C_FLAGS "")
     set(CXX_FLAGS "")
@@ -1294,8 +1306,6 @@ endif()
 add_library(llama
             llama.cpp
             llama.h
-            nvapi.cpp
-            nvapi.h
             unicode.h
             unicode.cpp
             unicode-data.cpp
