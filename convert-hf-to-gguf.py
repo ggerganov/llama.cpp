@@ -2339,6 +2339,7 @@ class GemmaModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
+
 @Model.register("Gemma2ForCausalLM")
 class Gemma2Model(Model):
     model_arch = gguf.MODEL_ARCH.GEMMA2
@@ -2376,6 +2377,7 @@ class Gemma2Model(Model):
             data_torch = data_torch + 1
 
         return [(self.map_tensor_name(name), data_torch)]
+
 
 @Model.register("Starcoder2ForCausalLM")
 class StarCoder2Model(Model):
