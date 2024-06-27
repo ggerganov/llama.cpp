@@ -687,9 +687,9 @@ ggml/src/ggml-cuda.o: \
 endif # GGML_CUDA
 
 ifdef GGML_VULKAN
-	MK_CPPFLAGS  += -DGGML_USE_VULKAN
-	MK_LDFLAGS += $(shell pkg-config --libs vulkan)
-	OBJS    += ggml-vulkan.o ggml-vulkan-shaders.o
+	MK_CPPFLAGS += -DGGML_USE_VULKAN
+	MK_LDFLAGS  += $(shell pkg-config --libs vulkan)
+	OBJ_GGML    += ggml/src/ggml-vulkan.o ggml/src/ggml-vulkan-shaders.o
 
 ifdef GGML_VULKAN_CHECK_RESULTS
 	MK_CPPFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
@@ -719,7 +719,7 @@ _llama_vk_source = ggml/src/ggml-vulkan-shaders.cpp
 _llama_vk_input_dir = ggml/src/vulkan-shaders
 _llama_vk_shader_deps = $(echo $(_llama_vk_input_dir)/*.comp)
 
-ggml-vulkan.o: ggml/src/ggml-vulkan.cpp ggml/src/ggml-vulkan.h $(_llama_vk_header) $(_llama_vk_source)
+ggml/src/ggml-vulkan.o: ggml/src/ggml-vulkan.cpp ggml/include/ggml-vulkan.h $(_llama_vk_header) $(_llama_vk_source)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(_llama_vk_header): $(_llama_vk_source)
@@ -1100,6 +1100,7 @@ clean:
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
+	rm -f ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
 	find examples pocs -type f -name "*.o" -delete
 
 #
