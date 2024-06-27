@@ -1,7 +1,7 @@
 #include "nvapi.h"
 
 #ifdef _WIN32
-#  include <libloaderapi.h>
+#  include <windows.h>
 #elif __linux__
 #  include <dlfcn.h>
 #endif
@@ -89,7 +89,7 @@ void nvapi_init() {
     // obtain the address of the nvapi_QueryInterface function
     if (lib) {
 #ifdef _WIN32
-        nvapi_QueryInterface = (nvapi_QueryInterface_t) GetProcAddress(lib, "nvapi_QueryInterface");
+        nvapi_QueryInterface = (nvapi_QueryInterface_t) GetProcAddress((HMODULE) lib, "nvapi_QueryInterface");
 #elif __linux__
         nvapi_QueryInterface = (nvapi_QueryInterface_t) dlsym(lib, "nvapi_QueryInterface");
 #endif
@@ -120,7 +120,7 @@ void nvapi_free() {
     // release the library resources
     if (lib) {
 #ifdef _WIN32
-        FreeLibrary(lib);
+        FreeLibrary((HMODULE) lib);
 #elif __linux__
         dlclose(lib);
 #endif
