@@ -2644,10 +2644,6 @@ std::string llama_chat_apply_template(const struct llama_model * model,
         }
     }
 
-    if (fallback) {
-        res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
-    }
-
     // if it turns out that our buffer is too small, we resize it
     if ((size_t) res > buf.size()) {
         buf.resize(res);
