@@ -222,7 +222,7 @@ jobs:
         run: |
           mkdir build
           cd build
-          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON
+          cmake .. -DLLAMA_FATAL_WARNINGS=ON -DLLAMA_CURL=ON -DBUILD_SHARED_LIBS=OFF
           cmake --build . --config Release -j $(nproc)
 
       - name: Test
