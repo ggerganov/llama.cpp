@@ -19601,17 +19601,34 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
         }
-    } else if (tmpl == "minicpm" || tmpl_contains("<\xe7\x94\xa8\xe6\x88\xb7>")) {
+    } else if (tmpl == "minicpm" || tmpl_contains(u8"<用户>")) {
         // MiniCPM-3B-OpenHermes-2.5-v2-GGUF
+        std::string user_tag = u8"<用户>";
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "user") {
-                ss << "<\xe7\x94\xa8\xe6\x88\xb7>";
+                ss << user_tag;
                 ss << trim(message->content);
                 ss << "<AI>";
             } else {
                 ss << trim(message->content);
             }
+        }
+    } else if (tmpl == "deepseek-lite" || tmpl_contains("'Assistant: ' + message['content'] + eos_token")) {
+        // DeepSeek-Coder-V2-Lite-Instruct-GGUF
+        std::string eos_token = u8"<｜end▁of▁sentence｜>";
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << message->content << "\n\n";
+            } else if (role == "user") {
+                ss << "User: " << message->content << "\n\n";
+            } else if (role == "assistant") {
+                ss << "Assistant: " << message->content << eos_token;
+            }
+        }
+        if (add_ass) {
+            ss << "Assistant: ";
         }
     } else {
         // template not supported

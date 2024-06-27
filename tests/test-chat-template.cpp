@@ -59,7 +59,9 @@ int main(void) {
         //Phi-3-vision
         "{% for message in messages %}{{'<|' + message['role'] + '|>' + '\n' + message['content'] + '<|end|>\n' }}{% endfor %}{% if add_generation_prompt and messages[-1]['role'] != 'assistant' %}{{- '<|assistant|>\n' -}}{% endif %}",
         // MiniCPM-3B-OpenHermes-2.5-v2-GGUF
-        "{% for message in messages %}{% if message['role'] == 'user' %}{{'<\xe7\x94\xa8\xe6\x88\xb7>' + message['content'].strip() + '<AI>'}}{% else %}{{message['content'].strip()}}{% endif %}{% endfor %}",
+        u8"{% for message in messages %}{% if message['role'] == 'user' %}{{'<用户>' + message['content'].strip() + '<AI>'}}{% else %}{{message['content'].strip()}}{% endif %}{% endfor %}",
+        // DeepSeek-Coder-V2-Lite-Instruct-GGUF
+        "{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}{{ 'User: ' + message['content'] + '\n\n' }}{% elif message['role'] == 'assistant' %}{{ 'Assistant: ' + message['content'] + eos_token }}{% elif message['role'] == 'system' %}{{ message['content'] + '\n\n' }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ 'Assistant:' }}{% endif %}",
     };
     std::vector<std::string> expected_output = {
         // teknium/OpenHermes-2.5-Mistral-7B
@@ -97,7 +99,9 @@ int main(void) {
         //Phi-3-vision
         "<|system|>\nYou are a helpful assistant<|end|>\n<|user|>\nHello<|end|>\n<|assistant|>\nHi there<|end|>\n<|user|>\nWho are you<|end|>\n<|assistant|>\n   I am an assistant   <|end|>\n<|user|>\nAnother question<|end|>\n<|assistant|>\n",
         // MiniCPM-3B-OpenHermes-2.5-v2-GGUF
-        "You are a helpful assistant<\xe7\x94\xa8\xe6\x88\xb7>Hello<AI>Hi there<\xe7\x94\xa8\xe6\x88\xb7>Who are you<AI>I am an assistant<\xe7\x94\xa8\xe6\x88\xb7>Another question<AI>",
+        u8"You are a helpful assistant<用户>Hello<AI>Hi there<用户>Who are you<AI>I am an assistant<用户>Another question<AI>",
+        // DeepSeek-Coder-V2-Lite-Instruct-GGUF
+        u8"You are a helpful assistant\n\nUser: Hello\n\nAssistant: Hi there<｜end▁of▁sentence｜>User: Who are you\n\nAssistant:    I am an assistant   <｜end▁of▁sentence｜>User: Another question\n\nAssistant: ",
     };
     std::vector<char> formatted_chat(1024);
     int32_t res;
