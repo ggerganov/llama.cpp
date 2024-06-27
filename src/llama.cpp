@@ -8073,9 +8073,7 @@ struct llm_build_context {
         return gf;
     }
 
-    struct ggml_tensor * llm_build_inp_rel_pos_bucket(
-                       bool   causal) {
-
+    struct ggml_tensor * llm_build_inp_rel_pos_bucket(bool causal) {
         if (causal) {
             lctx.inp_pos_bucket = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_kv,     n_tokens);
         } else {
@@ -8088,10 +8086,7 @@ struct llm_build_context {
         return lctx.inp_pos_bucket;
     }
 
-    struct ggml_tensor * llm_build_rel_pos_bias(
-         struct ggml_tensor * pos_bucket,
-         struct ggml_tensor * rel_attn_b) {
-
+    struct ggml_tensor * llm_build_rel_pos_bias(struct ggml_tensor * pos_bucket, struct ggml_tensor * rel_attn_b) {
         struct ggml_tensor * pos_bucket_1d = ggml_view_1d(ctx0, pos_bucket, pos_bucket->ne[0] * pos_bucket->ne[1], 0);
         cb(pos_bucket_1d, "pos_bucket_1d", -1);
 
@@ -13181,11 +13176,11 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
     if (lctx.inp_pos_bucket) {
         const int64_t n_tokens = batch.n_tokens;
- 
+
         GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_pos_bucket->buffer));
- 
+
         int32_t * data = (int32_t *) lctx.inp_pos_bucket->data;
- 
+
         if (!lctx.is_encoding) {
             const int64_t n_kv = kv_self.n;
             for (int h = 0; h < 1; ++h) {
