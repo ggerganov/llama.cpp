@@ -5,7 +5,9 @@ import os
 import shutil
 import struct
 import tempfile
+from dataclasses import dataclass
 from enum import Enum, auto
+from pathlib import Path
 from io import BufferedWriter
 from typing import IO, Any, Sequence, Mapping
 from string import ascii_letters, digits
@@ -30,17 +32,39 @@ from .quants import quant_shape_from_byte_shape
 logger = logging.getLogger(__name__)
 
 
+SHARD_NAME_FORMAT = "{:s}-{:05d}-of-{:05d}.gguf"
+
+
+@dataclass
+class TensorInfo:
+    shape: Sequence[int]
+    dtype: GGMLQuantizationType
+    nbytes: int
+    tensor: np.ndarray[Any, Any] | None = None
+
+
+@dataclass
+class GGUFValue:
+    value: Any
+    type: GGUFValueType
+
+
 class WriterState(Enum):
+    NO_FILE = auto()
     EMPTY   = auto()
     HEADER  = auto()
     KV_DATA = auto()
     TI_DATA = auto()
+    WEIGHTS = auto()
 
 
 class GGUFWriter:
-    fout: BufferedWriter
+    fout: list[BufferedWriter] | None
+    path: Path | None
     temp_file: tempfile.SpooledTemporaryFile[bytes] | None
-    tensors: list[np.ndarray[Any, Any]]
+    tensors: list[dict[str, TensorInfo]]
+    kv_data: list[dict[str, GGUFValue]]
+    state: WriterState
     _simple_value_packing = {
         GGUFValueType.UINT8:   "B",
         GGUFValueType.INT8:    "b",
@@ -56,141 +80,188 @@ class GGUFWriter:
     }
 
     def __init__(
-        self, path: os.PathLike[str] | str, arch: str, use_temp_file: bool = True,
-        endianess: GGUFEndian = GGUFEndian.LITTLE,
+        self, path: os.PathLike[str] | str | None, arch: str, use_temp_file: bool = False, endianess: GGUFEndian = GGUFEndian.LITTLE,
+        split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False
     ):
-        self.fout = open(path, "wb")
+        self.fout = None
+        self.path = Path(path) if path else None
         self.arch = arch
         self.endianess = endianess
-        self.offset_tensor = 0
         self.data_alignment = GGUF_DEFAULT_ALIGNMENT
-        self.kv_data = bytearray()
-        self.kv_data_count = 0
-        self.ti_data = bytearray()
-        self.ti_data_count = 0
-        self.ti_names = set()
         self.use_temp_file = use_temp_file
         self.temp_file = None
-        self.tensors = []
+        self.tensors = [{}]
+        self.kv_data = [{}]
+        self.split_max_tensors = split_max_tensors
+        self.split_max_size = split_max_size
+        self.dry_run = dry_run
+        self.small_first_shard = small_first_shard
         logger.info("gguf: This GGUF file is for {0} Endian only".format(
             "Big" if self.endianess == GGUFEndian.BIG else "Little",
         ))
-        self.state = WriterState.EMPTY
+        self.state = WriterState.NO_FILE
+
+        if self.small_first_shard:
+            self.tensors.append({})
 
         self.add_architecture()
 
-    def write_header_to_file(self) -> None:
+    def format_shard_names(self, path: Path) -> list[Path]:
+        if len(self.tensors) == 1:
+            return [path]
+        return [path.with_name(SHARD_NAME_FORMAT.format(path.stem, i + 1, len(self.tensors))) for i in range(len(self.tensors))]
+
+    def open_output_file(self, path: Path | None = None) -> None:
+        if self.state is WriterState.EMPTY and self.fout is not None and (path is None or path == self.path):
+            # allow calling this multiple times as long as the path is the same
+            return
+        if self.state is not WriterState.NO_FILE:
+            raise ValueError(f'Expected output file to be not yet opened, got {self.state}')
+
+        if path is not None:
+            self.path = path
+
+        if self.path is not None:
+            filenames = self.print_plan()
+            self.fout = [open(filename, "wb") for filename in filenames]
+            self.state = WriterState.EMPTY
+
+    def print_plan(self) -> list[Path]:
+        logger.info("Writing the following files:")
+        assert self.path is not None
+        filenames = self.format_shard_names(self.path)
+        assert len(filenames) == len(self.tensors)
+        for name, tensors in zip(filenames, self.tensors):
+            logger.info(f"{name}: n_tensors = {len(tensors)}, total_size = {GGUFWriter.format_n_bytes_to_str(sum(ti.nbytes for ti in tensors.values()))}")
+
+        if self.dry_run:
+            logger.info("Dry run, not writing files")
+            exit()
+
+        return filenames
+
+    def add_shard_kv_data(self) -> None:
+        if len(self.tensors) == 1:
+            return
+
+        total_tensors = sum(len(t) for t in self.tensors)
+        assert self.fout is not None
+        total_splits = len(self.fout)
+        self.kv_data.extend({} for _ in range(len(self.kv_data), total_splits))
+        for i, kv_data in enumerate(self.kv_data):
+            kv_data[Keys.Split.LLM_KV_SPLIT_NO] = GGUFValue(i, GGUFValueType.UINT16)
+            kv_data[Keys.Split.LLM_KV_SPLIT_COUNT] = GGUFValue(total_splits, GGUFValueType.UINT16)
+            kv_data[Keys.Split.LLM_KV_SPLIT_TENSORS_COUNT] = GGUFValue(total_tensors, GGUFValueType.INT32)
+
+    def write_header_to_file(self, path: Path | None = None) -> None:
+        if len(self.tensors) == 1 and (self.split_max_tensors != 0 or self.split_max_size != 0):
+            logger.warning("Model fails split requirements, not splitting")
+
+        self.open_output_file(path)
+
         if self.state is not WriterState.EMPTY:
             raise ValueError(f'Expected output file to be empty, got {self.state}')
 
-        self._write_packed("<I", GGUF_MAGIC, skip_pack_prefix = True)
-        self._write_packed("I", GGUF_VERSION)
-        self._write_packed("Q", self.ti_data_count)
-        self._write_packed("Q", self.kv_data_count)
-        self.flush()
+        assert self.fout is not None
+        assert len(self.fout) == len(self.tensors)
+        assert len(self.kv_data) == 1
+
+        self.add_shard_kv_data()
+
+        for fout, tensors, kv_data in zip(self.fout, self.tensors, self.kv_data):
+            fout.write(self._pack("<I", GGUF_MAGIC, skip_pack_prefix = True))
+            fout.write(self._pack("I", GGUF_VERSION))
+            fout.write(self._pack("Q", len(tensors)))
+            fout.write(self._pack("Q", len(kv_data)))
+            fout.flush()
         self.state = WriterState.HEADER
 
     def write_kv_data_to_file(self) -> None:
         if self.state is not WriterState.HEADER:
             raise ValueError(f'Expected output file to contain the header, got {self.state}')
+        assert self.fout is not None
 
-        self.fout.write(self.kv_data)
+        for fout, kv_data in zip(self.fout, self.kv_data):
+            kv_bytes = bytearray()
+
+            for key, val in kv_data.items():
+                kv_bytes += self._pack_val(key, GGUFValueType.STRING, add_vtype=False)
+                kv_bytes += self._pack_val(val.value, val.type, add_vtype=True)
+
+            fout.write(kv_bytes)
+
         self.flush()
         self.state = WriterState.KV_DATA
 
     def write_ti_data_to_file(self) -> None:
         if self.state is not WriterState.KV_DATA:
             raise ValueError(f'Expected output file to contain KV data, got {self.state}')
+        assert self.fout is not None
 
-        self.fout.write(self.ti_data)
-        self.flush()
+        for fout, tensors in zip(self.fout, self.tensors):
+            ti_data = bytearray()
+            offset_tensor = 0
+
+            for name, ti in tensors.items():
+                ti_data += self._pack_val(name, GGUFValueType.STRING, add_vtype=False)
+                n_dims = len(ti.shape)
+                ti_data += self._pack("I", n_dims)
+                for j in range(n_dims):
+                    ti_data += self._pack("Q", ti.shape[n_dims - 1 - j])
+                ti_data += self._pack("I", ti.dtype)
+                ti_data += self._pack("Q", offset_tensor)
+                offset_tensor += GGUFWriter.ggml_pad(ti.nbytes, self.data_alignment)
+
+            fout.write(ti_data)
+            fout.flush()
         self.state = WriterState.TI_DATA
 
-    def add_key(self, key: str) -> None:
-        self.add_val(key, GGUFValueType.STRING, add_vtype=False)
+    def add_key_value(self, key: str, val: Any, vtype: GGUFValueType) -> None:
+        if any(key in kv_data for kv_data in self.kv_data):
+            raise ValueError(f'Duplicated key name {key!r}')
+
+        self.kv_data[0][key] = GGUFValue(value=val, type=vtype)
 
     def add_uint8(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.UINT8)
+        self.add_key_value(key,val, GGUFValueType.UINT8)
 
     def add_int8(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.INT8)
+        self.add_key_value(key, val, GGUFValueType.INT8)
 
     def add_uint16(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.UINT16)
+        self.add_key_value(key, val, GGUFValueType.UINT16)
 
     def add_int16(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.INT16)
+        self.add_key_value(key, val, GGUFValueType.INT16)
 
     def add_uint32(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.UINT32)
+        self.add_key_value(key, val, GGUFValueType.UINT32)
 
     def add_int32(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.INT32)
+        self.add_key_value(key, val, GGUFValueType.INT32)
 
     def add_float32(self, key: str, val: float) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.FLOAT32)
+        self.add_key_value(key, val, GGUFValueType.FLOAT32)
 
     def add_uint64(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.UINT64)
+        self.add_key_value(key, val, GGUFValueType.UINT64)
 
     def add_int64(self, key: str, val: int) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.INT64)
+        self.add_key_value(key, val, GGUFValueType.INT64)
 
     def add_float64(self, key: str, val: float) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.FLOAT64)
+        self.add_key_value(key, val, GGUFValueType.FLOAT64)
 
     def add_bool(self, key: str, val: bool) -> None:
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.BOOL)
+        self.add_key_value(key, val, GGUFValueType.BOOL)
 
     def add_string(self, key: str, val: str) -> None:
         if not val:
             return
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.STRING)
+        self.add_key_value(key, val, GGUFValueType.STRING)
 
     def add_array(self, key: str, val: Sequence[Any]) -> None:
-        if not isinstance(val, Sequence):
-            raise ValueError("Value must be a sequence for array type")
-
-        self.add_key(key)
-        self.add_val(val, GGUFValueType.ARRAY)
-
-    def add_val(self, val: Any, vtype: GGUFValueType | None = None, add_vtype: bool = True) -> None:
-        if vtype is None:
-            vtype = GGUFValueType.get_type(val)
-
-        if add_vtype:
-            self.kv_data += self._pack("I", vtype)
-            self.kv_data_count += 1
-
-        pack_fmt = self._simple_value_packing.get(vtype)
-        if pack_fmt is not None:
-            self.kv_data += self._pack(pack_fmt, val, skip_pack_prefix = vtype == GGUFValueType.BOOL)
-        elif vtype == GGUFValueType.STRING:
-            encoded_val = val.encode("utf-8") if isinstance(val, str) else val
-            self.kv_data += self._pack("Q", len(encoded_val))
-            self.kv_data += encoded_val
-        elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and val:
-            ltype = GGUFValueType.get_type(val[0])
-            if not all(GGUFValueType.get_type(i) is ltype for i in val[1:]):
-                raise ValueError("All items in a GGUF array should be of the same type")
-            self.kv_data += self._pack("I", ltype)
-            self.kv_data += self._pack("Q", len(val))
-            for item in val:
-                self.add_val(item, add_vtype=False)
-        else:
-            raise ValueError("Invalid GGUF metadata value type or value")
+        self.add_key_value(key, val, GGUFValueType.ARRAY)
 
     @staticmethod
     def ggml_pad(x: int, n: int) -> int:
@@ -200,16 +271,12 @@ class GGUFWriter:
         self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype,
         tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None,
     ) -> None:
-        if self.state is not WriterState.EMPTY:
-            raise ValueError(f'Expected output file to be empty, got {self.state}')
+        if self.state is not WriterState.NO_FILE:
+            raise ValueError(f'Expected output file to be not yet opened, got {self.state}')
 
-        if name in self.ti_names:
-            raise ValueError(f'Duplicated tensor name {name}')
-        self.ti_names.add(name)
+        if any(name in tensors for tensors in self.tensors):
+            raise ValueError(f'Duplicated tensor name {name!r}')
 
-        encoded_name = name.encode("utf-8")
-        self.ti_data += self._pack("Q", len(encoded_name))
-        self.ti_data += encoded_name
         if raw_dtype is None:
             if tensor_dtype == np.float16:
                 dtype = GGMLQuantizationType.F16
@@ -231,14 +298,19 @@ class GGUFWriter:
             dtype = raw_dtype
             if tensor_dtype == np.uint8:
                 tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
-        n_dims = len(tensor_shape)
-        self.ti_data += self._pack("I", n_dims)
-        for i in range(n_dims):
-            self.ti_data += self._pack("Q", tensor_shape[n_dims - 1 - i])
-        self.ti_data += self._pack("I", dtype)
-        self.ti_data += self._pack("Q", self.offset_tensor)
-        self.offset_tensor += GGUFWriter.ggml_pad(tensor_nbytes, self.data_alignment)
-        self.ti_data_count += 1
+
+        # make sure there is at least one tensor before splitting
+        if len(self.tensors[-1]) > 0:
+            if (  # split when over tensor limit
+                self.split_max_tensors != 0
+                and len(self.tensors[-1]) >= self.split_max_tensors
+            ) or (   # split when over size limit
+                self.split_max_size != 0
+                and sum(ti.nbytes for ti in self.tensors[-1].values()) + tensor_nbytes > self.split_max_size
+            ):
+                self.tensors.append({})
+
+        self.tensors[-1][name] = TensorInfo(shape=tensor_shape, dtype=dtype, nbytes=tensor_nbytes)
 
     def add_tensor(
         self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None,
@@ -252,10 +324,10 @@ class GGUFWriter:
             self.temp_file = fp
 
         shape: Sequence[int] = raw_shape if raw_shape is not None else tensor.shape
-        self.add_tensor_info(name, shape, tensor.dtype, tensor.nbytes, raw_dtype = raw_dtype)
+        self.add_tensor_info(name, shape, tensor.dtype, tensor.nbytes, raw_dtype=raw_dtype)
 
         if self.temp_file is None:
-            self.tensors.append(tensor)
+            self.tensors[-1][name].tensor = tensor
             return
 
         tensor.tofile(self.temp_file)
@@ -267,59 +339,90 @@ class GGUFWriter:
             fp.write(bytes([0] * pad))
 
     def write_tensor_data(self, tensor: np.ndarray[Any, Any]) -> None:
-        if self.state is not WriterState.TI_DATA:
-            raise ValueError(f'Expected output file to contain tensor info, got {self.state}')
+        if self.state is not WriterState.TI_DATA and self.state is not WriterState.WEIGHTS:
+            raise ValueError(f'Expected output file to contain tensor info or weights, got {self.state}')
+        assert self.fout is not None
 
         if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
-        self.write_padding(self.fout, self.fout.tell())
-        tensor.tofile(self.fout)
-        self.write_padding(self.fout, tensor.nbytes)
+
+        file_id = -1
+        for i, tensors in enumerate(self.tensors):
+            if len(tensors) > 0:
+                file_id = i
+                break
+
+        fout = self.fout[file_id]
+
+        # pop the first tensor info
+        # TODO: cleaner way to get the first key
+        first_tensor_name = [name for name, _ in zip(self.tensors[file_id].keys(), range(1))][0]
+        ti = self.tensors[file_id].pop(first_tensor_name)
+        assert ti.nbytes == tensor.nbytes
+
+        self.write_padding(fout, fout.tell())
+        tensor.tofile(fout)
+        self.write_padding(fout, tensor.nbytes)
+
+        self.state = WriterState.WEIGHTS
 
     def write_tensors_to_file(self, *, progress: bool = False) -> None:
         self.write_ti_data_to_file()
 
-        self.write_padding(self.fout, self.fout.tell())
+        assert self.fout is not None
+
+        for fout in self.fout:
+            self.write_padding(fout, fout.tell())
 
         if self.temp_file is None:
-            self.tensors.reverse()  # to pop from the "beginning" in constant time
+            shard_bar = None
+            bar = None
 
             if progress:
                 from tqdm import tqdm
 
-                total_bytes = sum(t.nbytes for t in self.tensors)
+                total_bytes = sum(ti.nbytes for t in self.tensors for ti in t.values())
 
+                if len(self.fout) > 1:
+                    shard_bar = tqdm(desc=f"Shard (0/{len(self.fout)})", total=None, unit="byte", unit_scale=True)
                 bar = tqdm(desc="Writing", total=total_bytes, unit="byte", unit_scale=True)
 
-                while True:
-                    try:
-                        tensor = self.tensors.pop()
-                    except IndexError:
-                        break
-                    tensor.tofile(self.fout)
-                    bar.update(tensor.nbytes)
-                    self.write_padding(self.fout, tensor.nbytes)
-                return
-            while True:
-                try:
-                    tensor = self.tensors.pop()
-                except IndexError:
-                    break
-                tensor.tofile(self.fout)
-                self.write_padding(self.fout, tensor.nbytes)
-            return
+            for i, (fout, tensors) in enumerate(zip(self.fout, self.tensors)):
+                if shard_bar is not None:
+                    shard_bar.set_description(f"Shard ({i + 1}/{len(self.fout)})")
+                    total = sum(ti.nbytes for ti in tensors.values())
+                    shard_bar.reset(total=(total if total > 0 else None))
 
-        self.temp_file.seek(0)
+                # relying on the fact that Python dicts preserve insertion order (since 3.7)
+                for ti in tensors.values():
+                    assert ti.tensor is not None  # can only iterate once over the tensors
+                    assert ti.tensor.nbytes == ti.nbytes
+                    ti.tensor.tofile(fout)
+                    if shard_bar is not None:
+                        shard_bar.update(ti.nbytes)
+                    if bar is not None:
+                        bar.update(ti.nbytes)
+                    self.write_padding(fout, ti.nbytes)
+                    ti.tensor = None
+        else:
+            self.temp_file.seek(0)
 
-        shutil.copyfileobj(self.temp_file, self.fout)
-        self.flush()
-        self.temp_file.close()
+            shutil.copyfileobj(self.temp_file, self.fout[0 if not self.small_first_shard else 1])
+            self.flush()
+            self.temp_file.close()
+
+        self.state = WriterState.WEIGHTS
 
     def flush(self) -> None:
-        self.fout.flush()
+        assert self.fout is not None
+        for fout in self.fout:
+            fout.flush()
 
     def close(self) -> None:
-        self.fout.close()
+        if self.fout is not None:
+            for fout in self.fout:
+                fout.close()
+            self.fout = None
 
     def add_architecture(self) -> None:
         self.add_string(Keys.General.ARCHITECTURE, self.arch)
@@ -383,8 +486,14 @@ class GGUFWriter:
     def add_expert_feed_forward_length(self, length: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
 
+    def add_expert_shared_feed_forward_length(self, length: int) -> None:
+        self.add_uint32(Keys.LLM.EXPERT_SHARED_FEED_FORWARD_LENGTH.format(arch=self.arch), length)
+
     def add_parallel_residual(self, use: bool) -> None:
         self.add_bool(Keys.LLM.USE_PARALLEL_RESIDUAL.format(arch=self.arch), use)
+
+    def add_decoder_start_token_id(self, id: int) -> None:
+        self.add_uint32(Keys.LLM.DECODER_START_TOKEN_ID.format(arch=self.arch), id)
 
     def add_head_count(self, count: int) -> None:
         self.add_uint32(Keys.Attention.HEAD_COUNT.format(arch=self.arch), count)
@@ -434,6 +543,9 @@ class GGUFWriter:
     def add_kv_lora_rank(self, length: int) -> None:
         self.add_uint32(Keys.Attention.KV_LORA_RANK.format(arch=self.arch), length)
 
+    def add_relative_attn_buckets_count(self, value: int) -> None:
+        self.add_uint32(Keys.Attention.REL_BUCKETS_COUNT.format(arch=self.arch), value)
+
     def add_pooling_type(self, value: PoolingType) -> None:
         self.add_uint32(Keys.LLM.POOLING_TYPE.format(arch=self.arch), value.value)
 
@@ -449,7 +561,7 @@ class GGUFWriter:
     def add_rope_scaling_factor(self, value: float) -> None:
         self.add_float32(Keys.Rope.SCALING_FACTOR.format(arch=self.arch), value)
 
-    def add_rope_scaling_attn_factors(self, value: Sequence[float]) -> None:
+    def add_rope_scaling_attn_factors(self, value: float) -> None:
         self.add_float32(Keys.Rope.SCALING_ATTN_FACTOR.format(arch=self.arch), value)
 
     def add_rope_scaling_orig_ctx_len(self, value: int) -> None:
@@ -524,6 +636,12 @@ class GGUFWriter:
     def add_add_space_prefix(self, value: bool) -> None:
         self.add_bool(Keys.Tokenizer.ADD_PREFIX, value)
 
+    def add_remove_extra_whitespaces(self, value: bool) -> None:
+        self.add_bool(Keys.Tokenizer.REMOVE_EXTRA_WS, value)
+
+    def add_precompiled_charsmap(self, charsmap: Sequence[bytes]) -> None:
+        self.add_array(Keys.Tokenizer.PRECOMPILED_CHARSMAP, charsmap)
+
     def add_chat_template(self, value: str | Sequence[Mapping[str, str]]) -> None:
         if not isinstance(value, str):
             template_default = None
@@ -571,5 +689,42 @@ class GGUFWriter:
             pack_prefix = '<' if self.endianess == GGUFEndian.LITTLE else '>'
         return struct.pack(f'{pack_prefix}{fmt}', value)
 
-    def _write_packed(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> None:
-        self.fout.write(self._pack(fmt, value, skip_pack_prefix))
+    def _pack_val(self, val: Any, vtype: GGUFValueType, add_vtype: bool) -> bytes:
+        kv_data = bytearray()
+
+        if add_vtype:
+            kv_data += self._pack("I", vtype)
+
+        pack_fmt = self._simple_value_packing.get(vtype)
+        if pack_fmt is not None:
+            kv_data += self._pack(pack_fmt, val, skip_pack_prefix = vtype == GGUFValueType.BOOL)
+        elif vtype == GGUFValueType.STRING:
+            encoded_val = val.encode("utf-8") if isinstance(val, str) else val
+            kv_data += self._pack("Q", len(encoded_val))
+            kv_data += encoded_val
+        elif vtype == GGUFValueType.ARRAY and isinstance(val, Sequence) and val:
+            if isinstance(val, bytes):
+                ltype = GGUFValueType.UINT8
+            else:
+                ltype = GGUFValueType.get_type(val[0])
+                if not all(GGUFValueType.get_type(i) is ltype for i in val[1:]):
+                    raise ValueError("All items in a GGUF array should be of the same type")
+            kv_data += self._pack("I", ltype)
+            kv_data += self._pack("Q", len(val))
+            for item in val:
+                kv_data += self._pack_val(item, ltype, add_vtype=False)
+        else:
+            raise ValueError("Invalid GGUF metadata value type or value")
+
+        return kv_data
+
+    @staticmethod
+    def format_n_bytes_to_str(num: int) -> str:
+        if num == 0:
+            return "negligible - metadata only"
+        fnum = float(num)
+        for unit in ("", "K", "M", "G"):
+            if abs(fnum) < 1000.0:
+                return f"{fnum:3.1f}{unit}"
+            fnum /= 1000.0
+        return f"{fnum:.1f}T - over 1TB, split recommended"

@@ -223,7 +223,11 @@ int main(int argc, char ** argv) {
     inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
     embd_inp = inp_pfx;
     embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
-    embd_inp.push_back(llama_token_middle(model));
+
+    const llama_token middle_token = llama_token_middle(model);
+    if (middle_token >= 0) {
+        embd_inp.push_back(middle_token);
+    }
 
     LOG("prefix: \"%s\"\n", log_tostr(params.input_prefix));
     LOG("suffix: \"%s\"\n", log_tostr(params.input_suffix));
@@ -528,7 +532,12 @@ int main(int argc, char ** argv) {
                 inp_sfx.insert(inp_sfx.begin(), llama_token_suffix(model));
                 embd_inp = inp_pfx;
                 embd_inp.insert(embd_inp.end(), inp_sfx.begin(), inp_sfx.end());
-                embd_inp.push_back(llama_token_middle(model));
+
+                const llama_token middle_token = llama_token_middle(model);
+                if (middle_token >= 0) {
+                    embd_inp.push_back(middle_token);
+                }
+
                 embd.clear();
                 n_remain = params.n_predict;
                 n_past = 0;
