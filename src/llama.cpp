@@ -10992,7 +10992,7 @@ struct llm_build_context {
 
         return gf;
     }
-    
+
     struct ggml_cgraph * build_gemma2() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
 
@@ -11050,8 +11050,7 @@ struct llm_build_context {
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
-            
-            // is this the right place for it?
+
             cur = llm_build_norm(ctx0, cur, hparams,
                     model.layers[il].attn_post_norm, NULL,
                     LLM_NORM_RMS, cb, il);
