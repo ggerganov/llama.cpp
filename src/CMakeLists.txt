@@ -12,6 +12,7 @@ endif()
 #
 
 # nvapi
+
 if (LLAMA_NVAPI)
     add_library(nvapi nvapi.cpp nvapi.h)
 

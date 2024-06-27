@@ -1,7 +1,6 @@
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
-#include "nvapi.h"
 #include "unicode.h"
 
 #include "ggml.h"
@@ -28,6 +27,10 @@
 
 #ifdef GGML_USE_METAL
 #  include "ggml-metal.h"
+#endif
+
+#ifdef LLAMA_NVAPI
+#  include "nvapi.h"
 #endif
 
 // TODO: replace with ggml API call
@@ -17081,7 +17084,7 @@ void llama_backend_init(void) {
         ggml_free(ctx);
     }
 
-#if defined(GGML_USE_CUDA) && defined(LLAMA_NVAPI)
+#ifdef LLAMA_NVAPI
     // initalize NvAPI library
     nvapi_init();
 #endif
@@ -17096,7 +17099,7 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
 void llama_backend_free(void) {
     ggml_quantize_free();
 
-#if defined(GGML_USE_CUDA) && defined(LLAMA_NVAPI)
+#ifdef LLAMA_NVAPI
     // free NvAPI library
     nvapi_free();
 #endif
