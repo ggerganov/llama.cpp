@@ -19601,6 +19601,18 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
         }
+    } else if (tmpl == "minicpm" || tmpl_contains("<\xe7\x94\xa8\xe6\x88\xb7>")) {
+        // MiniCPM-3B-OpenHermes-2.5-v2-GGUF
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "user") {
+                ss << "<\xe7\x94\xa8\xe6\x88\xb7>";
+                ss << trim(message->content);
+                ss << "<AI>";
+            } else {
+                ss << trim(message->content);
+            }
+        }
     } else {
         // template not supported
         return -1;
