@@ -13106,13 +13106,6 @@ static void llama_graph_compute(
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
 
-void llama_set_logits_all(
-    struct llama_context * ctx,
-    bool logits_all
-) {
-    ctx->logits_all = logits_all;
-}
-
 // decode a batch of tokens by evaluating the transformer
 //
 //   - lctx:      llama context

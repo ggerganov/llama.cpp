@@ -652,11 +652,6 @@ extern "C" {
     // State / sessions
     //
 
-    // hack
-    void llama_set_logits_all(
-        struct llama_context * ctx,
-        bool logits_all);
-
     // Returns the maximum size in bytes of the state (rng, logits, embedding
     // and kv_cache) - will often be smaller after compacting tokens
     LLAMA_API size_t llama_state_get_size(const struct llama_context * ctx);
