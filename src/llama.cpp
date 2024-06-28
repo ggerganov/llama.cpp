@@ -16754,6 +16754,13 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         quantize &= name.find("ssm_x.weight")      == std::string::npos;
         quantize &= name.find("ssm_dt.weight")     == std::string::npos;
 
+        // do not quantize Deepseek-v2's low-rank attension weights
+        // NOTE: this will have O(((w-q)^2)^2) rate-distortion otherwise (4-th power quantization error!)
+        quantize &= name.find("attn_q_a.weight") == std::string::npos;
+        quantize &= name.find("attn_q_b.weight") == std::string::npos;
+        quantize &= name.find("attn_kv_a_mqa.weight") == std::string::npos;
+        quantize &= name.find("attn_kv_b.weight") == std::string::npos;
+
         enum ggml_type new_type;
         void * new_data;
         size_t new_size;
