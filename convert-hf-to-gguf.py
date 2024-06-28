@@ -490,6 +490,9 @@ class Model:
         if chkhsh == "b6e8e1518dc4305be2fe39c313ed643381c4da5db34a98f6a04c093f8afbe99b":
             # ref: https://huggingface.co/THUDM/glm-4-9b-chat
             res = "chatglm-bpe"
+        if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
+            # ref: https://huggingface.co/LumiOpen/Viking-7B
+            res = "viking"
 
         if res is None:
             logger.warning("\n")

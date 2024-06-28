@@ -2057,6 +2057,7 @@ enum e_model {
     MODEL_8x22B,
     MODEL_16x12B,
     MODEL_10B_128x3_66B,
+    MODEL_57B_A14B,
 };
 
 static const size_t kiB = 1024;
@@ -4288,6 +4289,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_8x22B:         return "8x22B";
         case MODEL_16x12B:        return "16x12B";
         case MODEL_10B_128x3_66B: return "10B+128x3.66B";
+        case MODEL_57B_A14B:      return "57B.A14B";
         default:                  return "?B";
     }
 }
@@ -4609,6 +4611,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_A2_7B; break;
+                    case 28: model.type = e_model::MODEL_57B_A14B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
@@ -5100,6 +5103,9 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "chatglm-bpe") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM4;
+            } else if (
+                tokenizer_pre == "viking") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_VIKING;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -5192,10 +5198,10 @@ static void llm_load_vocab(
         if (gen_name.find("code") != std::string::npos) {
             if (model.arch == LLM_ARCH_LLAMA
               && 32010 < vocab.id_to_token.size()
-              && vocab.id_to_token[32007].text == "<PRE>"
-              && vocab.id_to_token[32008].text == "<SUF>"
-              && vocab.id_to_token[32009].text == "<MID>"
-              && vocab.id_to_token[32010].text == "<EOT>") {
+              && vocab.id_to_token[32007].text.find("<PRE>") != std::string::npos
+              && vocab.id_to_token[32008].text.find("<SUF>") != std::string::npos
+              && vocab.id_to_token[32009].text.find("<MID>") != std::string::npos
+              && vocab.id_to_token[32010].text.find("<EOT>") != std::string::npos) {
                 vocab.special_prefix_id = 32007;
                 vocab.special_suffix_id = 32008;
                 vocab.special_middle_id = 32009;
@@ -13907,6 +13913,12 @@ struct llm_tokenizer_bpe {
             case LLAMA_VOCAB_PRE_TYPE_CHATGLM4:
                 regex_exprs = {
                     "(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+                };
+                break;
+            case LLAMA_VOCAB_PRE_TYPE_VIKING:
+                regex_exprs = {
+                    "\\p{N}",
+                    " ?[^(\\s|.,!?…。，、।۔،)]+",
                 };
                 break;
             default:
