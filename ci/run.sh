@@ -747,8 +747,6 @@ if [ -z ${GG_BUILD_LOW_PERF} ]; then
     pip install --editable gguf-py --disable-pip-version-check
 fi
 
-
-
 ret=0
 
 test $ret -eq 0 && gg_run ctest_debug
