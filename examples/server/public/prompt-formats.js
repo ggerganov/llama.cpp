@@ -56,7 +56,7 @@ export const promptFormats = {
   // ----------------------------
 
   "llama2": {
-  template: `<s>[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\nTest Message [/INST] Test Successful </s>{{history}}`,
+  template: `[INST] <<SYS>>\n{{prompt}}\n<</SYS>>\n\nTest Message [/INST] Test Successful </s>{{history}}`,
 
   historyTemplate: `{{message}}`,
 
@@ -75,7 +75,7 @@ export const promptFormats = {
   // ----------------------------
 
   "llama3": {
-  template: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{{prompt}}<|eot_id|>\n{{history}}<|start_header_id|>{{char}}<|end_header_id|>\n\n`,
+  template: `<|start_header_id|>system<|end_header_id|>\n\n{{prompt}}<|eot_id|>\n{{history}}<|start_header_id|>{{char}}<|end_header_id|>\n\n`,
 
   historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>\n\n{{message}}<|eot_id|>\n`,
 
