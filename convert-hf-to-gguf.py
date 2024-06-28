@@ -295,7 +295,7 @@ class Model:
 
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
                     if self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
-                        data = gguf.truncate_bf16(data) if old_dtype == torch.bfloat16 else gguf.quantize_bf16(data)
+                        data = gguf.quantize_bf16(data)
                         assert data.dtype == np.uint16
                         data_qtype = gguf.GGMLQuantizationType.BF16
 

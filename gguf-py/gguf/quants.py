@@ -28,16 +28,8 @@ def __compute_fp32_to_bf16(n: np.ndarray) -> np.ndarray:
     n = n.astype(np.float32, copy=False).view(np.uint32)
     # force nan to quiet
     n = np.where((n & 0x7fffffff) > 0x7f800000, (n & np.uint32(0xffff0000)) | np.uint32(64 << 16), n)
-    # flush subnormals to zero
-    n = np.where((n & 0x7f800000) == 0, n & np.uint32(0x80000000), n)
     # round to nearest even
     n = (np.uint64(n) + (0x7fff + ((n >> 16) & 1))) >> 16
-    return n.astype(np.uint16)
-
-
-# for fp32 values that are just extended bf16
-def __truncate_fp32_to_bf16(n: np.ndarray) -> np.ndarray:
-    n = n.astype(np.float32, copy=False).view(np.uint32) >> 16
     return n.astype(np.uint16)
 
 
@@ -66,20 +58,6 @@ def quantize_bf16(n: np.ndarray):
         return __quantize_bf16_lazy(n)
     else:
         return __quantize_bf16_array(n)
-
-
-def __truncate_bf16_array(n: np.ndarray) -> np.ndarray:
-    return __apply_over_grouped_rows(__truncate_fp32_to_bf16, arr=n, otype=np.uint16, oshape=n.shape)
-
-
-__truncate_bf16_lazy = LazyNumpyTensor._wrap_fn(__truncate_bf16_array, meta_noop=np.uint16)
-
-
-def truncate_bf16(n: np.ndarray):
-    if type(n) is LazyNumpyTensor:
-        return __truncate_bf16_lazy(n)
-    else:
-        return __truncate_bf16_array(n)
 
 
 __q8_block_size, __q8_type_size = GGML_QUANT_SIZES[GGMLQuantizationType.Q8_0]
