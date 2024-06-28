@@ -1,7 +1,7 @@
 /*
   JSON Schema to Grammar converter (JavaScript version)
 
-  There are C++ and a Python converters w/ the same features.
+  There are C++ and Python converters w/ the same features.
   (More flags are currently exposed for the Python version)
 
   Usage:
