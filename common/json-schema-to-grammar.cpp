@@ -720,7 +720,7 @@ private:
             }
             prop_names.push_back(prop_name);
         }
-        if (!(additional_properties.is_boolean() && !additional_properties.get<bool>())) {
+        if ((additional_properties.is_boolean() && additional_properties.get<bool>()) || additional_properties.is_object()) {
             std::string sub_name = name + (name.empty() ? "" : "-") + "additional";
             std::string value_rule =
                 additional_properties.is_object() ? visit(additional_properties, sub_name + "-value")

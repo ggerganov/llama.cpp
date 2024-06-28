@@ -751,7 +751,7 @@ export class SchemaConverter {
     const requiredProps = sortedProps.filter(k => required.has(k));
     const optionalProps = sortedProps.filter(k => !required.has(k));
 
-    if (additionalProperties !== false) {
+    if (additionalProperties) {
       const subName = `${name ?? ''}${name ? '-' : ''}additional`;
       const valueRule =
         additionalProperties != null && typeof additionalProperties === 'object' ? this.visit(additionalProperties, `${subName}-value`)
