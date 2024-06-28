@@ -189,7 +189,6 @@ Here is also a list of known limitations (contributions welcome):
 - [prefixItems](https://json-schema.org/draft/2020-12/json-schema-core#name-prefixitems) is broken (but [items](https://json-schema.org/draft/2020-12/json-schema-core#name-items) works)
 - `minimum`, `exclusiveMinimum`, `maximum`, `exclusiveMaximum`: only supported for `"type": "integer"` for now, not `number`
 - [pattern](https://json-schema.org/draft/2020-12/json-schema-validation#name-pattern)s must start with `^` and end with `$`
-- Remote `$ref`s not supported in the C++ version (Python & JavaScript versions fetch https refs)
 - `string` [formats](https://json-schema.org/draft/2020-12/json-schema-validation#name-defined-formats) lack `uri`, `email`
 - No [`patternProperties`](https://json-schema.org/draft/2020-12/json-schema-core#name-patternproperties)
 
