@@ -235,9 +235,8 @@ ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('^$.[]()|{}*+?')
 
 
 class SchemaConverter:
-    def __init__(self, *, prop_order, allow_fetch, dotall, raw_pattern):
+    def __init__(self, *, prop_order, dotall, raw_pattern):
         self._prop_order = prop_order
-        self._allow_fetch = allow_fetch
         self._dotall = dotall
         self._raw_pattern = raw_pattern
         self._rules = {
@@ -507,7 +506,7 @@ class SchemaConverter:
 
     def _resolve_ref(self, ref: str):
         parts = ref.split('#')
-        assert len(parts) == 2, f'Unsupported ref: {ref}'
+        assert len(parts) <= 2, f'Unsupported ref: {ref}'
         url = parts[0]
         target = None
         is_local = not url
@@ -518,13 +517,18 @@ class SchemaConverter:
             target = self._external_refs.get(url)
             if target is None:
                 # Fetch the referenced schema and resolve its refs
-                target = self._fetch_json(url)
+                assert url.startswith("https://"), f"Error resolving ref {ref}: unsupported url scheme"
+                import requests
+                target = requests.get(url).json()
                 self._external_refs[url] = target
 
-        tokens = parts[1].split('/')
-        for sel in tokens[1:]:
-            assert target is not None and sel in target, f'Error resolving ref {ref}: {sel} not in {target}'
-            target = target[sel]
+        if len(parts) == 1:
+            return self.ResolvedRef(target, '', is_local)
+        else:
+            tokens = parts[1].split('/')
+            for sel in tokens[1:]:
+                assert target is not None and sel in target, f'Error resolving ref {ref}: {sel} not in {target}'
+                target = target[sel]
 
         return self.ResolvedRef(target, tokens[-1] if tokens else '', is_local)
 
@@ -761,11 +765,6 @@ def main(args_in = None):
         '''
     )
     parser.add_argument(
-        '--allow-fetch',
-        action='store_true',
-        default=False,
-        help='Whether to allow fetching referenced schemas over HTTPS')
-    parser.add_argument(
         '--dotall',
         action='store_true',
         default=False,
@@ -792,7 +791,6 @@ def main(args_in = None):
             schema = json.load(f)
     converter = SchemaConverter(
         prop_order={name: idx for idx, name in enumerate(args.prop_order)},
-        allow_fetch=args.allow_fetch,
         dotall=args.dotall,
         raw_pattern=args.raw_pattern)
     converter.visit(schema, '')

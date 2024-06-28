@@ -264,7 +264,6 @@ const ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = new Set('^$.[]()|{}*+?');
 export class SchemaConverter {
   constructor(options) {
     this._propOrder = options.prop_order || {};
-    this._allowFetch = options.allow_fetch || false;
     this._dotall = options.dotall || false;
     this._rules = {'space': SPACE_RULE};
     this._refs = {};
@@ -558,6 +557,9 @@ export class SchemaConverter {
       target = this._externalRefs.get(url);
       if (target === undefined) {
         // Fetch the referenced schema and resolve its refs
+        if (!url.startsWith('https://')) {
+          throw new Error(`Error resolving ref ${ref}: unsupported url scheme`);
+        }
         target = this._fetchJson(url);
         this._externalRefs.set(url, target);
       }

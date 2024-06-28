@@ -838,10 +838,13 @@ public:
             auto it = _external_refs.find(url);
             if (it != _external_refs.end()) {
                 target = it->second;
-            } else {
+            } else if (url.rfind("https://", 0) == 0) {
                 // Fetch the referenced schema and resolve its refs
                 target = _fetch_json(url);
                 _external_refs[url] = target;
+            } else {
+                _errors.push_back("Error resolving ref " + ref + ": unsupported url scheme");
+                return {json(), "", false};
             }
         }
         if (parts.size() == 1) {
