@@ -2,7 +2,7 @@
   JSON Schema to Grammar converter (JavaScript version)
 
   There are C++ and Python converters w/ the same features.
-  (More flags are currently exposed for the Python version)
+  (More flags are currently exposed by the Python version)
 
   Usage:
     node examples/json_schema_to_grammar.mjs schema.json

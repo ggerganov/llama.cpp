@@ -123,7 +123,7 @@ You can use GBNF grammars:
     - For the `/chat/completions` endpoint, passed inside the `result_format` body field (e.g. `{"type", "json_object", "schema": {"items": {}}}`)
 - In [llama-cli](../examples/main), passed as the `--json` / `-j` flag
 - To convert to a grammar ahead of time:
-    - in CLI, with [`node examples/json_schema_to_grammar.py schema.json`](../examples/json_schema_to_grammar.py)
+    - in Python with [`python examples/json_schema_to_grammar.py schema.json`](../examples/json_schema_to_grammar.py)
     - in JavaScript with [`node examples/json_schema_to_grammar.mjs schema.json`](../examples/json_schema_to_grammar.mjs) (uses same lib as the [server](../examples/server)'s Web UI)
 
 Take a look at [tests](../tests/test-json-schema-to-grammar.cpp) to see which features are likely supported (you'll also find usage examples in https://github.com/ggerganov/llama.cpp/pull/5978, https://github.com/ggerganov/llama.cpp/pull/6659 & https://github.com/ggerganov/llama.cpp/pull/6555).
