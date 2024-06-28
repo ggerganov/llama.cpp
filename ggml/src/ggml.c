@@ -1754,17 +1754,6 @@ struct ggml_compute_state {
     struct ggml_compute_state_shared * shared;
 };
 
-struct ggml_compute_params {
-    // ith = thread index, nth = number of threads
-    int ith, nth;
-
-    // work buffer for all threads
-    size_t wsize;
-    void * wdata;
-
-    struct ggml_compute_state_shared * shared;
-};
-
 //
 // fundamental operations
 //
@@ -2857,7 +2846,7 @@ inline static void ggml_critical_section_start(void) {
 }
 
 #ifdef GGML_USE_OPENMP
-static void ggml_barrier(struct ggml_compute_state_shared * shared) {
+void ggml_barrier(struct ggml_compute_state_shared * shared) {
     if (shared->n_threads == 1) {
         return;
     }
@@ -2865,7 +2854,7 @@ static void ggml_barrier(struct ggml_compute_state_shared * shared) {
     #pragma omp barrier
 }
 #else
-static void ggml_barrier(struct ggml_compute_state_shared * shared) {
+void ggml_barrier(struct ggml_compute_state_shared * shared) {
     if (shared->n_threads == 1) {
         return;
     }
@@ -12306,10 +12295,15 @@ static void ggml_compute_forward_mul_mat_id(
     const struct ggml_tensor * src1 = dst->src[1];
     const struct ggml_tensor * ids = dst->src[2];
 
-    GGML_TENSOR_BINARY_OP_LOCALS
+#if GGML_USE_LLAMAFILE
+    if (llamafile_mixmul(params, src0, src1, ids, dst))
+        return;
+#endif
 
     const int ith = params->ith;
     const int nth = params->nth;
+
+    GGML_TENSOR_BINARY_OP_LOCALS
 
     const enum ggml_type type = src0->type;
 
@@ -18536,6 +18530,9 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
                     cur = 0;
                     const struct ggml_tensor * src0 = node->src[0];
                     const struct ggml_tensor * src1 = node->src[1];
+#if GGML_USE_LLAMAFILE
+                    const struct ggml_tensor * src2 = node->src[2];
+#endif
                     const enum ggml_type vec_dot_type = type_traits[src0->type].vec_dot_type;
                     if (src1->type != vec_dot_type) {
                         cur += ggml_row_size(vec_dot_type, ggml_nelements(src1));
@@ -18544,6 +18541,10 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
                     cur += GGML_PAD(cur, sizeof(int64_t));       // align
                     cur += n_as * sizeof(int64_t);               // matrix_row_counts
                     cur += n_as * src1->ne[2] * sizeof(int64_t); // matrix_rows
+#if GGML_USE_LLAMAFILE
+                    size_t cur2 = llamafile_mixmul_needs(src0, src1, src2);
+                    cur = cur > cur2 ? cur : cur2;
+#endif
                 } break;
             case GGML_OP_OUT_PROD:
                 {

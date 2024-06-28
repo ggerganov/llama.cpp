@@ -650,6 +650,21 @@ extern "C" {
         enum ggml_cgraph_eval_order order;
     };
 
+    struct ggml_compute_state_shared;
+
+    struct ggml_compute_params {
+        // ith = thread index, nth = number of threads
+        int ith, nth;
+
+        // work buffer for all threads
+        size_t wsize;
+        void * wdata;
+
+        struct ggml_compute_state_shared * shared;
+    };
+
+    void ggml_barrier(struct ggml_compute_state_shared * shared);
+
     // scratch buffer
     struct ggml_scratch {
         size_t offs;
