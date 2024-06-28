@@ -3128,11 +3128,11 @@ def main() -> None:
         if args.vocab_only:
             logger.info("Exporting model vocab...")
             model_instance.write_vocab()
-            logger.info("Model vocab successfully exported.")
+            logger.info(f"Model vocab successfully exported to {fname_out}.")
         else:
             logger.info("Exporting model...")
             model_instance.write()
-            logger.info("Model successfully exported.")
+            logger.info(f"Model successfully exported to {fname_out}.")
 
 
 if __name__ == '__main__':
