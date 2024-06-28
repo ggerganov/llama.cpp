@@ -1057,7 +1057,14 @@ std::string json_schema_to_grammar(const json & schema) {
     std::function<json(const std::string &)> fetch_json = [](const std::string &) { return json::object(); };
 
 #if defined(LLAMA_USE_CURL)
-    fetch_json = [](const std::string & url) {
+    // TODO: implement HTTP caching semantics.
+    std::unordered_map<std::string, json> cache;
+
+    fetch_json = [&](const std::string & url) {
+        auto it = cache.find(url);
+        if (it != cache.end()) {
+            return it->second;
+        }
         std::unique_ptr<CURL, decltype(&curl_easy_cleanup)> curl(curl_easy_init(), &curl_easy_cleanup);
         if (!curl) {
             fprintf(stderr, "%s: error initializing libcurl\n", __func__);
@@ -1082,7 +1089,7 @@ std::string json_schema_to_grammar(const json & schema) {
             throw std::runtime_error("Failed to fetch " + url + ": " + curl_easy_strerror(res));
         }
         response << '\0';
-        return json::parse(response.str());
+        return cache[url] = json::parse(response.str());
     };
 #endif
 
