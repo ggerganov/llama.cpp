@@ -994,6 +994,40 @@ static void test_json_schema() {
     );
 
     test_schema(
+        "simple pattern",
+        // Schema
+        R"""({
+            "pattern": "^[a-zA-Z0-9_-]*$"
+        })""",
+        // Passing strings
+        {
+            R"""("")""",
+            R"""("He_llo-12")""",
+        },
+        // Failing strings
+        {
+            R"""("!")""",
+            R"""("Hello World")""",
+        }
+    );
+
+    test_schema(
+        "pattern with escapes",
+        // Schema
+        R"""({
+            "pattern": "^a\\^\\$\\.\\[\\]\\(\\)\\|\\{\\}\\*\\+\\?b$"
+        })""",
+        // Passing strings
+        {
+            R"""("a^$.[]()|{}*+?b")""",
+        },
+        // Failing strings
+        {
+            R"""("ab")""",
+        }
+    );
+
+    test_schema(
         "",
         // Schema
         R"""(
