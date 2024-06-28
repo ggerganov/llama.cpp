@@ -1,4 +1,4 @@
-set(TARGET tokenize)
+set(TARGET llama-tokenize)
 add_executable(${TARGET} tokenize.cpp)
 install(TARGETS ${TARGET} RUNTIME)
 target_link_libraries(${TARGET} PRIVATE common llama ${CMAKE_THREAD_LIBS_INIT})
