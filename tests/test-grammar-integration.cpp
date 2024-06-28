@@ -1108,7 +1108,7 @@ static void test_json_schema() {
             R"""({ "number": "1600", "street_name": "Pennsylvania", "street_type":"Avenue"})""",
             // "Additional properties default to false for generation, even though the spec says true.
             R"""({ "number": 1600, "street_name": "Pennsylvania", "street_type":"Avenue", "direction":"NW"})""",
-            
+
         }
     );
 
