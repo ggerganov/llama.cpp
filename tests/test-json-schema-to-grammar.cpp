@@ -1220,6 +1220,48 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
 
     test({
         SUCCESS,
+        "nested refs + mix of properties and allOf",
+        // Schema
+        R"""({
+            "properties": {
+                "common": {"$ref": "#/$defs/SomeVal"}
+            },
+            "allOf": [
+                {"$ref": "#/$defs/foo"},
+                {"$ref": "#/$defs/bar"},
+                {
+                    "anyOf": [
+                        {"$ref": "#/$defs/baz"},
+                        {"$ref": "#/$defs/bam"}
+                    ]
+                }
+            ],
+            "required": ["common"],
+            "$defs": {
+                "SomeVal": {"type": "number"},
+                "foo": {"properties": {"a": {"$ref": "#/$defs/SomeVal"}}},
+                "bar": {"properties": {"b": {"$ref": "#/$defs/SomeVal"}}},
+                "bam": {"properties": {"c": {"$ref": "#/$defs/SomeVal"}}},
+                "baz": {"properties": {"d": {"$ref": "#/$defs/SomeVal"}}}
+            }
+        })""",
+        R"""(
+            a-kv ::= "\"a\"" space ":" space number
+            b-kv ::= "\"b\"" space ":" space number
+            c-kv ::= "\"c\"" space ":" space number
+            common-kv ::= "\"common\"" space ":" space number
+            d-kv ::= "\"d\"" space ":" space number
+            d-rest ::= ( "," space c-kv )?
+            decimal-part ::= [0-9]{1,16}
+            integral-part ::= [0] | [1-9] [0-9]{0,15}
+            number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
+            root ::= "{" space common-kv "," space a-kv "," space b-kv ( "," space ( d-kv d-rest | c-kv ) )? "}" space
+            space ::= | " " | "\n" [ \t]{0,20}
+        )""",
+    });
+
+    test({
+        SUCCESS,
         "conflicting names",
         R"""({
             "type": "object",
