@@ -1303,44 +1303,41 @@ static void test_json_schema() {
     );
 
     test_schema(
-        "refs",
+        "nested refs + mix of properties and allOf",
         // Schema
         R"""({
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 15,
-            "items": { "$ref": "#/$defs/TALK" },
-
-            "$defs": {
-                "characters": { "enum": ["Biff", "Alice"] },
-                "emotes": { "enum": ["EXCLAMATION", "CONFUSION", "CHEERFUL", "LOVE", "ANGRY"] },
-
-                "TALK": {
-                    "type": "object",
-                    "required": [ "character", "emote", "dialog" ],
-                    "properties": {
-                        "character": { "$ref": "#/$defs/characters" },
-                        "emote": { "$ref": "#/$defs/emotes" },
-                        "dialog": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 200
-                        }
-                    },
-                    "additionalProperties": false
+            "properties": {
+                "common": {"$ref": "#/$defs/SomeVal"}
+            },
+            "allOf": [
+                {"$ref": "#/$defs/foo"},
+                {"$ref": "#/$defs/bar"},
+                {
+                    "anyOf": [
+                        {"$ref": "#/$defs/baz"},
+                        {"$ref": "#/$defs/bam"}
+                    ]
                 }
+            ],
+            "required": ["common"],
+            "$defs": {
+                "SomeVal": {"type": "number"},
+                "foo": {"properties": {"a": {"$ref": "#/$defs/SomeVal"}}},
+                "bar": {"properties": {"b": {"$ref": "#/$defs/SomeVal"}}},
+                "bam": {"properties": {"c": {"$ref": "#/$defs/SomeVal"}}},
+                "baz": {"properties": {"d": {"$ref": "#/$defs/SomeVal"}}}
             }
         })""",
         // Passing strings
         {
-            R"""([{
-            "character": "Alice",
-            "emote": "EXCLAMATION",
-            "dialog": "Hello, world!"
-            }])""",
+            R"""({"common": "", "a": "", "b": ""})""",
+            R"""({"common": "", "a": "", "b": "", "d": "", "c": ""})""",
         },
         // Failing strings
         {
+            R"""({})""",
+            R"""({"a": "", "b": ""})""",
+            R"""({"common": "", "a": "", "b": "", "c": "", "d": ""})""",
         }
     );
 }
