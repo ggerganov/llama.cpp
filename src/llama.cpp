@@ -11090,6 +11090,7 @@ struct llm_build_context {
             cb(cur, "ffn_post_norm", -1);
 
             cur = ggml_add(ctx0, cur, sa_out);
+            cur = lctx.cvec.apply_to(ctx0, cur, il);
             cb(cur, "l_out", il);
 
             // input for next layer
