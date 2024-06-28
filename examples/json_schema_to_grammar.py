@@ -1,4 +1,17 @@
 #!/usr/bin/env python3
+'''
+  JSON Schema to Grammar conversion
+
+  There are C++ and JavaScript converters w/ the same features.
+
+  Usage:
+    python examples/json_schema_to_grammar.py schema.json
+    python examples/json_schema_to_grammar.py https://json.schemastore.org/tsconfig.json
+    echo '{"type": "object"}' | python examples/json_schema_to_grammar.py -
+
+  Also see https://github.com/ggerganov/llama.cpp/tree/master/grammars
+'''
+
 import argparse
 import itertools
 import json

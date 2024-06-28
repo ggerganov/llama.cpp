@@ -1299,7 +1299,7 @@ int main() {
             test_all("JavaScript", [](const TestCase & tc) {
                 write("test-json-schema-input.tmp", tc.schema);
                 tc.verify_status(std::system(
-                    "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+                    "node ./examples/json_schema_to_grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
                 tc.verify(read("test-grammar-output.tmp"));
             });
         } else {
