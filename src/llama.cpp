@@ -19603,11 +19603,10 @@ static int32_t llama_chat_apply_template_internal(
         }
     } else if (tmpl == "minicpm" || tmpl_contains(u8"<用户>")) {
         // MiniCPM-3B-OpenHermes-2.5-v2-GGUF
-        std::string user_tag = u8"<用户>";
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "user") {
-                ss << user_tag;
+                ss << u8"<用户>";
                 ss << trim(message->content);
                 ss << "<AI>";
             } else {
@@ -19616,7 +19615,6 @@ static int32_t llama_chat_apply_template_internal(
         }
     } else if (tmpl == "deepseek2" || tmpl_contains("'Assistant: ' + message['content'] + eos_token")) {
         // DeepSeek-V2
-        std::string eos_token = u8"<｜end▁of▁sentence｜>";
         for (auto message : chat) {
             std::string role(message->role);
             if (role == "system") {
@@ -19624,7 +19622,7 @@ static int32_t llama_chat_apply_template_internal(
             } else if (role == "user") {
                 ss << "User: " << message->content << "\n\n";
             } else if (role == "assistant") {
-                ss << "Assistant: " << message->content << eos_token;
+                ss << "Assistant: " << message->content << u8"<｜end▁of▁sentence｜>";
             }
         }
         if (add_ass) {
