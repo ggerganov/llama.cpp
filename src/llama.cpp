@@ -4281,6 +4281,7 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_410M:          return "410M";
         case MODEL_0_5B:          return "0.5B";
         case MODEL_1B:            return "1B";
+        case MODEL_1_3B:          return "1.3B";
         case MODEL_1_4B:          return "1.4B";
         case MODEL_2B:            return "2B";
         case MODEL_2_8B:          return "2.8B";
@@ -13105,6 +13106,13 @@ static void llama_graph_compute(
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
 
+void llama_set_logits_all(
+    struct llama_context * ctx,
+    bool logits_all
+) {
+    ctx->logits_all = logits_all;
+}
+
 // decode a batch of tokens by evaluating the transformer
 //
 //   - lctx:      llama context
@@ -14052,6 +14060,7 @@ struct llm_tokenizer_bpe {
                 break;
             case LLAMA_VOCAB_PRE_TYPE_GPT2:
             case LLAMA_VOCAB_PRE_TYPE_OLMO:
+            case LLAMA_VOCAB_PRE_TYPE_JAIS:
                 regex_exprs = {
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                 };
