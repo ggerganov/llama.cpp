@@ -49,18 +49,13 @@ static size_t get_max_token_length(const llama_context * ctx_main) {
     return len;
 }
 
-struct token_healing_info {
-    std::string prefix;
-    int n_tokens_removed;
-};
-
-token_healing_info llama_token_healing_get_prefix(
-                   const llama_context * ctx_main,
-                   const llama_token_healing_type th_type,
-                   const std::vector<llama_token> & tokens,
-                   int max_to_remove) {
+static llama_token_healing_output llama_token_healing_get_prefix(
+                                  const llama_context * ctx_main,
+                                  const llama_token_healing_type th_type,
+                                  const std::vector<llama_token> & tokens,
+                                  int max_to_remove) {
     if (tokens.size() <= 1) {
-        return {"", 0};
+        return {};
     }
 
     const int n_ctx = tokens.size();
@@ -122,34 +117,28 @@ token_healing_info llama_token_healing_get_prefix(
 // Token healing (external)
 //
 
-std::string llama_token_healing_rollback(
-            const llama_context * ctx_main,
-            llama_token_healing_type th_type,
-            std::vector<llama_token> & tokens,
-            int max_to_remove,
-            int * n_removed) {
-    if (n_removed != nullptr) {
-        *n_removed = 0;
-    }
+llama_token_healing_output llama_token_healing_rollback(
+                           const llama_context * ctx_main,
+                           llama_token_healing_type th_type,
+                           std::vector<llama_token> & tokens,
+                           int max_to_remove) {
     // NB. To avoid returning empty `tokens`, at least 1 token will remain in `tokens` after rolling back.
     //     It is the caller's responsibility to add BOS to the start of the prompt if they want to roll back the whole prompt.
-    token_healing_info info = llama_token_healing_get_prefix(ctx_main, th_type, tokens, max_to_remove);
+    llama_token_healing_output out = llama_token_healing_get_prefix(ctx_main, th_type, tokens, max_to_remove);
 
     // If constrained decoding would give back the original prompt, there is no need to modify the prompt.
     const bool is_multi_step = th_type == llama_token_healing_type::ROLLBACK_MULTI ||
                                th_type == llama_token_healing_type::DYNAMIC_MULTI;
-    const std::vector<llama_token> candidates = token_healing_get_candidates(ctx_main, info.prefix, is_multi_step);
-    LOG("token_healing: prefix = '%s' (%d tokens)\n", info.prefix.c_str(), info.n_tokens_removed);
-    if (info.n_tokens_removed == 1 && candidates.size() == 1) {
+    const std::vector<llama_token> candidates = token_healing_get_candidates(ctx_main, out.prefix, is_multi_step);
+    LOG("token_healing: prefix = '%s' (%d tokens)\n", out.prefix.c_str(), out.n_tokens_removed);
+    if (out.n_tokens_removed == 1 && candidates.size() == 1) {
         LOG("token_healing: nothing to heal\n");
-        return "";
+        return {};
     }
-    // Finalize outputs
-    if (n_removed != nullptr) {
-        *n_removed = info.n_tokens_removed;
-    }
-    tokens.resize(tokens.size() - info.n_tokens_removed);
-    return info.prefix;
+
+    // Finally, trim prompt tokens
+    tokens.resize(tokens.size() - out.n_tokens_removed);
+    return out;
 }
 
 void llama_token_healing_set_prefix(llama_sampling_context * ctx_sampling, const std::string & prefix) {
