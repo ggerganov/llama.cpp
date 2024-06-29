@@ -300,7 +300,7 @@ class Model:
 
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
                     # TODO: cleaner model-specific per-tensor types
-                    # NOTE: Q1_3 is only relevant for BitNet 1.58b
+                    # NOTE: Q1_3 is only relevant for BitNet b1.58
                     if (
                         self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3
                         and gguf.can_quantize_to_q1_3(data)

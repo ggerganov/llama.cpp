@@ -3366,7 +3366,7 @@ size_t quantize_q2_2(const float * restrict src, void * restrict dst, int64_t nr
     return nrow * row_size;
 }
 
-// ====================== 1.625 bpw (de)-quantization (BitNet 1.58b)
+// ====================== 1.625 bpw (de)-quantization (BitNet b1.58)
 
 void quantize_row_q1_3_reference(const float * restrict x, block_q1_3 * restrict y, int64_t k) {
     assert(k % QK1_3 == 0);

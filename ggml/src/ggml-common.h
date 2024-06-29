@@ -137,7 +137,7 @@ typedef sycl::half2 ggml_half2;
 
 #endif // GGML_COMMON_DECL_CUDA || GGML_COMMON_DECL_HIP
 
-// 1.625 bpw for BitNet 1.58b models
+// 1.625 bpw for BitNet b1.58 models
 #define QK1_3 64
 typedef struct {
     uint8_t q[(QK1_3 - 4*QK1_3/64)/5]; // 5 elements per byte (3^5 = 243 < 256)
