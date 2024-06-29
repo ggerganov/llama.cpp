@@ -293,7 +293,7 @@ int main(int argc, char ** argv) {
 
     if (sparams.token_healing_enabled && (params.conversation || !params.input_suffix.empty())) {
         sparams.token_healing_enabled = false;
-        LOG("token_healing: disabled due to custom suffix/conversation mode");
+        LOG("token healing: disabled due to custom suffix/conversation mode");
     }
     std::string token_healing_prefix;
     int token_healing_n_removed = 0;
