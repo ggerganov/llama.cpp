@@ -2103,8 +2103,8 @@ struct llama_hparams {
     float f_norm_eps;
     float f_norm_rms_eps;
 
-    float f_attn_logit_softcapping;
-    float f_final_logit_softcapping;
+    float f_attn_logit_softcapping = 50.0f;
+    float f_final_logit_softcapping = 30.0f;
 
     float    rope_attn_factor = 1.0f;
     float    rope_freq_base_train;
@@ -4710,8 +4710,8 @@ static void llm_load_hparams(
         case LLM_ARCH_GEMMA2:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
-                ml.get_key(LLM_KV_ATTN_LOGIT_SOFTCAPPING, hparams.f_attn_logit_softcapping);
-                ml.get_key(LLM_KV_FINAL_LOGIT_SOFTCAPPING, hparams.f_final_logit_softcapping);
+                ml.get_key(LLM_KV_ATTN_LOGIT_SOFTCAPPING, hparams.f_attn_logit_softcapping, false);
+                ml.get_key(LLM_KV_FINAL_LOGIT_SOFTCAPPING, hparams.f_final_logit_softcapping, false);
                 hparams.attn_soft_cap = true;
 
                 switch (hparams.n_layer) {
