@@ -1173,14 +1173,13 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--chat-template") {
         CHECK_ARG
-        std::string value(argv[i]);
-        if (!llama_chat_verify_template(value)) {
-            fprintf(stderr, "error: the supplied chat template is not supported: %s\n", value.c_str());
+        if (!llama_chat_verify_template(argv[i])) {
+            fprintf(stderr, "error: the supplied chat template is not supported: %s\n", argv[i]);
             fprintf(stderr, "note: llama.cpp does not use jinja parser, we only support commonly used templates\n");
             invalid_param = true;
             return true;
         }
-        params.chat_template = value;
+        params.chat_template = argv[i];
         return true;
     }
     if (arg == "--slot-prompt-similarity" || arg == "-sps") {
