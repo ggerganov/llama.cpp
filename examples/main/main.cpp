@@ -295,11 +295,10 @@ int main(int argc, char ** argv) {
         sparams.token_healing_enabled = false;
         LOG("token healing: disabled due to custom suffix/conversation mode");
     }
-    std::string token_healing_prefix;
-    int token_healing_n_removed = 0;
+    llama_token_healing_output token_healing_out{};
     if (!params.interactive_first && sparams.token_healing_enabled) {
-        token_healing_prefix = llama_token_healing_rollback(ctx, sparams.token_healing_type, embd_inp,
-                                                                 sparams.token_healing_n_rollback, &token_healing_n_removed);
+        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing_type, embd_inp,
+                                                              sparams.token_healing_n_rollback);
     }
 
     // Should not run without any tokens
@@ -326,7 +325,7 @@ int main(int argc, char ** argv) {
         std::vector<llama_token> original_inp = ::llama_tokenize(ctx, params.prompt, true, true);
         LOG("original_inp tokenized: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, original_inp).c_str());
 
-        original_prompt_len = original_inp.size() - token_healing_n_removed;
+        original_prompt_len = original_inp.size() - token_healing_out.n_tokens_removed;
         guidance_offset = (int)guidance_inp.size() - original_prompt_len;
         LOG("original_prompt_len: %s", log_tostr(original_prompt_len));
         LOG("guidance_offset:     %s", log_tostr(guidance_offset));
@@ -548,7 +547,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
     }
-    llama_token_healing_set_prefix(ctx_sampling, token_healing_prefix);
+    llama_token_healing_set_prefix(ctx_sampling, token_healing_out.prefix);
 
     if (llama_model_has_encoder(model)) {
         int enc_input_size = embd_inp.size();
@@ -883,7 +882,8 @@ int main(int argc, char ** argv) {
                 assistant_ss << llama_token_to_piece(ctx, id, false);
             }
 
-            token_healing_n_removed = 0;
+            token_healing_out = {};
+
             if (n_past > 0 && is_interacting) {
                 LOG("waiting for user input\n");
 
@@ -962,9 +962,8 @@ int main(int argc, char ** argv) {
                         const int max_to_remove = sparams.token_healing_n_rollback < 0
                                                    ? n_new_tokens
                                                    : std::min(sparams.token_healing_n_rollback, n_new_tokens);
-                        token_healing_prefix = llama_token_healing_rollback(ctx, sparams.token_healing_type, embd_inp,
-                                                                            max_to_remove, &token_healing_n_removed);
-                        n_bytes_to_skip = token_healing_prefix.size();
+                        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing_type, embd_inp, max_to_remove);
+                        n_bytes_to_skip = token_healing_out.prefix.size();
                     }
 
                     for (size_t i = original_size; i < embd_inp.size(); ++i) {
@@ -976,7 +975,7 @@ int main(int argc, char ** argv) {
                     // reset assistant message
                     assistant_ss.str("");
 
-                    n_remain -= line_inp.size() + token_healing_n_removed;
+                    n_remain -= line_inp.size() + token_healing_out.n_tokens_removed;
                     LOG("n_remain: %d\n", n_remain);
                 } else {
                     LOG("empty line, passing control back\n");
@@ -988,9 +987,9 @@ int main(int argc, char ** argv) {
             if (n_past > 0) {
                 if (is_interacting) {
                     llama_sampling_reset(ctx_sampling);
-                    if (token_healing_n_removed > 0) {
+                    if (token_healing_out.n_tokens_removed > 0) {
                         // Set new prefix after an interaction
-                        llama_token_healing_set_prefix(ctx_sampling, token_healing_prefix);
+                        llama_token_healing_set_prefix(ctx_sampling, token_healing_out.prefix);
                     }
                 }
                 is_interacting = false;
