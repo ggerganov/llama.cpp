@@ -11483,10 +11483,10 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
         // WARNING: reading 3 bytes further than necessary
         const uint8x16_t x13b = vld1q_u8((const uint8_t *) x);
 
-        uint8x16_t x0 = vqtbl1q_u8(x13b, mask0);
-        uint8x16_t x1 = vqtbl1q_u8(x13b, mask1);
-        uint8x16_t x2 = vqtbl1q_u8(x13b, mask2);
-        uint8x16_t x3 = vqtbl1q_u8(x13b, mask3);
+        uint8x16_t x0 = ggml_vqtbl1q_u8(x13b, mask0);
+        uint8x16_t x1 = ggml_vqtbl1q_u8(x13b, mask1);
+        uint8x16_t x2 = ggml_vqtbl1q_u8(x13b, mask2);
+        uint8x16_t x3 = ggml_vqtbl1q_u8(x13b, mask3);
 
         x0 = vmulq_u8(x0, shift0);
         x1 = vmulq_u8(x1, shift0);
