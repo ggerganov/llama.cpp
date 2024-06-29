@@ -522,6 +522,9 @@ class GGUFWriter:
     def add_final_logit_softcapping(self, value: float) -> None:
         self.add_float32(Keys.LLM.FINAL_LOGIT_SOFTCAPPING.format(arch=self.arch), value)
 
+    def add_query_pre_attn_scalar(self, value: float) -> None:
+        self.add_float32(Keys.LLM.QUERY_PRE_ATTN_SCALAR.format(arch=self.arch), value)
+
     def add_expert_count(self, count: int) -> None:
         self.add_uint32(Keys.LLM.EXPERT_COUNT.format(arch=self.arch), count)
 

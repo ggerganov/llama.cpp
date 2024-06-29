@@ -304,6 +304,7 @@ enum llm_kv {
     LLM_KV_DECODER_START_TOKEN_ID,
     LLM_KV_ATTN_LOGIT_SOFTCAPPING,
     LLM_KV_FINAL_LOGIT_SOFTCAPPING,
+    LLM_KV_QUERY_PRE_ATTN_SCALAR,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -396,6 +397,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_DECODER_START_TOKEN_ID,            "%s.decoder_start_token_id"            },
     { LLM_KV_ATTN_LOGIT_SOFTCAPPING,            "%s.attn_logit_softcapping"            },
     { LLM_KV_FINAL_LOGIT_SOFTCAPPING,           "%s.final_logit_softcapping"           },
+    { LLM_KV_QUERY_PRE_ATTN_SCALAR,             "%s.query_pre_attn_scalar"             },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,             "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,          "%s.attention.head_count_kv"          },
@@ -2105,6 +2107,7 @@ struct llama_hparams {
 
     float f_attn_logit_softcapping = 50.0f;
     float f_final_logit_softcapping = 30.0f;
+    float f_query_pre_attn_scalar = 144.0f;
 
     float    rope_attn_factor = 1.0f;
     float    rope_freq_base_train;
@@ -4712,6 +4715,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 ml.get_key(LLM_KV_ATTN_LOGIT_SOFTCAPPING, hparams.f_attn_logit_softcapping, false);
                 ml.get_key(LLM_KV_FINAL_LOGIT_SOFTCAPPING, hparams.f_final_logit_softcapping, false);
+                ml.get_key(LLM_KV_QUERY_PRE_ATTN_SCALAR, hparams.f_query_pre_attn_scalar, false);
                 hparams.attn_soft_cap = true;
 
                 switch (hparams.n_layer) {
@@ -10948,7 +10952,7 @@ struct llm_build_context {
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Qcur, "Qcur", il);
 
-                Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd_head_k)));
+                Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(hparams.f_query_pre_attn_scalar));
                 cb(Qcur, "Qcur_scaled", il);
 
                 Kcur = ggml_rope_ext(
