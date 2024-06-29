@@ -17195,10 +17195,11 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 
     // sanity checks
     //
-    //  - qs.n_attention_wv == 0                     for Mamba       models
-    //  - qs.n_attention_wv == model.hparams.n_layer for Transformer models
+    //  - qs.n_attention_wv == 0                         for Mamba           models
+    //  - qs.n_attention_wv == model.hparams.n_layer     for Transformer     models
+    //  - qs.n_attention_wv == 3 * model.hparams.n_layer for Encoder-Decoder models
     //
-    GGML_ASSERT((qs.n_attention_wv == 0 || qs.n_attention_wv == (int)model.hparams.n_layer) && "n_attention_wv is unexpected");
+    GGML_ASSERT((qs.n_attention_wv == 0 || qs.n_attention_wv == (int)model.hparams.n_layer || qs.n_attention_wv == 3 * (int)model.hparams.n_layer) && "n_attention_wv is unexpected");
 
     size_t total_size_org = 0;
     size_t total_size_new = 0;
@@ -17322,6 +17323,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         quantize &= name.find("ssm_conv1d.weight") == std::string::npos;
         quantize &= name.find("ssm_x.weight")      == std::string::npos;
         quantize &= name.find("ssm_dt.weight")     == std::string::npos;
+
+        // do not quantize relative position bias (T5)
+        quantize &= name.find("attn_rel_b.weight") == std::string::npos;
 
         enum ggml_type new_type;
         void * new_data;
