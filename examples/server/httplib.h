@@ -2693,8 +2693,8 @@ inline bool mmap::open(const char *path) {
     wpath += path[i];
   }
 
-  hFile_ = ::CreateFile2(wpath.c_str(), GENERIC_READ, FILE_SHARE_READ,
-                         OPEN_EXISTING, NULL);
+  hFile_ = ::CreateFileW(wpath.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                         NULL, OPEN_EXISTING, 0, NULL);
 
   if (hFile_ == INVALID_HANDLE_VALUE) { return false; }
 
@@ -2703,14 +2703,14 @@ inline bool mmap::open(const char *path) {
   size_ = static_cast<size_t>(size.QuadPart);
 
   hMapping_ =
-      ::CreateFileMappingFromApp(hFile_, NULL, PAGE_READONLY, size_, NULL);
+      ::CreateFileMappingW(hFile_, NULL, PAGE_READONLY, size.HighPart, size.LowPart, NULL);
 
   if (hMapping_ == NULL) {
     close();
     return false;
   }
 
-  addr_ = ::MapViewOfFileFromApp(hMapping_, FILE_MAP_READ, 0, 0);
+  addr_ = ::MapViewOfFile(hMapping_, FILE_MAP_READ, 0, 0, 0);
 #else
   fd_ = ::open(path, O_RDONLY);
   if (fd_ == -1) { return false; }
