@@ -11385,7 +11385,7 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
         // const __m128i x13b = _mm_insert_epi8(x12a, x->qs[0], 12);
         // WARNING: reading 3 bytes further than necessary.
         // It's measurably faster than a masked load on an Intel Core m3-8100Y
-        const __m128i x13b = _mm_loadu_si128((const __m128i_u *) x);
+        const __m128i x13b = _mm_loadu_si128((const __m128i *) x);
         const __m256i x13 = MM256_SET_M128I(x13b, x13b);
 
         {
@@ -11435,8 +11435,8 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
             x0 = _mm256_sub_epi8(x0, _mm256_set1_epi8(1));
             x1 = _mm256_sub_epi8(x1, _mm256_set1_epi8(1));
 
-            const __m256i y0 = _mm256_loadu_si256((const __m256i_u *) (y[0].qs));
-            const __m256i y1 = _mm256_loadu_si256((const __m256i_u *) (y[1].qs));
+            const __m256i y0 = _mm256_loadu_si256((const __m256i *) (y[0].qs));
+            const __m256i y1 = _mm256_loadu_si256((const __m256i *) (y[1].qs));
 
             const __m256 d0 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[0].d));
             const __m256 d1 = _mm256_set1_ps(GGML_FP16_TO_FP32(y[1].d));
