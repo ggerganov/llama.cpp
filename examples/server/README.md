@@ -18,8 +18,8 @@ The project is under active development, and we are [looking for feedback and co
 **Command line options:**
 
 - `-v`, `--verbose`: Enable verbose server output. When using the `/completion` endpoint, this includes the tokenized prompt, the full request and the full response.
-- `-t N`, `--threads N`: Set the number of threads to use during generation. Not used if model layers are offloaded to GPU. The server is using batching. This parameter is used only if one token is to be processed on CPU backend.
-- `-tb N, --threads-batch N`: Set the number of threads to use during batch and prompt processing. If not specified, the number of threads will be set to the number of threads used for generation. Not used if model layers are offloaded to GPU.
+- `-t N`, `--threads N`: Set the number of threads to use by CPU layers during generation. Not used by model layers that are offloaded to GPU. This option has no effect when using the maximum number of GPU layers. Default: `std::thread::hardware_concurrency()` (number of CPU cores).
+- `-tb N, --threads-batch N`: Set the number of threads to use by CPU layers during batch and prompt processing (>= 32 tokens). This option has no effect if a GPU is available. Default: `--threads`.
 - `--threads-http N`: Number of threads in the http server pool to process requests. Default: `max(std::thread::hardware_concurrency() - 1, --parallel N + 2)`
 - `-m FNAME`, `--model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`).
 - `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file. Default: unused
@@ -48,7 +48,7 @@ The project is under active development, and we are [looking for feedback and co
 - `--api-key`: Set an api key for request authorization. By default, the server responds to every request. With an api key set, the requests must have the Authorization header set with the api key as Bearer token. May be used multiple times to enable multiple valid keys.
 - `--api-key-file`: Path to file containing api keys delimited by new lines. If set, requests must include one of the keys for access. May be used in conjunction with `--api-key`s.
 - `--embeddings`: Enable embedding vector output and the OAI compatible endpoint /v1/embeddings. Physical batch size (`--ubatch-size`) must be carefully defined. Default: disabled
-- `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`
+- `-np N`, `--parallel N`: Set the number of slots for process requests. Default: `1`. Values > 1 will allow for higher throughput with multiple parallel requests but the results will **not** be deterministic due to differences in rounding error.
 - `-cb`, `--cont-batching`: Enable continuous batching (a.k.a dynamic batching).  Default: disabled
 - `-spf FNAME`, `--system-prompt-file FNAME` Set a file to load a system prompt (initial prompt of all slots). This is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 - `--mmproj MMPROJ_FILE`: Path to a multimodal projector file for LLaVA.
@@ -73,6 +73,7 @@ The project is under active development, and we are [looking for feedback and co
 - `-fa`, `--flash-attn` : enable flash attention (default: disabled).
 - `-ctk TYPE`, `--cache-type-k TYPE` : KV cache data type for K (default: `f16`, options `f32`, `f16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, or `q5_1`)
 - `-ctv TYPE`, `--cache-type-v TYPE` : KV cache type for V (default `f16`, see `-ctk` for options)
+- `--spm-infill` : Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
 **If compiled with `LLAMA_SERVER_SSL=ON`**
 - `--ssl-key-file FNAME`: path to file a PEM-encoded SSL private key
@@ -80,26 +81,26 @@ The project is under active development, and we are [looking for feedback and co
 
 ## Build
 
-`server` is built alongside everything else from the root of the project
+`llama-server` is built alongside everything else from the root of the project
 
 - Using `make`:
 
   ```bash
-  make server
+  make llama-server
   ```
 
 - Using `CMake`:
 
   ```bash
   cmake -B build
-  cmake --build build --config Release -t server
+  cmake --build build --config Release -t llama-server
   ```
 
-  Binary is at `./build/bin/server`
+  Binary is at `./build/bin/llama-server`
 
 ## Build with SSL
 
-`server` can also be built with SSL support using OpenSSL 3
+`llama-server` can also be built with SSL support using OpenSSL 3
 
 - Using `make`:
 
@@ -107,14 +108,14 @@ The project is under active development, and we are [looking for feedback and co
   # NOTE: For non-system openssl, use the following:
   #   CXXFLAGS="-I /path/to/openssl/include"
   #   LDFLAGS="-L /path/to/openssl/lib"
-  make LLAMA_SERVER_SSL=true server
+  make LLAMA_SERVER_SSL=true llama-server
   ```
 
 - Using `CMake`:
 
   ```bash
   cmake -B build -DLLAMA_SERVER_SSL=ON
-  cmake --build build --config Release -t server
+  cmake --build build --config Release -t llama-server
   ```
 
 ## Quick Start
@@ -124,13 +125,13 @@ To get started right away, run the following command, making sure to use the cor
 ### Unix-based systems (Linux, macOS, etc.)
 
 ```bash
-./server -m models/7B/ggml-model.gguf -c 2048
+./llama-server -m models/7B/ggml-model.gguf -c 2048
 ```
 
 ### Windows
 
 ```powershell
-server.exe -m models\7B\ggml-model.gguf -c 2048
+llama-server.exe -m models\7B\ggml-model.gguf -c 2048
 ```
 
 The above command will start a server that by default listens on `127.0.0.1:8080`.
@@ -279,7 +280,7 @@ node index.js
 
     `id_slot`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot.  Default: `-1`
 
-    `cache_prompt`: Re-use previously cached prompt from the last request if possible. This may prevent re-caching the prompt from scratch.  Default: `false`
+    `cache_prompt`: Re-use KV cache from a previous request if possible. This way the common prefix does not have to be re-processed, only the suffix that differs between the requests. Because (depending on the backend) the logits are **not** guaranteed to be bit-for-bit identical for different batch sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic results. Default: `false`
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
@@ -629,11 +630,11 @@ bash chat.sh
 
 ### OAI-like API
 
-The HTTP `server` supports an OAI-like API: https://github.com/openai/openai-openapi
+The HTTP `llama-server` supports an OAI-like API: https://github.com/openai/openai-openapi
 
 ### API errors
 
-`server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
+`llama-server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
 
 Example of an error:
 

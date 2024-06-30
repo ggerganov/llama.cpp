@@ -44,9 +44,9 @@ static void write_logfile(
         return;
     }
 
-    const std::string timestamp = get_sortable_timestamp();
+    const std::string timestamp = string_get_sortable_timestamp();
 
-    const bool success = create_directory_with_parents(params.logdir);
+    const bool success = fs_create_directory_with_parents(params.logdir);
     if (!success) {
         fprintf(stderr, "%s: warning: failed to create logdir %s, cannot write logfile\n",
                 __func__, params.logdir.c_str());
@@ -64,7 +64,7 @@ static void write_logfile(
     fprintf(logfile, "binary: main\n");
     char model_desc[128];
     llama_model_desc(model, model_desc, sizeof(model_desc));
-    dump_non_result_info_yaml(logfile, params, ctx, timestamp, results.tokens, model_desc);
+    yaml_dump_non_result_info(logfile, params, ctx, timestamp, results.tokens, model_desc);
 
     fprintf(logfile, "\n");
     fprintf(logfile, "######################\n");
@@ -72,9 +72,9 @@ static void write_logfile(
     fprintf(logfile, "######################\n");
     fprintf(logfile, "\n");
 
-    dump_vector_float_yaml(logfile, "logits", results.logits);
+    yaml_dump_vector_float(logfile, "logits", results.logits);
     fprintf(logfile, "ppl_value: %f\n", results.ppl_value);
-    dump_vector_float_yaml(logfile, "probs", results.probs);
+    yaml_dump_vector_float(logfile, "probs", results.probs);
 
     llama_dump_timing_info_yaml(logfile, ctx);
     fclose(logfile);
@@ -476,7 +476,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     }
 
     // Download: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-    // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Run `./llama-perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
@@ -1032,7 +1032,7 @@ struct winogrande_entry {
     std::vector<llama_token> seq_tokens[2];
 };
 
-static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string& prompt) {
+static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string & prompt) {
     std::vector<winogrande_entry> result;
     std::istringstream in(prompt);
     std::string line;
@@ -1425,7 +1425,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
         // Use all tasks
         tasks.resize(n_task);
         printf("%s: reading tasks", __func__);
-        int n_dot = n_task/100;
+        int n_dot = std::max((int) n_task/100, 1);
         int i = 0;
         for (auto& task : tasks) {
             ++i;
@@ -1675,7 +1675,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
 
     llama_batch_free(batch);
 
-    if (n_done < 100) return;
+    if (n_done < 100 && (params.multiple_choice_tasks != 0 && params.multiple_choice_tasks < (size_t)n_task)) return;
 
     float p = 1.f*n_correct/n_done;
     float sigma = sqrt(p*(1-p)/(n_done-1));
@@ -1964,11 +1964,13 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
+    params.n_ctx = 512;
+    params.logits_all = true;
+
     if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
-
-    params.logits_all = true;
 
     const int32_t n_ctx = params.n_ctx;
 
@@ -2006,9 +2008,6 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = gpt_random_prompt(rng);
-    }
 
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -2027,6 +2026,7 @@ int main(int argc, char ** argv) {
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
+
     if (params.n_ctx > n_ctx_train) {
         fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
                 __func__, n_ctx_train, params.n_ctx);
@@ -2035,7 +2035,7 @@ int main(int argc, char ** argv) {
     // print system information
     {
         fprintf(stderr, "\n");
-        fprintf(stderr, "%s\n", get_system_info(params).c_str());
+        fprintf(stderr, "%s\n", gpt_params_get_system_info(params).c_str());
     }
 
     struct results_perplexity results;
