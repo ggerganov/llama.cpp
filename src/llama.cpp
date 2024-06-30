@@ -287,6 +287,7 @@ enum llm_kv {
 
     LLM_KV_VOCAB_SIZE,
     LLM_KV_CONTEXT_LENGTH,
+    LLM_KV_CONTEXT_LENGTH_SWA,
     LLM_KV_EMBEDDING_LENGTH,
     LLM_KV_BLOCK_COUNT,
     LLM_KV_LEADING_DENSE_BLOCK_COUNT,
@@ -379,6 +380,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
 
     { LLM_KV_VOCAB_SIZE,                        "%s.vocab_size"                        },
     { LLM_KV_CONTEXT_LENGTH,                    "%s.context_length"                    },
+    { LLM_KV_CONTEXT_LENGTH_SWA,                "%s.context_length_swa"                },
     { LLM_KV_EMBEDDING_LENGTH,                  "%s.embedding_length"                  },
     { LLM_KV_BLOCK_COUNT,                       "%s.block_count"                       },
     { LLM_KV_LEADING_DENSE_BLOCK_COUNT,         "%s.leading_dense_block_count"         },
@@ -2079,7 +2081,8 @@ struct llama_hparams {
     bool use_par_res;
 
     uint32_t n_vocab;
-    uint32_t n_ctx_train; // context size the model was trained on
+    uint32_t n_ctx_train;    // context size the model was trained on
+    int32_t  n_ctx_swa = -1; // context size for sliding window attention (SWA)
     uint32_t n_embd;
     uint32_t n_head;
     uint32_t n_head_kv;
@@ -2660,6 +2663,9 @@ struct llama_context {
     struct ggml_tensor * inp_s_copy;    // I32 [kv_size]
     struct ggml_tensor * inp_s_mask;    // F32 [1, n_kv]
     struct ggml_tensor * inp_s_seq;     // I32 [n_kv, n_batch]
+
+    // KQ mask per layer, used by sliding window attention (gemma 2)
+    std::vector<struct ggml_tensor *> inp_KQ_mask_l;
 
     // control vectors
     struct llama_control_vector cvec;
@@ -4709,6 +4715,8 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_GEMMA2:
             {
+                hparams.n_ctx_swa = 4096; // default value
+                ml.get_key(LLM_KV_CONTEXT_LENGTH_SWA, hparams.n_ctx_swa, false);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 ml.get_key(LLM_KV_ATTN_LOGIT_SOFTCAPPING, hparams.f_attn_logit_softcapping, false);
                 ml.get_key(LLM_KV_FINAL_LOGIT_SOFTCAPPING, hparams.f_final_logit_softcapping, false);
@@ -11029,9 +11037,16 @@ struct llm_build_context {
         struct ggml_tensor * inp_pos = build_inp_pos();
 
         // KQ_mask (mask for 1 head, it will be broadcasted to all heads)
-        struct ggml_tensor * KQ_mask = build_inp_KQ_mask();
+        // gemma 2 requires different mask for layers using sliding window (SWA)
+        struct ggml_tensor * KQ_mask_full = build_inp_KQ_mask();
+        struct ggml_tensor * KQ_mask_SWA  = build_inp_KQ_mask();
+        lctx.inp_KQ_mask_l.clear();
 
         for (int il = 0; il < n_layer; ++il) {
+            // (il % 2) layers use SWA
+            struct ggml_tensor * KQ_mask = (il % 2 == 0) ? KQ_mask_SWA : KQ_mask_full;
+            lctx.inp_KQ_mask_l.push_back(KQ_mask);
+
             // norm
             cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
@@ -12671,6 +12686,14 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
             GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_KQ_mask->buffer));
 
             float * data = (float *) lctx.inp_KQ_mask->data;
+            float * data_swa = nullptr;
+
+            if (lctx.model.arch == LLM_ARCH_GEMMA2) {
+                GGML_ASSERT(!lctx.inp_KQ_mask_l.empty() && "gemma 2 requires different KQ mask per layer");
+                GGML_ASSERT(hparams.n_ctx_swa > 0);
+                data_swa = (float *) lctx.inp_KQ_mask_l[0]->data;
+                data     = (float *) lctx.inp_KQ_mask_l[1]->data;
+            }
 
             // For causal attention, use only the previous KV cells
             // of the correct sequence for each token of the batch.
@@ -12692,6 +12715,15 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                             }
                         }
                         data[h*(n_kv*n_tokens) + j*n_kv + i] = f;
+
+                        // may need to cut off old tokens for sliding window
+                        if (data_swa && f != -INFINITY) {
+                            const llama_pos n_keep = hparams.n_ctx_swa - batch.n_tokens;
+                            if (pos - lctx.kv_self.cells[i].pos > n_keep) {
+                                f = -INFINITY;
+                            }
+                            data_swa[h*(n_kv*n_tokens) + j*n_kv + i] = f;
+                        }
                     }
                 }
 
