@@ -1026,6 +1026,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.input_suffix = argv[i];
         return true;
     }
+    if (arg == "--spm-infill") {
+        params.spm_infill = true;
+        return true;
+    }
     if (arg == "--grammar") {
         CHECK_ARG
         sparams.grammar = argv[i];
@@ -1263,11 +1267,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     // cvector params
-    if (arg == "--completions-file") {
-        CHECK_ARG
-        params.cvector_completions_file = argv[i];
-        return true;
-    }
     if (arg == "--positive-file") {
         CHECK_ARG
         params.cvector_positive_file = argv[i];
@@ -1278,11 +1277,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.cvector_negative_file = argv[i];
         return true;
     }
-    if (arg == "--completions") {
-        CHECK_ARG
-        params.n_completions = std::stoi(argv[i]);
-        return true;
-    }
     if (arg == "--pca-batch") {
         CHECK_ARG
         params.n_pca_batch = std::stoi(argv[i]);
@@ -1291,6 +1285,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     if (arg == "--pca-iter") {
         CHECK_ARG
         params.n_pca_iterations = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--method") {
+        CHECK_ARG
+        std::string value(argv[i]);
+        /**/ if (value == "pca") { params.cvector_dimre_method = DIMRE_METHOD_PCA; }
+        else if (value == "mean") { params.cvector_dimre_method = DIMRE_METHOD_MEAN; }
+        else { invalid_param = true; }
         return true;
     }
 #ifndef LOG_DISABLE_LOGS
@@ -1411,6 +1413,8 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "main infill", "       --in-prefix-bos",        "prefix BOS to user inputs, preceding the `--in-prefix` string" });
     options.push_back({ "main infill", "       --in-prefix STRING",     "string to prefix user inputs with (default: empty)" });
     options.push_back({ "main infill", "       --in-suffix STRING",     "string to suffix after user inputs with (default: empty)" });
+    options.push_back({ "server infill",
+                                       "       --spm-infill",           "use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: %s)", params.spm_infill ? "enabled" : "disabled" });
 
     options.push_back({ "sampling" });
     options.push_back({ "*",           "       --samplers SAMPLERS",    "samplers that will be used for generation in the order, separated by \';\'\n"
@@ -1444,7 +1448,10 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "main",        "       --cfg-negative-prompt-file FNAME",
                                                                         "negative prompt file to use for guidance" });
     options.push_back({ "main",        "       --cfg-scale N",          "strength of guidance (default: %.1f, 1.0 = disable)", (double)sparams.cfg_scale });
-
+    options.push_back({ "main",        "       --chat-template JINJA_TEMPLATE",
+                                                                        "set custom jinja chat template (default: template taken from model's metadata)\n"
+                                                                        "only commonly used templates are accepted:\n"
+                                                                        "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
     options.push_back({ "grammar" });
     options.push_back({ "*",           "       --grammar GRAMMAR",      "BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", sparams.grammar.c_str() });
     options.push_back({ "*",           "       --grammar-file FNAME",   "file to read grammar from" });
@@ -1538,9 +1545,11 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       --lora FNAME",           "apply LoRA adapter (implies --no-mmap)" });
     options.push_back({ "*",           "       --lora-scaled FNAME S",  "apply LoRA adapter with user defined scaling S (implies --no-mmap)" });
     options.push_back({ "*",           "       --lora-base FNAME",      "optional model to use as a base for the layers modified by the LoRA adapter" });
-    options.push_back({ "*",           "       --control-vector FNAME", "add a control vector" });
+    options.push_back({ "*",           "       --control-vector FNAME", "add a control vector\n"
+                                                                        "note: this argument can be repeated to add multiple control vectors" });
     options.push_back({ "*",           "       --control-vector-scaled FNAME SCALE",
-                                                                        "add a control vector with user defined scaling SCALE" });
+                                                                        "add a control vector with user defined scaling SCALE\n"
+                                                                        "note: this argument can be repeated to add multiple scaled control vectors" });
     options.push_back({ "*",           "       --control-vector-layer-range START END",
                                                                         "layer range to apply the control vector(s) to, start and end inclusive" });
     options.push_back({ "*",           "-m,    --model FNAME",          "model path (default: models/$filename with filename from --hf-file\n"
@@ -1621,11 +1630,9 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "cvector",     "-o,    --output FNAME",         "output file (default: '%s')", params.cvector_outfile.c_str() });
     options.push_back({ "cvector",     "       --positive-file FNAME",  "positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str() });
     options.push_back({ "cvector",     "       --negative-file FNAME",  "negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str() });
-    options.push_back({ "cvector",     "       --completions-file FNAME",
-                                                                        "completions file (default: '%s')", params.cvector_completions_file.c_str() });
-    options.push_back({ "cvector",     "       --completions N",        "number of lines of completions file to use (default: %d)", params.n_completions });
     options.push_back({ "cvector",     "       --pca-batch N",          "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
     options.push_back({ "cvector",     "       --pca-iter N",           "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
+    options.push_back({ "cvector",     "       --method {pca,mean}",    "dimensionality reduction method to be used (default: pca)" });
 
     printf("usage: %s [options]\n", argv[0]);
 
@@ -2602,10 +2609,82 @@ bool llama_should_add_bos_token(const llama_model * model) {
     return add_bos != -1 ? bool(add_bos) : (llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
 }
 
+//
+// Chat template utils
+//
+
 bool llama_chat_verify_template(const std::string & tmpl) {
     llama_chat_message chat[] = {{"user", "test"}};
     int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
     return res >= 0;
+}
+
+std::string llama_chat_apply_template(const struct llama_model * model,
+        const std::string & tmpl,
+        const std::vector<llama_chat_msg> & msgs,
+        bool add_ass) {
+    int alloc_size = 0;
+    bool fallback = false; // indicate if we must fallback to default chatml
+    std::vector<llama_chat_message> chat;
+    for (auto & msg : msgs) {
+        chat.push_back({msg.role.c_str(), msg.content.c_str()});
+        alloc_size += (msg.role.size() + msg.content.size()) * 1.25;
+    }
+
+    const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
+    std::vector<char> buf(alloc_size);
+
+    // run the first time to get the total output length
+    int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+
+    // error: chat template is not supported
+    if (res < 0) {
+        if (ptr_tmpl != nullptr) {
+            // if the custom "tmpl" is not supported, we throw an error
+            // this is a bit redundant (for good), since we're not sure if user validated the custom template with llama_chat_verify_template()
+            throw std::runtime_error("this custom template is not supported");
+        } else {
+            // If the built-in template is not supported, we default to chatml
+            res = llama_chat_apply_template(nullptr, "chatml", chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+            fallback = true;
+        }
+    }
+
+    // if it turns out that our buffer is too small, we resize it
+    if ((size_t) res > buf.size()) {
+        buf.resize(res);
+        res = llama_chat_apply_template(
+            fallback ? nullptr : model,
+            fallback ? "chatml" : ptr_tmpl,
+            chat.data(), chat.size(), add_ass, buf.data(), buf.size());
+    }
+
+    std::string formatted_chat(buf.data(), res);
+    return formatted_chat;
+}
+
+std::string llama_chat_format_single(const struct llama_model * model,
+        const std::string & tmpl,
+        const std::vector<llama_chat_msg> & past_msg,
+        const llama_chat_msg & new_msg,
+        bool add_ass) {
+    auto fmt_past_msg = llama_chat_apply_template(model, tmpl, past_msg, false);
+    std::vector<llama_chat_msg> chat_new(past_msg);
+    chat_new.push_back(new_msg);
+    auto fmt_new_msg = llama_chat_apply_template(model, tmpl, chat_new, add_ass);
+    auto formatted = fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
+    return formatted;
+}
+
+std::string llama_chat_format_example(const struct llama_model * model,
+        const std::string & tmpl) {
+    std::vector<llama_chat_msg> msgs = {
+        {"system",    "You are a helpful assistant"},
+        {"user",      "Hello"},
+        {"assistant", "Hi there"},
+        {"user",      "How are you?"},
+    };
+    return llama_chat_apply_template(model, tmpl, msgs, true);
 }
 
 //
@@ -2748,124 +2827,86 @@ float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n)
 //
 
 static llama_control_vector_data llama_control_vector_load_one(const llama_control_vector_load_info & load_info) {
-    int32_t n_tensors;
-
-    size_t n_bytes = 0;
-
-    uint32_t max_direction_layer = 0;
-
     llama_control_vector_data result = { -1, {} };
 
-    // calculate size of ctx needed for tensors, ensure tensors are f32, and find max layer
-    {
-        struct ggml_init_params meta_params = {
-            /* .mem_size   = */ ggml_tensor_overhead() * 128 + ggml_graph_overhead(),
-            /* .mem_buffer = */ nullptr,
-            /* .no_alloc   = */ true,
-        };
-        ggml_context * meta_ctx = ggml_init(meta_params);
-        struct gguf_init_params meta_gguf_params = {
-            /* .no_alloc = */ true,
-            /* .ctx      = */ &meta_ctx,
-        };
-        struct gguf_context * meta_ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
-        if (!meta_ctx_gguf) {
-            fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
-            ggml_free(meta_ctx);
-            return result;
-        }
-
-        n_tensors = gguf_get_n_tensors(meta_ctx_gguf);
-        for (int i = 0; i < n_tensors; i++) {
-            std::string name = gguf_get_tensor_name(meta_ctx_gguf, i);
-
-            // split on '.'
-            size_t dotpos = name.find('.');
-            if (dotpos != std::string::npos && name.substr(0, dotpos) == "direction") {
-                try {
-                    uint32_t layer = std::stoi(name.substr(dotpos + 1));
-                    if (layer == 0) {
-                        fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                        ggml_free(meta_ctx);
-                        gguf_free(meta_ctx_gguf);
-                        return result;
-                    }
-                    if (layer > max_direction_layer) {
-                        max_direction_layer = layer;
-                    }
-                } catch (...) {
-                    fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                    ggml_free(meta_ctx);
-                    gguf_free(meta_ctx_gguf);
-                    return result;
-                }
-            }
-
-            struct ggml_tensor * tensor_meta = ggml_get_tensor(meta_ctx, name.c_str());
-            if (tensor_meta->type != GGML_TYPE_F32 || ggml_n_dims(tensor_meta) != 1) {
-                fprintf(stderr, "%s: direction tensor invalid in %s\n", __func__, load_info.fname.c_str());
-                ggml_free(meta_ctx);
-                gguf_free(meta_ctx_gguf);
-                return result;
-            }
-            if (result.n_embd == -1) {
-                result.n_embd = ggml_nelements(tensor_meta);
-            } else if (ggml_nelements(tensor_meta) != result.n_embd) {
-                fprintf(stderr, "%s: direction tensor sizes mismatched in %s\n", __func__, load_info.fname.c_str());
-                ggml_free(meta_ctx);
-                gguf_free(meta_ctx_gguf);
-                return result;
-            }
-            n_bytes += ggml_nbytes(tensor_meta);
-        }
-        ggml_free(meta_ctx);
-        gguf_free(meta_ctx_gguf);
+    ggml_context * ctx = nullptr;
+    struct gguf_init_params meta_gguf_params = {
+        /* .no_alloc = */ false,
+        /* .ctx      = */ &ctx,
+    };
+    struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), meta_gguf_params);
+    if (!ctx_gguf) {
+        fprintf(stderr, "%s: failed to load control vector file from %s\n", __func__, load_info.fname.c_str());
+        return result;
     }
 
+    int32_t n_tensors = gguf_get_n_tensors(ctx_gguf);
     if (n_tensors == 0) {
         fprintf(stderr, "%s: no direction tensors found in %s\n", __func__, load_info.fname.c_str());
-        return result;
     }
 
-    // load and scale tensors into final control vector context
-    struct ggml_init_params ggml_params = {
-        /* .mem_size   = */ ggml_tensor_overhead() * n_tensors + n_bytes,
-        /* .mem_buffer = */ nullptr,
-        /* .no_alloc   = */ false,
-    };
-    struct ggml_context * ctx = ggml_init(ggml_params);
+    for (int i = 0; i < n_tensors; i++) {
+        std::string name = gguf_get_tensor_name(ctx_gguf, i);
 
-    struct gguf_init_params params = {
-        /*.no_alloc = */ false,
-        /*.ctx      = */ &ctx,
-    };
-    struct gguf_context * ctx_gguf = gguf_init_from_file(load_info.fname.c_str(), params);
-    if (!ctx_gguf) {
-        fprintf(stderr, "%s: failed to load control vector from %s\n", __func__, load_info.fname.c_str());
-        ggml_free(ctx);
-        return result;
-    }
+        int layer_idx = -1;
 
-    // do not store data for layer 0 (it's not used)
-    result.data.resize(result.n_embd * max_direction_layer);
-
-    for (uint32_t il = 1; il <= max_direction_layer; il++) {
-        const std::string name = "direction." + std::to_string(il);
-        const ggml_tensor * tensor = ggml_get_tensor(ctx, name.c_str());
-
-        float * dst = result.data.data() + result.n_embd * (il - 1);
-
-        if (tensor) {
-            const float * src = (const float *) tensor->data;
-            for (int j = 0; j < result.n_embd; j++) {
-                dst[j] = src[j] * load_info.strength;
-            }
-        } else {
-            for (int j = 0; j < result.n_embd; j++) {
-                dst[j] = 0.0f;
+        // split on '.'
+        size_t dotpos = name.find('.');
+        if (dotpos != std::string::npos && name.substr(0, dotpos) == "direction") {
+            try {
+                layer_idx = std::stoi(name.substr(dotpos + 1));
+            } catch (...) {
+                layer_idx = -1;
             }
         }
+        if (layer_idx < 0) {
+            fprintf(stderr, "%s: invalid/unparsable direction tensor layer index in %s\n", __func__, load_info.fname.c_str());
+            result.n_embd = -1;
+            break;
+        } else if (layer_idx == 0) {
+            fprintf(stderr, "%s: invalid (zero) direction tensor layer index in %s\n", __func__, load_info.fname.c_str());
+            result.n_embd = -1;
+            break;
+        }
+
+        struct ggml_tensor * tensor = ggml_get_tensor(ctx, name.c_str());
+        if (tensor->type != GGML_TYPE_F32) {
+            fprintf(stderr, "%s: invalid (non-F32) direction tensor type in %s\n", __func__, load_info.fname.c_str());
+            result.n_embd = -1;
+            break;
+        }
+        if (ggml_n_dims(tensor) != 1) {
+            fprintf(stderr, "%s: invalid (non-1D) direction tensor shape in %s\n", __func__, load_info.fname.c_str());
+            result.n_embd = -1;
+            break;
+        }
+
+        if (result.n_embd == -1) {
+            result.n_embd = ggml_nelements(tensor);
+        } else if (ggml_nelements(tensor) != result.n_embd) {
+            fprintf(stderr, "%s: direction tensor in %s does not match previous dimensions\n", __func__, load_info.fname.c_str());
+            result.n_embd = -1;
+            break;
+        }
+
+        // extend if necessary - do not store data for layer 0 (it's not used)
+        result.data.resize(std::max(result.data.size(), static_cast<size_t>(result.n_embd * layer_idx)), 0.0f);
+
+        const float * src = (const float *) tensor->data;
+        float * dst = result.data.data() + result.n_embd * (layer_idx - 1);  // layer 1 at [0]
+        for (int j = 0; j < result.n_embd; j++) {
+            dst[j] += src[j] * load_info.strength;  // allows multiple directions for same layer in same file
+        }
+
     }
+
+    if (result.n_embd == -1) {
+        fprintf(stderr, "%s: skipping %s due to invalid direction tensors\n", __func__, load_info.fname.c_str());
+        result.data.clear();
+    }
+
+    gguf_free(ctx_gguf);
+    ggml_free(ctx);
 
     return result;
 }
@@ -2877,16 +2918,19 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
         auto cur = llama_control_vector_load_one(info);
 
         if (cur.n_embd == -1) {
-            return result;
+            result.n_embd = -1;
+            break;
         }
-        if (result.n_embd != -1 && (result.n_embd != cur.n_embd || result.data.size() != cur.data.size())) {
-            fprintf(stderr, "%s: control vector in %s does not match previous vector dimensions\n", __func__, info.fname.c_str());
-            return result;
+        if (result.n_embd != -1 && result.n_embd != cur.n_embd) {
+            fprintf(stderr, "%s: control vectors in %s does not match previous dimensions\n", __func__, info.fname.c_str());
+            result.n_embd = -1;
+            break;
         }
 
         if (result.n_embd == -1) {
             result = std::move(cur);
         } else {
+            result.data.resize(std::max(result.data.size(), cur.data.size()), 0.0f);  // extend if necessary
             for (size_t i = 0; i < cur.data.size(); i++) {
                 result.data[i] += cur.data[i];
             }
@@ -2894,7 +2938,8 @@ llama_control_vector_data llama_control_vector_load(const std::vector<llama_cont
     }
 
     if (result.n_embd == -1) {
-        fprintf(stderr, "%s: no vectors passed\n", __func__);
+        fprintf(stderr, "%s: no valid control vector files passed\n", __func__);
+        result.data.clear();
     }
 
     return result;

@@ -487,6 +487,9 @@ class Model:
         if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
             res = "jina-v2-code"
+        if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
+            # ref: https://huggingface.co/LumiOpen/Viking-7B
+            res = "viking"
 
         if res is None:
             logger.warning("\n")
@@ -2323,6 +2326,52 @@ class GemmaModel(Model):
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
+
+        # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
+        # To prevent errors, skip loading lm_head.weight.
+        if name == "lm_head.weight":
+            logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+            return []
+
+        # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
+        if name.endswith("norm.weight"):
+            data_torch = data_torch + 1
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("Gemma2ForCausalLM")
+class Gemma2Model(Model):
+    model_arch = gguf.MODEL_ARCH.GEMMA2
+
+    def set_vocab(self):
+        self._set_vocab_llama_hf()
+        self.gguf_writer.add_add_space_prefix(False)
+
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+        block_count = hparams["num_hidden_layers"]
+
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
+        self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+        self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"] if "num_key_value_heads" in hparams else hparams["num_attention_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_key_length(hparams["head_dim"])
+        self.gguf_writer.add_value_length(hparams["head_dim"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_attn_logit_softcapping(
+            self.hparams["attn_logit_softcapping"]
+        )
+        self.gguf_writer.add_final_logit_softcapping(
+            self.hparams["final_logit_softcapping"]
+        )
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unusem
 
         # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
         # To prevent errors, skip loading lm_head.weight.
