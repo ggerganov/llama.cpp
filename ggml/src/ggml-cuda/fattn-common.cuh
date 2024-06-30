@@ -54,7 +54,6 @@ typedef float (*vec_dot_KQ_f32_t)(
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q4_0 * K_q4_0 = (const block_q4_0 *) K_c;
     GGML_UNUSED(Q_v);
@@ -90,19 +89,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_1(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q4_1 * K_q4_1 = (const block_q4_1 *) K_c;
     GGML_UNUSED(Q_v);
@@ -142,19 +133,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_1(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q5_0 * K_q5_0 = (const block_q5_0 *) K_c;
     GGML_UNUSED(Q_v);
@@ -197,19 +180,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q5_1 * K_q5_1 = (const block_q5_1 *) K_c;
     GGML_UNUSED(Q_v);
@@ -256,19 +231,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template <typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q8_0(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q8_0 * K_q8_0 = (const block_q8_0 *) K_c;
     GGML_UNUSED(Q_v);
@@ -297,13 +264,6 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q8_0(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template <typename T, int D>
