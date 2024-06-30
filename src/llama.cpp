@@ -287,7 +287,6 @@ enum llm_kv {
 
     LLM_KV_VOCAB_SIZE,
     LLM_KV_CONTEXT_LENGTH,
-    LLM_KV_CONTEXT_LENGTH_SWA,
     LLM_KV_EMBEDDING_LENGTH,
     LLM_KV_BLOCK_COUNT,
     LLM_KV_LEADING_DENSE_BLOCK_COUNT,
@@ -318,6 +317,7 @@ enum llm_kv {
     LLM_KV_ATTENTION_Q_LORA_RANK,
     LLM_KV_ATTENTION_KV_LORA_RANK,
     LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT,
+    LLM_KV_ATTENTION_SLIDING_WINDOW,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
@@ -380,7 +380,6 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
 
     { LLM_KV_VOCAB_SIZE,                        "%s.vocab_size"                        },
     { LLM_KV_CONTEXT_LENGTH,                    "%s.context_length"                    },
-    { LLM_KV_CONTEXT_LENGTH_SWA,                "%s.context_length_swa"                },
     { LLM_KV_EMBEDDING_LENGTH,                  "%s.embedding_length"                  },
     { LLM_KV_BLOCK_COUNT,                       "%s.block_count"                       },
     { LLM_KV_LEADING_DENSE_BLOCK_COUNT,         "%s.leading_dense_block_count"         },
@@ -411,6 +410,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_Q_LORA_RANK,            "%s.attention.q_lora_rank"            },
     { LLM_KV_ATTENTION_KV_LORA_RANK,           "%s.attention.kv_lora_rank"           },
     { LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT, "%s.attention.relative_buckets_count" },
+    { LLM_KV_ATTENTION_SLIDING_WINDOW,         "%s.attention.sliding_window"         },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
@@ -2082,7 +2082,6 @@ struct llama_hparams {
 
     uint32_t n_vocab;
     uint32_t n_ctx_train;    // context size the model was trained on
-    int32_t  n_ctx_swa = -1; // context size for sliding window attention (SWA)
     uint32_t n_embd;
     uint32_t n_head;
     uint32_t n_head_kv;
@@ -2102,6 +2101,7 @@ struct llama_hparams {
     uint32_t n_ff_shexp = 0;
     uint32_t n_expert_shared = 0;
     float    expert_weights_scale = 0.0;
+    uint32_t n_sliding = 0; // sliding window attention (SWA)
 
     float f_norm_eps;
     float f_norm_rms_eps;
@@ -4715,8 +4715,8 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_GEMMA2:
             {
-                hparams.n_ctx_swa = 4096; // default value
-                ml.get_key(LLM_KV_CONTEXT_LENGTH_SWA, hparams.n_ctx_swa, false);
+                hparams.n_sliding = 4096; // default value of gemma 2
+                ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_sliding, false);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
                 ml.get_key(LLM_KV_ATTN_LOGIT_SOFTCAPPING, hparams.f_attn_logit_softcapping, false);
                 ml.get_key(LLM_KV_FINAL_LOGIT_SOFTCAPPING, hparams.f_final_logit_softcapping, false);
@@ -12687,11 +12687,11 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
             float * data = (float *) lctx.inp_KQ_mask->data;
             float * data_swa = nullptr;
-            const llama_pos n_keep_swa = hparams.n_ctx_swa - batch.n_tokens;
+            const llama_pos n_keep_swa = hparams.n_sliding - batch.n_tokens;
 
             if (lctx.model.arch == LLM_ARCH_GEMMA2) {
                 GGML_ASSERT(!lctx.inp_KQ_mask_l.empty() && "gemma 2 requires different KQ mask per layer");
-                GGML_ASSERT(hparams.n_ctx_swa > 0);
+                GGML_ASSERT(hparams.n_sliding > 0);
                 data_swa = (float *) lctx.inp_KQ_mask_l[0]->data;
                 data     = (float *) lctx.inp_KQ_mask_l[1]->data;
                 // because layer masks are alternate for gemma 2, we only need to take first 2 layers
