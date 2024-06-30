@@ -846,7 +846,7 @@ static __device__ __forceinline__ float vec_dot_iq2_xxs_q8_1(
 
     const int q2 = get_int_b2(bq2->qs, iqs);
     const uint8_t * aux8 = (const uint8_t *) &q2;
-    const uint aux32 = get_int_b2(bq2->qs, iqs + 1);
+    const uint32_t aux32 = get_int_b2(bq2->qs, iqs + 1);
 
     int sumi = 0;
 #pragma unroll
@@ -976,7 +976,7 @@ static __device__ __forceinline__ float vec_dot_iq3_xxs_q8_1(
 
     const int2 q3_packed = make_int2(get_int_b2(bq3->qs, iqs), get_int_b2(bq3->qs, iqs+1));
     const uint8_t * q3 = (const uint8_t *) &q3_packed;
-    const uint aux32 = get_int_b2(bq3->qs, QK_K/16 + iqs/2);
+    const uint32_t aux32 = get_int_b2(bq3->qs, QK_K/16 + iqs/2);
 
     int sumi = 0;
 #pragma unroll
