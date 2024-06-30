@@ -134,7 +134,6 @@ let
     vulkan-headers
     vulkan-loader
     shaderc
-    python3
   ];
 in
 

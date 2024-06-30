@@ -525,11 +525,6 @@ if (GGML_RPC)
 endif()
 
 if (GGML_VULKAN)
-    find_package(Python COMPONENTS Interpreter)
-    if (NOT Python_FOUND)
-        message(FATAL_ERROR "python is required to compile Vulkan shaders")
-    endif()
-
     find_package(Vulkan)
 
     if (Vulkan_FOUND)
@@ -563,7 +558,9 @@ if (GGML_VULKAN)
             add_compile_definitions(GGML_VULKAN_RUN_TESTS)
         endif()
 
-        set (_llama_vk_genshaders_cmd ${Python_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../ggml_vk_generate_shaders.py)
+        add_subdirectory(vulkan-gen-shaders)
+
+        set (_llama_vk_genshaders_cmd vulkan-gen-shaders)
         set (_llama_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
         set (_llama_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
         set (_llama_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)

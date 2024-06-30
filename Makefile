@@ -186,6 +186,10 @@ ifdef GGML_RPC
 	BUILD_TARGETS += rpc-server
 endif
 
+ifdef GGML_VULKAN
+	BUILD_TARGETS += vulkan-gen-shaders
+endif
+
 default: $(BUILD_TARGETS)
 
 test: $(TEST_TARGETS)
@@ -711,9 +715,8 @@ ifdef GGML_VULKAN_RUN_TESTS
 	MK_CPPFLAGS  += -DGGML_VULKAN_RUN_TESTS
 endif
 
-PYTHON_CMD = python
 GLSLC_CMD  = glslc
-_llama_vk_genshaders_cmd = $(PYTHON_CMD) ggml/ggml_vk_generate_shaders.py
+_llama_vk_genshaders_cmd = $(shell pwd)/vulkan-gen-shaders
 _llama_vk_header = ggml/src/ggml-vulkan-shaders.hpp
 _llama_vk_source = ggml/src/ggml-vulkan-shaders.cpp
 _llama_vk_input_dir = ggml/src/vulkan-shaders
@@ -724,12 +727,15 @@ ggml/src/ggml-vulkan.o: ggml/src/ggml-vulkan.cpp ggml/include/ggml-vulkan.h $(_l
 
 $(_llama_vk_header): $(_llama_vk_source)
 
-$(_llama_vk_source): $(_llama_vk_shader_deps)
+$(_llama_vk_source): $(_llama_vk_shader_deps) vulkan-gen-shaders
 	$(_llama_vk_genshaders_cmd) \
 		--glslc      $(GLSLC_CMD) \
 		--input-dir  $(_llama_vk_input_dir) \
 		--target-hpp $(_llama_vk_header) \
 		--target-cpp $(_llama_vk_source)
+
+vulkan-gen-shaders: ggml/src/vulkan-gen-shaders/vulkan-gen-shaders.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $(LDFLAGS) ggml/src/vulkan-gen-shaders/vulkan-gen-shaders.cpp
 
 endif # GGML_VULKAN
 
@@ -1100,7 +1106,7 @@ clean:
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
-	rm -f ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
+	rm -f vulkan-gen-shaders ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
 	find examples pocs -type f -name "*.o" -delete
 
 #

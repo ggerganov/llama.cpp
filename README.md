@@ -586,8 +586,7 @@ Building the program with BLAS support may lead to some performance improvements
         mingw-w64-ucrt-x86_64-gcc \
         mingw-w64-ucrt-x86_64-cmake \
         mingw-w64-ucrt-x86_64-vulkan-devel \
-        mingw-w64-ucrt-x86_64-shaderc \
-        mingw-w64-ucrt-x86_64-python3
+        mingw-w64-ucrt-x86_64-shaderc
     ```
   Switch into `llama.cpp` directory and build using CMake.
   ```sh
