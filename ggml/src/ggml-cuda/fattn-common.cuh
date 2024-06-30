@@ -72,7 +72,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
         const int v = (get_int_from_uint8(K_q4_0[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
@@ -120,7 +120,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_1(
         const int v = (get_int_from_uint8_aligned(K_q4_1[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
@@ -179,7 +179,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
 
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
@@ -234,7 +234,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
 
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
