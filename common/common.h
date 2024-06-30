@@ -250,6 +250,8 @@ struct gpt_params {
     std::string cvector_outfile       = "control_vector.gguf";
     std::string cvector_positive_file = "examples/cvector-generator/positive.txt";
     std::string cvector_negative_file = "examples/cvector-generator/negative.txt";
+
+    bool spm_infill = false; // suffix/prefix/middle pattern for infill
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
@@ -380,6 +382,8 @@ struct llama_chat_msg {
 bool llama_chat_verify_template(const std::string & tmpl);
 
 // CPP wrapper for llama_chat_apply_template
+// If the built-in template is not supported, we default to chatml
+// If the custom "tmpl" is not supported, we throw an error
 std::string llama_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & chat,

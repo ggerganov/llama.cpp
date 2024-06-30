@@ -45,6 +45,7 @@ BUILD_TARGETS = \
 TEST_TARGETS = \
 	tests/test-autorelease \
 	tests/test-backend-ops \
+	tests/test-chat-template \
 	tests/test-double-float \
 	tests/test-grad0 \
 	tests/test-grammar-integration \
@@ -1092,6 +1093,7 @@ clean:
 	rm -rvf src/*.o
 	rm -rvf tests/*.o
 	rm -rvf examples/*.o
+	rm -rvf common/*.o
 	rm -rvf *.a
 	rm -rvf *.dll
 	rm -rvf *.so
