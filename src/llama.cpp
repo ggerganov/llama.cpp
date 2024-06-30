@@ -5170,6 +5170,28 @@ static void llm_load_vocab(
         vocab.token_to_id[word] = i;
         vocab.max_token_len = std::max(vocab.max_token_len, (int) word.size());
 
+        // TODO: properly handle pre-normalized added_tokens and remove this
+        // handle space tokens with dual tokens,
+        // like the pre-normalized added_tokens
+        // of neox-style tokenizers (mpt, olmo, stablelm, etc)
+        if (word.find(' ') != std::string::npos) {
+            // same as in the internal `unicode_byte_encoding_process`
+            // TODO: extract and expose this in some unicode_* function
+            std::string text_utf;
+            auto utf_word =  unicode_cpts_from_utf8(word);
+            for (size_t i = 0; i < utf_word.size(); ++i) {
+                text_utf += unicode_cpt_to_utf8(utf_word[i]);
+            }
+
+            std::string encoded_token;
+            for (char & c : text_utf) {
+                encoded_token += unicode_byte_to_utf8(c);
+            }
+
+            // override token id
+            vocab.token_to_id[encoded_token] = i;
+        }
+
         auto & token_data = vocab.id_to_token[i];
         token_data.text  = std::move(word);
         token_data.score = scores ? scores[i] : 0.0f;
@@ -13890,13 +13912,9 @@ struct llm_tokenizer_bpe {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_MPT:
-                // TODO: MPT pre-tokenization regexes are unknown
-                //       the following are close, but not exact. run the following:
-                //       ./bin/test-tokenizer-0 ../models/ggml-vocab-mpt.gguf
-                GGML_ASSERT("MPT pre-tokenization regexes are unknown - fixes needed");
+            case LLAMA_VOCAB_PRE_TYPE_OLMO:
                 regex_exprs = {
-                    "\\s?\\p{L}+",
-                    "\\s?\\p{P}+",
+                    "[ ]{2,24}", // the spaces from the added_tokens are split separately
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                 };
                 break;
@@ -13909,7 +13927,6 @@ struct llm_tokenizer_bpe {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_GPT2:
-            case LLAMA_VOCAB_PRE_TYPE_OLMO:
                 regex_exprs = {
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                 };
@@ -13984,6 +14001,10 @@ struct llm_tokenizer_bpe {
 
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
+
+        // FIXME: pre-tokenize added_tokens (user-defined tokens) before other pre-tokenization
+        // ref: https://github.com/huggingface/tokenizers/blob/fdd26ba9a3f0c133427aab0423888cbde91362d7/tokenizers/src/tokenizer/mod.rs#L726
+        // (useful for neox-style tokenizers)
 
         const auto word_collection = unicode_regex_split(text, regex_exprs);
 
