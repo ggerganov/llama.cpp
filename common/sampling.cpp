@@ -67,7 +67,16 @@ static llama_token_healing_output llama_token_healing_get_prefix(
 
     const llama_model * model = llama_get_model(ctx_main);
     auto is_special_token = [&](const llama_token token_id) {
-        return llama_token_is_control(model, token_id) || llama_token_is_eog(model, token_id);
+        return llama_token_is_control(model,    token_id)
+            || llama_token_bos       (model) == token_id
+            || llama_token_eos       (model) == token_id
+            || llama_token_cls       (model) == token_id
+            || llama_token_sep       (model) == token_id
+            || llama_token_pad       (model) == token_id
+            || llama_token_prefix    (model) == token_id
+            || llama_token_middle    (model) == token_id
+            || llama_token_suffix    (model) == token_id
+            || llama_token_eot       (model) == token_id;
     };
 
     if (th_type == llama_token_healing_type::DYNAMIC_ONCE || th_type == llama_token_healing_type::DYNAMIC_MULTI) {
