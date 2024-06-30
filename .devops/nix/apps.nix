@@ -6,11 +6,11 @@
         let
           inherit (config.packages) default;
           binaries = [
-            "llama"
+            "llama-cli"
             "llama-embedding"
             "llama-server"
-            "quantize"
-            "train-text-from-scratch"
+            "llama-quantize"
+            "llama-train-text-from-scratch"
           ];
           mkApp = name: {
             type = "app";

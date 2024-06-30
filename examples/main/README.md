@@ -1,4 +1,4 @@
-# llama.cpp/example/main
+# llama.cpp/examples/main
 
 This example program allows you to use various LLaMA language models in an easy and efficient way. It is specifically designed to work with the [llama.cpp](https://github.com/ggerganov/llama.cpp) project, which provides a plain C/C++ implementation with optional 4-bit quantization support for faster, lower memory inference, and is optimized for desktop CPUs. This program can be used to perform various inference tasks with LLaMA models, including generating text based on user-provided prompts and chat-like interactions with reverse prompts.
 
@@ -20,13 +20,13 @@ To get started right away, run the following command, making sure to use the cor
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin --prompt "Once upon a time"
+./llama-cli -m models/7B/ggml-model.bin --prompt "Once upon a time"
 ```
 
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin --prompt "Once upon a time"
+llama-cli.exe -m models\7B\ggml-model.bin --prompt "Once upon a time"
 ```
 
 For an interactive experience, try this command:
@@ -34,7 +34,7 @@ For an interactive experience, try this command:
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
+./llama-cli -m models/7B/ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -p \
 'User: Hi
 AI: Hello. I am an AI chatbot. Would you like to talk?
 User: Sure!
@@ -45,7 +45,7 @@ User:'
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
+llama-cli.exe -m models\7B\ggml-model.bin -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
 ```
 
 The following command generates "infinite" text from a starting prompt (you can use `Ctrl-C` to stop it):
@@ -53,18 +53,18 @@ The following command generates "infinite" text from a starting prompt (you can 
 #### Unix-based systems (Linux, macOS, etc.):
 
 ```bash
-./main -m models/7B/ggml-model.bin --ignore-eos -n -1
+./llama-cli -m models/7B/ggml-model.bin --ignore-eos -n -1
 ```
 
 #### Windows:
 
 ```powershell
-main.exe -m models\7B\ggml-model.bin --ignore-eos -n -1
+llama-cli.exe -m models\7B\ggml-model.bin --ignore-eos -n -1
 ```
 
 ## Common Options
 
-In this section, we cover the most commonly used options for running the `main` program with the LLaMA models:
+In this section, we cover the most commonly used options for running the `llama-cli` program with the LLaMA models:
 
 -   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/7B/ggml-model.gguf`; inferred from `--model-url` if set).
 -   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf).
@@ -74,7 +74,7 @@ In this section, we cover the most commonly used options for running the `main` 
 
 ## Input Prompts
 
-The `main` program provides several ways to interact with the LLaMA models using input prompts:
+The `llama-cli` program provides several ways to interact with the LLaMA models using input prompts:
 
 -   `--prompt PROMPT`: Provide a prompt directly as a command-line option.
 -   `--file FNAME`: Provide a file containing a prompt or multiple prompts.
@@ -82,7 +82,7 @@ The `main` program provides several ways to interact with the LLaMA models using
 
 ## Interaction
 
-The `main` program offers a seamless way to interact with LLaMA models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive` and `--interactive-first`.
+The `llama-cli` program offers a seamless way to interact with LLaMA models, allowing users to engage in real-time conversations or provide instructions for specific tasks. The interactive mode can be triggered using various options, including `--interactive` and `--interactive-first`.
 
 In interactive mode, users can participate in text generation by injecting their input during the process. Users can press `Ctrl+C` at any time to interject and type their input, followed by pressing `Return` to submit it to the LLaMA model. To submit additional lines without finalizing input, users can end the current line with a backslash (`\`) and continue typing.
 
@@ -107,7 +107,7 @@ To overcome this limitation, you can use the `--in-prefix` flag to add a space o
 The `--in-prefix` flag is used to add a prefix to your input, primarily, this is used to insert a space after the reverse prompt. Here's an example of how to use the `--in-prefix` flag in conjunction with the `--reverse-prompt` flag:
 
 ```sh
-./main -r "User:" --in-prefix " "
+./llama-cli -r "User:" --in-prefix " "
 ```
 
 ### In-Suffix
@@ -115,7 +115,7 @@ The `--in-prefix` flag is used to add a prefix to your input, primarily, this is
 The `--in-suffix` flag is used to add a suffix after your input. This is useful for adding an "Assistant:" prompt after the user's input. It's added after the new-line character (`\n`) that's automatically added to the end of the user's input. Here's an example of how to use the `--in-suffix` flag in conjunction with the `--reverse-prompt` flag:
 
 ```sh
-./main -r "User:" --in-prefix " " --in-suffix "Assistant:"
+./llama-cli -r "User:" --in-prefix " " --in-suffix "Assistant:"
 ```
 
 ## Context Management

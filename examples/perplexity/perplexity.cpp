@@ -476,7 +476,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     }
 
     // Download: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-    // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Run `./llama-perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 

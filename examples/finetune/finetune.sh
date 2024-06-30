@@ -2,7 +2,7 @@
 cd `dirname $0`
 cd ../..
 
-EXE="./finetune"
+EXE="./llama-finetune"
 
 if [[ ! $LLAMA_MODEL_DIR ]]; then LLAMA_MODEL_DIR="./models"; fi
 if [[ ! $LLAMA_TRAINING_DIR ]]; then LLAMA_TRAINING_DIR="."; fi
