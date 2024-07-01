@@ -58,7 +58,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
     const block_q4_0 * K_q4_0 = (const block_q4_0 *) K_c;
     GGML_UNUSED(Q_v);
 
-    half sum = 0.0f;
+    T sum = 0.0f;
 
 #pragma unroll
     for (int k_KQ_0 = 0; k_KQ_0 < D/sizeof(int); k_KQ_0 += WARP_SIZE) {
