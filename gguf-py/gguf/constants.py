@@ -155,6 +155,7 @@ class MODEL_ARCH(IntEnum):
     GEMMA2       = auto()
     STARCODER2   = auto()
     MAMBA        = auto()
+    JAMBA        = auto()
     XVERSE       = auto()
     COMMAND_R    = auto()
     DBRX         = auto()
@@ -208,7 +209,10 @@ class MODEL_TENSOR(IntEnum):
     SSM_CONV1D           = auto()
     SSM_X                = auto()
     SSM_DT               = auto()
+    SSM_DT_NORM          = auto()
     SSM_A                = auto()
+    SSM_B_NORM           = auto()
+    SSM_C_NORM           = auto()
     SSM_D                = auto()
     SSM_OUT              = auto()
     ATTN_Q_A             = auto()
@@ -279,6 +283,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GEMMA2:         "gemma2",
     MODEL_ARCH.STARCODER2:     "starcoder2",
     MODEL_ARCH.MAMBA:          "mamba",
+    MODEL_ARCH.JAMBA:          "jamba",
     MODEL_ARCH.XVERSE:         "xverse",
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
@@ -332,7 +337,10 @@ TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
     MODEL_TENSOR.SSM_CONV1D:           "blk.{bid}.ssm_conv1d",
     MODEL_TENSOR.SSM_X:                "blk.{bid}.ssm_x",
     MODEL_TENSOR.SSM_DT:               "blk.{bid}.ssm_dt",
+    MODEL_TENSOR.SSM_DT_NORM:          "blk.{bid}.ssm_dt_norm",
     MODEL_TENSOR.SSM_A:                "blk.{bid}.ssm_a",
+    MODEL_TENSOR.SSM_B_NORM:           "blk.{bid}.ssm_b_norm",
+    MODEL_TENSOR.SSM_C_NORM:           "blk.{bid}.ssm_c_norm",
     MODEL_TENSOR.SSM_D:                "blk.{bid}.ssm_d",
     MODEL_TENSOR.SSM_OUT:              "blk.{bid}.ssm_out",
     MODEL_TENSOR.ATTN_Q_A:             "blk.{bid}.attn_q_a",
@@ -803,6 +811,34 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.SSM_A,
         MODEL_TENSOR.SSM_D,
         MODEL_TENSOR.SSM_OUT,
+    ],
+    MODEL_ARCH.JAMBA: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.SSM_IN,
+        MODEL_TENSOR.SSM_CONV1D,
+        MODEL_TENSOR.SSM_X,
+        MODEL_TENSOR.SSM_DT,
+        MODEL_TENSOR.SSM_DT_NORM,
+        MODEL_TENSOR.SSM_A,
+        MODEL_TENSOR.SSM_B_NORM,
+        MODEL_TENSOR.SSM_C_NORM,
+        MODEL_TENSOR.SSM_D,
+        MODEL_TENSOR.SSM_OUT,
+        MODEL_TENSOR.FFN_GATE_INP,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.FFN_GATE_EXP,
+        MODEL_TENSOR.FFN_DOWN_EXP,
+        MODEL_TENSOR.FFN_UP_EXP,
     ],
     MODEL_ARCH.XVERSE: [
         MODEL_TENSOR.TOKEN_EMBD,

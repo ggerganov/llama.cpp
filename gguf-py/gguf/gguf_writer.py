@@ -498,8 +498,11 @@ class GGUFWriter:
     def add_head_count(self, count: int) -> None:
         self.add_uint32(Keys.Attention.HEAD_COUNT.format(arch=self.arch), count)
 
-    def add_head_count_kv(self, count: int) -> None:
-        self.add_uint32(Keys.Attention.HEAD_COUNT_KV.format(arch=self.arch), count)
+    def add_head_count_kv(self, count: int | Sequence[int]) -> None:
+        if isinstance(count, int):
+            self.add_uint32(Keys.Attention.HEAD_COUNT_KV.format(arch=self.arch), count)
+        else:
+            self.add_array(Keys.Attention.HEAD_COUNT_KV.format(arch=self.arch), count)
 
     def add_key_length(self, length: int) -> None:
         self.add_uint32(Keys.Attention.KEY_LENGTH.format(arch=self.arch), length)
