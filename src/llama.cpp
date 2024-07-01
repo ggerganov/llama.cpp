@@ -2084,7 +2084,6 @@ enum e_model {
     MODEL_16x12B,
     MODEL_10B_128x3_66B,
     MODEL_57B_A14B,
-    MODEL_9B,
     MODEL_27B,
 };
 
@@ -4324,7 +4323,6 @@ static const char * llama_model_type_name(e_model type) {
         case MODEL_16x12B:        return "16x12B";
         case MODEL_10B_128x3_66B: return "10B+128x3.66B";
         case MODEL_57B_A14B:      return "57B.A14B";
-        case MODEL_9B:            return "9B";
         case MODEL_27B:           return "27B";
         default:                  return "?B";
     }
@@ -5011,9 +5009,7 @@ static void llm_load_vocab(
             if (merges_keyidx == -1) {
                 throw std::runtime_error("cannot find tokenizer merges in model file\n");
             }
-            printf("merges_keyidx: %d\n", merges_keyidx);
             const int n_merges = gguf_get_arr_n(ctx, merges_keyidx);
-            printf("n_merges: %d\n", n_merges);
             for (int i = 0; i < n_merges; i++) {
                 const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
                 GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
