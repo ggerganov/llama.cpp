@@ -307,6 +307,11 @@ static struct lora_data * load_lora(struct lora_info * info) {
         tensors_offset.push_back(offset);
         file.seek(nbytes, SEEK_CUR);
     }
+
+    ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(result->ctx,  ggml_backend_metal_buffer_type());
+        if (!buf) {
+            LLAMA_LOG_ERROR("%s: failed to allocate buffer for lora tensors\n", __func__);
+        }
     // read tensor data
     result->data.resize(total_nbytes_pad);
     size_t data_offset = 0;
@@ -3922,7 +3927,7 @@ struct llama_model_loader {
 
         std::vector<no_init<uint8_t>> read_buf;
         std::vector<std::future<std::pair<ggml_tensor *, bool>>> validation_result;
-
+        // Allocate tensors data to buffer
         for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
             const auto * weight = get_weight(ggml_get_name(cur));
             if (weight == nullptr) {
@@ -3951,7 +3956,7 @@ struct llama_model_loader {
                         return std::make_pair(cur, ggml_validate_row_data(cur->type, data, n_size));
                     }));
                 }
-
+                // TODO LORA allocation of base tensors
                 GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
                 if (buf_mmap && cur->data == nullptr) {
                     ggml_backend_tensor_alloc(buf_mmap, cur, data);
@@ -5392,7 +5397,7 @@ static bool llm_load_tensors(
         auto ctx_for_layer_split        = [&](int i) { return ctx_map.at(model.buft_layer[i].buft_matrix); };
 
         model.layers.resize(n_layer);
-
+        // main players model, ml, ctx_input/output, tn (gets name?)
         const auto tn = LLM_TN(model.arch);
         switch (model.arch) {
             case LLM_ARCH_LLAMA:
@@ -6666,7 +6671,7 @@ static bool llm_load_tensors(
 #endif
             }
         }
-#ifdef GGML_USE_METAL
+#ifdef GGML_USE_METAL // LORA Use metal on base tensors
         else if (ml.use_mmap && use_mmap_buffer && buft == ggml_backend_metal_buffer_type()) {
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 const size_t max_size = ggml_get_max_tensor_size(ctx);
@@ -16341,12 +16346,92 @@ struct llama_context * llama_new_context_with_model(
         // Assign data 
         ctx->llora_data = *loras[0];
 
-        // build the map?
-        ctx->lora_weights_map = get_lora_weights_map_cpp((ctx->llora_data).ctx);
-        std::vector<std::string> keys;
-        for (const auto& pair : ctx->lora_weights_map) {
-            keys.push_back(pair.first);
+
+        ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft((ctx->llora_data).ctx,  ggml_backend_metal_buffer_type());
+        if (!buf) {
+            LLAMA_LOG_ERROR("%s: failed to allocate buffer for lora tensors\n", __func__);
         }
+        // Looks this worked, need to check if tensors have new buffer (not sure below).
+        // Also do we need to set the tensors? not clear where data is, looks like it is loaded after the
+        //  tensor creation in context, but loaded where? cuz if data present dfferebt way to set with ggml_backend_tensor_set instead of ggml_backend_tensor_alloc
+
+        // TODO looks like I have already a context with load_lora, understand if 
+        // I am using it
+        // If the contexg it set to right buffer with ggml_backend_alloc_ctx_tensors_from_buft((ctx->llora_data).ctx,  ggml_backend_metal_buffer_type());
+        // As I should already have created the tensors in the context, 
+        // Understand where are the weights loaded instead
+        // Load the weight/data in the context
+        // Maybe check finetuning approach at managing the lora weights.
+        
+
+
+        // build the map? TODO LORA ctx->lora_weights_map layers seem to not have buffer type but it should as the simple example does
+        ctx->lora_weights_map = get_lora_weights_map_cpp((ctx->llora_data).ctx);
+        // std::vector<std::string> keys;
+        // for (const auto& pair : ctx->lora_weights_map) {
+        //     keys.push_back(pair.first);
+
+        //     ggml_tensor * tensorA = pair.second.loraA;
+        //     ggml_tensor * tensorB = pair.second.loraB;
+
+        //     ggml_tensor * tensorA_ctx = ggml_new_tensor((ctx->llora_data).ctx, tensorA->type, 4, tensorA->ne);
+        //     ggml_tensor * tensorB_ctx = ggml_new_tensor((ctx->llora_data).ctx, tensorB->type, 4, tensorB->ne);
+
+        // }
+        
+        // for (struct ggml_tensor * cur = ggml_get_first_tensor((ctx->llora_data).ctx); cur != NULL; cur = ggml_get_next_tensor((ctx->llora_data).ctx, cur)) {
+        //     const auto * name = ggml_get_name(cur);
+        //     // ggml_backend_tensor_set(tensorA, tensorA->data, 0, ggml_nbytes(tensorA));
+        //     // ggml_backend_tensor_set(tensorB, tensorB->data, 0, ggml_nbytes(tensorB));
+
+        // }
+        
+            // for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
+            // const auto * weight = get_weight(ggml_get_name(cur));
+            // if (weight == nullptr) {
+            //     // this can happen with split experts models
+            //     continue;
+            // }
+
+            // if (progress_callback) {
+            //     if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
+            //         return false;
+            //     }
+            // }
+
+            // size_t n_size = ggml_nbytes(cur);
+
+            // if (use_mmap) {
+            //     const auto & mapping = mappings.at(weight->idx);
+            //     ggml_backend_buffer_t buf_mmap = nullptr;
+            //     if (bufs_mmap.count(weight->idx)) {
+            //         buf_mmap = bufs_mmap.at(weight->idx);
+            //     }
+            //     uint8_t * data = (uint8_t *) mapping->addr + weight->offs;
+
+            //     if (check_tensors) {
+            //         validation_result.emplace_back(std::async(std::launch::async, [cur, data, n_size] {
+            //             return std::make_pair(cur, ggml_validate_row_data(cur->type, data, n_size));
+            //         }));
+            //     }
+            //     // TODO LORA allocation of base tensors
+            //     GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
+            //     if (buf_mmap && cur->data == nullptr) {
+            //         ggml_backend_tensor_alloc(buf_mmap, cur, data);
+            //         if (lmlocks) {
+            //             const auto & lmlock = lmlocks->at(weight->idx);
+            //             lmlock->grow_to(weight->offs + n_size);
+            //         }
+
+            //         auto & mmap_used = mmaps_used[weight->idx];
+            //         mmap_used.first  = std::min(mmap_used.first,  weight->offs);
+            //         mmap_used.second = std::max(mmap_used.second, weight->offs + n_size);
+            //     } else {
+            //         ggml_backend_tensor_set(cur, data, 0, n_size);
+
+
+
+
     }
 
     /// LORA

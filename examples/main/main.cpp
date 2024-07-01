@@ -117,7 +117,74 @@ static void llama_log_callback_logTee(ggml_log_level level, const char * text, v
     LOG_TEE("%s", text);
 }
 
+#include "ggml-metal.h"
+
+bool is_pointer_in_buffer_range(void *ptr, void *buffer_start, size_t buffer_size) {
+    return (ptr >= (char*)buffer_start) && (ptr < ((char*)buffer_start + buffer_size));
+}
+
+
+void verify_tensor_allocation(struct ggml_context * ctx, ggml_backend_buffer_t buffer, size_t buffer_size) {
+    struct ggml_tensor * first = ggml_get_first_tensor(ctx);
+    for (struct ggml_tensor * t = first; t != NULL; t = ggml_get_next_tensor(ctx, t)) {
+        if (t->data != NULL) {
+            if (!is_pointer_in_buffer_range(t->data, buffer, buffer_size)) {
+                fprintf(stderr, "Tensor %s is not within the allocated buffer range.\n", t->name);
+            } else {
+                printf("Tensor %s is correctly allocated in the buffer.\n", t->name);
+            }
+        }
+    }
+}
+
 int main(int argc, char ** argv) {
+
+
+    // The library allows the user to define a certain function using the available tensor operations. This function
+    // definition is represented internally via a computation graph. Each tensor operation in the function definition
+    // corresponds to a node in the graph. Having the computation graph defined, the user can choose to compute the
+    // function's value and/or its gradient with respect to the input variables. Optionally, the function can be optimized
+    // using one of the available optimization algorithms.
+    //
+    // For example, here we define the function: f(x) = a*x^2 + b    
+
+    // memory allocation happens here
+    // Create context allogating memory
+    struct ggml_init_params _params = {
+        .mem_size   = 16*1024*1024,
+        .mem_buffer = NULL,
+        .no_alloc   = true,
+    };
+    struct ggml_context * _ctx = ggml_init(_params);
+
+    struct ggml_tensor * x = ggml_new_tensor_1d(_ctx, GGML_TYPE_F32, 1);
+
+    // ggml_set_param(_ctx, x); // x is an input variable
+
+    // struct ggml_tensor * a  = ggml_new_tensor_1d(_ctx, GGML_TYPE_F32, 1);
+    // struct ggml_tensor * b  = ggml_new_tensor_1d(_ctx, GGML_TYPE_F32, 1);
+    // struct ggml_tensor * x2 = ggml_mul(_ctx, x, x);
+    // struct ggml_tensor * f  = ggml_add(_ctx, ggml_mul(_ctx, a, x2), b);
+
+    // struct ggml_cgraph * gf = ggml_new_graph(_ctx);
+
+    // // ggml_backend_alloc_ctx_tensors_from_buft(_ctx, ggml_backend_cpu_buffer_type());
+    // // ggml_backend_alloc_ctx_tensors_from_buft(_ctx,  ggml_backend_metal_buffer_type());
+    ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(_ctx, ggml_backend_metal_buffer_type());
+            if (buf == nullptr) {
+                throw std::runtime_error("unable to allocate backend buffer");
+            }
+            else {
+                size_t buffer_size = ggml_backend_buft_get_max_size(ggml_backend_metal_buffer_type());
+
+                // Verify tensor allocations
+                verify_tensor_allocation(_ctx, buf, buffer_size);
+            }
+    ggml_used_mem(_ctx);
+    // 
+
+
+
     gpt_params params;
     g_params = &params;
 
