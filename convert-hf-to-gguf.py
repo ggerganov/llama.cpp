@@ -2972,6 +2972,8 @@ class JaisModel(Model):
         else:
             assert False
 
+        self.max_alibi_bias = 8.0
+
     def set_vocab(self):
         self._set_vocab_gpt2()
 
@@ -2985,12 +2987,6 @@ class JaisModel(Model):
         self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
         self.gguf_writer.add_file_type(self.ftype)
 
-        # Hack to populate self.tensor_names
-        all(self.get_tensors())
-        if 'transformer.relative_pe.slopes' not in self.tensor_names:
-            self.gguf_writer.add_max_alibi_bias(8.0)
-        # else set later
-
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
@@ -3001,11 +2997,14 @@ class JaisModel(Model):
             return tensors
 
         if name.endswith(("relative_pe.slopes")):
-            # calculate ALiBi bias
+            # Calculate max ALiBi bias (this is the inverse of the ALiBi calculation)
+            # Some other models has max_alibi_bias spelled out explicitly in the hyperparams,
+            # but Jais's PyTorch model simply precalculates the slope values and places them
+            # in relative_pes.slopes
             n_head_closest_log2 = 2 ** math.floor(math.log2(self.hparams["n_head"]))
             first_val = float(data_torch._data[0])
-            alibi_bias = -round(math.log2(first_val) * n_head_closest_log2)
-            self.gguf_writer.add_max_alibi_bias(alibi_bias)
+            self.max_alibi_bias = -round(math.log2(first_val) * n_head_closest_log2)
+
             return tensors
 
         if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_fc2.weight")):
@@ -3024,6 +3023,10 @@ class JaisModel(Model):
             tensors.append((new_name, data_torch))
 
         return tensors
+
+    def write_tensors(self):
+        super().write_tensors()
+        self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
 
 
 ###### CONVERSION LOGIC ######
