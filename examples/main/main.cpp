@@ -291,14 +291,14 @@ int main(int argc, char ** argv) {
         LOG("tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
     }
 
-    if (sparams.token_healing_enabled && (params.conversation || !params.input_suffix.empty())) {
-        sparams.token_healing_enabled = false;
+    if (sparams.token_healing.enabled && (params.conversation || !params.input_suffix.empty())) {
+        sparams.token_healing.enabled = false;
         LOG("token healing: disabled due to custom suffix/conversation mode");
     }
     llama_token_healing_output token_healing_out{};
-    if (!params.interactive_first && sparams.token_healing_enabled) {
-        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing_type, embd_inp,
-                                                              sparams.token_healing_n_rollback);
+    if (!params.interactive_first && sparams.token_healing.enabled) {
+        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing.type, embd_inp,
+                                                              sparams.token_healing.n_rollback);
     }
 
     // Should not run without any tokens
@@ -956,13 +956,13 @@ int main(int argc, char ** argv) {
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
                     embd_inp.insert(embd_inp.end(), line_sfx.begin(), line_sfx.end());
 
-                    if (sparams.token_healing_enabled) {
+                    if (sparams.token_healing.enabled) {
                         // Limit token healing rollback to new tokens only (otherwise would need to shift everything)
                         const int n_new_tokens = embd_inp.size() - original_size;
-                        const int max_to_remove = sparams.token_healing_n_rollback < 0
+                        const int max_to_remove = sparams.token_healing.n_rollback < 0
                                                    ? n_new_tokens
-                                                   : std::min(sparams.token_healing_n_rollback, n_new_tokens);
-                        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing_type, embd_inp, max_to_remove);
+                                                   : std::min(sparams.token_healing.n_rollback, n_new_tokens);
+                        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing.type, embd_inp, max_to_remove);
                         n_bytes_to_skip = token_healing_out.prefix.size();
                     }
 

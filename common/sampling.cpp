@@ -154,6 +154,25 @@ void llama_token_healing_set_prefix(llama_sampling_context * ctx_sampling, const
     ctx_sampling->token_healing_prefix = prefix;
 }
 
+bool llama_token_healing_parse_params(const std::string & params, llama_token_healing_params & th_params) {
+    th_params.enabled = true;
+    th_params.n_rollback = -1;
+    /**/ if (params    == "0" ) { th_params.enabled = false; }
+    else if (params    == "1" ) { th_params.type = llama_token_healing_type::ROLLBACK_LAST; }
+    else if (params    == "d1") { th_params.type = llama_token_healing_type::DYNAMIC_ONCE;  }
+    else if (params    == "d" ) { th_params.type = llama_token_healing_type::DYNAMIC_MULTI; }
+    else if (params[0] == 'r' ) {
+        th_params.type = llama_token_healing_type::ROLLBACK_MULTI;
+        th_params.n_rollback = std::stoi(params.substr(1));
+        if (th_params.n_rollback <= 0) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+    return true;
+}
+
 //
 // Sampling
 //
@@ -552,11 +571,10 @@ static llama_token_data_array llama_sampling_prepare_impl(
     cur.resize(n_vocab);
 
     // Constrain tokens based on the remaining token healing prefix (if any)
-    const auto & th_type = params.token_healing_type;
     const auto & th_prefix = ctx_sampling->token_healing_prefix;
-    if (params.token_healing_enabled && !th_prefix.empty()) {
-        const bool is_multi_step = th_type == llama_token_healing_type::ROLLBACK_MULTI ||
-                                   th_type == llama_token_healing_type::DYNAMIC_MULTI;
+    if (params.token_healing.enabled && !th_prefix.empty()) {
+        const bool is_multi_step = params.token_healing.type == llama_token_healing_type::ROLLBACK_MULTI ||
+                                   params.token_healing.type == llama_token_healing_type::DYNAMIC_MULTI;
         std::vector<llama_token> th_candidates = token_healing_get_candidates(ctx_main, th_prefix, is_multi_step);
 
         LOG("token_healing: prefix = '%s'\n", th_prefix.c_str());
@@ -635,7 +653,7 @@ void llama_sampling_accept(
         llama_grammar_accept_token(ctx_sampling->grammar, ctx_main, id);
     }
 
-    if (ctx_sampling->params.token_healing_enabled && apply_grammar) {
+    if (ctx_sampling->params.token_healing.enabled && apply_grammar) {
         std::string & th_prefix = ctx_sampling->token_healing_prefix;
         if (!th_prefix.empty()) {
             const std::string new_token_piece = llama_token_to_piece(ctx_main, id);

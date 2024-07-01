@@ -1095,21 +1095,8 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "-th" || arg == "--token-healing") {
         CHECK_ARG
-        sparams.token_healing_enabled = true;
-        auto & th_type = sparams.token_healing_type;
-        auto & th_n_rollback = sparams.token_healing_n_rollback;
         std::string value(argv[i]);
-        /**/ if (value    == "0" ) { sparams.token_healing_enabled = false; }
-        else if (value    == "1" ) { th_type = llama_token_healing_type::ROLLBACK_LAST; }
-        else if (value    == "d1") { th_type = llama_token_healing_type::DYNAMIC_ONCE; }
-        else if (value    == "d" ) { th_type = llama_token_healing_type::DYNAMIC_MULTI; }
-        else if (value[0] == 'r' ) {
-            th_type = llama_token_healing_type::ROLLBACK_MULTI;
-            th_n_rollback = std::stoi(value.substr(1));
-            if (th_n_rollback <= 0) {
-                sparams.token_healing_enabled = false;
-            }
-        } else { invalid_param = true; }
+        invalid_param = !llama_token_healing_parse_params(value, sparams.token_healing);
         return true;
     }
     if (arg == "--override-kv") {
