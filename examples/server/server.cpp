@@ -2076,8 +2076,8 @@ struct server_context {
 
                             if (slot.sparams.token_healing.enabled) {
                                 // For FIM roll back only the prefix part (i.e. cursor location)
-                                token_healing_out = llama_token_healing_rollback(ctx, slot.sparams.token_healing.type,
-                                    prefix_tokens, slot.sparams.token_healing.n_rollback);
+                                token_healing_out = llama_token_healing_rollback(ctx, prefix_tokens,
+                                    slot.sparams.token_healing.type, slot.sparams.token_healing.n_rollback);
                             }
 
                             auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
@@ -2097,8 +2097,8 @@ struct server_context {
                             prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
 
                             if (slot.sparams.token_healing.enabled) {
-                                token_healing_out = llama_token_healing_rollback(ctx, slot.sparams.token_healing.type,
-                                    prompt_tokens, slot.sparams.token_healing.n_rollback);
+                                token_healing_out = llama_token_healing_rollback(ctx, prompt_tokens,
+                                    slot.sparams.token_healing.type, slot.sparams.token_healing.n_rollback);
                             }
                         }
 
