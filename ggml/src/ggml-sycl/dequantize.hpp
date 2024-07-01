@@ -293,7 +293,8 @@ static void dequantize_block_q3_K(const void * __restrict__ vx, dst_t * __restri
 #if QK_K == 256
 static inline void get_scale_min_k4(int j, const uint8_t * q, uint8_t & d, uint8_t & m) {
     if (j < 4) {
-        d = q[j] & 63; m = q[j + 4] & 63;
+        d = q[j] & 63;
+        m = q[j + 4] & 63;
     } else {
         d = (q[j+4] & 0xF) | ((q[j-4] >> 6) << 4);
         m = (q[j+4] >>  4) | ((q[j-0] >> 6) << 4);
@@ -325,9 +326,11 @@ static void dequantize_block_q4_K(const void * __restrict__ vx, dst_t * __restri
 
     uint8_t sc, m;
     get_scale_min_k4(is + 0, x[i].scales, sc, m);
-    const float d1 = dall * sc; const float m1 = dmin * m;
+    const float d1 = dall * sc;
+    const float m1 = dmin * m;
     get_scale_min_k4(is + 1, x[i].scales, sc, m);
-    const float d2 = dall * sc; const float m2 = dmin * m;
+    const float d2 = dall * sc;
+    const float m2 = dmin * m;
     for (int l = 0; l < n; ++l) {
         y[l + 0] = d1 * (q[l] & 0xF) - m1;
         y[l +32] = d2 * (q[l] >>  4) - m2;
