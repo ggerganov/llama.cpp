@@ -274,7 +274,7 @@ effectiveStdenv.mkDerivation (
       # Configurations we don't want even the CI to evaluate. Results in the
       # "unsupported platform" messages. This is mostly a no-op, because
       # cudaPackages would've refused to evaluate anyway.
-      badPlatforms = optionals (useCuda) lib.platforms.darwin;
+      badPlatforms = optionals useCuda lib.platforms.darwin;
 
       # Configurations that are known to result in build failures. Can be
       # overridden by importing Nixpkgs with `allowBroken = true`.
