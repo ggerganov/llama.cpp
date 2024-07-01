@@ -267,7 +267,6 @@ class TensorNameMap:
             "encoder.layers.{bid}.mlp.fc11",                          # nomic-bert
             "model.layers.{bid}.mlp.c_fc",                            # starcoder2
             "encoder.layer.{bid}.mlp.gated_layers_v",                 # jina-bert-v2
-            "transformer.layers.{bid}.ffn.proj_1",                    # openelm
             "model.layers.{bid}.residual_mlp.w3",                     # arctic
         ),
 
