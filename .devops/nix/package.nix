@@ -17,19 +17,16 @@
   rocmPackages,
   vulkan-headers,
   vulkan-loader,
-  clblast,
   curl,
   useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
-    useOpenCL
     useRocm
     useVulkan
   ] && blas.meta.available,
   useCuda ? config.cudaSupport,
-  useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
+  useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin,
   useMpi ? false, # Increases the runtime closure size by ~700M
-  useOpenCL ? false,
   useRocm ? config.rocmSupport,
   enableCurl ? true,
   useVulkan ? false,
@@ -58,7 +55,6 @@ let
     ++ lib.optionals useCuda [ "CUDA" ]
     ++ lib.optionals useMetalKit [ "MetalKit" ]
     ++ lib.optionals useMpi [ "MPI" ]
-    ++ lib.optionals useOpenCL [ "OpenCL" ]
     ++ lib.optionals useRocm [ "ROCm" ]
     ++ lib.optionals useVulkan [ "Vulkan" ];
 
@@ -200,7 +196,6 @@ effectiveStdenv.mkDerivation (
       optionals effectiveStdenv.isDarwin darwinBuildInputs
       ++ optionals useCuda cudaBuildInputs
       ++ optionals useMpi [ mpi ]
-      ++ optionals useOpenCL [ clblast ]
       ++ optionals useRocm rocmBuildInputs
       ++ optionals useBlas [ blas ]
       ++ optionals useVulkan vulkanBuildInputs
@@ -257,7 +252,6 @@ effectiveStdenv.mkDerivation (
         useCuda
         useMetalKit
         useMpi
-        useOpenCL
         useRocm
         useVulkan
         ;
@@ -284,7 +278,7 @@ effectiveStdenv.mkDerivation (
       # Configurations we don't want even the CI to evaluate. Results in the
       # "unsupported platform" messages. This is mostly a no-op, because
       # cudaPackages would've refused to evaluate anyway.
-      badPlatforms = optionals (useCuda || useOpenCL) lib.platforms.darwin;
+      badPlatforms = optionals useCuda lib.platforms.darwin;
 
       # Configurations that are known to result in build failures. Can be
       # overridden by importing Nixpkgs with `allowBroken = true`.
