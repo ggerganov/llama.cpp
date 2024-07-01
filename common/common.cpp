@@ -78,7 +78,7 @@ using json = nlohmann::ordered_json;
 //
 
 int32_t cpu_get_num_physical_cores() {
-#ifdef __linux__
+#if defined(__linux__) || defined(__COSMOPOLITAN__)
     // enumerate the set of thread siblings, num entries is num cores
     std::unordered_set<std::string> siblings;
     for (uint32_t cpu=0; cpu < UINT32_MAX; ++cpu) {
@@ -113,7 +113,7 @@ int32_t cpu_get_num_physical_cores() {
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
 }
 
-#if defined(__x86_64__) && defined(__linux__) && !defined(__ANDROID__)
+#if defined(__x86_64__) && (defined(__linux__) || defined(__COSMOPOLITAN__)) && !defined(__ANDROID__)
 #include <pthread.h>
 
 static void cpuid(unsigned leaf, unsigned subleaf,
@@ -167,7 +167,7 @@ static int cpu_count_math_cpus(int n_cpu) {
  * Returns number of CPUs on system that are useful for math.
  */
 int32_t cpu_get_num_math() {
-#if defined(__x86_64__) && defined(__linux__) && !defined(__ANDROID__)
+#if defined(__x86_64__) && (defined(__linux__) || defined(__COSMOPOLITAN__)) && !defined(__ANDROID__)
     int n_cpu = sysconf(_SC_NPROCESSORS_ONLN);
     if (n_cpu < 1) {
         return cpu_get_num_physical_cores();
