@@ -297,8 +297,8 @@ int main(int argc, char ** argv) {
     }
     llama_token_healing_output token_healing_out{};
     if (!params.interactive_first && sparams.token_healing.enabled) {
-        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing.type, embd_inp,
-                                                              sparams.token_healing.n_rollback);
+        token_healing_out = llama_token_healing_rollback(ctx, embd_inp,
+            sparams.token_healing.type, sparams.token_healing.n_rollback);
     }
 
     // Should not run without any tokens
@@ -962,7 +962,7 @@ int main(int argc, char ** argv) {
                         const int max_to_remove = sparams.token_healing.n_rollback < 0
                                                    ? n_new_tokens
                                                    : std::min(sparams.token_healing.n_rollback, n_new_tokens);
-                        token_healing_out = llama_token_healing_rollback(ctx, sparams.token_healing.type, embd_inp, max_to_remove);
+                        token_healing_out = llama_token_healing_rollback(ctx, embd_inp, sparams.token_healing.type, max_to_remove);
                         n_bytes_to_skip = token_healing_out.prefix.size();
                     }
 

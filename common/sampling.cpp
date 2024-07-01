@@ -128,8 +128,8 @@ static llama_token_healing_output llama_token_healing_get_prefix(
 
 llama_token_healing_output llama_token_healing_rollback(
                            const llama_context * ctx_main,
-                           llama_token_healing_type th_type,
                            std::vector<llama_token> & tokens,
+                           llama_token_healing_type th_type,
                            int max_to_remove) {
     // NB. To avoid returning empty `tokens`, at least 1 token will remain in `tokens` after rolling back.
     //     It is the caller's responsibility to add BOS to the start of the prompt if they want to roll back the whole prompt.
