@@ -6879,8 +6879,9 @@ static bool llm_load_tensors(
 
                         const int64_t n_ff = hparams.n_ff_l(i);
 
-                        ggml_context* ctx_layer = ctx_for_layer(i);
-                        ggml_context* ctx_split = ctx_for_layer_split(i);
+                        ggml_context * ctx_layer = ctx_for_layer(i);
+                        ggml_context * ctx_split = ctx_for_layer_split(i);
+
                         auto & layer = model.layers[i];
 
                         layer.attn_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM, "weight", i), {n_embd});
