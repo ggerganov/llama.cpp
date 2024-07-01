@@ -4902,8 +4902,8 @@ static void llm_load_hparams(
         case LLM_ARCH_JAIS:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
-                // TODO: become GGUF KV parameter
-                hparams.f_max_alibi_bias = 8.0f;
+                ml.get_key(LLM_KV_ATTENTION_MAX_ALIBI_BIAS, hparams.f_max_alibi_bias);
+
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1_3B; break;
                     case 40: model.type = e_model::MODEL_13B; break;
