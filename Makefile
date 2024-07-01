@@ -188,7 +188,7 @@ ifdef GGML_RPC
 endif
 
 ifdef GGML_VULKAN
-	BUILD_TARGETS += vulkan-gen-shaders
+	BUILD_TARGETS += vulkan-shaders-gen
 endif
 
 default: $(BUILD_TARGETS)
@@ -717,26 +717,26 @@ ifdef GGML_VULKAN_RUN_TESTS
 endif
 
 GLSLC_CMD  = glslc
-_llama_vk_genshaders_cmd = $(shell pwd)/vulkan-gen-shaders
-_llama_vk_header = ggml/src/ggml-vulkan-shaders.hpp
-_llama_vk_source = ggml/src/ggml-vulkan-shaders.cpp
-_llama_vk_input_dir = ggml/src/vulkan-shaders
-_llama_vk_shader_deps = $(echo $(_llama_vk_input_dir)/*.comp)
+_ggml_vk_genshaders_cmd = $(shell pwd)/vulkan-shaders-gen
+_ggml_vk_header = ggml/src/ggml-vulkan-shaders.hpp
+_ggml_vk_source = ggml/src/ggml-vulkan-shaders.cpp
+_ggml_vk_input_dir = ggml/src/vulkan-shaders
+_ggml_vk_shader_deps = $(echo $(_ggml_vk_input_dir)/*.comp)
 
-ggml/src/ggml-vulkan.o: ggml/src/ggml-vulkan.cpp ggml/include/ggml-vulkan.h $(_llama_vk_header) $(_llama_vk_source)
+ggml/src/ggml-vulkan.o: ggml/src/ggml-vulkan.cpp ggml/include/ggml-vulkan.h $(_ggml_vk_header) $(_ggml_vk_source)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(_llama_vk_header): $(_llama_vk_source)
+$(_ggml_vk_header): $(_ggml_vk_source)
 
-$(_llama_vk_source): $(_llama_vk_shader_deps) vulkan-gen-shaders
-	$(_llama_vk_genshaders_cmd) \
+$(_ggml_vk_source): $(_ggml_vk_shader_deps) vulkan-shaders-gen
+	$(_ggml_vk_genshaders_cmd) \
 		--glslc      $(GLSLC_CMD) \
-		--input-dir  $(_llama_vk_input_dir) \
-		--target-hpp $(_llama_vk_header) \
-		--target-cpp $(_llama_vk_source)
+		--input-dir  $(_ggml_vk_input_dir) \
+		--target-hpp $(_ggml_vk_header) \
+		--target-cpp $(_ggml_vk_source)
 
-vulkan-gen-shaders: ggml/src/vulkan-gen-shaders/vulkan-gen-shaders.cpp
-	$(CXX) $(CXXFLAGS) -o $@ $(LDFLAGS) ggml/src/vulkan-gen-shaders/vulkan-gen-shaders.cpp
+vulkan-shaders-gen: ggml/src/vulkan-shaders/vulkan-shaders-gen.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $(LDFLAGS) ggml/src/vulkan-shaders/vulkan-shaders-gen.cpp
 
 endif # GGML_VULKAN
 
@@ -1108,7 +1108,7 @@ clean:
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
-	rm -f vulkan-gen-shaders ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
+	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
 	find examples pocs -type f -name "*.o" -delete
 
 #

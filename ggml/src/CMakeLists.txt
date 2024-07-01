@@ -558,34 +558,34 @@ if (GGML_VULKAN)
             add_compile_definitions(GGML_VULKAN_RUN_TESTS)
         endif()
 
-        add_subdirectory(vulkan-gen-shaders)
+        add_subdirectory(vulkan-shaders)
 
-        set (_llama_vk_genshaders_cmd vulkan-gen-shaders)
-        set (_llama_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
-        set (_llama_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
-        set (_llama_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
-        set (_llama_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
+        set (_ggml_vk_genshaders_cmd vulkan-shaders-gen)
+        set (_ggml_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
+        set (_ggml_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
+        set (_ggml_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
+        set (_ggml_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
 
-        file(GLOB _llama_vk_shader_deps "${_llama_vk_input_dir}/*.comp")
+        file(GLOB _ggml_vk_shader_deps "${_ggml_vk_input_dir}/*.comp")
 
         add_custom_command(
-            OUTPUT ${_llama_vk_header}
-                   ${_llama_vk_source}
+            OUTPUT ${_ggml_vk_header}
+                   ${_ggml_vk_source}
 
-            COMMAND ${_llama_vk_genshaders_cmd}
+            COMMAND ${_ggml_vk_genshaders_cmd}
                 --glslc      ${Vulkan_GLSLC_EXECUTABLE}
-                --input-dir  ${_llama_vk_input_dir}
-                --output-dir ${_llama_vk_output_dir}
-                --target-hpp ${_llama_vk_header}
-                --target-cpp ${_llama_vk_source}
+                --input-dir  ${_ggml_vk_input_dir}
+                --output-dir ${_ggml_vk_output_dir}
+                --target-hpp ${_ggml_vk_header}
+                --target-cpp ${_ggml_vk_source}
                 --no-clean
 
-            DEPENDS ${_llama_vk_shader_deps}
+            DEPENDS ${_ggml_vk_shader_deps}
             COMMENT "Generate vulkan shaders"
         )
 
-        set(GGML_HEADERS_VULKAN ${CMAKE_CURRENT_SOURCE_DIR}/../include/ggml-vulkan.h ${_llama_vk_header})
-        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp ${_llama_vk_source})
+        set(GGML_HEADERS_VULKAN ${CMAKE_CURRENT_SOURCE_DIR}/../include/ggml-vulkan.h ${_ggml_vk_header})
+        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp ${_ggml_vk_source})
 
         set(GGML_EXTRA_LIBS     ${GGML_EXTRA_LIBS} Vulkan::Vulkan)
         set(GGML_EXTRA_INCLUDES ${GGML_EXTRA_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR})
