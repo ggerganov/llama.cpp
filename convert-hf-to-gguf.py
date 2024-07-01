@@ -2351,7 +2351,6 @@ class Gemma2Model(Model):
         tokens, scores, toktypes, special_vocab = self._set_vocab_sentencepiece(add_to_gguf=False)
         # hack: This is required so that we can properly use start/end-of-turn for chat template
         for i in range(216): # 216 -> last special token
-            scores[i] = -1000.0
             toktypes[i] = SentencePieceTokenTypes.CONTROL
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_scores(scores)
