@@ -85,6 +85,7 @@ models = [
     {"name": "smaug-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct", },
     {"name": "poro-chat",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Poro-34B-chat", },
     {"name": "jina-v2-code",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-code", },
+    {"name": "viking",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Viking-7B", }, # Also used for Viking 13B and 33B
 ]
 
 
@@ -214,7 +215,7 @@ src_func = f"""
 """
 
 convert_py_pth = pathlib.Path("convert-hf-to-gguf.py")
-convert_py = convert_py_pth.read_text()
+convert_py = convert_py_pth.read_text(encoding="utf-8")
 convert_py = re.sub(
     r"(# Marker: Start get_vocab_base_pre)(.+?)( +# Marker: End get_vocab_base_pre)",
     lambda m: m.group(1) + src_func + m.group(3),
@@ -222,7 +223,7 @@ convert_py = re.sub(
     flags=re.DOTALL | re.MULTILINE,
 )
 
-convert_py_pth.write_text(convert_py)
+convert_py_pth.write_text(convert_py, encoding="utf-8")
 
 logger.info("+++ convert-hf-to-gguf.py was updated")
 
