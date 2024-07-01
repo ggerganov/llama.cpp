@@ -27,6 +27,7 @@ import logging
 import os
 import pathlib
 import re
+import shutil
 
 import requests
 import sys
@@ -110,12 +111,27 @@ def download_model(model):
     if tokt == TOKENIZER_TYPE.SPM:
         files.append("tokenizer.model")
 
-    for file in files:
-        save_path = f"models/tokenizers/{name}/{file}"
-        if os.path.isfile(save_path):
-            logger.info(f"{name}: File {save_path} already exists - skipping")
-            continue
-        download_file_with_auth(f"{repo}/resolve/main/{file}", token, save_path)
+    if os.path.isdir(repo):
+        # If repo is a path on the file system, copy the directory
+        for file in files:
+            src_path = os.path.join(repo, file)
+            dst_path = f"models/tokenizers/{name}/{file}"
+            if os.path.isfile(dst_path):
+                logger.info(f"{name}: File {dst_path} already exists - skipping")
+                continue
+            if os.path.isfile(src_path):
+                shutil.copy2(src_path, dst_path)
+                logger.info(f"{name}: Copied {src_path} to {dst_path}")
+            else:
+                logger.warning(f"{name}: Source file {src_path} does not exist")
+    else:
+        # If repo is a URL, download the files
+        for file in files:
+            save_path = f"models/tokenizers/{name}/{file}"
+            if os.path.isfile(save_path):
+                logger.info(f"{name}: File {save_path} already exists - skipping")
+                continue
+            download_file_with_auth(f"{repo}/resolve/main/{file}", token, save_path)
 
 
 for model in models:
