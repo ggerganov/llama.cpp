@@ -17,20 +17,20 @@
   rocmPackages,
   vulkan-headers,
   vulkan-loader,
+  curl,
   shaderc,
   clblast,
   useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
-    useOpenCL
     useRocm
     useVulkan
   ] && blas.meta.available,
   useCuda ? config.cudaSupport,
-  useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin && !useOpenCL,
+  useMetalKit ? stdenv.isAarch64 && stdenv.isDarwin,
   useMpi ? false, # Increases the runtime closure size by ~700M
-  useOpenCL ? false,
   useRocm ? config.rocmSupport,
+  enableCurl ? true,
   useVulkan ? false,
   llamaVersion ? "0.0.0", # Arbitrary version, substituted by the flake
 
@@ -57,7 +57,6 @@ let
     ++ lib.optionals useCuda [ "CUDA" ]
     ++ lib.optionals useMetalKit [ "MetalKit" ]
     ++ lib.optionals useMpi [ "MPI" ]
-    ++ lib.optionals useOpenCL [ "OpenCL" ]
     ++ lib.optionals useRocm [ "ROCm" ]
     ++ lib.optionals useVulkan [ "Vulkan" ];
 
@@ -200,19 +199,19 @@ effectiveStdenv.mkDerivation (
       optionals effectiveStdenv.isDarwin darwinBuildInputs
       ++ optionals useCuda cudaBuildInputs
       ++ optionals useMpi [ mpi ]
-      ++ optionals useOpenCL [ clblast ]
       ++ optionals useRocm rocmBuildInputs
       ++ optionals useBlas [ blas ]
-      ++ optionals useVulkan vulkanBuildInputs;
+      ++ optionals useVulkan vulkanBuildInputs
+      ++ optionals enableCurl [ curl ];
 
     cmakeFlags =
       [
         (cmakeBool "LLAMA_BUILD_SERVER" true)
         (cmakeBool "BUILD_SHARED_LIBS" (!enableStatic))
         (cmakeBool "CMAKE_SKIP_BUILD_RPATH" true)
+        (cmakeBool "LLAMA_CURL" enableCurl)
         (cmakeBool "GGML_NATIVE" false)
         (cmakeBool "GGML_BLAS" useBlas)
-        (cmakeBool "GGML_CLBLAST" useOpenCL)
         (cmakeBool "GGML_CUDA" useCuda)
         (cmakeBool "GGML_HIPBLAS" useRocm)
         (cmakeBool "GGML_METAL" useMetalKit)
@@ -256,7 +255,6 @@ effectiveStdenv.mkDerivation (
         useCuda
         useMetalKit
         useMpi
-        useOpenCL
         useRocm
         useVulkan
         ;
@@ -283,7 +281,7 @@ effectiveStdenv.mkDerivation (
       # Configurations we don't want even the CI to evaluate. Results in the
       # "unsupported platform" messages. This is mostly a no-op, because
       # cudaPackages would've refused to evaluate anyway.
-      badPlatforms = optionals (useCuda || useOpenCL) lib.platforms.darwin;
+      badPlatforms = optionals useCuda lib.platforms.darwin;
 
       # Configurations that are known to result in build failures. Can be
       # overridden by importing Nixpkgs with `allowBroken = true`.
