@@ -1168,7 +1168,9 @@ target_link_libraries(ggml PRIVATE Threads::Threads ${GGML_EXTRA_LIBS})
 
 find_library(MATH_LIBRARY m)
 if (MATH_LIBRARY)
-    target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
+    if (NOT WIN32 AND GGML_SYCL)
+        target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
+    endif()
 endif()
 
 if (BUILD_SHARED_LIBS)
