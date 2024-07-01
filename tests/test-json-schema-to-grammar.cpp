@@ -1120,28 +1120,15 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         R"""(
             alternative-0 ::= foo
             alternative-1 ::= bar
-            array ::= "[" space ( value ("," space value)* )? "]" space
-            bar ::= "{" space  (bar-b-kv bar-b-rest | bar-additional-kv ( "," space bar-additional-kv )* )? "}" space
-            bar-additional-k ::= ["] ( [b] char+ | [^"b] char* )? ["] space
-            bar-additional-kv ::= bar-additional-k ":" space value
+            bar ::= "{" space  (bar-b-kv )? "}" space
             bar-b-kv ::= "\"b\"" space ":" space number
-            bar-b-rest ::= ( "," space bar-additional-kv )*
-            boolean ::= ("true" | "false") space
-            char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
             decimal-part ::= [0-9]{1,16}
-            foo ::= "{" space  (foo-a-kv foo-a-rest | foo-additional-kv ( "," space foo-additional-kv )* )? "}" space
+            foo ::= "{" space  (foo-a-kv )? "}" space
             foo-a-kv ::= "\"a\"" space ":" space number
-            foo-a-rest ::= ( "," space foo-additional-kv )*
-            foo-additional-k ::= ["] ( [a] char+ | [^"a] char* )? ["] space
-            foo-additional-kv ::= foo-additional-k ":" space value
             integral-part ::= [0] | [1-9] [0-9]{0,15}
-            null ::= "null" space
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
-            object ::= "{" space ( string ":" space value ("," space string ":" space value)* )? "}" space
             root ::= alternative-0 | alternative-1
             space ::= | " " | "\n" [ \t]{0,20}
-            string ::= "\"" char* "\"" space
-            value ::= object | array | string | number | boolean | null
         )"""
     });
 
@@ -1177,25 +1164,15 @@ static void test_all(const std::string & lang, std::function<void(const TestCase
         })""",
         R"""(
             a-kv ::= "\"a\"" space ":" space number
-            additional-k ::= ["] ( [a] char+ | [b] char+ | [c] char+ | [d] char+ | [^"abcd] char* )? ["] space
-            additional-kv ::= additional-k ":" space value
-            array ::= "[" space ( value ("," space value)* )? "]" space
             b-kv ::= "\"b\"" space ":" space number
-            boolean ::= ("true" | "false") space
             c-kv ::= "\"c\"" space ":" space number
-            c-rest ::= ( "," space additional-kv )*
-            char ::= [^"\\\x7F\x00-\x1F] | [\\] (["\\bfnrt] | "u" [0-9a-fA-F]{4})
             d-kv ::= "\"d\"" space ":" space number
-            d-rest ::= ( "," space c-kv )? c-rest
+            d-rest ::= ( "," space c-kv )?
             decimal-part ::= [0-9]{1,16}
             integral-part ::= [0] | [1-9] [0-9]{0,15}
-            null ::= "null" space
             number ::= ("-"? integral-part) ("." decimal-part)? ([eE] [-+]? integral-part)? space
-            object ::= "{" space ( string ":" space value ("," space string ":" space value)* )? "}" space
-            root ::= "{" space a-kv "," space b-kv ( "," space ( d-kv d-rest | c-kv c-rest | additional-kv ( "," space additional-kv )* ) )? "}" space
+            root ::= "{" space a-kv "," space b-kv ( "," space ( d-kv d-rest | c-kv ) )? "}" space
             space ::= | " " | "\n" [ \t]{0,20}
-            string ::= "\"" char* "\"" space
-            value ::= object | array | string | number | boolean | null
         )"""
     });
 
@@ -1262,26 +1239,30 @@ int main() {
         }
     });
 
-    if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python -c \"import sys; exit(1) if sys.version_info < (3, 8) else print('Python version is sufficient')\"") == 0)) {
-        test_all("Python", [](const TestCase & tc) {
-            write("test-json-schema-input.tmp", tc.schema);
-            tc.verify_status(std::system(
-                "python ./examples/json_schema_to_grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
-            tc.verify(read("test-grammar-output.tmp"));
-        });
+    if (getenv("LLAMA_SKIP_TESTS_SLOW_ON_EMULATOR")) {
+        fprintf(stderr, "\033[33mWARNING: Skipping slow tests on emulator.\n\033[0m");
     } else {
-        fprintf(stderr, "\033[33mWARNING: Python not found (min version required is 3.8), skipping Python JSON schema -> grammar tests.\n\033[0m");
-    }
+        if (getenv("LLAMA_PYTHON_AVAILABLE") || (std::system("python -c \"import sys; exit(1) if sys.version_info < (3, 8) else print('Python version is sufficient')\"") == 0)) {
+            test_all("Python", [](const TestCase & tc) {
+                write("test-json-schema-input.tmp", tc.schema);
+                tc.verify_status(std::system(
+                    "python ./examples/json_schema_to_grammar.py test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+                tc.verify(read("test-grammar-output.tmp"));
+            });
+        } else {
+            fprintf(stderr, "\033[33mWARNING: Python not found (min version required is 3.8), skipping Python JSON schema -> grammar tests.\n\033[0m");
+        }
 
-    if (getenv("LLAMA_NODE_AVAILABLE") || (std::system("node --version") == 0)) {
-        test_all("JavaScript", [](const TestCase & tc) {
-            write("test-json-schema-input.tmp", tc.schema);
-            tc.verify_status(std::system(
-                "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
-            tc.verify(read("test-grammar-output.tmp"));
-        });
-    } else {
-        fprintf(stderr, "\033[33mWARNING: Node not found, skipping JavaScript JSON schema -> grammar tests.\n\033[0m");
+        if (getenv("LLAMA_NODE_AVAILABLE") || (std::system("node --version") == 0)) {
+            test_all("JavaScript", [](const TestCase & tc) {
+                write("test-json-schema-input.tmp", tc.schema);
+                tc.verify_status(std::system(
+                    "node ./tests/run-json-schema-to-grammar.mjs test-json-schema-input.tmp > test-grammar-output.tmp") == 0 ? SUCCESS : FAILURE);
+                tc.verify(read("test-grammar-output.tmp"));
+            });
+        } else {
+            fprintf(stderr, "\033[33mWARNING: Node not found, skipping JavaScript JSON schema -> grammar tests.\n\033[0m");
+        }
     }
 
     test_all("Check Expectations Validity", [](const TestCase & tc) {

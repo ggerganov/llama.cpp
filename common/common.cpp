@@ -1014,16 +1014,23 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--in-prefix-bos") {
         params.input_prefix_bos = true;
+        params.enable_chat_template = false;
         return true;
     }
     if (arg == "--in-prefix") {
         CHECK_ARG
         params.input_prefix = argv[i];
+        params.enable_chat_template = false;
         return true;
     }
     if (arg == "--in-suffix") {
         CHECK_ARG
         params.input_suffix = argv[i];
+        params.enable_chat_template = false;
+        return true;
+    }
+    if (arg == "--spm-infill") {
+        params.spm_infill = true;
         return true;
     }
     if (arg == "--grammar") {
@@ -1402,13 +1409,15 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "halt generation at PROMPT, return control in interactive mode\n"
                                                                         "can be specified more than once for multiple prompts" });
     options.push_back({ "main",        "-sp,   --special",              "special tokens output enabled (default: %s)", params.special ? "true" : "false" });
-    options.push_back({ "main",        "-cnv,  --conversation",         "run in conversation mode (does not print special tokens and suffix/prefix) (default: %s)", params.conversation ? "true" : "false" });
+    options.push_back({ "main",        "-cnv,  --conversation",         "run in conversation mode (does not print special tokens and suffix/prefix, use default chat template) (default: %s)", params.conversation ? "true" : "false" });
     options.push_back({ "main infill", "-i,    --interactive",          "run in interactive mode (default: %s)", params.interactive ? "true" : "false" });
     options.push_back({ "main infill", "-if,   --interactive-first",    "run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false" });
     options.push_back({ "main infill", "-mli,  --multiline-input",      "allows you to write or paste multiple lines without ending each in '\\'" });
     options.push_back({ "main infill", "       --in-prefix-bos",        "prefix BOS to user inputs, preceding the `--in-prefix` string" });
     options.push_back({ "main infill", "       --in-prefix STRING",     "string to prefix user inputs with (default: empty)" });
     options.push_back({ "main infill", "       --in-suffix STRING",     "string to suffix after user inputs with (default: empty)" });
+    options.push_back({ "server infill",
+                                       "       --spm-infill",           "use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: %s)", params.spm_infill ? "enabled" : "disabled" });
 
     options.push_back({ "sampling" });
     options.push_back({ "*",           "       --samplers SAMPLERS",    "samplers that will be used for generation in the order, separated by \';\'\n"
@@ -2662,12 +2671,19 @@ std::string llama_chat_format_single(const struct llama_model * model,
         const std::vector<llama_chat_msg> & past_msg,
         const llama_chat_msg & new_msg,
         bool add_ass) {
+    std::ostringstream ss;
     auto fmt_past_msg = llama_chat_apply_template(model, tmpl, past_msg, false);
     std::vector<llama_chat_msg> chat_new(past_msg);
+    // if the past_msg ends with a newline, we must preserve it in the formatted version
+    if (add_ass && !fmt_past_msg.empty() && fmt_past_msg.back() == '\n') {
+        ss << "\n";
+    };
+    // format chat with new_msg
     chat_new.push_back(new_msg);
     auto fmt_new_msg = llama_chat_apply_template(model, tmpl, chat_new, add_ass);
-    auto formatted = fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
-    return formatted;
+    // get the diff part
+    ss << fmt_new_msg.substr(fmt_past_msg.size(), fmt_new_msg.size() - fmt_past_msg.size());
+    return ss.str();
 }
 
 std::string llama_chat_format_example(const struct llama_model * model,
