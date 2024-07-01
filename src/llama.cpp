@@ -5222,7 +5222,6 @@ static void llm_load_vocab(
                 vocab.special_eot_id    = 107;
             }
         }
-        
         try {
             vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
         } catch (const std::exception & e) {
@@ -19829,7 +19828,7 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
         }
-    } else if (tmpl.find("chatglm3") != std::string::npos || tmpl.find("[gMASK]sop") != std::string::npos) {
+    } else if (tmpl == "chatglm3" || tmpl_contains("[gMASK]sop")) {
         // chatglm3-6b
         ss << "[gMASK]" << "sop";
         for (auto message : chat) {
@@ -19839,7 +19838,7 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "<|assistant|>";
         }
-    } else if (tmpl.find("chatglm4") != std::string::npos || tmpl.find("[gMASK]<sop>") != std::string::npos) {
+    } else if (tmpl == "chaglm4" || tmpl_contains("[gMASK]<sop>")) {
         ss << "[gMASK]" << "<sop>";
         for (auto message : chat) {
             std::string role(message->role);
