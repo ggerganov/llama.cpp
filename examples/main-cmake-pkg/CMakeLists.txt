@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.12)
-project("main-cmake-pkg" C CXX)
-set(TARGET main-cmake-pkg)
+project("llama-cli-cmake-pkg" C CXX)
+set(TARGET llama-cli-cmake-pkg)
 
 find_package(Llama 0.0.1 REQUIRED)
 
 # Bake common functionality in with target. Because applications
 # using the relocatable Llama package should be outside of the
-# source tree, main-cmake-pkg pretends the dependencies are built-in.
+# source tree, llama-cli-cmake-pkg pretends the dependencies are built-in.
 set(_common_path "${CMAKE_CURRENT_LIST_DIR}/../../common")
 add_library(common OBJECT)
 file(GLOB _common_files
@@ -15,7 +15,7 @@ file(GLOB _common_files
 )
 target_sources(common PRIVATE ${_common_files})
 
-# If the common project was part of "main-cmake-pkg" the transient
+# If the common project was part of "llama-cli-cmake-pkg" the transient
 # defines would automatically be attached. Because the common func-
 # tionality is separate, but dependent upon the defines, it must be
 # explicitly extracted from the "llama" target.

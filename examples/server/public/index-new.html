@@ -416,7 +416,7 @@
           message = html`<${Probabilities} data=${data} />`
         } else {
           const text = isArrayMessage ?
-            data.map(msg => msg.content).join('').replace(/^\s+/, '') :
+            data.map(msg => msg.content).join('') :
             data;
           message = isCompletionMode ?
             text :
@@ -634,12 +634,12 @@ return html`
       <div>
         <div class="grammar">
           <label for="template"></label>
-          <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON-Scheme + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+          <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON Schema + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
         </div>
         <div class="grammar-columns">
           <div class="json-schema-controls">
             <input type="text" name="prop-order" placeholder="Order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
-            <button type="button" class="button-grammar" onclick=${convertJSONSchemaGrammar}>Convert JSON-Scheme</button>
+            <button type="button" class="button-grammar" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
           </div>
         </div>
       </div>
