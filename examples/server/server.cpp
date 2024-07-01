@@ -1087,31 +1087,20 @@ struct server_context {
 
         {
             const auto & token_healing_str = data.find("token_healing");
-            auto & th_enabled = slot.sparams.token_healing_enabled;
-            th_enabled = default_sparams.token_healing_enabled;
             if (token_healing_str != data.end() && token_healing_str->is_string()) {
                 const auto value = token_healing_str->get<std::string>();
-                auto & th_type = slot.sparams.token_healing_type;
-                auto & th_n_rollback = slot.sparams.token_healing_n_rollback;
-                th_enabled = true;
-                /**/ if (value    == "0" ) { th_enabled = false; }
-                else if (value    == "1" ) { th_type = llama_token_healing_type::ROLLBACK_LAST; }
-                else if (value    == "d1") { th_type = llama_token_healing_type::DYNAMIC_ONCE; }
-                else if (value    == "d" ) { th_type = llama_token_healing_type::DYNAMIC_MULTI; }
-                else if (value[0] == 'r' ) {
-                    th_type = llama_token_healing_type::ROLLBACK_MULTI;
-                    th_n_rollback = std::stoi(value.substr(1));
-                    if (th_n_rollback <= 0) {
-                        th_enabled = false;
-                    }
-                } else { th_enabled = false; }
-
+                if (!llama_token_healing_parse_params(value, slot.sparams.token_healing)) {
+                    send_error(task, "\"token_healing\" parse error", ERROR_TYPE_INVALID_REQUEST);
+                    return false;
+                }
                 LOG_VERBOSE("token healing", {
                     {"id_slot", slot.id},
-                    {"enabled", th_enabled},
-                    {"type", th_type},
-                    {"n_rollback", th_n_rollback}
+                    {"enabled", slot.sparams.token_healing.enabled},
+                    {"type", slot.sparams.token_healing.type},
+                    {"n_rollback", slot.sparams.token_healing.n_rollback}
                 });
+            } else {
+                slot.sparams.token_healing = default_sparams.token_healing;
             }
         }
 
@@ -1395,7 +1384,7 @@ struct server_context {
             {"min_keep",                  slot.sparams.min_keep},
             {"grammar",                   slot.sparams.grammar},
             {"samplers",                  samplers_sequence},
-            {"token_healing_enabled",     slot.sparams.token_healing_enabled}
+            {"token_healing_enabled",     slot.sparams.token_healing.enabled}
         };
     }
 
@@ -2085,10 +2074,10 @@ struct server_context {
                             prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(model));
                             suffix_tokens.insert(suffix_tokens.begin(), llama_token_suffix(model));
 
-                            if (slot.sparams.token_healing_enabled) {
+                            if (slot.sparams.token_healing.enabled) {
                                 // For FIM roll back only the prefix part (i.e. cursor location)
-                                token_healing_out = llama_token_healing_rollback(ctx, slot.sparams.token_healing_type,
-                                    prefix_tokens, slot.sparams.token_healing_n_rollback);
+                                token_healing_out = llama_token_healing_rollback(ctx, slot.sparams.token_healing.type,
+                                    prefix_tokens, slot.sparams.token_healing.n_rollback);
                             }
 
                             auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
@@ -2107,9 +2096,9 @@ struct server_context {
                         } else {
                             prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
 
-                            if (slot.sparams.token_healing_enabled) {
-                                token_healing_out = llama_token_healing_rollback(ctx, slot.sparams.token_healing_type,
-                                    prompt_tokens, slot.sparams.token_healing_n_rollback);
+                            if (slot.sparams.token_healing.enabled) {
+                                token_healing_out = llama_token_healing_rollback(ctx, slot.sparams.token_healing.type,
+                                    prompt_tokens, slot.sparams.token_healing.n_rollback);
                             }
                         }
 
@@ -2125,7 +2114,7 @@ struct server_context {
                             {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
                         });
 
-                        if (slot.sparams.token_healing_enabled) {
+                        if (slot.sparams.token_healing.enabled) {
                             slot.n_th_prefix = token_healing_out.prefix.size();
                             LOG_VERBOSE("token healing prompt", {
                                 {"id_slot", slot.id},
@@ -2200,7 +2189,7 @@ struct server_context {
                             }
 
                             llama_sampling_reset(slot.ctx_sampling);
-                            if (slot.sparams.token_healing_enabled) {
+                            if (slot.sparams.token_healing.enabled) {
                                 llama_token_healing_set_prefix(slot.ctx_sampling, token_healing_out.prefix);
                             }
 

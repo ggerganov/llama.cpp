@@ -26,6 +26,12 @@ enum class llama_token_healing_type : uint8_t {
     DYNAMIC_MULTI    // dynamic roll back, multiple constrained decoding steps
 };
 
+struct llama_token_healing_params {
+    bool enabled                  = false;
+    llama_token_healing_type type = llama_token_healing_type::DYNAMIC_MULTI;
+    int n_rollback                = -1;  // number of tokens to roll back
+};
+
 // sampling parameters
 typedef struct llama_sampling_params {
     int32_t     n_prev                = 64;                 // number of previous tokens to remember
@@ -70,9 +76,7 @@ typedef struct llama_sampling_params {
     std::vector<llama_token> penalty_prompt_tokens;
     bool                     use_penalty_prompt_tokens = false;
 
-    llama_token_healing_type token_healing_type       = llama_token_healing_type::ROLLBACK_LAST;
-    bool                     token_healing_enabled    = false;
-    int                      token_healing_n_rollback = -1;  // number of tokens to roll back
+    llama_token_healing_params token_healing;
 } llama_sampling_params;
 
 // general sampler context
@@ -190,3 +194,6 @@ llama_token_healing_output llama_token_healing_rollback(
                            int max_to_remove = -1);
 
 void llama_token_healing_set_prefix(llama_sampling_context * ctx_sampling, const std::string & prefix);
+
+// Helper for parsing token healing params from a string.
+bool llama_token_healing_parse_params(const std::string & params, llama_token_healing_params & th_params);
