@@ -8,21 +8,17 @@
 
 static bool qnn_is_valid_params(ggml_backend_qnn_context* ctx, const ggml_tensor* src0,
     const ggml_tensor* src1, ggml_tensor* dst) {
-    if ((nullptr == ctx) || (nullptr == src0) || (nullptr == src1) || (nullptr == dst)) {
+    if (!ctx || !src0 || !src1 || !dst) {
         QNN_LOG_WARN("invalid params\n");
         return false;
     }
 
-    qnn::qnn_instance* instance = nullptr;
-    Qnn_Tensor_t* tensor_0 = nullptr;
-    Qnn_Tensor_t* tensor_1 = nullptr;
-    Qnn_Tensor_t* tensor_2 = nullptr;
-    tensor_0 = (Qnn_Tensor_t*)src0->extra;
-    tensor_1 = (Qnn_Tensor_t*)src1->extra;
-    tensor_2 = (Qnn_Tensor_t*)dst->extra;
-    instance = ctx->instance;
-    if ((nullptr == instance) || (nullptr == tensor_0) || (nullptr == tensor_1) || (nullptr == tensor_2)) {
-        QNN_LOG_WARN("invalid params\n");
+    auto* instance = ctx->instance;
+    auto* tensor0 = src0->extra;
+    auto* tensor1 = src1->extra;
+    auto* tensor2 = dst->extra;
+    if (!instance || !tensor0 || !tensor1 || !tensor2) {
+        QNN_LOG_WARN("invalid tensors\n");
         return false;
     }
 
@@ -60,7 +56,7 @@ static void ggml_qnn_add(ggml_backend_qnn_context* ctx, const ggml_tensor* src0,
     qnn::qnn_perf perf("ggml_qnn_add");
     perf.start();
 
-    std::string map_entry = std::string(ggml_op_name(ggmlop));
+    std::string map_entry(ggml_op_name(ggmlop));
     if (instance->_qnn_graph_map.find(map_entry) !=
         instance->_qnn_graph_map.end()) {
         graph_initialized = true;
@@ -141,8 +137,8 @@ static void ggml_qnn_add(ggml_backend_qnn_context* ctx, const ggml_tensor* src0,
             goto failure;
         }
 
-        Qnn_Tensor_t   tensor_inputs[] = { *tensor_input0.get_qnn_tensor(), *tensor_input1.get_qnn_tensor() };
-        Qnn_Tensor_t   tensor_outputs[] = { *tensor_output.get_qnn_tensor() };
+        Qnn_Tensor_t tensor_inputs[] = { *tensor_input0.get_qnn_tensor(), *tensor_input1.get_qnn_tensor() };
+        Qnn_Tensor_t tensor_outputs[] = { *tensor_output.get_qnn_tensor() };
         Qnn_OpConfig_t op_config = {
             (Qnn_OpConfigVersion_t)1,
             .v1 = {"ggml_op_add",

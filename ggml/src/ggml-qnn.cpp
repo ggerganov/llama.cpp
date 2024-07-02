@@ -321,9 +321,7 @@ static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context * ctx,
     return true;
 }
 
-bool ggml_qnn_compute_forward(ggml_backend_qnn_context * ctx,
-                              struct ggml_compute_params * params,
-                              struct ggml_tensor * tensor) {
+bool ggml_qnn_compute_forward(ggml_backend_qnn_context * ctx, struct ggml_tensor * tensor) {
     auto func = qnn::ggml_qnn_op_array()[tensor->op];
     if (!func) {
         QNN_LOG_WARN("unsupported op %d", tensor->op);
@@ -515,13 +513,6 @@ GGML_CALL static size_t ggml_backend_qnn_buffer_type_get_max_size(ggml_backend_b
     return (96 * 1024 * 1024);
 }
 
-GGML_CALL static bool ggml_backend_qnn_buffer_type_supports_backend(
-    ggml_backend_buffer_type_t buft, ggml_backend_t backend) {
-    GGML_UNUSED(buft);
-
-    return ggml_backend_is_qnn(backend) || ggml_backend_is_cpu(backend);
-}
-
 GGML_CALL static bool ggml_backend_qnn_buffer_is_host(ggml_backend_buffer_type_t buft) {
     GGML_UNUSED(buft);
     return true;
@@ -574,9 +565,6 @@ GGML_CALL static ggml_status ggml_backend_qnn_graph_compute(ggml_backend_t backe
     ggml_backend_qnn_context * ctx   = (ggml_backend_qnn_context *) backend->context;
     GGML_UNUSED(ctx);
 
-    ggml_compute_params params = {};
-    params.type                = GGML_TASK_TYPE_COMPUTE;
-    params.ith                 = 0;
     for (int i = 0; i < cgraph->n_nodes; i++) {
         ggml_tensor * node = cgraph->nodes[i];
         if (ggml_is_empty(node) || node->op == GGML_OP_RESHAPE ||
@@ -584,7 +572,7 @@ GGML_CALL static ggml_status ggml_backend_qnn_graph_compute(ggml_backend_t backe
             node->op == GGML_OP_PERMUTE || node->op == GGML_OP_NONE) {
             continue;
         }
-        bool ok = ggml_qnn_compute_forward(ctx, &params, node);
+        bool ok = ggml_qnn_compute_forward(ctx, node);
         if (!ok) {
             QNN_LOG_DEBUG("error: op not supported %s (%s)\n", node->name, ggml_op_name(node->op));
         }
@@ -616,9 +604,11 @@ static ggml_backend_i ggml_backend_qnn_interface = {
     /* .synchronize             = */ nullptr,
     /* .graph_plan_create       = */ nullptr,
     /* .graph_plan_free         = */ nullptr,
+    /* .graph_plan_update       = */ nullptr,
     /* .graph_plan_compute      = */ nullptr,
     /* .graph_compute           = */ ggml_backend_qnn_graph_compute,
     /* .supports_op             = */ ggml_backend_qnn_supports_op,
+    /* .supports_buft           = */ nullptr,
     /* .offload_op              = */ ggml_backend_qnn_offload_op,
     /* .event_new               = */ nullptr,
     /* .event_free              = */ nullptr,
@@ -702,10 +692,9 @@ ggml_backend_buffer_type_t ggml_backend_qnn_buffer_type(size_t device) {
                     /* .get_alignment    = */ ggml_backend_qnn_buffer_type_get_alignment,
                     /* .get_max_size     = */ ggml_backend_qnn_buffer_type_get_max_size,
                     /* .get_alloc_size   = */ nullptr, // defaults to ggml_nbytes
-                    /* .supports_backend = */ ggml_backend_qnn_buffer_type_supports_backend,
                     /* .is_host          = */ ggml_backend_qnn_buffer_is_host
                     },
-                /* .context = */ & context,
+                /* .context = */ &context,
             };
         }
         ggml_backend_qnn_buffer_type_initialized = true;
