@@ -19,6 +19,19 @@ enum class llama_sampler_type : char {
     TEMPERATURE = 't'
 };
 
+enum class llama_token_healing_type : uint8_t {
+    ROLLBACK_LAST,   // roll back last token with a single constrained decoding step
+    ROLLBACK_MULTI,  // roll back a fixed amount of tokens, multiple constrained decoding steps
+    DYNAMIC_ONCE,    // dynamic roll back, single constrained decoding step
+    DYNAMIC_MULTI    // dynamic roll back, multiple constrained decoding steps
+};
+
+struct llama_token_healing_params {
+    bool enabled                  = false;
+    llama_token_healing_type type = llama_token_healing_type::DYNAMIC_MULTI;
+    int n_rollback                = -1;  // number of tokens to roll back
+};
+
 // sampling parameters
 typedef struct llama_sampling_params {
     int32_t     n_prev                = 64;                 // number of previous tokens to remember
@@ -62,6 +75,8 @@ typedef struct llama_sampling_params {
 
     std::vector<llama_token> penalty_prompt_tokens;
     bool                     use_penalty_prompt_tokens = false;
+
+    llama_token_healing_params token_healing;
 } llama_sampling_params;
 
 // general sampler context
@@ -77,6 +92,8 @@ struct llama_sampling_context {
 
     // internal
     grammar_parser::parse_state parsed_grammar;
+
+    std::string token_healing_prefix;  // remaining prefix to constrain sampling
 
     // TODO: replace with ring-buffer
     std::vector<llama_token>      prev;
@@ -158,3 +175,25 @@ void llama_sampling_accept(
         struct llama_context * ctx_main,
         llama_token id,
         bool apply_grammar);
+
+//
+// Token healing
+//
+
+struct llama_token_healing_output {
+    std::string prefix;
+    int n_tokens_removed;
+};
+
+// Roll back `tokens` for constrained generation according to the token healing strategy.
+// Call `llama_token_healing_set_prefix` with the returned prefix before the first sampling.
+llama_token_healing_output llama_token_healing_rollback(
+                           const llama_context * ctx_main,
+                           std::vector<llama_token> & tokens,
+                           llama_token_healing_type th_type,
+                           int max_to_remove = -1);
+
+void llama_token_healing_set_prefix(llama_sampling_context * ctx_sampling, const std::string & prefix);
+
+// Helper for parsing token healing params from a string.
+bool llama_token_healing_parse_params(const std::string & params, llama_token_healing_params & th_params);

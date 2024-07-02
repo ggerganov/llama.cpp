@@ -184,6 +184,7 @@ struct server_slot {
     // stats
     size_t n_sent_text = 0; // number of sent text character
     size_t n_sent_token_probs = 0;
+    size_t n_th_prefix = 0; // size of remaining token healing prefix
 
     int64_t t_start_process_prompt;
     int64_t t_start_generation;
@@ -205,6 +206,7 @@ struct server_slot {
         infill             = false;
         ga_i               = 0;
         n_past_se          = 0;
+        n_th_prefix        = 0;
 
         generated_token_probs.clear();
     }
@@ -1084,6 +1086,25 @@ struct server_context {
         }
 
         {
+            const auto & token_healing_str = data.find("token_healing");
+            if (token_healing_str != data.end() && token_healing_str->is_string()) {
+                const auto value = token_healing_str->get<std::string>();
+                if (!llama_token_healing_parse_params(value, slot.sparams.token_healing)) {
+                    send_error(task, "\"token_healing\" parse error", ERROR_TYPE_INVALID_REQUEST);
+                    return false;
+                }
+                LOG_VERBOSE("token healing", {
+                    {"id_slot", slot.id},
+                    {"enabled", slot.sparams.token_healing.enabled},
+                    {"type", slot.sparams.token_healing.type},
+                    {"n_rollback", slot.sparams.token_healing.n_rollback}
+                });
+            } else {
+                slot.sparams.token_healing = default_sparams.token_healing;
+            }
+        }
+
+        {
             if (slot.ctx_sampling != nullptr) {
                 llama_sampling_free(slot.ctx_sampling);
             }
@@ -1178,14 +1199,26 @@ struct server_context {
     }
 
     bool process_token(completion_token_output & result, server_slot & slot) {
-        // remember which tokens were sampled - used for repetition penalties during sampling
         const std::string token_str = llama_token_to_piece(ctx, result.tok, false);
         slot.sampled = result.tok;
-
-        // search stop word and delete it
-        slot.generated_text += token_str;
         slot.has_next_token = true;
 
+        // Suppress generating the token healing prefix to not repeat the input prompt's suffix
+        bool is_token_healing = false;
+        if (slot.n_th_prefix > 0) {
+            if (slot.n_th_prefix < token_str.size()) {
+                slot.generated_text += token_str.substr(slot.n_th_prefix);
+                slot.n_th_prefix = 0;
+                is_token_healing = false;  // to send partial token text when streaming
+            } else {
+                slot.n_th_prefix -= token_str.size();
+                is_token_healing = true;
+            }
+        } else {
+            slot.generated_text += token_str;
+        }
+
+        // remember which tokens were sampled - used for repetition penalties during sampling
         if (slot.ctx_sampling->params.use_penalty_prompt_tokens && result.tok != -1) {
             // we can change penalty_prompt_tokens because it is always created from scratch each request
             slot.ctx_sampling->params.penalty_prompt_tokens.push_back(result.tok);
@@ -1213,7 +1246,7 @@ struct server_context {
             break;
         }
 
-        if (!incomplete) {
+        if (!incomplete && !is_token_healing) {
             size_t pos = std::min(slot.n_sent_text, slot.generated_text.size());
 
             const std::string str_test = slot.generated_text.substr(pos);
@@ -1245,7 +1278,7 @@ struct server_context {
             }
         }
 
-        if (incomplete) {
+        if (incomplete || is_token_healing) {
             slot.has_next_token = true;
         }
 
@@ -1350,7 +1383,8 @@ struct server_context {
             {"n_probs",                   slot.sparams.n_probs},
             {"min_keep",                  slot.sparams.min_keep},
             {"grammar",                   slot.sparams.grammar},
-            {"samplers",                  samplers_sequence}
+            {"samplers",                  samplers_sequence},
+            {"token_healing_enabled",     slot.sparams.token_healing.enabled}
         };
     }
 
@@ -2019,6 +2053,8 @@ struct server_context {
                         slot.t_start_process_prompt = ggml_time_us();
                         slot.t_start_generation = 0;
 
+                        llama_token_healing_output token_healing_out{};
+
                         if (slot.infill) {
                             const bool add_bos = llama_should_add_bos_token(model);
                             bool suff_rm_leading_spc = true;
@@ -2038,6 +2074,12 @@ struct server_context {
                             prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(model));
                             suffix_tokens.insert(suffix_tokens.begin(), llama_token_suffix(model));
 
+                            if (slot.sparams.token_healing.enabled) {
+                                // For FIM roll back only the prefix part (i.e. cursor location)
+                                token_healing_out = llama_token_healing_rollback(ctx, prefix_tokens,
+                                    slot.sparams.token_healing.type, slot.sparams.token_healing.n_rollback);
+                            }
+
                             auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
                             auto embd_end = params.spm_infill ? prefix_tokens : suffix_tokens;
                             if (add_bos) {
@@ -2053,6 +2095,11 @@ struct server_context {
                             prompt_tokens = embd_inp;
                         } else {
                             prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
+
+                            if (slot.sparams.token_healing.enabled) {
+                                token_healing_out = llama_token_healing_rollback(ctx, prompt_tokens,
+                                    slot.sparams.token_healing.type, slot.sparams.token_healing.n_rollback);
+                            }
                         }
 
                         slot.n_past = 0;
@@ -2066,6 +2113,16 @@ struct server_context {
                             {"n_prompt_tokens", slot.n_prompt_tokens},
                             {"prompt_tokens",   tokens_to_str(ctx, prompt_tokens.cbegin(), prompt_tokens.cend())},
                         });
+
+                        if (slot.sparams.token_healing.enabled) {
+                            slot.n_th_prefix = token_healing_out.prefix.size();
+                            LOG_VERBOSE("token healing prompt", {
+                                {"id_slot", slot.id},
+                                {"id_task", slot.id_task},
+                                {"removed_suffix", token_healing_out.prefix},
+                                {"n_tokens_removed", token_healing_out.n_tokens_removed}
+                            });
+                        }
 
                         // empty prompt passed -> release the slot and send empty response
                         if (prompt_tokens.empty()) {
@@ -2132,6 +2189,9 @@ struct server_context {
                             }
 
                             llama_sampling_reset(slot.ctx_sampling);
+                            if (slot.sparams.token_healing.enabled) {
+                                llama_token_healing_set_prefix(slot.ctx_sampling, token_healing_out.prefix);
+                            }
 
                             if (!slot.params.cache_prompt) {
                                 slot.n_past_se = 0;
