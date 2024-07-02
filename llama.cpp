@@ -150,6 +150,11 @@ struct lora_data {
     struct lora_info     info;
     std::vector<uint8_t> data;
     struct ggml_context * ctx;
+    // the backend to perform the computation (CPU, CUDA, METAL)
+    ggml_backend_t backend = NULL;
+
+    // the backend buffer to storage the tensors data of a and b
+    ggml_backend_buffer_t buffer;
 
     uint32_t lora_r;
     uint32_t lora_alpha;
@@ -253,8 +258,16 @@ static struct lora_data * load_lora(struct lora_info * info) {
     struct lora_data * result = new struct lora_data;
     result->info = *info;
     result->ctx = NULL;
+    result->backend = NULL;
+    result->buffer = NULL;
     result->lora_r     = 1;
     result->lora_alpha = 1;
+
+    fprintf(stderr, "%s: using Metal backend\n", __func__);
+    result->backend = ggml_backend_metal_init();
+    if (!result->backend) {
+        fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
+    }
 
     struct llama_file_lora file(info->filename.c_str(), "rb");
     if (file.fp == NULL) {
@@ -307,9 +320,10 @@ static struct lora_data * load_lora(struct lora_info * info) {
         tensors_offset.push_back(offset);
         file.seek(nbytes, SEEK_CUR);
     }
+    result->buffer = ggml_backend_alloc_ctx_tensors(result->ctx, result->backend);
 
-    ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(result->ctx,  ggml_backend_metal_buffer_type());
-        if (!buf) {
+    // ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(result->ctx,  ggml_backend_metal_buffer_type());
+        if (!result->buffer) {
             LLAMA_LOG_ERROR("%s: failed to allocate buffer for lora tensors\n", __func__);
         }
     // read tensor data
@@ -321,9 +335,15 @@ static struct lora_data * load_lora(struct lora_info * info) {
         size_t nbytes     = ggml_nbytes(tensor);
         size_t nbytes_pad = ggml_nbytes_pad(tensor);
         file.seek(offset, SEEK_SET);
-        tensor->data = result->data.data() + data_offset;
-        file.read_raw(tensor->data, nbytes);
-        data_offset += nbytes_pad;
+
+        std::vector<char> read_buf;
+        read_buf.resize(ggml_nbytes(tensor));
+        file.read_raw(read_buf.data(), ggml_nbytes(tensor));
+        ggml_backend_tensor_set(tensor, read_buf.data(), 0, ggml_nbytes(tensor));
+        // tensor_tmp->data = result->data.data() + data_offset;
+        // file.read_raw(tensor_tmp->data, nbytes);
+        // data_offset += nbytes_pad;
+        // ggml_backend_tensor_set(tensor, tensor_tmp->data, 0, ggml_nbytes(tensor));
     }
     return result;
 }
