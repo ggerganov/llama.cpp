@@ -304,7 +304,7 @@ static inline void get_scale_min_k4(int j, const uint8_t * q, uint8_t & d, uint8
 
 template<typename dst_t>
 static void dequantize_block_q4_K(const void * __restrict__ vx, dst_t * __restrict__ yy,
-                                  const sycl::nd_item<3> &item_ct1) {
+                                  uint8_t* scales_local, const sycl::nd_item<3> &item_ct1) {
     const block_q4_K * x = (const block_q4_K *) vx;
 
     const int i = item_ct1.get_group(2);
@@ -323,15 +323,20 @@ static void dequantize_block_q4_K(const void * __restrict__ vx, dst_t * __restri
     const float dall = dm[0];
     const float dmin = dm[1];
 
+    if (tid < 12)
+        scales_local[tid] = x[i].scales[tid];
+    item_ct1.barrier(sycl::access::fence_space::local_space);
+
     const uint8_t * q = x[i].qs + 32*il + n*ir;
 
     uint8_t sc, m;
-    get_scale_min_k4(is + 0, x[i].scales, sc, m);
+    get_scale_min_k4(is + 0, scales_local, sc, m);
     const float d1 = dall * sc;
     const float m1 = dmin * m;
-    get_scale_min_k4(is + 1, x[i].scales, sc, m);
+    get_scale_min_k4(is + 1, scales_local, sc, m);
     const float d2 = dall * sc;
     const float m2 = dmin * m;
+
     for (int l = 0; l < n; ++l) {
         y[l + 0] = d1 * (q[l] & 0xF) - m1;
         y[l +32] = d2 * (q[l] >>  4) - m2;
