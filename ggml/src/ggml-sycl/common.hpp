@@ -351,4 +351,9 @@ static __dpct_inline__ float warp_reduce_max(float x,
     return x;
 }
 
+template <typename Tp, int dim = 1>
+static __dpct_inline__ Tp* get_pointer(sycl::local_accessor<Tp, dim> acc) {
+    return acc.template get_multi_ptr<sycl::access::decorated::no>().get();
+}
+
 #endif // GGML_SYCL_COMMON_HPP
