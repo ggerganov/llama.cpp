@@ -14890,9 +14890,9 @@ struct llm_tokenizer_ugm {
         size_t input_len = normalized.size();
 
         // initialize score_sum to -FLT_MAX so it will be always lower than sums of token scores
-        std::vector<struct best_tokenization> tokenization_results(input_len + 1, {0, 0, -FLT_MAX});
+        std::vector<struct best_tokenization> tokenization_results(input_len + 1, {vocab.special_unk_id, 0, -FLT_MAX});
         // at the beginning tokenization score is zero
-        tokenization_results[0] = { 0, 0, 0 };
+        tokenization_results[0] = { vocab.special_unk_id, 0, 0 };
 
         for (size_t input_offset = 0; input_offset < input_len;) {
             size_t prefix_offset = input_offset;
@@ -14912,7 +14912,7 @@ struct llm_tokenizer_ugm {
                         single_codepoint_token_found = true;
                     }
                     llama_token token_id = node->value;
-                    const auto &token_data = vocab.id_to_token[token_id];
+                    const auto & token_data = vocab.id_to_token[token_id];
 
                     // we set the user-defined token scores to 0 to make them more likely to be selected
                     // (normal token scores are log probabilities, so they are negative)
