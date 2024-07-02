@@ -48,11 +48,6 @@ static int g_ggml_sycl_debug = 0;
     }                                                                    \
   }()
 
-// #define DEBUG_SYCL_MALLOC
-
-static int g_work_group_size = -1;
-// typedef sycl::half ggml_fp16_t;
-
 #define __SYCL_ARCH__ DPCT_COMPATIBILITY_TEMP
 #define VER_4VEC 610 // todo for hardward optimize.
 #define VER_GEN9 700 // todo for hardward optimize.
@@ -167,8 +162,6 @@ int get_current_device_id();
 
   (void)bad_arch; // suppress unused function warning
 }
-
-int get_current_device_id();
 
 inline dpct::err0 ggml_sycl_set_device(const int device_id) try {
 
