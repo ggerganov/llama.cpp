@@ -729,7 +729,7 @@ _ggml_vk_input_dir = ggml/src/vulkan-shaders
 _ggml_vk_shader_deps = $(echo $(_ggml_vk_input_dir)/*.comp)
 
 ggml/src/ggml-vulkan.o: ggml/src/ggml-vulkan.cpp ggml/include/ggml-vulkan.h $(_ggml_vk_header) $(_ggml_vk_source)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(shell pkg-config --cflags vulkan) -c $< -o $@
 
 $(_ggml_vk_header): $(_ggml_vk_source)
 
