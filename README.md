@@ -876,7 +876,7 @@ $mv /sdcard/llama.cpp/llama-2-7b-chat.Q4_K_M.gguf /data/data/com.termux/files/ho
 Now, you can start chatting:
 ```
 $cd /data/data/com.termux/files/home/bin
-$./llama-cli -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 -cml
+$./llama-cli -m ../model/llama-2-7b-chat.Q4_K_M.gguf -n 128 --repeat_penalty 1.0 --color -i -r "User:" -f prompts/chat-with-bob.txt
 ```
 
 Here's a demo of an interactive session running on Pixel 5 phone:
