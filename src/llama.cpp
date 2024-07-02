@@ -14888,6 +14888,9 @@ struct llm_tokenizer_ugm {
         std::string normalized;
         normalize(text, &normalized);
         size_t input_len = normalized.size();
+        if (input_len == 0) {
+            return;
+        }
 
         // initialize score_sum to -FLT_MAX so it will be always lower than sums of token scores
         std::vector<struct best_tokenization> tokenization_results(input_len + 1, {0, 0, -FLT_MAX});
