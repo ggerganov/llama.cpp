@@ -45,6 +45,7 @@ BUILD_TARGETS = \
 TEST_TARGETS = \
 	tests/test-autorelease \
 	tests/test-backend-ops \
+	tests/test-chat-template \
 	tests/test-double-float \
 	tests/test-grad0 \
 	tests/test-grammar-integration \
@@ -60,6 +61,11 @@ TEST_TARGETS = \
 	tests/test-tokenizer-0 \
 	tests/test-tokenizer-1-bpe \
 	tests/test-tokenizer-1-spm
+
+# Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
+LEGACY_TARGETS = main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
+	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
+	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm
 
 # Deprecation aliases
 ifdef LLAMA_CUBLAS
@@ -1070,6 +1076,7 @@ clean:
 	rm -rvf src/*.o
 	rm -rvf tests/*.o
 	rm -rvf examples/*.o
+	rm -rvf common/*.o
 	rm -rvf *.a
 	rm -rvf *.dll
 	rm -rvf *.so
@@ -1084,6 +1091,7 @@ clean:
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
+	rm -rvf $(LEGACY_TARGETS)
 	find examples pocs -type f -name "*.o" -delete
 
 #

@@ -79,14 +79,21 @@ set(GGML_SANITIZE_ADDRESS   ${LLAMA_SANITIZE_ADDRESS})
 set(GGML_SANITIZE_UNDEFINED ${LLAMA_SANITIZE_UNDEFINED})
 set(GGML_ALL_WARNINGS       ${LLAMA_ALL_WARNINGS})
 set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
-set(GGML_LLAMAFILE          ON)
-set(GGML_CUDA_USE_GRAPHS    ON)
+
+# change the default for these ggml options
+if (NOT DEFINED GGML_LLAMAFILE)
+    set(GGML_LLAMAFILE ON)
+endif()
+
+if (NOT DEFINED GGML_CUDA_USE_GRAPHS)
+    set(GGML_CUDA_USE_GRAPHS ON)
+endif()
 
 # transition helpers
 function (llama_option_depr TYPE OLD NEW)
     if (${OLD})
         message(${TYPE} "${OLD} is deprecated and will be removed in the future.\nUse ${NEW} instead\n")
-        set(${NEW} ON)
+        set(${NEW} ON PARENT_SCOPE)
     endif()
 endfunction()
 
@@ -96,7 +103,6 @@ llama_option_depr(WARNING     LLAMA_KOMPUTE             GGML_KOMPUTE)
 llama_option_depr(WARNING     LLAMA_METAL               GGML_METAL)
 llama_option_depr(WARNING     LLAMA_METAL_EMBED_LIBRARY GGML_METAL_EMBED_LIBRARY)
 llama_option_depr(WARNING     LLAMA_NATIVE              GGML_NATIVE)
-llama_option_depr(WARNING     LLAMA_OPENMP              GGML_OPENMP)
 llama_option_depr(WARNING     LLAMA_RPC                 GGML_RPC)
 llama_option_depr(WARNING     LLAMA_SYCL                GGML_SYCL)
 llama_option_depr(WARNING     LLAMA_SYCL_F16            GGML_SYCL_F16)

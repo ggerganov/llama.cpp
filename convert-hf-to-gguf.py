@@ -487,6 +487,12 @@ class Model:
         if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
             res = "jina-v2-code"
+        if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
+            # ref: https://huggingface.co/LumiOpen/Viking-7B
+            res = "viking"
+        if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
+            # ref: https://huggingface.co/core42/jais-13b
+            res = "jais"
 
         if res is None:
             logger.warning("\n")
@@ -573,7 +579,19 @@ class Model:
         special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _set_vocab_sentencepiece(self):
+    def _set_vocab_sentencepiece(self, add_to_gguf=True):
+        tokens, scores, toktypes = self._create_vocab_sentencepiece()
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _create_vocab_sentencepiece(self):
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
@@ -635,14 +653,7 @@ class Model:
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
 
-        self.gguf_writer.add_tokenizer_model("llama")
-        self.gguf_writer.add_tokenizer_pre("default")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        special_vocab.add_to_gguf(self.gguf_writer)
+        return tokens, scores, toktypes
 
     def _set_vocab_llama_hf(self):
         vocab = gguf.LlamaHfVocab(self.dir_model)
@@ -2337,6 +2348,70 @@ class GemmaModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
+@Model.register("Gemma2ForCausalLM")
+class Gemma2Model(Model):
+    model_arch = gguf.MODEL_ARCH.GEMMA2
+
+    def set_vocab(self):
+        tokens, scores, toktypes = self._create_vocab_sentencepiece()
+        # hack: This is required so that we can properly use start/end-of-turn for chat template
+        for i in range(108):
+            # including <unusedX>, <start_of_turn>, <end_of_turn>
+            toktypes[i] = SentencePieceTokenTypes.CONTROL
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+        self.gguf_writer.add_add_space_prefix(False)
+
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+        block_count = hparams["num_hidden_layers"]
+
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
+        self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+        self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"] if "num_key_value_heads" in hparams else hparams["num_attention_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_key_length(hparams["head_dim"])
+        self.gguf_writer.add_value_length(hparams["head_dim"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_attn_logit_softcapping(
+            self.hparams["attn_logit_softcapping"]
+        )
+        self.gguf_writer.add_final_logit_softcapping(
+            self.hparams["final_logit_softcapping"]
+        )
+        self.gguf_writer.add_sliding_window(self.hparams["sliding_window"])
+
+        # sanity check
+        attn_scalar = self.hparams["query_pre_attn_scalar"]
+        if attn_scalar != hparams["hidden_size"] / hparams["num_attention_heads"]:
+            raise ValueError("query_pre_attn_scalar must be equal to n_embd / n_head")
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unusem
+
+        # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
+        # To prevent errors, skip loading lm_head.weight.
+        if name == "lm_head.weight":
+            logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+            return []
+
+        # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
+        if name.endswith("norm.weight"):
+            data_torch = data_torch + 1
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+
 @Model.register("Starcoder2ForCausalLM")
 class StarCoder2Model(Model):
     model_arch = gguf.MODEL_ARCH.STARCODER2
@@ -2919,6 +2994,96 @@ class T5Model(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
+@Model.register("JAISLMHeadModel")
+class JaisModel(Model):
+    model_arch = gguf.MODEL_ARCH.JAIS
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # SwigLU activation
+        assert self.hparams["activation_function"] == "swiglu"
+        # ALiBi position embedding
+        assert self.hparams["position_embedding_type"] == "alibi"
+
+        # Embeddings scale
+        self.embeddings_scale = 1.0
+        # note: For some JAIS flavors, output is tied to (same as) wte in original model
+        self.output_is_wte = False
+        if 'mup_embeddings_scale' in self.hparams:
+            self.output_is_wte = True   # Hack (?)
+            self.embeddings_scale = self.hparams['mup_embeddings_scale']
+        elif 'embeddings_scale' in self.hparams:
+            self.embeddings_scale = self.hparams['embeddings_scale']
+        else:
+            assert False
+
+        self.width_scale = 1.0
+        if 'mup_output_alpha' in self.hparams:
+            assert 'mup_width_scale' in self.hparams
+            self.width_scale = self.hparams['mup_output_alpha'] * self.hparams['mup_width_scale']
+        elif 'width_scale' in self.hparams:
+            self.width_scale = self.hparams['width_scale']
+        else:
+            assert False
+
+        self.max_alibi_bias = 8.0
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_inner"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        tensors: list[tuple[str, Tensor]] = []
+
+        # we don't need these
+        if name.endswith((".attn.bias")):
+            return tensors
+
+        if name.endswith(("relative_pe.slopes")):
+            # Calculate max ALiBi bias (this is the inverse of the ALiBi calculation)
+            # Some other models has max_alibi_bias spelled out explicitly in the hyperparams,
+            # but Jais's PyTorch model simply precalculates the slope values and places them
+            # in relative_pes.slopes
+            n_head_closest_log2 = 2 ** math.floor(math.log2(self.hparams["n_head"]))
+            first_val = float(data_torch._data[0])
+            self.max_alibi_bias = -round(math.log2(first_val) * n_head_closest_log2)
+
+            return tensors
+
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_fc2.weight")):
+            data_torch = data_torch.transpose(1, 0)
+
+        new_name = self.map_tensor_name(name)
+
+        if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
+            tensors.append((new_name, data_torch * self.embeddings_scale))
+            if self.output_is_wte:
+                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch * self.width_scale))
+        elif new_name == self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT):
+            assert not self.output_is_wte
+            tensors.append((new_name, data_torch * self.width_scale))
+        else:
+            tensors.append((new_name, data_torch))
+
+        return tensors
+
+    def write_tensors(self):
+        super().write_tensors()
+        self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
+
+
 ###### CONVERSION LOGIC ######
 
 
@@ -3074,7 +3239,8 @@ def main() -> None:
         "auto": gguf.LlamaFileType.GUESSED,
     }
 
-    if args.use_temp_file and (args.split_max_tensors > 0 or args.split_max_size != "0"):
+    is_split = args.split_max_tensors > 0 or args.split_max_size != "0"
+    if args.use_temp_file and is_split:
         logger.error("Error: Cannot use temp file when splitting")
         sys.exit(1)
 
@@ -3111,11 +3277,12 @@ def main() -> None:
         if args.vocab_only:
             logger.info("Exporting model vocab...")
             model_instance.write_vocab()
-            logger.info("Model vocab successfully exported.")
+            logger.info(f"Model vocab successfully exported to {model_instance.fname_out}")
         else:
             logger.info("Exporting model...")
             model_instance.write()
-            logger.info("Model successfully exported.")
+            out_path = f"{model_instance.fname_out.parent}{os.sep}" if is_split else model_instance.fname_out
+            logger.info(f"Model successfully exported to {out_path}")
 
 
 if __name__ == '__main__':
