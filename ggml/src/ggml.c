@@ -823,6 +823,30 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_Q8_K,
         .nrows                    = 1,
     },
+    [GGML_TYPE_Q2_2] = {
+        .type_name                = "q2_2",
+        .blck_size                = QK2_2,
+        .type_size                = sizeof(block_q2_2),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_q2_2,
+        .from_float               = quantize_row_q2_2,
+        .from_float_reference     = (ggml_from_float_t) quantize_row_q2_2_reference,
+        .vec_dot                  = ggml_vec_dot_q2_2_q8_0,
+        .vec_dot_type             = GGML_TYPE_Q8_0,
+        .nrows                    = 1,
+    },
+    [GGML_TYPE_Q1_3] = {
+        .type_name                = "q1_3",
+        .blck_size                = QK1_3,
+        .type_size                = sizeof(block_q1_3),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_q1_3,
+        .from_float               = quantize_row_q1_3,
+        .from_float_reference     = (ggml_from_float_t) quantize_row_q1_3_reference,
+        .vec_dot                  = ggml_vec_dot_q1_3_q8_0,
+        .vec_dot_type             = GGML_TYPE_Q8_0,
+        .nrows                    = 1,
+    },
     [GGML_TYPE_IQ1_S] = {
         .type_name                = "iq1_s",
         .blck_size                = QK_K,
@@ -10041,7 +10065,16 @@ static void ggml_compute_forward_mul_f32(
     GGML_ASSERT( nb0 == sizeof(float));
     GGML_ASSERT(nb00 == sizeof(float));
 
-    if (nb10 == sizeof(float)) {
+    if (ggml_nelements(src1) == 1) {
+        float scale = ((float *) src1->data)[0];
+        for (int64_t ir = ith; ir < nr; ir += nth) {
+            if (dst->data != src0->data) {
+                // src0 is same shape as dst => same indices
+                memcpy((char *)dst->data + ir*nb1, (char *)src0->data + ir*nb01, ne0 * sizeof(float));
+            }
+            ggml_vec_scale_f32(ne0, (float *) ((char *) dst->data + ir*nb1), scale);
+        }
+    } else if (nb10 == sizeof(float)) {
         for (int64_t ir = ith; ir < nr; ir += nth) {
             // src0 and dst are same shape => same indices
             const int64_t i03 = ir/(ne02*ne01);
@@ -13713,6 +13746,8 @@ static void ggml_compute_forward_clamp(
             } break;
         case GGML_TYPE_F16:
         case GGML_TYPE_BF16:
+        case GGML_TYPE_Q1_3:
+        case GGML_TYPE_Q2_2:
         case GGML_TYPE_Q4_0:
         case GGML_TYPE_Q4_1:
         case GGML_TYPE_Q5_0:
@@ -20438,6 +20473,8 @@ size_t ggml_quantize_chunk(
     size_t result = 0;
 
     switch (type) {
+        case GGML_TYPE_Q1_3:    result = quantize_q1_3(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
+        case GGML_TYPE_Q2_2:    result = quantize_q2_2(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q4_0:    result = quantize_q4_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q4_1:    result = quantize_q4_1(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
         case GGML_TYPE_Q5_0:    result = quantize_q5_0(src + start, (char *) dst + start_row * row_size, nrows, n_per_row, imatrix); break;
