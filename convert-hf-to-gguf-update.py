@@ -147,7 +147,10 @@ for model in models:
 
     # create the tokenizer
     try:
-        tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+        if name == "t5":
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}", use_fast=False)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
     except OSError as e:
         logger.error(f"Error loading tokenizer for model {name}. The model may not exist or is not accessible with the provided token. Error: {e}")
         continue  # Skip to the next model if the tokenizer can't be loaded
@@ -306,7 +309,10 @@ for model in models:
 
     # create the tokenizer
     try:
-        tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+        if name == "t5":
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}", use_fast=False)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
     except OSError as e:
         logger.error(f"Failed to load tokenizer for model {name}. Error: {e}")
         continue  # Skip this model and continue with the next one in the loop
