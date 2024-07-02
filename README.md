@@ -585,6 +585,20 @@ Building the program with BLAS support may lead to some performance improvements
   | GGML_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
 
 - #### Vulkan
+  ##### Windows (MSYS2)
+  Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
+    ```sh
+    pacman -S git \
+        mingw-w64-ucrt-x86_64-gcc \
+        mingw-w64-ucrt-x86_64-cmake \
+        mingw-w64-ucrt-x86_64-vulkan-devel \
+        mingw-w64-ucrt-x86_64-shaderc
+    ```
+  Switch into `llama.cpp` directory and build using CMake.
+  ```sh
+  cmake -B build -DLLAMA_VULKAN=ON
+  cmake --build build --config Release
+  ```
 
   **With docker**:
 

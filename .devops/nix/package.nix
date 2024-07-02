@@ -18,6 +18,8 @@
   vulkan-headers,
   vulkan-loader,
   curl,
+  shaderc,
+  clblast,
   useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
@@ -130,6 +132,7 @@ let
   vulkanBuildInputs = [
     vulkan-headers
     vulkan-loader
+    shaderc
   ];
 in
 
