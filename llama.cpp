@@ -3986,7 +3986,7 @@ struct llama_model_loader {
                         return std::make_pair(cur, ggml_validate_row_data(cur->type, data, n_size));
                     }));
                 }
-                // TODO LORA allocation of base tensors
+
                 GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
                 if (buf_mmap && cur->data == nullptr) {
                     ggml_backend_tensor_alloc(buf_mmap, cur, data);
@@ -5427,7 +5427,7 @@ static bool llm_load_tensors(
         auto ctx_for_layer_split        = [&](int i) { return ctx_map.at(model.buft_layer[i].buft_matrix); };
 
         model.layers.resize(n_layer);
-        // main players model, ml, ctx_input/output, tn (gets name?)
+
         const auto tn = LLM_TN(model.arch);
         switch (model.arch) {
             case LLM_ARCH_LLAMA:
@@ -6701,7 +6701,7 @@ static bool llm_load_tensors(
 #endif
             }
         }
-#ifdef GGML_USE_METAL // LORA Use metal on base tensors
+#ifdef GGML_USE_METAL
         else if (ml.use_mmap && use_mmap_buffer && buft == ggml_backend_metal_buffer_type()) {
             for (uint32_t idx = 0; idx < ml.files.size(); idx++) {
                 const size_t max_size = ggml_get_max_tensor_size(ctx);
