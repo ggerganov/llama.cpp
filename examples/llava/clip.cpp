@@ -130,12 +130,14 @@ enum projector_type {
     PROJECTOR_TYPE_LDP,
     PROJECTOR_TYPE_LDPV2,
     PROJECTOR_TYPE_UNKNOWN,
+    PROJECTOR_TYPE_MLP_PHI
 };
 
 static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_MLP, "mlp" },
     { PROJECTOR_TYPE_LDP, "ldp" },
     { PROJECTOR_TYPE_LDPV2, "ldpv2"},
+    { PROJECTOR_TYPE_MLP_PHI, "mlp_phi" }
 };
 
 
@@ -698,8 +700,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         // ne is whcn, ne = [1024, 576, 1, 1]
         embeddings = ggml_get_rows(ctx0, embeddings, patches);
 
-        // print_tensor_info(embeddings, "embeddings");
-
         // llava projector
         if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
@@ -709,7 +709,24 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
 
-        } else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+        } else if (ctx->proj_type == PROJECTOR_TYPE_MLP_PHI) {
+            // needs to be reworked, see https://huggingface.co/microsoft/Phi-3-vision-128k-instruct/blob/main/image_embedding_phi3_v.py
+            // line 204 onwards
+            struct ggml_tensor * embeddings_ = embeddings;
+            // [1024, 576, 1, 1] -> [4096, 576, 1, 1]
+            embeddings = ggml_concat(ctx0, embeddings, embeddings_, 0);
+            embeddings = ggml_concat(ctx0, embeddings, embeddings_, 0);
+            embeddings = ggml_concat(ctx0, embeddings, embeddings_, 0);
+            
+            embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
+            embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
+
+            embeddings = ggml_gelu(ctx0, embeddings);
+            embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
+            embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
+
+        }
+        else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
             // ggml_tensor_printf(embeddings, "mm_0_w",0,true,false);
@@ -1208,7 +1225,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
 
         // LLaVA projection
-        if (new_clip->proj_type == PROJECTOR_TYPE_MLP || new_clip->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+        if (new_clip->proj_type == PROJECTOR_TYPE_MLP || new_clip->proj_type == PROJECTOR_TYPE_MLP_NORM || new_clip->proj_type == PROJECTOR_TYPE_MLP_PHI) {
             vision_model.mm_0_w              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "weight"));
             vision_model.mm_0_b              = get_tensor(new_clip->ctx_data, format(TN_LLAVA_PROJ, 0, "bias"));
             try {
@@ -2067,6 +2084,9 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
         return ctx->vision_model.mm_model_peg_0_b->ne[0];
     }
     if (ctx->proj_type == PROJECTOR_TYPE_MLP) {
+        return ctx->vision_model.mm_2_b->ne[0];
+    }
+    if (ctx->proj_type == PROJECTOR_TYPE_MLP_PHI) {
         return ctx->vision_model.mm_2_b->ne[0];
     }
     if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
