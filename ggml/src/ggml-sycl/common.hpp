@@ -217,11 +217,11 @@ struct ggml_sycl_device_info {
     bool sycl_visible_devices_existed = false;
 
     struct sycl_device_info {
-        int cc; // compute capability
+        int     cc;                 // compute capability
         // int     nsm;                // number of streaming multiprocessors
         // size_t  smpb;               // max. shared memory per block
-        bool vmm; // virtual memory support
-        size_t total_vram;
+        bool    vmm;                // virtual memory support
+        size_t  total_vram;
     };
 
     sycl_device_info devices[GGML_SYCL_MAX_DEVICES] = {};
