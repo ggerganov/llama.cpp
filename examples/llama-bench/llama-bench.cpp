@@ -1390,7 +1390,7 @@ int main(int argc, char ** argv) {
             test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
         }
         if (t.n_gen > 0) {
-            test_gen(ctx, 1, 0, t.n_threads);
+            test_gen(ctx, t.n_gen, 0, t.n_threads);
         }
 
         for (int i = 0; i < params.reps; i++) {
