@@ -579,7 +579,19 @@ class Model:
         special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _set_vocab_sentencepiece(self):
+    def _set_vocab_sentencepiece(self, add_to_gguf=True):
+        tokens, scores, toktypes = self._create_vocab_sentencepiece()
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _create_vocab_sentencepiece(self):
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
@@ -641,14 +653,7 @@ class Model:
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
 
-        self.gguf_writer.add_tokenizer_model("llama")
-        self.gguf_writer.add_tokenizer_pre("default")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        special_vocab.add_to_gguf(self.gguf_writer)
+        return tokens, scores, toktypes
 
     def _set_vocab_llama_hf(self):
         vocab = gguf.LlamaHfVocab(self.dir_model)
@@ -2348,7 +2353,19 @@ class Gemma2Model(Model):
     model_arch = gguf.MODEL_ARCH.GEMMA2
 
     def set_vocab(self):
-        self._set_vocab_llama_hf()
+        tokens, scores, toktypes = self._create_vocab_sentencepiece()
+        # hack: This is required so that we can properly use start/end-of-turn for chat template
+        for i in range(108):
+            # including <unusedX>, <start_of_turn>, <end_of_turn>
+            toktypes[i] = SentencePieceTokenTypes.CONTROL
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
         self.gguf_writer.add_add_space_prefix(False)
 
     def set_gguf_parameters(self):
@@ -2372,6 +2389,12 @@ class Gemma2Model(Model):
         self.gguf_writer.add_final_logit_softcapping(
             self.hparams["final_logit_softcapping"]
         )
+        self.gguf_writer.add_sliding_window(self.hparams["sliding_window"])
+
+        # sanity check
+        attn_scalar = self.hparams["query_pre_attn_scalar"]
+        if attn_scalar != hparams["hidden_size"] / hparams["num_attention_heads"]:
+            raise ValueError("query_pre_attn_scalar must be equal to n_embd / n_head")
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unusem
