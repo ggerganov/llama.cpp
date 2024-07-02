@@ -117,25 +117,6 @@ static void llama_log_callback_logTee(ggml_log_level level, const char * text, v
     LOG_TEE("%s", text);
 }
 
-#include "ggml-metal.h"
-
-bool is_pointer_in_buffer_range(void *ptr, void *buffer_start, size_t buffer_size) {
-    return (ptr >= (char*)buffer_start) && (ptr < ((char*)buffer_start + buffer_size));
-}
-
-
-void verify_tensor_allocation(struct ggml_context * ctx, ggml_backend_buffer_t buffer, size_t buffer_size) {
-    struct ggml_tensor * first = ggml_get_first_tensor(ctx);
-    for (struct ggml_tensor * t = first; t != NULL; t = ggml_get_next_tensor(ctx, t)) {
-        if (t->data != NULL) {
-            if (!is_pointer_in_buffer_range(t->data, buffer, buffer_size)) {
-                fprintf(stderr, "Tensor %s is not within the allocated buffer range.\n", t->name);
-            } else {
-                printf("Tensor %s is correctly allocated in the buffer.\n", t->name);
-            }
-        }
-    }
-}
 
 int main(int argc, char ** argv) {
 

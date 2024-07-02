@@ -263,11 +263,27 @@ static struct lora_data * load_lora(struct lora_info * info) {
     result->lora_r     = 1;
     result->lora_alpha = 1;
 
+#ifdef GGML_USE_CUDA
+    fprintf(stderr, "%s: using CUDA backend\n", __func__);
+    result->backend = ggml_backend_cuda_init(0); // init device 0
+    if (!result->backend) {
+        fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
+    }
+#endif
+
+#ifdef GGML_USE_METAL
     fprintf(stderr, "%s: using Metal backend\n", __func__);
     result->backend = ggml_backend_metal_init();
     if (!result->backend) {
         fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
     }
+#endif
+
+    // if there aren't GPU Backends fallback to CPU backend
+    if (!result->backend) {
+        result->backend = ggml_backend_cpu_init();
+    }
+
 
     struct llama_file_lora file(info->filename.c_str(), "rb");
     if (file.fp == NULL) {
@@ -320,30 +336,24 @@ static struct lora_data * load_lora(struct lora_info * info) {
         tensors_offset.push_back(offset);
         file.seek(nbytes, SEEK_CUR);
     }
-    result->buffer = ggml_backend_alloc_ctx_tensors(result->ctx, result->backend);
 
-    // ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(result->ctx,  ggml_backend_metal_buffer_type());
+
+    
+    result->buffer = ggml_backend_alloc_ctx_tensors(result->ctx, result->backend);
         if (!result->buffer) {
             LLAMA_LOG_ERROR("%s: failed to allocate buffer for lora tensors\n", __func__);
         }
     // read tensor data
     result->data.resize(total_nbytes_pad);
-    size_t data_offset = 0;
     for (size_t i = 0; i < tensors.size(); ++i) {
         struct ggml_tensor * tensor = tensors[i];
         size_t offset     = tensors_offset[i];
         size_t nbytes     = ggml_nbytes(tensor);
-        size_t nbytes_pad = ggml_nbytes_pad(tensor);
         file.seek(offset, SEEK_SET);
-
         std::vector<char> read_buf;
-        read_buf.resize(ggml_nbytes(tensor));
-        file.read_raw(read_buf.data(), ggml_nbytes(tensor));
-        ggml_backend_tensor_set(tensor, read_buf.data(), 0, ggml_nbytes(tensor));
-        // tensor_tmp->data = result->data.data() + data_offset;
-        // file.read_raw(tensor_tmp->data, nbytes);
-        // data_offset += nbytes_pad;
-        // ggml_backend_tensor_set(tensor, tensor_tmp->data, 0, ggml_nbytes(tensor));
+        read_buf.resize(nbytes);
+        file.read_raw(read_buf.data(), nbytes);
+        ggml_backend_tensor_set(tensor, read_buf.data(), 0, nbytes);
     }
     return result;
 }
@@ -16344,7 +16354,7 @@ struct llama_context * llama_new_context_with_model(
 
     llama_context * ctx = new llama_context(*model);
 
-    /// LORA
+    /// LORA load start
     struct export_lora_params * lora_params = new struct export_lora_params;
     struct lora_info lora;
     lora.filename = params.hot_lora;
@@ -16365,27 +16375,6 @@ struct llama_context * llama_new_context_with_model(
         }
         // Assign data 
         ctx->llora_data = *loras[0];
-
-
-        ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft((ctx->llora_data).ctx,  ggml_backend_metal_buffer_type());
-        if (!buf) {
-            LLAMA_LOG_ERROR("%s: failed to allocate buffer for lora tensors\n", __func__);
-        }
-        // Looks this worked, need to check if tensors have new buffer (not sure below).
-        // Also do we need to set the tensors? not clear where data is, looks like it is loaded after the
-        //  tensor creation in context, but loaded where? cuz if data present dfferebt way to set with ggml_backend_tensor_set instead of ggml_backend_tensor_alloc
-
-        // TODO looks like I have already a context with load_lora, understand if 
-        // I am using it
-        // If the contexg it set to right buffer with ggml_backend_alloc_ctx_tensors_from_buft((ctx->llora_data).ctx,  ggml_backend_metal_buffer_type());
-        // As I should already have created the tensors in the context, 
-        // Understand where are the weights loaded instead
-        // Load the weight/data in the context
-        // Maybe check finetuning approach at managing the lora weights.
-        
-
-
-        // build the map? TODO LORA ctx->lora_weights_map layers seem to not have buffer type but it should as the simple example does
         ctx->lora_weights_map = get_lora_weights_map_cpp((ctx->llora_data).ctx);
         // std::vector<std::string> keys;
         // for (const auto& pair : ctx->lora_weights_map) {
@@ -16398,63 +16387,9 @@ struct llama_context * llama_new_context_with_model(
         //     ggml_tensor * tensorB_ctx = ggml_new_tensor((ctx->llora_data).ctx, tensorB->type, 4, tensorB->ne);
 
         // }
-        
-        // for (struct ggml_tensor * cur = ggml_get_first_tensor((ctx->llora_data).ctx); cur != NULL; cur = ggml_get_next_tensor((ctx->llora_data).ctx, cur)) {
-        //     const auto * name = ggml_get_name(cur);
-        //     // ggml_backend_tensor_set(tensorA, tensorA->data, 0, ggml_nbytes(tensorA));
-        //     // ggml_backend_tensor_set(tensorB, tensorB->data, 0, ggml_nbytes(tensorB));
-
-        // }
-        
-            // for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur != NULL; cur = ggml_get_next_tensor(ctx, cur)) {
-            // const auto * weight = get_weight(ggml_get_name(cur));
-            // if (weight == nullptr) {
-            //     // this can happen with split experts models
-            //     continue;
-            // }
-
-            // if (progress_callback) {
-            //     if (!progress_callback((float) size_done / size_data, progress_callback_user_data)) {
-            //         return false;
-            //     }
-            // }
-
-            // size_t n_size = ggml_nbytes(cur);
-
-            // if (use_mmap) {
-            //     const auto & mapping = mappings.at(weight->idx);
-            //     ggml_backend_buffer_t buf_mmap = nullptr;
-            //     if (bufs_mmap.count(weight->idx)) {
-            //         buf_mmap = bufs_mmap.at(weight->idx);
-            //     }
-            //     uint8_t * data = (uint8_t *) mapping->addr + weight->offs;
-
-            //     if (check_tensors) {
-            //         validation_result.emplace_back(std::async(std::launch::async, [cur, data, n_size] {
-            //             return std::make_pair(cur, ggml_validate_row_data(cur->type, data, n_size));
-            //         }));
-            //     }
-            //     // TODO LORA allocation of base tensors
-            //     GGML_ASSERT(buf_mmap || cur->data); // either we have a buffer to allocate the tensor in, or it is already allocated
-            //     if (buf_mmap && cur->data == nullptr) {
-            //         ggml_backend_tensor_alloc(buf_mmap, cur, data);
-            //         if (lmlocks) {
-            //             const auto & lmlock = lmlocks->at(weight->idx);
-            //             lmlock->grow_to(weight->offs + n_size);
-            //         }
-
-            //         auto & mmap_used = mmaps_used[weight->idx];
-            //         mmap_used.first  = std::min(mmap_used.first,  weight->offs);
-            //         mmap_used.second = std::max(mmap_used.second, weight->offs + n_size);
-            //     } else {
-            //         ggml_backend_tensor_set(cur, data, 0, n_size);
-
-
-
-
     }
 
-    /// LORA
+    /// LORA load end
 
     const auto & hparams = model->hparams;
     auto       & cparams = ctx->cparams;
