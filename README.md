@@ -591,11 +591,11 @@ Building the program with BLAS support may lead to some performance improvements
   ###### w64devkit
 
   Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
-  
+
   Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
-  
+
   Create a `w64devkit/x86_64-w64-mingw32/lib/pkgconfig/vulkan.pc` file with the following contents:
-  
+
   _Note: make sure the path matches the version in SDK download_.
   ```
   Name: Vulkan-Loader
@@ -605,7 +605,7 @@ Building the program with BLAS support may lead to some performance improvements
   Cflags: -I/VulkanSDK/1.3.283.0/Include
   ```
   Launch `w64devkit.exe`, switch into `llama.cpp` directory and run `make GGML_VULKAN=1`.
-  
+
   ###### MSYS2
   Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
     ```sh
