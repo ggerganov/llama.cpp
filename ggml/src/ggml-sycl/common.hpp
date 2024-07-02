@@ -15,6 +15,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <regex>
 
 #include "dpct/helper.hpp"
 #include "ggml-sycl.h"
@@ -46,11 +47,6 @@ static int g_ggml_sycl_debug = 0;
       return dpct::default_error;                                        \
     }                                                                    \
   }()
-
-// #define DEBUG_SYCL_MALLOC
-
-static int g_work_group_size = 0;
-// typedef sycl::half ggml_fp16_t;
 
 #define __SYCL_ARCH__ DPCT_COMPATIBILITY_TEMP
 #define VER_4VEC 610 // todo for hardward optimize.
@@ -89,6 +85,12 @@ enum ggml_sycl_backend_gpu_mode {
   SYCL_MUL_GPU_MODE
 };
 
+enum ggml_sycl_backend_device_filter {
+  SYCL_ALL_DEVICES = 0,
+  SYCL_DEVICES_TOP_LEVEL_ZERO,
+  SYCL_VISIBLE_DEVICES
+};
+
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 static void crash() {
@@ -107,6 +109,8 @@ static void crash() {
   GGML_ASSERT(!"SYCL error");
 }
 
+#define SYCL_RETURN_ERROR 1
+
 #define SYCL_CHECK(err)                     \
   do {                                      \
     auto err_ = (err);                      \
@@ -118,6 +122,7 @@ static void crash() {
           __LINE__,                         \
           "Meet error in this line code!"); \
   } while (0)
+
 
 #if DPCT_COMPAT_RT_VERSION >= 11100
 #define GGML_SYCL_ASSUME(x) __builtin_assume(x)
@@ -147,6 +152,8 @@ static void* g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
 
+int get_current_device_id();
+
 [[noreturn]] static inline void bad_arch(const sycl::stream& stream_ct1) {
   stream_ct1 << "ERROR: ggml-sycl was compiled without support for the "
                 "current GPU architecture.\n";
@@ -156,20 +163,18 @@ static size_t g_scratch_offset = 0;
   (void)bad_arch; // suppress unused function warning
 }
 
-int get_current_device_id();
-
-inline dpct::err0 ggml_sycl_set_device(const int device) try {
+inline dpct::err0 ggml_sycl_set_device(const int device_id) try {
 
   int current_device_id;
   SYCL_CHECK(CHECK_TRY_ERROR(current_device_id = get_current_device_id()));
 
-  // GGML_SYCL_DEBUG("ggml_sycl_set_device device_id=%d,
-  // current_device_id=%d\n", device, current_device);
-  if (device == current_device_id) {
+  GGML_SYCL_DEBUG("ggml_sycl_set_device device_id=%d, current_device_id=%d\n", device_id, current_device_id);
+  if (device_id == current_device_id) {
     return 0;
   }
 
-  return CHECK_TRY_ERROR(dpct::select_device(device));
+  return CHECK_TRY_ERROR(dpct::select_device(device_id));
+
 } catch (sycl::exception const& exc) {
   std::cerr << exc.what() << "Exception caught at file:" << __FILE__
             << ", line:" << __LINE__ << std::endl;
@@ -177,10 +182,39 @@ inline dpct::err0 ggml_sycl_set_device(const int device) try {
   std::exit(1);
 }
 
-//////////////////////
+class sycl_device_mgr {
+  public:
+    std::vector<int> device_ids;
+    std::vector<sycl::device> devices;
+    std::vector<int> max_compute_units;
+    std::vector<int> work_group_sizes;
+    sycl::queue *first_queue;
+    std::vector<sycl::queue> _queues;
+    std::vector<sycl::context> ctxs;
+    std::string device_list = "";
+
+    sycl_device_mgr(ggml_sycl_backend_device_filter device_filter);
+
+    sycl::queue *_create_queue_ptr(sycl::device device); //internal API to hide dpct API.
+    void create_context_for_group_gpus();
+    sycl::queue *create_queue_for_device(sycl::device &device);
+    sycl::queue *create_queue_for_device_id(int device_id);
+    int get_device_index(int device_id);
+    void create_context_for_devices();
+    void init_allow_devices();
+    bool is_allowed_device(int device_id);
+    void detect_all_sycl_device_list();
+    void detect_sycl_visible_device_list();
+    void detect_sycl_gpu_list_with_max_cu();
+    int get_device_count();
+    bool is_ext_oneapi_device(const sycl::device &dev);
+};
+
 
 struct ggml_sycl_device_info {
     int device_count;
+    bool oneapi_device_selector_existed = false;
+    bool sycl_visible_devices_existed = false;
 
     struct sycl_device_info {
         int     cc;                 // compute capability
@@ -193,9 +227,16 @@ struct ggml_sycl_device_info {
     sycl_device_info devices[GGML_SYCL_MAX_DEVICES] = {};
 
     std::array<float, GGML_SYCL_MAX_DEVICES> default_tensor_split = {};
-};
 
-const ggml_sycl_device_info & ggml_sycl_info();
+    sycl_device_mgr *device_mgr = NULL;
+
+    void print_gpu_device_list();
+    int work_group_size(int device_id);
+    void refresh_device();
+    bool is_allowed_device(int device_id);
+    const char* devices_list();
+    int get_device_id(int device_index);
+};
 
 struct ggml_sycl_pool {
     virtual ~ggml_sycl_pool() = default;
@@ -262,15 +303,16 @@ struct ggml_backend_sycl_context {
 
     queue_ptr qptrs[GGML_SYCL_MAX_DEVICES][GGML_SYCL_MAX_STREAMS] = { { nullptr } };
 
-    explicit ggml_backend_sycl_context(int device) :
-        device(device),
+    explicit ggml_backend_sycl_context(struct ggml_sycl_device_info &sycl_device_info, int device_id) :
+        device(device_id),
         name(GGML_SYCL_NAME + std::to_string(device)) {
+            for (int i=0;i<GGML_SYCL_MAX_STREAMS; i++){
+                qptrs[device_id][i] = sycl_device_info.device_mgr->create_queue_for_device_id(device_id);
+            }
     }
 
     queue_ptr stream(int device, int stream) {
-        if (qptrs[device][stream] == nullptr) {
-            qptrs[device][stream] = &(dpct::get_current_device().default_queue());
-        }
+        assert(qptrs[device][stream] != nullptr);
         return qptrs[device][stream];
     }
 
@@ -294,6 +336,20 @@ struct ggml_backend_sycl_context {
         return pool(device);
     }
 };
+
+static inline void exit_with_stack_print() {
+    SYCL_CHECK(SYCL_RETURN_ERROR);
+}
+
+
+static inline int get_sycl_env(const char *env_name, int default_val);
+static inline bool env_existed(const char *env_name);
+void* ggml_sycl_host_malloc(size_t size);
+void ggml_sycl_host_free(void* ptr);
+static std::vector<int> get_sycl_visible_devices();
+void ggml_backend_sycl_print_sycl_devices();
+static ggml_sycl_device_info ggml_sycl_init();
+ggml_sycl_device_info &ggml_sycl_info();
 
 // common host functions
 
