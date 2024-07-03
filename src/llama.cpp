@@ -5200,13 +5200,6 @@ static void llm_load_vocab(
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_bos = true;
             vocab.tokenizer_add_eos = false;
-            // chatglm3 needs to preprocess prefix and suffix
-            if (tokenizer_pre == "chatglm-spm") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CHATGLM3;
-                vocab.tokenizer_add_bos = false;
-                vocab.tokenizer_add_eos = false;
-                vocab.tokenizer_add_space_prefix = false;
-            }
         } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_bos = true;
@@ -15190,14 +15183,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     output.push_back(vocab.special_bos_id);
                     is_prev_special = true;
                 }
-                // add prefix to chatglm3
-                if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM3) {
-                    output.push_back(64790); // [gMask]
-                    output.push_back(64792); // sop
-                    output.push_back(64795); // <|user|>
-                    output.push_back(30910); // \n
-                    output.push_back(13);
-                }
 
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
@@ -15232,10 +15217,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                     GGML_ASSERT(vocab.special_eos_id != -1);
                     output.push_back(vocab.special_eos_id);
                 }
-                // add suffix to chatglm3
-                if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM3) {
-                    output.push_back(64796); // <|assistant|>
-                }
             } break;
         case LLAMA_VOCAB_TYPE_BPE:
             {
@@ -15243,13 +15224,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 
                 if (add_special) {
                     tokenizer.append_bos(output);
-                }
-                // add prefix to chatglm4
-                if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM4) {
-                    output.push_back(151331); // [gMASK]
-                    output.push_back(151333); // <sop>
-                    output.push_back(151336); // <|user|>
-                    output.push_back(198); // \n
                 }
                 for (const auto & fragment : fragment_buffer) {
                     if (fragment.type == FRAGMENT_BUFFER_VARIANT_TYPE_RAW_TEXT) {
@@ -15267,10 +15241,6 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                 if (add_special) {
                     tokenizer.append_eos(output);
                     tokenizer.check_double_bos_eos(output);
-                }
-                // add suffix to chatglm4
-                if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_CHATGLM4) {
-                    output.push_back(151337); // <|assistant|>
                 }
             } break;
         case LLAMA_VOCAB_TYPE_WPM:
