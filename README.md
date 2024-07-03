@@ -1,3 +1,37 @@
+# llama.cpp for SYCL (Neo Zhang)
+
+This is folk of [llama.cpp](https://github.com/ggerganov/llama.cpp). Thanks for their great work!
+
+As an original developer of SYCL backend, I'd like to continue maintaining and developing SYCL backend in my own repo for Intel GPU in the future.
+
+It will provide freedom to me to update SYCL backend to provide more stable and friendly usage to users.
+
+## What's the same of original repo:
+
+- All functions/features are same as those in original repo, except SYCL backend.
+
+I will sync the commits from original repo weekly.
+
+I will choose to sync/update the commits impact SYCL backend. Make sure it has no side-impact to SYCL backend.
+
+
+## What's different of this folk:
+
+1. Get my private improvement:
+
+I will improve the SYCL backend in my spare time: fix bug, improve OOB, add feature/optimization.
+
+Welcome to sync back my update to original repo.
+
+2. Get stable release:
+
+Due to there is no CI during PR merge, SYCL backend is easy to be broken.
+
+During sync the commits, I will test and update the commits impact SYCL backend. Make sure the release is working well for SYCL backend user.
+
+
+//-----original------
+
 # llama.cpp
 
 ![llama](https://user-images.githubusercontent.com/1991296/230134379-7181e485-c521-4d23-a0d6-f7b3b61ba524.png)
