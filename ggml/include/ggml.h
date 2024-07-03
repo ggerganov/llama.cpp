@@ -2413,7 +2413,7 @@ extern "C" {
     typedef void (*ggml_vec_dot_t)   (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT x, size_t bx,
                                       const void * GGML_RESTRICT y, size_t by, int nrc);
     typedef void (*ggml_from_float_to_mat_t)(const float * GGML_RESTRICT x, void  * GGML_RESTRICT y, int64_t nr,
-                                      int64_t k, int64_t bx);
+                                             int64_t k, int64_t bx);
     typedef void (*ggml_gemv_t)      (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx,
                                       const void * GGML_RESTRICT vy, int nr, int nc);
     typedef void (*ggml_gemm_t)      (int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx,
