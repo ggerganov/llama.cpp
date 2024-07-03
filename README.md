@@ -606,7 +606,7 @@ Building the program with BLAS support may lead to some performance improvements
   Version: $SDK_VERSION
   Libs: -lvulkan-1
   EOF
-  
+
   ```
   Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
 
