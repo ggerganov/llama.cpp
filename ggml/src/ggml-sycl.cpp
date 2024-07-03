@@ -5295,7 +5295,7 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
             {
                 ggml_type src0_type = op->src[0]->type;
                 int dim = op->op_params[0];
-                return src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16 && dim == 2;
+                return ggml_is_contiguous(op->src[0]) && ggml_is_contiguous(op->src[1]) && src0_type != GGML_TYPE_I32 && src0_type != GGML_TYPE_I16 && dim == 2;
             } break;
         case GGML_OP_DUP:
         case GGML_OP_NONE:
