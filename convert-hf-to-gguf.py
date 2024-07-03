@@ -3209,7 +3209,6 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_token_types(toktypes)
 
         special_vocab = gguf.SpecialVocab(dir_model, load_merges=False)
-        special_vocab.chat_template = "chatglm4"
         special_vocab.merges = merges
         # only add special tokens when they were not already loaded from config.json
         special_vocab._set_special_token("eos", tokenizer.get_added_vocab()["<|endoftext|>"])
