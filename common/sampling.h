@@ -41,6 +41,7 @@ typedef struct llama_sampling_params {
     float       mirostat_eta          = 0.10f;              // learning rate
     bool        penalize_nl           = false;              // consider newlines as a repeatable token
     uint32_t    seed                  = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampling_context
+    bool        ignore_english_tokens = false;              // Ignore tokens with 3+ English characters (except those with angle brackets)
 
     std::vector<llama_sampler_type> samplers_sequence = {
         llama_sampler_type::TOP_K,
