@@ -26,6 +26,7 @@ actor LlamaContext {
     private var context: OpaquePointer
     private var batch: llama_batch
     private var tokens_list: [llama_token]
+    var latest_llama_token_is_eog_or_reach_len: Bool = false
 
     /// This variable is used to store temporarily invalid cchars
     private var temporary_invalid_cchars: [CChar]
@@ -160,6 +161,7 @@ actor LlamaContext {
 
         if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
             print("\n")
+            latest_llama_token_is_eog_or_reach_len = true
             let new_token_str = String(cString: temporary_invalid_cchars + [0])
             temporary_invalid_cchars.removeAll()
             return new_token_str
