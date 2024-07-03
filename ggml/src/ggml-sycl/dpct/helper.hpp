@@ -1762,8 +1762,21 @@ namespace dpct
                            uint32_t, int32_t>;
 
     template <typename T1, typename T2, typename T3>
-    inline auto dp4a(T1 a, T2 b, T3 c)
-    {
+    inline auto dp4a(T1 a, T2 b, T3 c) {
+#if defined(__SYCL_DEVICE_ONLY__) && defined(__NVPTX__) &&                     \
+    defined(__SYCL_CUDA_ARCH__) && __SYCL_CUDA_ARCH__ >= 610
+          dot_product_acc_t<T1, T2> res;
+          if constexpr (std::is_same_v<dot_product_acc_t<T1, T2>, uint32_t>) {
+            asm volatile("dp4a.u32.u32 %0, %1, %2, %3;"
+                        : "=r"(res)
+                        : "r"(a), "r"(b), "r"(c));
+          } else {
+            asm volatile("dp4a.s32.s32 %0, %1, %2, %3;"
+                        : "=r"(res)
+                        : "r"(a), "r"(b), "r"(c));
+          }
+        return res;
+#else
         dot_product_acc_t<T1, T2> res = c;
         auto va = extract_and_sign_or_zero_extend4(a);
         auto vb = extract_and_sign_or_zero_extend4(b);
@@ -1772,6 +1785,7 @@ namespace dpct
         res += va[2] * vb[2];
         res += va[3] * vb[3];
         return res;
+#endif
     }
 
     struct sub_sat
