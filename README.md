@@ -592,19 +592,23 @@ Building the program with BLAS support may lead to some performance improvements
 
   Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
 
-  Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows).
+  Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). When selecting components, only the Vulkan SDK Core is required.
 
-  Create a `w64devkit/x86_64-w64-mingw32/lib/pkgconfig/vulkan.pc` file with the following contents:
-
-  _Note: make sure the path matches the version in SDK download_.
-  ```
+  Launch `w64devkit.exe` and run the following commands to copy Vulkan dependencies:
+  ```sh
+  SDK_VERSION=1.3.283.0
+  cp /VulkanSDK/$SDK_VERSION/Bin/glslc.exe $W64DEVKIT_HOME/bin/
+  cp /VulkanSDK/$SDK_VERSION/Lib/vulkan-1.lib $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/
+  cp -r /VulkanSDK/$SDK_VERSION/Include/* $W64DEVKIT_HOME/x86_64-w64-mingw32/include/
+  cat > $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/pkgconfig/vulkan.pc <<EOF
   Name: Vulkan-Loader
   Description: Vulkan Loader
-  Version: 1.3.283
-  Libs: -L/VulkanSDK/1.3.283.0/Lib -lvulkan-1
-  Cflags: -I/VulkanSDK/1.3.283.0/Include
+  Version: $SDK_VERSION
+  Libs: -lvulkan-1
+  EOF
+  
   ```
-  Launch `w64devkit.exe`, switch into `llama.cpp` directory and run `make GGML_VULKAN=1`.
+  Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
 
   ###### MSYS2
   Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
