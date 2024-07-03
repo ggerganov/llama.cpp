@@ -1,5 +1,4 @@
 // Warns users that this filename was deprecated, and provides a link for more information.
-// If the name of the file matches a name in a lookup table, then provide the replacement name as well.
 
 #include <cstdio>
 #include <string>
@@ -21,7 +20,7 @@ int main(int argc, char** argv) {
     // Append "llama-" to the beginning of filename to get the replacemnt filename
     auto replacement_filename = "llama-" + filename;
 
-    // If filename is "main", then our replacement filename is llama-cli
+    // The exception is if the filename is "main", then our replacement filename is "llama-cli"
     if (filename == "main") {
         replacement_filename = "llama-cli";
     }
@@ -29,7 +28,7 @@ int main(int argc, char** argv) {
     fprintf(stdout, "\n");
     fprintf(stdout, "WARNING: The binary '%s' is deprecated.\n", filename.c_str());
     fprintf(stdout, " Please use '%s' instead.\n", replacement_filename.c_str());
-    fprintf(stdout, " See https://github.com/ggerganov/llama.cpp/tree/master/examples/deprecation-warning for more information.\n");
+    fprintf(stdout, " See https://github.com/ggerganov/llama.cpp/tree/master/examples/deprecation-warning/README.md for more information.\n");
     fprintf(stdout, "\n");
 
     return EXIT_FAILURE;
