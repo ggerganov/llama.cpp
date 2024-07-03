@@ -75,9 +75,9 @@ export const promptFormats = {
   // ----------------------------
 
   "llama3": {
-  template: `<|start_header_id|>system<|end_header_id|>\n\n{{prompt}}<|eot_id|>\n{{history}}<|start_header_id|>{{char}}<|end_header_id|>\n\n`,
+  template: `<|start_header_id|>system<|end_header_id|>\n\n{{prompt}}<|eot_id|>{{history}}<|start_header_id|>{{char}}<|end_header_id|>\n\n`,
 
-  historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>\n\n{{message}}<|eot_id|>\n`,
+  historyTemplate: `<|start_header_id|>{{name}}<|end_header_id|>\n\n{{message}}<|eot_id|>`,
 
   char: "assistant",
   charMsgPrefix: "",
