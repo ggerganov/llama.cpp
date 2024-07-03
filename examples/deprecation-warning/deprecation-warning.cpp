@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
     if (pos != std::string::npos) {
         filename = filename.substr(pos+1);
     }
-    
+
     // Append "llama-" to the beginning of filename to get the replacemnt filename
     auto replacement_filename = "llama-" + filename;
 
