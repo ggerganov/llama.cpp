@@ -1779,6 +1779,106 @@ static void diag_mask_inf_f32_sycl(const float *x, float *dst,
                          });
 }
 
+template <bool vals_smem, int ncols_template, int block_size_template>
+static void soft_max_f32_submitter(const float * x, const float * mask, float * dst, const int ncols_par,
+                                   const int nrows_y, const float scale, const float max_bias, const float m0,
+                                   const float m1, uint32_t n_head_log2, sycl::range<3> block_nums, sycl::range<3> block_dims,
+                                   const size_t n_local_scratch, queue_ptr stream) {
+    stream->submit([&](sycl::handler &cgh) {
+        sycl::local_accessor<float, 1> local_buf_acc(n_local_scratch, cgh);
+
+        cgh.parallel_for(
+            sycl::nd_range<3>(block_nums * block_dims, block_dims),
+            [=](sycl::nd_item<3> item_ct1) [[intel::reqd_sub_group_size(WARP_SIZE)]] {
+                soft_max_f32<vals_smem, ncols_template, block_size_template>(x, mask, dst, ncols_par,
+                                                                             nrows_y, scale, max_bias, m0,
+                                                                             m1, n_head_log2, item_ct1,
+                                                                             get_pointer(local_buf_acc));
+            });
+    });
+}
+
+static void soft_max_f32_sycl(const float * x, const float * mask,
+                              float * dst, const int ncols_x, const int nrows_x,
+                              const int nrows_y, const float scale, const float max_bias,
+                              queue_ptr stream) {
+    int nth = WARP_SIZE;
+    int max_block_size = get_work_group_size(stream->get_device());
+    while (nth < ncols_x && nth < max_block_size) nth *= 2;
+    if (nth>max_block_size) nth = max_block_size;
+
+    const sycl::range<3> block_dims(1, 1, nth);
+    const sycl::range<3> block_nums(1, 1, nrows_x);
+    const size_t n_local_scratch = (GGML_PAD(ncols_x, WARP_SIZE) + WARP_SIZE);
+
+    const uint32_t n_head_kv   = nrows_x/nrows_y;
+    const uint32_t n_head_log2 = 1u << (uint32_t) floorf(log2f((float) n_head_kv));
+
+    const float m0 = powf(2.0f, -(max_bias       ) / n_head_log2);
+    const float m1 = powf(2.0f, -(max_bias / 2.0f) / n_head_log2);
+
+    const size_t local_mem_size = stream->get_device().get_info<sycl::info::device::local_mem_size>();
+    if (n_local_scratch*sizeof(float) < local_mem_size) {
+        if (ncols_x > max_block_size) {
+            soft_max_f32_submitter<true, 0, 0>(x, mask, dst, ncols_x, nrows_y, scale,
+                                               max_bias, m0, m1, n_head_log2, block_nums,
+                                               block_dims, n_local_scratch, stream);
+            return;
+        }
+        switch (ncols_x) {
+            case 32:
+                soft_max_f32_submitter<true, 32, 32>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                     max_bias, m0, m1, n_head_log2, block_nums,
+                                                     block_dims, n_local_scratch, stream);
+                break;
+            case 64:
+                soft_max_f32_submitter<true, 64, 64>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                     max_bias, m0, m1, n_head_log2, block_nums,
+                                                     block_dims, n_local_scratch, stream);
+                break;
+            case 128:
+                soft_max_f32_submitter<true, 128, 128>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                       max_bias, m0, m1, n_head_log2, block_nums,
+                                                       block_dims, n_local_scratch, stream);
+                break;
+            case 256:
+                soft_max_f32_submitter<true, 256, 256>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                       max_bias, m0, m1, n_head_log2, block_nums,
+                                                       block_dims, n_local_scratch, stream);
+                break;
+            case 512:
+                soft_max_f32_submitter<true, 512, 512>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                       max_bias, m0, m1, n_head_log2, block_nums,
+                                                       block_dims, n_local_scratch, stream);
+                break;
+            case 1024:
+                soft_max_f32_submitter<true, 1024, 1024>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                         max_bias, m0, m1, n_head_log2, block_nums,
+                                                         block_dims, n_local_scratch, stream);
+                break;
+            case 2048:
+                soft_max_f32_submitter<true, 2048, 1024>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                         max_bias, m0, m1, n_head_log2, block_nums,
+                                                         block_dims, n_local_scratch, stream);
+                break;
+            case 4096:
+                soft_max_f32_submitter<true, 4096, 1024>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                         max_bias, m0, m1, n_head_log2, block_nums,
+                                                         block_dims, n_local_scratch, stream);
+                break;
+            default:
+                soft_max_f32_submitter<true, 0, 0>(x, mask, dst, ncols_x, nrows_y, scale,
+                                                   max_bias, m0, m1, n_head_log2, block_nums,
+                                                   block_dims, n_local_scratch, stream);
+                break;
+        }
+    } else {
+        soft_max_f32_submitter<false, 0, 0>(x, mask, dst, ncols_x, nrows_y, scale,
+                                            max_bias, m0, m1, n_head_log2, block_nums,
+                                            block_dims, WARP_SIZE, stream);
+    }
+}
+
 template <typename T>
 static void im2col_sycl(const float *x, T *dst, int IW, int IH,
                                 int OW, int OH, int KW, int KH, int IC,
