@@ -702,11 +702,10 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_Q8_0,
 #if defined (__ARM_FEATURE_MATMUL_INT8)
         .nrows                    = 2,
-        .from_float_to_mat        = quantize_q8_0_4x8,
 #else
         .nrows                    = 1,
-        .from_float_to_mat        = quantize_q8_0_4x4,
 #endif
+        .from_float_to_mat        = quantize_mat_q8_0,
     },
     [GGML_TYPE_Q8_1] = {
         .type_name                = "q8_1",
@@ -917,6 +916,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
         .ncols                    = 4,
+        .interleave_blcksize      = 4,
         .gemv                     = ggml_gemv_q4_0_4x4_q8_0,
         .gemm                     = ggml_gemm_q4_0_4x4_q8_0,
     },
@@ -932,6 +932,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
         .ncols                    = 4,
+        .interleave_blcksize      = 8,
         .gemv                     = ggml_gemv_q4_0_4x8_q8_0,
         .gemm                     = ggml_gemm_q4_0_4x8_q8_0,
     },
@@ -947,6 +948,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .vec_dot_type             = GGML_TYPE_Q8_0,
         .nrows                    = 1,
         .ncols                    = 8,
+        .interleave_blcksize      = 8,
         .gemv                     = ggml_gemv_q4_0_8x8_q8_0,
         .gemm                     = ggml_gemm_q4_0_8x8_q8_0,
     }
@@ -12207,6 +12209,7 @@ static void ggml_compute_forward_mul_mat(
     ggml_from_float_t const from_float_to_vec_dot = type_traits[vec_dot_type].from_float;
     int64_t           const vec_dot_num_rows      = type_traits[type].nrows;
     int64_t           const matmul_num_cols       = type_traits[type].ncols;
+    int64_t           const interleave_blcksize   = type_traits[type].interleave_blcksize;
     ggml_from_float_to_mat_t const from_float_to_mat
                                                   = type_traits[vec_dot_type].from_float_to_mat;
     ggml_gemv_t       const gemv                  = type_traits[type].gemv;
@@ -12281,7 +12284,7 @@ UseGgmlGemm1:;
                     int64_t i11_processed = 0;
                     if ((ggml_n_dims(src1) == 2) && from_float_to_mat && gemm) {
                         for (int64_t i11 = 0; i11 < ne11 - ne11 % 4; i11 += 4) {
-                            from_float_to_mat((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11), (void *) wdata, ne10);
+                            from_float_to_mat((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11), (void *) wdata, 4, ne10, interleave_blcksize);
                             wdata += row_size * 4;
                         }
                         i11_processed = ne11 - ne11 % 4;
