@@ -1991,6 +1991,8 @@ int main(int argc, char ** argv) {
         params.n_batch = std::min(params.n_batch, n_kv);
     } else {
         params.n_batch = std::min(params.n_batch, params.n_ctx);
+        // ensure there's at least enough seq_ids for HellaSwag
+        params.n_parallel = std::max(4, params.n_parallel);
     }
 
     if (params.ppl_stride > 0) {
@@ -2014,9 +2016,6 @@ int main(int argc, char ** argv) {
 
     llama_model * model;
     llama_context * ctx;
-
-    // ensure there's at least enough seq_ids for HellaSwag
-    params.n_parallel = std::max(4, params.n_parallel);
 
     // load the model and apply lora adapter, if any
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
