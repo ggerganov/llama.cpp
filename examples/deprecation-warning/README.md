@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 [2024 Jun 12] Binaries have been renamed w/ a `llama-` prefix. `main` is now `llama-cli`, `server` is `llama-server`, etc (https://github.com/ggerganov/llama.cpp/pull/7809)
 
-This migration is long-overdue, but it is a breaking change that may not always be immediately obvious.
+This migration was important, but it is a breaking change that may not always be immediately obvious to users.
 
 Please update all scripts and workflows to use the new binary names.
 
