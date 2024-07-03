@@ -493,6 +493,9 @@ class Model:
         if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
             # ref: https://huggingface.co/LumiOpen/Viking-7B
             res = "viking"
+        if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
+            # ref: https://huggingface.co/core42/jais-13b
+            res = "jais"
 
         if res is None:
             logger.warning("\n")
@@ -2968,6 +2971,95 @@ class T5Model(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
 
+@Model.register("JAISLMHeadModel")
+class JaisModel(Model):
+    model_arch = gguf.MODEL_ARCH.JAIS
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # SwigLU activation
+        assert self.hparams["activation_function"] == "swiglu"
+        # ALiBi position embedding
+        assert self.hparams["position_embedding_type"] == "alibi"
+
+        # Embeddings scale
+        self.embeddings_scale = 1.0
+        # note: For some JAIS flavors, output is tied to (same as) wte in original model
+        self.output_is_wte = False
+        if 'mup_embeddings_scale' in self.hparams:
+            self.output_is_wte = True   # Hack (?)
+            self.embeddings_scale = self.hparams['mup_embeddings_scale']
+        elif 'embeddings_scale' in self.hparams:
+            self.embeddings_scale = self.hparams['embeddings_scale']
+        else:
+            assert False
+
+        self.width_scale = 1.0
+        if 'mup_output_alpha' in self.hparams:
+            assert 'mup_width_scale' in self.hparams
+            self.width_scale = self.hparams['mup_output_alpha'] * self.hparams['mup_width_scale']
+        elif 'width_scale' in self.hparams:
+            self.width_scale = self.hparams['width_scale']
+        else:
+            assert False
+
+        self.max_alibi_bias = 8.0
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_inner"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        tensors: list[tuple[str, Tensor]] = []
+
+        # we don't need these
+        if name.endswith((".attn.bias")):
+            return tensors
+
+        if name.endswith(("relative_pe.slopes")):
+            # Calculate max ALiBi bias (this is the inverse of the ALiBi calculation)
+            # Some other models has max_alibi_bias spelled out explicitly in the hyperparams,
+            # but Jais's PyTorch model simply precalculates the slope values and places them
+            # in relative_pes.slopes
+            n_head_closest_log2 = 2 ** math.floor(math.log2(self.hparams["n_head"]))
+            first_val = float(data_torch._data[0])
+            self.max_alibi_bias = -round(math.log2(first_val) * n_head_closest_log2)
+
+            return tensors
+
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_fc2.weight")):
+            data_torch = data_torch.transpose(1, 0)
+
+        new_name = self.map_tensor_name(name)
+
+        if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
+            tensors.append((new_name, data_torch * self.embeddings_scale))
+            if self.output_is_wte:
+                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch * self.width_scale))
+        elif new_name == self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT):
+            assert not self.output_is_wte
+            tensors.append((new_name, data_torch * self.width_scale))
+        else:
+            tensors.append((new_name, data_torch))
+
+        return tensors
+
+    def write_tensors(self):
+        super().write_tensors()
+        self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
+
 @Model.register("ChatGLMModel", "ChatGLMForConditionalGeneration")
 class ChatGLMModel(Model):
     model_arch = gguf.MODEL_ARCH.CHATGLM
@@ -3153,7 +3245,6 @@ class ChatGLMModel(Model):
         name = name.removeprefix("transformer.")
         return [(self.map_tensor_name(name), data_torch)]
 
-
 ###### CONVERSION LOGIC ######
 
 
@@ -3309,7 +3400,8 @@ def main() -> None:
         "auto": gguf.LlamaFileType.GUESSED,
     }
 
-    if args.use_temp_file and (args.split_max_tensors > 0 or args.split_max_size != "0"):
+    is_split = args.split_max_tensors > 0 or args.split_max_size != "0"
+    if args.use_temp_file and is_split:
         logger.error("Error: Cannot use temp file when splitting")
         sys.exit(1)
 
@@ -3346,11 +3438,12 @@ def main() -> None:
         if args.vocab_only:
             logger.info("Exporting model vocab...")
             model_instance.write_vocab()
-            logger.info("Model vocab successfully exported.")
+            logger.info(f"Model vocab successfully exported to {model_instance.fname_out}")
         else:
             logger.info("Exporting model...")
             model_instance.write()
-            logger.info("Model successfully exported.")
+            out_path = f"{model_instance.fname_out.parent}{os.sep}" if is_split else model_instance.fname_out
+            logger.info(f"Model successfully exported to {out_path}")
 
 
 if __name__ == '__main__':

@@ -91,6 +91,8 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_CHATGLM3       = 16,
         LLAMA_VOCAB_PRE_TYPE_CHATGLM4       = 17,
         LLAMA_VOCAB_PRE_TYPE_VIKING         = 18,
+        LLAMA_VOCAB_PRE_TYPE_VIKING         = 19,
+        LLAMA_VOCAB_PRE_TYPE_JAIS           = 20,
     };
 
     // note: these values should be synchronized with ggml_rope
