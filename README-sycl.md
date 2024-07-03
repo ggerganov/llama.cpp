@@ -296,15 +296,25 @@ Similar to the native `sycl-ls`, available SYCL devices can be queried as follow
 A example of such log in a system with 1 *intel CPU* and 1 *intel GPU* can look like the following:
 ```
 found 6 SYCL devices:
-|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |
-|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|
-|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|
-| 0|[level_zero:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       1.3|        512|    1024|     32|    16225243136|
-| 1|[level_zero:gpu:1]|                    Intel(R) UHD Graphics 770|       1.3|         32|     512|     32|    53651849216|
-| 2|    [opencl:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       3.0|        512|    1024|     32|    16225243136|
-| 3|    [opencl:gpu:1]|                    Intel(R) UHD Graphics 770|       3.0|         32|     512|     32|    53651849216|
-| 4|    [opencl:cpu:0]|         13th Gen Intel(R) Core(TM) i7-13700K|       3.0|         24|    8192|     64|    67064815616|
-| 5|    [opencl:acc:0]|               Intel(R) FPGA Emulation Device|       1.2|         24|67108864|     64|    67064815616|
+Part1:
+|ID|        Device Type| Ver|                                   Name|Global mem size|
+|--|-------------------|----|---------------------------------------|---------------|
+| 0| [level_zero:gpu:0]| 1.3|         Intel Data Center GPU Flex 170|         16225M|
+| 1| [level_zero:gpu:1]| 1.3|         Intel Data Center GPU Flex 170|         16225M|
+| 2|     [opencl:gpu:0]| 3.0|         Intel Data Center GPU Flex 170|         16225M|
+| 3|     [opencl:gpu:1]| 3.0|         Intel Data Center GPU Flex 170|         16225M|
+| 4|     [opencl:cpu:0]| 3.0|     Intel Xeon Gold 6346 CPU @ 3.10GHz|        540700M|
+| 5|     [opencl:acc:0]| 1.2|            Intel FPGA Emulation Device|        540700M|
+Part2:
+|ID|Max compute units|Max work group|Max subgroup|                    Driver version|
+|--|-----------------|--------------|------------|----------------------------------|
+| 0|              512|          1024|          32|                         1.3.27642|
+| 1|              512|          1024|          32|                         1.3.27642|
+| 2|              512|          1024|          32|                    23.43.27642.40|
+| 3|              512|          1024|          32|                    23.43.27642.40|
+| 4|               64|          8192|          64|2024.17.5.0.08_160000.xmain-hotfix|
+| 5|               64|      67108864|          64|2024.17.5.0.08_160000.xmain-hotfix|
+
 ```
 
 | Attribute              | Note                                                        |
@@ -477,15 +487,24 @@ build\bin\ls-sycl-device.exe
 The output of this command in a system with 1 *intel CPU* and 1 *intel GPU* would look like the following:
 ```
 found 6 SYCL devices:
-|  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |
-|ID|       Device Type|                                         Name|capability|units      |group   |group  |Global mem size|
-|--|------------------|---------------------------------------------|----------|-----------|--------|-------|---------------|
-| 0|[level_zero:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       1.3|        512|    1024|     32|    16225243136|
-| 1|[level_zero:gpu:1]|                    Intel(R) UHD Graphics 770|       1.3|         32|     512|     32|    53651849216|
-| 2|    [opencl:gpu:0]|               Intel(R) Arc(TM) A770 Graphics|       3.0|        512|    1024|     32|    16225243136|
-| 3|    [opencl:gpu:1]|                    Intel(R) UHD Graphics 770|       3.0|         32|     512|     32|    53651849216|
-| 4|    [opencl:cpu:0]|         13th Gen Intel(R) Core(TM) i7-13700K|       3.0|         24|    8192|     64|    67064815616|
-| 5|    [opencl:acc:0]|               Intel(R) FPGA Emulation Device|       1.2|         24|67108864|     64|    67064815616|
+Part1:
+|ID|        Device Type| Ver|                                   Name|Global mem size|
+|--|-------------------|----|---------------------------------------|---------------|
+| 0| [level_zero:gpu:0]| 1.3|         Intel Data Center GPU Flex 170|         16225M|
+| 1| [level_zero:gpu:1]| 1.3|         Intel Data Center GPU Flex 170|         16225M|
+| 2|     [opencl:gpu:0]| 3.0|         Intel Data Center GPU Flex 170|         16225M|
+| 3|     [opencl:gpu:1]| 3.0|         Intel Data Center GPU Flex 170|         16225M|
+| 4|     [opencl:cpu:0]| 3.0|     Intel Xeon Gold 6346 CPU @ 3.10GHz|        540700M|
+| 5|     [opencl:acc:0]| 1.2|            Intel FPGA Emulation Device|        540700M|
+Part2:
+|ID|Max compute units|Max work group|Max subgroup|                    Driver version|
+|--|-----------------|--------------|------------|----------------------------------|
+| 0|              512|          1024|          32|                         1.3.27642|
+| 1|              512|          1024|          32|                         1.3.27642|
+| 2|              512|          1024|          32|                    23.43.27642.40|
+| 3|              512|          1024|          32|                    23.43.27642.40|
+| 4|               64|          8192|          64|2024.17.5.0.08_160000.xmain-hotfix|
+| 5|               64|      67108864|          64|2024.17.5.0.08_160000.xmain-hotfix|
 
 ```
 
@@ -556,6 +575,32 @@ use 1 SYCL GPUs: [0] with Max compute units:512
 |-------------------|------------------|---------------------------------------------------------------------------------------------------------------------------|
 | GGML_SYCL_DEBUG   | 0 (default) or 1 | Enable log function by macro: GGML_SYCL_DEBUG                                                                             |
 | ZES_ENABLE_SYSMAN | 0 (default) or 1 | Support to get free memory of GPU by sycl::aspect::ext_intel_free_memory.<br>Recommended to use when --split-mode = layer |
+| GGML_SYCL_VISIBLE_DEVICES|id1,id2,...|It's like `CUDA_VISIBLE_DEVICES`, define the SYCL device ID list to visible. Like "0", "0,2", "2,1" |
+| ONEAPI_DEVICE_SELECTOR|Refer to [oneapi-device-selector](https://intel.github.io/llvm-docs/EnvironmentVariables.html#oneapi-device-selector)|be used to limit the choice of devices available when the SYCL-using application is run|
+
+##### Choose SYCL Devices in Running Time
+
+In SYCL running time, a physical device could be mapped to two logical devices on different running times: Level-Zero and OpenCL. So it will show more devices in SYCL view. But we need avoid to run code on these two logical devices on same physical device in same time.
+
+The SCYL backend supports dGPU or iGPU in same machine.
+
+##### SYCL Backend Rule:
+
+|Mode|Explain|Example|Recommend Cases|Note|
+|-|-|-|-|-|
+|Normal|Use all powest devices. Default mode. No special setting.<br>SYCL backend will detect and choose the **Level-Zero** devices which have top `Max compute units`.<br> ||Most cases of normal user.||
+|Advanced|Allow user choose one or more SYCL devices which could be Level-Zero or OpenCL or both.<br>Set the device list by environment variable: **GGML_SYCL_VISIBLE_DEVICES**, like `CUDA_VISIBLE_DEVICES`.<br>SYCL backend will choose all devices by it.| `set/export GGML_SYCL_VISIBLE_DEVICES=1`<br>`set/export GGML_SYCL_VISIBLE_DEVICES=0,1`<br>`set/export GGML_SYCL_VISIBLE_DEVICES=2,1`|Use iGPU or both in dGPU + iGPU environment<br>Use a dGPU in mulitple dGPU environment.<br>Use one or more OpenCL devices|There is known issue of OpenCL device. WIP.|
+|Developer|Allow SYCL developer choose one or more SYCL devices by environment varibale **ONEAPI_DEVICE_SELECTOR** with flexiable grammar.<br>Refer to [oneapi-device-selector](https://intel.github.io/llvm-docs/EnvironmentVariables.html#oneapi-device-selector).|`set/export ONEAPI_DEVICE_SELECTOR=level_zero:1`<br>`set/export ONEAPI_DEVICE_SELECTOR=opencl:*`<br>`set/export ONEAPI_DEVICE_SELECTOR=opencl:gpu;level_zero:gpu`<br>|Cover the Advanced mode. It will impact **Normal** and **Advanced** modes as low level principle.<br>Flexiable grammar support more complex device environments.|There is known issue of OpenCL device. WIP.|
+
+##### Parameters of Llama.cpp
+
+The parameters about device choose of llama.cpp works with SYCL backend rule to decide the final result. User could use one or all chosen devices by SYCL backend rule.
+
+|Device|Values|Note|
+|-|-|-|
+|Single Device|`--split-mode=none` and `--main-gpu=id`|The value of `main-gpu` must be in the chosen device lists printed out during llama.cpp startup. Like:<br>`detect 2 SYCL level-zero GPUs:[0,1]`.<br>`main-gpu` should be set to `0` or `1`.|
+|Multiple Device|`--split-mode=layer`|Default|
+
 
 ## Known Issues
 

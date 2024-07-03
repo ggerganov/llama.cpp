@@ -588,7 +588,7 @@ namespace dpct
         out = prop;
     }
 
-   /// dpct device extension
+    /// dpct device extension
     class device_ext : public sycl::device {
       typedef std::mutex mutex_type;
 
@@ -687,119 +687,131 @@ namespace dpct
         init_queues();
       }
 
-      sycl::queue &in_order_queue() { return _q_in_order; }
+      sycl::queue &in_order_queue() { return *_q_in_order; }
 
-      sycl::queue &out_of_order_queue() { return _q_out_of_order; }
+      sycl::queue &out_of_order_queue() { return *_q_out_of_order; }
 
       sycl::queue &default_queue() { return in_order_queue(); }
 
       void queues_wait_and_throw() {
         std::unique_lock<mutex_type> lock(m_mutex);
+        std::vector<std::shared_ptr<sycl::queue>> current_queues(
+            _queues);
         lock.unlock();
-        for (auto &q : _queues) {
-          q.wait_and_throw();
+        for (const auto &q : current_queues)
+        {
+            q->wait_and_throw();
         }
         // Guard the destruct of current_queues to make sure the ref count is
         // safe.
         lock.lock();
       }
 
-      sycl::queue create_queue(bool enable_exception_handler = false) {
+      sycl::queue *create_queue(bool enable_exception_handler = false) {
         return create_in_order_queue(enable_exception_handler);
       }
 
-      sycl::queue create_queue(sycl::device device,
+      sycl::queue *create_queue(sycl::device device,
                                bool enable_exception_handler = false) {
         return create_in_order_queue(device, enable_exception_handler);
       }
 
-      sycl::queue create_in_order_queue(bool enable_exception_handler = false) {
+      sycl::queue *create_in_order_queue(bool enable_exception_handler = false) {
         std::lock_guard<mutex_type> lock(m_mutex);
         return create_queue_impl(enable_exception_handler,
                                  sycl::property::queue::in_order());
       }
 
-      sycl::queue create_in_order_queue(sycl::device device,
+      sycl::queue *create_in_order_queue(sycl::device device,
                                         bool enable_exception_handler = false) {
         std::lock_guard<mutex_type> lock(m_mutex);
         return create_queue_impl(device, enable_exception_handler,
                                  sycl::property::queue::in_order());
       }
 
-      sycl::queue create_out_of_order_queue(
+      sycl::queue *create_out_of_order_queue(
           bool enable_exception_handler = false) {
         std::lock_guard<mutex_type> lock(m_mutex);
         return create_queue_impl(enable_exception_handler);
       }
 
-      void destroy_queue(sycl::queue queue) {
+      void destroy_queue(sycl::queue *&queue) {
         std::lock_guard<mutex_type> lock(m_mutex);
-        _queues.clear();
+        _queues.erase(std::remove_if(_queues.begin(), _queues.end(),
+                                    [=](const std::shared_ptr<sycl::queue> &q) -> bool
+                                    {
+                                        return q.get() == queue;
+                                    }),
+                    _queues.end());
+        queue = nullptr;
       }
-      void set_saved_queue(sycl::queue q) {
+      void set_saved_queue(sycl::queue *q) {
         std::lock_guard<mutex_type> lock(m_mutex);
         _saved_queue = q;
       }
-      sycl::queue get_saved_queue() const {
+      sycl::queue *get_saved_queue() const {
         std::lock_guard<mutex_type> lock(m_mutex);
         return _saved_queue;
       }
 
      private:
-      void clear_queues() { _queues.clear(); }
+      void clear_queues() {
+        _queues.clear();
+        _q_in_order = _q_out_of_order = _saved_queue = nullptr;
+      }
 
       void init_queues() {
         _q_in_order =
             create_queue_impl(true, sycl::property::queue::in_order());
         _q_out_of_order = create_queue_impl(true);
-        _saved_queue = default_queue();
+        _saved_queue = &default_queue();
       }
 
       /// Caller should acquire resource \p m_mutex before calling this
       /// function.
       template <class... Properties>
-      sycl::queue create_queue_impl(bool enable_exception_handler,
+      sycl::queue *create_queue_impl(bool enable_exception_handler,
                                     Properties... properties) {
         sycl::async_handler eh = {};
         if (enable_exception_handler) {
           eh = exception_handler;
         }
-        auto q = sycl::queue(*this, eh,
-                             sycl::property_list(
+        _queues.push_back(std::make_shared<sycl::queue>(
+            *this, eh,
+            sycl::property_list(
 #ifdef DPCT_PROFILING_ENABLED
-                                 sycl::property::queue::enable_profiling(),
+                sycl::property::queue::enable_profiling(),
 #endif
-                                 properties...));
-        _queues.push_back(q);
+                properties...)));
 
-        return _queues.back();
+        return _queues.back().get();
       }
 
       template <class... Properties>
-      sycl::queue create_queue_impl(sycl::device device,
+      sycl::queue *create_queue_impl(sycl::device device,
                                     bool enable_exception_handler,
                                     Properties... properties) {
         sycl::async_handler eh = {};
         if (enable_exception_handler) {
           eh = exception_handler;
         }
-        _queues.push_back(
-            sycl::queue(device, eh,
+        _queues.push_back(std::make_shared<sycl::queue>(
+            device, eh,
                         sycl::property_list(
 #ifdef DPCT_PROFILING_ENABLED
                             sycl::property::queue::enable_profiling(),
 #endif
                             properties...)));
 
-        return _queues.back();
+        return _queues.back().get();
       }
 
       void get_version(int &major, int &minor) const {
         detail::get_version(*this, major, minor);
       }
-      sycl::queue _q_in_order, _q_out_of_order;
-      sycl::queue _saved_queue;
-      std::vector<sycl::queue> _queues;
+      sycl::queue *_q_in_order, *_q_out_of_order;
+      sycl::queue *_saved_queue;
+      std::vector<std::shared_ptr<sycl::queue>> _queues;
       mutable mutex_type m_mutex;
     };
 
@@ -855,15 +867,15 @@ namespace dpct
         unsigned int get_device_id(const sycl::device &dev)
         {
             unsigned int id = 0;
-            for (auto dev_item : _devs)
+            for (auto &dev_item : _devs)
             {
                 if (*dev_item == dev)
                 {
-                    break;
+                    return id;
                 }
                 id++;
             }
-            return id;
+            return -1;
         }
 
         template <class DeviceSelector>
