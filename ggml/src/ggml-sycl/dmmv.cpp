@@ -3,7 +3,6 @@
 #include "dequantize.hpp"
 #include "presets.hpp"
 
-int constexpr QK_WARP_SIZE = 32;
 
 static void convert_f16(const void * vx, const int ib, const int iqs, dfloat2 & v){
     const sycl::half *x = (const sycl::half *)vx;
