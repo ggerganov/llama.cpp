@@ -1,6 +1,7 @@
 
 #include "backend-ops.hpp"
 
+#include "graph.hpp"
 #include "logger.hpp"
 #include "tensor.hpp"
 #include "utils.hpp"
@@ -130,7 +131,7 @@ static void ggml_qnn_add(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
 
         Qnn_Tensor_t tensor_inputs[] = { *tensor_input0.get_qnn_tensor(), *tensor_input1.get_qnn_tensor() };
         Qnn_Tensor_t tensor_outputs[] = { *tensor_output.get_qnn_tensor() };
-        Qnn_OpConfig_t op_config = { (Qnn_OpConfigVersion_t)1,
+        Qnn_OpConfig_t op_config = { QNN_OPCONFIG_VERSION_1,
                                      .v1 = { "ggml_op_add", QNN_OP_PACKAGE_NAME_QTI_AISW, QNN_OP_ELEMENT_WISE_ADD, 0,
                                              qnn_params, 2, tensor_inputs, 1, tensor_outputs } };
         error = qnn_raw_interface.graphAddNode(graph_handle, op_config);
@@ -300,7 +301,7 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context *ctx, const ggml_tensor *s
 
         Qnn_Tensor_t tensor_inputs[] = { *tensor_input0.get_qnn_tensor(), *tensor_input1.get_qnn_tensor() };
         Qnn_Tensor_t tensor_outputs[] = { *tensor_output.get_qnn_tensor() };
-        Qnn_OpConfig_t op_config = { (Qnn_OpConfigVersion_t)1,
+        Qnn_OpConfig_t op_config = { QNN_OPCONFIG_VERSION_1,
                                      .v1 = { "ggml_op_mul_mat", QNN_OP_PACKAGE_NAME_QTI_AISW, QNN_OP_MAT_MUL, 0,
                                              qnn_params, 2, tensor_inputs, 1, tensor_outputs } };
         error = qnn_raw_interface.graphAddNode(graph_handle, op_config);
