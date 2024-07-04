@@ -2636,6 +2636,7 @@ namespace dpct
                 beta, c, ldc, stride_c, batch_size);
             break;
         }
+#endif
         case detail::get_type_combination_id(
             library_data_t::real_half, library_data_t::real_half,
             library_data_t::real_half, library_data_t::real_float):
