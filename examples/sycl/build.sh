@@ -3,6 +3,7 @@
 #  Copyright (C) 2024 Intel Corporation
 #  SPDX-License-Identifier: MIT
 
+clear
 mkdir -p build
 cd build
 source /opt/intel/oneapi/setvars.sh

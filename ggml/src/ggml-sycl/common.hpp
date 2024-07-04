@@ -351,15 +351,6 @@ void ggml_backend_sycl_print_sycl_devices();
 static ggml_sycl_device_info ggml_sycl_init();
 ggml_sycl_device_info &ggml_sycl_info();
 
-// common host functions
-
-static inline int get_work_group_size(const sycl::device& device) {
-    dpct::device_info prop;
-    dpct::get_device_info(prop, device);
-    return prop.get_max_work_group_size();
-}
-
-
 // common device functions
 
 static __dpct_inline__ float warp_reduce_sum(float x,
