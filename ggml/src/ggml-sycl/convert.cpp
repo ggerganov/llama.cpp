@@ -542,6 +542,8 @@ to_fp32_sycl_t ggml_get_to_fp32_sycl(ggml_type type) {
         case GGML_TYPE_F16:
             return convert_unary_sycl<sycl::half>;
         default:
-            return nullptr;
+            std::cerr << "not support data type:" << type << " in "<< __func__
+              << ", "<<__FILE__<< " line:" << __LINE__ << std::endl;
+            std::exit(1);
     }
 }

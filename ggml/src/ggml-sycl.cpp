@@ -5325,7 +5325,13 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
                 if (a->ne[3] != b->ne[3]) {
                     return false;
                 }
+
                 ggml_type a_type = a->type;
+
+                if (op->op == GGML_OP_MUL_MAT_ID || op->op == GGML_OP_MUL_MAT_ID){
+                    if (op->src[0]->type == GGML_TYPE_BF16) return false;
+                }
+
                 if (a_type == GGML_TYPE_IQ4_NL  || a_type == GGML_TYPE_IQ4_XS ||
                     a_type == GGML_TYPE_IQ3_XXS || a_type == GGML_TYPE_IQ3_S  ||
                     a_type == GGML_TYPE_IQ2_XXS || a_type == GGML_TYPE_IQ2_XS || a_type == GGML_TYPE_IQ2_S ||
