@@ -19832,6 +19832,7 @@ int32_t llama_detokenize(
 
     if (remove_special && model->vocab.tokenizer_add_bos) {
         if (n_tokens > 0 && tokens[0] == model->vocab.special_bos_id) {
+            remove_space = false;
             n_tokens--;
             tokens++;
         }
@@ -19846,15 +19847,14 @@ int32_t llama_detokenize(
     for (int32_t i = 0; i < n_tokens; ++i) {
         GGML_ASSERT(avail >= 0);
         int32_t n_chars = llama_token_to_piece(model, tokens[i], text, avail, remove_space, unparse_special);
+        remove_space = false;
         if (n_chars < 0) {
             avail = 0;
             total -= n_chars;
-            remove_space = false;
         } else if (n_chars > 0) {
             avail -= n_chars;
             text  += n_chars;
             total += n_chars;
-            remove_space = false;
         }
     }
 
