@@ -25,11 +25,11 @@ logger = logging.getLogger("test-tokenizer-random")
 class LibLlama:
 
     DEFAULT_PATH_LLAMA_H = "./include/llama.h"
-    DEFAULT_PATH_INCLUDES = [ "./ggml/include/", "./include/" ]
+    DEFAULT_PATH_INCLUDES = ["./ggml/include/", "./include/"]
     DEFAULT_PATH_LIBLLAMA = "./build/src/libllama.so"  # CMakeLists.txt: BUILD_SHARED_LIBS ON
 
     def __init__(self, path_llama_h: str = None, path_includes: list[str] = [], path_libllama: str = None):
-        path_llama_h  = path_llama_h  or self.DEFAULT_PATH_LLAMA_H
+        path_llama_h = path_llama_h or self.DEFAULT_PATH_LLAMA_H
         path_includes = path_includes or self.DEFAULT_PATH_INCLUDES
         path_libllama = path_libllama or self.DEFAULT_PATH_LIBLLAMA
         (self.ffi, self.lib) = self._load_libllama_cffi(path_llama_h, path_includes, path_libllama)
