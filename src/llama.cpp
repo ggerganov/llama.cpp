@@ -14346,7 +14346,7 @@ private:
                 size_t prefix_offset = input_offset;
                 unicode_cpt_from_utf8(input, prefix_offset);
                 return { &input[input_offset], prefix_offset - input_offset, prefix_offset - input_offset };
-            } catch(std::invalid_argument & /*ex*/) {
+            } catch (std::invalid_argument & /*ex*/) {
                 // if no, consume 1 byte and return U+FFFD - REPLACEMENT CHARACTER
                 return { "\xEF\xBF\xBD", 3, 1 };
             }
