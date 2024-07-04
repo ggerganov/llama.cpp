@@ -197,7 +197,7 @@ static void norm_f32_sycl(const float* x, float* dst, const int ncols,
             });
     }
     else {
-        const int work_group_size = get_work_group_size(stream->get_device());
+        const int work_group_size = dpct::dev_mgr::instance().get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:17: The work-group size passed to the SYCL kernel may exceed
@@ -240,7 +240,7 @@ static void group_norm_f32_sycl(const float* x, float* dst,
             });
     }
     else {
-        const int work_group_size = get_work_group_size(stream->get_device());
+        const int work_group_size = dpct::dev_mgr::instance().get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:18: The work-group size passed to the SYCL kernel may exceed
@@ -286,7 +286,7 @@ static void rms_norm_f32_sycl(const float* x, float* dst, const int ncols,
             });
     }
     else {
-        const int work_group_size = get_work_group_size(stream->get_device());
+        const int work_group_size = dpct::dev_mgr::instance().get_work_group_size(stream->get_device());
         const sycl::range<3> block_dims(1, 1, work_group_size);
         /*
         DPCT1049:19: The work-group size passed to the SYCL kernel may exceed

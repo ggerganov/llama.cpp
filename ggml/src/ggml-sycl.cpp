@@ -49,7 +49,6 @@ bool   ggml_backend_is_sycl(ggml_backend_t backend);
 int    ggml_backend_sycl_get_device(ggml_backend_t backend);
 static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer);
 static inline int get_sycl_env(const char *env_name, int default_val);
-static inline int get_work_group_size(const sycl::device& device);
 
 void dev2dev_memcpy(sycl::queue &q_dst, sycl::queue &q_src, void *ptr_dst,
                     const void *ptr_src, size_t size) {
@@ -1914,7 +1913,7 @@ static void soft_max_f32_sycl(const float * x, const float * mask,
                               const int nrows_y, const float scale, const float max_bias,
                               queue_ptr stream) {
     int nth = WARP_SIZE;
-    int max_block_size = get_work_group_size(stream->get_device());
+    int max_block_size = dpct::dev_mgr::instance().get_work_group_size(stream->get_device());
     while (nth < ncols_x && nth < max_block_size) nth *= 2;
     if (nth>max_block_size) nth = max_block_size;
 
