@@ -4532,8 +4532,6 @@ static void llm_load_hparams(
     ml.get_key_or_arr(LLM_KV_FEED_FORWARD_LENGTH,  hparams.n_ff_arr,   hparams.n_layer);
     ml.get_key_or_arr(LLM_KV_ATTENTION_HEAD_COUNT, hparams.n_head_arr, hparams.n_layer);
 
-    GGML_ASSERT(hparams.n_head() > 0);
-
     // n_head_kv is optional, default to n_head
     hparams.n_head_kv_arr = hparams.n_head_arr;
 
@@ -4565,8 +4563,9 @@ static void llm_load_hparams(
 
     ml.get_key(LLM_KV_ROPE_SCALING_ATTN_FACTOR, hparams.rope_attn_factor, false);
 
-    // sanity check for n_rot (optional)
-    {
+    // non-transformer models do not have attention heads
+    if (hparams.n_head() > 0) {
+        // sanity check for n_rot (optional)
         hparams.n_rot = hparams.n_embd / hparams.n_head();
 
         ml.get_key(LLM_KV_ROPE_DIMENSION_COUNT, hparams.n_rot, false);
@@ -4578,13 +4577,17 @@ static void llm_load_hparams(
         }
         // gpt-neox n_rot = rotary_pct * (n_embd / n_head)
         // gpt-j n_rot = rotary_dim
+
+        hparams.n_embd_head_k = hparams.n_embd / hparams.n_head();
+        ml.get_key(LLM_KV_ATTENTION_KEY_LENGTH, hparams.n_embd_head_k, false);
+
+        hparams.n_embd_head_v = hparams.n_embd / hparams.n_head();
+        ml.get_key(LLM_KV_ATTENTION_VALUE_LENGTH, hparams.n_embd_head_v, false);
+    } else {
+        hparams.n_rot = 0;
+        hparams.n_embd_head_k = 0;
+        hparams.n_embd_head_v = 0;
     }
-
-    hparams.n_embd_head_k = hparams.n_embd / hparams.n_head();
-    ml.get_key(LLM_KV_ATTENTION_KEY_LENGTH, hparams.n_embd_head_k, false);
-
-    hparams.n_embd_head_v = hparams.n_embd / hparams.n_head();
-    ml.get_key(LLM_KV_ATTENTION_VALUE_LENGTH, hparams.n_embd_head_v, false);
 
     // arch-specific KVs
     switch (model.arch) {
