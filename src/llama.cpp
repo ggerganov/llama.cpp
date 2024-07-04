@@ -104,9 +104,10 @@
 #define LLAMA_ATTRIBUTE_FORMAT(...)
 #endif
 
+// bump if necessary
 #define LLAMA_MAX_NODES   8192
 #define LLAMA_MAX_LAYERS  256
-#define LLAMA_MAX_EXPERTS 160
+#define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
 //
 // logging
