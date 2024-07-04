@@ -1,0 +1,31 @@
+---
+BasedOnStyle: Google
+IndentWidth: 4
+AccessModifierOffset: -4
+AlignAfterOpenBracket: Align
+AlignOperands: true
+AlignTrailingComments: true
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBraces: Custom
+BreakConstructorInitializers: AfterColon
+ColumnLimit: 120
+Cpp11BracedListStyle: false
+DerivePointerAlignment: false
+IncludeCategories: 
+  - Regex:           '^<.*\.h>'
+    Priority:        1
+  - Regex:           '^<.*'
+    Priority:        2
+  - Regex:           '^"ggml\.h"'
+    Priority:        3
+  - Regex:           '^"ggml-.+\.h"'
+    Priority:        4
+  - Regex:           '.*'
+    Priority:        5
+KeepEmptyLinesAtTheStartOfBlocks: true
+MaxEmptyLinesToKeep: 1
+PointerAlignment: Right
+SortIncludes: true
+SpacesBeforeTrailingComments: 1
+UseTab: Never
