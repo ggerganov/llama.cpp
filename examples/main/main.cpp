@@ -532,6 +532,7 @@ int main(int argc, char ** argv) {
         if (decoder_start_token_id == -1) {
             decoder_start_token_id = llama_token_bos(model);
         }
+
         embd_inp.clear();
         embd_inp.push_back(decoder_start_token_id);
     }
