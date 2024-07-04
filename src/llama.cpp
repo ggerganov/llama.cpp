@@ -13640,7 +13640,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
     if (!lctx.is_encoding && lctx.inp_embd_enc) {
         assert(lctx.inp_embd_enc->type == GGML_TYPE_F32);
-        assert(ggml_nelements(lctx.inp_embd_enc) == lctx.embd_enc.size());
+        assert((size_t) ggml_nelements(lctx.inp_embd_enc) == lctx.embd_enc.size());
 
         ggml_backend_tensor_set(lctx.inp_embd_enc, lctx.embd_enc.data(), 0, ggml_nbytes(lctx.inp_embd_enc));
     }
@@ -14197,7 +14197,7 @@ static int llama_encode_internal(
 
         // remember the sequence ids used during the encoding - needed for cross attention later
         lctx.seq_ids_enc.resize(n_tokens);
-        for (int i = 0; i < n_tokens; i++) {
+        for (uint32_t i = 0; i < n_tokens; i++) {
             for (int s = 0; s < batch.n_seq_id[i]; s++) {
                 llama_seq_id seq_id = batch.seq_id[i][s];
                 lctx.seq_ids_enc[i].insert(seq_id);
