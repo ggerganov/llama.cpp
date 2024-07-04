@@ -19,5 +19,7 @@
 #include "dmmv.hpp"
 #include "mmq.hpp"
 #include "mmvq.hpp"
+#include "rope.hpp"
+#include "norm.hpp"
 
 #endif // GGML_SYCL_BACKEND_HPP
