@@ -526,6 +526,8 @@ if __name__ == "__main__":
     tokenizers = [
         "llama-spm",      # SPM
         "phi-3",          # SPM
+        "gemma",          # SPM
+        "gemma-2",        # SPM
         "baichuan",       # SPM
         "bert-bge",       # WPM
         "jina-v2-en",     # WPM
@@ -546,6 +548,8 @@ if __name__ == "__main__":
         "smaug-bpe",      # BPE
         "poro-chat",      # BPE
         "jina-v2-code",   # BPE
+        "viking",         # BPE
+        "jais",           # BPE
     ]
 
     logger.info("=" * 50)
