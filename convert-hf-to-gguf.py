@@ -1942,7 +1942,7 @@ class Phi3MiniModel(Model):
         if len(rope_scaling_type) == 0:
             raise KeyError('Missing the required key rope_scaling.type')
 
-        if rope_scaling_type == 'su':
+        if rope_scaling_type == 'su' or rope_scaling_type == 'longrope':
             attn_factor = math.sqrt(1 + math.log(scale) / math.log(orig_max_pos_embds)) if scale > 1.0 else 1.0
         elif rope_scaling_type == 'yarn':
             attn_factor = 0.1 * math.log(scale) + 1.0 if scale > 1.0 else 1.0
@@ -2316,6 +2316,8 @@ class GemmaModel(Model):
         special_vocab._set_special_token("eot",    107)
         special_vocab.add_to_gguf(self.gguf_writer)
 
+        self.gguf_writer.add_add_space_prefix(False)
+
     def set_gguf_parameters(self):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
@@ -2366,6 +2368,7 @@ class Gemma2Model(Model):
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
+
         self.gguf_writer.add_add_space_prefix(False)
 
     def set_gguf_parameters(self):
