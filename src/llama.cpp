@@ -5158,6 +5158,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "viking") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_VIKING;
+                vocab.tokenizer_clean_spaces = false;
             } else if (
                 tokenizer_pre == "jais") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JAIS;
