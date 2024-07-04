@@ -97,7 +97,7 @@ check_requirements() {
 }
 
 check_convert_script() {
-    local py=$1             # e.g. convert_hf_to_gguf.py
+    local py=$1             # e.g. ./convert_hf_to_gguf.py
     local pyname=${py##*/}  # e.g. convert_hf_to_gguf.py
     pyname=${pyname%.py}    # e.g. convert_hf_to_gguf
 
