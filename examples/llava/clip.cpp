@@ -554,7 +554,7 @@ struct clip_ctx {
     ggml_gallocr_t compute_alloc = NULL;
 };
 
-static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, std::pair<int, int> load_image_size = {448, 448}) {
+static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, std::pair<int, int> load_image_size = {448, 448}, bool is_inf = false) {
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
         return nullptr;
@@ -569,6 +569,10 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     if (ctx->has_minicpmv_projector) {
         image_size_width     = load_image_size.first;
         image_size_height    = load_image_size.second;
+        if (is_inf){
+            image_size_width = imgs->data->nx;
+            image_size_height = imgs->data->ny;
+        }
     }
     const int patch_size    = hparams.patch_size;
     const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
@@ -762,7 +766,8 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
 
-        } else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+        } 
+        else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
             // ggml_tensor_printf(embeddings, "mm_0_w",0,true,false);
@@ -1450,7 +1455,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1, s
         new_clip->compute_alloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(new_clip->backend));
         clip_image_f32_batch batch;
         batch.size = 1;
-        ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch, load_image_size);
+        ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch, load_image_size, false);
         ggml_gallocr_reserve(new_clip->compute_alloc, gf);
         size_t compute_memory_buffer_size = ggml_gallocr_get_buffer_size(new_clip->compute_alloc, 0);
         LOG_TEE("%s: compute allocated memory: %.2f MB\n", __func__, compute_memory_buffer_size /1024.0/1024.0);
@@ -2080,7 +2085,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     }
 
     // build the inference graph
-    ggml_cgraph * gf = clip_image_build_graph(ctx, imgs, load_image_size);
+    ggml_cgraph * gf = clip_image_build_graph(ctx, imgs, load_image_size, true);
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
 
     // set inputs
@@ -2091,8 +2096,8 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     int image_size_width     = image_size;
     int image_size_height    = image_size;
     if (ctx->has_minicpmv_projector) {
-        image_size_width     = load_image_size.first;
-        image_size_height    = load_image_size.second;
+        image_size_width     = imgs->data[0].nx;;
+        image_size_height    = imgs->data[0].ny;
     }
     const int patch_size    = hparams.patch_size;
     const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
@@ -2144,8 +2149,8 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             //    -> https://huggingface.co/Qwen/Qwen-VL/tree/main
             //    -> https://huggingface.co/Qwen/Qwen-VL/blob/0547ed36a86561e2e42fecec8fd0c4f6953e33c4/visual.py#L23
             struct ggml_tensor * pos_embed = ggml_graph_get_tensor(gf, "pos_embed");
-            int pos_w = image_size_width/patch_size;
-            int pos_h = image_size_height/patch_size;
+            int pos_w = load_image_size.first/patch_size;
+            int pos_h = load_image_size.second/patch_size;
             int embed_dim = 4096;
             auto pos_embed_t = get_2d_sincos_pos_embed(embed_dim, std::make_pair(pos_w, pos_h));
 
