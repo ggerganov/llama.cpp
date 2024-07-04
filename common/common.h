@@ -52,6 +52,12 @@ int32_t cpu_get_num_math();
 // CLI argument parsing
 //
 
+// dimensionality reduction methods, used by cvector-generator
+enum dimre_method {
+    DIMRE_METHOD_PCA,
+    DIMRE_METHOD_MEAN,
+};
+
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
@@ -152,7 +158,6 @@ struct gpt_params {
     bool prompt_cache_all  = false; // save user input and generations to prompt cache
     bool prompt_cache_ro   = false; // open the prompt cache read-only and do not update it
 
-    bool embedding         = false; // get only sentence embedding
     bool escape            = true;  // escape "\n", "\r", "\t", "\'", "\"", and "\\"
     bool multiline_input   = false; // reverse the usage of `\`
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
@@ -179,6 +184,12 @@ struct gpt_params {
     std::string mmproj = "";        // path to multimodal projector
     std::vector<std::string> image; // path to image file(s)
 
+    // embedding
+    bool embedding         = false; // get only sentence embedding
+    int32_t embd_normalize = 2;     // normalisation for embendings (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)
+    std::string embd_out   = "";    // empty = default, "array" = [[],[]...], "json" = openai style, "json+" = same "json" + cosine similarity matrix
+    std::string embd_sep   = "\n";  // separator of embendings
+
     // server params
     int32_t port           = 8080;         // server listens on this network port
     int32_t timeout_read   = 600;          // http read timeout in seconds
@@ -189,6 +200,7 @@ struct gpt_params {
     std::string public_path   = "";
     std::string chat_template = "";
     std::string system_prompt = "";
+    bool enable_chat_template = true;
 
     std::vector<std::string> api_keys;
 
@@ -233,13 +245,14 @@ struct gpt_params {
     bool compute_ppl    = true;  // whether to compute perplexity
 
     // cvector-generator params
-    int n_completions = 64;
-    int n_pca_batch = 20;
+    int n_pca_batch = 100;
     int n_pca_iterations = 1000;
-    std::string cvector_outfile          = "control_vector.gguf";
-    std::string cvector_completions_file = "examples/cvector-generator/completions.txt";
-    std::string cvector_positive_file    = "examples/cvector-generator/positive.txt";
-    std::string cvector_negative_file    = "examples/cvector-generator/negative.txt";
+    dimre_method cvector_dimre_method = DIMRE_METHOD_PCA;
+    std::string cvector_outfile       = "control_vector.gguf";
+    std::string cvector_positive_file = "examples/cvector-generator/positive.txt";
+    std::string cvector_negative_file = "examples/cvector-generator/negative.txt";
+
+    bool spm_infill = false; // suffix/prefix/middle pattern for infill
 };
 
 void gpt_params_handle_model_default(gpt_params & params);
@@ -352,8 +365,33 @@ bool llama_should_add_bos_token(const llama_model * model);
 // Chat template utils
 //
 
+// same with llama_chat_message, but uses std::string
+struct llama_chat_msg {
+    std::string role;
+    std::string content;
+};
+
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
 bool llama_chat_verify_template(const std::string & tmpl);
+
+// CPP wrapper for llama_chat_apply_template
+// If the built-in template is not supported, we default to chatml
+// If the custom "tmpl" is not supported, we throw an error
+std::string llama_chat_apply_template(const struct llama_model * model,
+        const std::string & tmpl,
+        const std::vector<llama_chat_msg> & chat,
+        bool add_ass);
+
+// Format single message, while taking into account the position of that message in chat history
+std::string llama_chat_format_single(const struct llama_model * model,
+        const std::string & tmpl,
+        const std::vector<llama_chat_msg> & past_msg,
+        const llama_chat_msg & new_msg,
+        bool add_ass);
+
+// Returns an example of formatted chat
+std::string llama_chat_format_example(const struct llama_model * model,
+        const std::string & tmpl);
 
 //
 // KV cache utils
@@ -369,7 +407,7 @@ void llama_kv_cache_dump_view_seqs(const llama_kv_cache_view & view, int row_siz
 // Embedding utils
 //
 
-void llama_embd_normalize(const float * inp, float * out, int n);
+void llama_embd_normalize(const float * inp, float * out, int n, int embd_norm = 2);
 
 float llama_embd_similarity_cos(const float * embd1, const float * embd2, int n);
 
@@ -413,4 +451,3 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
 void yaml_dump_non_result_info(
     FILE * stream, const gpt_params & params, const llama_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
-

@@ -65,7 +65,8 @@ class Model:
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool, model_name: str | None):
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool,
+                 model_name: str | None, split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
         self.dir_model = dir_model
@@ -80,7 +81,7 @@ class Model:
         if not self.is_safetensors:
             self.part_names = Model.get_model_part_names(self.dir_model, "pytorch_model", ".bin")
         self.hparams = Model.load_hparams(self.dir_model)
-        self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer"])
+        self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer", "num_layers"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensor_names = None
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -96,7 +97,8 @@ class Model:
         ftype_lw: str = ftype_up.lower()
         # allow templating the file name with the output ftype, useful with the "auto" ftype
         self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
-        self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
+        self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
+                                           split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
 
     @classmethod
     def __init_subclass__(cls):
@@ -332,6 +334,8 @@ class Model:
         self.gguf_writer.close()
 
     def write_vocab(self):
+        if len(self.gguf_writer.tensors) != 1:
+            raise ValueError('Splitting the vocabulary is not supported')
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
@@ -483,6 +487,12 @@ class Model:
         if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
             res = "jina-v2-code"
+        if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
+            # ref: https://huggingface.co/LumiOpen/Viking-7B
+            res = "viking"
+        if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
+            # ref: https://huggingface.co/core42/jais-13b
+            res = "jais"
 
         if res is None:
             logger.warning("\n")
@@ -569,7 +579,19 @@ class Model:
         special_vocab._set_special_token("unk", tokenizer.special_tokens["<|endoftext|>"])
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _set_vocab_sentencepiece(self):
+    def _set_vocab_sentencepiece(self, add_to_gguf=True):
+        tokens, scores, toktypes = self._create_vocab_sentencepiece()
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _create_vocab_sentencepiece(self):
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
@@ -631,14 +653,7 @@ class Model:
                 scores.append(-1000.0)
                 toktypes.append(SentencePieceTokenTypes.UNUSED)
 
-        self.gguf_writer.add_tokenizer_model("llama")
-        self.gguf_writer.add_tokenizer_pre("default")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes)
-
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        special_vocab.add_to_gguf(self.gguf_writer)
+        return tokens, scores, toktypes
 
     def _set_vocab_llama_hf(self):
         vocab = gguf.LlamaHfVocab(self.dir_model)
@@ -967,7 +982,11 @@ class XverseModel(Model):
         from transformers import AutoTokenizer
         tokenizer = AutoTokenizer.from_pretrained(dir_model)
         vocab_size = hparams.get("vocab_size", len(tokenizer.vocab))
-        assert max(tokenizer.vocab.values()) < vocab_size
+        # Since we are checking the maximum index, we need to ensure it's strictly less than vocab_size,
+        # because vocab_size is the count of items, and indexes start at 0.
+        max_vocab_index = max(tokenizer.get_vocab().values())
+        if max_vocab_index >= vocab_size:
+            raise ValueError("Vocabulary size exceeds expected maximum size.")
 
         reverse_vocab: dict[int, str] = {id_: encoded_tok for encoded_tok, id_ in tokenizer.vocab.items()}
         added_vocab = tokenizer.get_added_vocab()
@@ -1398,6 +1417,48 @@ class LlamaModel(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
+
+
+@Model.register("BitnetForCausalLM")
+class BitnetModel(Model):
+    model_arch = gguf.MODEL_ARCH.BITNET
+
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+        self.gguf_writer.add_rope_scaling_factor(1.0)
+
+    def weight_quant(self, weight):
+        dtype = weight.dtype
+        weight = weight.float()
+        s = 1 / weight.abs().mean().clamp(min=1e-5)
+        weight = (weight * s).round().clamp(-1, 1) / s
+        scale = weight.abs().max().unsqueeze(0)
+        weight = torch.where(weight.abs().less(1e-6), 0, weight).type(dtype)
+        weight = torch.sign(weight).type(dtype)
+        return weight.type(dtype), scale.type(torch.float32)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        new_name = self.map_tensor_name(name)
+
+        if any(self.match_model_tensor_name(new_name, key, bid) for key in [
+            gguf.MODEL_TENSOR.ATTN_Q,
+            gguf.MODEL_TENSOR.ATTN_K,
+            gguf.MODEL_TENSOR.ATTN_V,
+            gguf.MODEL_TENSOR.ATTN_OUT,
+            gguf.MODEL_TENSOR.FFN_UP,
+            gguf.MODEL_TENSOR.FFN_DOWN,
+            gguf.MODEL_TENSOR.FFN_GATE,
+        ]):
+            # transform weight into 1/0/-1 (in fp32)
+            weight_torch, scale_torch = self.weight_quant(data_torch)
+            yield (new_name, weight_torch)
+            yield (new_name.removesuffix(".weight") + ".scale", scale_torch)
+        else:
+            yield (new_name, data_torch)
 
 
 @Model.register("GrokForCausalLM")
@@ -1881,7 +1942,7 @@ class Phi3MiniModel(Model):
         if len(rope_scaling_type) == 0:
             raise KeyError('Missing the required key rope_scaling.type')
 
-        if rope_scaling_type == 'su':
+        if rope_scaling_type == 'su' or rope_scaling_type == 'longrope':
             attn_factor = math.sqrt(1 + math.log(scale) / math.log(orig_max_pos_embds)) if scale > 1.0 else 1.0
         elif rope_scaling_type == 'yarn':
             attn_factor = 0.1 * math.log(scale) + 1.0 if scale > 1.0 else 1.0
@@ -2255,6 +2316,8 @@ class GemmaModel(Model):
         special_vocab._set_special_token("eot",    107)
         special_vocab.add_to_gguf(self.gguf_writer)
 
+        self.gguf_writer.add_add_space_prefix(False)
+
     def set_gguf_parameters(self):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
@@ -2273,6 +2336,71 @@ class GemmaModel(Model):
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
+
+        # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
+        # To prevent errors, skip loading lm_head.weight.
+        if name == "lm_head.weight":
+            logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+            return []
+
+        # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
+        if name.endswith("norm.weight"):
+            data_torch = data_torch + 1
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("Gemma2ForCausalLM")
+class Gemma2Model(Model):
+    model_arch = gguf.MODEL_ARCH.GEMMA2
+
+    def set_vocab(self):
+        tokens, scores, toktypes = self._create_vocab_sentencepiece()
+        # hack: This is required so that we can properly use start/end-of-turn for chat template
+        for i in range(108):
+            # including <unusedX>, <start_of_turn>, <end_of_turn>
+            toktypes[i] = SentencePieceTokenTypes.CONTROL
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+        self.gguf_writer.add_add_space_prefix(False)
+
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+        block_count = hparams["num_hidden_layers"]
+
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
+        self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
+        self.gguf_writer.add_embedding_length(hparams["hidden_size"])
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+        self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"] if "num_key_value_heads" in hparams else hparams["num_attention_heads"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        self.gguf_writer.add_key_length(hparams["head_dim"])
+        self.gguf_writer.add_value_length(hparams["head_dim"])
+        self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_attn_logit_softcapping(
+            self.hparams["attn_logit_softcapping"]
+        )
+        self.gguf_writer.add_final_logit_softcapping(
+            self.hparams["final_logit_softcapping"]
+        )
+        self.gguf_writer.add_sliding_window(self.hparams["sliding_window"])
+
+        # sanity check
+        attn_scalar = self.hparams["query_pre_attn_scalar"]
+        if attn_scalar != hparams["hidden_size"] / hparams["num_attention_heads"]:
+            raise ValueError("query_pre_attn_scalar must be equal to n_embd / n_head")
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unusem
 
         # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
         # To prevent errors, skip loading lm_head.weight.
@@ -2725,6 +2853,214 @@ class DeepseekV2Model(Model):
                 raise ValueError(f"Unprocessed experts: {experts}")
 
 
+@Model.register("T5ForConditionalGeneration")
+@Model.register("T5WithLMHeadModel")
+class T5Model(Model):
+    model_arch = gguf.MODEL_ARCH.T5
+
+    def set_vocab(self):
+        # to avoid TypeError: Descriptors cannot be created directly
+        # exception when importing sentencepiece_model_pb2
+        os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
+        from sentencepiece import SentencePieceProcessor
+        from sentencepiece import sentencepiece_model_pb2 as model
+
+        tokenizer_path = self.dir_model / 'spiece.model'
+
+        if not tokenizer_path.is_file():
+            raise FileNotFoundError(f"File not found: {tokenizer_path}")
+
+        sentencepiece_model = model.ModelProto()
+        sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
+        add_prefix = sentencepiece_model.normalizer_spec.add_dummy_prefix
+        remove_whitespaces = sentencepiece_model.normalizer_spec.remove_extra_whitespaces
+        precompiled_charsmap = sentencepiece_model.normalizer_spec.precompiled_charsmap
+        assert sentencepiece_model.trainer_spec.model_type == 1 # UNIGRAM
+
+        tokenizer = SentencePieceProcessor()
+        tokenizer.LoadFromFile(str(tokenizer_path))
+
+        vocab_size = self.hparams.get('vocab_size', tokenizer.vocab_size())
+
+        tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
+        scores: list[float] = [-10000.0] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+
+        for token_id in range(tokenizer.vocab_size()):
+            piece = tokenizer.IdToPiece(token_id)
+            text = piece.encode("utf-8")
+            score = tokenizer.GetScore(token_id)
+
+            toktype = SentencePieceTokenTypes.NORMAL
+            if tokenizer.IsUnknown(token_id):
+                toktype = SentencePieceTokenTypes.UNKNOWN
+            elif tokenizer.IsControl(token_id):
+                toktype = SentencePieceTokenTypes.CONTROL
+            elif tokenizer.IsUnused(token_id):
+                toktype = SentencePieceTokenTypes.UNUSED
+            elif tokenizer.IsByte(token_id):
+                toktype = SentencePieceTokenTypes.BYTE
+
+            tokens[token_id] = text
+            scores[token_id] = score
+            toktypes[token_id] = toktype
+
+        added_tokens_file = self.dir_model / 'added_tokens.json'
+        if added_tokens_file.is_file():
+            with open(added_tokens_file, "r", encoding="utf-8") as f:
+                added_tokens_json = json.load(f)
+                for key in added_tokens_json:
+                    token_id = added_tokens_json[key]
+                    if (token_id >= vocab_size):
+                        logger.warning(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
+                        continue
+
+                    tokens[token_id] = key.encode("utf-8")
+                    scores[token_id] = -1000.0
+                    toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
+
+        if vocab_size > len(tokens):
+            pad_count = vocab_size - len(tokens)
+            logger.debug(f"Padding vocab with {pad_count} token(s) - [PAD1] through [PAD{pad_count}]")
+            for i in range(1, pad_count + 1):
+                tokens.append(bytes(f"[PAD{i}]", encoding="utf-8"))
+                scores.append(-1000.0)
+                toktypes.append(SentencePieceTokenTypes.UNUSED)
+
+        self.gguf_writer.add_tokenizer_model("t5")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
+        self.gguf_writer.add_add_space_prefix(add_prefix)
+        self.gguf_writer.add_remove_extra_whitespaces(remove_whitespaces)
+        if precompiled_charsmap:
+            self.gguf_writer.add_precompiled_charsmap(precompiled_charsmap)
+
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+        self.gguf_writer.add_add_bos_token(False)
+        self.gguf_writer.add_add_eos_token(True)
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name("T5")
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["d_model"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["d_ff"])
+        self.gguf_writer.add_block_count(self.hparams["num_layers"])
+        self.gguf_writer.add_head_count(self.hparams["num_heads"])
+        self.gguf_writer.add_key_length(self.hparams["d_kv"])
+        self.gguf_writer.add_value_length(self.hparams["d_kv"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_relative_attn_buckets_count(self.hparams["relative_attention_num_buckets"])
+        self.gguf_writer.add_layer_norm_rms_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_decoder_start_token_id(self.hparams["decoder_start_token_id"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        # Sometimes T5 and Flan-T5 based models contain "encoder.embed_tokens.weight" tensor or
+        # "decoder.embed_tokens.weight" tensors that are duplicates of "shared.weight" tensor
+        # To prevent errors caused by an unnecessary unmapped tensor, skip both of them and use only "shared.weight".
+        if name == "decoder.embed_tokens.weight" or name == "encoder.embed_tokens.weight":
+            logger.debug(f"Skipping tensor {name!r} in safetensors so that convert can end normally.")
+            return []
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("JAISLMHeadModel")
+class JaisModel(Model):
+    model_arch = gguf.MODEL_ARCH.JAIS
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # SwigLU activation
+        assert self.hparams["activation_function"] == "swiglu"
+        # ALiBi position embedding
+        assert self.hparams["position_embedding_type"] == "alibi"
+
+        # Embeddings scale
+        self.embeddings_scale = 1.0
+        # note: For some JAIS flavors, output is tied to (same as) wte in original model
+        self.output_is_wte = False
+        if 'mup_embeddings_scale' in self.hparams:
+            self.output_is_wte = True   # Hack (?)
+            self.embeddings_scale = self.hparams['mup_embeddings_scale']
+        elif 'embeddings_scale' in self.hparams:
+            self.embeddings_scale = self.hparams['embeddings_scale']
+        else:
+            assert False
+
+        self.width_scale = 1.0
+        if 'mup_output_alpha' in self.hparams:
+            assert 'mup_width_scale' in self.hparams
+            self.width_scale = self.hparams['mup_output_alpha'] * self.hparams['mup_width_scale']
+        elif 'width_scale' in self.hparams:
+            self.width_scale = self.hparams['width_scale']
+        else:
+            assert False
+
+        self.max_alibi_bias = 8.0
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_inner"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        tensors: list[tuple[str, Tensor]] = []
+
+        # we don't need these
+        if name.endswith((".attn.bias")):
+            return tensors
+
+        if name.endswith(("relative_pe.slopes")):
+            # Calculate max ALiBi bias (this is the inverse of the ALiBi calculation)
+            # Some other models has max_alibi_bias spelled out explicitly in the hyperparams,
+            # but Jais's PyTorch model simply precalculates the slope values and places them
+            # in relative_pes.slopes
+            n_head_closest_log2 = 2 ** math.floor(math.log2(self.hparams["n_head"]))
+            first_val = float(data_torch._data[0])
+            self.max_alibi_bias = -round(math.log2(first_val) * n_head_closest_log2)
+
+            return tensors
+
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_fc2.weight")):
+            data_torch = data_torch.transpose(1, 0)
+
+        new_name = self.map_tensor_name(name)
+
+        if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
+            tensors.append((new_name, data_torch * self.embeddings_scale))
+            if self.output_is_wte:
+                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch * self.width_scale))
+        elif new_name == self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT):
+            assert not self.output_is_wte
+            tensors.append((new_name, data_torch * self.width_scale))
+        else:
+            tensors.append((new_name, data_torch))
+
+        return tensors
+
+    def write_tensors(self):
+        super().write_tensors()
+        self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
+
+
 ###### CONVERSION LOGIC ######
 
 
@@ -2810,8 +3146,42 @@ def parse_args() -> argparse.Namespace:
         "--verbose", action="store_true",
         help="increase output verbosity",
     )
+    parser.add_argument(
+        "--split-max-tensors", type=int, default=0,
+        help="max tensors in each split",
+    )
+    parser.add_argument(
+        "--split-max-size", type=str, default="0",
+        help="max size per split N(M|G)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="only print out a split plan and exit, without writing any new files",
+    )
+    parser.add_argument(
+        "--no-tensor-first-split", action="store_true",
+        help="do not add tensors to the first split (disabled by default)"
+    )
 
     return parser.parse_args()
+
+
+def split_str_to_n_bytes(split_str: str) -> int:
+    if split_str.endswith("K"):
+        n = int(split_str[:-1]) * 1000
+    elif split_str.endswith("M"):
+        n = int(split_str[:-1]) * 1000 * 1000
+    elif split_str.endswith("G"):
+        n = int(split_str[:-1]) * 1000 * 1000 * 1000
+    elif split_str.isnumeric():
+        n = int(split_str)
+    else:
+        raise ValueError(f"Invalid split size: {split_str}, must be a number, optionally followed by K, M, or G")
+
+    if n < 0:
+        raise ValueError(f"Invalid split size: {split_str}, must be positive")
+
+    return n
 
 
 def main() -> None:
@@ -2846,6 +3216,11 @@ def main() -> None:
         "auto": gguf.LlamaFileType.GUESSED,
     }
 
+    is_split = args.split_max_tensors > 0 or args.split_max_size != "0"
+    if args.use_temp_file and is_split:
+        logger.error("Error: Cannot use temp file when splitting")
+        sys.exit(1)
+
     if args.outfile is not None:
         fname_out = args.outfile
     else:
@@ -2863,7 +3238,10 @@ def main() -> None:
             logger.error(f"Model {hparams['architectures'][0]} is not supported")
             sys.exit(1)
 
-        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file, args.no_lazy, args.model_name)
+        model_instance = model_class(dir_model, ftype_map[args.outtype], fname_out, args.bigendian, args.use_temp_file,
+                                     args.no_lazy, args.model_name, split_max_tensors=args.split_max_tensors,
+                                     split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
+                                     small_first_shard=args.no_tensor_first_split)
 
         logger.info("Set model parameters")
         model_instance.set_gguf_parameters()
@@ -2874,13 +3252,14 @@ def main() -> None:
         model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
 
         if args.vocab_only:
-            logger.info(f"Exporting model vocab to '{model_instance.fname_out}'")
+            logger.info("Exporting model vocab...")
             model_instance.write_vocab()
+            logger.info(f"Model vocab successfully exported to {model_instance.fname_out}")
         else:
-            logger.info(f"Exporting model to '{model_instance.fname_out}'")
+            logger.info("Exporting model...")
             model_instance.write()
-
-        logger.info(f"Model successfully exported to '{model_instance.fname_out}'")
+            out_path = f"{model_instance.fname_out.parent}{os.sep}" if is_split else model_instance.fname_out
+            logger.info(f"Model successfully exported to {out_path}")
 
 
 if __name__ == '__main__':

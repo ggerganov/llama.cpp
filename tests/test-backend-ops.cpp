@@ -1,7 +1,6 @@
 #include <ggml.h>
 #include <ggml-alloc.h>
 #include <ggml-backend.h>
-#include <ggml-backend-impl.h>
 
 #include <algorithm>
 #include <array>
@@ -783,6 +782,10 @@ struct test_cpy : public test_case {
 
     std::string vars() override {
         return VARS_TO_STR3(type_src, type_dst, ne);
+    }
+
+    double max_nmse_err() override {
+        return 1e-6;
     }
 
     size_t op_size(ggml_tensor * t) override {
@@ -2049,6 +2052,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         GGML_TYPE_IQ2_XS, GGML_TYPE_IQ2_S,
         GGML_TYPE_IQ3_XXS, GGML_TYPE_IQ1_S, GGML_TYPE_IQ1_M,
         GGML_TYPE_IQ4_NL, GGML_TYPE_IQ3_S, GGML_TYPE_IQ4_XS,
+        GGML_TYPE_BF16,
     };
 
     // unary ops

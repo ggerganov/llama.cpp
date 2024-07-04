@@ -10,7 +10,7 @@ class TensorNameMap:
         # Token embeddings
         MODEL_TENSOR.TOKEN_EMBD: (
             "gpt_neox.embed_in",                         # gptneox
-            "transformer.wte",                           # gpt2 gpt-j mpt refact qwen dbrx
+            "transformer.wte",                           # gpt2 gpt-j mpt refact qwen dbrx jais
             "transformer.word_embeddings",               # falcon
             "word_embeddings",                           # bloom
             "model.embed_tokens",                        # llama-hf
@@ -24,6 +24,7 @@ class TensorNameMap:
             "backbone.embedding",                        # mamba
             "backbone.embeddings",                       # mamba-hf
             "transformer.in_out_embed",                  # Grok
+            "shared",                                    # t5
         ),
 
         # Token type embeddings
@@ -48,7 +49,7 @@ class TensorNameMap:
         # Output
         MODEL_TENSOR.OUTPUT: (
             "embed_out",                 # gptneox
-            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen mamba dbrx
+            "lm_head",                   # gpt2 mpt falcon llama-hf baichuan qwen mamba dbrx jais
             "output",                    # llama-pth bloom internlm2
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
@@ -57,7 +58,7 @@ class TensorNameMap:
         # Output norm
         MODEL_TENSOR.OUTPUT_NORM: (
             "gpt_neox.final_layer_norm",               # gptneox
-            "transformer.ln_f",                        # gpt2 gpt-j falcon
+            "transformer.ln_f",                        # gpt2 gpt-j falcon jais
             "model.norm",                              # llama-hf baichuan internlm2
             "norm",                                    # llama-pth
             "transformer.norm_f",                      # mpt dbrx
@@ -80,7 +81,7 @@ class TensorNameMap:
         # Attention norm
         MODEL_TENSOR.ATTN_NORM: (
             "gpt_neox.layers.{bid}.input_layernorm",                # gptneox
-            "transformer.h.{bid}.ln_1",                             # gpt2 gpt-j refact qwen
+            "transformer.h.{bid}.ln_1",                             # gpt2 gpt-j refact qwen jais
             "transformer.blocks.{bid}.norm_1",                      # mpt
             "transformer.h.{bid}.input_layernorm",                  # falcon7b
             "h.{bid}.input_layernorm",                              # bloom
@@ -108,7 +109,7 @@ class TensorNameMap:
         # Attention query-key-value
         MODEL_TENSOR.ATTN_QKV: (
             "gpt_neox.layers.{bid}.attention.query_key_value",                     # gptneox
-            "transformer.h.{bid}.attn.c_attn",                                     # gpt2 qwen
+            "transformer.h.{bid}.attn.c_attn",                                     # gpt2 qwen jais
             "transformer.blocks.{bid}.attn.Wqkv",                                  # mpt
             "transformer.blocks.{bid}.norm_attn_norm.attn.Wqkv",                   # dbrx
             "transformer.h.{bid}.self_attention.query_key_value",                  # falcon
@@ -159,7 +160,7 @@ class TensorNameMap:
         # Attention output
         MODEL_TENSOR.ATTN_OUT: (
             "gpt_neox.layers.{bid}.attention.dense",                        # gptneox
-            "transformer.h.{bid}.attn.c_proj",                              # gpt2 refact qwen
+            "transformer.h.{bid}.attn.c_proj",                              # gpt2 refact qwen jais
             "transformer.blocks.{bid}.attn.out_proj",                       # mpt
             "transformer.h.{bid}.self_attention.dense",                     # falcon
             "h.{bid}.self_attention.dense",                                 # bloom
@@ -186,6 +187,10 @@ class TensorNameMap:
             "transformer.blocks.{bid}.norm_attn_norm.norm_2",  # dbrx
         ),
 
+        MODEL_TENSOR.ATTN_POST_NORM: (
+            "model.layers.{bid}.post_attention_layernorm",     # gemma2
+        ),
+
         # Rotary embeddings
         MODEL_TENSOR.ATTN_ROT_EMBD: (
             "model.layers.{bid}.self_attn.rotary_emb.inv_freq",        # llama-hf
@@ -197,7 +202,7 @@ class TensorNameMap:
         # Feed-forward norm
         MODEL_TENSOR.FFN_NORM: (
             "gpt_neox.layers.{bid}.post_attention_layernorm",                # gptneox
-            "transformer.h.{bid}.ln_2",                                      # gpt2 refact qwen
+            "transformer.h.{bid}.ln_2",                                      # gpt2 refact qwen jais
             "h.{bid}.post_attention_layernorm",                              # bloom
             "transformer.blocks.{bid}.norm_2",                               # mpt
             "model.layers.{bid}.post_attention_layernorm",                   # llama-hf
@@ -207,6 +212,16 @@ class TensorNameMap:
             "h.{bid}.ln_2",                                                  # gpt2
             "model.layers.{bid}.ffn_norm",                                   # internlm2
             "transformer.decoder_layer.{bid}.rms_norm_2",                    # Grok
+        ),
+
+        # Post feed-forward norm
+        MODEL_TENSOR.FFN_PRE_NORM: (
+            "model.layers.{bid}.pre_feedforward_layernorm", # gemma2
+        ),
+
+        # Post feed-forward norm
+        MODEL_TENSOR.FFN_POST_NORM: (
+            "model.layers.{bid}.post_feedforward_layernorm", # gemma2
         ),
 
         MODEL_TENSOR.FFN_GATE_INP: (
@@ -224,7 +239,7 @@ class TensorNameMap:
         # Feed-forward up
         MODEL_TENSOR.FFN_UP: (
             "gpt_neox.layers.{bid}.mlp.dense_h_to_4h",                # gptneox
-            "transformer.h.{bid}.mlp.c_fc",                           # gpt2
+            "transformer.h.{bid}.mlp.c_fc",                           # gpt2 jais
             "transformer.blocks.{bid}.ffn.up_proj",                   # mpt
             "transformer.h.{bid}.mlp.dense_h_to_4h",                  # falcon
             "h.{bid}.mlp.dense_h_to_4h",                              # bloom
@@ -270,6 +285,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.gate_proj",           # llama-hf refact
             "layers.{bid}.feed_forward.w1",               # llama-pth
             "transformer.h.{bid}.mlp.w2",                 # qwen
+            "transformer.h.{bid}.mlp.c_fc2",              # jais
             "model.layers.layers.{bid}.mlp.gate_proj",    # plamo
             "model.layers.{bid}.feed_forward.w1",         # internlm2
             "encoder.layers.{bid}.mlp.fc12",              # nomic-bert
@@ -293,7 +309,7 @@ class TensorNameMap:
         # Feed-forward down
         MODEL_TENSOR.FFN_DOWN: (
             "gpt_neox.layers.{bid}.mlp.dense_4h_to_h",                # gptneox
-            "transformer.h.{bid}.mlp.c_proj",                         # gpt2 refact qwen
+            "transformer.h.{bid}.mlp.c_proj",                         # gpt2 refact qwen jais
             "transformer.blocks.{bid}.ffn.down_proj",                 # mpt
             "transformer.h.{bid}.mlp.dense_4h_to_h",                  # falcon
             "h.{bid}.mlp.dense_4h_to_h",                              # bloom
@@ -412,6 +428,128 @@ class TensorNameMap:
 
         MODEL_TENSOR.ATTN_KV_A_NORM: (
             "model.layers.{bid}.self_attn.kv_a_layernorm", # deepseek2
+        ),
+
+        MODEL_TENSOR.ATTN_SUB_NORM: (
+            "model.layers.{bid}.self_attn.inner_attn_ln",  # bitnet
+        ),
+
+        MODEL_TENSOR.FFN_SUB_NORM: (
+            "model.layers.{bid}.mlp.ffn_layernorm",  # bitnet
+        ),
+
+        MODEL_TENSOR.DEC_ATTN_NORM: (
+            "decoder.block.{bid}.layer.0.layer_norm", # t5
+        ),
+
+        MODEL_TENSOR.DEC_ATTN_Q: (
+            "decoder.block.{bid}.layer.0.SelfAttention.q", # t5
+        ),
+
+        MODEL_TENSOR.DEC_ATTN_K: (
+            "decoder.block.{bid}.layer.0.SelfAttention.k", # t5
+        ),
+
+        MODEL_TENSOR.DEC_ATTN_V: (
+            "decoder.block.{bid}.layer.0.SelfAttention.v", # t5
+        ),
+
+        MODEL_TENSOR.DEC_ATTN_OUT: (
+            "decoder.block.{bid}.layer.0.SelfAttention.o", # t5
+        ),
+
+        MODEL_TENSOR.DEC_ATTN_REL_B: (
+            "decoder.block.{bid}.layer.0.SelfAttention.relative_attention_bias", # t5
+        ),
+
+        MODEL_TENSOR.DEC_CROSS_ATTN_NORM: (
+            "decoder.block.{bid}.layer.1.layer_norm", # t5
+        ),
+
+        MODEL_TENSOR.DEC_CROSS_ATTN_Q: (
+            "decoder.block.{bid}.layer.1.EncDecAttention.q", # t5
+        ),
+
+        MODEL_TENSOR.DEC_CROSS_ATTN_K: (
+            "decoder.block.{bid}.layer.1.EncDecAttention.k", # t5
+        ),
+
+        MODEL_TENSOR.DEC_CROSS_ATTN_V: (
+            "decoder.block.{bid}.layer.1.EncDecAttention.v", # t5
+        ),
+
+        MODEL_TENSOR.DEC_CROSS_ATTN_OUT: (
+            "decoder.block.{bid}.layer.1.EncDecAttention.o", # t5
+        ),
+
+        MODEL_TENSOR.DEC_CROSS_ATTN_REL_B: (
+            "decoder.block.{bid}.layer.1.EncDecAttention.relative_attention_bias", # t5
+        ),
+
+        MODEL_TENSOR.DEC_FFN_NORM: (
+            "decoder.block.{bid}.layer.2.layer_norm", # t5
+        ),
+
+        MODEL_TENSOR.DEC_FFN_GATE: (
+            "decoder.block.{bid}.layer.2.DenseReluDense.wi_0", # flan-t5
+        ),
+
+        MODEL_TENSOR.DEC_FFN_UP: (
+            "decoder.block.{bid}.layer.2.DenseReluDense.wi",   # t5
+            "decoder.block.{bid}.layer.2.DenseReluDense.wi_1", # flan-t5
+        ),
+
+        MODEL_TENSOR.DEC_FFN_DOWN: (
+            "decoder.block.{bid}.layer.2.DenseReluDense.wo", # t5
+        ),
+
+        MODEL_TENSOR.DEC_OUTPUT_NORM: (
+            "decoder.final_layer_norm", # t5
+        ),
+
+        MODEL_TENSOR.ENC_ATTN_NORM: (
+            "encoder.block.{bid}.layer.0.layer_norm", # t5
+        ),
+
+        MODEL_TENSOR.ENC_ATTN_Q: (
+            "encoder.block.{bid}.layer.0.SelfAttention.q", # t5
+        ),
+
+        MODEL_TENSOR.ENC_ATTN_K: (
+            "encoder.block.{bid}.layer.0.SelfAttention.k", # t5
+        ),
+
+        MODEL_TENSOR.ENC_ATTN_V: (
+            "encoder.block.{bid}.layer.0.SelfAttention.v", # t5
+        ),
+
+        MODEL_TENSOR.ENC_ATTN_OUT: (
+            "encoder.block.{bid}.layer.0.SelfAttention.o", # t5
+        ),
+
+        MODEL_TENSOR.ENC_ATTN_REL_B: (
+            "encoder.block.{bid}.layer.0.SelfAttention.relative_attention_bias", # t5
+        ),
+
+        MODEL_TENSOR.ENC_FFN_NORM: (
+            "encoder.block.{bid}.layer.1.layer_norm", # t5
+        ),
+
+        MODEL_TENSOR.ENC_FFN_GATE: (
+            "encoder.block.{bid}.layer.1.DenseReluDense.wi_0", # flan-t5
+        ),
+
+        MODEL_TENSOR.ENC_FFN_UP: (
+            "encoder.block.{bid}.layer.1.DenseReluDense.wi",   # t5
+            "encoder.block.{bid}.layer.1.DenseReluDense.wi_1", # flan-t5
+        ),
+
+        MODEL_TENSOR.ENC_FFN_DOWN: (
+            "encoder.block.{bid}.layer.1.DenseReluDense.wo", # t5
+        ),
+
+        MODEL_TENSOR.ENC_OUTPUT_NORM: (
+            "encoder.final_layer_norm", # t5
         ),
     }
 
