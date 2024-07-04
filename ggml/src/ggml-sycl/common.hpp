@@ -13,10 +13,12 @@
 #ifndef GGML_SYCL_COMMON_HPP
 #define GGML_SYCL_COMMON_HPP
 
-#include <fstream>
 #include <iostream>
 
-#include "dpct/helper.hpp"
+#include "dpct/defs.hpp"
+#include "dpct/device.hpp"
+#include "dpct/util.hpp"
+
 #include "ggml-sycl.h"
 #include "presets.hpp"
 
@@ -33,19 +35,6 @@ static int g_ggml_sycl_debug = 0;
     if (g_ggml_sycl_debug)          \
       fprintf(stderr, __VA_ARGS__); \
   } while (0)
-
-#define CHECK_TRY_ERROR(expr)                                            \
-  [&]() {                                                                \
-    try {                                                                \
-      expr;                                                              \
-      return dpct::success;                                              \
-    } catch (std::exception const& e) {                                  \
-      std::cerr << e.what() << "\nException caught at file:" << __FILE__ \
-                << ", line:" << __LINE__ << ", func:" << __func__        \
-                << std::endl;                                            \
-      return dpct::default_error;                                        \
-    }                                                                    \
-  }()
 
 // #define DEBUG_SYCL_MALLOC
 

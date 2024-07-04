@@ -12,31 +12,32 @@
 
 #include <algorithm>
 #include <assert.h>
-#include <atomic>
-#include <cinttypes>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <float.h>
-#include <limits>
 #include <stdint.h>
 #include <stdio.h>
-#include <vector>
 #include <cmath>
 #include <iostream>
-#include <fstream>
-#include <stdio.h>
 #include <stdlib.h>
 #include <regex>
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
 
+#include <oneapi/mkl.hpp>
+
 #include "ggml-sycl.h"
 #include "ggml.h"
 #include "ggml-backend-impl.h"
 
 #include "ggml-sycl/backend.hpp"
+#include "ggml-sycl/dpct/atomic.hpp"
+#include "ggml-sycl/dpct/blas.hpp"
+#include "ggml-sycl/dpct/helper.hpp"
+#include "ggml-sycl/dpct/math.hpp"
+#include "ggml-sycl/dpct/memory.hpp"
 #include "ggml-sycl/presets.hpp"
 
 bool   ggml_sycl_loaded(void);

@@ -1,5 +1,9 @@
 #include "rope.hpp"
 
+#include <cmath>
+
+#include <sycl/sycl.hpp>
+
 struct rope_corr_dims {
     float v[2];
 };
