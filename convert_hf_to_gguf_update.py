@@ -15,7 +15,7 @@
 # - Add a new model to the "models" list
 # - Run the script with your huggingface token:
 #
-#   python3 convert_hf_to_gguf-update.py <huggingface_token>
+#   python3 convert_hf_to_gguf_update.py <huggingface_token>
 #
 # - Copy-paste the generated get_vocab_base_pre() function into convert_hf_to_gguf.py
 # - Update llama.cpp with the new pre-tokenizer if necessary
@@ -37,7 +37,7 @@ from enum import IntEnum, auto
 from transformers import AutoTokenizer
 
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger("convert_hf_to_gguf-update")
+logger = logging.getLogger("convert_hf_to_gguf_update")
 sess = requests.Session()
 
 
@@ -56,10 +56,10 @@ if len(sys.argv) == 2:
     token = sys.argv[1]
     if not token.startswith("hf_"):
         logger.info("Huggingface token seems invalid")
-        logger.info("Usage: python convert_hf_to_gguf-update.py <huggingface_token>")
+        logger.info("Usage: python convert_hf_to_gguf_update.py <huggingface_token>")
         sys.exit(1)
 else:
-    logger.info("Usage: python convert_hf_to_gguf-update.py <huggingface_token>")
+    logger.info("Usage: python convert_hf_to_gguf_update.py <huggingface_token>")
     sys.exit(1)
 
 # TODO: add models here, base models preferred
@@ -201,7 +201,7 @@ src_func = f"""
 
         res = None
 
-        # NOTE: if you get an error here, you need to update the convert_hf_to_gguf-update.py script
+        # NOTE: if you get an error here, you need to update the convert_hf_to_gguf_update.py script
         #       or pull the latest version of the model from Huggingface
         #       don't edit the hashes manually!
 {src_ifs}

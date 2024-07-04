@@ -1161,7 +1161,7 @@ class FalconModel(Model):
         # So we rearrange them here,, so that we have n_head query weights
         # followed by n_head_kv key weights followed by n_head_kv value weights,
         # in contiguous fashion.
-        # ref: https://github.com/jploski/ggml/blob/falcon40b/examples/falcon/convert_hf_to_gguf.py
+        # ref: https://github.com/jploski/ggml/blob/falcon40b/examples/falcon/convert-hf-to-gguf.py
 
         if "query_key_value" in name:
             n_head = self.find_hparam(["num_attention_heads", "n_head"])
