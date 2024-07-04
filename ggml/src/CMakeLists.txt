@@ -486,9 +486,11 @@ if (GGML_SYCL)
     add_compile_options(-I./) #include DPCT
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
+        add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
+    else()
+        add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
     endif()
 
     file(GLOB   GGML_HEADERS_SYCL "ggml-sycl/*.hpp")
@@ -1166,7 +1168,9 @@ target_link_libraries(ggml PRIVATE Threads::Threads ${GGML_EXTRA_LIBS})
 
 find_library(MATH_LIBRARY m)
 if (MATH_LIBRARY)
-    target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
+    if (NOT WIN32 OR NOT GGML_SYCL)
+        target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
+    endif()
 endif()
 
 if (BUILD_SHARED_LIBS)
