@@ -54,9 +54,9 @@ public:
             graph_vtcm_config.option = QNN_GRAPH_CONFIG_OPTION_CUSTOM;
             graph_vtcm_config.customConfig = &vtcm_config;
 
-            const QnnGraph_Config_t *p_graphconfig[] = { &graph_hvx_config, &graph_dlbc_config, &graph_vtcm_config,
+            const QnnGraph_Config_t *graph_configs[] = { &graph_hvx_config, &graph_dlbc_config, &graph_vtcm_config,
                                                          &graph_opt_config, nullptr };
-            error = qnn_interface.graphCreate(qnn_context, graph_name.c_str(), p_graphconfig, &graph_handle);
+            error = qnn_interface.graphCreate(qnn_context, graph_name.c_str(), graph_configs, &graph_handle);
         } else {
             error = qnn_interface.graphCreate(qnn_context, graph_name.c_str(), nullptr, &graph_handle);
         }
@@ -67,10 +67,9 @@ public:
                 "error = %d\n",
                 graph_name.c_str(), error);
             return;
-        } else {
-            QNN_LOG_INFO("create qnn graph handle with graph name %s ok\n", graph_name.c_str());
         }
 
+        QNN_LOG_INFO("create qnn graph handle with graph name %s ok\n", graph_name.c_str());
         _graph_handle = graph_handle;
     }
 
