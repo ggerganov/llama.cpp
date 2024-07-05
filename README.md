@@ -302,8 +302,8 @@ llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
 # Output:
 # > hi, who are you?
 # Hi there! I'm your helpful assistant! I'm an AI-powered chatbot designed to assist and provide information to users like you. I'm here to help answer your questions, provide guidance, and offer support on a wide range of topics. I'm a friendly and knowledgeable AI, and I'm always happy to help with anything you need. What's on your mind, and how can I assist you today?
-# 
-# > what is 1+1?   
+#
+# > what is 1+1?
 # Easy peasy! The answer to 1+1 is... 2!
 ```
 
@@ -329,7 +329,7 @@ You can also use your own template via in-prefix, in-suffix and reverse-prompt p
 
 ### Interactive mode
 
-> [!NOTE]  
+> [!NOTE]
 > If you prefer basic usage, please consider using conversation mode instead of interactive mode
 
 In this mode, you can always interrupt generation by pressing Ctrl+C and entering one or more lines of text, which will be converted into tokens and appended to the current context. You can also specify a *reverse prompt* with the parameter `-r "reverse prompt string"`. This will result in user input being prompted whenever the exact tokens of the reverse prompt string are encountered in the generation. A typical use is to use a prompt that makes LLaMA emulate a chat between multiple users, say Alice and Bob, and pass `-r "Alice:"`.
