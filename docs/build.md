@@ -238,11 +238,11 @@ The following compilation options are also available to tweak performance (yes, 
 | GGML_CUDA_MMV_Y        | Positive integer       | 1       | Block size in y direction for the HIP mul mat vec kernels. Increasing this value can improve performance on fast GPUs. Power of 2 recommended. Does not affect k-quants.                                                                       |
 | GGML_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
 
--#### Vulkan
+### Vulkan
 
 **Windows**
 
-###### w64devkit
+#### w64devkit
 
 Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
 
@@ -264,7 +264,7 @@ EOF
 ```
 Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
 
-###### MSYS2
+#### MSYS2
 Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
   ```sh
   pacman -S git \
