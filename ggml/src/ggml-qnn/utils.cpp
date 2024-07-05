@@ -23,8 +23,8 @@ namespace qnn {
 
 // TODO: mapping more ggml data type to QNN data type
 // ref:explanation of k-quants, https://github.com/ggerganov/llama.cpp/pull/1684
-Qnn_DataType_t datatype_from_ggml_datatype(enum ggml_type ggmltype) {
-    switch (ggmltype) {
+Qnn_DataType_t device_datatype_from_ggml_datatype(ggml_type ggml_type) {
+    switch (ggml_type) {
         case GGML_TYPE_F16:
             return QNN_DATATYPE_FLOAT_16;
         case GGML_TYPE_F32:
@@ -39,6 +39,18 @@ Qnn_DataType_t datatype_from_ggml_datatype(enum ggml_type ggmltype) {
             break;
     }
     return QNN_DATATYPE_UNDEFINED;
+}
+
+Qnn_TensorType_t device_tensortype_from_ggml_tensor(ggml_tensor *ggml_tensor) {
+    Qnn_TensorType_t qnn_tensor_type = QNN_TENSOR_TYPE_APP_WRITE;
+
+    if (ggml_tensor->flags & GGML_TENSOR_FLAG_INPUT) {
+        qnn_tensor_type = QNN_TENSOR_TYPE_APP_WRITE;
+    } else if (ggml_tensor->flags & GGML_TENSOR_FLAG_OUTPUT) {
+        qnn_tensor_type = QNN_TENSOR_TYPE_APP_READ;
+    }
+
+    return qnn_tensor_type;
 }
 
 uint32_t get_ggml_tensor_rank(const ggml_tensor *tensor) {

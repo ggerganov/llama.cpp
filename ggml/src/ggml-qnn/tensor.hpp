@@ -17,7 +17,7 @@ public:
                                        ggml_backend_qnn_context *ctx) :
         _tensor(tensor), _qnn_tensor(reinterpret_cast<Qnn_Tensor_t *>(tensor->extra)), _context(ctx) {
         _old_dimensions = QNN_VER_PTR(*_qnn_tensor)->dimensions;
-        const auto qnn_data_type = datatype_from_ggml_datatype(tensor->type);
+        const auto qnn_data_type = device_datatype_from_ggml_datatype(tensor->type);
         const bool is_npu = ctx->device == QNN_BACKEND_NPU;
         QNN_VER_PTR(*_qnn_tensor)->type = _tensorType;
         if (is_npu) {
@@ -67,7 +67,7 @@ public:
                                        ggml_backend_qnn_context *ctx) :
         _tensor(tensor), _qnn_tensor(qnn_tensor), _context(ctx) {
         _old_dimensions = QNN_VER_PTR(*_qnn_tensor)->dimensions;
-        const auto qnn_data_type = qnn::datatype_from_ggml_datatype(tensor->type);
+        const auto qnn_data_type = device_datatype_from_ggml_datatype(tensor->type);
         const bool is_npu = ctx->device == QNN_BACKEND_NPU;
 
         _dimensions[0] = (uint32_t)tensor->ne[0];

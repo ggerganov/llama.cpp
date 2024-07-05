@@ -15,7 +15,6 @@
 
 namespace qnn {
 
-Qnn_DataType_t datatype_from_ggml_datatype(enum ggml_type ggmltype);
 uint32_t get_ggml_tensor_rank(const ggml_tensor *tensor);
 const char *get_backend_name(int n_backend_type);
 const char *get_chipset_desc(uint32_t chipset_id);
@@ -168,6 +167,9 @@ inline void set_qnn_tensor_memhandle(Qnn_Tensor_t &tensor, Qnn_MemHandle_t handl
         tensor.v1.memHandle = handle;
     }
 }
+
+Qnn_DataType_t device_datatype_from_ggml_datatype(ggml_type ggml_type);
+Qnn_TensorType_t device_tensortype_from_ggml_tensor(ggml_tensor *ggml_tensor);
 
 void device_tensor_init(Qnn_Tensor_t &tensor, uint32_t rank, Qnn_TensorMemType_t mem_type, const char *tensor_name,
                         Qnn_TensorType_t qnn_tensor_type, Qnn_DataType_t qnn_data_type, uint32_t *dimensions);

@@ -250,23 +250,15 @@ GGML_CALL static void ggml_backend_qnn_buffer_init_tensor(ggml_backend_buffer_t 
     static int idx = 0;
     char tensor_name[GGML_MAX_NAME] = { 0 };
     snprintf(tensor_name, GGML_MAX_NAME, "tensor_%04d", idx++);
-
-    uint32_t dimensions[] = { (uint32_t)tensor->ne[0], (uint32_t)tensor->ne[1], (uint32_t)tensor->ne[2],
-                              (uint32_t)tensor->ne[3] };
-    Qnn_DataType_t qnn_data_type = qnn::datatype_from_ggml_datatype(tensor->type);
-    Qnn_TensorType_t qnn_tensor_type = QNN_TENSOR_TYPE_APP_WRITE;
-
-    if (tensor->flags & GGML_TENSOR_FLAG_INPUT) {
-        qnn_tensor_type = QNN_TENSOR_TYPE_APP_WRITE;
-    } else if (tensor->flags & GGML_TENSOR_FLAG_OUTPUT) {
-        qnn_tensor_type = QNN_TENSOR_TYPE_APP_READ;
-    }
-
+    Qnn_DataType_t qnn_data_type = qnn::device_datatype_from_ggml_datatype(tensor->type);
+    Qnn_TensorType_t qnn_tensor_type = qnn::device_tensortype_from_ggml_tensor(tensor);
     Qnn_TensorMemType_t qnn_mem_type = QNN_TENSORMEMTYPE_RAW;
     if (ctx->device == QNN_BACKEND_GPU) {
         qnn_mem_type = QNN_TENSORMEMTYPE_MEMHANDLE;
     }
 
+    uint32_t dimensions[] = { (uint32_t)tensor->ne[0], (uint32_t)tensor->ne[1], (uint32_t)tensor->ne[2],
+                              (uint32_t)tensor->ne[3] };
     Qnn_Tensor_t qnn_tensor;
     qnn::device_tensor_init(qnn_tensor, qnn::get_ggml_tensor_rank(tensor), qnn_mem_type, tensor_name, qnn_tensor_type,
                             qnn_data_type, dimensions);
