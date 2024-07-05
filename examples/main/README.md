@@ -53,7 +53,7 @@ Once downloaded, place your model in the models folder in llama.cpp.
 ```
 
 #### Infinite text from a starting prompt (you can use `Ctrl-C` to stop it):
- 
+
 ```powershell
 llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
 ```
@@ -67,7 +67,7 @@ In this section, we cover the most commonly used options for running the `llama-
 -   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
 -   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.
 -   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
--   `-mli,  --multiline-input`: Allows you to write or paste multiple lines without ending each in '\'
+-   `-mli, --multiline-input`: Allows you to write or paste multiple lines without ending each in '\'
 -   `-t N, --threads N`: Set the number of threads to use during generation. For optimal performance, it is recommended to set this value to the number of physical CPU cores your system has. 
 -   `-ngl N, --n-gpu-layers N`: When compiled with GPU support, this option allows offloading some layers to the GPU for computation. Generally results in increased performance.
 
@@ -131,7 +131,7 @@ During text generation, LLaMA models have a limited context size, which means th
 
 ### Context Size
 
--   `-c N, --ctx-size N`: Set the size of the prompt context (default: 0, 0 = loaded from model). The LLaMA models were built with a context of 2048-8192, which will yield the best results on longer input/inference. 
+- `-c N, --ctx-size N`: Set the size of the prompt context (default: 0, 0 = loaded from model). The LLaMA models were built with a context of 2048-8192, which will yield the best results on longer input/inference. 
 
 ### Extended Context Size
 
