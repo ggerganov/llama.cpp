@@ -1179,7 +1179,15 @@ llama-gguf: examples/gguf/gguf.cpp \
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-gguf-hash: examples/gguf-hash/gguf-hash.cpp examples/gguf-hash/deps/sha1/sha1.c examples/gguf-hash/deps/xxhash/xxhash.c\
+examples/gguf-hash/deps/sha1/sha1.o: \
+	examples/gguf-hash/deps/sha1/sha1.c
+	$(CC) $(CFLAGS)    -c $< -o $@
+
+examples/gguf-hash/deps/xxhash/xxhash.o: \
+	examples/gguf-hash/deps/xxhash/xxhash.c
+	$(CC) $(CFLAGS)    -c $< -o $@
+
+llama-gguf-hash: examples/gguf-hash/gguf-hash.cpp examples/gguf-hash/deps/sha1/sha1.o examples/gguf-hash/deps/xxhash/xxhash.o\
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -Iexamples/gguf-hash/deps -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
