@@ -132,7 +132,7 @@ int main(int argc, char ** argv) {
     //// assign the system KV cache to all parallel sequences
     //// this way, the parallel sequences will "reuse" the prompt tokens without having to copy them
     //for (int32_t i = 1; i < n_parallel; ++i) {
-    //    llama_kv_cache_seq_cp(ctx, 0, i, -1, -1);
+    //    llama_past_seq_cp(ctx, 0, i, -1, -1);
     //}
 
     if (n_parallel > 1) {

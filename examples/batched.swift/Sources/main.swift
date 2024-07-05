@@ -98,7 +98,7 @@ if llama_decode(context, batch) != 0 {
 }
 
 for i in 1 ..< n_parallel {
-    llama_kv_cache_seq_cp(context, 0, Int32(i), 0, batch.n_tokens)
+    llama_past_seq_cp(context, 0, Int32(i), -1, -1)
 }
 
 if n_parallel > 1 {
