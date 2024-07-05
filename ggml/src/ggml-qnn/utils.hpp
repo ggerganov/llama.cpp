@@ -169,6 +169,13 @@ inline void set_qnn_tensor_memhandle(Qnn_Tensor_t &tensor, Qnn_MemHandle_t handl
     }
 }
 
+void device_tensor_init(Qnn_Tensor_t &tensor, uint32_t rank, Qnn_TensorMemType_t mem_type, const char *tensor_name,
+                        Qnn_TensorType_t qnn_tensor_type, Qnn_DataType_t qnn_data_type, uint32_t *dimensions);
+
+Qnn_ErrorHandle_t device_tensor_deep_copy(const Qnn_Tensor_t &src, Qnn_Tensor_t &dst);
+
+void device_tensor_free(Qnn_Tensor_t &tensor);
+
 #if ENABLE_QNNBACKEND_PERF
 class qnn_perf {
 public:
@@ -206,15 +213,6 @@ public:
 
 } // namespace qnn
 
-#define VALIDATE(value, status)                                \
-    do {                                                       \
-        status = value;                                        \
-        if (status != QNN_SUCCESS) {                           \
-            QNN_LOG_WARN("%s expected QNN_SUCCESS\n", #value); \
-            return status;                                     \
-        }                                                      \
-    } while (0)
-
 #define QNN_TENSOR_GET_ID(tensor) qnn::get_qnn_tensorid(tensor)
 #define QNN_TENSOR_GET_NAME(tensor) qnn::get_qnn_tensorname(tensor)
 #define QNN_TENSOR_GET_TYPE(tensor) qnn::get_qnn_tensortype(tensor)
@@ -236,4 +234,3 @@ public:
 #define QNN_TENSOR_SET_MEM_TYPE(tensor, value) qnn::set_qnn_tensor_memtype(tensor, value)
 #define QNN_TENSOR_SET_CLIENT_BUF(tensor, value) qnn::set_qnn_tensor_clientbuf(tensor, value)
 #define QNN_TENSOR_SET_MEM_HANDLE(tensor, value) qnn::set_qnn_tensor_memhandle(tensor, value)
-#define VALIDATE_TENSOR_VERSION(tensor, err) VALIDATE(qnn::validate_tensor_version(tensor), err)

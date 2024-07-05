@@ -37,13 +37,6 @@
 
 // =================================================================================================
 //
-//  forward declaration
-//
-// =================================================================================================
-static int free_qnn_tensor(Qnn_Tensor_t &tensor);
-
-// =================================================================================================
-//
 //  self-defined macro / data structure
 //
 // =================================================================================================
@@ -128,7 +121,7 @@ struct ggml_backend_qnn_buffer_context {
         }
 
         for (auto *qnn_tensor : qnn_tensors) {
-            free_qnn_tensor(*qnn_tensor);
+            qnn::device_tensor_free(*qnn_tensor);
             free(qnn_tensor);
         }
 
@@ -156,95 +149,6 @@ struct ggml_backend_qnn_buffer_type_context {
 //  QNN backend internal helper functions
 //
 // =================================================================================================
-static size_t memscpy(void *dst, size_t dst_size, const void *src, size_t copy_size) {
-    if (!dst || !src || !dst_size || !copy_size) return 0;
-
-    size_t min_size = dst_size < copy_size ? dst_size : copy_size;
-
-    memcpy(dst, src, min_size);
-
-    return min_size;
-}
-
-static int deep_copy_qnn_tensors(Qnn_Tensor_t &src, Qnn_Tensor_t &dst) {
-    int err = 0;
-    VALIDATE_TENSOR_VERSION(src, err);
-
-    dst.version = src.version;
-    QNN_TENSOR_SET_NAME(dst, ::strndup(QNN_TENSOR_GET_NAME(src), std::string(QNN_TENSOR_GET_NAME(src)).size()));
-    if (nullptr == QNN_TENSOR_GET_NAME(dst)) {
-        return 1;
-    }
-    QNN_TENSOR_SET_ID(dst, QNN_TENSOR_GET_ID(src));
-    QNN_TENSOR_SET_TYPE(dst, QNN_TENSOR_GET_TYPE(src));
-    QNN_TENSOR_SET_DATA_FORMAT(dst, QNN_TENSOR_GET_DATA_FORMAT(src));
-    QNN_TENSOR_SET_DATA_TYPE(dst, QNN_TENSOR_GET_DATA_TYPE(src));
-    QNN_TENSOR_SET_MEM_TYPE(dst, QNN_TENSOR_GET_MEM_TYPE(src));
-
-    if (QNN_TENSOR_GET_MEM_TYPE(src) == QNN_TENSORMEMTYPE_RAW) {
-        Qnn_ClientBuffer_t client_buf = { nullptr, 0 };
-        QNN_TENSOR_SET_CLIENT_BUF(dst, client_buf);
-    } else if (QNN_TENSOR_GET_MEM_TYPE(src) == QNN_TENSORMEMTYPE_MEMHANDLE) {
-        QNN_TENSOR_SET_MEM_HANDLE(dst, nullptr);
-    } else {
-        return 1;
-    }
-
-    Qnn_QuantizeParams_t src_qparam = QNN_TENSOR_GET_QUANT_PARAMS(src);
-    Qnn_QuantizationEncoding_t encoding = src_qparam.quantizationEncoding;
-    if (encoding == QNN_QUANTIZATION_ENCODING_AXIS_SCALE_OFFSET) {
-        Qnn_QuantizeParams_t src_qparam_cpy = src_qparam;
-        Qnn_AxisScaleOffset_t &axis_scale_offset = src_qparam_cpy.axisScaleOffsetEncoding;
-        Qnn_ScaleOffset_t **scaleOffset = &axis_scale_offset.scaleOffset;
-        size_t scaleOffsetSize = axis_scale_offset.numScaleOffsets * sizeof(Qnn_ScaleOffset_t);
-        *scaleOffset = (Qnn_ScaleOffset_t *)malloc(scaleOffsetSize);
-        memscpy(*scaleOffset, scaleOffsetSize, src_qparam.axisScaleOffsetEncoding.scaleOffset, scaleOffsetSize);
-        QNN_TENSOR_SET_QUANT_PARAMS(dst, src_qparam_cpy);
-    } else if (encoding == QNN_QUANTIZATION_ENCODING_BW_AXIS_SCALE_OFFSET) {
-        Qnn_QuantizeParams_t src_qparam_cpy = src_qparam;
-        Qnn_BwAxisScaleOffset_t &bwaxis_scale_offset = src_qparam_cpy.bwAxisScaleOffsetEncoding;
-        size_t scaleSize = bwaxis_scale_offset.numElements * sizeof(float);
-        float **scales = &bwaxis_scale_offset.scales;
-        int32_t **offsets = &bwaxis_scale_offset.offsets;
-        *scales = (float *)malloc(scaleSize);
-        memscpy(*scales, scaleSize, src_qparam.bwAxisScaleOffsetEncoding.scales, scaleSize);
-
-        if (bwaxis_scale_offset.offsets != nullptr) {
-            size_t offsetSize = bwaxis_scale_offset.numElements * sizeof(int32_t);
-            *offsets = (int32_t *)malloc(offsetSize);
-            memscpy(*offsets, offsetSize, src_qparam.bwAxisScaleOffsetEncoding.offsets, offsetSize);
-        }
-        QNN_TENSOR_SET_QUANT_PARAMS(dst, src_qparam_cpy);
-    } else {
-        QNN_TENSOR_SET_QUANT_PARAMS(dst, src_qparam);
-    }
-
-    uint32_t rank = QNN_TENSOR_GET_RANK(src);
-    QNN_TENSOR_SET_RANK(dst, rank);
-    size_t dim_size = rank * sizeof(uint32_t);
-    uint32_t *dimensions = (uint32_t *)malloc(dim_size);
-    if (dimensions == nullptr) {
-        QNN_LOG_WARN(
-            "deep_copy_qnn_tensors() allocation error while copying "
-            "tensor %s\n",
-            QNN_TENSOR_GET_NAME(src));
-        return 1;
-    }
-    memscpy(dimensions, dim_size, QNN_TENSOR_GET_DIMENSIONS(src), dim_size);
-    QNN_TENSOR_SET_DIMENSIONS(dst, dimensions);
-
-    return err;
-}
-
-static int free_qnn_tensor(Qnn_Tensor_t &tensor) {
-    int err = 0;
-    VALIDATE_TENSOR_VERSION(tensor, err);
-
-    free((void *)QNN_TENSOR_GET_NAME(tensor));
-    free(QNN_TENSOR_GET_DIMENSIONS(tensor));
-
-    return err;
-}
 
 // =================================================================================================
 //
@@ -335,8 +239,13 @@ GGML_CALL static void *ggml_backend_qnn_buffer_get_base(ggml_backend_buffer_t bu
 }
 
 GGML_CALL static void ggml_backend_qnn_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor *tensor) {
-    Qnn_ErrorHandle_t error = QNN_SUCCESS;
     ggml_backend_qnn_buffer_context *ctx = (ggml_backend_qnn_buffer_context *)buffer->context;
+
+    Qnn_Tensor_t *p_qnn_tensor = (Qnn_Tensor_t *)calloc(1, sizeof(Qnn_Tensor_t));
+    if (!p_qnn_tensor) {
+        QNN_LOG_WARN("calloc failed");
+        return;
+    }
 
     static int idx = 0;
     char tensor_name[GGML_MAX_NAME] = { 0 };
@@ -352,39 +261,23 @@ GGML_CALL static void ggml_backend_qnn_buffer_init_tensor(ggml_backend_buffer_t 
     } else if (tensor->flags & GGML_TENSOR_FLAG_OUTPUT) {
         qnn_tensor_type = QNN_TENSOR_TYPE_APP_READ;
     }
-    Qnn_Tensor_t qnn_tensor = QNN_TENSOR_INIT;
 
     Qnn_TensorMemType_t qnn_mem_type = QNN_TENSORMEMTYPE_RAW;
     if (ctx->device == QNN_BACKEND_GPU) {
         qnn_mem_type = QNN_TENSORMEMTYPE_MEMHANDLE;
     }
 
-    qnn_tensor = { .version = QNN_TENSOR_VERSION_1,
-                   { .v1 = {
-                         .id = 0,
-                         .name = tensor_name,
-                         .type = qnn_tensor_type,
-                         .dataFormat = QNN_TENSOR_DATA_FORMAT_FLAT_BUFFER,
-                         .dataType = qnn_data_type,
-                         .quantizeParams = { QNN_DEFINITION_UNDEFINED,
-                                             QNN_QUANTIZATION_ENCODING_UNDEFINED,
-                                             { .scaleOffsetEncoding = { .scale = 0.0000000000000000f, .offset = 0 } } },
-                         .rank = qnn::get_ggml_tensor_rank(tensor),
-                         .dimensions = dimensions,
-                         .memType = qnn_mem_type,
-                         { .clientBuf = { .data = nullptr, .dataSize = 0 } } } } };
+    Qnn_Tensor_t qnn_tensor;
+    qnn::device_tensor_init(qnn_tensor, qnn::get_ggml_tensor_rank(tensor), qnn_mem_type, tensor_name, qnn_tensor_type,
+                            qnn_data_type, dimensions);
 
-    Qnn_Tensor_t *p_qnn_tensor = (Qnn_Tensor_t *)calloc(1, sizeof(Qnn_Tensor_t));
-    if (nullptr == p_qnn_tensor) {
-        QNN_LOG_WARN("calloc failed");
-        return;
-    }
-    error = deep_copy_qnn_tensors(qnn_tensor, *p_qnn_tensor);
+    Qnn_ErrorHandle_t error = qnn::device_tensor_deep_copy(qnn_tensor, *p_qnn_tensor);
     if (error != QNN_SUCCESS) {
         free(p_qnn_tensor);
         QNN_LOG_WARN("init tensor failed");
         return;
     }
+    
     tensor->extra = p_qnn_tensor;
     ctx->qnn_tensors.push_back(p_qnn_tensor);
 }
