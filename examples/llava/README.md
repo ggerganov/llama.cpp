@@ -103,6 +103,59 @@ python ./examples/convert-legacy-llama.py ../llava-v1.6-vicuna-7b/ --skip-unknow
 **note** llava-1.6 needs more context than llava-1.5, at least 3000 is needed (just run it at -c 4096)
 **note** llava-1.6 greatly benefits from batched prompt processing (defaults work)
 
+## Phi-3-Vision-128K-Instruct gguf conversion
+1) Set a working directory for PHI3V and PHI3 instruct. Clone both into this dir. (It's easiest to cd into your local hf cache and copy the models from there to here)
+
+```console
+mkdir phi3-fun
+cd phi3-fun
+
+mkdir phi3-base
+git clone https://huggingface.co/microsoft/Phi-3-mini-128k-instruct
+
+mkdir phi3-vision
+git clone https://huggingface.co/microsoft/Phi-3-vision-128k-instruct
+
+```
+
+2) Use `llava-surgery-v2.py` to extract clip from PHI3V:
+```console
+python examples/llava/llava-surgery-v2.py -C -m phi3-fun/phi3-vision/
+```
+- you will find a llava.projector and a llava.clip file in your model directory
+
+4) Copy the llava.clip file into a subdirectory (like vit), rename it to pytorch_model.bin and add a fitting vit configuration to the directory:
+```console
+// under phi3-fun/phi-vision dir
+mkdir vit
+cp llava.clip vit/pytorch_model.bin
+cp llava.projector vit/
+curl -s -q https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json -o vit/config.json
+```
+set `mm_projector_type` ->  `mlp_phi` in `config.json`
+
+5) Create the visual gguf model:
+```console
+python examples/llava/convert-image-encoder-to-gguf.py -m phi3-fun/phi3-vision/vit --llava-projector phi3-fun/phi3-vision/vit/llava.projector --output-dir phi3-fun/phi3-vision/vit --clip-model-is-vision
+```
+
+6) Extract the language-modelling  (everything except CLIP) part of PHI3V and assign the weights to a normal PHI3 model
+
+```console
+python examples/llava/phi3-weight-transfer.py --phi3-instruct-base-path phi3-fun/phi3-base --phi3v-base-path phi3-fun/phi3-vision
+```
+
+7) Convert this to a normal gguf
+(First delete the old safetensors from this directory)
+```console
+python convert-hf-to-gguf.py phi3-fun/phi3-base
+```
+
+8) Invoke
+```console
+./llava-cli -m phi3-fun/phi3-base/ggml-model-f16.gguf --mmproj phi3-fun/phi3-vision/vit/mmproj-model-f16.gguf --image IMAGE -c 4096  --temp .1 -p "PROMPT"
+```
+
 ## llava-cli templating and llava-1.6 prompting
 
 llava-1.5 models all use the same vicuna prompt, here you can just add your image question like `-p "Provide a full description."`
@@ -137,3 +190,4 @@ Alternatively just pay notice to how many "tokens" have been used for your promp
 - [x] Support non-CPU backend for the image encoding part.
 - [ ] Support different sampling methods.
 - [ ] Support more model variants.
+

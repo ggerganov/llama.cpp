@@ -38,7 +38,9 @@ def clean_vision_tower_from_checkpoint(checkpoint_path):
     # file_type = 'pytorch'
     model_path = os.path.dirname(checkpoint_path)
     print(f"Searching for vision tower tensors in {checkpoint_path}")
-    clip_tensors = [k for k, v in checkpoint.items() if (k.startswith("model.vision_tower") or k.startswith("vit."))]
+    clip_tensors = [k for k, v in checkpoint.items() if (k.startswith("model.vision_embed_tokens.img_processor.vision_model") or \
+                                                        (k.startswith("model.vision_tower")) or \
+                                                        (k.startswith("vit.")))]
 
     if len(clip_tensors) > 0:
         print(f"Found {len(clip_tensors)} tensors to extract from {checkpoint_path}")
@@ -83,10 +85,13 @@ def find_relevant_checkpoints(checkpoint_paths, newline_criteria, projector):
     return newline_checkpoint_path, projector_checkpoint_path
 
 def newline_criteria(checkpoint):
-    return any(k.startswith("model.image_newline") for k in checkpoint.keys())
+    return any(k.startswith("model.vision_embed_tokens.sub_GN") or \
+               k.startswith("model.image_newline") for k in checkpoint.keys())
 
 def proj_criteria(checkpoint):
-    return any(k.startswith("model.mm_projector") or k.startswith("vision_proj.") for k in checkpoint.keys())
+    return any(k.startswith("model.vision_embed_tokens.img_projection") or \
+               k.startswith("vision_proj.") or \
+               k.startswith("model.mm_projector") for k in checkpoint.keys())
 
 
 # Command-line interface setup
@@ -121,14 +126,16 @@ first_checkpoint = None
 if newline_checkpoint_path is not None:
     print(f"Taking newline from {newline_checkpoint_path}")
     first_checkpoint, file_type = load_model(newline_checkpoint_path)
-    first_mm_tensors = [k for k, v in first_checkpoint.items() if k.startswith("model.image_newline")]
+    first_mm_tensors = [k for k, v in first_checkpoint.items() if k.startswith("model.vision_embed_tokens.sub_GN") or k.startswith("model.image_newline")]
 
 # Load the checkpoint
 mm_tensors = []
 last_checkpoint = None
 if projector_checkpoint_path is not None:
     last_checkpoint, file_type = load_model(projector_checkpoint_path)
-    mm_tensors = [k for k, v in last_checkpoint.items() if k.startswith("model.mm_projector") or k.startswith("vision_proj.")]
+    mm_tensors = [k for k, v in last_checkpoint.items() if (k.startswith("model.vision_embed_tokens.img_projection")) or \
+                                                           (k.startswith("vision_proj.")) or \
+                                                           (k.startswith("model.mm_projector"))]
 
 if len(mm_tensors) == 0:
     if last_checkpoint is not None:
@@ -144,8 +151,28 @@ print(f"Found additional {len(first_mm_tensors)} tensors to extract.")
 projector = {}
 for name in mm_tensors:
     projector[name] = last_checkpoint[name].float()
-for name in first_mm_tensors:
-    projector[name] = first_checkpoint[name].float()
+
+def rename_keys(d, prefix):
+    new_dict = {}
+    for key, value in d.items():
+        parts = key.split('.')
+        new_key = f"{prefix}.{parts[-2]}.{parts[-1]}"
+        new_dict[new_key] = value
+    return new_dict
+
+if list(projector.keys())[0].startswith("mm") is False: 
+    
+    print("-------------------------------")
+    print("PHI3V clip implicit conversion")
+    print("-------------------------------")
+    
+    projector = rename_keys(projector, "mm")
+
+    for name in first_mm_tensors:
+        projector["model.image_newline"] = first_checkpoint[name].float()[0, 0, 0, :]
+
+    print("Updated projector keys to match LLAVA clip schema")
+    print(projector)
 
 if len(projector) > 0:
     save_model(projector, f"{args.model}/llava.projector", 'pytorch')
