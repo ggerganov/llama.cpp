@@ -1,4 +1,4 @@
-# llama.cpp/examples/llama-cli
+# llama.cpp/examples/main
 
 This example program allows you to use various LLaMA language models easily and efficiently. It is specifically designed to work with the [llama.cpp](https://github.com/ggerganov/llama.cpp) project, which provides a plain C/C++ implementation with optional 4-bit quantization support for faster, lower memory inference, and is optimized for desktop CPUs. This program can be used to perform various inference tasks with LLaMA models, including generating text based on user-provided prompts and chat-like interactions with reverse prompts.
 
@@ -27,18 +27,9 @@ To get started right away, run the following command, making sure to use the cor
 ##### Conversation mode (Allow for continuous interaction with the model)
 
 ```bash
-./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf -cnv --ctx_size 0 --chat-template llama3
+./llama-cli -m models/gemma-1.1-7b-it.Q4_K_M.gguf -cnv 
 ```
-##### For an interactive experience, try this command:
 
-```bash
-./llama-cli -m models\gemma-1.1-7b-it.Q4_K_M.gguf -n -1 --color -r "User:" --in-prefix " " -i -p \
-'User: Hi
-AI: Hello. I am an AI chatbot. Would you like to talk?
-User: Sure!
-AI: What would you like to talk about?
-User:'
-```
 ##### Infinite text from a starting prompt (you can use `Ctrl-C` to stop it):
 ```bash
 ./llama-cli -m models\gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
@@ -53,12 +44,7 @@ User:'
 ##### Conversation mode (Allow for continuous interaction with the model)
 
 ```powershell
-./llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf -cnv --ctx_size 0 --chat-template llama3
-```
-##### For an interactive experience, try this command:
-
-```powershell
-llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf -n -1 --color -r "User:" --in-prefix " " -i -e -p "User: Hi\nAI: Hello. I am an AI chatbot. Would you like to talk?\nUser: Sure!\nAI: What would you like to talk about?\nUser:"
+./llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf -cnv 
 ```
 
 #### Infinite text from a starting prompt (you can use `Ctrl-C` to stop it):
