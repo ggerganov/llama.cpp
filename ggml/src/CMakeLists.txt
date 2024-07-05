@@ -1209,7 +1209,7 @@ if (GGML_CUDA)
 endif()
 
 if (WIN32)
-    add_compile_definitions(-D_WIN32_WINNT=${GGML_WIN_VER} -DWINVER=${GGML_WIN_VER})
+    add_compile_definitions(_WIN32_WINNT=${GGML_WIN_VER} WINVER=${GGML_WIN_VER})
 endif()
 
 #

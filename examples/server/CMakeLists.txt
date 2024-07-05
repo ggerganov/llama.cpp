@@ -53,8 +53,8 @@ if (LLAMA_SERVER_SSL)
 endif()
 
 if (WIN32)
-    add_compile_definitions(-D_WIN32_WINNT=${GGML_WIN_VER} -DWINVER=${GGML_WIN_VER})
     TARGET_LINK_LIBRARIES(${TARGET} PRIVATE ws2_32)
+    target_compile_definitions(${TARGET} PRIVATE _WIN32_WINNT=${GGML_WIN_VER} WINVER=${GGML_WIN_VER})
 endif()
 
 target_compile_features(${TARGET} PRIVATE cxx_std_11)
