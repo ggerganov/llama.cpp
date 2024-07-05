@@ -30,7 +30,7 @@ Fn load_qnn_functionpointers(void *handle, const char *function_name) {
     return reinterpret_cast<Fn>(dlsym(handle, function_name));
 }
 
-inline int validate_tensor_version(Qnn_Tensor_t tensor) {
+inline int validate_tensor_version(const Qnn_Tensor_t &tensor) {
     if (tensor.version != QNN_TENSOR_VERSION_1) {
         QNN_LOG_WARN("validate_tensor_version() tensor %s, got unsupported version %d\n", tensor.v1.name,
                      tensor.version);
