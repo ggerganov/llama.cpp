@@ -14,6 +14,8 @@
 #endif
 #include <string>
 #include <stdio.h>
+#include <iostream>
+
 
 struct rpc_server_params {
     std::string host        = "0.0.0.0";
@@ -65,8 +67,24 @@ static bool rpc_server_params_parse(int argc, char ** argv, rpc_server_params & 
     return true;
 }
 
+void printAntigmaLogo() {
+    std::cout << R"(
+
+                                                                           
+   _|_|    _|      _|  _|_|_|_|_|  _|_|_|    _|_|_|  _|      _|    _|_|    
+ _|    _|  _|_|    _|      _|        _|    _|        _|_|  _|_|  _|    _|  
+ _|_|_|_|  _|  _|  _|      _|        _|    _|  _|_|  _|  _|  _|  _|_|_|_|  
+ _|    _|  _|    _|_|      _|        _|    _|    _|  _|      _|  _|    _|  
+ _|    _|  _|      _|      _|      _|_|_|    _|_|_|  _|      _|  _|    _|  
+                                                                           
+                                                                           
+                                                   
+    )" << '\n';
+}
+
 static ggml_backend_t create_backend() {
     ggml_backend_t backend = NULL;
+    printAntigmaLogo();
 #ifdef GGML_USE_CUDA
     fprintf(stderr, "%s: using CUDA backend\n", __func__);
     backend = ggml_backend_cuda_init(0); // init device 0
@@ -127,7 +145,7 @@ int main(int argc, char * argv[]) {
     } else {
         get_backend_memory(&free_mem, &total_mem);
     }
-    printf("Starting RPC server on %s, backend memory: %zu MB\n", endpoint.c_str(), free_mem / (1024 * 1024));
+    printf("\nStarting Antigma node on %s, backend memory: %zu MB\n", endpoint.c_str(), free_mem / (1024 * 1024));
     start_rpc_server(backend, endpoint.c_str(), free_mem, total_mem);
     ggml_backend_free(backend);
     return 0;

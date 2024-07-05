@@ -26,6 +26,10 @@
 #  include <unistd.h>
 #endif
 #include <string.h>
+#include <iostream>
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 #define UNUSED GGML_UNUSED
 
@@ -1141,6 +1145,24 @@ static void rpc_serve_client(ggml_backend_t backend, sockfd_t sockfd, size_t fre
     }
 }
 
+// Function to update the loading bar
+void loading_bar(std::atomic<bool>& stop_loading) {
+    const char spinner[] = "|/-\\";
+    int pos = 0;
+
+    while (!stop_loading.load()) { // Keep running until the main thread signals to stop
+        std::cout << "\r" << spinner[pos] << " loading and computing tensor" << std::flush;
+        pos = (pos + 1) % 4;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Update every 100ms
+    }
+}
+
+// Function to simulate rpc_serve_client execution
+void mock_rpc_serve_client() {
+    // Simulate a long-running task
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+}
+
 void start_rpc_server(ggml_backend_t backend, const char * endpoint, size_t free_mem, size_t total_mem) {
     std::string host;
     int port;
@@ -1164,13 +1186,22 @@ void start_rpc_server(ggml_backend_t backend, const char * endpoint, size_t free
     }
     while (true) {
         auto client_socket = socket_accept(server_socket->fd);
+        std::atomic<bool> stop_loading(false);
         if (client_socket == nullptr) {
             fprintf(stderr, "Failed to accept client connection\n");
             return;
         }
-        printf("Accepted client connection, free_mem=%zu, total_mem=%zu\n", free_mem, total_mem);
+        printf("Incoming a new accepted client connection, free_mem=%zu, total_mem=%zu\n", free_mem, total_mem);
+        // Create a thread to run the loading bar
+        std::thread loading_thread(loading_bar, std::ref(stop_loading));
         rpc_serve_client(backend, client_socket->fd, free_mem, total_mem);
-        printf("Client connection closed\n");
+        // mock_rpc_serve_client();
+        // Signal the loading bar thread to stop and wait for it to finish
+        stop_loading = true;
+        loading_thread.join();
+        printf("\n");
+        printf("Task is done!\n");
+        printf("Client connection closed\n\n");
     }
 #ifdef _WIN32
     WSACleanup();

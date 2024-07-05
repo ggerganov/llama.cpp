@@ -1687,7 +1687,7 @@ std::string gpt_params_get_system_info(const gpt_params & params) {
     }
     os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
 
-    return os.str();
+    return "";
 }
 
 //

@@ -133,7 +133,7 @@ static cudaError_t ggml_cuda_device_malloc(void ** ptr, size_t size, int device)
 #endif
 }
 
-static ggml_cuda_device_info ggml_cuda_init() {
+static ggml_cuda_device_info cuda_init() {
 #ifdef __HIP_PLATFORM_AMD__
     // Workaround for a rocBLAS bug when using multiple graphics cards:
     // https://github.com/ROCmSoftwarePlatform/rocBLAS/issues/1346
@@ -210,7 +210,7 @@ static ggml_cuda_device_info ggml_cuda_init() {
 }
 
 const ggml_cuda_device_info & ggml_cuda_info() {
-    static ggml_cuda_device_info info = ggml_cuda_init();
+    static ggml_cuda_device_info info = cuda_init();
     return info;
 }
 

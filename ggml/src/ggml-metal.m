@@ -289,7 +289,7 @@ static void * ggml_metal_host_malloc(size_t n) {
     return data;
 }
 
-static struct ggml_metal_context * ggml_metal_init(int n_cb) {
+static struct ggml_metal_context * metal_init(int n_cb) {
     GGML_METAL_LOG_INFO("%s: allocating\n", __func__);
 
 #if TARGET_OS_OSX && !GGML_METAL_NDEBUG
@@ -669,7 +669,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
 }
 
 static void ggml_metal_free(struct ggml_metal_context * ctx) {
-    GGML_METAL_LOG_INFO("%s: deallocating\n", __func__);
+    //GGML_METAL_LOG_INFO("%s: deallocating\n", __func__);
 
     for (int i = 0; i < GGML_METAL_KERNEL_TYPE_COUNT; ++i) {
         [ctx->kernels[i].pipeline release];
@@ -2975,8 +2975,7 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t s
 #ifndef GGML_METAL_NDEBUG
 #if TARGET_OS_OSX || (TARGET_OS_IOS && __clang_major__ >= 15)
     if (@available(macOS 10.12, iOS 16.0, *)) {
-        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, (%8.2f / %8.2f)",
-                __func__,
+        GGML_METAL_LOG_INFO("allocated buffer, size = %8.2f MiB, (%8.2f / %8.2f)",
                 size_aligned / 1024.0 / 1024.0,
                 device.currentAllocatedSize / 1024.0 / 1024.0,
                 device.recommendedMaxWorkingSetSize / 1024.0 / 1024.0);
@@ -2987,8 +2986,7 @@ static void ggml_backend_metal_log_allocated_size(id<MTLDevice> device, size_t s
             GGML_METAL_LOG_INFO("\n");
         }
     } else {
-        GGML_METAL_LOG_INFO("%s: allocated buffer, size = %8.2f MiB, (%8.2f)\n",
-                __func__,
+        GGML_METAL_LOG_INFO("allocated buffer, size = %8.2f MiB, (%8.2f)\n",
                 size_aligned / 1024.0 / 1024.0,
                 device.currentAllocatedSize / 1024.0 / 1024.0);
     }
@@ -3219,7 +3217,7 @@ static ggml_guid_t ggml_backend_metal_guid(void) {
 }
 
 ggml_backend_t ggml_backend_metal_init(void) {
-    struct ggml_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
+    struct ggml_metal_context * ctx = metal_init(GGML_DEFAULT_N_THREADS);
 
     if (ctx == NULL) {
         return NULL;

@@ -127,6 +127,21 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     return formatted;
 }
 
+void printAntigmaLogo() {
+    std::cout << R"(
+
+                                                                           
+   _|_|    _|      _|  _|_|_|_|_|  _|_|_|    _|_|_|  _|      _|    _|_|    
+ _|    _|  _|_|    _|      _|        _|    _|        _|_|  _|_|  _|    _|  
+ _|_|_|_|  _|  _|  _|      _|        _|    _|  _|_|  _|  _|  _|  _|_|_|_|  
+ _|    _|  _|    _|_|      _|        _|    _|    _|  _|      _|  _|    _|  
+ _|    _|  _|      _|      _|      _|_|_|    _|_|_|  _|      _|  _|    _|  
+                                                                           
+                                                                           
+                                                   
+    )" << '\n';
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
@@ -140,7 +155,7 @@ int main(int argc, char ** argv) {
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("main", "log"));
-    LOG_TEE("Log start\n");
+    // LOG_TEE("Log start\n");
     log_dump_cmdline(argc, argv);
     llama_log_set(llama_log_callback_logTee, nullptr);
 #endif // LOG_DISABLE_LOGS
@@ -182,14 +197,15 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: warning: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
 
-    LOG_TEE("%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
-    LOG_TEE("%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);
+    // LOG_TEE("%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
+    printAntigmaLogo();
+    LOG_TEE("Starting with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
 
     if (params.seed == LLAMA_DEFAULT_SEED) {
         params.seed = time(NULL);
     }
 
-    LOG_TEE("%s: seed  = %u\n", __func__, params.seed);
+    // LOG_TEE("%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
 
@@ -452,9 +468,9 @@ int main(int argc, char ** argv) {
             }
         }
     }
-    LOG_TEE("sampling: \n%s\n", llama_sampling_print(sparams).c_str());
-    LOG_TEE("sampling order: \n%s\n", llama_sampling_order_print(sparams).c_str());
-    LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
+    // LOG_TEE("sampling: \n%s\n", llama_sampling_print(sparams).c_str());
+    // LOG_TEE("sampling order: \n%s\n", llama_sampling_order_print(sparams).c_str());
+    // LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 
     // group-attention state
     // number of grouped KV tokens so far (used only if params.grp_attn_n > 1)
@@ -981,7 +997,7 @@ int main(int argc, char ** argv) {
     llama_backend_free();
 
 #ifndef LOG_DISABLE_LOGS
-    LOG_TEE("Log end\n");
+    //LOG_TEE("Log end\n");
 #endif // LOG_DISABLE_LOGS
 
     return 0;
