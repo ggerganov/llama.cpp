@@ -94,7 +94,7 @@ static const uint32_t K[64] = {
 static void
 sha256_transform(uint32_t *state, const uint32_t *data)
 {
-  uint32_t W[16];
+  uint32_t W[16] = {0};
   unsigned j;
   #ifdef _SHA256_UNROLL2
   uint32_t a,b,c,d,e,f,g,h;
