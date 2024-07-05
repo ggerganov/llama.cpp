@@ -294,7 +294,11 @@ llama-cli -m your_model.gguf -p "I believe the meaning of life is" -n 128
 # I believe the meaning of life is to find your own truth and to live in accordance with it. For me, this means being true to myself and following my passions, even if they don't align with societal expectations. I think that's what I love about yoga – it's not just a physical practice, but a spiritual one too. It's about connecting with yourself, listening to your inner voice, and honoring your own unique journey.
 ```
 
-Or, you can run launch it in conversation mode (or chat mode):
+See [this page](./examples/main/README.md) for a full list of parameters.
+
+### Conversation mode
+
+If you want a more ChatGPT-like experience, you can run in conversation mode by passing `-cnv` as a parameter:
 
 ```bash
 llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
@@ -307,15 +311,7 @@ llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
 # Easy peasy! The answer to 1+1 is... 2!
 ```
 
-### Conversation mode
-
-If you want a more ChatGPT-like experience, you can run in conversation mode by passing `-cnv` as a parameter:
-
-```bash
-./llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv
-```
-
-By default, the chat template will be taken from the input model. If you want to use a custom chat template, pass `--chat-template NAME` as a parameter. See the list of [supported templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
+By default, the chat template will be taken from the input model. If you want to use another chat template, pass `--chat-template NAME` as a parameter. See the list of [supported templates](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template)
 
 ```bash
 ./llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --chat-template chatml
@@ -324,7 +320,20 @@ By default, the chat template will be taken from the input model. If you want to
 You can also use your own template via in-prefix, in-suffix and reverse-prompt parameters:
 
 ```bash
-./llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --in-prefix 'User:' --reverse-prompt 'User:'
+./llama-cli -m your_model.gguf -p "You are a helpful assistant" -cnv --in-prefix 'User: ' --reverse-prompt 'User:'
+```
+
+### Web server
+
+[llama.cpp web server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
+
+Example usage:
+
+```bash
+./llama-server -m your_model.gguf --port 8080
+
+# Basic web UI can be accessed via browser: http://localhost:8080
+# Chat completion endpoint: http://localhost:8080/v1/chat/completions
 ```
 
 ### Interactive mode
@@ -368,18 +377,6 @@ PROMPT_CACHE_FILE=chat.prompt.bin CHAT_SAVE_DIR=./chat/another ./examples/chat-p
 # Different prompt cache for different prompt/model
 PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
     CHAT_SAVE_DIR=./chat/bob ./examples/chat-persistent.sh
-```
-
-### Web server
-
-[llama.cpp web server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
-
-Example usage:
-
-```bash
-./llama-server -m your_model.gguf --port 8080
-
-# Then, open in browser: http://localhost:8080
 ```
 
 ### Constrained output with grammars
