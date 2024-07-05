@@ -42,6 +42,10 @@ endif()
 
 option(BUILD_SHARED_LIBS "build shared libraries" ${BUILD_SHARED_LIBS_DEFAULT})
 
+if (WIN32)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 #
 # option list
 #
@@ -152,7 +156,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/llama-config.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/llama)
 
 install(
-    FILES convert-hf-to-gguf.py
+    FILES convert_hf_to_gguf.py
     PERMISSIONS
         OWNER_READ
         OWNER_WRITE
