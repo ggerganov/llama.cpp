@@ -56,14 +56,6 @@ Since its [inception](https://github.com/ggerganov/llama.cpp/issues/33#issuecomm
 improved significantly thanks to many contributions. It is the main playground for developing new features for the
 [ggml](https://github.com/ggerganov/ggml) library.
 
-**Supported platforms:**
-
-- [X] Mac OS
-- [X] Linux
-- [X] Windows (via CMake)
-- [X] Docker
-- [X] FreeBSD
-
 **Supported models:**
 
 Typically finetunes of the base models below are supported as well.
@@ -118,12 +110,6 @@ Typically finetunes of the base models below are supported as well.
 - [x] [Mini CPM](https://huggingface.co/models?search=MiniCPM)
 - [x] [Moondream](https://huggingface.co/vikhyatk/moondream2)
 - [x] [Bunny](https://github.com/BAAI-DCAI/Bunny)
-
-**HTTP server**
-
-[llama.cpp web server](./examples/server) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
-
-[simplechat](./examples/server/public_simplechat) is a simple chat client, which can be used to chat with the model exposed using above web server (use --path to point to simplechat), from a local web browser.
 
 **Bindings:**
 
@@ -384,6 +370,18 @@ PROMPT_TEMPLATE=./prompts/chat-with-bob.txt PROMPT_CACHE_FILE=bob.prompt.bin \
     CHAT_SAVE_DIR=./chat/bob ./examples/chat-persistent.sh
 ```
 
+### Web server
+
+[llama.cpp web server](./examples/server/README.md) is a lightweight [OpenAI API](https://github.com/openai/openai-openapi) compatible HTTP server that can be used to serve local models and easily connect them to existing clients.
+
+Example usage:
+
+```bash
+./llama-server -m your_model.gguf --port 8080
+
+# Then, open in browser: http://localhost:8080
+```
+
 ### Constrained output with grammars
 
 `llama.cpp` supports grammars to constrain model output. For example, you can force the model to output JSON only:
@@ -456,7 +454,12 @@ To learn more how to measure perplexity using llama.cpp, [read this documentatio
 - [main (cli)](./examples/main/README.md)
 - [server](./examples/server/README.md)
 - [jeopardy](./examples/jeopardy/README.md)
-- [BLIS](./docs/BLIS.md)
+- [GBNF grammars](./grammars/README.md)
+
+**Development documentations**
+
+- [How to build](./docs/build.md)
+- [Running on Docker](./docs/docker.md)
+- [Build on Android](./docs/android.md)
 - [Performance troubleshooting](./docs/token_generation_performance_tips.md)
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
-- [GBNF grammars](./grammars/README.md)
