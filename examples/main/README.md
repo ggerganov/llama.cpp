@@ -17,6 +17,11 @@ This example program allows you to use various LLaMA language models easily and 
 
 To get started right away, run the following command, making sure to use the correct path for the model you have:
 
+First, we will need to download a model. In these examples, we will use the Gemma model from the ggml-org repo on Hugging Face.
+[https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true](https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true)
+
+Once downloaded, place your model in the models folder in llama.cpp.
+
 ### Unix-based systems (Linux, macOS, etc.):
 
 ##### Input prompt (One-and-done)
@@ -58,7 +63,7 @@ llama-cli.exe -m models\gemma-1.1-7b-it.Q4_K_M.gguf --ignore-eos -n -1
 In this section, we cover the most commonly used options for running the `llama-cli` program with the LLaMA models:
 
 -   `-m FNAME, --model FNAME`: Specify the path to the LLaMA model file (e.g., `models/gemma-1.1-7b-it.Q4_K_M.gguf`; inferred from `--model-url` if set).
--   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g [https://huggingface.co/ggml-org/models/resolve/main/phi-2/ggml-model-q4_0.gguf](https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/blob/main/gemma-1.1-7b-it.Q4_K_M.gguf)).
+-   `-mu MODEL_URL --model-url MODEL_URL`: Specify a remote http url to download the file (e.g [https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true](https://huggingface.co/ggml-org/gemma-1.1-7b-it-Q4_K_M-GGUF/resolve/main/gemma-1.1-7b-it.Q4_K_M.gguf?download=true)).
 -   `-i, --interactive`: Run the program in interactive mode, allowing you to provide input directly and receive real-time responses.
 -   `-n N, --n-predict N`: Set the number of tokens to predict when generating text. Adjusting this value can influence the length of the generated text.
 -   `-c N, --ctx-size N`: Set the size of the prompt context. The default is 512, but LLaMA models were built with a context of 2048, which will provide better results for longer input/inference.
