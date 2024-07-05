@@ -2,7 +2,6 @@
 
 #include <math.h>
 
-#include <map>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -704,9 +703,6 @@ public:
     bool is_rpcmem_allocated(void *buf) { return _qnn_mem_set.count(buf) != 0U; }
 
     const qnn::qcom_socinfo &get_soc_info() { return _soc_info; }
-
-public:
-    std::map<std::string, std::tuple<Qnn_GraphHandle_t, Qnn_Tensor_t *, Qnn_Tensor_t *, Qnn_Tensor_t *>> _qnn_graph_map;
 
 private:
     int load_system() {

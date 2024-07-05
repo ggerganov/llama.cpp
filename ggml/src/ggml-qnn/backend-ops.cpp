@@ -57,9 +57,9 @@ static void ggml_qnn_add(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
     perf.start();
 
     std::string map_entry(ggml_op_name(ggmlop));
-    if (instance->_qnn_graph_map.find(map_entry) != instance->_qnn_graph_map.end()) {
+    if (ctx->qnn_graph_map.find(map_entry) != ctx->qnn_graph_map.end()) {
         graph_initialized = true;
-        auto &graph_item = instance->_qnn_graph_map[map_entry];
+        auto &graph_item = ctx->qnn_graph_map[map_entry];
         graph_handle = std::get<0>(graph_item);
     }
 
@@ -157,9 +157,9 @@ static void ggml_qnn_add(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
 
         auto graph_item = std::make_tuple(graph_handle, tensor_input0.get_qnn_tensor(), tensor_input1.get_qnn_tensor(),
                                           tensor_output.get_qnn_tensor());
-        instance->_qnn_graph_map[map_entry] = graph_item;
+        ctx->qnn_graph_map[map_entry] = graph_item;
     } else {
-        auto &graph_item = instance->_qnn_graph_map[map_entry];
+        auto &graph_item = ctx->qnn_graph_map[map_entry];
         qnn::ggml_qnn_tensor_input tensor_input0(src0, std::get<1>(graph_item), ctx);
         qnn::ggml_qnn_tensor_input tensor_input1(src1, std::get<2>(graph_item), ctx);
         qnn::ggml_qnn_tensor_output tensor_output(dst, std::get<3>(graph_item), ctx);
@@ -226,9 +226,9 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context *ctx, const ggml_tensor *s
     perf.start();
 
     std::string map_entry = std::string(ggml_op_name(ggmlop));
-    if (instance->_qnn_graph_map.find(map_entry) != instance->_qnn_graph_map.end()) {
+    if (ctx->qnn_graph_map.find(map_entry) != ctx->qnn_graph_map.end()) {
         graph_initialized = true;
-        auto &graph_item = instance->_qnn_graph_map[map_entry];
+        auto &graph_item = ctx->qnn_graph_map[map_entry];
         graph_handle = std::get<0>(graph_item);
     }
 
@@ -327,9 +327,9 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context *ctx, const ggml_tensor *s
 
         auto graph_item = std::make_tuple(graph_handle, tensor_input0.get_qnn_tensor(), tensor_input1.get_qnn_tensor(),
                                           tensor_output.get_qnn_tensor());
-        instance->_qnn_graph_map[map_entry] = graph_item;
+        ctx->qnn_graph_map[map_entry] = graph_item;
     } else {
-        auto &graph_item = instance->_qnn_graph_map[map_entry];
+        auto &graph_item = ctx->qnn_graph_map[map_entry];
         qnn::ggml_qnn_tensor_input tensor_input0(src0, std::get<1>(graph_item), ctx);
         qnn::ggml_qnn_tensor_input tensor_input1(src1, std::get<2>(graph_item), ctx);
         qnn::ggml_qnn_tensor_output tensor_output(dst, std::get<3>(graph_item), ctx);

@@ -529,18 +529,13 @@ GGML_CALL static void ggml_backend_qnn_free(ggml_backend_t backend) {
 
     auto *instance = g_qnn_mgr[ctx->device].instance;
     if (instance != nullptr) {
-        // TODO: this should be done inside the destructor
-        std::map<std::string,
-                 std::tuple<Qnn_GraphHandle_t, Qnn_Tensor_t *, Qnn_Tensor_t *,
-                            Qnn_Tensor_t *>>::iterator graph_it;
-        for (graph_it = instance->_qnn_graph_map.begin();
-             graph_it != instance->_qnn_graph_map.end(); graph_it++) {
-            auto & graph_item   = graph_it->second;
-            Qnn_GraphHandle_t & graph_handle = std::get<0>(graph_item);
+        for (const auto &graph_item: ctx->qnn_graph_map) {
+            Qnn_GraphHandle_t graph_handle = std::get<0>(graph_item.second);
             GGML_UNUSED(graph_handle);
-            QNN_LOG_INFO("graph type:%s", graph_it->first.c_str());
+            QNN_LOG_INFO("graph type:%s", graph_item.first.c_str());
         }
-        instance->_qnn_graph_map.clear();
+
+        ctx->qnn_graph_map.clear();
 
         instance->qnn_finalize();
         delete instance;
