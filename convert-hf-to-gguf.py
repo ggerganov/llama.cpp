@@ -13,7 +13,7 @@ import sys
 from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
-from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Sequence, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, ContextManager, Iterable, Iterator, Literal, Sequence, TypeVar, cast
 
 import math
 import numpy as np
@@ -490,6 +490,9 @@ class Model:
         if chkhsh == "7fc505bd3104ca1083b150b17d088b59534ede9bde81f0dd2090967d7fe52cee":
             # ref: https://huggingface.co/LumiOpen/Viking-7B
             res = "viking"
+        if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
+            # ref: https://huggingface.co/core42/jais-13b
+            res = "jais"
 
         if res is None:
             logger.warning("\n")
@@ -673,6 +676,51 @@ class Model:
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
+
+    def _set_vocab_builtin(self, model_name: Literal["gpt-neox", "llama-spm"], vocab_size: int):
+        tokenizer_path = Path(sys.path[0]) / "models" / f"ggml-vocab-{model_name}.gguf"
+        logger.warning(f"Using tokenizer from '{os.path.relpath(tokenizer_path, os.getcwd())}'")
+        vocab_reader = gguf.GGUFReader(tokenizer_path, "r")
+
+        default_pre = "mpt" if model_name == "gpt-neox" else "default"
+
+        field = vocab_reader.get_field(gguf.Keys.Tokenizer.MODEL)
+        assert field  # tokenizer model
+        self.gguf_writer.add_tokenizer_model(bytes(field.parts[-1]).decode("utf-8"))
+
+        field = vocab_reader.get_field(gguf.Keys.Tokenizer.PRE)
+        self.gguf_writer.add_tokenizer_pre(bytes(field.parts[-1]).decode("utf-8") if field else default_pre)
+
+        field = vocab_reader.get_field(gguf.Keys.Tokenizer.LIST)
+        assert field  # token list
+        self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])
+
+        if model_name == "llama-spm":
+            field = vocab_reader.get_field(gguf.Keys.Tokenizer.SCORES)
+            assert field  # token scores
+            self.gguf_writer.add_token_scores([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
+
+        field = vocab_reader.get_field(gguf.Keys.Tokenizer.TOKEN_TYPE)
+        assert field  # token types
+        self.gguf_writer.add_token_types([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
+
+        if model_name != "llama-spm":
+            field = vocab_reader.get_field(gguf.Keys.Tokenizer.MERGES)
+            assert field  # token merges
+            self.gguf_writer.add_token_merges([bytes(field.parts[i]) for i in field.data])
+
+        if (field := vocab_reader.get_field(gguf.Keys.Tokenizer.BOS_ID)) is not None:
+            self.gguf_writer.add_bos_token_id(field.parts[-1].tolist()[0])
+        if (field := vocab_reader.get_field(gguf.Keys.Tokenizer.EOS_ID)) is not None:
+            self.gguf_writer.add_eos_token_id(field.parts[-1].tolist()[0])
+        if (field := vocab_reader.get_field(gguf.Keys.Tokenizer.UNK_ID)) is not None:
+            self.gguf_writer.add_unk_token_id(field.parts[-1].tolist()[0])
+        if (field := vocab_reader.get_field(gguf.Keys.Tokenizer.PAD_ID)) is not None:
+            self.gguf_writer.add_pad_token_id(field.parts[-1].tolist()[0])
+        if (field := vocab_reader.get_field(gguf.Keys.Tokenizer.ADD_BOS)) is not None:
+            self.gguf_writer.add_add_bos_token(field.parts[-1].tolist()[0])
+        if (field := vocab_reader.get_field(gguf.Keys.Tokenizer.ADD_EOS)) is not None:
+            self.gguf_writer.add_add_eos_token(field.parts[-1].tolist()[0])
 
 
 @Model.register("GPTNeoXForCausalLM")
@@ -1603,9 +1651,17 @@ class MiniCPMModel(Model):
     def set_vocab(self):
         self._set_vocab_llama_hf()
 
+    @staticmethod
+    def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
+        if n_head_kv is not None and n_head != n_head_kv:
+            n_head = n_head_kv
+        return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
+                .swapaxes(1, 2)
+                .reshape(weights.shape))
+
     def _reverse_hf_permute(self, weights: Tensor, n_head: int, n_kv_head: int | None = None) -> Tensor:
         if n_kv_head is not None and n_head != n_kv_head:
-            n_head = n_kv_head
+            n_head //= n_kv_head
 
         return (
             weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
@@ -1939,7 +1995,7 @@ class Phi3MiniModel(Model):
         if len(rope_scaling_type) == 0:
             raise KeyError('Missing the required key rope_scaling.type')
 
-        if rope_scaling_type == 'su':
+        if rope_scaling_type == 'su' or rope_scaling_type == 'longrope':
             attn_factor = math.sqrt(1 + math.log(scale) / math.log(orig_max_pos_embds)) if scale > 1.0 else 1.0
         elif rope_scaling_type == 'yarn':
             attn_factor = 0.1 * math.log(scale) + 1.0 if scale > 1.0 else 1.0
@@ -2313,6 +2369,8 @@ class GemmaModel(Model):
         special_vocab._set_special_token("eot",    107)
         special_vocab.add_to_gguf(self.gguf_writer)
 
+        self.gguf_writer.add_add_space_prefix(False)
+
     def set_gguf_parameters(self):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
@@ -2363,6 +2421,7 @@ class Gemma2Model(Model):
 
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
         special_vocab.add_to_gguf(self.gguf_writer)
+
         self.gguf_writer.add_add_space_prefix(False)
 
     def set_gguf_parameters(self):
@@ -2433,39 +2492,7 @@ class MambaModel(Model):
             self._set_vocab_sentencepiece()
         else:
             # Use the GPT-NeoX tokenizer when no tokenizer files are present
-            tokenizer_path = Path(sys.path[0]) / "models" / "ggml-vocab-gpt-neox.gguf"
-            logger.warning(f"Using tokenizer from '{os.path.relpath(tokenizer_path, os.getcwd())}'")
-            neox_reader = gguf.GGUFReader(tokenizer_path, "r")
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.MODEL)
-            self.gguf_writer.add_tokenizer_model(bytes(field.parts[-1]).decode("utf-8") if field else "gpt2")
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.PRE)
-            self.gguf_writer.add_tokenizer_pre(bytes(field.parts[-1]).decode("utf-8") if field else "mpt")
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.LIST)
-            assert field
-            self.gguf_writer.add_token_list([bytes(field.parts[i]) for i in field.data][:vocab_size])
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.TOKEN_TYPE)
-            assert field
-            self.gguf_writer.add_token_types([field.parts[i].tolist()[0] for i in field.data][:vocab_size])
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.MERGES)
-            assert field
-            self.gguf_writer.add_token_merges([bytes(field.parts[i]) for i in field.data])
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.BOS_ID)
-            self.gguf_writer.add_bos_token_id(field.parts[-1].tolist()[0] if field else 1)
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.EOS_ID)
-            self.gguf_writer.add_eos_token_id(field.parts[-1].tolist()[0] if field else 0)
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.UNK_ID)
-            self.gguf_writer.add_unk_token_id(field.parts[-1].tolist()[0] if field else 0)
-
-            field = neox_reader.get_field(gguf.Keys.Tokenizer.PAD_ID)
-            self.gguf_writer.add_pad_token_id(field.parts[-1].tolist()[0] if field else 0)
+            self._set_vocab_builtin("gpt-neox", vocab_size)
 
     def set_gguf_parameters(self):
         d_model = self.find_hparam(["hidden_size",       "d_model"])
@@ -2615,6 +2642,82 @@ class JinaBertV2Model(BertModel):
             raise NotImplementedError(f'Tokenizer {tokenizer_class} is not supported for JinaBertModel')
         self.gguf_writer.add_add_bos_token(True)
         self.gguf_writer.add_add_eos_token(True)
+
+
+@Model.register("OpenELMForCausalLM")
+class OpenELMModel(Model):
+    model_arch = gguf.MODEL_ARCH.OPENELM
+
+    @staticmethod
+    def _make_divisible(v: float | int, divisor: int) -> int:
+        # ref: https://huggingface.co/apple/OpenELM-270M-Instruct/blob/eb111ff2e6724348e5b905984063d4064d4bc579/configuration_openelm.py#L34-L38
+        new_v = max(divisor, int(v + divisor / 2) // divisor * divisor)
+        # Make sure that round down does not go down by more than 10%.
+        if new_v < 0.9 * v:
+            new_v += divisor
+        return new_v
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        ffn_multipliers: list[float] = self.hparams["ffn_multipliers"]
+        ffn_dim_divisor: int = self.hparams["ffn_dim_divisor"]
+        self._n_embd: int = self.hparams["model_dim"]
+        self._num_kv_heads: list[int] = self.hparams["num_kv_heads"]
+        self._num_query_heads: list[int] = self.hparams["num_query_heads"]
+        self._ffn_dims: list[int] = [
+            OpenELMModel._make_divisible(multiplier * self._n_embd, ffn_dim_divisor)
+            for multiplier in ffn_multipliers
+        ]
+        assert isinstance(self._num_kv_heads, list) and isinstance(self._num_kv_heads[0], int)
+        assert isinstance(self._num_query_heads, list) and isinstance(self._num_query_heads[0], int)
+
+    # Uses the tokenizer from meta-llama/Llama-2-7b-hf
+    def set_vocab(self):
+        try:
+            self._set_vocab_sentencepiece()
+        except FileNotFoundError:
+            self._set_vocab_builtin("llama-spm", self.hparams["vocab_size"])
+
+    def set_gguf_parameters(self):
+        n_embd = self._n_embd
+        head_dim = self.hparams["head_dim"]
+        rot_pct = 1.0
+        assert self.block_count == len(self._num_kv_heads)
+        assert self.block_count == len(self._num_query_heads)
+        assert self.block_count == len(self._ffn_dims)
+
+        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
+        self.gguf_writer.add_block_count(self.block_count)
+        self.gguf_writer.add_context_length(self.hparams["max_context_length"])
+        self.gguf_writer.add_embedding_length(n_embd)
+        self.gguf_writer.add_feed_forward_length(self._ffn_dims)
+        self.gguf_writer.add_head_count(self._num_query_heads)
+        self.gguf_writer.add_head_count_kv(self._num_kv_heads)
+        self.gguf_writer.add_rope_freq_base(self.hparams["rope_freq_constant"])
+        # https://huggingface.co/apple/OpenELM-270M-Instruct/blob/c401df2/modeling_openelm.py#L30
+        self.gguf_writer.add_layer_norm_rms_eps(1e-6)
+        self.gguf_writer.add_rope_dimension_count(int(rot_pct * head_dim))
+        self.gguf_writer.add_key_length(head_dim)
+        self.gguf_writer.add_value_length(head_dim)
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def find_hparam(self, keys: Iterable[str], optional: bool = False) -> Any:
+        if "n_layers" in keys:
+            return self.hparams["num_transformer_layers"]
+
+        return super().find_hparam(keys, optional)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+
+        # split ff
+        if bid is not None and name == f"transformer.layers.{bid}.ffn.proj_1.weight":
+            ff_dim = self._ffn_dims[bid]
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_GATE, bid), data_torch[:ff_dim])
+            yield (self.format_tensor_name(gguf.MODEL_TENSOR.FFN_UP, bid), data_torch[ff_dim:])
+            return
+
+        yield (self.map_tensor_name(name), data_torch)
 
 
 @Model.register("ArcticForCausalLM")
@@ -2847,10 +2950,16 @@ class DeepseekV2Model(Model):
                 raise ValueError(f"Unprocessed experts: {experts}")
 
 
-@Model.register("T5ForConditionalGeneration")
 @Model.register("T5WithLMHeadModel")
+@Model.register("T5ForConditionalGeneration")
+@Model.register("MT5ForConditionalGeneration")
+@Model.register("UMT5ForConditionalGeneration")
 class T5Model(Model):
     model_arch = gguf.MODEL_ARCH.T5
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.shared_token_embeddings_found = False
 
     def set_vocab(self):
         # to avoid TypeError: Descriptors cannot be created directly
@@ -2859,17 +2968,29 @@ class T5Model(Model):
         from sentencepiece import SentencePieceProcessor
         from sentencepiece import sentencepiece_model_pb2 as model
 
-        tokenizer_path = self.dir_model / 'spiece.model'
+        tokenizer_path = self.dir_model / 'tokenizer.model'
+
+        # many older models use spiece.model tokenizer model filename
+        if not tokenizer_path.is_file():
+            tokenizer_path = self.dir_model / 'spiece.model'
 
         if not tokenizer_path.is_file():
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
         sentencepiece_model = model.ModelProto()
         sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
+
+        # some models like Pile-T5 family use BPE tokenizer instead of Unigram
+        if sentencepiece_model.trainer_spec.model_type == 2: # BPE
+            # assure the tokenizer model file name is correct
+            assert tokenizer_path.name == 'tokenizer.model'
+            return self._set_vocab_sentencepiece()
+        else:
+            assert sentencepiece_model.trainer_spec.model_type == 1 # UNIGRAM
+
         add_prefix = sentencepiece_model.normalizer_spec.add_dummy_prefix
         remove_whitespaces = sentencepiece_model.normalizer_spec.remove_extra_whitespaces
         precompiled_charsmap = sentencepiece_model.normalizer_spec.precompiled_charsmap
-        assert sentencepiece_model.trainer_spec.model_type == 1 # UNIGRAM
 
         tokenizer = SentencePieceProcessor()
         tokenizer.LoadFromFile(str(tokenizer_path))
@@ -2939,7 +3060,10 @@ class T5Model(Model):
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name("T5")
-        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        if (n_ctx := self.find_hparam(["n_positions"], optional=True)) is None:
+            logger.warning("Couldn't find context length in config.json, assuming default value of 512")
+            n_ctx = 512
+        self.gguf_writer.add_context_length(n_ctx)
         self.gguf_writer.add_embedding_length(self.hparams["d_model"])
         self.gguf_writer.add_feed_forward_length(self.hparams["d_ff"])
         self.gguf_writer.add_block_count(self.hparams["num_layers"])
@@ -2955,14 +3079,109 @@ class T5Model(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
-        # Sometimes T5 and Flan-T5 based models contain "encoder.embed_tokens.weight" tensor or
-        # "decoder.embed_tokens.weight" tensors that are duplicates of "shared.weight" tensor
-        # To prevent errors caused by an unnecessary unmapped tensor, skip both of them and use only "shared.weight".
-        if name == "decoder.embed_tokens.weight" or name == "encoder.embed_tokens.weight":
-            logger.debug(f"Skipping tensor {name!r} in safetensors so that convert can end normally.")
-            return []
+        # T5 based models contain shared token embeddings tensors saved randomly as either "encoder.embed_tokens.weight",
+        # "decoder.embed_tokens.weight" or "shared.weight" tensor. In some models there are even multiple of them stored
+        # in the safetensors files. We use the first tensor from these three as the token embeddings for both encoder
+        # and decoder and ignore the remaining ones.
+        if name in ["decoder.embed_tokens.weight", "encoder.embed_tokens.weight", "shared.weight"]:
+            if not self.shared_token_embeddings_found:
+                name = "shared.weight"
+                self.shared_token_embeddings_found = True
+            else:
+                logger.debug(f"Skipping shared tensor {name!r} in safetensors so that convert can end normally.")
+                return []
 
         return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("JAISLMHeadModel")
+class JaisModel(Model):
+    model_arch = gguf.MODEL_ARCH.JAIS
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # SwigLU activation
+        assert self.hparams["activation_function"] == "swiglu"
+        # ALiBi position embedding
+        assert self.hparams["position_embedding_type"] == "alibi"
+
+        # Embeddings scale
+        self.embeddings_scale = 1.0
+        # note: For some JAIS flavors, output is tied to (same as) wte in original model
+        self.output_is_wte = False
+        if 'mup_embeddings_scale' in self.hparams:
+            self.output_is_wte = True   # Hack (?)
+            self.embeddings_scale = self.hparams['mup_embeddings_scale']
+        elif 'embeddings_scale' in self.hparams:
+            self.embeddings_scale = self.hparams['embeddings_scale']
+        else:
+            assert False
+
+        self.width_scale = 1.0
+        if 'mup_output_alpha' in self.hparams:
+            assert 'mup_width_scale' in self.hparams
+            self.width_scale = self.hparams['mup_output_alpha'] * self.hparams['mup_width_scale']
+        elif 'width_scale' in self.hparams:
+            self.width_scale = self.hparams['width_scale']
+        else:
+            assert False
+
+        self.max_alibi_bias = 8.0
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_inner"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        tensors: list[tuple[str, Tensor]] = []
+
+        # we don't need these
+        if name.endswith((".attn.bias")):
+            return tensors
+
+        if name.endswith(("relative_pe.slopes")):
+            # Calculate max ALiBi bias (this is the inverse of the ALiBi calculation)
+            # Some other models has max_alibi_bias spelled out explicitly in the hyperparams,
+            # but Jais's PyTorch model simply precalculates the slope values and places them
+            # in relative_pes.slopes
+            n_head_closest_log2 = 2 ** math.floor(math.log2(self.hparams["n_head"]))
+            first_val = float(data_torch._data[0])
+            self.max_alibi_bias = -round(math.log2(first_val) * n_head_closest_log2)
+
+            return tensors
+
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_fc2.weight")):
+            data_torch = data_torch.transpose(1, 0)
+
+        new_name = self.map_tensor_name(name)
+
+        if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
+            tensors.append((new_name, data_torch * self.embeddings_scale))
+            if self.output_is_wte:
+                tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch * self.width_scale))
+        elif new_name == self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT):
+            assert not self.output_is_wte
+            tensors.append((new_name, data_torch * self.width_scale))
+        else:
+            tensors.append((new_name, data_torch))
+
+        return tensors
+
+    def write_tensors(self):
+        super().write_tensors()
+        self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
 
 
 ###### CONVERSION LOGIC ######
