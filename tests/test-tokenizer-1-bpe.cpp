@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
             t.join();
         }
 
-        if(errcode) {
+        if (errcode) {
             return errcode;
         }
     }
