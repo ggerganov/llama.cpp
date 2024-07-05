@@ -7,6 +7,7 @@ CLI to hash GGUF files.
 - `--xxhash`: use xhash (default)
 - `--sha1`: use sha1
 - `--uuid`: use uuid
+- `--sha256`: use sha256
 
 ### Compile Example
 
@@ -18,6 +19,7 @@ make -C build llama-gguf-hash VERBOSE=1
 ./build/bin/llama-gguf-hash --xxhash test.gguf
 ./build/bin/llama-gguf-hash --sha1 test.gguf
 ./build/bin/llama-gguf-hash --uuid test.gguf
+./build/bin/llama-gguf-hash --sha256 test.gguf
 ```
 
 ### Crypto/Hash Libraries Used
@@ -26,3 +28,4 @@ These micro c libraries dependencies was installed via the [clib c package manag
 
 - https://github.com/mofosyne/xxHash
 - https://github.com/clibs/sha1/
+- https://github.com/jb55/sha256.c

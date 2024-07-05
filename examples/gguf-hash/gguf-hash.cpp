@@ -9,25 +9,31 @@
 
 #include <string.h>
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "xxhash/xxhash.h"
 #include "sha1/sha1.h"
-
-#ifdef SHA256 // TODO: https://github.com/jb55/sha256.c
 #include "sha256/sha256.h"
+
+#ifdef __cplusplus
+}
 #endif
+
 
 // uuid.uuid5(uuid.NAMESPACE_URL, 'en.wikipedia.org/wiki/Llama.cpp')
 #define UUID_NAMESPACE_LLAMA_CPP "ef001206-dadc-5f6d-a15f-3359e577d4e5"
 #define UUID_NAMESPACE_LLAMA_CPP_HEX 0xef, 0x00, 0x12, 0x06, 0xda, 0xdc, 0x5f, 0x6d, 0xa1, 0x5f, 0x33, 0x59, 0xe5, 0x77, 0xd4, 0xe5
+
 
 struct hash_params {
     std::string input;
     bool xxhash = false;
     bool sha1 = false;
     bool uuid = false;
-#ifdef SHA256
     bool sha256 = false;
-#endif
 };
 
 static void hash_print_usage(const char * executable) {
@@ -42,9 +48,7 @@ static void hash_print_usage(const char * executable) {
     printf("      --xxhash            use xxhash\n");
     printf("      --sha1              use sha1\n");
     printf("      --uuid              use uuid\n");
-#ifdef SHA256
     printf("      --sha256            use sha256\n");
-#endif
     printf("\n");
 }
 
@@ -80,12 +84,10 @@ static void hash_params_parse_ex(int argc, const char ** argv, hash_params & par
             params.uuid = true;
         }
 
-#ifdef SHA256
         if (arg == "--sha256") {
             arg_found = true;
             params.sha256 = true;
         }
-#endif
 
         if (!arg_found) {
             throw std::invalid_argument("error: unknown argument: " + arg);
@@ -95,9 +97,7 @@ static void hash_params_parse_ex(int argc, const char ** argv, hash_params & par
     if (!params.xxhash
             && !params.sha1
             && !params.uuid
-#ifdef SHA256
             && !params.sha256
-#endif
         ) {
         // By default if no swich argument provided, assume xxhash
         params.xxhash = true;
@@ -152,13 +152,11 @@ static bool gguf_hash(const hash_params & hash_params) {
         SHA1Init(&sha1_model_hash_ctx);
     }
 
-#ifdef SHA256
     // sha256 init
     sha256_t sha256_model_hash_ctx;
     if (hash_params.sha256) {
         sha256_init(&sha256_model_hash_ctx);
     }
-#endif
 
     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
     const int n_tensors = gguf_get_n_tensors(ctx);
@@ -202,12 +200,11 @@ static bool gguf_hash(const hash_params & hash_params) {
             SHA1Update( &sha1_model_hash_ctx, (unsigned char const *)raw_data, n_bytes);
         }
 
-#ifdef SHA256
         if (hash_params.sha256) {
 
             // Per Layer Hash
             unsigned char result[SHA256_DIGEST_SIZE]; // sha256 outputs 32 bytes
-            sha256_hash( result, (const unsigned char *)raw_data, n_bytes);
+            sha256_hash((unsigned char*) result, (const unsigned char *)raw_data, n_bytes);
 
             char hex_result[SHA256_DIGEST_SIZE * 2 + 1] = {0};
             for (int  offset = 0; offset < SHA256_DIGEST_SIZE; offset++) {
@@ -219,7 +216,6 @@ static bool gguf_hash(const hash_params & hash_params) {
             // Overall Model Hash
             sha256_update( &sha256_model_hash_ctx, (unsigned char const *)raw_data, n_bytes);
         }
-#endif
     }
 
     if (hash_params.xxhash) {
@@ -246,7 +242,6 @@ static bool gguf_hash(const hash_params & hash_params) {
         printf("sha1    %s  %s\n", hex_result, fname.c_str());
     }
 
-#ifdef SHA256
     if (hash_params.sha256) {
         unsigned char result[SHA256_DIGEST_SIZE]; // sha256 outputs 32 bytes
         sha256_final( &sha256_model_hash_ctx,  result);
@@ -258,7 +253,6 @@ static bool gguf_hash(const hash_params & hash_params) {
 
         printf("sha256  %s  %s\n", hex_result, fname.c_str());
     }
-#endif
 
     ggml_free(ctx_data);
     gguf_free(ctx);
