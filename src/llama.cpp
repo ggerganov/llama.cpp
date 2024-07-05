@@ -3258,6 +3258,11 @@ static void llama_kv_cache_seq_add(
 
     if (p0 < 0) p0 = 0;
     if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+    // If there is no range then return early to avoid looping over the cache.
+    if (p0 == p1) {
+        cache.head = 0;
+        return;
+    }
 
     if (cache.recurrent) {
         // for Mamba-like models, only the pos needs to be shifted
@@ -3302,6 +3307,8 @@ static void llama_kv_cache_seq_div(
                           int   d) {
     if (p0 < 0) p0 = 0;
     if (p1 < 0) p1 = std::numeric_limits<llama_pos>::max();
+    // If there is no range then return early to avoid looping over the cache.
+    if (p0 == p1) return;
 
     if (cache.recurrent) {
         // for Mamba-like models, only the pos needs to be changed
