@@ -280,7 +280,7 @@ Here are the end-to-end binary build and model conversion steps for most support
 ### Basic usage
 
 Firstly, you need to get the binary. There are different methods that you can follow:
-- Method 1: Clone this repository and build locally
+- Method 1: Clone this repository and build locally, see [how to build](./docs/build.md)
 - Method 2: If you are using MacOS or Linux, you can install llama.cpp via [brew, flox or nix](./docs/install.md)
 - Method 3: Use a Docker image, see [documentation for Docker](./docs/docker.md)
 - Method 4: Download pre-built binary from [releases](https://github.com/ggerganov/llama.cpp/releases)
