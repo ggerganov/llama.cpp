@@ -18314,7 +18314,7 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
             if (il == 0) n_tensors_per_layer++;
         }
     }
-    printf("n_tensors_per_layer %d\n", n_tensors_per_layer);
+    // printf("n_tensors_per_layer %d\n", n_tensors_per_layer);
 
     // count layer buffer types
     std::map<ggml_backend_buffer_type_t, int> buft_tensor_count;
@@ -18363,6 +18363,8 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
             } else {
                 ab_map[name].b = cur;
             }
+        } else {
+            LLAMA_LOG_WARN("%s: discard tensor '%s'\n", __func__, cur->name);
         }
     }
 
@@ -18400,14 +18402,14 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
         adapter.bufs.reserve(ctx_map.size());
         for (auto it : ctx_map) {
             ggml_backend_buffer_type_t buft = it.first;
-            ggml_context * ctx = it.second;
-            ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx, buft);
+            ggml_context * ctx_dev = it.second;
+            ggml_backend_buffer_t buf = ggml_backend_alloc_ctx_tensors_from_buft(ctx_dev, buft);
             if (!buf) {
                 LLAMA_LOG_ERROR("%s: failed to allocate buffer for lora adapter\n", __func__);
                 return -1;
             }
             ggml_backend_buffer_clear(buf, 0);
-            adapter.ctxs.push_back(ctx);
+            adapter.ctxs.push_back(ctx_dev);
             adapter.bufs.push_back(buf);
         }
     }
@@ -18424,8 +18426,8 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
             }
             gguf_file.seek(offs, SEEK_SET);
             gguf_file.read_raw(read_buf.data(), size);
-            // LLAMA_LOG_INFO("%s: %s size=%ld\n", __func__, orig->name, size);
-            return ggml_backend_tensor_set(dev, read_buf.data(), 0, size);
+            // LLAMA_LOG_INFO("%s: %s size=%ld\n", __func__, dev->name, size);
+            ggml_backend_tensor_set(dev, read_buf.data(), 0, size);
         };
         for (auto & it : adapter.ab_map) {
             auto orig = ab_map[it.first];
@@ -18461,6 +18463,7 @@ static int32_t llama_lora_restore_tensors(struct llama_context & lctx) {
             model.layers[il] = model.orig_layers[il]; // copy
         }
     }
+    return 0;
 }
 
 static int32_t llama_lora_patch_tensors(struct llama_context & lctx, struct ggml_context * ctx_build) {
@@ -18498,8 +18501,8 @@ static int32_t llama_lora_patch_tensors(struct llama_context & lctx, struct ggml
             cur = ggml_add(ctx_build, cur, *tensor);
             // TODO: scale
             ggml_format_name(cur, "%s.merged", name.c_str());
-            // LLAMA_LOG_INFO("LORA %s\n", cur->name);
-            tensor = &cur;
+            // LLAMA_LOG_INFO("LORA %p %s\n", cur, cur->name);
+            *tensor = cur;
         }
     };
     for (auto adapter : lctx.lora_adapters) {
@@ -18541,24 +18544,12 @@ static int32_t llama_lora_patch_tensors(struct llama_context & lctx, struct ggml
             patch_tensor(adapter, &layer.wq_b);
             patch_tensor(adapter, &layer.wkv_a_mqa);
             patch_tensor(adapter, &layer.wkv_b);
-            patch_tensor(adapter, &layer.wq_cross);
-            patch_tensor(adapter, &layer.wk_cross);
-            patch_tensor(adapter, &layer.wv_cross);
-            patch_tensor(adapter, &layer.wo_cross);
-            patch_tensor(adapter, &layer.wq_enc);
-            patch_tensor(adapter, &layer.wk_enc);
-            patch_tensor(adapter, &layer.wv_enc);
-            patch_tensor(adapter, &layer.wo_enc);
 
             patch_tensor(adapter, &layer.bq);
             patch_tensor(adapter, &layer.bk);
             patch_tensor(adapter, &layer.bv);
             patch_tensor(adapter, &layer.bo);
             patch_tensor(adapter, &layer.bqkv);
-
-            patch_tensor(adapter, &layer.attn_rel_b);
-            patch_tensor(adapter, &layer.attn_rel_b_enc);
-            patch_tensor(adapter, &layer.attn_rel_b_cross);
 
             patch_tensor(adapter, &layer.ffn_norm);
             patch_tensor(adapter, &layer.ffn_norm_b);
@@ -18578,7 +18569,7 @@ static int32_t llama_lora_patch_tensors(struct llama_context & lctx, struct ggml
             patch_tensor(adapter, &layer.ffn_gate_inp);
             patch_tensor(adapter, &layer.ffn_gate_exps);
             patch_tensor(adapter, &layer.ffn_down_exps);
-            patch_tensor(adapter, &layer.ffn_up_exps );
+            patch_tensor(adapter, &layer.ffn_up_exps);
 
             patch_tensor(adapter, &layer.ffn_gate_inp_shexp);
             patch_tensor(adapter, &layer.ffn_gate_shexp);
