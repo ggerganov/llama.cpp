@@ -30,7 +30,7 @@ extern "C" {
 
 struct hash_params {
     std::string input;
-    bool xxhash = false;
+    bool xxh64 = false;
     bool sha1 = false;
     bool uuid = false;
     bool sha256 = false;
@@ -45,7 +45,7 @@ static void hash_print_usage(const char * executable) {
     printf("\n");
     printf("options:\n");
     printf("  -h, --help              show this help message and exit\n");
-    printf("      --xxhash            use xxhash\n");
+    printf("      --xxh64             use xxh64\n");
     printf("      --sha1              use sha1\n");
     printf("      --uuid              use uuid\n");
     printf("      --sha256            use sha256\n");
@@ -69,9 +69,9 @@ static void hash_params_parse_ex(int argc, const char ** argv, hash_params & par
             exit(0);
         }
 
-        if (arg == "--xxhash") {
+        if (arg == "--xxh64") {
             arg_found = true;
-            params.xxhash = true;
+            params.xxh64 = true;
         }
 
         if (arg == "--sha1") {
@@ -94,13 +94,13 @@ static void hash_params_parse_ex(int argc, const char ** argv, hash_params & par
         }
     }
 
-    if (!params.xxhash
+    if (!params.xxh64
             && !params.sha1
             && !params.uuid
             && !params.sha256
         ) {
-        // By default if no swich argument provided, assume xxhash
-        params.xxhash = true;
+        // By default if no swich argument provided, assume xxh64
+        params.xxh64 = true;
     }
 
     if (argc - arg_idx < 1) {
@@ -132,16 +132,16 @@ static bool gguf_hash(const hash_params & hash_params) {
         /*.ctx      = */ &ctx_data,
     };
 
-    // xxhash init
-    XXH64_state_t* xxhash_model_hash_state = NULL;
-    if (hash_params.xxhash) {
-        xxhash_model_hash_state = XXH64_createState();
-        if (xxhash_model_hash_state==NULL) {
+    // xxh64 init
+    XXH64_state_t* xxh64_model_hash_state = NULL;
+    if (hash_params.xxh64) {
+        xxh64_model_hash_state = XXH64_createState();
+        if (xxh64_model_hash_state==NULL) {
             abort();
         }
 
         XXH64_hash_t const seed = 0;
-        if (XXH64_reset(xxhash_model_hash_state, seed) == XXH_ERROR) {
+        if (XXH64_reset(xxh64_model_hash_state, seed) == XXH_ERROR) {
             abort();
         }
     }
@@ -166,7 +166,7 @@ static bool gguf_hash(const hash_params & hash_params) {
         auto n_bytes = ggml_nbytes(cur);
         auto *raw_data = cur->data;
 
-        if (hash_params.xxhash) {
+        if (hash_params.xxh64) {
 
             // Per Layer Hash
             XXH64_hash_t hash = XXH64(raw_data, n_bytes, 0);
@@ -177,10 +177,10 @@ static bool gguf_hash(const hash_params & hash_params) {
                 sprintf( ( hex_result + (2*offset)), "%02x", (unsigned char) (hash >> shift_bits_by)&0xff);
             }
 
-            printf("xxhash  %s  %s:%s\n", hex_result, fname.c_str(), name);
+            printf("xxh64   %s  %s:%s\n", hex_result, fname.c_str(), name);
 
             // Overall Model Hash
-            if (XXH64_update(xxhash_model_hash_state, raw_data, n_bytes) == XXH_ERROR) abort();
+            if (XXH64_update(xxh64_model_hash_state, raw_data, n_bytes) == XXH_ERROR) abort();
         }
 
         if (hash_params.sha1) {
@@ -218,8 +218,8 @@ static bool gguf_hash(const hash_params & hash_params) {
         }
     }
 
-    if (hash_params.xxhash) {
-        XXH64_hash_t const hash = XXH64_digest(xxhash_model_hash_state);
+    if (hash_params.xxh64) {
+        XXH64_hash_t const hash = XXH64_digest(xxh64_model_hash_state);
 
         char hex_result[17];
         for (int  offset = 0; offset < 8; offset++) {
@@ -227,7 +227,7 @@ static bool gguf_hash(const hash_params & hash_params) {
             sprintf( ( hex_result + (2*offset)), "%02x", (unsigned char) (hash >> shift_bits_by)&0xff);
         }
 
-        printf("xxhash  %s  %s\n", hex_result, fname.c_str());
+        printf("xxh64   %s  %s\n", hex_result, fname.c_str());
     }
 
     if (hash_params.sha1) {
