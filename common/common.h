@@ -107,7 +107,6 @@ struct gpt_params {
     std::string model_draft          = ""; // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = ""; // model url to download
-    std::string auth_token           = ""; // auth bearer token
     std::string hf_token             = ""; // HF token
     std::string hf_repo              = ""; // HF repo
     std::string hf_file              = ""; // HF file
@@ -257,7 +256,7 @@ struct gpt_params {
     bool spm_infill = false; // suffix/prefix/middle pattern for infill
 };
 
-void gpt_params_handle_auth_token(gpt_params & params);
+void gpt_params_handle_hf_token(gpt_params & params);
 void gpt_params_handle_model_default(gpt_params & params);
 
 bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
@@ -300,7 +299,6 @@ void string_process_escapes(std::string & input);
 bool fs_validate_filename(const std::string & filename);
 bool fs_create_directory_with_parents(const std::string & path);
 
-void hf_get_token_from_env(gpt_params & params);
 std::string fs_get_cache_directory();
 std::string fs_get_cache_file(const std::string & filename);
 
@@ -314,8 +312,8 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
-struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * auth_token, const struct llama_model_params & params);
-struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * auth_token, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
 
 // Batch utils
 
