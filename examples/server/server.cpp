@@ -2967,10 +2967,13 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
-        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
         std::string template_key = "tokenizer.chat_template", curr_tmpl;
-        if (llama_model_meta_val_str(ctx_server.model, template_key.c_str(), model_template.data(), model_template.size()) > 0) {
-            curr_tmpl = std::string(model_template.data(), model_template.size());
+        int32_t tlen = llama_model_meta_val_str(ctx_server.model, template_key.c_str(), nullptr, 0);
+        if (tlen > 0) {
+            std::vector<char> model_template(tlen + 1, 0);
+            if (llama_model_meta_val_str(ctx_server.model, template_key.c_str(), model_template.data(), model_template.size()) > 0) {
+                curr_tmpl = std::string(model_template.data(), model_template.size());
+            }
         }
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
