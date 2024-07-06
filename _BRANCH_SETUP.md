@@ -32,13 +32,14 @@ Run main with base model and lora adapter to hot-swap
 ```bash
 ./main -m ./models/open-llama/ggml-model-f16.gguf \
 --hot-lora models/open-llama/lora-ggml-model-q8_0-hot-lora-LATEST.bin \
--ngl 0 \
+-ngl 99 \
 -n 128
 ```
-
-Working but `ggml_metal_get_buffer: error: tensor 'blk.16.attn_v.weight.loraB' buffer is nil`
-
-With `ngl > 0` the code breaks. Probably because the Lora tensors try to interact with the base tensors (as in `lora_mul_mat`), but the lora tensors are not moved to the gpu buffer of the base tensors.
+```bash
+./main -m ./models/open-llama/ggml-model-f16.gguf \
+-ngl 99 \
+-n 128
+```
 
 # Logic
 
@@ -300,3 +301,45 @@ int main() {
 
   }
   ```
+
+
+
+    ```bash
+    # Convert base model to gguf
+    python3 convert-hf-to-gguf.py models/open-llama/ && \
+    # Quantize base model
+    ./quantize ./models/open-llama/ggml-model-f16.gguf ./models/open-llama/ggml-model-q4.gguf Q4_K && \
+    # Obtain Lora adapter
+    ./finetune  --model-base models/open-llama/ggml-model-q4.gguf \
+    --checkpoint-in models/open-llama/chk-lora-ggml-model-q4-hot-lora-LATEST.gguf \
+    --checkpoint-out models/open-llama/chk-lora-ggml-model-q4-hot-lora-ITERATION.gguf \
+    --lora-out models/open-llama/lora-ggml-model-q4-hot-lora-ITERATION.bin \
+    --train-data "data/hot-lora.txt" \
+    --save-every 1 \
+    --threads 1 \
+    --adam-iter 1 \
+    --batch 1 \
+    --ctx 16 \
+    --use-checkpointing
+    ```
+
+</details>
+
+## 1. Run main with adapter
+
+- Run main with base model and lora adapter to hot-swap
+    ```bash
+  ./main -m ./models/open-llama/ggml-model-q4.gguf \
+  --hot-lora models/open-llama/lora-ggml-model-q4-hot-lora-LATEST.bin \
+  -ngl 99 \
+  -n 128
+  ```
+
+- Do not pass the flag `--hot-lora` and the adapter is ignored:
+  ```bash
+  ./main -m ./models/open-llama/ggml-model-q4.gguf \
+  -ngl 99 \
+  -n 128
+  ```
+
+  make clean && make -j 8 LLAMA_DEBUG=1
