@@ -178,7 +178,11 @@ For Jetson user, if you have Jetson Orin, you can try this: [Offical Support](ht
   cmake --build build --config Release
   ```
 
-The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used. The following compilation options are also available to tweak performance:
+The environment variable [`CUDA_VISIBLE_DEVICES`](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#env-vars) can be used to specify which GPU(s) will be used.
+
+The environment variable `GGML_CUDA_ENABLE_UNIFIED_MEMORY=1` can be used to enable unified memory in linux. This allows using system RAM when the GPU VRAM is exhausted. It is useful when the model barely fits in VRAM and inference is causing OOM errors. Should be enabled with `-ngl 99` to avoid sharing memory bandwidth with the CPU. In windows this setting is available in the nvidia control panel as `System Memory Fallback`.
+
+The following compilation options are also available to tweak performance:
 
 | Option                        | Legal values           | Default | Description                                                                                                                                                                                                                                                                             |
 |-------------------------------|------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
