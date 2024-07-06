@@ -12,6 +12,7 @@ This example program allows you to use various LLaMA language models in an easy 
 6. [Generation Flags](#generation-flags)
 7. [Performance Tuning and Memory Options](#performance-tuning-and-memory-options)
 8. [Additional Options](#additional-options)
+9. [Shared Library](#shared-library)
 
 ## Quick Start
 
@@ -314,3 +315,82 @@ These options provide extra functionality and customization when running the LLa
 -   `--lora-base FNAME`: Optional model to use as a base for the layers modified by the LoRA adapter. This flag is used in conjunction with the `--lora` flag, and specifies the base model for the adaptation.
 
 -   `-hfr URL --hf-repo URL`: The url to the Hugging Face model repository. Used in conjunction with `--hf-file` or `-hff`. The model is downloaded and stored in the file provided by `-m` or `--model`. If `-m` is not provided, the model is auto-stored in the path specified by the `LLAMA_CACHE` environment variable  or in an OS-specific local cache.
+
+## Shared Library
+
+To build `llama-cli` as a shared library, run the following command from the root directory of the repository:
+
+```bash
+CXXFLAGS="-DSHARED_LIB" LDFLAGS="-shared -o libllama-cli.so" make llama-cli
+```
+
+You will receive the function `llama_cli_main`, which can be invoked via FFI with the standard options available to `llama-cli`:
+
+```c
+int llama_cli_main(int argc, char ** argv);
+```
+
+To enhance the management of custom file descriptors for STDOUT and STDERR, and to intercept token printing, we provide four functions:
+
+```c
+void llama_set_stdout(FILE* f);
+void llama_set_stderr(FILE* f);
+void llama_set_fprintf(int (*func)(FILE*, const char*, ...));
+void llama_set_fflush(int (*func)(FILE*));
+```
+
+This is particularly beneficial if you need to use `libllama-cli.so` through FFI in other programming languages without altering the default STDOUT and STDERR file descriptors.
+
+Here's a Python example that independently handles printing tokens without relying on STDOUT and STDERR:
+
+```python
+from ctypes import *
+
+#
+# open shared library
+#
+lib = CDLL('./libllama-cli.so')
+lib.llama_cli_main.argtypes = [c_int, POINTER(c_char_p)]
+lib.llama_cli_main.restype = c_int
+
+#
+# redefine fprintf and fflush
+#
+@CFUNCTYPE(c_int, c_void_p, c_char_p, c_char_p)
+def fprintf(file_obj, fmt, *args):
+    content = fmt.decode('utf-8') % tuple(arg.decode('utf-8') for arg in args)
+    print(content, flush=True, end='')
+    size = len(content)
+    return size
+
+
+@CFUNCTYPE(c_int, c_void_p)
+def fflush(file_obj):
+    print(flush=True, end='')
+    return 0
+
+
+lib.llama_set_fprintf(fprintf)
+lib.llama_set_fflush(fflush)
+
+#
+# generate and print token by token
+#
+argv: list[bytes] = [
+    b'llama-cli',
+    b'-m',
+    b'models/7B/ggml-model.bin',
+    b'--no-display-prompt',
+    b'--simple-io',
+    b'--log-disable',
+    b'-p',
+    b'What is cosmos?',
+]
+
+argc = len(argv)
+argv = (c_char_p * argc)(*argv)
+res = lib.llama_cli_main(argc, argv)
+assert res == 0
+```
+
+You can capture generated tokens in the Python implementation of `fprintf` function without actually printing them, if necessary.

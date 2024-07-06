@@ -39,6 +39,39 @@ static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
 static bool need_insert_eot = false;
+static FILE *llama_stdout = stdout;
+static FILE *llama_stderr = stderr;
+static int (*llama_fprintf)(FILE*, const char*, ...) = fprintf;
+static int (*llama_fflush)(FILE*) = fflush;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void llama_set_stdout(FILE* f);
+void llama_set_stderr(FILE* f);
+void llama_set_fprintf(int (*func)(FILE*, const char*, ...));
+void llama_set_fflush(int (*func)(FILE*));
+
+void llama_set_stdout(FILE* f) {
+    llama_stdout = f;
+}
+
+void llama_set_stderr(FILE* f) {
+    llama_stderr = f;
+}
+
+void llama_set_fprintf(int (*func)(FILE*, const char*, ...)) {
+    llama_fprintf = func;
+}
+
+void llama_set_fflush(int (*func)(FILE*)) {
+    llama_fflush = func;
+}
+
+#ifdef __cplusplus
+}
+#endif
 
 static bool file_exists(const std::string & path) {
     std::ifstream f(path.c_str());
@@ -65,7 +98,7 @@ static void write_logfile(
 
     const bool success = fs_create_directory_with_parents(params.logdir);
     if (!success) {
-        fprintf(stderr, "%s: warning: failed to create logdir %s, cannot write logfile\n",
+        llama_fprintf(llama_stderr, "%s: warning: failed to create logdir %s, cannot write logfile\n",
                 __func__, params.logdir.c_str());
         return;
     }
@@ -74,7 +107,7 @@ static void write_logfile(
     FILE * logfile = fopen(logfile_path.c_str(), "w");
 
     if (logfile == NULL) {
-        fprintf(stderr, "%s: failed to open logfile %s\n", __func__, logfile_path.c_str());
+        llama_fprintf(llama_stderr, "%s: failed to open logfile %s\n", __func__, logfile_path.c_str());
         return;
     }
 
@@ -127,7 +160,18 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     return formatted;
 }
 
-int main(int argc, char ** argv) {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef SHARED_LIB
+int llama_cli_main(int argc, char ** argv);
+
+int llama_cli_main(int argc, char ** argv)
+#else
+int main(int argc, char ** argv)
+#endif
+{
     gpt_params params;
     g_params = &params;
 
@@ -524,7 +568,7 @@ int main(int argc, char ** argv) {
 
     struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams);
     if (!ctx_sampling) {
-        fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
+        llama_fprintf(llama_stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
     }
 
@@ -561,7 +605,7 @@ int main(int argc, char ** argv) {
                 console::set_display(console::error);
                 printf("<<input too long: skipped %d token%s>>", skipped_tokens, skipped_tokens != 1 ? "s" : "");
                 console::set_display(console::reset);
-                fflush(stdout);
+                llama_fflush(llama_stdout);
             }
 
             if (ga_n == 1) {
@@ -761,7 +805,7 @@ int main(int argc, char ** argv) {
                 const std::string token_str = llama_token_to_piece(ctx, id, params.special);
 
                 // Console/Stream Output
-                fprintf(stdout, "%s", token_str.c_str());
+                llama_fprintf(llama_stdout, "%s", token_str.c_str());
 
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
@@ -774,7 +818,7 @@ int main(int argc, char ** argv) {
                     output_ss << token_str;
                 }
 
-                fflush(stdout);
+                llama_fflush(llama_stdout);
             }
         }
 
@@ -986,3 +1030,7 @@ int main(int argc, char ** argv) {
 
     return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif
