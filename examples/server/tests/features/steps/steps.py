@@ -780,7 +780,7 @@ def step_assert_metric_value(context, metric_name, metric_value):
 def step_available_models(context):
     # openai client always expects an api_key
     openai.api_key = context.user_api_key if context.user_api_key is not None else 'nope'
-    openai.base_url = f'{context.base_url}/v1'
+    openai.base_url = f'{context.base_url}/v1/'
     context.models = openai.models.list().data
 
 
@@ -993,7 +993,7 @@ async def oai_chat_completions(user_prompt,
     else:
         try:
             openai.api_key = user_api_key
-            openai.base_url = f'{base_url}{base_path}'
+            openai.base_url = f'{base_url}{base_path}/'
             assert model is not None
             chat_completion = openai.chat.completions.create(
                 messages=payload['messages'],
@@ -1079,7 +1079,7 @@ async def request_oai_embeddings(input, seed,
                 return embeddings
     else:
         openai.api_key = user_api_key
-        openai.base_url = f'{base_url}/v1'
+        openai.base_url = f'{base_url}/v1/'
         assert model is not None
         oai_embeddings = openai.embeddings.create(
             model=model,
