@@ -2978,7 +2978,7 @@ int main(int argc, char ** argv) {
             { "system_prompt",               ctx_server.system_prompt.c_str() },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel },
-            { "model_template",              curr_tmpl.c_str() }
+            { "chat_template",               curr_tmpl.c_str() }
         };
 
         res.set_content(data.dump(), "application/json; charset=utf-8");
