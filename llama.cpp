@@ -9731,9 +9731,9 @@ struct llm_build_context {
     ggml_tensor * loraB = it->second.loraB;
 
     ggml_tensor * t_lora = ggml_mul_mat(ctx0,
-                loraA,
+                loraB,
                 ggml_mul_mat(ctx0, 
-                    ggml_transpose(ctx0, loraB), 
+                    ggml_cont(ctx0, ggml_transpose(ctx0, loraA)),
                     cur
                 )
             );

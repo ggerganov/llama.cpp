@@ -342,4 +342,7 @@ int main() {
   -n 128
   ```
 
+build for debug:
+```bash
   make clean && make -j 8 LLAMA_DEBUG=1
+```
