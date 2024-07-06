@@ -903,8 +903,8 @@ async def request_completion(prompt,
 async def oai_chat_completions(user_prompt,
                                seed,
                                system_prompt,
-                               base_url,
-                               base_path,
+                               base_url: str,
+                               base_path: str,
                                async_client,
                                debug=False,
                                temperature=None,
@@ -993,7 +993,7 @@ async def oai_chat_completions(user_prompt,
     else:
         try:
             openai.api_key = user_api_key
-            openai.base_url = f'{base_url}{base_path}/'
+            openai.base_url = f'{base_url}{base_path.removesuffix("chat")}'
             assert model is not None
             chat_completion = openai.chat.completions.create(
                 messages=payload['messages'],
