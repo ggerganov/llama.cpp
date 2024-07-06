@@ -2702,6 +2702,10 @@ struct llama_model {
     int64_t t_load_us = 0;
     int64_t t_start_us = 0;
 
+    // used by lora, to save model's original tensors
+    std::vector<struct ggml_tensor *> orig_tensors;
+    std::vector<llama_layer> orig_layers;
+
     ~llama_model() {
         for (struct ggml_context * ctx : ctxs) {
             ggml_free(ctx);
@@ -13491,6 +13495,10 @@ static struct ggml_cgraph * llama_build_graph_s_copy(llama_context & lctx) {
     return result;
 }
 
+// forward declaration
+static int32_t llama_lora_patch_tensors(struct llama_context & lctx, struct ggml_context * ctx_build);
+static int32_t llama_lora_restore_tensors(struct llama_context & lctx);
+
 static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
      const llama_batch & batch,
@@ -13533,6 +13541,11 @@ static struct ggml_cgraph * llama_build_graph(
     struct llm_build_context llm(lctx, batch, cb, worst_case);
 
     llm.init();
+
+    if (!lctx.lora_adapters.empty()) {
+        llama_lora_restore_tensors(lctx);
+        llama_lora_patch_tensors(lctx, llm.ctx0);
+    }
 
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
@@ -18304,10 +18317,12 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
     printf("n_tensors_per_layer %d\n", n_tensors_per_layer);
 
     // count layer buffer types
-    std::map<ggml_backend_buffer_type_t, int> buft_layer_count;
+    std::map<ggml_backend_buffer_type_t, int> buft_tensor_count;
     for (int64_t i = 0; i < model.hparams.n_layer; i++) {
-        buft_layer_count[model.buft_layer[i].buft]++;
+        buft_tensor_count[model.buft_layer[i].buft] += n_tensors_per_layer;
     }
+    buft_tensor_count[model.buft_input.buft]  += n_inp_tensors;
+    buft_tensor_count[model.buft_output.buft] += n_out_tensors;
 
     // allocate contexts
     std::map<ggml_backend_buffer_type_t, ggml_context *> ctx_map;
@@ -18320,13 +18335,11 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
             };
             return ggml_init(params);
         };
-        for (auto & it : buft_layer_count) {
-            int n_layers = it.second;
-            printf("buf %p layers %d\n", it.first, it.second);
-            ctx_map[it.first] = new_ggml_ctx(2*n_layers*n_tensors_per_layer);
+        for (auto & it : buft_tensor_count) {
+            int n_tensors = it.second;
+            // LLAMA_LOG_INFO("buf %p layers %d\n", it.first, it.second);
+            ctx_map[it.first] = new_ggml_ctx(2*n_tensors); // for a+b tensors
         }
-        //ctx_map[model.buft_input.buft]  = new_ggml_ctx(2*n_inp_tensors);
-        //ctx_map[model.buft_output.buft] = new_ggml_ctx(2*n_out_tensors);
     }
 
     // bundle lora_a and lora_b into pairs
@@ -18356,22 +18369,29 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
     // add tensors
     for (auto & it : ab_map) {
         std::string name = it.first;
+        const char * cname = name.c_str();
         lora_weight & w = it.second;
         GGML_ASSERT(w.a != nullptr);
         GGML_ASSERT(w.b != nullptr);
         int il = -1;
-        sscanf(name.c_str(), "blk.%d.", &il);
+        sscanf(cname, "blk.%d.", &il);
+        struct ggml_context * dev_ctx; // device ctx
         if (il >= 0) {
-            printf("%s %p %p\n", name.c_str(), w.a, w.b);
-            struct ggml_context * dev_ctx = ctx_map.at(model.buft_layer[il].buft);
-            struct ggml_tensor * tensor_a = ggml_dup_tensor(dev_ctx, w.a);
-            struct ggml_tensor * tensor_b = ggml_dup_tensor(dev_ctx, w.b);
-            ggml_set_name(tensor_a, w.a->name);
-            ggml_set_name(tensor_b, w.b->name);
-            adapter.ab_map[name] = lora_weight(tensor_a, tensor_b);
+            dev_ctx = ctx_map.at(model.buft_layer[il].buft);
+        } else if (strstr(cname, "tok") == 0) {
+            dev_ctx = ctx_map.at(model.buft_input.buft);
+        } else if (strstr(cname, "output") == 0) {
+            dev_ctx = ctx_map.at(model.buft_output.buft);
         } else {
-            // TODO: process output & token_embd tensors
+            LLAMA_LOG_WARN("%s: discard tensor '%s'\n", __func__, cname);
+            continue;
         }
+        // LLAMA_LOG_INFO("%s %p %p\n", cname, w.a, w.b);
+        struct ggml_tensor * tensor_a = ggml_dup_tensor(dev_ctx, w.a);
+        struct ggml_tensor * tensor_b = ggml_dup_tensor(dev_ctx, w.b);
+        ggml_set_name(tensor_a, w.a->name);
+        ggml_set_name(tensor_b, w.b->name);
+        adapter.ab_map[name] = lora_weight(tensor_a, tensor_b);
     }
 
     // allocate tensors / buffers and zero
@@ -18402,8 +18422,9 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
             if (read_buf.size() < size) {
                 read_buf.resize(size);
             }
+            gguf_file.seek(offs, SEEK_SET);
             gguf_file.read_raw(read_buf.data(), size);
-            printf("%s: %s size=%ld\n", __func__, orig->name, size);
+            // LLAMA_LOG_INFO("%s: %s size=%ld\n", __func__, orig->name, size);
             return ggml_backend_tensor_set(dev, read_buf.data(), 0, size);
         };
         for (auto & it : adapter.ab_map) {
@@ -18414,8 +18435,162 @@ static int llama_lora_adapter_init_internal(const struct llama_model & model, co
         }
     }
 
+    LLAMA_LOG_INFO("%s: loaded %ld tensors from lora file\n", __func__, adapter.ab_map.size()*2);
+
     // free ctx for reading gguf
     ggml_free(ctx);
+    return 0;
+}
+
+static int32_t llama_lora_restore_tensors(struct llama_context & lctx) {
+    // TODO @ngxson : not ideal, but "const" is discarded to make it work
+    struct llama_model & model = const_cast<struct llama_model &>(lctx.model);
+    if (!model.orig_tensors.empty()) {
+        size_t i = 0;
+        model.tok_embd        = model.orig_tensors[i++];
+        model.type_embd       = model.orig_tensors[i++];
+        model.pos_embd        = model.orig_tensors[i++];
+        model.tok_norm        = model.orig_tensors[i++];
+        model.tok_norm_b      = model.orig_tensors[i++];
+        model.output_norm     = model.orig_tensors[i++];
+        model.output_norm_b   = model.orig_tensors[i++];
+        model.output          = model.orig_tensors[i++];
+        model.output_b        = model.orig_tensors[i++];
+        model.output_norm_enc = model.orig_tensors[i++];
+        for (size_t il = 0; il < model.orig_layers.size(); il++) {
+            model.layers[il] = model.orig_layers[il]; // copy
+        }
+    }
+}
+
+static int32_t llama_lora_patch_tensors(struct llama_context & lctx, struct ggml_context * ctx_build) {
+    GGML_ASSERT(!lctx.lora_adapters.empty());
+    // TODO @ngxson : not ideal, but "const" is discarded to make it work
+    struct llama_model & model = const_cast<struct llama_model &>(lctx.model);
+
+    // save all original tensors
+    if (model.orig_tensors.empty()) {
+        model.orig_tensors.push_back(model.tok_embd);
+        model.orig_tensors.push_back(model.type_embd);
+        model.orig_tensors.push_back(model.pos_embd);
+        model.orig_tensors.push_back(model.tok_norm);
+        model.orig_tensors.push_back(model.tok_norm_b);
+        model.orig_tensors.push_back(model.output_norm);
+        model.orig_tensors.push_back(model.output_norm_b);
+        model.orig_tensors.push_back(model.output);
+        model.orig_tensors.push_back(model.output_b);
+        model.orig_tensors.push_back(model.output_norm_enc);
+        model.orig_layers.reserve(model.layers.size());
+        for (llama_layer layer : model.layers) {
+            model.orig_layers.push_back(layer); // copy
+        }
+    }
+
+    // patch tensors
+    auto patch_tensor = [&](struct llama_lora_adapter * adapter, struct ggml_tensor ** tensor) {
+        if (*tensor == nullptr) {
+            return;
+        }
+        std::string name = ggml_get_name(*tensor);
+        if (adapter->ab_map.find(name) != adapter->ab_map.end()) {
+            auto lora_w = adapter->ab_map[name];
+            struct ggml_tensor * cur = ggml_mul_mat(ctx_build, lora_w.a, lora_w.b);
+            cur = ggml_add(ctx_build, cur, *tensor);
+            // TODO: scale
+            ggml_format_name(cur, "%s.merged", name.c_str());
+            // LLAMA_LOG_INFO("LORA %s\n", cur->name);
+            tensor = &cur;
+        }
+    };
+    for (auto adapter : lctx.lora_adapters) {
+        patch_tensor(adapter, &model.tok_embd);
+        patch_tensor(adapter, &model.type_embd);
+        patch_tensor(adapter, &model.pos_embd);
+        patch_tensor(adapter, &model.tok_norm);
+        patch_tensor(adapter, &model.tok_norm_b);
+        patch_tensor(adapter, &model.output_norm);
+        patch_tensor(adapter, &model.output_norm_b);
+        patch_tensor(adapter, &model.output);
+        patch_tensor(adapter, &model.output_b);
+        patch_tensor(adapter, &model.output_norm_enc);
+        for (llama_layer & layer : model.layers) {
+            patch_tensor(adapter, &layer.attn_norm);
+            patch_tensor(adapter, &layer.attn_norm_b);
+            patch_tensor(adapter, &layer.attn_norm_2);
+            patch_tensor(adapter, &layer.attn_norm_2_b);
+            patch_tensor(adapter, &layer.attn_q_norm);
+            patch_tensor(adapter, &layer.attn_q_norm_b);
+            patch_tensor(adapter, &layer.attn_k_norm);
+            patch_tensor(adapter, &layer.attn_k_norm_b);
+            patch_tensor(adapter, &layer.attn_out_norm);
+            patch_tensor(adapter, &layer.attn_out_norm_b);
+            patch_tensor(adapter, &layer.attn_q_a_norm);
+            patch_tensor(adapter, &layer.attn_kv_a_norm);
+            patch_tensor(adapter, &layer.attn_sub_norm);
+            patch_tensor(adapter, &layer.attn_post_norm);
+            patch_tensor(adapter, &layer.ffn_sub_norm);
+            patch_tensor(adapter, &layer.attn_norm_cross);
+            patch_tensor(adapter, &layer.attn_norm_enc);
+
+            patch_tensor(adapter, &layer.wq);
+            patch_tensor(adapter, &layer.wk);
+            patch_tensor(adapter, &layer.wv);
+            patch_tensor(adapter, &layer.wo);
+            patch_tensor(adapter, &layer.wqkv);
+            patch_tensor(adapter, &layer.wq_a);
+            patch_tensor(adapter, &layer.wq_b);
+            patch_tensor(adapter, &layer.wkv_a_mqa);
+            patch_tensor(adapter, &layer.wkv_b);
+            patch_tensor(adapter, &layer.wq_cross);
+            patch_tensor(adapter, &layer.wk_cross);
+            patch_tensor(adapter, &layer.wv_cross);
+            patch_tensor(adapter, &layer.wo_cross);
+            patch_tensor(adapter, &layer.wq_enc);
+            patch_tensor(adapter, &layer.wk_enc);
+            patch_tensor(adapter, &layer.wv_enc);
+            patch_tensor(adapter, &layer.wo_enc);
+
+            patch_tensor(adapter, &layer.bq);
+            patch_tensor(adapter, &layer.bk);
+            patch_tensor(adapter, &layer.bv);
+            patch_tensor(adapter, &layer.bo);
+            patch_tensor(adapter, &layer.bqkv);
+
+            patch_tensor(adapter, &layer.attn_rel_b);
+            patch_tensor(adapter, &layer.attn_rel_b_enc);
+            patch_tensor(adapter, &layer.attn_rel_b_cross);
+
+            patch_tensor(adapter, &layer.ffn_norm);
+            patch_tensor(adapter, &layer.ffn_norm_b);
+            patch_tensor(adapter, &layer.ffn_post_norm);
+            patch_tensor(adapter, &layer.layer_out_norm);
+            patch_tensor(adapter, &layer.layer_out_norm_b);
+            patch_tensor(adapter, &layer.ffn_norm_exps);
+            patch_tensor(adapter, &layer.ffn_norm_enc);
+
+            patch_tensor(adapter, &layer.ffn_gate);
+            patch_tensor(adapter, &layer.ffn_down);
+            patch_tensor(adapter, &layer.ffn_up);
+            patch_tensor(adapter, &layer.ffn_gate_enc);
+            patch_tensor(adapter, &layer.ffn_down_enc);
+            patch_tensor(adapter, &layer.ffn_up_enc);
+
+            patch_tensor(adapter, &layer.ffn_gate_inp);
+            patch_tensor(adapter, &layer.ffn_gate_exps);
+            patch_tensor(adapter, &layer.ffn_down_exps);
+            patch_tensor(adapter, &layer.ffn_up_exps );
+
+            patch_tensor(adapter, &layer.ffn_gate_inp_shexp);
+            patch_tensor(adapter, &layer.ffn_gate_shexp);
+            patch_tensor(adapter, &layer.ffn_down_shexp);
+            patch_tensor(adapter, &layer.ffn_up_shexp);
+
+            patch_tensor(adapter, &layer.ffn_gate_b);
+            patch_tensor(adapter, &layer.ffn_down_b);
+            patch_tensor(adapter, &layer.ffn_up_b);
+            patch_tensor(adapter, &layer.ffn_act);
+        }
+    }
     return 0;
 }
 
