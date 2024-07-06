@@ -265,7 +265,7 @@ class Model:
                     break
 
             for new_name, data in ((n, d.squeeze().numpy()) for n, d in self.modify_tensors(data_torch, name, bid)):
-                data: np.ndarray = data  # type hint
+                data: np.ndarray  # type hint
                 n_dims = len(data.shape)
                 data_dtype = data.dtype
                 data_qtype: gguf.GGMLQuantizationType | None = None
@@ -595,10 +595,6 @@ class Model:
         from sentencepiece import SentencePieceProcessor
 
         tokenizer_path = self.dir_model / 'tokenizer.model'
-
-        tokens: list[bytes] = []
-        scores: list[float] = []
-        toktypes: list[int] = []
 
         if not tokenizer_path.is_file():
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
@@ -2117,7 +2113,7 @@ class InternLM2Model(Model):
             logger.error(f'Error: Missing {tokenizer_path}')
             sys.exit(1)
 
-        sentencepiece_model = model.ModelProto()
+        sentencepiece_model = model.ModelProto()  # pyright: ignore[reportAttributeAccessIssue]
         sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
         add_prefix = sentencepiece_model.normalizer_spec.add_dummy_prefix
 
@@ -2969,16 +2965,16 @@ class T5Model(Model):
         if not tokenizer_path.is_file():
             raise FileNotFoundError(f"File not found: {tokenizer_path}")
 
-        sentencepiece_model = model.ModelProto()
+        sentencepiece_model = model.ModelProto()  # pyright: ignore[reportAttributeAccessIssue]
         sentencepiece_model.ParseFromString(open(tokenizer_path, "rb").read())
 
         # some models like Pile-T5 family use BPE tokenizer instead of Unigram
-        if sentencepiece_model.trainer_spec.model_type == 2: # BPE
+        if sentencepiece_model.trainer_spec.model_type == 2:  # BPE
             # assure the tokenizer model file name is correct
             assert tokenizer_path.name == 'tokenizer.model'
             return self._set_vocab_sentencepiece()
         else:
-            assert sentencepiece_model.trainer_spec.model_type == 1 # UNIGRAM
+            assert sentencepiece_model.trainer_spec.model_type == 1  # UNIGRAM
 
         add_prefix = sentencepiece_model.normalizer_spec.add_dummy_prefix
         remove_whitespaces = sentencepiece_model.normalizer_spec.remove_extra_whitespaces
@@ -3149,7 +3145,7 @@ class JaisModel(Model):
             # but Jais's PyTorch model simply precalculates the slope values and places them
             # in relative_pes.slopes
             n_head_closest_log2 = 2 ** math.floor(math.log2(self.hparams["n_head"]))
-            first_val = float(data_torch._data[0])
+            first_val = float(data_torch[0].item())
             self.max_alibi_bias = -round(math.log2(first_val) * n_head_closest_log2)
 
             return tensors
