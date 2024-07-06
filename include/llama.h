@@ -515,7 +515,11 @@ extern "C" {
     // will be applied on top of the previous one
     LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
             struct llama_context * ctx,
-            const char * path_lora);
+            const char * path_lora,
+            float scale);
+    LLAMA_API int32_t llama_lora_adapter_apply(
+            struct llama_context * ctx,
+            struct llama_lora_adapter * adapter);
 
     // Apply a loaded control vector to a llama_context, or if data is NULL, clear
     // the currently loaded vector.
