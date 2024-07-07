@@ -194,7 +194,7 @@ def step_start_server(context):
 
 @step("the server is {expecting_status}")
 @async_run_until_complete
-async def step_wait_for_the_server_to_be_started(context, expecting_status: str):
+async def step_wait_for_the_server_to_be_started(context, expecting_status: Literal['healthy', 'ready', 'idle', 'busy'] | str):
     match expecting_status:
         case 'healthy':
             await wait_for_health_status(context, context.base_url, 200, 'ok',
@@ -792,7 +792,7 @@ def step_supported_models(context, n_model):
 
 
 @step('model {i_model:d} is {param} {preposition} {param_value}')
-def step_supported_models(context, i_model, param, preposition, param_value):
+def step_supported_models(context, i_model: int, param: Literal['identified', 'trained'] | str, preposition: str, param_value: str):
     assert i_model < len(context.models)
     model = context.models[i_model]
 
@@ -801,7 +801,7 @@ def step_supported_models(context, i_model, param, preposition, param_value):
         case 'identified':
             value = model.id
         case 'trained':
-            value = str(model.meta.n_ctx_train)
+            value = str(model.meta["n_ctx_train"])
         case _:
             assert False, "param {param} not supported"
     assert param_value == value, f"model param {param} {value} != {param_value}"
