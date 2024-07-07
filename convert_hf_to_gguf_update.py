@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # This script downloads the tokenizer models of the specified models from Huggingface and
-# generates the get_vocab_base_pre() function for convert-hf-to-gguf.py
+# generates the get_vocab_base_pre() function for convert_hf_to_gguf.py
 #
 # This is necessary in order to analyze the type of pre-tokenizer used by the model and
 # provide the necessary information to llama.cpp via the GGUF header in order to implement
@@ -15,9 +15,9 @@
 # - Add a new model to the "models" list
 # - Run the script with your huggingface token:
 #
-#   python3 convert-hf-to-gguf-update.py <huggingface_token>
+#   python3 convert_hf_to_gguf_update.py <huggingface_token>
 #
-# - Copy-paste the generated get_vocab_base_pre() function into convert-hf-to-gguf.py
+# - Copy-paste the generated get_vocab_base_pre() function into convert_hf_to_gguf.py
 # - Update llama.cpp with the new pre-tokenizer if necessary
 #
 # TODO: generate tokenizer tests for llama.cpp
@@ -37,7 +37,7 @@ from enum import IntEnum, auto
 from transformers import AutoTokenizer
 
 logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger("convert-hf-to-gguf-update")
+logger = logging.getLogger("convert_hf_to_gguf_update")
 sess = requests.Session()
 
 
@@ -45,6 +45,7 @@ class TOKENIZER_TYPE(IntEnum):
     SPM = auto()
     BPE = auto()
     WPM = auto()
+    UGM = auto()
 
 
 # TODO: this string has to exercise as much pre-tokenizer functionality as possible
@@ -55,10 +56,10 @@ if len(sys.argv) == 2:
     token = sys.argv[1]
     if not token.startswith("hf_"):
         logger.info("Huggingface token seems invalid")
-        logger.info("Usage: python convert-hf-to-gguf-update.py <huggingface_token>")
+        logger.info("Usage: python convert_hf_to_gguf_update.py <huggingface_token>")
         sys.exit(1)
 else:
-    logger.info("Usage: python convert-hf-to-gguf-update.py <huggingface_token>")
+    logger.info("Usage: python convert_hf_to_gguf_update.py <huggingface_token>")
     sys.exit(1)
 
 # TODO: add models here, base models preferred
@@ -86,6 +87,10 @@ models = [
     {"name": "poro-chat",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Poro-34B-chat", },
     {"name": "jina-v2-code",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-code", },
     {"name": "viking",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Viking-7B", }, # Also used for Viking 13B and 33B
+    {"name": "gemma",          "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/google/gemma-2b", },
+    {"name": "gemma-2",        "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/google/gemma-2-9b", },
+    {"name": "jais",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/core42/jais-13b", },
+    {"name": "t5",             "tokt": TOKENIZER_TYPE.UGM, "repo": "https://huggingface.co/google-t5/t5-small", },
 ]
 
 
@@ -107,8 +112,12 @@ def download_model(model):
     os.makedirs(f"models/tokenizers/{name}", exist_ok=True)
 
     files = ["config.json", "tokenizer.json", "tokenizer_config.json"]
+
     if tokt == TOKENIZER_TYPE.SPM:
         files.append("tokenizer.model")
+
+    if tokt == TOKENIZER_TYPE.UGM:
+        files.append("spiece.model")
 
     for file in files:
         save_path = f"models/tokenizers/{name}/{file}"
@@ -125,14 +134,14 @@ for model in models:
         logger.error(f"Failed to download model {model['name']}. Error: {e}")
 
 
-# generate the source code for the convert-hf-to-gguf.py:get_vocab_base_pre() function:
+# generate the source code for the convert_hf_to_gguf.py:get_vocab_base_pre() function:
 
 src_ifs = ""
 for model in models:
     name = model["name"]
     tokt = model["tokt"]
 
-    if tokt == TOKENIZER_TYPE.SPM:
+    if tokt == TOKENIZER_TYPE.SPM or tokt == TOKENIZER_TYPE.UGM:
         continue
 
     # Skip if the tokenizer folder does not exist or there are other download issues previously
@@ -142,7 +151,10 @@ for model in models:
 
     # create the tokenizer
     try:
-        tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+        if name == "t5":
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}", use_fast=False)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
     except OSError as e:
         logger.error(f"Error loading tokenizer for model {name}. The model may not exist or is not accessible with the provided token. Error: {e}")
         continue  # Skip to the next model if the tokenizer can't be loaded
@@ -189,7 +201,7 @@ src_func = f"""
 
         res = None
 
-        # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script
+        # NOTE: if you get an error here, you need to update the convert_hf_to_gguf_update.py script
         #       or pull the latest version of the model from Huggingface
         #       don't edit the hashes manually!
 {src_ifs}
@@ -198,9 +210,9 @@ src_func = f"""
             logger.warning("**************************************************************************************")
             logger.warning("** WARNING: The BPE pre-tokenizer was not recognized!")
             logger.warning("**          There are 2 possible reasons for this:")
-            logger.warning("**          - the model has not been added to convert-hf-to-gguf-update.py yet")
+            logger.warning("**          - the model has not been added to convert_hf_to_gguf_update.py yet")
             logger.warning("**          - the pre-tokenization config has changed upstream")
-            logger.warning("**          Check your model files and convert-hf-to-gguf-update.py and update them accordingly.")
+            logger.warning("**          Check your model files and convert_hf_to_gguf_update.py and update them accordingly.")
             logger.warning("** ref:     https://github.com/ggerganov/llama.cpp/pull/6920")
             logger.warning("**")
             logger.warning(f"** chkhsh:  {{chkhsh}}")
@@ -214,7 +226,7 @@ src_func = f"""
         return res
 """
 
-convert_py_pth = pathlib.Path("convert-hf-to-gguf.py")
+convert_py_pth = pathlib.Path("convert_hf_to_gguf.py")
 convert_py = convert_py_pth.read_text(encoding="utf-8")
 convert_py = re.sub(
     r"(# Marker: Start get_vocab_base_pre)(.+?)( +# Marker: End get_vocab_base_pre)",
@@ -225,7 +237,7 @@ convert_py = re.sub(
 
 convert_py_pth.write_text(convert_py, encoding="utf-8")
 
-logger.info("+++ convert-hf-to-gguf.py was updated")
+logger.info("+++ convert_hf_to_gguf.py was updated")
 
 # generate tests for each tokenizer model
 
@@ -263,6 +275,7 @@ tests = [
     "\n =",
     "' era",
     "Hello, y'all! How are you 😁 ?我想在apple工作1314151天～",
+    "!!!!!!",
     "3",
     "33",
     "333",
@@ -272,7 +285,8 @@ tests = [
     "3333333",
     "33333333",
     "333333333",
-    # "Cửa Việt", # llama-bpe fails on this
+    "Cửa Việt", # llama-bpe fails on this
+    " discards",
     chktxt,
 ]
 
@@ -300,7 +314,10 @@ for model in models:
 
     # create the tokenizer
     try:
-        tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
+        if name == "t5":
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}", use_fast=False)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(f"models/tokenizers/{name}")
     except OSError as e:
         logger.error(f"Failed to load tokenizer for model {name}. Error: {e}")
         continue  # Skip this model and continue with the next one in the loop
@@ -326,6 +343,6 @@ logger.info("\nRun the following commands to generate the vocab files for testin
 for model in models:
     name = model["name"]
 
-    print(f"python3 convert-hf-to-gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only") # noqa: NP100
+    print(f"python3 convert_hf_to_gguf.py models/tokenizers/{name}/ --outfile models/ggml-vocab-{name}.gguf --vocab-only") # noqa: NP100
 
 logger.info("\n")

@@ -54,12 +54,11 @@ typedef float (*vec_dot_KQ_f32_t)(
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q4_0 * K_q4_0 = (const block_q4_0 *) K_c;
     GGML_UNUSED(Q_v);
 
-    half sum = 0.0f;
+    T sum = 0.0f;
 
 #pragma unroll
     for (int k_KQ_0 = 0; k_KQ_0 < D/sizeof(int); k_KQ_0 += WARP_SIZE) {
@@ -69,10 +68,10 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
         const int iqs4  = k_KQ %  QI4_0;
         const int shift = k_KQ & (QI8_1/2);
 
-        const int v = (get_int_from_uint8(K_q4_0[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
+        const int v = (get_int_b2(K_q4_0[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
@@ -90,19 +89,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_0(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_1(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q4_1 * K_q4_1 = (const block_q4_1 *) K_c;
     GGML_UNUSED(Q_v);
@@ -117,10 +108,10 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_1(
         const int iqs4  = k_KQ %  QI4_1;
         const int shift = k_KQ & (QI8_1/2);
 
-        const int v = (get_int_from_uint8_aligned(K_q4_1[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
+        const int v = (get_int_b4(K_q4_1[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
@@ -142,19 +133,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q4_1(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q5_0 * K_q5_0 = (const block_q5_0 *) K_c;
     GGML_UNUSED(Q_v);
@@ -170,8 +153,8 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
         const int iqs8  = k_KQ %  QI8_1;
         const int shift = k_KQ & (QI8_1/2);
 
-        int v = (get_int_from_uint8(K_q5_0[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
-        const int vh = get_int_from_uint8(K_q5_0[ib].qh, 0) >> (iqs8 * QI5_0);
+        int v = (get_int_b2(K_q5_0[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
+        const int vh = get_int_b2(K_q5_0[ib].qh, 0) >> (iqs8 * QI5_0);
         v |= (vh <<  4) & 0x00000010; // 0 ->  4
         v |= (vh << 11) & 0x00001000; // 1 -> 12
         v |= (vh << 18) & 0x00100000; // 2 -> 20
@@ -179,7 +162,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
 
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
@@ -197,19 +180,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_0(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template<typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q5_1 * K_q5_1 = (const block_q5_1 *) K_c;
     GGML_UNUSED(Q_v);
@@ -225,8 +200,8 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
         const int iqs8  = k_KQ %  QI8_1;
         const int shift = k_KQ & (QI8_1/2);
 
-        int v = (get_int_from_uint8(K_q5_1[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
-        const int vh = get_int_from_uint8(K_q5_1[ib].qh, 0) >> (iqs8 * QI5_1);
+        int v = (get_int_b2(K_q5_1[ib].qs, iqs4) >> shift) & 0x0F0F0F0F;
+        const int vh = get_int_b2(K_q5_1[ib].qh, 0) >> (iqs8 * QI5_1);
         v |= (vh <<  4) & 0x00000010; // 0 ->  4
         v |= (vh << 11) & 0x00001000; // 1 -> 12
         v |= (vh << 18) & 0x00100000; // 2 -> 20
@@ -234,7 +209,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
 
         const int u = Q_q8[k_KQ_0/WARP_SIZE];
 
-        const int sumi = __dp4a(v, u, 0);
+        const int sumi = ggml_cuda_dp4a(v, u, 0);
 
 #ifdef FP16_AVAILABLE
         if (std::is_same<T, half>::value) {
@@ -256,19 +231,11 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q5_1(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template <typename T, int D>
 static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q8_0(
     const char * __restrict__ K_c, const void * __restrict__ Q_v, const int * __restrict__ Q_q8, const void * __restrict__ Q_ds_v) {
-#if __CUDA_ARCH__ >= MIN_CC_DP4A
 
     const block_q8_0 * K_q8_0 = (const block_q8_0 *) K_c;
     GGML_UNUSED(Q_v);
@@ -282,7 +249,7 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q8_0(
         const int ib  = k_KQ / QI8_0;
         const int iqs = k_KQ % QI8_0;
 
-        const int v = get_int_from_int8(K_q8_0[ib].qs, iqs);
+        const int v = get_int_b2(K_q8_0[ib].qs, iqs);
 
         T Q_d;
         if (std::is_same<T, half>::value) {
@@ -297,13 +264,6 @@ static __device__ __forceinline__ T vec_dot_fattn_vec_KQ_q8_0(
     }
 
     return sum;
-#else
-    GGML_UNUSED(K_c);
-    GGML_UNUSED(Q_v);
-    GGML_UNUSED(Q_q8);
-    GGML_UNUSED(Q_ds_v);
-    NO_DEVICE_CODE;
-#endif  // __CUDA_ARCH__ >= MIN_CC_DP4A
 }
 
 template <typename T, int D>
@@ -448,7 +408,7 @@ static __device__ __forceinline__ T dequantize_1_q5_0(const void * __restrict__ 
 
     const T   d   = x[ib].d;
     const int ql0 = x[ib].qs[iqs];
-    const int qh0 = get_int_from_uint8(x[ib].qh, 0);
+    const int qh0 = get_int_b2(x[ib].qh, 0);
     const int ql  = ((ql0 >> (4*shift)) & 0x0F);
     const int qh  = ((qh0 >> idq) << 4) & 0x10;
     const int q   = (ql | qh) - 16;
@@ -473,7 +433,7 @@ static __device__ __forceinline__ T dequantize_1_q5_1(const void * __restrict__ 
 
     const half2 dm  = x[ib].dm;
     const int   ql0 = x[ib].qs[iqs];
-    const int   qh0 = get_int_from_uint8_aligned(x[ib].qh, 0);
+    const int   qh0 = get_int_b4(x[ib].qh, 0);
     const int   ql  = ((ql0 >> (4*shift)) & 0x0F);
     const int   qh  = ((qh0 >> idq) << 4) & 0x10;
     const int   q   = (ql | qh);

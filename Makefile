@@ -14,6 +14,7 @@ BUILD_TARGETS = \
 	llama-finetune \
 	llama-gbnf-validator \
 	llama-gguf \
+	llama-gguf-hash \
 	llama-gguf-split \
 	llama-gritlm \
 	llama-imatrix \
@@ -61,6 +62,11 @@ TEST_TARGETS = \
 	tests/test-tokenizer-0 \
 	tests/test-tokenizer-1-bpe \
 	tests/test-tokenizer-1-spm
+
+# Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
+LEGACY_TARGETS = main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
+	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
+	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm
 
 # Deprecation aliases
 ifdef LLAMA_CUBLAS
@@ -1086,6 +1092,7 @@ clean:
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
+	rm -rvf $(LEGACY_TARGETS)
 	find examples pocs -type f -name "*.o" -delete
 
 #
@@ -1170,6 +1177,23 @@ llama-save-load-state: examples/save-load-state/save-load-state.cpp \
 llama-gguf: examples/gguf/gguf.cpp \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+examples/gguf-hash/deps/sha1/sha1.o: \
+	examples/gguf-hash/deps/sha1/sha1.c
+	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
+
+examples/gguf-hash/deps/xxhash/xxhash.o: \
+	examples/gguf-hash/deps/xxhash/xxhash.c
+	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
+
+examples/gguf-hash/deps/sha256/sha256.o: \
+	examples/gguf-hash/deps/sha256/sha256.c
+	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
+
+llama-gguf-hash: examples/gguf-hash/gguf-hash.cpp examples/gguf-hash/deps/sha1/sha1.o examples/gguf-hash/deps/xxhash/xxhash.o examples/gguf-hash/deps/sha256/sha256.o\
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/gguf-hash/deps -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-gguf-split: examples/gguf-split/gguf-split.cpp \
