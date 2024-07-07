@@ -1,12 +1,12 @@
 #include "ggml.h"
 
-#include "stdlib.h"   /* abort() */
+#include <cstdlib>   /* abort() */
 #include <cstddef>
 #include <cstdio>
 #include <string>
 #include <stdexcept>
 #include <algorithm>
-#include <string.h>
+#include <cstring>
 
 #include <sstream>
 #include <fstream>
