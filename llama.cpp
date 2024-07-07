@@ -328,12 +328,6 @@ static struct lora_data * load_lora(struct lora_info * info) {
         file.seek((0-file.tell()) & 31, SEEK_CUR);
         size_t offset = file.tell();
         struct ggml_tensor * tensor = ggml_new_tensor(result->ctx, (enum ggml_type) type, n_dims, ne);
-        // Transpose lora matrix A
-        if (std::string(name_buf.data()).find("loraA") != std::string::npos) {
-            tensor = ggml_cont(result->ctx,
-                ggml_transpose(result->ctx, tensor)
-            );
-        }
         ggml_set_name(tensor, name_buf.data());
         size_t nbytes     = ggml_nbytes(tensor);
         size_t nbytes_pad = ggml_nbytes_pad(tensor);
@@ -360,6 +354,14 @@ static struct lora_data * load_lora(struct lora_info * info) {
         read_buf.resize(nbytes);
         file.read_raw(read_buf.data(), nbytes);
         ggml_backend_tensor_set(tensor, read_buf.data(), 0, nbytes);
+        // Transpose lora matrix A
+        std::string original_name(tensor->name);
+        if (std::string(tensor->name).find(".loraA") != std::string::npos) {
+            tensor = ggml_cont(result->ctx,
+                ggml_transpose(result->ctx, tensor)
+            );
+            ggml_set_name(tensor, original_name.c_str());
+        }
     }
     return result;
 }
