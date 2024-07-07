@@ -67,7 +67,7 @@ class Model:
     model_arch: gguf.MODEL_ARCH
 
     def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool, metadata: gguf.Metadata,
-                 model_name: str | None, split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
+                 split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
 
@@ -106,21 +106,6 @@ class Model:
         self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
         self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
                                            split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
-
-        # Update any missing authorship metadata with HuggingFace parameters or model card frontmatter
-        if self.metadata is not None:
-
-            # Source Hugging Face Repository
-            if self.metadata.source_hf_repo is None:
-                if self.hparams is not None and "_name_or_path" in self.hparams:
-                    self.metadata.source_hf_repo = self.hparams["_name_or_path"]
-
-            # Model License
-            if self.metadata.license is None:
-                if self.model_card is not None and "license" in self.model_card:
-                    self.metadata.source_hf_repo = self.model_card["license"]
-
-        self.model_name = Model.get_model_name(self.metadata, self.hparams, self.dir_model, self.model_arch)
 
         # Fallback to model architecture name if metadata name is still missing
         if self.metadata.name is None:
@@ -3708,8 +3693,8 @@ def main() -> None:
             logger.error(f"Model {hparams['architectures'][0]} is not supported")
             sys.exit(1)
 
-        model_instance = model_class(dir_model, output_type, fname_out, args.bigendian, args.use_temp_file, args.no_lazy,
-                                     metadata, args.model_name, split_max_tensors=args.split_max_tensors,
+        model_instance = model_class(dir_model, output_type, fname_out, args.bigendian, args.use_temp_file,
+                                     args.no_lazy, metadata, split_max_tensors=args.split_max_tensors,
                                      split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
                                      small_first_shard=args.no_tensor_first_split)
 
