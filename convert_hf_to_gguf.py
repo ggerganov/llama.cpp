@@ -373,6 +373,18 @@ class Model:
         except KeyError:
             raise NotImplementedError(f'Architecture {arch!r} not supported!') from None
 
+    def does_token_look_special(self, token: str) -> bool:
+        # Some models mark some added tokens which ought to be control tokens as not special.
+        # (e.g. command-r, command-r-plus, deepseek-coder, gemma{,-2})
+        is_known_special = token in (
+            "<pad>",  # deepseek-coder
+            "<mask>", "<2mass>", "[@BOS@]",  # gemma{,-2}
+        )
+        # TODO: should these be marked as UNUSED instead?
+        is_known_special = is_known_special or (token.startswith("<unused") and token.endswith(">"))  # gemma{,-2}
+
+        return is_known_special or (token.startswith(("<|", "<｜")) and token.endswith(("|>", "｜>")))
+
     # used for GPT-2 BPE and WordPiece vocabs
     def get_vocab_base(self) -> tuple[list[str], list[int], str]:
         tokens: list[str] = []
@@ -393,8 +405,9 @@ class Model:
                 tokens.append(f"[PAD{i}]")
                 toktypes.append(gguf.TokenType.USER_DEFINED)
             elif reverse_vocab[i] in added_vocab:
-                tokens.append(reverse_vocab[i])
-                if tokenizer.added_tokens_decoder[i].special:
+                token: str = reverse_vocab[i]
+                tokens.append(token)
+                if tokenizer.added_tokens_decoder[i].special or self.does_token_look_special(token):
                     toktypes.append(gguf.TokenType.CONTROL)
                 else:
                     toktypes.append(gguf.TokenType.USER_DEFINED)
