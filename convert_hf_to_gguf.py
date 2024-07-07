@@ -3349,10 +3349,10 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_file_type(self.ftype)
         self.gguf_writer.add_rope_dimension_count(64)
         self.gguf_writer.add_add_bos_token(False)
-        rope_ratio = 10000
+        rope_freq = 10000
         if "rope_ratio" in self.hparams:
-            rope_ratio = rope_ratio * self.hparams["rope_ratio"]
-        self.gguf_writer.add_rope_freq_base(rope_ratio)
+            rope_freq = rope_freq * self.hparams["rope_ratio"]
+        self.gguf_writer.add_rope_freq_base(rope_freq)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
