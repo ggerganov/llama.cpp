@@ -97,7 +97,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [OLMo](https://allenai.org/olmo)
 - [x] [GPT-NeoX](https://github.com/EleutherAI/gpt-neox) + [Pythia](https://github.com/EleutherAI/pythia)
 
-(instructions for supporting more models: [HOWTO-add-model.md](./docs/HOWTO-add-model.md))
+(instructions for supporting more models: [HOWTO-add-model.md](./docs/development/HOWTO-add-model.md))
 
 **Multimodal models:**
 
