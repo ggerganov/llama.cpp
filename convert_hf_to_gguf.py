@@ -90,6 +90,7 @@ class Model:
         self.tensor_names = None
         self.metadata = metadata
 
+        # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
         if self.ftype == gguf.LlamaFileType.GUESSED:
             # NOTE: can't use field "torch_dtype" in config.json, because some finetunes lie.
             _, first_tensor = next(self.get_tensors())
@@ -99,13 +100,6 @@ class Model:
             else:
                 logger.info(f"choosing --outtype bf16 from first tensor type ({first_tensor.dtype})")
                 self.ftype = gguf.LlamaFileType.MOSTLY_BF16
-
-        ftype_up: str = self.ftype.name.partition("_")[2].upper()
-        ftype_lw: str = ftype_up.lower()
-        # allow templating the file name with the output ftype, useful with the "auto" ftype
-        self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
-        self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
-                                           split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
 
         # Fallback to model architecture name if metadata name is still missing
         if self.metadata.name is None:
@@ -126,13 +120,15 @@ class Model:
         # Filename Output
         if fname_out is not None:
             # custom defined filename and path was provided
+            # allow templating the file name with the output ftype, useful with the "auto" ftype
             self.fname_out = fname_out.parent / gguf.fill_templated_filename(fname_out.name, output_type)
         else:
             # output in the same directory as the model by default
             self.fname_out = dir_model / f"{self.fname_default}.gguf"
 
         # Configure GGUF Writer
-        self.gguf_writer = gguf.GGUFWriter(self.fname_out, gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file)
+        self.gguf_writer = gguf.GGUFWriter(path=self.fname_out, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
+                                           split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
 
     @classmethod
     def __init_subclass__(cls):
