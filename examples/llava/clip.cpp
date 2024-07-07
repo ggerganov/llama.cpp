@@ -606,13 +606,13 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
     inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
     inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));
-    struct ggml_tensor * embeddings = inp;
-    struct ggml_tensor * pos_embed;
-
+    
     if (ctx->has_patch_bias) {
         // inp = ggml_add(ctx0, inp, ggml_repeat(ctx0, model.patch_bias, inp));
         inp = ggml_add(ctx0, inp, model.patch_bias);
     }
+    struct ggml_tensor * embeddings = inp;
+    struct ggml_tensor * pos_embed;
 
     if(ctx->has_llava_projector){
         // concat class_embeddings and patch_embeddings
@@ -2135,7 +2135,6 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit
             //    -> https://huggingface.co/HuggingFaceM4/siglip-so400m-14-980-flash-attn2-navit/blob/d66538faeba44480d0bfaa42145eef26f9423199/modeling_siglip.py#L316
             struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
-
             int* positions_data = (int*)malloc(ggml_nbytes(positions));
             for (int i = 0; i < num_positions; i++) {
                 positions_data[i] = std::floor(70.0*i/num_positions);
