@@ -2544,7 +2544,6 @@ struct llama_context {
     }
 
     llama_cparams cparams;
-    bool lora_loaded = false;
     std::map<std::string, lora_weights> lora_weights_map; // only one LoRA adapter at the moment
     lora_data llora_data;
     float lora_scale = 1.0f;
@@ -16309,7 +16308,7 @@ void llama_free_model(struct llama_model * model) {
 }
 
 
-static std::map<std::string, lora_weights> get_lora_weights_map_cpp(struct ggml_context* ctx) {
+static std::map<std::string, lora_weights> get_lora_weights_map(struct ggml_context* ctx) {
     struct lora_tensor_pair* pair = build_lora_weights_map(ctx);
     std::map<std::string, lora_weights> map;
 
@@ -16370,7 +16369,7 @@ struct llama_context * llama_new_context_with_model(
             
         lora.scale = 1.0f; // redundant as already inside lora_context, but should be here for multiple loras?
         lora_params->lora.push_back(lora);
-        // load all loras
+        // load all loras (only 1 supported here)
         std::vector<struct lora_data *> loras;
         for (size_t i = 0; i < lora_params->lora.size(); ++i) {
             struct lora_data * llora_data = load_lora(&lora_params->lora[i]);
@@ -16381,22 +16380,10 @@ struct llama_context * llama_new_context_with_model(
         if (loras.size() == 0) {
             fprintf(stderr, "warning: no lora adapters will be applied.\n");
         }
-        // Assign data 
+        // Assign data and get mapping (index 0 as only 1 lora is supoprted now)
         ctx->llora_data = *loras[0];
-        ctx->lora_weights_map = get_lora_weights_map_cpp((ctx->llora_data).ctx);
-        // std::vector<std::string> keys;
-        // for (const auto& pair : ctx->lora_weights_map) {
-        //     keys.push_back(pair.first);
-
-        //     ggml_tensor * tensorA = pair.second.loraA;
-        //     ggml_tensor * tensorB = pair.second.loraB;
-
-        //     ggml_tensor * tensorA_ctx = ggml_new_tensor((ctx->llora_data).ctx, tensorA->type, 4, tensorA->ne);
-        //     ggml_tensor * tensorB_ctx = ggml_new_tensor((ctx->llora_data).ctx, tensorB->type, 4, tensorB->ne);
-
-        // }
+        ctx->lora_weights_map = get_lora_weights_map((ctx->llora_data).ctx);
     }
-
     /// LORA load end
 
     const auto & hparams = model->hparams;
