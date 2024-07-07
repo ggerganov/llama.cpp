@@ -23,12 +23,86 @@ bool qnn_is_valid_params(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
         return false;
     }
 
-    auto *instance = ctx->instance;
-    auto *tensor0 = src0->extra;
-    auto *tensor1 = src1->extra;
-    auto *tensor2 = dst->extra;
+    auto instance = ctx->instance;
+    auto *tensor0 = qnn::ggml_qnn_tensor::from_ggml_tensor(src0);
+    auto *tensor1 = qnn::ggml_qnn_tensor::from_ggml_tensor(src1);
+    auto *tensor2 = qnn::ggml_qnn_tensor::from_ggml_tensor(dst);
     if (!instance || !tensor0 || !tensor1 || !tensor2) {
         QNN_LOG_WARN("invalid tensors\n");
+        return false;
+    }
+
+    return true;
+}
+
+template <size_t _InputSize, size_t _OutputSize>
+bool qnn_bind_tensors_to_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *graph, const std::string &op_name,
+                               const std::array<const ggml_tensor *, _InputSize> &inputs,
+                               const std::array<ggml_tensor *, _OutputSize> &outputs) {
+    std::array<Qnn_Tensor_t, _InputSize> qnn_input_tensors;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(inputs[i]);
+        if (!tensor || !tensor->bind_to_graph(*graph)) {
+            return false;
+        }
+
+        qnn_input_tensors[i] = tensor->get_qnn_tensor();
+    }
+
+    std::array<Qnn_Tensor_t, _OutputSize> qnn_output_tensors;
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(outputs[i]);
+        if (!tensor || !tensor->bind_to_graph(*graph)) {
+            return false;
+        }
+
+        qnn_output_tensors[i] = tensor->get_qnn_tensor();
+    }
+
+    if (!graph->add_nodes(op_name, qnn_input_tensors, qnn_output_tensors)) {
+        return false;
+    }
+
+    return true;
+}
+
+template <size_t _InputSize>
+bool write_to_qnn_tensors(const std::array<const ggml_tensor *, _InputSize> &inputs) {
+    for (auto &input : inputs) {
+        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(input);
+        if (!tensor || !tensor->write_to_qnn_tensor()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template <size_t _OutputSize>
+bool read_from_qnn_tensors(const std::array<ggml_tensor *, _OutputSize> &outputs) {
+    for (auto &output : outputs) {
+        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(output);
+        if (!tensor || !tensor->read_from_qnn_tensor()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template <size_t _InputSize, size_t _OutputSize>
+bool execute_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *graph,
+                   const std::array<const ggml_tensor *, _InputSize> &inputs,
+                   const std::array<ggml_tensor *, _OutputSize> &outputs) {
+    if (!write_to_qnn_tensors<_InputSize>(inputs)) {
+        return false;
+    }
+
+    if (!graph->execute()) {
+        return false;
+    }
+
+    if (!read_from_qnn_tensors<_OutputSize>(outputs)) {
         return false;
     }
 
@@ -61,13 +135,10 @@ static void ggml_qnn_add(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
 
     bool succeed = false;
     std::string graph_key(ggml_op_name(GGML_OP_ADD));
-    auto it = ctx->qnn_graph_map.find(graph_key);
-    if (it != ctx->qnn_graph_map.end()) {
-        const auto &graph_item = it->second;
-        qnn::ggml_qnn_tensor_input tensor_input0(src0, std::get<1>(graph_item), ctx);
-        qnn::ggml_qnn_tensor_input tensor_input1(src1, std::get<2>(graph_item), ctx);
-        qnn::ggml_qnn_tensor_output tensor_output(dst, std::get<3>(graph_item), ctx);
-        std::get<0>(graph_item)->execute();
+    auto it = ctx->qnn_binary_graph_cache.find(graph_key);
+    qnn::ggml_qnn_graph_binary *graph_ptr = nullptr;
+    if (it != ctx->qnn_binary_graph_cache.end()) {
+        graph_ptr = it->second.get();
     } else {
         graph_name = graph_name + "_" + std::to_string(ctx->threads) + "_" + src0->name + "_" + src1->name;
         auto graph = std::make_unique<qnn::ggml_qnn_graph_binary>(graph_name, (QNNBackend)(ctx->device),
@@ -78,34 +149,15 @@ static void ggml_qnn_add(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
             goto failure;
         }
 
-        qnn::ggml_qnn_tensor_input tensor_input0(src0, graph->get_graph_handler(), ctx);
-        if (!tensor_input0.is_valid()) {
-            goto failure;
-        }
-        qnn::ggml_qnn_tensor_input tensor_input1(src1, graph->get_graph_handler(), ctx);
-        if (!tensor_input1.is_valid()) {
-            goto failure;
-        }
-        qnn::ggml_qnn_tensor_output tensor_output(dst, graph->get_graph_handler(), ctx);
-        if (!tensor_output.is_valid()) {
+        if (!qnn_bind_tensors_to_graph<2, 1>(graph.get(), QNN_OP_ELEMENT_WISE_ADD, { src0, src1 }, { dst })) {
             goto failure;
         }
 
-        if (!graph->add_nodes(QNN_OP_ELEMENT_WISE_ADD,
-                              { *tensor_input0.get_qnn_tensor(), *tensor_input1.get_qnn_tensor() },
-                              { *tensor_output.get_qnn_tensor() })) {
-            goto failure;
-        }
-
-        if (!graph->execute()) {
-            goto failure;
-        }
-
-        ctx->qnn_graph_map[graph_key] = std::make_tuple(std::move(graph), tensor_input0.get_qnn_tensor(),
-                                                        tensor_input1.get_qnn_tensor(), tensor_output.get_qnn_tensor());
+        graph_ptr = graph.get();
+        ctx->qnn_binary_graph_cache[graph_key] = std::move(graph);
     }
 
-    succeed = true;
+    succeed = execute_graph<2, 1>(graph_ptr, { src0, src1 }, { dst });
 
 failure:
     if (!succeed) {
@@ -143,13 +195,10 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context *ctx, const ggml_tensor *s
 
     bool succeed = false;
     std::string graph_key(ggml_op_name(GGML_OP_MUL_MAT));
-    auto it = ctx->qnn_graph_map.find(graph_key);
-    if (it != ctx->qnn_graph_map.end()) {
-        const auto &graph_item = it->second;
-        qnn::ggml_qnn_tensor_input tensor_input0(src0, std::get<1>(graph_item), ctx);
-        qnn::ggml_qnn_tensor_input tensor_input1(src1, std::get<2>(graph_item), ctx);
-        qnn::ggml_qnn_tensor_output tensor_output(dst, std::get<3>(graph_item), ctx);
-        std::get<0>(graph_item)->execute();
+    auto it = ctx->qnn_binary_graph_cache.find(graph_key);
+    qnn::ggml_qnn_graph_binary *graph_ptr = nullptr;
+    if (it != ctx->qnn_binary_graph_cache.end()) {
+        graph_ptr = it->second.get();
     } else {
         graph_name = graph_name + "_" + std::to_string(ctx->threads) + "_" + src0->name + "_" + src1->name;
         auto graph = std::make_unique<qnn::ggml_qnn_graph_binary>(graph_name, (QNNBackend)(ctx->device),
@@ -160,33 +209,15 @@ static void ggml_qnn_mul_mat(ggml_backend_qnn_context *ctx, const ggml_tensor *s
             goto failure;
         }
 
-        qnn::ggml_qnn_tensor_input tensor_input0(src0, graph->get_graph_handler(), ctx);
-        if (!tensor_input0.is_valid()) {
-            goto failure;
-        }
-        qnn::ggml_qnn_tensor_input tensor_input1(src1, graph->get_graph_handler(), ctx);
-        if (!tensor_input1.is_valid()) {
-            goto failure;
-        }
-        qnn::ggml_qnn_tensor_output tensor_output(dst, graph->get_graph_handler(), ctx);
-        if (!tensor_output.is_valid()) {
+        if (!qnn_bind_tensors_to_graph<2, 1>(graph.get(), QNN_OP_MAT_MUL, { src0, src1 }, { dst })) {
             goto failure;
         }
 
-        if (!graph->add_nodes(QNN_OP_MAT_MUL, { *tensor_input0.get_qnn_tensor(), *tensor_input1.get_qnn_tensor() },
-                              { *tensor_output.get_qnn_tensor() })) {
-            goto failure;
-        }
-
-        if (!graph->execute()) {
-            goto failure;
-        }
-
-        ctx->qnn_graph_map[graph_key] = std::make_tuple(std::move(graph), tensor_input0.get_qnn_tensor(),
-                                                        tensor_input1.get_qnn_tensor(), tensor_output.get_qnn_tensor());
+        graph_ptr = graph.get();
+        ctx->qnn_binary_graph_cache[graph_key] = std::move(graph);
     }
 
-    succeed = true;
+    succeed = execute_graph<2, 1>(graph_ptr, { src0, src1 }, { dst });
 
 failure:
     if (!succeed) {

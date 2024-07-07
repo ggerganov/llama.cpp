@@ -637,20 +637,20 @@ public:
             return 3;
         }
 
-        if (is_rpcmem_registered((QNN_VER_PTR(*p_tensor)->memHandle))) {
-            QNN_LOG_WARN("tensor %s has been registered shared memory\n", (QNN_VER_PTR(*p_tensor)->name));
+        if (is_rpcmem_registered(QNN_TENSOR_GET_MEM_HANDLE(*p_tensor))) {
+            QNN_LOG_WARN("tensor %s has been registered shared memory\n", QNN_TENSOR_GET_NAME(*p_tensor));
             return 4;
         }
 
         int32_t mem_fd = rpcmem_to_fd(p_data);
-        if (-1 == mem_fd) {
+        if (mem_fd == -1) {
             QNN_LOG_WARN("failed to get file descriptor\n");
             return 5;
         }
         QNN_LOG_INFO("mem_fd %d\n", mem_fd);
-        Qnn_MemDescriptor_t descriptor = { { QNN_VER_PTR(*p_tensor)->rank, QNN_VER_PTR(*p_tensor)->dimensions,
+        Qnn_MemDescriptor_t descriptor = { { QNN_TENSOR_GET_RANK(*p_tensor), QNN_TENSOR_GET_DIMENSIONS(*p_tensor),
                                              nullptr },
-                                           QNN_VER_PTR(*p_tensor)->dataType,
+                                           QNN_TENSOR_GET_DATA_TYPE(*p_tensor),
                                            QNN_MEM_TYPE_ION,
                                            { { mem_fd } } };
         Qnn_MemHandle_t handle = nullptr;
@@ -662,9 +662,10 @@ public:
                          strerror(error));
             return 6;
         } else {
-            QNN_LOG_INFO("tensor %s successfully register shared memory\n", (QNN_VER_PTR(*p_tensor)->name));
+            QNN_LOG_INFO("tensor %s successfully register shared memory\n", QNN_TENSOR_GET_NAME(*p_tensor));
         }
-        QNN_VER_PTR(*p_tensor)->memHandle = handle;
+
+        QNN_TENSOR_SET_MEM_HANDLE(*p_tensor, handle);
         _qnn_mem_set.insert((std::pair<void *, Qnn_MemHandle_t>(p_data, handle)));
 
         return 0;

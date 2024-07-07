@@ -1,5 +1,6 @@
 #include "ggml-qnn.h"
 
+#include <list>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,7 +82,6 @@ static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
                           .threads = 1,
                           .name = "qnn-cpu",
                           .lib = "libQnnCpu.so",
-                          .instance = nullptr,
                           .backend = nullptr,
                           .raw_interface = {},
                           .raw_system_interface = {},
@@ -91,7 +91,6 @@ static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
                           .threads = 1,
                           .name = "qnn-gpu",
                           .lib = "libQnnGpu.so",
-                          .instance = nullptr,
                           .backend = nullptr,
                           .raw_interface = {},
                           .raw_system_interface = {},
@@ -101,7 +100,6 @@ static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
                           .threads = 1,
                           .name = "qnn-npu",
                           .lib = "libQnnHtp.so",
-                          .instance = nullptr,
                           .backend = nullptr,
                           .raw_interface = {},
                           .raw_system_interface = {},
@@ -112,23 +110,16 @@ struct ggml_backend_qnn_buffer_context {
     ggml_backend_qnn_buffer_context(size_t device) : device(device), name(QNN_BACKEND_NAME + std::to_string(device)) {}
 
     ~ggml_backend_qnn_buffer_context() {
+        tensors.clear();
         if (buffer) {
             free(buffer);
         }
-
-        for (auto *qnn_tensor : qnn_tensors) {
-            qnn::device_tensor_free(*qnn_tensor);
-            free(qnn_tensor);
-        }
-
-        qnn_tensors.clear();
     }
+
     void *buffer = nullptr;
-
     struct ggml_backend_qnn_context *backend_ctx = nullptr;
-
+    std::list<std::unique_ptr<qnn::ggml_qnn_tensor>> tensors;
     size_t buffer_size = 0;
-    std::vector<Qnn_Tensor_t *> qnn_tensors;
     size_t device;
     std::string name;
 };
@@ -235,37 +226,14 @@ GGML_CALL static void *ggml_backend_qnn_buffer_get_base(ggml_backend_buffer_t bu
 GGML_CALL static void ggml_backend_qnn_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor *tensor) {
     ggml_backend_qnn_buffer_context *ctx = (ggml_backend_qnn_buffer_context *)buffer->context;
 
-    Qnn_Tensor_t *p_qnn_tensor = (Qnn_Tensor_t *)calloc(1, sizeof(Qnn_Tensor_t));
-    if (!p_qnn_tensor) {
-        QNN_LOG_WARN("calloc failed");
-        return;
-    }
-
-    static int idx = 0;
-    char tensor_name[GGML_MAX_NAME] = { 0 };
-    snprintf(tensor_name, GGML_MAX_NAME, "tensor_%04d", idx++);
-    Qnn_DataType_t qnn_data_type = qnn::device_datatype_from_ggml_datatype(tensor->type);
-    Qnn_TensorType_t qnn_tensor_type = qnn::device_tensortype_from_ggml_tensor(tensor);
-    Qnn_TensorMemType_t qnn_mem_type = QNN_TENSORMEMTYPE_RAW;
-    if (ctx->device == QNN_BACKEND_GPU) {
-        qnn_mem_type = QNN_TENSORMEMTYPE_MEMHANDLE;
-    }
-
-    uint32_t dimensions[] = { (uint32_t)tensor->ne[0], (uint32_t)tensor->ne[1], (uint32_t)tensor->ne[2],
-                              (uint32_t)tensor->ne[3] };
-    Qnn_Tensor_t qnn_tensor;
-    qnn::device_tensor_init(qnn_tensor, qnn::get_ggml_tensor_rank(tensor), qnn_mem_type, tensor_name, qnn_tensor_type,
-                            qnn_data_type, dimensions);
-
-    Qnn_ErrorHandle_t error = qnn::device_tensor_deep_copy(qnn_tensor, *p_qnn_tensor);
-    if (error != QNN_SUCCESS) {
-        free(p_qnn_tensor);
-        QNN_LOG_WARN("init tensor failed");
+    auto instance = ctx->backend_ctx->instance;
+    auto qnn_tensor = std::make_unique<qnn::ggml_qnn_tensor>(tensor, (QNNBackend)(ctx->device), instance);
+    if (!qnn_tensor->is_valid()) {
+        QNN_LOG_WARN("Create ggml_qnn_tensor failed");
         return;
     }
     
-    tensor->extra = p_qnn_tensor;
-    ctx->qnn_tensors.push_back(p_qnn_tensor);
+    ctx->tensors.push_back(std::move(qnn_tensor));
 }
 
 GGML_CALL static void ggml_backend_qnn_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor *tensor,
@@ -373,17 +341,16 @@ GGML_CALL static void ggml_backend_qnn_free(ggml_backend_t backend) {
     ggml_backend_qnn_context *ctx = (ggml_backend_qnn_context *)backend->context;
     QNN_LOG_INFO("idx %d, name:%s", ctx->device, g_qnn_mgr[ctx->device].name);
 
-    auto *instance = g_qnn_mgr[ctx->device].instance;
-    if (instance != nullptr) {
-        for (const auto &graph_item : ctx->qnn_graph_map) {
+    auto instance = g_qnn_mgr[ctx->device].instance;
+    if (instance) {
+        for (const auto &graph_item : ctx->qnn_binary_graph_cache) {
             QNN_LOG_INFO("graph type:%s", graph_item.first.c_str());
         }
 
-        ctx->qnn_graph_map.clear();
+        ctx->qnn_binary_graph_cache.clear();
 
         instance->qnn_finalize();
-        delete instance;
-        g_qnn_mgr[ctx->device].instance = nullptr;
+        g_qnn_mgr[ctx->device].instance.reset();
     }
 
     if (g_qnn_mgr[ctx->device].backend != nullptr) {
@@ -582,17 +549,15 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char *qnn_lib_path) {
         }
     }
 
-    auto *instance = new qnn::qnn_instance(qnn_lib_path, g_qnn_mgr[device].lib, "");
+    auto instance = std::make_shared<qnn::qnn_instance>(qnn_lib_path, g_qnn_mgr[device].lib, "");
     result = instance->qnn_init(nullptr);
-    if (0 != result) {
+    if (result != 0) {
         QNN_LOG_WARN("init qnn subsystem failed with qnn backend %s, pls check why\n", qnn::get_backend_name(device));
-        delete instance;
         return nullptr;
     }
     auto qnn_interface = instance->get_qnn_interface();
     if (!qnn_interface.is_loaded()) {
         QNN_LOG_WARN("qnn subsystem failure\n");
-        delete instance;
         return nullptr;
     }
 

@@ -49,7 +49,5 @@ using pfn_qnninterface_getproviders = decltype(QnnInterface_getProviders);
 using pfn_qnnsysteminterface_getproviders = decltype(QnnSystemInterface_getProviders);
 } // namespace qnn
 
-#define QNN_VER_PTR(x) (&((x).v1)) // TODO: remove this macro after we have a separate header for QNN
-
 #define RPCMEM_DEFAULT_FLAGS 1
 #define RPCMEM_HEAP_ID_SYSTEM 25

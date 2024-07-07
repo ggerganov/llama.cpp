@@ -73,6 +73,22 @@ public:
         _graph_handle = graph_handle;
     }
 
+    bool create_graph_tensor(Qnn_Tensor_t &tensor) {
+        if (!is_valid()) {
+            QNN_LOG_ERROR("Invalid graph\n");
+            return false;
+        }
+
+        auto err = _qnn_interface.tensorCreateGraphTensor(_graph_handle, &tensor);
+        if (err != QNN_SUCCESS) {
+            QNN_LOG_INFO("error = %d\n", err);
+            QNN_LOG_DEBUG("tensor%p name %s", _qnn_tensor, QNN_TENSOR_GET_NAME(*_qnn_tensor));
+            return false;
+        }
+
+        return true;
+    }
+
     bool add_nodes(const std::string &op_name, const input_tensor_array_t &tensor_inputs,
                    const output_tensor_array_t &tensor_outputs) {
         if (!is_valid()) {
@@ -123,6 +139,8 @@ public:
     bool is_valid() const { return _graph_handle != nullptr; }
 
     Qnn_GraphHandle_t get_graph_handler() const { return _graph_handle; }
+
+    const std::string &get_name() const { return _graph_name; }
 
 private:
     const std::string _graph_name;

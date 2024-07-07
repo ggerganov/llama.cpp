@@ -102,6 +102,13 @@ inline Qnn_TensorMemType_t get_qnn_tensor_memtype(const Qnn_Tensor_t &tensor) {
     return QNN_TENSORMEMTYPE_UNDEFINED;
 }
 
+inline Qnn_MemHandle_t get_qnn_tensor_memhandle(const Qnn_Tensor_t &tensor) {
+    if (tensor.version == QNN_TENSOR_VERSION_1) {
+        return tensor.v1.memHandle;
+    }
+    return nullptr;
+}
+
 inline void set_qnn_tensor_id(Qnn_Tensor_t &tensor, uint32_t id) {
     if (tensor.version == QNN_TENSOR_VERSION_1) {
         tensor.v1.id = id;
@@ -224,6 +231,7 @@ public:
 #define QNN_TENSOR_GET_RANK(tensor) qnn::get_qnn_tensor_rank(tensor)
 #define QNN_TENSOR_GET_DIMENSIONS(tensor) qnn::get_qnn_tensor_dimensions(tensor)
 #define QNN_TENSOR_GET_MEM_TYPE(tensor) qnn::get_qnn_tensor_memtype(tensor)
+#define QNN_TENSOR_GET_MEM_HANDLE(tensor) qnn::get_qnn_tensor_memhandle(tensor)
 
 #define QNN_TENSOR_SET_ID(tensor, value) qnn::set_qnn_tensor_id(tensor, value)
 #define QNN_TENSOR_SET_NAME(tensor, value) qnn::set_qnn_tensor_name(tensor, value)
