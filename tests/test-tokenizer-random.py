@@ -15,6 +15,7 @@ import subprocess
 import random
 import unicodedata
 
+from pathlib import Path
 from typing import Any, Iterator, cast
 from typing_extensions import Buffer
 
@@ -39,7 +40,7 @@ class LibLlama:
         self.lib.llama_backend_init()
 
     def _load_libllama_cffi(self, path_llama_h: str, path_includes: list[str], path_libllama: str) -> tuple[cffi.FFI, Any]:
-        cmd = ["gcc", "-E", "-P", "-D__restrict=", "-D__attribute__(x)=", "-D__asm__(x)="]
+        cmd = ["gcc", "-O0", "-E", "-P", "-D__restrict=", "-D__attribute__(x)=", "-D__asm__(x)="]
         cmd += ["-I" + path for path in path_includes] + [path_llama_h]
         res = subprocess.run(cmd, stdout=subprocess.PIPE)
         assert (res.returncode == 0)
@@ -480,8 +481,8 @@ def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLl
 
 def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("vocab_file", help="path to vocab 'gguf' file")
-    parser.add_argument("dir_tokenizer", help="directory containing 'tokenizer.model' file")
+    parser.add_argument("vocab_file", type=str, help="path to vocab 'gguf' file")
+    parser.add_argument("dir_tokenizer", type=str, help="directory containing 'tokenizer.model' file")
     parser.add_argument("--verbose", action="store_true", help="increase output verbosity")
     args = parser.parse_args(argv)
 
@@ -523,7 +524,7 @@ if __name__ == "__main__":
         format   = "%(levelname)s %(message)s",
     )
 
-    path_tokenizers   = "./models/tokenizers/"
+    path_tokenizers   = Path("./models/tokenizers/")
     path_vocab_format = "./models/ggml-vocab-%s.gguf"
 
     tokenizers = [
@@ -559,6 +560,6 @@ if __name__ == "__main__":
     for tokenizer in tokenizers:
         logger.info("-" * 50)
         logger.info(f"TOKENIZER: '{tokenizer}'")
-        vocab_file = path_vocab_format % tokenizer
-        dir_tokenizer = path_tokenizers + "/" + tokenizer
-        main([vocab_file, dir_tokenizer, "--verbose"])
+        vocab_file = Path(path_vocab_format % tokenizer)
+        dir_tokenizer = path_tokenizers / tokenizer
+        main([str(vocab_file), str(dir_tokenizer), "--verbose"])
