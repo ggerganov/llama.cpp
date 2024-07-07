@@ -10863,7 +10863,7 @@ struct llm_build_context {
             // special-case: the up and gate tensors are merged into a single tensor
             // TOOD: support into llm_build_ffn
             {
-                cur = llm_build_ffn(ctx0, cur,
+                cur = llm_build_ffn(lctx, ctx0, cur,
                         model.layers[il].ffn_up,   NULL, NULL,
                         NULL,                      NULL, NULL,
                         model.layers[il].ffn_down, NULL, NULL,
@@ -13622,7 +13622,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur_rope", il);
 
-                cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
@@ -13647,7 +13647,7 @@ struct llm_build_context {
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
 
-                cur = llm_build_ffn(ctx0, cur,
+                cur = llm_build_ffn(lctx, ctx0, cur,
                         model.layers[il].ffn_up,   NULL, NULL,
                         NULL,                      NULL, NULL,
                         model.layers[il].ffn_down, NULL, NULL,
