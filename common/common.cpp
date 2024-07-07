@@ -2063,14 +2063,14 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
         const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
         float lora_scale = std::get<1>(params.lora_adapter[i]);
-        auto adapter = llama_lora_adapter_init(lctx, lora_adapter.c_str(), lora_scale);
+        auto adapter = llama_lora_adapter_init(model, lora_adapter.c_str());
         if (adapter == nullptr) {
             fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
             llama_free(lctx);
             llama_free_model(model);
             return std::make_tuple(nullptr, nullptr);
         }
-        llama_lora_adapter_apply(lctx, adapter);
+        llama_lora_adapter_set(lctx, adapter, lora_scale);
     }
 
     if (params.ignore_eos) {
