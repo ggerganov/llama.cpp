@@ -5513,7 +5513,8 @@ static void llm_load_vocab(
             }
         }
 
-        if ((token_data.attr & LLAMA_TOKEN_ATTR_USER_DEFINED) && token_data.text.find('<') && token_data.text.rfind('>')) {
+        if ((token_data.attr & LLAMA_TOKEN_ATTR_USER_DEFINED) && !token_data.text.empty() &&
+            token_data.text.front() == '<' && token_data.text.back() == '>') {
             // Some models mark some added tokens which ought to be control tokens as not special.
             // (e.g. command-r, command-r-plus, deepseek-coder)
             // TODO: should this be fixed in the convert script instead?
