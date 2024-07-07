@@ -5,14 +5,12 @@ on:
     paths:
       - '.github/workflows/python-type-check.yml'
       - '**.py'
-      - 'requirements.txt'
-      - 'requirements/*.txt'
+      - '**/requirements*.txt'
   pull_request:
     paths:
       - '.github/workflows/python-type-check.yml'
       - '**.py'
-      - 'requirements.txt'
-      - 'requirements/*.txt'
+      - '**/requirements*.txt'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
@@ -29,7 +27,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
       - name: Install Python dependencies
         # TODO: use a venv
         run: pip install -r requirements/requirements-all.txt
