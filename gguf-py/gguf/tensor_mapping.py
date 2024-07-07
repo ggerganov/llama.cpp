@@ -25,6 +25,7 @@ class TensorNameMap:
             "backbone.embeddings",                       # mamba-hf
             "transformer.in_out_embed",                  # Grok
             "embedding.word_embeddings",                 # chatglm
+            "transformer.token_embeddings",              # openelm
             "shared",                                    # t5
         ),
 
@@ -38,6 +39,7 @@ class TensorNameMap:
             "word_embeddings_layernorm",  # bloom
             "embeddings.LayerNorm",       # bert
             "emb_ln",                     # nomic-bert
+            "transformer.norm",           # openelm
         ),
 
         # Position embeddings
@@ -72,6 +74,7 @@ class TensorNameMap:
             "backbone.norm_f",                         # mamba
             "transformer.rms_norm",                    # Grok
             "encoder.final_layernorm",                 # chatglm
+            "transformer.norm",                        # openelm
         ),
 
         # Rope frequencies
@@ -103,6 +106,7 @@ class TensorNameMap:
             "transformer.decoder_layer.{bid}.rms_norm",             # Grok
             "transformer.blocks.{bid}.norm_attn_norm.norm_1",       # dbrx
             "encoder.layers.{bid}.input_layernorm",                 # chatglm
+            "transformer.layers.{bid}.attn_norm",                   # openelm
         ),
 
         # Attention norm 2
@@ -126,6 +130,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.attn.Wqkv",                                      # nomic-bert
             "model.layers.{bid}.self_attn.qkv_proj",                               # phi3
             "encoder.layers.{bid}.self_attention.query_key_value",                 # chatglm
+            "transformer.layers.{bid}.attn.qkv_proj",                              # openelm
         ),
 
         # Attention query
@@ -184,6 +189,7 @@ class TensorNameMap:
             "transformer.decoder_layer.{bid}.multi_head_attention.linear",  # Grok
             "transformer.blocks.{bid}.norm_attn_norm.attn.out_proj",        # dbrx
             "encoder.layers.{bid}.self_attention.dense",                    # chatglm
+            "transformer.layers.{bid}.attn.out_proj",                       # openelm
         ),
 
         # Attention output norm
@@ -220,6 +226,7 @@ class TensorNameMap:
             "model.layers.{bid}.ffn_norm",                                   # internlm2
             "transformer.decoder_layer.{bid}.rms_norm_2",                    # Grok
             "encoder.layers.{bid}.post_attention_layernorm",                 # chatglm
+            "transformer.layers.{bid}.ffn_norm",                             # openelm
         ),
 
         # Post feed-forward norm
@@ -336,6 +343,7 @@ class TensorNameMap:
             "encoder.layers.{bid}.mlp.fc2",                           # nomic-bert
             "model.layers.{bid}.mlp.c_proj",                          # starcoder2
             "encoder.layer.{bid}.mlp.wo",                             # jina-bert-v2
+            "transformer.layers.{bid}.ffn.proj_2",                    # openelm
             "model.layers.{bid}.residual_mlp.w2",                     # arctic
             "encoder.layer.{bid}.mlp.down_layer",                     # jina-bert-v2
             "encoder.layers.{bid}.mlp.dense_4h_to_h",                 # chatglm
@@ -358,7 +366,8 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.q_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.q_norm",                            # cohere
             "transformer.blocks.{bid}.attn.q_ln",                             # sea-lion
-            "encoder.layer.{bid}.attention.self.layer_norm_q"                 # jina-bert-v2
+            "encoder.layer.{bid}.attention.self.layer_norm_q",                # jina-bert-v2
+            "transformer.layers.{bid}.attn.q_norm",                           # openelm
         ),
 
         MODEL_TENSOR.ATTN_K_NORM: (
@@ -366,7 +375,8 @@ class TensorNameMap:
             "model.layers.{bid}.self_attn.k_layernorm",                       # persimmon
             "model.layers.{bid}.self_attn.k_norm",                            # cohere
             "transformer.blocks.{bid}.attn.k_ln",                             # sea-lion
-            "encoder.layer.{bid}.attention.self.layer_norm_k"                 # jina-bert-v2
+            "encoder.layer.{bid}.attention.self.layer_norm_k",                # jina-bert-v2
+            "transformer.layers.{bid}.attn.k_norm",                           # openelm
         ),
 
         MODEL_TENSOR.ROPE_FREQS: (
