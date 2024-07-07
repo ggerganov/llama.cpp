@@ -34,4 +34,5 @@ jobs:
         uses: jakebailey/pyright-action@v2
         with:
           version: 1.1.370
+          level: warning
           warnings: true
