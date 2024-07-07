@@ -464,8 +464,7 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
     if (!result.contains("model") || !result.contains("oaicompat_token_ctr")) {
         return std::vector<json>({result});
     }
-
-    bool first = json_value(result, "oaicompat_token_ctr", 0) == 0;
+    bool first = json_value(result, "oaicompat_token_ctr", 1) == 1;
     std::string modelname = json_value(result, "model", std::string(DEFAULT_OAICOMPAT_MODEL));
 
     bool stopped_word   = json_value(result, "stopped_word",  false);
