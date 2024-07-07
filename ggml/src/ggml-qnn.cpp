@@ -116,16 +116,11 @@ struct ggml_backend_qnn_buffer_context {
             free(buffer);
         }
 
-        for (auto *sub_buffer : sub_buffers) {
-            free(sub_buffer);
-        }
-
         for (auto *qnn_tensor : qnn_tensors) {
             qnn::device_tensor_free(*qnn_tensor);
             free(qnn_tensor);
         }
 
-        sub_buffers.clear();
         qnn_tensors.clear();
     }
     void *buffer = nullptr;
@@ -133,7 +128,6 @@ struct ggml_backend_qnn_buffer_context {
     struct ggml_backend_qnn_context *backend_ctx = nullptr;
 
     size_t buffer_size = 0;
-    std::vector<void *> sub_buffers;
     std::vector<Qnn_Tensor_t *> qnn_tensors;
     size_t device;
     std::string name;
