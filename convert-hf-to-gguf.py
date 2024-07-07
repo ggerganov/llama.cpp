@@ -3060,6 +3060,7 @@ class JaisModel(Model):
         super().write_tensors()
         self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
 
+
 @Model.register("ChatGLMModel", "ChatGLMForConditionalGeneration")
 class ChatGLMModel(Model):
     model_arch = gguf.MODEL_ARCH.CHATGLM
@@ -3077,8 +3078,6 @@ class ChatGLMModel(Model):
         assert max(tokenizer.get_vocab().values()) < vocab_size
         role_special_tokens = ["<|system|>", "<|user|>", "<|assistant|>", "<|observation|>"]
         special_tokens = ["[MASK]", "[gMASK]", "[sMASK]", "sop", "eop"] + role_special_tokens
-        print(vocab_size)
-        print(max(tokenizer.get_vocab().values()))
         for token_id in range(vocab_size):
             piece = tokenizer._convert_id_to_token(token_id)
             if token_id == 0:
@@ -3233,7 +3232,6 @@ class ChatGLMModel(Model):
         self.gguf_writer.add_rope_dimension_count(64)
         self.gguf_writer.add_add_bos_token(False)
         self.gguf_writer.add_rope_freq_base(self.hparams.get("rope_ratio", 10000))
-
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
