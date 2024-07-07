@@ -37,47 +37,83 @@ static __global__ void quantize_q8_1(const float * __restrict__ x, void * __rest
     reinterpret_cast<half&>(y[ib].ds.y) = sum;
 }
 
-template <bool need_sum>
+template <int need_sum>
 static __global__ void quantize_mmq_q8_1(
     const float * __restrict__ x, void * __restrict__ vy, const int64_t kx0, const int64_t kx1, const int64_t kx0_padded) {
 
-    const int64_t ix0 = (int64_t)blockDim.x*blockIdx.x + threadIdx.x;
+    const int64_t ix0 = ((int64_t)blockDim.x*blockIdx.x + threadIdx.x)*4;
 
     if (ix0 >= kx0_padded) {
         return;
     }
 
+    const float4 * x4 = (const float4 *) x;
+
     const int64_t ix1 = kx1*blockIdx.z + blockIdx.y;
 
     block_q8_1_mmq * y = (block_q8_1_mmq *) vy;
 
-    const int64_t ib0 = blockIdx.z*(gridDim.y*gridDim.x*blockDim.x/(4*QK8_1)); // first block of channel
-    const int64_t ib  = ib0 + (ix0 / (4*QK8_1))*kx1 + blockIdx.y;              // block index in channel
-    const int64_t iqs = ix0 % (4*QK8_1);                                       // quant index in block
+    const int64_t ib0 = blockIdx.z*((int64_t)gridDim.y*gridDim.x*blockDim.x/QK8_1); // first block of channel
+    const int64_t ib  = ib0 + (ix0 / (4*QK8_1))*kx1 + blockIdx.y;                   // block index in channel
+    const int64_t iqs = ix0 % (4*QK8_1);                                            // quant index in block
 
-    const float xi = ix0 < kx0 ? x[ix1*kx0 + ix0] : 0.0f;
-    float amax = fabsf(xi);
+    const float4 xi = ix0 < kx0 ? x4[(ix1*kx0 + ix0)/4] : make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float amax = fabsf(xi.x);
+    amax = fmaxf(amax, fabsf(xi.y));
+    amax = fmaxf(amax, fabsf(xi.z));
+    amax = fmaxf(amax, fabsf(xi.w));
 
-    amax = warp_reduce_max(amax);
+#pragma unroll
+    for (int mask = need_sum == 2 ? 8 : 4; mask > 0; mask >>= 1) {
+        amax = fmaxf(amax, __shfl_xor_sync(0xFFFFFFFF, amax, mask, WARP_SIZE));
+    }
 
     float sum;
-    if (need_sum) {
-        sum = warp_reduce_sum(xi);
+    if (need_sum > 0) {
+        sum = xi.x + xi.y + xi.z + xi.w;
+#pragma unroll
+        for (int mask = need_sum == 2 ? 2 : 4; mask > 0; mask >>= 1) {
+            sum += __shfl_xor_sync(0xFFFFFFFF, sum, mask, WARP_SIZE);
+        }
     }
 
-    const float d = amax / 127;
-    const int8_t q = amax == 0.0f ? 0 : roundf(xi / d);
+    const float d_inv = 127.0f / amax;
+    char4 q;
+    q.x = roundf(xi.x*d_inv);
+    q.y = roundf(xi.y*d_inv);
+    q.z = roundf(xi.z*d_inv);
+    q.w = roundf(xi.w*d_inv);
 
-    y[ib].qs[iqs] = q;
+    char4 * yqs4 = (char4 *) y[ib].qs;
+    yqs4[iqs/4] = q;
 
-    if (iqs % QK8_1 != 0) {
-        return;
-    }
+    if (need_sum < 2) {
+        if (iqs % QK8_1 != 0) {
+            return;
+        }
 
-    if (need_sum) {
-        y[ib].ds[iqs/QK8_1] = make_half2(d, sum);
+        const float d = 1.0f / d_inv;
+
+        if (need_sum > 0) {
+            y[ib].ds[iqs/QK8_1] = make_half2(d, sum);
+        } else {
+            ((float *) y[ib].ds)[iqs/QK8_1] = d;
+        }
     } else {
-        ((float *) y[ib].ds)[iqs/QK8_1] = d;
+        if (iqs % (QK8_1/2) != 0 || iqs >= (3*QK8_1)) {
+            return;
+        }
+
+        half * ydsh = (half *) y[ib].ds;
+        ydsh[2 + iqs/(QK8_1/2)] = sum;
+
+        if (iqs % (QK8_1*2) != 0) {
+            return;
+        }
+
+        const float d = 1.0f / d_inv;
+
+        ydsh[iqs/(QK8_1*2)] = d;
     }
 }
 
@@ -101,12 +137,21 @@ void quantize_mmq_q8_1_cuda(
 
     GGML_ASSERT(kx0_padded % (4*QK8_1) == 0);
 
-    const int64_t block_num_x = (kx0_padded + CUDA_QUANTIZE_BLOCK_SIZE - 1) / CUDA_QUANTIZE_BLOCK_SIZE;
+    const int64_t block_num_x = (kx0_padded + 4*CUDA_QUANTIZE_BLOCK_SIZE_MMQ - 1) / (4*CUDA_QUANTIZE_BLOCK_SIZE_MMQ);
     const dim3 num_blocks(block_num_x, kx1, channels);
-    const dim3 block_size(CUDA_QUANTIZE_BLOCK_SIZE, 1, 1);
-    if (mmq_need_sum(type_x)) {
-        quantize_mmq_q8_1<true><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
-    } else {
-        quantize_mmq_q8_1<false><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
+    const dim3 block_size(CUDA_QUANTIZE_BLOCK_SIZE_MMQ, 1, 1);
+    switch (mmq_need_sum(type_x)) {
+        case 0:
+            quantize_mmq_q8_1<0><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
+            break;
+        case 1:
+            quantize_mmq_q8_1<1><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
+            break;
+        case 2:
+            quantize_mmq_q8_1<2><<<num_blocks, block_size, 0, stream>>>(x, vy, kx0, kx1, kx0_padded);
+            break;
+        default:
+            GGML_ASSERT(false);
+            break;
     }
 }
