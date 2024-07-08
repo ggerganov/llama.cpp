@@ -7867,10 +7867,9 @@ static struct ggml_tensor * llm_build_lora_mm(
             continue;
         }
         // TODO: check if lora_a need transpose
-        struct ggml_tensor * a = ggml_cont(ctx0, ggml_transpose(ctx0, lora->a));
         struct ggml_tensor * ab_cur = ggml_mul_mat(
             ctx0, lora->b,
-            ggml_mul_mat(ctx0, a, cur)
+            ggml_mul_mat(ctx0, lora->a, cur)
         );
         ab_cur = ggml_scale_inplace(ctx0, ab_cur, scale);
         res = ggml_add(ctx0, res, ab_cur);
