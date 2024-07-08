@@ -15440,8 +15440,8 @@ struct llm_tokenizer_bpe {
                 break;
             case LLAMA_VOCAB_PRE_TYPE_VIKING:
                 regex_exprs = {
-                    "\\p{N}",
                     " ?[^(\\s|.,!?…。，、।۔،)]+",
+                    "\\p{N}",
                 };
                 break;
             default:
