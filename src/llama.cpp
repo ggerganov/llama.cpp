@@ -15468,6 +15468,15 @@ struct llm_tokenizer_bpe {
             case LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH:
                 regex_exprs = {"\\w+|[^\\w\\s]+"};
                 break;
+            default:
+                // default regex for BPE tokenization pre-processing
+                regex_exprs = {
+                    "[\\p{P}\\$\\+<=>\\^~\\|]+",
+                    "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                    "\\p{N}+",
+                    "[0-9][0-9][0-9]",
+                };
+                break;
         }
     }
 
