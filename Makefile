@@ -826,7 +826,8 @@ OBJ_GGML += \
 	ggml/src/ggml.o \
 	ggml/src/ggml-alloc.o \
 	ggml/src/ggml-backend.o \
-	ggml/src/ggml-quants.o
+	ggml/src/ggml-quants.o \
+	ggml/src/ggml-aarch64.o
 
 OBJ_LLAMA = \
 	src/llama.o \
@@ -956,6 +957,13 @@ ggml/src/ggml-quants.o: \
 	ggml/src/ggml-quants.c \
 	ggml/include/ggml.h \
 	ggml/src/ggml-quants.h \
+	ggml/src/ggml-common.h
+	$(CC) $(CFLAGS)    -c $< -o $@
+
+ggml/src/ggml-aarch64.o: \
+	ggml/src/ggml-aarch64.c \
+	ggml/include/ggml.h \
+	ggml/src/ggml-aarch64.h \
 	ggml/src/ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 

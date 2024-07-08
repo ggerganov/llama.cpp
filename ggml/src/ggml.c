@@ -474,18 +474,6 @@ int64_t ggml_cycles_per_ms(void) {
     return CLOCKS_PER_SEC/1000;
 }
 
-#ifdef GGML_PERF
-#define ggml_perf_time_ms()       ggml_time_ms()
-#define ggml_perf_time_us()       ggml_time_us()
-#define ggml_perf_cycles()        ggml_cycles()
-#define ggml_perf_cycles_per_ms() ggml_cycles_per_ms()
-#else
-#define ggml_perf_time_ms()       0
-#define ggml_perf_time_us()       0
-#define ggml_perf_cycles()        0
-#define ggml_perf_cycles_per_ms() 0
-#endif
-
 //
 // cross-platform UTF-8 file paths
 //
@@ -12272,29 +12260,23 @@ UseGgmlGemm1:;
 
         for (int64_t i13 = 0; i13 < ne13; ++i13) {
             for (int64_t i12 = 0; i12 < ne12; ++i12) {
-                for (int64_t i11 = ith; i11 < ne11; i11 += nth) {
+                int64_t i11_processed = 0;
+                if ((ggml_n_dims(src1) == 2) && from_float_to_mat && gemm) {
+                    for (int64_t i11 = ith * 4; i11 < ne11 - ne11 % 4; i11 += nth * 4) {
+                        from_float_to_mat((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11),
+                                          (void *)               (wdata + i13*nbw3 + i12*nbw2 + i11*nbw1),
+                                          4, ne10, interleave_blcksize);
+                    }
+                    i11_processed = ne11 - ne11 % 4;
+                }
+                for (int64_t i11 = i11_processed + ith; i11 < ne11; i11 += nth) {
                     from_float_to_vec_dot((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11),
                                           (void *)               (wdata + i13*nbw3 + i12*nbw2 + i11*nbw1),
                                            ne10);
                 }
             }
         }
-            for (int64_t i13 = 0; i13 < ne13; ++i13) {
-                for (int64_t i12 = 0; i12 < ne12; ++i12) {
-                    int64_t i11_processed = 0;
-                    if ((ggml_n_dims(src1) == 2) && from_float_to_mat && gemm) {
-                        for (int64_t i11 = 0; i11 < ne11 - ne11 % 4; i11 += 4) {
-                            from_float_to_mat((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11), (void *) wdata, 4, ne10, interleave_blcksize);
-                            wdata += row_size * 4;
-                        }
-                        i11_processed = ne11 - ne11 % 4;
-                    }
-                    for (int64_t i11 = i11_processed; i11 < ne11; ++i11) {
-                        from_float_to_vec_dot((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11), (void *) wdata, ne10);
-                        wdata += row_size;
-                    }
-                }
-            }
+    }
 
     if (ith == 0) {
         // Every thread starts at ith, so the first unprocessed chunk is nth.  This save a bit of coordination right at the start.
@@ -12367,11 +12349,6 @@ UseGgmlGemm2:;
     // The number of elements in each chunk
     const int64_t dr0 = (nr0 + nchunk0 - 1) / nchunk0;
     const int64_t dr1 = (nr1 + nchunk1 - 1) / nchunk1;
-
-    // The first chunk comes from our thread_id, the rest will get auto-assigned.
-    int current_chunk = ith;
-    //if (ith == 0)
-    //    printf("MUL_MAT = [%d, %d, %d, %d] x [%d, %d, %d, %d] = %d x %d = %d.  Fp Ops/Ch %d\n", ne00, ne01, ne02, ne03, ne10, ne11, ne12, ne13, nchunk0, nchunk1, nchunk0 * nchunk1, ne00 * nr0 * nr1 / nchunk0 / nchunk1);
 
     if ((ggml_n_dims(src0) == 2) && gemv) {
         const void * src1_wdata      = (src1->type == vec_dot_type) ? src1->data : params->wdata;
