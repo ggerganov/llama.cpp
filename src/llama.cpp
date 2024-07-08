@@ -467,7 +467,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TOKENIZER_MIDDLE_ID,            "tokenizer.ggml.middle_token_id"          },
     { LLM_KV_TOKENIZER_EOT_ID,               "tokenizer.ggml.eot_token_id"             },
 
-    { LLM_KV_TRAINING_TYPE,                  "training.type"                     },
+    { LLM_KV_TRAINING_TYPE,                  "training.type" },
 };
 
 struct LLM_KV {
@@ -18521,7 +18521,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 static void llama_lora_adapter_init_internal(struct llama_model * model, const char * path_lora, struct llama_lora_adapter & adapter) {
     static const int n_inp_tensors = 5; // see llama_model
     static const int n_out_tensors = 5; // see llama_model
-    LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
+    LLAMA_LOG_INFO("%s: applying lora adapter from '%s' ...\n", __func__, path_lora);
 
     ggml_context * ctx = nullptr;
     struct gguf_init_params meta_gguf_params = {
@@ -18530,8 +18530,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
     };
     struct gguf_context * ctx_gguf = gguf_init_from_file(path_lora, meta_gguf_params);
     if (!ctx_gguf) {
-        LLAMA_LOG_ERROR("%s: failed to load lora adapter file from %s\n", __func__, path_lora);
-        throw std::exception();
+        throw std::runtime_error("failed to load lora adapter file from " + std::string(path_lora));
     }
 
     // check metadata
@@ -18631,11 +18630,17 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
         if (!model_tensor) {
             gguf_free(ctx_gguf);
             ggml_free(ctx);
-            throw std::runtime_error("LoRA tensor '" + name + "' does not exist in base model\n");
+            throw std::runtime_error("LoRA tensor '" + name + "' does not exist in base model");
         }
         struct ggml_context * dev_ctx = ctx_map.at(ggml_backend_buffer_get_type(model_tensor->buffer));
-        // TODO: validate tensor shape
-        // LLAMA_LOG_INFO("%s %p %p\n", cname, w.a, w.b);
+        // validate tensor shape
+        if (model_tensor->ne[0] != w.a->ne[0] || model_tensor->ne[1] != w.b->ne[1]) {
+            throw std::runtime_error("tensor '" + name + "' has incorrect shape");
+        }
+        if (w.a->ne[1] != w.b->ne[0]) {
+            throw std::runtime_error("lora_a tensor is not transposed (hint: adapter from \"finetune\" example is no longer supported)");
+        }
+        // save tensor to adapter
         struct ggml_tensor * tensor_a = ggml_dup_tensor(dev_ctx, w.a);
         struct ggml_tensor * tensor_b = ggml_dup_tensor(dev_ctx, w.b);
         ggml_set_name(tensor_a, w.a->name);
