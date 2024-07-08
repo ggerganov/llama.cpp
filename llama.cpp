@@ -2545,7 +2545,7 @@ struct llama_context {
 
     llama_cparams cparams;
     std::map<std::string, lora_weights> lora_weights_map; // only one LoRA adapter at the moment
-    lora_data llora_data;
+    lora_data llama_lora_data;
     float lora_scale = 1.0f;
 
     std::vector<ggml_backend_t> backends;
@@ -7699,21 +7699,21 @@ struct llm_build_context {
             // self-attention
             {
                 // compute Q and K and RoPE them
-                struct ggml_tensor * Qcur = lora_mul_mat(lctx, ctx0, model.layers[il].wq, cur);
+                struct ggml_tensor * Qcur = ggml_mul_mat_lora(lctx, ctx0, model.layers[il].wq, cur);
                 cb(Qcur, "Qcur", il);
                 if (model.layers[il].bq) {
                     Qcur = ggml_add(ctx0, Qcur, model.layers[il].bq);
                     cb(Qcur, "Qcur", il);
                 }
 
-                struct ggml_tensor * Kcur = lora_mul_mat(lctx, ctx0, model.layers[il].wk, cur);
+                struct ggml_tensor * Kcur = ggml_mul_mat_lora(lctx, ctx0, model.layers[il].wk, cur);
                 cb(Kcur, "Kcur", il);
                 if (model.layers[il].bk) {
                     Kcur = ggml_add(ctx0, Kcur, model.layers[il].bk);
                     cb(Kcur, "Kcur", il);
                 }
 
-                struct ggml_tensor * Vcur = lora_mul_mat(lctx, ctx0, model.layers[il].wv, cur);
+                struct ggml_tensor * Vcur = ggml_mul_mat_lora(lctx, ctx0, model.layers[il].wv, cur);
                 cb(Vcur, "Vcur", il);
                 if (model.layers[il].bv) {
                     Vcur = ggml_add(ctx0, Vcur, model.layers[il].bv);
@@ -9722,7 +9722,7 @@ struct llm_build_context {
         return gf;
     }
 
-    static ggml_tensor * lora_mul_mat(
+    static ggml_tensor * ggml_mul_mat_lora(
         llama_context & lctx, 
         ggml_context * ctx0, 
         ggml_tensor * weight, 
@@ -16372,17 +16372,17 @@ struct llama_context * llama_new_context_with_model(
         // load all loras (only 1 supported here)
         std::vector<struct lora_data *> loras;
         for (size_t i = 0; i < lora_params->lora.size(); ++i) {
-            struct lora_data * llora_data = load_lora(&lora_params->lora[i]);
-            if (llora_data != NULL) {
-                loras.push_back(llora_data);
+            struct lora_data * llama_lora_data = load_lora(&lora_params->lora[i]);
+            if (llama_lora_data != NULL) {
+                loras.push_back(llama_lora_data);
             }
         }
         if (loras.size() == 0) {
             fprintf(stderr, "warning: no lora adapters will be applied.\n");
         }
         // Assign data and get mapping (index 0 as only 1 lora is supoprted now)
-        ctx->llora_data = *loras[0];
-        ctx->lora_weights_map = get_lora_weights_map((ctx->llora_data).ctx);
+        ctx->llama_lora_data = *loras[0];
+        ctx->lora_weights_map = get_lora_weights_map((ctx->llama_lora_data).ctx);
     }
     /// LORA load end
 
