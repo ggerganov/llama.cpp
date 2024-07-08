@@ -14,7 +14,11 @@ buildPythonPackage {
   version = llamaVersion;
   pyproject = true;
   nativeBuildInputs = [ poetry-core ];
-  propagatedBuildInputs = [ numpy tqdm sentencepiece ];
+  propagatedBuildInputs = [
+    numpy
+    tqdm
+    sentencepiece
+  ];
   src = lib.cleanSource ../../gguf-py;
   pythonImportsCheck = [
     "numpy"
