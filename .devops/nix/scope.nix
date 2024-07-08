@@ -21,7 +21,6 @@ in
 
 lib.makeScope newScope (self: {
   inherit llamaVersion;
-  pp = python3.pkgs;
   gguf-py = self.callPackage ./package-gguf-py.nix {
     inherit
       buildPythonPackage

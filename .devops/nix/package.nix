@@ -120,13 +120,14 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     filter =
       name: type:
       let
-        any = builtins.any (x: x);
-        baseName = builtins.baseNameOf name;
+        noneOf = builtins.all (x: !x);
+        baseName = baseNameOf name;
       in
-      any [
-        (lib.hasSuffix ".py" name)
-        (baseName == "README.md")
-        (baseName == "pyproject.toml")
+      noneOf [
+        (lib.hasSuffix ".nix" name) # Ignore *.nix files when computing outPaths
+        (lib.hasSuffix ".md" name) # Ignore *.md changes whe computing outPaths
+        (lib.hasPrefix "." baseName) # Skip hidden files and directories
+        (baseName == "flake.lock")
       ];
     src = lib.cleanSource ../../.;
   };
