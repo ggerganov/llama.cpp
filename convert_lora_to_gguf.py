@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
         description="Convert a huggingface PEFT LoRA adapter to a GGML compatible file")
     parser.add_argument(
         "--outfile", type=Path,
-        help="path to write to; default: based on input.",
+        help="path to write to; default: based on input. {ftype} will be replaced by the outtype.",
     )
     parser.add_argument(
         "--outtype", type=str, choices=["f32", "f16", "bf16", "q8_0"], default="f16",
@@ -77,7 +77,7 @@ if __name__ == '__main__':
         fname_out = args.outfile
     else:
         # output in the same directory as the model by default
-        fname_out = dir_lora / 'ggml-lora.gguf'
+        fname_out = dir_lora / 'ggml-lora-{ftype}.gguf'
 
     if os.path.exists(input_model):
         lora_model = torch.load(input_model, map_location="cpu")
