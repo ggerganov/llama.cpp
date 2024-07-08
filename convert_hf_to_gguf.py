@@ -2145,7 +2145,7 @@ class InternLM2Model(Model):
                 toktype = SentencePieceTokenTypes.UNUSED
             elif tokenizer.IsByte(token_id):
                 toktype = SentencePieceTokenTypes.BYTE
-            # take care of ununsed raw token 
+            # take care of ununsed raw token
             if piece.startswith('[UNUSED'):
                 toktype = SentencePieceTokenTypes.UNKNOWN
 
@@ -2245,7 +2245,7 @@ class InternLM2Model(Model):
             if self.hparams["rope_scaling"].get("type") == "linear":
                 self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
                 self.gguf_writer.add_rope_scaling_factor(self.hparams["rope_scaling"]["factor"])
-                
+
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         num_heads = self.hparams["num_attention_heads"]
         num_kv_heads = self.hparams["num_key_value_heads"]
