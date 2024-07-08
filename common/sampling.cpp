@@ -568,8 +568,6 @@ static llama_token_data_array llama_sampling_prepare_impl(
         llama_sample_apply_guidance(ctx_main, logits, logits_guidance, params.cfg_scale);
     }
 
-    cur.resize(n_vocab);
-
     // Constrain tokens based on the remaining token healing prefix (if any)
     const auto & th_prefix = ctx_sampling->token_healing_prefix;
     if (params.token_healing.enabled && !th_prefix.empty()) {
@@ -583,10 +581,12 @@ static llama_token_data_array llama_sampling_prepare_impl(
         }
 
         // N.B. We could also set token constraints by setting rejected tokens' logits to -inf
+        cur.clear();
         for (const llama_token token_id : th_candidates) {
-            cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
+            cur.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
         }
     } else {
+        cur.resize(n_vocab);
         for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
             cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
         }
