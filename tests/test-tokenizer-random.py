@@ -36,7 +36,7 @@ class LibLlama:
         self.lib.llama_backend_init()
 
     def _load_libllama_cffi(self, path_llama_h: str, path_includes: list[str], path_libllama: str):
-        cmd = ["gcc", "-E", "-P", "-D__restrict=", "-D__attribute__(x)=", "-D__asm__(x)="]
+        cmd = ["gcc", "-O0", "-fno-inline", "-E", "-P", "-D__restrict=", "-D__attribute__(x)=", "-D__asm__(x)="]
         cmd += ["-I" + path for path in path_includes] + [path_llama_h]
         res = subprocess.run(cmd, stdout=subprocess.PIPE)
         assert (res.returncode == 0)
