@@ -273,7 +273,7 @@ def generator_apostrophe() -> Iterator[str]:
 
 
 def generator_added_lr_strip(tokenizer: TokenizerGroundtruth) -> Iterator[str]:
-    WHITESPACES = ["", " ", "  ", "\n", "\r\n", "\n\n", "\t", "\t\t"]
+    WHITESPACES = ["", " ", "  ", "\n", "\r\n", "\n\n", "\t", "\t\t", "        "]
     all_tokens = list(sorted(set(tokenizer.special_tokens + tokenizer.added_tokens)))
     for token in all_tokens:
         for lstrip in WHITESPACES:
