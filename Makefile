@@ -1478,26 +1478,65 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 #
 # Deprecated binaries that we want to keep around long enough for people to migrate to the new filenames, then these can be removed.
 #
+# Mark legacy binary targets as .PHONY so that they are always checked.
+.PHONY: main quantize perplexity embedding server finetune
+
 main: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard main))
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'main' binary is deprecated. Please use 'llama-cli' instead."
+	@echo "  Remove the 'main' binary to remove this warning."
+	@echo "#########"
+endif
 
 quantize: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard quantize))
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
+	@echo "  Remove the 'quantize' binary to remove this warning."
+	@echo "#########"
+endif
 
 perplexity: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard perplexity))
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
+	@echo "  Remove the 'perplexity' binary to remove this warning."
+	@echo "#########"
+endif
 
 embedding: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard embedding))
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
+	@echo "  Remove the 'embedding' binary to remove this warning."
+	@echo "#########"
+endif
 
 server: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard server))
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'server' binary is deprecated. Please use 'llama-server' instead."
+	@echo "  Remove the 'server' binary to remove this warning."
+	@echo "#########"
+endif
 
 finetune: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard finetune))
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'finetune' binary is deprecated. Please use 'llama-finetune' instead."
+	@echo "  Remove the 'finetune' binary to remove this warning."
+	@echo "#########"
+endif
