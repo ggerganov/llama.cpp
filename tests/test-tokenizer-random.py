@@ -20,7 +20,7 @@ from typing import Any, Iterator, cast
 from typing_extensions import Buffer
 
 import cffi
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizer
 
 
 logger = logging.getLogger("test-tokenizer-random")
@@ -129,7 +129,7 @@ class Tokenizer:
 class TokenizerGroundtruth (Tokenizer):
 
     def __init__(self, dir_tokenizer: str):
-        self.model = AutoTokenizer.from_pretrained(dir_tokenizer)
+        self.model: PreTrainedTokenizer = AutoTokenizer.from_pretrained(dir_tokenizer)
         # guess BOS and EOS
         ids = self.encode("a")
         assert 1 <= len(ids) <= 3
@@ -143,7 +143,7 @@ class TokenizerGroundtruth (Tokenizer):
         self.vocab = list(sorted(self.vocab))
         # tokens and lists
         self.special_tokens = list(self.model.all_special_tokens)
-        self.added_tokens   = list(self.model.added_tokens_encoder)
+        self.added_tokens   = self.model.batch_decode(self.model.added_tokens_encoder.values(), skip_special_tokens=False)
         self.bos_token = self.model.bos_token
         self.eos_token = self.model.eos_token
 
@@ -458,8 +458,8 @@ def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLl
             i = find_first_mismatch(ids1, ids2)
             ids1 = list(ids1)[max(0, i - 2) : i + 5 + 1]
             ids2 = list(ids2)[max(0, i - 2) : i + 5 + 1]
-            logger.error(" Expected: " + str(ids1))
-            logger.error("   Result: " + str(ids2))
+            logger.error(" Expected: " + str(ids1) + f" {[tokenizer1.decode([id]) for id in ids1]}")
+            logger.error("   Result: " + str(ids2) + f" {[tokenizer2.decode([id]) for id in ids2]}")
             encode_errors += 1
             logger.error(f" {encode_errors=}")
         if decode_errors < MAX_ERRORS and not check_detokenizer(text, text1, text2):
