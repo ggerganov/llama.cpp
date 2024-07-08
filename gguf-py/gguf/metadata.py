@@ -95,9 +95,6 @@ class Metadata:
         if model_name is not None:
             metadata.name = model_name
 
-        # If any UUID is still missing at this point, then we should fill it in
-        metadata = Metadata.generate_any_missing_uuid(metadata)
-
         return metadata
 
     @staticmethod
@@ -332,57 +329,5 @@ class Metadata:
                 metadata.version = version
             if metadata.parameter_class_attribute is None and parameter_class_attribute is not None:
                 metadata.parameter_class_attribute = parameter_class_attribute
-
-        return metadata
-
-    @staticmethod
-    def generate_any_missing_uuid(metadata: Metadata) -> Metadata:
-
-        # UUID Generation if not already provided
-        if metadata.uuid is None:
-            # Generate UUID based on provided links/id. UUIDv4 used as fallback
-            new_uuid = None
-
-            if metadata.doi is not None:
-                new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, f"https://doi.org/{metadata.doi}")
-            elif metadata.repo_url is not None:
-                new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, metadata.repo_url)
-            elif metadata.url is not None:
-                new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, metadata.url)
-            else:
-                new_uuid = uuid.uuid4() # every model must have at least a random UUIDv4
-
-            if new_uuid is not None:
-                metadata.uuid = str(new_uuid)
-
-        if metadata.source_uuid is None:
-            # Generate a UUID based on provided links/id only if source provided
-            new_uuid = None
-
-            if metadata.source_doi is not None:
-                new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, f"https://doi.org/{metadata.source_doi}")
-            elif metadata.source_repo_url is not None:
-                new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, metadata.source_repo_url)
-            elif metadata.source_url is not None:
-                new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, metadata.source_url)
-
-            if new_uuid is not None:
-                metadata.source_uuid = str(new_uuid)
-
-        if metadata.base_models is not None:
-            for model_entry in metadata.base_models:
-                if "uuid" not in model_entry:
-                    # Generate a UUID based on provided links/id only if source provided
-                    new_uuid = None
-
-                    if "repo_url" in model_entry:
-                        new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, model_entry["repo_url"])
-                    elif "url" in model_entry:
-                        new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, model_entry["url"])
-                    elif "doi" in model_entry:
-                        new_uuid = uuid.uuid5(uuid.NAMESPACE_URL, model_entry["doi"])
-
-                    if new_uuid is not None:
-                        model_entry["uuid"] = str(new_uuid)
 
         return metadata

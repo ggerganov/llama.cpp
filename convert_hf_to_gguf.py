@@ -432,6 +432,11 @@ class Model:
 
     def write(self):
         self.write_tensors()
+
+        if self.metadata.uuid is None:
+            self.metadata.uuid = self.gguf_writer.generate_tensors_uuid()
+            logger.info("generating general.uuid (based on tensor content) {0}".format(self.metadata.uuid))
+
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
