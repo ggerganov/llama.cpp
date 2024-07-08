@@ -73,6 +73,7 @@ The project is under active development, and we are [looking for feedback and co
 - `-fa`, `--flash-attn` : enable flash attention (default: disabled).
 - `-ctk TYPE`, `--cache-type-k TYPE` : KV cache data type for K (default: `f16`, options `f32`, `f16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, or `q5_1`)
 - `-ctv TYPE`, `--cache-type-v TYPE` : KV cache type for V (default `f16`, see `-ctk` for options)
+- `--spm-infill` : Use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this.
 
 **If compiled with `LLAMA_SERVER_SSL=ON`**
 - `--ssl-key-file FNAME`: path to file a PEM-encoded SSL private key
@@ -80,26 +81,26 @@ The project is under active development, and we are [looking for feedback and co
 
 ## Build
 
-`server` is built alongside everything else from the root of the project
+`llama-server` is built alongside everything else from the root of the project
 
 - Using `make`:
 
   ```bash
-  make server
+  make llama-server
   ```
 
 - Using `CMake`:
 
   ```bash
   cmake -B build
-  cmake --build build --config Release -t server
+  cmake --build build --config Release -t llama-server
   ```
 
-  Binary is at `./build/bin/server`
+  Binary is at `./build/bin/llama-server`
 
 ## Build with SSL
 
-`server` can also be built with SSL support using OpenSSL 3
+`llama-server` can also be built with SSL support using OpenSSL 3
 
 - Using `make`:
 
@@ -107,14 +108,14 @@ The project is under active development, and we are [looking for feedback and co
   # NOTE: For non-system openssl, use the following:
   #   CXXFLAGS="-I /path/to/openssl/include"
   #   LDFLAGS="-L /path/to/openssl/lib"
-  make LLAMA_SERVER_SSL=true server
+  make LLAMA_SERVER_SSL=true llama-server
   ```
 
 - Using `CMake`:
 
   ```bash
   cmake -B build -DLLAMA_SERVER_SSL=ON
-  cmake --build build --config Release -t server
+  cmake --build build --config Release -t llama-server
   ```
 
 ## Quick Start
@@ -124,13 +125,13 @@ To get started right away, run the following command, making sure to use the cor
 ### Unix-based systems (Linux, macOS, etc.)
 
 ```bash
-./server -m models/7B/ggml-model.gguf -c 2048
+./llama-server -m models/7B/ggml-model.gguf -c 2048
 ```
 
 ### Windows
 
 ```powershell
-server.exe -m models\7B\ggml-model.gguf -c 2048
+llama-server.exe -m models\7B\ggml-model.gguf -c 2048
 ```
 
 The above command will start a server that by default listens on `127.0.0.1:8080`.
@@ -279,7 +280,7 @@ node index.js
 
     `id_slot`: Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle slot.  Default: `-1`
 
-    `cache_prompt`: Re-use previously cached prompt from the last request if possible. This may prevent re-caching the prompt from scratch.  Default: `false`
+    `cache_prompt`: Re-use KV cache from a previous request if possible. This way the common prefix does not have to be re-processed, only the suffix that differs between the requests. Because (depending on the backend) the logits are **not** guaranteed to be bit-for-bit identical for different batch sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic results. Default: `false`
 
     `system_prompt`: Change the system prompt (initial prompt of all slots), this is useful for chat applications. [See more](#change-system-prompt-on-runtime)
 
@@ -365,7 +366,8 @@ Notice that each `probs` is an array of length `n_probs`.
   "assistant_name": "",
   "user_name": "",
   "default_generation_settings": { ... },
-  "total_slots": 1
+  "total_slots": 1,
+  "chat_template": ""
 }
 ```
 
@@ -373,8 +375,9 @@ Notice that each `probs` is an array of length `n_probs`.
 - `user_name` - the required anti-prompt to generate the prompt in case you have specified a system prompt for all slots.
 - `default_generation_settings` - the default generation settings for the `/completion` endpoint, which has the same fields as the `generation_settings` response object from the `/completion` endpoint.
 - `total_slots` - the total number of slots for process requests (defined by `--parallel` option)
+- `chat_template` - the model's original Jinja2 prompt template
 
-- **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only model with [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, ChatML template will be used.
+- **POST** `/v1/chat/completions`: OpenAI-compatible Chat Completions API. Given a ChatML-formatted json description in `messages`, it returns the predicted completion. Both synchronous and streaming mode are supported, so scripted and interactive applications work fine. While no strong claims of compatibility with OpenAI API spec is being made, in our experience it suffices to support many apps. Only models with a [supported chat template](https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template) can be used optimally with this endpoint. By default, the ChatML template will be used.
 
     *Options:*
 
@@ -629,11 +632,11 @@ bash chat.sh
 
 ### OAI-like API
 
-The HTTP `server` supports an OAI-like API: https://github.com/openai/openai-openapi
+The HTTP `llama-server` supports an OAI-like API: https://github.com/openai/openai-openapi
 
 ### API errors
 
-`server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
+`llama-server` returns errors in the same format as OAI: https://github.com/openai/openai-openapi
 
 Example of an error:
 

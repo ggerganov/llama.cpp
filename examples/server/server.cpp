@@ -147,7 +147,7 @@ struct server_slot {
     int32_t n_prompt_tokens           = 0;
     int32_t n_prompt_tokens_processed = 0;
 
-    json prompt;
+    json prompt; // can be either a string, array of strings or array of token ids
 
     // when a task is submitted, we first tokenize the prompt and store it here
     std::vector<llama_token> prompt_tokens;
@@ -647,6 +647,9 @@ struct server_context {
 
     server_metrics metrics;
 
+    // Necessary similarity of prompt for slot selection
+    float slot_prompt_similarity = 0.0f;
+
     ~server_context() {
         if (ctx) {
             llama_free(ctx);
@@ -795,24 +798,88 @@ struct server_context {
         return prompt_tokens;
     }
 
-    server_slot * get_slot(int id) {
-        int64_t t_last = ggml_time_us();
-
-        server_slot * last_used = nullptr;
-
+    server_slot * get_slot_by_id(int id) {
         for (server_slot & slot : slots) {
-            if (slot.id == id && slot.available()) {
+            if (slot.id == id) {
                 return &slot;
-            }
-
-            // among all available slots, find the one that has been least recently used
-            if (slot.available() && slot.t_last_used < t_last) {
-                last_used = &slot;
-                t_last = slot.t_last_used;
             }
         }
 
-        return last_used;
+        return nullptr;
+    }
+
+    server_slot * get_available_slot(const std::string & prompt) {
+        server_slot * ret = nullptr;
+
+        // find the slot that has at least n% prompt similarity
+        if (ret == nullptr && slot_prompt_similarity != 0.0f && !prompt.empty()) {
+            int max_lcp_len = 0;
+            float similarity = 0;
+
+            for (server_slot & slot : slots) {
+                // skip the slot if it is not available
+                if (!slot.available()) {
+                    continue;
+                }
+
+                // skip the slot if it does not contains prompt
+                if (!slot.prompt.is_string()) {
+                    continue;
+                }
+
+                // current slot's prompt
+                std::string slot_prompt = slot.prompt.get<std::string>();
+
+                // length of the current slot's prompt
+                int slot_prompt_len = slot_prompt.size();
+
+                // length of the Longest Common Prefix between the current slot's prompt and the input prompt
+                int lcp_len = common_part(slot_prompt, prompt);
+
+                // fraction of the common substring length compared to the current slot's prompt length
+                similarity = static_cast<float>(lcp_len) / slot_prompt_len;
+
+                // select the current slot if the criteria match
+                if (lcp_len > max_lcp_len && similarity > slot_prompt_similarity) {
+                    max_lcp_len = lcp_len;
+                    ret = &slot;
+                }
+            }
+
+            if (ret != nullptr) {
+                LOG_VERBOSE("selected slot by lcp similarity", {
+                    {"id_slot", ret->id},
+                    {"max_lcp_len", max_lcp_len},
+                    {"similarity", similarity},
+                });
+            }
+        }
+
+        // find the slot that has been least recently used
+        if (ret == nullptr) {
+            int64_t t_last = ggml_time_us();
+            for (server_slot & slot : slots) {
+                // skip the slot if it is not available
+                if (!slot.available()) {
+                    continue;
+                }
+
+                // select the current slot if the criteria match
+                if (slot.t_last_used < t_last) {
+                    t_last = slot.t_last_used;
+                    ret = &slot;
+                }
+            }
+
+            if (ret != nullptr) {
+                LOG_VERBOSE("selected slot by lru", {
+                    {"id_slot", ret->id},
+                    {"t_last", t_last},
+                });
+            }
+        }
+
+        return ret;
     }
 
     bool launch_slot_with_task(server_slot & slot, const server_task & task) {
@@ -888,16 +955,19 @@ struct server_context {
         slot.params.input_suffix = json_value(data, "input_suffix", default_params.input_suffix);
 
         // get prompt
-        {
+        if (!task.infill) {
             const auto & prompt = data.find("prompt");
             if (prompt == data.end()) {
-                send_error(task, "Either \"prompt\" or \"messages\" must be provided", ERROR_TYPE_INVALID_REQUEST);
+                send_error(task, "\"prompt\" must be provided", ERROR_TYPE_INVALID_REQUEST);
                 return false;
-            } else {
-                slot.prompt = *prompt;
             }
-            if (slot.prompt.is_array() && slot.prompt.size() == 0) {
-                send_error(task, "\"prompt\" cannot be an empty array", ERROR_TYPE_INVALID_REQUEST);
+
+            if ((prompt->is_string()) ||
+                (prompt->is_array() &&  prompt->size() == 1 && prompt->at(0).is_string()) ||
+                (prompt->is_array() && !prompt->empty()     && prompt->at(0).is_number_integer())) {
+                slot.prompt = *prompt;
+            } else {
+                send_error(task, "\"prompt\" must be a string or an array of integers", ERROR_TYPE_INVALID_REQUEST);
                 return false;
             }
         }
@@ -1515,10 +1585,30 @@ struct server_context {
         switch (task.type) {
             case SERVER_TASK_TYPE_COMPLETION:
                 {
-                    server_slot * slot = get_slot(json_value(task.data, "id_slot", -1));
+                    const int id_slot = json_value(task.data, "id_slot", -1);
+
+                    server_slot * slot;
+
+                    if (id_slot != -1) {
+                        slot = get_slot_by_id(id_slot);
+                    } else {
+                        std::string prompt;
+                        if (task.data.contains("prompt") && task.data.at("prompt").is_string()) {
+                            prompt = json_value(task.data, "prompt", std::string());
+                        }
+
+                        slot = get_available_slot(prompt);
+                    }
+
                     if (slot == nullptr) {
                         // if no slot is available, we defer this task for processing later
                         LOG_VERBOSE("no slot is available", {{"id_task", task.id}});
+                        queue_tasks.defer(task);
+                        break;
+                    }
+                    if (!slot->available()) {
+                        // if requested slot is unavailable, we defer this task for processing later
+                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
                         queue_tasks.defer(task);
                         break;
                     }
@@ -1638,9 +1728,15 @@ struct server_context {
             case SERVER_TASK_TYPE_SLOT_SAVE:
                 {
                     int id_slot = task.data.at("id_slot");
-                    server_slot * slot = get_slot(id_slot);
+                    server_slot * slot = get_slot_by_id(id_slot);
                     if (slot == nullptr) {
                         send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+                    if (!slot->available()) {
+                        // if requested slot is unavailable, we defer this task for processing later
+                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
+                        queue_tasks.defer(task);
                         break;
                     }
 
@@ -1673,9 +1769,15 @@ struct server_context {
             case SERVER_TASK_TYPE_SLOT_RESTORE:
                 {
                     int id_slot = task.data.at("id_slot");
-                    server_slot * slot = get_slot(id_slot);
+                    server_slot * slot = get_slot_by_id(id_slot);
                     if (slot == nullptr) {
                         send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+                    if (!slot->available()) {
+                        // if requested slot is unavailable, we defer this task for processing later
+                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
+                        queue_tasks.defer(task);
                         break;
                     }
 
@@ -1715,9 +1817,15 @@ struct server_context {
             case SERVER_TASK_TYPE_SLOT_ERASE:
                 {
                     int id_slot = task.data.at("id_slot");
-                    server_slot * slot = get_slot(id_slot);
+                    server_slot * slot = get_slot_by_id(id_slot);
                     if (slot == nullptr) {
                         send_error(task, "Invalid slot ID", ERROR_TYPE_INVALID_REQUEST);
+                        break;
+                    }
+                    if (!slot->available()) {
+                        // if requested slot is unavailable, we defer this task for processing later
+                        LOG_VERBOSE("requested slot is unavailable", {{"id_task", task.id}});
+                        queue_tasks.defer(task);
                         break;
                     }
 
@@ -1912,6 +2020,7 @@ struct server_context {
                         slot.t_start_generation = 0;
 
                         if (slot.infill) {
+                            const bool add_bos = llama_should_add_bos_token(model);
                             bool suff_rm_leading_spc = true;
                             if (params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
                                 params.input_suffix.erase(0, 1);
@@ -1927,11 +2036,21 @@ struct server_context {
                             }
 
                             prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(model));
-                            prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(model)); // always add BOS
-                            prefix_tokens.insert(prefix_tokens.end(),   llama_token_suffix(model));
-                            prefix_tokens.insert(prefix_tokens.end(),   suffix_tokens.begin(), suffix_tokens.end());
-                            prefix_tokens.push_back(llama_token_middle(model));
-                            prompt_tokens = prefix_tokens;
+                            suffix_tokens.insert(suffix_tokens.begin(), llama_token_suffix(model));
+
+                            auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
+                            auto embd_end = params.spm_infill ? prefix_tokens : suffix_tokens;
+                            if (add_bos) {
+                                embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+                            }
+                            embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
+
+                            const llama_token middle_token = llama_token_middle(model);
+                            if (middle_token >= 0) {
+                                embd_inp.push_back(middle_token);
+                            }
+
+                            prompt_tokens = embd_inp;
                         } else {
                             prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
                         }
@@ -2360,7 +2479,7 @@ int main(int argc, char ** argv) {
 
     // TODO: not great to use extern vars
     server_log_json = params.log_json;
-    server_verbose = params.verbose;
+    server_verbose = params.verbosity > 0;
 
     // struct that contains llama context and inference
     server_context ctx_server;
@@ -2467,6 +2586,9 @@ int main(int argc, char ** argv) {
         log_data["api_key"] = "api_key: " + std::to_string(params.api_keys.size()) + " keys loaded";
     }
 
+    // Necessary similarity of prompt for slot selection
+    ctx_server.slot_prompt_similarity = params.slot_prompt_similarity;
+
     // load the model
     if (!ctx_server.load_model(params)) {
         state.store(SERVER_STATE_ERROR);
@@ -2483,24 +2605,16 @@ int main(int argc, char ** argv) {
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
     if (params.chat_template.empty()) {
         if (!ctx_server.validate_model_chat_template()) {
-            LOG_ERROR("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
+            LOG_WARNING("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
             params.chat_template = "chatml";
         }
     }
 
     // print sample chat example to make it clear which template is used
     {
-        json chat;
-        chat.push_back({{"role", "system"},    {"content", "You are a helpful assistant"}});
-        chat.push_back({{"role", "user"},      {"content", "Hello"}});
-        chat.push_back({{"role", "assistant"}, {"content", "Hi there"}});
-        chat.push_back({{"role", "user"},      {"content", "How are you?"}});
-
-        const std::string chat_example = format_chat(ctx_server.model, params.chat_template, chat);
-
         LOG_INFO("chat template", {
-            {"chat_example", chat_example},
-            {"built_in", params.chat_template.empty()},
+            {"chat_example", llama_chat_format_example(ctx_server.model, params.chat_template)},
+            {"built_in",     params.chat_template.empty()},
         });
     }
 
@@ -2853,11 +2967,20 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+        std::string template_key = "tokenizer.chat_template", curr_tmpl;
+        int32_t tlen = llama_model_meta_val_str(ctx_server.model, template_key.c_str(), nullptr, 0);
+        if (tlen > 0) {
+            std::vector<char> curr_tmpl_buf(tlen + 1, 0);
+            if (llama_model_meta_val_str(ctx_server.model, template_key.c_str(), curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
+                curr_tmpl = std::string(curr_tmpl_buf.data(), tlen);
+            }
+        }
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
             { "system_prompt",               ctx_server.system_prompt.c_str() },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
-            { "total_slots",                 ctx_server.params.n_parallel }
+            { "total_slots",                 ctx_server.params.n_parallel },
+            { "chat_template",               curr_tmpl.c_str() }
         };
 
         res.set_content(data.dump(), "application/json; charset=utf-8");

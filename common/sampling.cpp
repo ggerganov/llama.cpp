@@ -28,9 +28,13 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 
         std::vector<const llama_grammar_element *> grammar_rules(result->parsed_grammar.c_rules());
 
-        result->grammar = llama_grammar_init(
+        struct llama_grammar * grammar = llama_grammar_init(
                 grammar_rules.data(),
                 grammar_rules.size(), result->parsed_grammar.symbol_ids.at("root"));
+        if (grammar == nullptr) {
+            throw std::runtime_error("Failed to initialize llama_grammar");
+        }
+        result->grammar = grammar;
     }
 
     result->prev.resize(params.n_prev);
@@ -59,9 +63,13 @@ void llama_sampling_reset(llama_sampling_context * ctx) {
     if (!ctx->parsed_grammar.rules.empty()) {
         std::vector<const llama_grammar_element *> grammar_rules(ctx->parsed_grammar.c_rules());
 
-        ctx->grammar = llama_grammar_init(
+        struct llama_grammar * grammar = llama_grammar_init(
                 grammar_rules.data(),
                 grammar_rules.size(), ctx->parsed_grammar.symbol_ids.at("root"));
+        if (grammar == nullptr) {
+            throw std::runtime_error("Failed to initialize llama_grammar");
+        }
+        ctx->grammar = grammar;
     }
 
     std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
@@ -274,8 +282,6 @@ static llama_token llama_sampling_sample_impl(
         GGML_ASSERT(!original_logits.empty());
     }
     llama_token id = 0;
-    // Get a pointer to the logits
-    float * logits = llama_get_logits_ith(ctx_main, idx);
 
     if (temp < 0.0) {
         // greedy sampling, with probs
@@ -316,6 +322,9 @@ static llama_token llama_sampling_sample_impl(
     }
 
     if (ctx_sampling->grammar != NULL && !is_resampling) {
+        // Get a pointer to the logits
+        float * logits = llama_get_logits_ith(ctx_main, idx);
+
         // Create an array with a single token data element for the sampled id
         llama_token_data single_token_data = {id, logits[id], 0.0f};
         llama_token_data_array single_token_data_array = { &single_token_data, 1, false };
