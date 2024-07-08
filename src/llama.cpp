@@ -371,6 +371,8 @@ enum llm_kv {
     LLM_KV_TOKENIZER_SUFFIX_ID,
     LLM_KV_TOKENIZER_MIDDLE_ID,
     LLM_KV_TOKENIZER_EOT_ID,
+
+    LLM_KV_TRAINING_TYPE,
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -464,6 +466,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TOKENIZER_SUFFIX_ID,            "tokenizer.ggml.suffix_token_id"          },
     { LLM_KV_TOKENIZER_MIDDLE_ID,            "tokenizer.ggml.middle_token_id"          },
     { LLM_KV_TOKENIZER_EOT_ID,               "tokenizer.ggml.eot_token_id"             },
+
+    { LLM_KV_TRAINING_TYPE,                  "training.type"                     },
 };
 
 struct LLM_KV {
@@ -18519,8 +18523,6 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
     static const int n_out_tensors = 5; // see llama_model
     LLAMA_LOG_INFO("%s: applying lora adapter from '%s' - please wait ...\n", __func__, path_lora);
 
-    // TODO: check lora base model arch
-
     ggml_context * ctx = nullptr;
     struct gguf_init_params meta_gguf_params = {
         /* .no_alloc = */ false,
@@ -18530,6 +18532,25 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
     if (!ctx_gguf) {
         LLAMA_LOG_ERROR("%s: failed to load lora adapter file from %s\n", __func__, path_lora);
         throw std::exception();
+    }
+
+    // check metadata
+    {
+        auto get_kv_str = [&](std::string key) -> std::string {
+            std::vector<char> str_buf(32, 0); // we only get the arch, so no need big buffer here
+            int id = gguf_find_key(ctx_gguf, key.c_str());
+            return id < 0 ? "" : std::string(gguf_get_val_str(ctx_gguf, id));
+        };
+        LLM_KV llm_kv = LLM_KV(LLM_ARCH_UNKNOWN);
+        auto lora_arch_name = get_kv_str(llm_kv(LLM_KV_GENERAL_ARCHITECTURE));
+        auto lora_arch = llm_arch_from_string(lora_arch_name);
+        if (lora_arch != model->arch) {
+            throw std::runtime_error("model arch and LoRA arch mismatch");
+        }
+        auto train_type = get_kv_str(llm_kv(LLM_KV_TRAINING_TYPE));
+        if (train_type != "finetune_lora") {
+            throw std::runtime_error("expect training.type to be finetune_lora, but got: " + train_type);
+        }
     }
 
     // calculate n_tensors_per_layer
@@ -18542,7 +18563,6 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
             if (il == 0) n_tensors_per_layer++;
         }
     }
-    // printf("n_tensors_per_layer %d\n", n_tensors_per_layer);
 
     // count layer buffer types
     std::map<ggml_backend_buffer_type_t, int> buft_tensor_count;
