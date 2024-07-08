@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <map>
+#include <string>
 
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
@@ -424,6 +426,18 @@ extern "C" {
     LLAMA_API struct llama_context * llama_new_context_with_model(
                      struct llama_model * model,
             struct llama_context_params   params);
+
+    LLAMA_API void llama_print_derived_models(struct llama_context* ctx);
+
+    LLAMA_API void llama_set_derived_models(
+                struct llama_context * ctx,
+    std::map<std::string, struct llama_model *> derived_models);
+
+    static const char* BASE_MODEL = "base";
+
+    LLAMA_API bool llama_switch_derived_model(
+        struct llama_context* ctx,
+        std::string derived_model_name);
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
@@ -1086,6 +1100,11 @@ extern "C" {
     ///          llama_split_prefix(split_prefix, 64, "/models/ggml-model-q4_0-00002-of-00004.gguf", 2, 4) => split_prefix = "/models/ggml-model-q4_0"
     //  Returns the split_prefix length.
     LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
+
+    LLAMA_API int llama_foundation_split_path(char* split_path, size_t maxlen, const char* path_prefix);
+
+    LLAMA_API int llama_foundation_prefix(char* split_path, size_t maxlen, const char* path_prefix);
+
 
     // Performance information
     LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);

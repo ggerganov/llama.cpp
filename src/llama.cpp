@@ -2248,6 +2248,8 @@ struct llama_cparams {
     bool offload_kqv;
     bool flash_attn;
 
+    std::string derived_model_name = BASE_MODEL;
+
     enum llama_pooling_type pooling_type;
 
     ggml_backend_sched_eval_callback cb_eval;
@@ -2620,6 +2622,9 @@ struct llama_context {
 
 
     const llama_model & model;
+
+    // derived models
+    std::map<std::string, llama_model *> derived_models;
 
     // key + value cache for the self attention
     struct llama_kv_cache kv_self;
@@ -3543,7 +3548,14 @@ struct llama_model_loader {
             }
 
             char split_prefix[PATH_MAX] = {0};
-            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
+            char foundation_prefix[PATH_MAX] = { 0 };
+            // Two types of split files are supported:
+            // prefix is abc, postfix is 00001-of-00002, 00002-of-00002
+            // abc-00001-of-00002.gguf, abc-00002-of-00002.gguf
+            // prefix is abc, postfix is foundation, adaptor-task-x, adaptor-task-y
+            // abc-foundation.gguf, abc-adaptor-task-x.gguf, abc-adaptor-task-y.gguf
+            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)
+                && !llama_foundation_prefix(foundation_prefix, sizeof(foundation_prefix), fname.c_str())) {
                 throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
             }
 
@@ -3554,6 +3566,14 @@ struct llama_model_loader {
             char split_path[PATH_MAX] = {0};
             for (idx = 1; idx < n_split; idx++) {
                 llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
+
+                // if split path not exist
+                struct stat model_file_info;
+                std::string str_split_path(split_path);
+                auto file_exists = (stat(str_split_path.c_str(), &model_file_info) == 0);
+                if (!file_exists) {
+                    llama_foundation_split_path(split_path, sizeof(split_path), foundation_prefix);
+                }
 
                 struct gguf_init_params split_params = {
                     /*.no_alloc = */ true,
@@ -7804,10 +7824,11 @@ struct llm_build_context {
     // TODO: consider making the entire interface noexcept
     llm_build_context(
         llama_context  & lctx,
+    const llama_model  & model,
     const llama_batch  & batch,
     const llm_build_cb & cb,
                   bool   worst_case) :
-        model            (lctx.model),
+        model            (model),
         lctx             (lctx),
         hparams          (model.hparams),
         cparams          (lctx.cparams),
@@ -12525,7 +12546,7 @@ static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const
 
     llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
 
-    struct llm_build_context llm(lctx, dummy, cb, false);
+    struct llm_build_context llm(lctx, lctx.model, dummy, cb, false);
 
     llm.init();
 
@@ -12542,7 +12563,7 @@ static struct ggml_cgraph * llama_build_graph_k_shift(llama_context & lctx) {
 
     llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
 
-    struct llm_build_context llm(lctx, dummy, cb, false);
+    struct llm_build_context llm(lctx, lctx.model, dummy, cb, false);
 
     llm.init();
 
@@ -12559,7 +12580,7 @@ static struct ggml_cgraph * llama_build_graph_s_copy(llama_context & lctx) {
 
     llm_build_cb cb = [&](struct ggml_tensor * , const char * , int ) { };
 
-    struct llm_build_context llm(lctx, dummy, cb, false);
+    struct llm_build_context llm(lctx, lctx.model, dummy, cb, false);
 
     llm.init();
 
@@ -12574,7 +12595,19 @@ static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
      const llama_batch & batch,
                   bool   worst_case) {
-    const auto & model = lctx.model;
+    const auto & foundation_model = lctx.model;
+
+    const llama_model* model_ptr = nullptr;
+    const auto it = lctx.derived_models.find(lctx.cparams.derived_model_name);
+    if (it != lctx.derived_models.end()) {
+        const auto& model_derived = *(it->second);
+        model_ptr = &model_derived;
+    }
+    else {
+        model_ptr = &foundation_model;
+    }
+
+    const llama_model & model = *model_ptr;
 
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
     llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name, int il) {
@@ -12609,7 +12642,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     struct ggml_cgraph * result = NULL;
 
-    struct llm_build_context llm(lctx, batch, cb, worst_case);
+    struct llm_build_context llm(lctx, lctx.model, batch, cb, worst_case);
 
     llm.init();
 
@@ -17955,12 +17988,43 @@ struct llama_context * llama_new_context_with_model(
     return ctx;
 }
 
+struct llama_context * llama_new_context_with_derived_models(
+                 struct llama_model * model,
+        struct llama_context_params   params,
+        const std::map<std::string, llama_model*> derived_models) {
+    llama_context * ctx = llama_new_context_with_model(model, params);
+    if (ctx) {
+        ctx->derived_models = derived_models;
+    }
+    return ctx;
+}
+
 void llama_free(struct llama_context * ctx) {
     delete ctx;
 }
 
 const llama_model * llama_get_model(const struct llama_context * ctx) {
     return &ctx->model;
+}
+
+void llama_print_derived_models(struct llama_context * ctx) {
+    for (const auto & it : ctx->derived_models) {
+        LLAMA_LOG_INFO("%s: %s\n", __func__, it.first.c_str());
+    }
+}
+
+void llama_set_derived_models(struct llama_context * ctx, const std::map<std::string, llama_model*> derived_models) {
+    ctx->derived_models = derived_models;
+}
+
+bool llama_switch_derived_model(struct llama_context* ctx, const std::string derived_model_name) {
+    llama_synchronize(ctx);
+
+    auto& cparams = ctx->cparams;
+    cparams.derived_model_name = (ctx->derived_models.find(derived_model_name) == ctx->derived_models.end()) ? BASE_MODEL : derived_model_name;
+    LLAMA_LOG_INFO("%s: %s\n", __func__, cparams.derived_model_name);
+
+    return true;
 }
 
 uint32_t llama_n_ctx(const struct llama_context * ctx) {
@@ -20109,6 +20173,29 @@ LLAMA_API int32_t llama_chat_apply_template(
         strncpy(buf, formatted_chat.c_str(), length);
     }
     return res;
+}
+
+LLAMA_API int llama_foundation_split_path(char* split_path, size_t maxlen, const char* path_prefix) {
+    static const char* const SHARED_SPLIT_PATH_FORMAT = "%s-foundation.gguf";
+    if (snprintf(split_path, maxlen, SHARED_SPLIT_PATH_FORMAT, path_prefix)) {
+        return strlen(split_path);
+    }
+    return 0;
+}
+
+int llama_foundation_prefix(char* dest, size_t maxlen, const char* split_path) {
+    const char* keyword = "-adaptor-";
+    const char* pos = strstr(split_path, keyword);
+
+    if (pos != NULL) {
+        size_t size_prefix = pos - split_path;
+        snprintf(dest, std::min((size_t)size_prefix + 1, maxlen), "%s", split_path);
+        // strncpy(dest, split_path, size_prefix);
+        // dest[size_prefix] = '\0';
+        return size_prefix;
+    }
+
+    return 0;
 }
 
 LLAMA_API int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {

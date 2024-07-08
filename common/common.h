@@ -124,6 +124,9 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
 
+    // multiple derived models paths map
+    std::vector<std::tuple<std::string, std::string>> derived_model_paths; // derived model paths
+
     // TODO: avoid tuple, use struct
     std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
     std::string lora_base  = "";                              // base model path for the lora adapter

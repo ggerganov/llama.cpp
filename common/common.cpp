@@ -654,6 +654,18 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.hf_file = argv[i];
         return true;
     }
+    if (arg == "-mpa" || arg == "--model-path-alias") {
+        CHECK_ARG
+        std::string model_derived_alias = argv[i];
+        size_t equals_pos = model_derived_alias.find('=');
+        if (equals_pos != std::string::npos) {
+            std::string alias = model_derived_alias.substr(0, equals_pos);
+            std::string model_path = model_derived_alias.substr(equals_pos + 1);
+            params.derived_model_paths.emplace_back(alias, model_path);
+        }
+
+        return true;
+    }
     if (arg == "--lora") {
         CHECK_ARG
         params.lora_adapter.emplace_back(argv[i], 1.0f);
@@ -2044,6 +2056,24 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
             return std::make_tuple(nullptr, nullptr);
         }
     }
+
+    std::map<std::string, llama_model*> derived_models;
+    for (unsigned int i = 0; i < params.derived_model_paths.size(); ++i) {
+        const auto & derived_model_path = params.derived_model_paths[i];
+        const std::string & derived_model_name = std::get<0>(derived_model_path);
+        const std::string & derived_model_file = std::get<1>(derived_model_path);
+
+        llama_model * derived_model_ptr = nullptr;
+        derived_model_ptr = llama_load_model_from_file(derived_model_file.c_str(), mparams);
+
+        if (derived_model_ptr == NULL) {
+            fprintf(stderr, "%s: error: failed to load derived model '%s'\n", __func__, derived_model_file.c_str());
+        }
+
+        derived_models[derived_model_name] = derived_model_ptr;
+    }
+
+    llama_set_derived_models(lctx, derived_models);
 
     for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
         const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
