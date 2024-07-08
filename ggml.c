@@ -5331,6 +5331,7 @@ struct ggml_tensor * ggml_group_norm_inplace(
     return ggml_group_norm_impl(ctx, a, n_groups, true);
 }
 
+
 // ggml_mul_mat
 
 struct ggml_tensor * ggml_mul_mat(
