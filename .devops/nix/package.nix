@@ -73,7 +73,6 @@ let
   ) ", accelerated with ${strings.concatStringsSep ", " suffices}";
 
   executableSuffix = effectiveStdenv.hostPlatform.extensions.executable;
-  mapToPythonPackages = ps: packages: map (package: ps.${package}) packages;
 
   xcrunHost = runCommand "xcrunHost" { } ''
     mkdir -p $out/bin
@@ -121,14 +120,13 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     filter =
       name: type:
       let
-        noneOf = builtins.all (x: !x);
-        baseName = baseNameOf name;
+        any = builtins.any (x: x);
+        baseName = builtins.baseNameOf name;
       in
-      noneOf [
-        (lib.hasSuffix ".nix" name) # Ignore *.nix files when computing outPaths
-        (lib.hasSuffix ".md" name) # Ignore *.md changes whe computing outPaths
-        (lib.hasPrefix "." baseName) # Skip hidden files and directories
-        (baseName == "flake.lock")
+      any [
+        (lib.hasSuffix ".py" name)
+        (baseName == "README.md")
+        (baseName == "pyproject.toml")
       ];
     src = lib.cleanSource ../../.;
   };

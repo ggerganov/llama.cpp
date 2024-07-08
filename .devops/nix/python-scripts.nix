@@ -23,12 +23,27 @@ in
 
 buildPythonPackage ({
   pname = "llama-scripts";
-  src = ../../.;
   version = "0.0.0";
   pyproject = true;
+
+  # NOTE: The files filtered out here are not visible in the build sandbox, neither
+  # do they affect the output hash. They can be modified without triggering a rebuild.
+  src = lib.cleanSourceWith {
+    filter =
+      name: type:
+      let
+        any = builtins.any (x: x);
+        baseName = builtins.baseNameOf name;
+      in
+      any [
+        (lib.hasSuffix ".py" name)
+        (baseName == "README.md")
+        (baseName == "pyproject.toml")
+      ];
+    src = lib.cleanSource ../../.;
+  };
   nativeBuildInputs = [ poetry-core ];
-  projectDir = ../../.;
-  propagatedBuildInputs = llama-python-deps;
+  dependencies = llama-python-deps;
 
   passthru = {
     shell = mkShell {
