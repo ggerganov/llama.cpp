@@ -5,9 +5,6 @@
 #include "ggml-quants.h"
 #include "ggml-impl.h"
 
-#define GGML_COMMON_IMPL_C
-#include "ggml-common.h"
-
 #include <math.h>
 #include <string.h>
 #include <assert.h>
@@ -304,7 +301,8 @@ static size_t quantize_q4_0_nr_bl(const float * restrict src, void * restrict ds
     else if (nrows_interleaved == 4) {
         out_ptr = (block_q4_0x4 *) dst;
     }
-    block_q4_0 dst_tmp[nrows_interleaved];
+    assert(nrows_interleaved <= 8);
+    block_q4_0 dst_tmp[8];
 
     for (int b = 0; b < (nrow * n_per_row); b += nrows_interleaved * n_per_row) {
 

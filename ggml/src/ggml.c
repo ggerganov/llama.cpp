@@ -12383,13 +12383,15 @@ UseGgmlGemm2:;
         if (src0_start >= src0_end) return;
 
         // If there are more than three rows in src1, use gemm; otherwise, use gemv.
-        if (gemm && (ne11 > 3))
+        if (gemm && (ne11 > 3)) {
             gemm(ne00, (float *)((char *) dst->data) + src0_start, ne01, (const char *) src0->data + src0_start * nb01,
                  (const char *) src1_wdata, ne11 - ne11 % 4, src0_end - src0_start);
-        for (int iter = gemm ? ne11 - ne11 % 4 : 0; iter < ne11; iter++)
+        }
+        for (int iter = gemm ? ne11 - ne11 % 4 : 0; iter < ne11; iter++) {
             gemv(ne00, (float *)((char *) dst->data + (iter * nb1)) + src0_start, ne01,
                  (const char *) src0->data + src0_start * nb01, (const char *) src1_wdata + (src1_col_stride * iter), 1,
                  src0_end - src0_start);
+        }
         return;
     }
 
