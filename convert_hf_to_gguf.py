@@ -634,7 +634,7 @@ class Model:
 
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNUSED] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
             piece = tokenizer.IdToPiece(token_id)
@@ -677,7 +677,7 @@ class Model:
                 for token_id, token_data in added_tokens_decoder.items():
                     token_id = int(token_id)
                     token: str = token_data["content"]
-                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
                         assert tokens[token_id] == token.encode("utf-8")
                     if token_data.get("special") or self.does_token_look_special(token):
                         toktypes[token_id] = SentencePieceTokenTypes.CONTROL
@@ -1916,7 +1916,7 @@ class Phi3MiniModel(Model):
 
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNUSED] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
 
@@ -1961,7 +1961,7 @@ class Phi3MiniModel(Model):
                 for token_id, foken_data in added_tokens_decoder.items():
                     token_id = int(token_id)
                     token = foken_data["content"].encode("utf-8")
-                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
                         assert tokens[token_id] == token
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
@@ -1977,7 +1977,7 @@ class Phi3MiniModel(Model):
                 for foken_data in added_tokens:
                     token_id = int(foken_data["id"])
                     token = foken_data["content"].encode("utf-8")
-                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
                         assert tokens[token_id] == token
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
@@ -2766,7 +2766,7 @@ class ArcticModel(Model):
 
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNUSED] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
 
@@ -3021,7 +3021,7 @@ class T5Model(Model):
 
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNUSED] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
             piece = tokenizer.IdToPiece(token_id)
@@ -3239,15 +3239,14 @@ class ChatGLMModel(Model):
             if len(piece) != 0 and token_id < tokenizer.tokenizer.sp_model.vocab_size():
                 score = tokenizer.tokenizer.sp_model.get_score(token_id)
 
-            if len(piece) == 0:
-                text = f"[PAD{token_id}]".encode("utf-8")
-
             if token_id >= tokenizer.tokenizer.sp_model.vocab_size():
                 if piece in special_tokens:
-                    # show special tokens in prompt
-                    toktype = SentencePieceTokenTypes.USER_DEFINED
+                    toktype = SentencePieceTokenTypes.CONTROL
+                elif len(piece) == 0:
+                    text = f"[PAD{token_id}]".encode("utf-8")
+                    toktype = SentencePieceTokenTypes.UNUSED
                 else:
-                    toktype = SentencePieceTokenTypes.UNKNOWN
+                    toktype = SentencePieceTokenTypes.USER_DEFINED
                 tokens.append(text)
                 scores.append(score)
                 toktypes.append(toktype)
