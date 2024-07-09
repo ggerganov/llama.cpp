@@ -128,7 +128,7 @@ if __name__ == '__main__':
         map_name[tensor_name] = dest_name
 
     # overwrite method
-    def map_tensor_name(self, name: str) -> Iterator[tuple[str, Tensor]]:
+    def map_tensor_name(self, name: str) -> str:
         return map_name[name]
 
     # overwrite method
@@ -141,13 +141,13 @@ if __name__ == '__main__':
         del name, new_name, bid, n_dims  # unused
         return ftype != gguf.LlamaFileType.ALL_F32
 
-    model_instance._map_tensor_name = model_instance.map_tensor_name
+    model_instance._map_tensor_name = model_instance.map_tensor_name # type: ignore
     model_instance.map_tensor_name = types.MethodType(map_tensor_name, model_instance)
 
-    model_instance._get_tensors = model_instance.get_tensors
+    model_instance._get_tensors = model_instance.get_tensors # type: ignore
     model_instance.get_tensors = types.MethodType(get_tensors, model_instance)
 
-    model_instance._extra_f16_tensors = model_instance.extra_f16_tensors
+    model_instance._extra_f16_tensors = model_instance.extra_f16_tensors # type: ignore
     model_instance.extra_f16_tensors = types.MethodType(extra_f16_tensors, model_instance)
 
     model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
