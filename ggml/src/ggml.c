@@ -37,6 +37,10 @@
 #include <unistd.h>
 #endif
 
+#if defined(__ARM_FEATURE_SVE)
+#include <sys/prctl.h>
+#endif
+
 #ifdef __ARM_FEATURE_MATMUL_INT8
 #undef GGML_USE_LLAMAFILE
 #endif
@@ -21760,7 +21764,7 @@ int ggml_cpu_has_neon(void) {
 int ggml_cpu_has_sve(void) {
 #if defined(__ARM_FEATURE_SVE)
     // TODO: Currently, SVE 256 bit is only supported.
-    GGML_ASSERT(svcntb() == QK8_0);
+    GGML_ASSERT((PR_SVE_VL_LEN_MASK & prctl(PR_SVE_GET_VL)) == QK8_0);
     return 1;
 #else
     return 0;
