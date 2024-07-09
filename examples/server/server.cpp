@@ -884,7 +884,7 @@ struct server_context {
 
     bool launch_slot_with_task(server_slot & slot, const server_task & task) {
         slot_params default_params;
-        // Default sampling parameters are loaded from the server context unless overridden by individual requests
+        // Sampling parameter defaults are loaded from the global server context (but individual requests can still override them)
         llama_sampling_params default_sparams = params.sparams;
         auto & data = task.data;
 
