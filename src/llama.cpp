@@ -5641,7 +5641,7 @@ static void llm_load_vocab(
     // build special tokens cache
     {
         for (llama_vocab::id id = 0; id < (llama_vocab::id)n_vocab; ++id) {
-            if (vocab.id_to_token[id].attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
+            if (vocab.id_to_token[id].attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_USER_DEFINED | LLAMA_TOKEN_ATTR_UNKNOWN)) {
                 vocab.cache_special_tokens.push_back(id);
             }
         }
@@ -16168,8 +16168,8 @@ static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<
         const auto & data = vocab.id_to_token[special_id];
         const auto & special_token = data.text;
 
-        if (!parse_special && (data.attr & LLAMA_TOKEN_ATTR_CONTROL)) {
-            // Only ignore control tokens when parse_special == false
+        if (!parse_special && (data.attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_UNKNOWN))) {
+            // Ignore control and unknown tokens when parse_special == false
             continue;
             // User-defined tokens are still pre-tokenized before everything else
             // ref: https://github.com/huggingface/tokenizers/blob/fdd26ba9a3f0c133427aab0423888cbde91362d7/tokenizers/src/tokenizer/mod.rs#L726
