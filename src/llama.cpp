@@ -18022,7 +18022,7 @@ bool llama_switch_derived_model(struct llama_context* ctx, const std::string der
 
     auto& cparams = ctx->cparams;
     cparams.derived_model_name = (ctx->derived_models.find(derived_model_name) == ctx->derived_models.end()) ? BASE_MODEL : derived_model_name;
-    LLAMA_LOG_INFO("%s: %s\n", __func__, cparams.derived_model_name);
+    LLAMA_LOG_INFO("%s: %s\n", __func__, cparams.derived_model_name.c_str());
 
     return true;
 }

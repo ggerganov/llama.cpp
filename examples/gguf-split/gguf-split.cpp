@@ -32,8 +32,10 @@ struct split_params {
     int n_split_tensors = 128;
     std::string input;
     std::string output;
+    std::string tensor_set_file;
     bool no_tensor_first_split = false;
     bool dry_run = false;
+    bool customized_split = false;
 };
 
 static void split_print_usage(const char * executable) {
@@ -47,6 +49,7 @@ static void split_print_usage(const char * executable) {
     printf("  -h, --help              show this help message and exit\n");
     printf("  --version               show version and build info\n");
     printf("  --split                 split GGUF to multiple GGUF (enabled by default)\n");
+    printf("  --tensor-set            customize tensor set used to split. File contains modules, e.g. 'ffn_up.weight'");
     printf("  --merge                 merge multiple GGUF to a single GGUF\n");
     printf("  --split-max-tensors     max tensors in each split (default: %d)\n", default_params.n_split_tensors);
     printf("  --split-max-size N(M|G) max size per split\n");
@@ -121,6 +124,16 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
             params.operation = SPLIT_OP_SPLIT;
         }
 
+        if (arg == "--tensor-set") {
+            arg_found = true;
+            if (++arg_idx >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.tensor_set_file = argv[arg_idx];
+            params.customized_split = true;
+        }
+
         if (is_mode_set) {
             throw std::invalid_argument("error: either --split-max-tensors or --split-max-size can be specified, but not both");
         }
@@ -180,12 +193,27 @@ static void zeros(std::ofstream & file, size_t n) {
     }
 }
 
+static std::vector<std::string> read_customized_tensors(const std::string & tensor_set_file) {
+    std::vector<std::string> tensor_set;
+    std::ifstream f_tensor_set(tensor_set_file);
+    if (!f_tensor_set.is_open()) {
+        fprintf(stderr, "error: failed to open tensor set file %s\n", tensor_set_file.c_str());
+        exit(EXIT_FAILURE);
+    }
+    std::string line;
+    while (std::getline(f_tensor_set, line)) {
+        tensor_set.push_back(line);
+    }
+    return tensor_set;
+}
+
 struct split_strategy {
     const split_params params;
     std::ifstream & f_input;
     struct gguf_context * ctx_gguf;
     struct ggml_context * ctx_meta = NULL;
     const int n_tensors;
+    std::string tensor_set_file;
 
     // one ctx_out per one output file
     std::vector<struct gguf_context *> ctx_outs;
@@ -233,20 +261,45 @@ struct split_strategy {
             new_ctx_out(true);
         }
 
-        // process tensors one by one
-        size_t curr_tensors_size = 0; // current size by counting only tensors size (without metadata)
-        for (int i = 0; i < n_tensors; ++i) {
-            struct ggml_tensor * t = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
-            // calculate the "imaginary" size = the current size + next tensor size
-            size_t n_bytes = GGML_PAD(ggml_nbytes(t), GGUF_DEFAULT_ALIGNMENT);
-            size_t next_tensors_size = curr_tensors_size + n_bytes;
-            if (should_split(i, next_tensors_size)) {
-                new_ctx_out(false);
-                curr_tensors_size = n_bytes;
-            } else {
-                curr_tensors_size = next_tensors_size;
+        if (!params.customized_split) {
+            // process tensors one by one
+            size_t curr_tensors_size = 0; // current size by counting only tensors size (without metadata)
+            for (int i = 0; i < n_tensors; ++i) {
+                struct ggml_tensor * t = ggml_get_tensor(ctx_meta, gguf_get_tensor_name(ctx_gguf, i));
+                // calculate the "imaginary" size = the current size + next tensor size
+                size_t n_bytes = GGML_PAD(ggml_nbytes(t), GGUF_DEFAULT_ALIGNMENT);
+                size_t next_tensors_size = curr_tensors_size + n_bytes;
+                if (should_split(i, next_tensors_size)) {
+                    new_ctx_out(false);
+                    curr_tensors_size = n_bytes;
+                } else {
+                    curr_tensors_size = next_tensors_size;
+                }
+                gguf_add_tensor(ctx_out, t);
             }
-            gguf_add_tensor(ctx_out, t);
+        } else {
+            // custom split based on tensor set
+            std::vector<std::string> tensor_set = read_customized_tensors(params.tensor_set_file);
+            if(tensor_set.empty()) {
+                fprintf(stderr, "error: tensor set is empty\n");
+                exit(EXIT_FAILURE);
+            }
+            for (int i = 0; i < n_tensors; ++i) {
+                const char * t_name = gguf_get_tensor_name(ctx_gguf, i);
+                if (is_tensor_in_customized_set(t_name, tensor_set)) {
+                    struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
+                    gguf_add_tensor(ctx_out, t);
+                }
+            }
+            new_ctx_out(false);
+            // add left tensors to the next split
+            for (int i = 0; i < n_tensors; ++i) {
+                const char * t_name = gguf_get_tensor_name(ctx_gguf, i);
+                if (!is_tensor_in_customized_set(t_name, tensor_set)) {
+                    struct ggml_tensor * t = ggml_get_tensor(ctx_meta, t_name);
+                    gguf_add_tensor(ctx_out, t);
+                }
+            }
         }
 
         // push the last ctx_out
@@ -272,6 +325,16 @@ struct split_strategy {
             // split by number of tensors per file
             return i_tensor > 0 && i_tensor < n_tensors && i_tensor % params.n_split_tensors == 0;
         }
+    }
+
+    bool is_tensor_in_customized_set(const char * t_name, std::vector<std::string> tensor_set) {
+        for (auto & s : tensor_set) {
+            if (strstr(t_name, s.c_str()) != NULL) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     void print_info() {
