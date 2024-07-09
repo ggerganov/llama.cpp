@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import re
 import json
-import uuid
 import frontmatter
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
 from .constants import Keys
+
+import gguf
 
 
 @dataclass
@@ -331,3 +332,78 @@ class Metadata:
                 metadata.parameter_class_attribute = parameter_class_attribute
 
         return metadata
+
+    def set_gguf_meta_model(self, gguf_writer: gguf.GGUFWriter):
+        gguf_writer.add_name(self.name)
+
+        if self.author is not None:
+            gguf_writer.add_author(self.author)
+        if self.version is not None:
+            gguf_writer.add_version(self.version)
+        if self.organization is not None:
+            gguf_writer.add_organization(self.organization)
+
+        if self.finetune is not None:
+            gguf_writer.add_finetune(self.finetune)
+        if self.basename is not None:
+            gguf_writer.add_basename(self.basename)
+
+        if self.description is not None:
+            gguf_writer.add_description(self.description)
+        if self.quantized_by is not None:
+            gguf_writer.add_quantized_by(self.quantized_by)
+
+        if self.parameter_class_attribute is not None:
+            gguf_writer.add_parameter_class_attribute(self.parameter_class_attribute)
+
+        if self.license is not None:
+            gguf_writer.add_license(self.license)
+        if self.license_name is not None:
+            gguf_writer.add_license_name(self.license_name)
+        if self.license_link is not None:
+            gguf_writer.add_license_link(self.license_link)
+
+        if self.url is not None:
+            gguf_writer.add_url(self.url)
+        if self.doi is not None:
+            gguf_writer.add_doi(self.doi)
+        if self.uuid is not None:
+            gguf_writer.add_uuid(self.uuid)
+        if self.repo_url is not None:
+            gguf_writer.add_repo_url(self.repo_url)
+
+        if self.source_url is not None:
+            gguf_writer.add_source_url(self.source_url)
+        if self.source_doi is not None:
+            gguf_writer.add_source_doi(self.source_doi)
+        if self.source_uuid is not None:
+            gguf_writer.add_source_uuid(self.source_uuid)
+        if self.source_repo_url is not None:
+            gguf_writer.add_source_repo_url(self.source_repo_url)
+
+        if self.base_models is not None:
+            gguf_writer.add_base_model_count(len(self.base_models))
+            for key, base_model_entry in enumerate(self.base_models):
+                if "name" in base_model_entry:
+                    gguf_writer.add_base_model_name(key, base_model_entry["name"])
+                if "author" in base_model_entry:
+                    gguf_writer.add_base_model_author(key, base_model_entry["author"])
+                if "version" in base_model_entry:
+                    gguf_writer.add_base_model_version(key, base_model_entry["version"])
+                if "organization" in base_model_entry:
+                    gguf_writer.add_base_model_organization(key, base_model_entry["organization"])
+                if "url" in base_model_entry:
+                    gguf_writer.add_base_model_url(key, base_model_entry["url"])
+                if "doi" in base_model_entry:
+                    gguf_writer.add_base_model_doi(key, base_model_entry["doi"])
+                if "uuid" in base_model_entry:
+                    gguf_writer.add_base_model_uuid(key, base_model_entry["uuid"])
+                if "repo_url" in base_model_entry:
+                    gguf_writer.add_base_model_repo_url(key, base_model_entry["repo_url"])
+
+        if self.tags is not None:
+            gguf_writer.add_tags(self.tags)
+        if self.languages is not None:
+            gguf_writer.add_languages(self.languages)
+        if self.datasets is not None:
+            gguf_writer.add_datasets(self.datasets)

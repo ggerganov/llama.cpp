@@ -215,81 +215,6 @@ class Model:
             raise ValueError(f"Can not map tensor {name!r}")
         return new_name
 
-    def set_gguf_meta_model(self):
-        self.gguf_writer.add_name(self.metadata.name)
-
-        if self.metadata.author is not None:
-            self.gguf_writer.add_author(self.metadata.author)
-        if self.metadata.version is not None:
-            self.gguf_writer.add_version(self.metadata.version)
-        if self.metadata.organization is not None:
-            self.gguf_writer.add_organization(self.metadata.organization)
-
-        if self.metadata.finetune is not None:
-            self.gguf_writer.add_finetune(self.metadata.finetune)
-        if self.metadata.basename is not None:
-            self.gguf_writer.add_basename(self.metadata.basename)
-
-        if self.metadata.description is not None:
-            self.gguf_writer.add_description(self.metadata.description)
-        if self.metadata.quantized_by is not None:
-            self.gguf_writer.add_quantized_by(self.metadata.quantized_by)
-
-        if self.metadata.parameter_class_attribute is not None:
-            self.gguf_writer.add_parameter_class_attribute(self.metadata.parameter_class_attribute)
-
-        if self.metadata.license is not None:
-            self.gguf_writer.add_license(self.metadata.license)
-        if self.metadata.license_name is not None:
-            self.gguf_writer.add_license_name(self.metadata.license_name)
-        if self.metadata.license_link is not None:
-            self.gguf_writer.add_license_link(self.metadata.license_link)
-
-        if self.metadata.url is not None:
-            self.gguf_writer.add_url(self.metadata.url)
-        if self.metadata.doi is not None:
-            self.gguf_writer.add_doi(self.metadata.doi)
-        if self.metadata.uuid is not None:
-            self.gguf_writer.add_uuid(self.metadata.uuid)
-        if self.metadata.repo_url is not None:
-            self.gguf_writer.add_repo_url(self.metadata.repo_url)
-
-        if self.metadata.source_url is not None:
-            self.gguf_writer.add_source_url(self.metadata.source_url)
-        if self.metadata.source_doi is not None:
-            self.gguf_writer.add_source_doi(self.metadata.source_doi)
-        if self.metadata.source_uuid is not None:
-            self.gguf_writer.add_source_uuid(self.metadata.source_uuid)
-        if self.metadata.source_repo_url is not None:
-            self.gguf_writer.add_source_repo_url(self.metadata.source_repo_url)
-
-        if self.metadata.base_models is not None:
-            self.gguf_writer.add_base_model_count(len(self.metadata.base_models))
-            for key, base_model_entry in enumerate(self.metadata.base_models):
-                if "name" in base_model_entry:
-                    self.gguf_writer.add_base_model_name(key, base_model_entry["name"])
-                if "author" in base_model_entry:
-                    self.gguf_writer.add_base_model_author(key, base_model_entry["author"])
-                if "version" in base_model_entry:
-                    self.gguf_writer.add_base_model_version(key, base_model_entry["version"])
-                if "organization" in base_model_entry:
-                    self.gguf_writer.add_base_model_organization(key, base_model_entry["organization"])
-                if "url" in base_model_entry:
-                    self.gguf_writer.add_base_model_url(key, base_model_entry["url"])
-                if "doi" in base_model_entry:
-                    self.gguf_writer.add_base_model_doi(key, base_model_entry["doi"])
-                if "uuid" in base_model_entry:
-                    self.gguf_writer.add_base_model_uuid(key, base_model_entry["uuid"])
-                if "repo_url" in base_model_entry:
-                    self.gguf_writer.add_base_model_repo_url(key, base_model_entry["repo_url"])
-
-        if self.metadata.tags is not None:
-            self.gguf_writer.add_tags(self.metadata.tags)
-        if self.metadata.languages is not None:
-            self.gguf_writer.add_languages(self.metadata.languages)
-        if self.metadata.datasets is not None:
-            self.gguf_writer.add_datasets(self.metadata.datasets)
-
     def set_gguf_parameters(self):
         self.gguf_writer.add_block_count(self.block_count)
 
@@ -430,13 +355,30 @@ class Model:
 
                 self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
 
-    def write(self):
-        self.write_tensors()
+    def prepare_key_value_store(self):
 
+        # Upon missing model uuid, generate uuid based on tensor content
         if self.metadata.uuid is None:
             self.metadata.uuid = self.gguf_writer.generate_tensors_uuid()
-            logger.info("generating general.uuid (based on tensor content) {0}".format(self.metadata.uuid))
+            max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
+            logger.info(f"{f'%-{max_name_len}s' % f'generating general.uuid'} {self.metadata.uuid}")
 
+        logger.info("Set meta model")
+        self.metadata.set_gguf_meta_model(self.gguf_writer)
+
+        logger.info("Set model parameters")
+        self.gguf_writer.add_type(gguf.GGUFType.MODEL)
+        self.set_gguf_parameters()
+
+        logger.info("Set model tokenizer")
+        self.set_vocab()
+
+        logger.info("Set model quantization version")
+        self.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
+
+    def write(self):
+        self.write_tensors()
+        self.prepare_key_value_store()
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
@@ -445,6 +387,12 @@ class Model:
     def write_vocab(self):
         if len(self.gguf_writer.tensors) != 1:
             raise ValueError('Splitting the vocabulary is not supported')
+
+        if self.metadata.uuid is None:
+            # Required tensor data least for uuid generation if in vocab_only mode
+            self.write_tensors()
+
+        self.prepare_key_value_store()
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
@@ -3702,18 +3650,6 @@ def main() -> None:
         if args.get_outfile:
             print(f"{model_instance.fname_default}") # noqa: NP100
             return
-
-        logger.info("Set meta model")
-        model_instance.set_gguf_meta_model()
-
-        logger.info("Set model parameters")
-        model_instance.gguf_writer.add_type(gguf.GGUFType.MODEL)
-        model_instance.set_gguf_parameters()
-
-        logger.info("Set model tokenizer")
-        model_instance.set_vocab()
-
-        model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
 
         if args.vocab_only:
             logger.info("Exporting model vocab...")

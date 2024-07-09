@@ -380,7 +380,7 @@ class GGUFWriter:
                 assert ti.tensor.nbytes == ti.nbytes
                 uuidv5_sha1.update(ti.tensor.tobytes('C'))
 
-        return uuid.UUID(bytes=uuidv5_sha1.digest()[:16], version=5)
+        return str(uuid.UUID(bytes=uuidv5_sha1.digest()[:16], version=5))
 
     def write_tensors_to_file(self, *, progress: bool = False) -> None:
         self.write_ti_data_to_file()
