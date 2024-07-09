@@ -373,9 +373,6 @@ class Model:
         except KeyError:
             raise NotImplementedError(f'Architecture {arch!r} not supported!') from None
 
-    def support_lora(self) -> bool:
-        return False
-
     # used for GPT-2 BPE and WordPiece vocabs
     def get_vocab_base(self) -> tuple[list[str], list[int], str]:
         tokens: list[str] = []
@@ -1415,9 +1412,9 @@ class LlamaModel(Model):
         n_head = self.hparams["num_attention_heads"]
         n_kv_head = self.hparams.get("num_key_value_heads")
 
-        if name.endswith(("q_proj.weight", "q_proj.bias", "q_proj.lora_B.weight")):
+        if name.endswith(("q_proj.weight", "q_proj.bias")):
             data_torch = LlamaModel.permute(data_torch, n_head, n_head)
-        if name.endswith(("k_proj.weight", "k_proj.bias", "k_proj.lora_B.weight")):
+        if name.endswith(("k_proj.weight", "k_proj.bias")):
             data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
 
         # process the experts separately
@@ -1464,10 +1461,6 @@ class LlamaModel(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
-
-    def support_lora(self) -> bool:
-        # TODO: support lora conversion for MOE
-        return "num_local_experts" not in self.hparams
 
 
 @Model.register("BitnetForCausalLM")
