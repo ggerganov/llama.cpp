@@ -2057,23 +2057,20 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         }
     }
 
-    std::map<std::string, llama_model*> derived_models;
     for (unsigned int i = 0; i < params.derived_model_paths.size(); ++i) {
         const auto & derived_model_path = params.derived_model_paths[i];
         const std::string & derived_model_name = std::get<0>(derived_model_path);
         const std::string & derived_model_file = std::get<1>(derived_model_path);
 
-        llama_model * derived_model_ptr = nullptr;
-        derived_model_ptr = llama_load_model_from_file(derived_model_file.c_str(), mparams);
+        llama_model * derived_model = llama_load_model_from_file(derived_model_file.c_str(), mparams);
 
-        if (derived_model_ptr == NULL) {
+        if (derived_model == NULL) {
             fprintf(stderr, "%s: error: failed to load derived model '%s'\n", __func__, derived_model_file.c_str());
         }
 
-        derived_models[derived_model_name] = derived_model_ptr;
+        llama_model_set_name(derived_model, derived_model_name.c_str());
+        llama_ctx_set_derived_model(lctx, derived_model);
     }
-
-    llama_set_derived_models(lctx, derived_models);
 
     for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
         const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);

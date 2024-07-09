@@ -8,8 +8,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <map>
-#include <string>
 
 #ifdef _WIN32
 #else
@@ -432,17 +430,19 @@ extern "C" {
                      struct llama_model * model,
             struct llama_context_params   params);
 
-    LLAMA_API void llama_print_derived_models(struct llama_context* ctx);
-
-    LLAMA_API void llama_set_derived_models(
-                struct llama_context * ctx,
-    std::map<std::string, struct llama_model *> derived_models);
-
     static const char* BASE_MODEL = "base";
 
-    LLAMA_API bool llama_switch_derived_model(
+    LLAMA_API void llama_print_derived_models(const struct llama_context* ctx);
+
+    LLAMA_API void llama_model_set_name(struct llama_model * model, const char* name);
+
+    LLAMA_API void llama_ctx_set_derived_model(
+            struct llama_context * ctx,
+            struct llama_model * derived_model);
+
+    LLAMA_API bool llama_ctx_switch_derived_model(
         struct llama_context* ctx,
-        std::string derived_model_name);
+        const char * derived_model_name);
 
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);

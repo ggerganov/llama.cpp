@@ -2624,7 +2624,7 @@ struct llama_context {
     const llama_model & model;
 
     // derived models
-    std::map<std::string, llama_model *> derived_models;
+    std::vector<llama_model *> derived_models;
 
     // key + value cache for the self attention
     struct llama_kv_cache kv_self;
@@ -3549,13 +3549,15 @@ struct llama_model_loader {
 
             char split_prefix[PATH_MAX] = {0};
             char foundation_prefix[PATH_MAX] = { 0 };
-            // Two types of split files are supported:
-            // prefix is abc, postfix is 00001-of-00002, 00002-of-00002
-            // abc-00001-of-00002.gguf, abc-00002-of-00002.gguf
-            // prefix is abc, postfix is foundation, adaptor-task-x, adaptor-task-y
-            // abc-foundation.gguf, abc-adaptor-task-x.gguf, abc-adaptor-task-y.gguf
-            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)
-                && !llama_foundation_prefix(foundation_prefix, sizeof(foundation_prefix), fname.c_str())) {
+            // Two split mode:
+            // - abc-00001-of-00002.gguf, abc-00002-of-00002.gguf, prefix is abc, postfix is 00001-of-00002, 00002-of-00002
+            // - abc-foundation.gguf, abc-adaptor-task-x.gguf, abc-adaptor-task-y.gguf, prefix is abc, postfix is -foundation, -adaptor-task-x, -adaptor-task-y
+            bool foundation_mode = false;
+            if (llama_foundation_prefix(foundation_prefix, sizeof(foundation_prefix), fname.c_str()) && n_split == 2) {
+                foundation_mode = true;
+            }
+
+            if (!foundation_mode && !llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
                 throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
             }
 
@@ -3565,14 +3567,10 @@ struct llama_model_loader {
 
             char split_path[PATH_MAX] = {0};
             for (idx = 1; idx < n_split; idx++) {
-                llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
-
-                // if split path not exist
-                struct stat model_file_info;
-                std::string str_split_path(split_path);
-                auto file_exists = (stat(str_split_path.c_str(), &model_file_info) == 0);
-                if (!file_exists) {
+                if (foundation_mode) {
                     llama_foundation_split_path(split_path, sizeof(split_path), foundation_prefix);
+                } else {
+                    llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
                 }
 
                 struct gguf_init_params split_params = {
@@ -12595,19 +12593,19 @@ static struct ggml_cgraph * llama_build_graph(
          llama_context & lctx,
      const llama_batch & batch,
                   bool   worst_case) {
-    const auto & foundation_model = lctx.model;
-
+    const auto& foundation_model = lctx.model;
     const llama_model* model_ptr = nullptr;
-    const auto it = lctx.derived_models.find(lctx.cparams.derived_model_name);
-    if (it != lctx.derived_models.end()) {
-        const auto& model_derived = *(it->second);
-        model_ptr = &model_derived;
-    }
-    else {
-        model_ptr = &foundation_model;
+    const char* model_name = lctx.cparams.derived_model_name.c_str();
+
+    for (const auto& model : lctx.derived_models) {
+        if (model->name == model_name) {
+            model_ptr = model;
+            break;
+        }
     }
 
-    const llama_model & model = *model_ptr;
+    model_ptr = model_ptr ? model_ptr : &foundation_model;
+    const llama_model& model = *model_ptr;
 
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
     llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name, int il) {
@@ -17988,17 +17986,6 @@ struct llama_context * llama_new_context_with_model(
     return ctx;
 }
 
-struct llama_context * llama_new_context_with_derived_models(
-                 struct llama_model * model,
-        struct llama_context_params   params,
-        const std::map<std::string, llama_model*> derived_models) {
-    llama_context * ctx = llama_new_context_with_model(model, params);
-    if (ctx) {
-        ctx->derived_models = derived_models;
-    }
-    return ctx;
-}
-
 void llama_free(struct llama_context * ctx) {
     delete ctx;
 }
@@ -18007,21 +17994,39 @@ const llama_model * llama_get_model(const struct llama_context * ctx) {
     return &ctx->model;
 }
 
-void llama_print_derived_models(struct llama_context * ctx) {
-    for (const auto & it : ctx->derived_models) {
-        LLAMA_LOG_INFO("%s: %s\n", __func__, it.first.c_str());
+void llama_model_set_name(struct llama_model * model, const char * model_name) {
+    model->name = model_name;
+}
+
+void llama_print_derived_models(const struct llama_context * ctx) {
+    for (const auto & derived_model : ctx->derived_models) {
+        if (!derived_model->name.empty()) {
+            LLAMA_LOG_INFO("%s: %s\n", __func__, derived_model->name.c_str());
+        }
     }
 }
 
-void llama_set_derived_models(struct llama_context * ctx, const std::map<std::string, llama_model*> derived_models) {
-    ctx->derived_models = derived_models;
+void llama_ctx_set_derived_model(struct llama_context * ctx, struct llama_model * derived_model) {
+    ctx->derived_models.emplace_back(derived_model);
 }
 
-bool llama_switch_derived_model(struct llama_context* ctx, const std::string derived_model_name) {
+bool llama_ctx_switch_derived_model(struct llama_context* ctx, const char * derived_model_name) {
     llama_synchronize(ctx);
-
     auto& cparams = ctx->cparams;
-    cparams.derived_model_name = (ctx->derived_models.find(derived_model_name) == ctx->derived_models.end()) ? BASE_MODEL : derived_model_name;
+    int found = 0;
+
+    const llama_model* model_ptr = nullptr;
+
+    bool is_derived = false;
+    for (const auto& model : ctx->derived_models) {
+        if (model->name == derived_model_name) {
+            model_ptr = model;
+            is_derived = true;
+            break;
+        }
+    }
+
+    cparams.derived_model_name = is_derived ? derived_model_name : BASE_MODEL;
     LLAMA_LOG_INFO("%s: %s\n", __func__, cparams.derived_model_name.c_str());
 
     return true;
@@ -20190,8 +20195,6 @@ int llama_foundation_prefix(char* dest, size_t maxlen, const char* split_path) {
     if (pos != NULL) {
         size_t size_prefix = pos - split_path;
         snprintf(dest, std::min((size_t)size_prefix + 1, maxlen), "%s", split_path);
-        // strncpy(dest, split_path, size_prefix);
-        // dest[size_prefix] = '\0';
         return size_prefix;
     }
 
