@@ -533,10 +533,20 @@ def compare_vocabs(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLlamaC
         if vocab1 != vocab2:
             num_errors = 0
             for i in range(max(len(vocab1), len(vocab2))):
-                text1 = vocab1[i] if i < len(vocab1) else ""
-                text2 = vocab2[i] if i < len(vocab2) else ""
-                is_unused = text1.startswith("[UNUSED_TOKEN_")  # AutoTokenizer adds more unused tokens than SentencePiece ?
-                if text1 != text2 and is_unused and text2:
+                text1 = vocab1[i] if i < len(vocab1) else None
+                text2 = vocab2[i] if i < len(vocab2) else None
+                if True:  #WIP: SentencePiece adds more unused tokens than AutoTokenizer ?
+                    if text1 is None:
+                        if not text2 or text2.startswith('[PAD'):  # is unused ?  #TODO: use toktypes
+                            text2 = None
+                    else:
+                        #TODO: is "UNUSED_TOKEN_" valid for all models ?
+                        text1 = text1.replace("[UNUSED_TOKEN_", "[PAD")
+                    #if text1 is None or text1.startswith("[UNUSED_TOKEN_"):  # is unused ?
+                    #    text1 = ""
+                    #if text2 is None or text2.startswith('[PAD'):  # is unused ?
+                    #    text2 = ""
+                if text1 != text2:
                     num_errors += 1
                     if num_errors < MAX_PRINT_ERRORS:
                         logger.error(f" {detokenize=} id={i} expected={repr(text1)} result={repr(text2)}")
