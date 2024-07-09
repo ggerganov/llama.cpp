@@ -11,6 +11,7 @@
 #include "System/QnnSystemInterface.h"
 #include "backend.hpp"
 #include "graph.hpp"
+#include "logger.hpp"
 #include "qnn.hpp"
 #include "utils.hpp"
 
@@ -59,6 +60,7 @@ public:
         }
 
         tensor->extra = this;
+        QNN_LOG_DEBUG("create tensor %s with device %d", _tensor_name.c_str(), device);
     }
 
     template <size_t _InputSize, size_t _OutputSize>
@@ -92,6 +94,8 @@ public:
 
         QNN_TENSOR_SET_ID(_qnn_tensor, QNN_TENSOR_GET_ID(tensor));
         _graph_handle = graph.get_graph_handler();
+
+        QNN_LOG_DEBUG("bind tensor %s to graph %s", _tensor_name.c_str(), graph.get_name().c_str());
         return true;
     }
 
@@ -164,10 +168,10 @@ private:
             QNN_LOG_WARN("alloc rpc mem failure, %s\n", strerror(errno));
             QNN_LOG_DEBUG("tensor name %s", _tensor_name.c_str());
             return false;
-        } else {
-            QNN_LOG_INFO("alloc rpcmem successfully\n");
         }
 
+        QNN_LOG_INFO("tensor %s: alloc rpcmem(%p) successfully\n", _tensor_name.c_str(), qnn_buffer);
+        
         auto error = _qnn_instance->register_rpcmem(qnn_buffer, &_qnn_tensor);
         if (error != QNN_SUCCESS) {
             QNN_LOG_WARN("register rpc mem failure, %d\n", (int)error);
