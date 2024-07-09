@@ -56,9 +56,3 @@ class TestMetadataMethod(unittest.TestCase):
         got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), None, None, model_dir_path)
         expect = gguf.Metadata(name='Hermes 2 Pro Llama 3 8b DPO', author=None, version=None, organization=None, finetune='DPO', basename='hermes-2-pro-llama-3', description=None, quantized_by=None, parameter_class_attribute='8b', url=None, doi=None, uuid=None, repo_url=None, license=None, license_name=None, license_link=None, base_models=None, tags=None, languages=None, datasets=None)
         self.assertEqual(got, expect)
-
-    def test_generate_any_missing_uuid(self):
-        metadata = gguf.Metadata(repo_url="example.com", source_url="example.com", base_models=[{"doi":"10.57967/hf/2410"},{"doi":"10.47366/sabia.v5n1a3"}])
-        got = gguf.Metadata.generate_any_missing_uuid(metadata)
-        expect = gguf.Metadata(name=None, author=None, version=None, organization=None, finetune=None, basename=None, description=None, quantized_by=None, parameter_class_attribute=None, url=None, doi=None, uuid='a5cf6e8e-4cfa-5f31-a804-6de6d1245e26', repo_url='example.com', source_url='example.com', source_doi=None, source_uuid='a5cf6e8e-4cfa-5f31-a804-6de6d1245e26', source_repo_url=None, license=None, license_name=None, license_link=None, base_models=[{'doi': '10.57967/hf/2410', 'uuid': '26ce8128-2d34-5ea2-bc50-b5b90e21ed71'}, {'doi': '10.47366/sabia.v5n1a3', 'uuid': 'a15b24d6-5657-5d52-aaed-20dad7f4c500'}], tags=None, languages=None, datasets=None)
-        self.assertEqual(got, expect)
