@@ -14,6 +14,8 @@
 
 #include "ggml-aarch64.h"
 
+#pragma GCC diagnostic ignored "-Woverlength-strings"
+
 #define UNUSED GGML_UNUSED
 
 // Functions to create the interleaved data layout formats
