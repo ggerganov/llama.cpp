@@ -49,8 +49,7 @@ public:
         // TODO: set the quantizeParams base on the tensor type
         QNN_TENSOR_SET_RANK(_qnn_tensor, qnn::get_ggml_tensor_rank(tensor));
 
-        const bool is_npu = device == QNN_BACKEND_NPU;
-        if (is_npu) {
+        if (should_use_mem_handle()) {
             QNN_TENSOR_SET_MEM_TYPE(_qnn_tensor, QNN_TENSORMEMTYPE_MEMHANDLE);
             QNN_TENSOR_SET_MEM_HANDLE(_qnn_tensor, nullptr);
         } else {
@@ -171,7 +170,7 @@ private:
         }
 
         QNN_LOG_INFO("tensor %s: alloc rpcmem(%p) successfully\n", _tensor_name.c_str(), qnn_buffer);
-        
+
         auto error = _qnn_instance->register_rpcmem(qnn_buffer, &_qnn_tensor);
         if (error != QNN_SUCCESS) {
             QNN_LOG_WARN("register rpc mem failure, %d\n", (int)error);
