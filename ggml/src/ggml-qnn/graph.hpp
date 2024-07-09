@@ -82,7 +82,7 @@ public:
         auto err = _qnn_interface.tensorCreateGraphTensor(_graph_handle, &tensor);
         if (err != QNN_SUCCESS) {
             QNN_LOG_INFO("error = %d\n", err);
-            QNN_LOG_DEBUG("tensor%p name %s", _qnn_tensor, QNN_TENSOR_GET_NAME(*_qnn_tensor));
+            QNN_LOG_DEBUG("tensor%p name %s", &tensor, QNN_TENSOR_GET_NAME(tensor));
             return false;
         }
 
