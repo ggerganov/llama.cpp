@@ -42,7 +42,7 @@ git clone https://github.com/ggerganov/llama.cpp
 
 cd llama.cpp
 
-LLAMA_CUDA=1 make -j
+GGML_CUDA=1 make -j
 
 ln -sfn /workspace/TinyLlama-1.1B-Chat-v0.3  ./models/tinyllama-1b
 ln -sfn /workspace/CodeLlama-7b-hf           ./models/codellama-7b
@@ -60,7 +60,7 @@ cd /workspace/llama.cpp
 mkdir build-cublas
 cd build-cublas
 
-cmake -DLLAMA_CUDA=1 ../
+cmake -DGGML_CUDA=1 ../
 make -j
 
 if [ "$1" -eq "0" ]; then
@@ -75,11 +75,11 @@ if [ "$1" -eq "1" ]; then
 
     cd /workspace/llama.cpp
 
-    python3 convert.py ./models/tinyllama-1b  --outfile ./models/tinyllama-1b/ggml-model-f16.gguf  --outtype f16
+    python3 examples/convert_legacy_llama.py ./models/tinyllama-1b  --outfile ./models/tinyllama-1b/ggml-model-f16.gguf  --outtype f16
 
-    ./quantize ./models/tinyllama-1b/ggml-model-f16.gguf ./models/tinyllama-1b/ggml-model-q4_0.gguf q4_0
-    ./quantize ./models/tinyllama-1b/ggml-model-f16.gguf ./models/tinyllama-1b/ggml-model-q4_k.gguf q4_k
-    ./quantize ./models/tinyllama-1b/ggml-model-f16.gguf ./models/tinyllama-1b/ggml-model-q8_0.gguf q8_0
+    ./llama-quantize ./models/tinyllama-1b/ggml-model-f16.gguf ./models/tinyllama-1b/ggml-model-q4_0.gguf q4_0
+    ./llama-quantize ./models/tinyllama-1b/ggml-model-f16.gguf ./models/tinyllama-1b/ggml-model-q4_k.gguf q4_k
+    ./llama-quantize ./models/tinyllama-1b/ggml-model-f16.gguf ./models/tinyllama-1b/ggml-model-q8_0.gguf q8_0
 fi
 
 if [ "$1" -eq "2" ]; then
@@ -90,11 +90,11 @@ if [ "$1" -eq "2" ]; then
 
     cd /workspace/llama.cpp
 
-    python3 convert.py ./models/codellama-7b  --outfile ./models/codellama-7b/ggml-model-f16.gguf  --outtype f16
+    python3 examples/convert_legacy_llama.py ./models/codellama-7b  --outfile ./models/codellama-7b/ggml-model-f16.gguf  --outtype f16
 
-    ./quantize ./models/codellama-7b/ggml-model-f16.gguf ./models/codellama-7b/ggml-model-q4_0.gguf q4_0
-    ./quantize ./models/codellama-7b/ggml-model-f16.gguf ./models/codellama-7b/ggml-model-q4_k.gguf q4_k
-    ./quantize ./models/codellama-7b/ggml-model-f16.gguf ./models/codellama-7b/ggml-model-q8_0.gguf q8_0
+    ./llama-quantize ./models/codellama-7b/ggml-model-f16.gguf ./models/codellama-7b/ggml-model-q4_0.gguf q4_0
+    ./llama-quantize ./models/codellama-7b/ggml-model-f16.gguf ./models/codellama-7b/ggml-model-q4_k.gguf q4_k
+    ./llama-quantize ./models/codellama-7b/ggml-model-f16.gguf ./models/codellama-7b/ggml-model-q8_0.gguf q8_0
 fi
 
 if [ "$1" -eq "3" ]; then
@@ -105,11 +105,11 @@ if [ "$1" -eq "3" ]; then
 
     cd /workspace/llama.cpp
 
-    python3 convert.py ./models/codellama-13b --outfile ./models/codellama-13b/ggml-model-f16.gguf --outtype f16
+    python3 examples/convert_legacy_llama.py ./models/codellama-13b --outfile ./models/codellama-13b/ggml-model-f16.gguf --outtype f16
 
-    ./quantize ./models/codellama-13b/ggml-model-f16.gguf ./models/codellama-13b/ggml-model-q4_0.gguf q4_0
-    ./quantize ./models/codellama-13b/ggml-model-f16.gguf ./models/codellama-13b/ggml-model-q4_k.gguf q4_k
-    ./quantize ./models/codellama-13b/ggml-model-f16.gguf ./models/codellama-13b/ggml-model-q8_0.gguf q8_0
+    ./llama-quantize ./models/codellama-13b/ggml-model-f16.gguf ./models/codellama-13b/ggml-model-q4_0.gguf q4_0
+    ./llama-quantize ./models/codellama-13b/ggml-model-f16.gguf ./models/codellama-13b/ggml-model-q4_k.gguf q4_k
+    ./llama-quantize ./models/codellama-13b/ggml-model-f16.gguf ./models/codellama-13b/ggml-model-q8_0.gguf q8_0
 fi
 
 if [ "$1" -eq "4" ]; then
@@ -120,11 +120,11 @@ if [ "$1" -eq "4" ]; then
 
     cd /workspace/llama.cpp
 
-    python3 convert.py ./models/codellama-34b --outfile ./models/codellama-34b/ggml-model-f16.gguf --outtype f16
+    python3 examples/convert_legacy_llama.py ./models/codellama-34b --outfile ./models/codellama-34b/ggml-model-f16.gguf --outtype f16
 
-    ./quantize ./models/codellama-34b/ggml-model-f16.gguf ./models/codellama-34b/ggml-model-q4_0.gguf q4_0
-    ./quantize ./models/codellama-34b/ggml-model-f16.gguf ./models/codellama-34b/ggml-model-q4_k.gguf q4_k
-    ./quantize ./models/codellama-34b/ggml-model-f16.gguf ./models/codellama-34b/ggml-model-q8_0.gguf q8_0
+    ./llama-quantize ./models/codellama-34b/ggml-model-f16.gguf ./models/codellama-34b/ggml-model-q4_0.gguf q4_0
+    ./llama-quantize ./models/codellama-34b/ggml-model-f16.gguf ./models/codellama-34b/ggml-model-q4_k.gguf q4_k
+    ./llama-quantize ./models/codellama-34b/ggml-model-f16.gguf ./models/codellama-34b/ggml-model-q8_0.gguf q8_0
 fi
 
 if [ "$1" -eq "5" ]; then
@@ -135,11 +135,11 @@ if [ "$1" -eq "5" ]; then
 
     cd /workspace/llama.cpp
 
-    python3 convert.py ./models/codellama-7b-instruct  --outfile ./models/codellama-7b-instruct/ggml-model-f16.gguf  --outtype f16
+    python3 examples/convert_legacy_llama.py ./models/codellama-7b-instruct  --outfile ./models/codellama-7b-instruct/ggml-model-f16.gguf  --outtype f16
 
-    ./quantize ./models/codellama-7b-instruct/ggml-model-f16.gguf ./models/codellama-7b-instruct/ggml-model-q4_0.gguf q4_0
-    ./quantize ./models/codellama-7b-instruct/ggml-model-f16.gguf ./models/codellama-7b-instruct/ggml-model-q4_k.gguf q4_k
-    ./quantize ./models/codellama-7b-instruct/ggml-model-f16.gguf ./models/codellama-7b-instruct/ggml-model-q8_0.gguf q8_0
+    ./llama-quantize ./models/codellama-7b-instruct/ggml-model-f16.gguf ./models/codellama-7b-instruct/ggml-model-q4_0.gguf q4_0
+    ./llama-quantize ./models/codellama-7b-instruct/ggml-model-f16.gguf ./models/codellama-7b-instruct/ggml-model-q4_k.gguf q4_k
+    ./llama-quantize ./models/codellama-7b-instruct/ggml-model-f16.gguf ./models/codellama-7b-instruct/ggml-model-q8_0.gguf q8_0
 fi
 
 if [ "$1" -eq "6" ]; then
@@ -150,11 +150,11 @@ if [ "$1" -eq "6" ]; then
 
     cd /workspace/llama.cpp
 
-    python3 convert.py ./models/codellama-13b-instruct --outfile ./models/codellama-13b-instruct/ggml-model-f16.gguf --outtype f16
+    python3 examples/convert_legacy_llama.py ./models/codellama-13b-instruct --outfile ./models/codellama-13b-instruct/ggml-model-f16.gguf --outtype f16
 
-    ./quantize ./models/codellama-13b-instruct/ggml-model-f16.gguf ./models/codellama-13b-instruct/ggml-model-q4_0.gguf q4_0
-    ./quantize ./models/codellama-13b-instruct/ggml-model-f16.gguf ./models/codellama-13b-instruct/ggml-model-q4_k.gguf q4_k
-    ./quantize ./models/codellama-13b-instruct/ggml-model-f16.gguf ./models/codellama-13b-instruct/ggml-model-q8_0.gguf q8_0
+    ./llama-quantize ./models/codellama-13b-instruct/ggml-model-f16.gguf ./models/codellama-13b-instruct/ggml-model-q4_0.gguf q4_0
+    ./llama-quantize ./models/codellama-13b-instruct/ggml-model-f16.gguf ./models/codellama-13b-instruct/ggml-model-q4_k.gguf q4_k
+    ./llama-quantize ./models/codellama-13b-instruct/ggml-model-f16.gguf ./models/codellama-13b-instruct/ggml-model-q8_0.gguf q8_0
 fi
 
 if [ "$1" -eq "7" ]; then
@@ -165,11 +165,11 @@ if [ "$1" -eq "7" ]; then
 
     cd /workspace/llama.cpp
 
-    python3 convert.py ./models/codellama-34b-instruct --outfile ./models/codellama-34b-instruct/ggml-model-f16.gguf --outtype f16
+    python3 examples/convert_legacy_llama.py ./models/codellama-34b-instruct --outfile ./models/codellama-34b-instruct/ggml-model-f16.gguf --outtype f16
 
-    ./quantize ./models/codellama-34b-instruct/ggml-model-f16.gguf ./models/codellama-34b-instruct/ggml-model-q4_0.gguf q4_0
-    ./quantize ./models/codellama-34b-instruct/ggml-model-f16.gguf ./models/codellama-34b-instruct/ggml-model-q4_k.gguf q4_k
-    ./quantize ./models/codellama-34b-instruct/ggml-model-f16.gguf ./models/codellama-34b-instruct/ggml-model-q8_0.gguf q8_0
+    ./llama-quantize ./models/codellama-34b-instruct/ggml-model-f16.gguf ./models/codellama-34b-instruct/ggml-model-q4_0.gguf q4_0
+    ./llama-quantize ./models/codellama-34b-instruct/ggml-model-f16.gguf ./models/codellama-34b-instruct/ggml-model-q4_k.gguf q4_k
+    ./llama-quantize ./models/codellama-34b-instruct/ggml-model-f16.gguf ./models/codellama-34b-instruct/ggml-model-q8_0.gguf q8_0
 fi
 
 if [ "$1" -eq "1" ]; then
@@ -181,22 +181,22 @@ if [ "$1" -eq "1" ]; then
     ../scripts/get-wikitext-2.sh
     unzip wikitext-2-raw-v1.zip
 
-    make -j && ./bin/perplexity -m ../models/tinyllama-1b/ggml-model-f16.gguf -f ./wikitext-2-raw/wiki.test.raw -ngl 100 --chunks 32
+    make -j && ./bin/llama-perplexity -m ../models/tinyllama-1b/ggml-model-f16.gguf -f ./wikitext-2-raw/wiki.test.raw -ngl 100 --chunks 32
 
     # batched
     cd /workspace/llama.cpp
 
-    LLAMA_CUDA=1 make -j && ./batched ./models/tinyllama-1b/ggml-model-f16.gguf "Hello, my name is" 8 128 999
+    GGML_CUDA=1 make -j && ./llama-batched ./models/tinyllama-1b/ggml-model-f16.gguf "Hello, my name is" 8 128 999
 
     # batched-bench
     cd /workspace/llama.cpp
 
-    LLAMA_CUDA=1 make -j && ./batched-bench ./models/tinyllama-1b/ggml-model-f16.gguf 4608 1 99 0 512 128 1,2,3,4,5,6,7,8,16,32
+    GGML_CUDA=1 make -j && ./llama-batched-bench ./models/tinyllama-1b/ggml-model-f16.gguf 4608 1 99 0 512 128 1,2,3,4,5,6,7,8,16,32
 
     # parallel
     cd /workspace/llama.cpp
 
-    LLAMA_CUDA=1 make -j && ./parallel -m ./models/tinyllama-1b/ggml-model-f16.gguf -t 1 -ngl 100 -c 4096 -b 512 -s 1 -np 8 -ns 128 -n 100 -cb
+    GGML_CUDA=1 make -j && ./llama-parallel -m ./models/tinyllama-1b/ggml-model-f16.gguf -t 1 -ngl 100 -c 4096 -b 512 -s 1 -np 8 -ns 128 -n 100 -cb
 
 fi
 
@@ -204,10 +204,9 @@ fi
 #if [ "$1" -eq "7" ]; then
 #    cd /workspace/llama.cpp
 #
-#    LLAMA_CUDA=1 make -j && ./speculative -m ./models/codellama-34b-instruct/ggml-model-f16.gguf -md ./models/codellama-7b-instruct/ggml-model-q4_0.gguf -p "# Dijkstra's shortest path algorithm in Python (4 spaces indentation) + complexity analysis:\n\n" -e -ngl 999 -ngld 999 -t 4 -n 512 -c 4096 -s 21 --draft 16 -np 1 --temp 0.0
+#    GGML_CUDA=1 make -j && ./llama-speculative -m ./models/codellama-34b-instruct/ggml-model-f16.gguf -md ./models/codellama-7b-instruct/ggml-model-q4_0.gguf -p "# Dijkstra's shortest path algorithm in Python (4 spaces indentation) + complexity analysis:\n\n" -e -ngl 999 -ngld 999 -t 4 -n 512 -c 4096 -s 21 --draft 16 -np 1 --temp 0.0
 #fi
 
 # more benches
-#LLAMA_CUDA=1 make -j && ./batched-bench ./models/codellama-7b/ggml-model-q4_k.gguf  4096 1 99 1 512,3200 128,128,800 1
-#LLAMA_CUDA=1 make -j && ./batched-bench ./models/codellama-13b/ggml-model-q4_k.gguf 4096 1 99 1 512,3200 128,128,800 1
-
+#GGML_CUDA=1 make -j && ./llama-batched-bench ./models/codellama-7b/ggml-model-q4_k.gguf  4096 1 99 1 512,3200 128,128,800 1
+#GGML_CUDA=1 make -j && ./llama-batched-bench ./models/codellama-13b/ggml-model-q4_k.gguf 4096 1 99 1 512,3200 128,128,800 1

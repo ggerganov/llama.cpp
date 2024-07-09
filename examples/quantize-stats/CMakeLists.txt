@@ -1,4 +1,4 @@
-set(TARGET quantize-stats)
+set(TARGET llama-quantize-stats)
 add_executable(${TARGET} quantize-stats.cpp)
 install(TARGETS ${TARGET} RUNTIME)
 target_link_libraries(${TARGET} PRIVATE llama build_info ${CMAKE_THREAD_LIBS_INIT})

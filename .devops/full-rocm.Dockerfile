@@ -36,7 +36,7 @@ COPY . .
 # Set nvcc architecture
 ENV GPU_TARGETS=${ROCM_DOCKER_ARCH}
 # Enable ROCm
-ENV LLAMA_HIPBLAS=1
+ENV GGML_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
 
@@ -45,6 +45,6 @@ ENV LLAMA_CURL=1
 RUN apt-get update && \
     apt-get install -y libcurl4-openssl-dev
 
-RUN make
+RUN make -j$(nproc)
 
 ENTRYPOINT ["/app/.devops/tools.sh"]

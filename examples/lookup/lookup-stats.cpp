@@ -16,6 +16,7 @@ int main(int argc, char ** argv){
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
 
