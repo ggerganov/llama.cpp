@@ -118,8 +118,8 @@ static void dequantize_mul_mat_vec_q4_0(const void * __restrict__ vx, const dflo
 
         const int vui = x[ib].qs[iqs];
         dfloat2 v;
-        v.x() = (vui & 0xF) * d;
-        v.y() = (vui >> 4) * d;
+        v.x() = ((vui & 0xF) - 8) * d;
+        v.y() = ((vui >> 4) - 8) * d;
 #ifdef GGML_SYCL_F16
         dfloat2 t1{ y[iybs + iqs + 0],
                     y[iybs + iqs + QK4_0 / 2] };
