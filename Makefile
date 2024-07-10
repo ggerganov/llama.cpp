@@ -1505,15 +1505,12 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 # Mark legacy binary targets as .PHONY so that they are always checked.
 .PHONY: main quantize perplexity embedding server finetune
 
+# NOTE: We currently will always build the deprecation-warning `main` binary to help users migrate.
+#  Eventually we will want to remove this target from building all the time.
 main: examples/deprecation-warning/deprecation-warning.cpp
-ifneq (,$(wildcard main))
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "#########"
 	@echo "WARNING: The 'main' binary is deprecated. Please use 'llama-cli' instead."
-	@echo "  Remove the 'main' binary to remove this warning."
-	@echo "#########"
-endif
 
 quantize: examples/deprecation-warning/deprecation-warning.cpp
 ifneq (,$(wildcard quantize))
