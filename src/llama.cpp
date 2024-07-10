@@ -3549,10 +3549,10 @@ struct llama_model_loader {
 
             char split_prefix[PATH_MAX] = {0};
             char foundation_prefix[PATH_MAX] = { 0 };
-            // Two split mode:
-            // - abc-00001-of-00002.gguf, abc-00002-of-00002.gguf, prefix is abc, postfix is 00001-of-00002, 00002-of-00002
-            // - abc-foundation.gguf, abc-adaptor-task-x.gguf, abc-adaptor-task-y.gguf, prefix is abc, postfix is -foundation, -adaptor-task-x, -adaptor-task-y
+
+            // // model-foundation.gguf, model-adaptor-task-x.gguf, model-adaptor-task-y.gguf
             bool foundation_mode = false;
+
             if (llama_foundation_prefix(foundation_prefix, sizeof(foundation_prefix), fname.c_str()) && n_split == 2) {
                 foundation_mode = true;
             }
@@ -12594,8 +12594,8 @@ static struct ggml_cgraph * llama_build_graph(
      const llama_batch & batch,
                   bool   worst_case) {
     const auto& foundation_model = lctx.model;
-    const llama_model* model_ptr = nullptr;
     const char* model_name = lctx.cparams.derived_model_name.c_str();
+    const llama_model* model_ptr = nullptr;
 
     for (const auto& model : lctx.derived_models) {
         if (model->name == model_name) {

@@ -9,11 +9,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-#ifdef _WIN32
-#else
-#include <sys/stat.h>
-#endif // _WIN32
-
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
 #        ifdef LLAMA_BUILD
