@@ -901,9 +901,6 @@ private:
     std::string _model_name; // Qualcomm's dedicated prebuilt model name, keep it for further usage
     BackendIdType _backend_id;
 
-    bool _debug_tensor = false;
-    bool _do_node_validations = true;
-
     QnnLog_Level_t _qnn_log_level = QNN_LOG_LEVEL_DEBUG;
 
     qnn::sdk_profile_level _profile_level = qnn::sdk_profile_level::profile_detail;

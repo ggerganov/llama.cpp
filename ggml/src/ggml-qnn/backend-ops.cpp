@@ -122,8 +122,6 @@ bool execute_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *graph,
 #define CHECK_PARAMS(ctx, src0, src1, dst)
 #endif
 
-// TODO: this function can be removed later because there are duplicated codes with ggml_qnn_mul_mat
-//       keep it for illustrate how to implement a specified GGMPL OP using QNN API + QNN RPC
 static void ggml_qnn_add(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
                          ggml_tensor *dst) {
     CHECK_PARAMS(ctx, src0, src1, dst);
