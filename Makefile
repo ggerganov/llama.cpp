@@ -552,6 +552,12 @@ ifdef GGML_BLIS
 	OBJ_GGML    += ggml/src/ggml-blas.o
 endif # GGML_BLIS
 
+ifdef GGML_NVPL
+	MK_CPPFLAGS += -DGGML_USE_BLAS -DNVPL_ENABLE_CBLAS -DNVPL_ILP64 -I/usr/local/include/nvpl_blas -I/usr/include/nvpl_blas
+	MK_LDFLAGS  += -L/usr/local/lib -lnvpl_blas_core -lnvpl_blas_ilp64_gomp
+	OBJ_GGML    += ggml/src/ggml-blas.o
+endif # GGML_NVPL
+
 ifndef GGML_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
 	OBJ_GGML    += ggml/src/llamafile/sgemm.o
