@@ -342,6 +342,9 @@ static __device__ void no_device_code(
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
     __trap();
 
+    // Suppress "function declared 'noreturn' but has a return statement" warning.
+    while(true);
+
     GGML_UNUSED(no_device_code); // suppress unused function warning
 }
 
