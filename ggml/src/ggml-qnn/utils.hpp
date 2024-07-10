@@ -189,6 +189,7 @@ void device_tensor_free(Qnn_Tensor_t &tensor);
 class qnn_perf {
 public:
     qnn_perf(const std::string &perf_name) : _perf_name(std::move(perf_name)) {};
+    ~qnn_perf() { info(); }
     qnn_perf() = delete;
     qnn_perf(const qnn_perf &) = delete;
     qnn_perf &operator=(const qnn_perf &) = delete;
@@ -211,6 +212,7 @@ private:
 class qnn_perf {
 public:
     qnn_perf(const std::string &perf_name) {}
+    ~qnn_perf() { info(); }
     qnn_perf() = delete;
     qnn_perf(const qnn_perf &) = delete;
     qnn_perf &operator=(const qnn_perf &) = delete;
