@@ -681,7 +681,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     if (arg == "--lora") {
         CHECK_ARG
         params.lora_adapter.emplace_back(argv[i], 1.0f);
-        params.use_mmap = false;
         return true;
     }
     if (arg == "--lora-scaled") {
@@ -689,7 +688,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         const char* lora_adapter = argv[i];
         CHECK_ARG
         params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
-        params.use_mmap = false;
         return true;
     }
     if (arg == "--lora-base") {
