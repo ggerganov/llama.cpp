@@ -3553,12 +3553,13 @@ struct llama_model_loader {
             // // model-foundation.gguf, model-adaptor-task-x.gguf, model-adaptor-task-y.gguf
             bool foundation_mode = false;
 
-            if (llama_foundation_prefix(foundation_prefix, sizeof(foundation_prefix), fname.c_str()) && n_split == 2) {
-                foundation_mode = true;
-            }
-
-            if (!foundation_mode && !llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
-                throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
+            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
+                if (llama_foundation_prefix(foundation_prefix, sizeof(foundation_prefix), fname.c_str()) && n_split == 2) {
+                    foundation_mode = true;
+                }
+                else {
+                    throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
+                }
             }
 
             if (trace > 0) {
