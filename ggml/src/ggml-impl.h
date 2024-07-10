@@ -144,7 +144,7 @@ extern "C" {
 #endif
 #endif
 
-#if defined(__ARM_FEATURE_SVE)
+#if (defined(__ARM_FEATURE_SVE) && defined(GGML_USE_SVE))
 #include <arm_sve.h>
 #endif
 

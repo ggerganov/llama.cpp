@@ -963,6 +963,7 @@ if (CMAKE_OSX_ARCHITECTURES      STREQUAL "arm64" OR
             list(APPEND ARCH_FLAGS -mno-unaligned-access)
         endif()
         if (GGML_SVE)
+            list(APPEND GGML_CDEF_PUBLIC GGML_USE_SVE)
             list(APPEND ARCH_FLAGS -march=armv8.6-a+sve)
         endif()
     endif()

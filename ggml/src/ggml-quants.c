@@ -3813,7 +3813,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         return;
     }
 #endif
-#if defined(__ARM_FEATURE_SVE)
+#if (defined(__ARM_FEATURE_SVE) && defined(GGML_USE_SVE))
     const svbool_t ptrueh = svptrue_pat_b8(SV_VL16);
     const svbool_t ptruel = svnot_b_z(svptrue_b8(), ptrueh);
 
@@ -5421,7 +5421,7 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         return;
     }
 #endif
-#if defined(__ARM_FEATURE_SVE)
+#if (defined(__ARM_FEATURE_SVE) && defined(GGML_USE_SVE))
     svfloat32_t sumv0 = svdup_n_f32(0.0f);
     svfloat32_t sumv1 = svdup_n_f32(0.0f);
 
