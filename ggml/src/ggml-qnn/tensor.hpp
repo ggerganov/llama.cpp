@@ -33,7 +33,7 @@ public:
         if (_tensor_name.empty()) {
             static std::atomic_uint32_t unnamed_tensor_count = 0;
             char buffer[GGML_MAX_NAME] = {};
-            snprintf(buffer, sizeof(buffer), "unnamed_%p", unnamed_tensor_count++);
+            snprintf(buffer, sizeof(buffer), "unnamed_%d", (int)(unnamed_tensor_count++));
             _tensor_name = buffer;
         }
 
