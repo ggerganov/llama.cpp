@@ -2189,7 +2189,7 @@ class InternLM2Model(Model):
                 toktype = SentencePieceTokenTypes.BYTE
             # take care of ununsed raw token
             if piece.startswith('[UNUSED'):
-                toktype = SentencePieceTokenTypes.UNKNOWN
+                toktype = SentencePieceTokenTypes.UNUSED
 
             tokens.append(text)
             scores.append(score)
@@ -2219,7 +2219,7 @@ class InternLM2Model(Model):
                     if token == chat_eos_token:
                         chat_eos_token_id = token_id
                     token = token.encode("utf-8")
-                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
                         assert(tokens[token_id] == token)
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
@@ -2238,7 +2238,7 @@ class InternLM2Model(Model):
                     if token == chat_eos_token:
                         chat_eos_token_id = token_id
                     token = token.encode("utf-8")
-                    if toktypes[token_id] != SentencePieceTokenTypes.UNKNOWN:
+                    if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
                         assert(tokens[token_id] == token)
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
