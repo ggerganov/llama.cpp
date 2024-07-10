@@ -93,7 +93,7 @@ static void dequantize_mul_mat_vec(const void * __restrict__ vx, const dfloat * 
 
 static void dequantize_mul_mat_vec_q4_0(const void * __restrict__ vx, const dfloat * __restrict__ y, float * __restrict__ dst, const int ncols, const int nrows,
                                    const sycl::nd_item<3> &item_ct1) {
-    const int row = item_ct1.get_group(2) * item_ct1.get_local_range(1);
+    const int row = item_ct1.get_group(2);
     if (row >= nrows) {
         return;
     }
@@ -110,12 +110,10 @@ static void dequantize_mul_mat_vec_q4_0(const void * __restrict__ vx, const dflo
     static_assert(ColTile == 2);
 
     const block_q4_0 * x = (const block_q4_0 *) vx;
-
+    const int iqs = tid; // x quant index
     for (int i = 0; i < ncols; i += QK4_0) {
-        const int col = i + tid * ColTile;
-        const int ib = (row * ncols + col) / QK4_0; // x block index
-        const int iqs = (col % QK4_0) / QR4_0; // x quant index
-        const int iybs = col - col % QK4_0; // y block start index
+        const int ib = (row * ncols + i) / QK4_0; // x block index
+        const int iybs = i; // y block start index
         const dfloat d = x[ib].d;
 
         const int vui = x[ib].qs[iqs];
