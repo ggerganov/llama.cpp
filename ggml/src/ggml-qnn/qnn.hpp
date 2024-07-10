@@ -661,13 +661,12 @@ public:
             QNN_LOG_WARN("failed to register shared memory, error %d, %s\n", QNN_GET_ERROR_CODE(error),
                          strerror(error));
             return 6;
-        } else {
-            QNN_LOG_INFO("tensor %s successfully register shared memory\n", QNN_TENSOR_GET_NAME(*p_tensor));
         }
 
         QNN_TENSOR_SET_MEM_HANDLE(*p_tensor, handle);
         _qnn_mem_set.insert((std::pair<void *, Qnn_MemHandle_t>(p_data, handle)));
 
+        QNN_LOG_INFO("tensor %s successfully register shared memory handler: %p\n", QNN_TENSOR_GET_NAME(*p_tensor), handle);
         return 0;
     }
 

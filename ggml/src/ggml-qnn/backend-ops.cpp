@@ -66,44 +66,43 @@ bool qnn_bind_tensors_to_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *gra
     return true;
 }
 
-template <size_t _InputSize>
-bool write_to_qnn_tensors(const std::array<const ggml_tensor *, _InputSize> &inputs) {
-    for (auto &input : inputs) {
-        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(input);
-        if (!tensor || !tensor->write_to_qnn_tensor()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-template <size_t _OutputSize>
-bool read_from_qnn_tensors(const std::array<ggml_tensor *, _OutputSize> &outputs) {
-    for (auto &output : outputs) {
-        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(output);
-        if (!tensor || !tensor->read_from_qnn_tensor()) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 template <size_t _InputSize, size_t _OutputSize>
 bool execute_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *graph,
                    const std::array<const ggml_tensor *, _InputSize> &inputs,
                    const std::array<ggml_tensor *, _OutputSize> &outputs) {
-    if (!write_to_qnn_tensors<_InputSize>(inputs)) {
+
+    std::array<Qnn_Tensor_t, _InputSize> qnn_input_tensors;
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(inputs[i]);
+        if (!tensor || !tensor->write_to_qnn_tensor()) {
+            QNN_LOG_WARN("write_to_qnn_tensor failed\n");
+            return false;
+        }
+
+        qnn_input_tensors[i] = tensor->get_qnn_tensor();
+    }
+
+    std::array<Qnn_Tensor_t, _OutputSize> qnn_output_tensors;
+    for (size_t i = 0; i < outputs.size(); ++i) {
+        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(outputs[i]);
+        if (!tensor) {
+            return false;
+        }
+
+        qnn_output_tensors[i] = tensor->get_qnn_tensor();
+    }
+
+    if (!graph->execute(qnn_input_tensors, qnn_output_tensors)) {
+        QNN_LOG_WARN("execute failed\n");
         return false;
     }
 
-    if (!graph->execute()) {
-        return false;
-    }
-
-    if (!read_from_qnn_tensors<_OutputSize>(outputs)) {
-        return false;
+    for (auto &output : outputs) {
+        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(output);
+        if (!tensor || !tensor->read_from_qnn_tensor()) {
+            QNN_LOG_WARN("read_from_qnn_tensors failed\n");
+            return false;
+        }
     }
 
     return true;

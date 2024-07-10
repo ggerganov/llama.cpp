@@ -96,6 +96,7 @@ public:
             return false;
         }
 
+        QNN_LOG_DEBUG("graph name %s, add_nodes start", _graph_name.c_str());
         _tensor_inputs = tensor_inputs;
         _tensor_outputs = tensor_outputs;
 
@@ -116,10 +117,13 @@ public:
             return false;
         }
 
+        QNN_LOG_DEBUG("graph name %s, add_nodes succeed", _graph_name.c_str());
         return true;
     }
 
-    bool execute() {
+    bool execute(const input_tensor_array_t &tensor_inputs, const output_tensor_array_t &tensor_outputs) {
+        _tensor_inputs = tensor_inputs;
+        _tensor_outputs = tensor_outputs;
         auto error = _qnn_interface.graphExecute(_graph_handle, _tensor_inputs.data(), _tensor_inputs.size(),
                                                  _tensor_outputs.data(), _tensor_outputs.size(), nullptr, nullptr);
         if (_device == QNN_BACKEND_NPU) {
