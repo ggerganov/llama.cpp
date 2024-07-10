@@ -1505,12 +1505,17 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 # Mark legacy binary targets as .PHONY so that they are always checked.
 .PHONY: main quantize perplexity embedding server finetune
 
-# NOTE: We currently will always build the deprecation-warning `main` binary to help users migrate.
-#  Eventually we will want to remove this target from building all the time.
+# NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
+#  Eventually we will want to remove these target from building all the time.
 main: examples/deprecation-warning/deprecation-warning.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "WARNING: The 'main' binary is deprecated. Please use 'llama-cli' instead."
+	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
+
+server: examples/deprecation-warning/deprecation-warning.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "NOTICE: The 'server' binary is deprecated. Please use 'llama-server' instead."
 
 quantize: examples/deprecation-warning/deprecation-warning.cpp
 ifneq (,$(wildcard quantize))
@@ -1539,16 +1544,6 @@ ifneq (,$(wildcard embedding))
 	@echo "#########"
 	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
 	@echo "  Remove the 'embedding' binary to remove this warning."
-	@echo "#########"
-endif
-
-server: examples/deprecation-warning/deprecation-warning.cpp
-ifneq (,$(wildcard server))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "#########"
-	@echo "WARNING: The 'server' binary is deprecated. Please use 'llama-server' instead."
-	@echo "  Remove the 'server' binary to remove this warning."
 	@echo "#########"
 endif
 
