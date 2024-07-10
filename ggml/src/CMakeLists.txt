@@ -527,7 +527,7 @@ if (GGML_RPC)
 endif()
 
 if (GGML_VULKAN)
-    find_package(Vulkan)
+    find_package(Vulkan COMPONENTS glslc REQUIRED)
 
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
