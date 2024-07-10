@@ -59,14 +59,14 @@ class Model:
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
     fname_out: Path
-    fname_default: Path
+    fname_default: str
     gguf_writer: gguf.GGUFWriter
     metadata: gguf.Metadata
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool, use_temp_file: bool, eager: bool, metadata: gguf.Metadata,
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path | None, is_big_endian: bool, use_temp_file: bool, eager: bool, metadata: gguf.Metadata,
                  split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
@@ -107,11 +107,11 @@ class Model:
 
         # Generate parameter weight class (useful for leader boards) if not yet determined
         if self.metadata.parameter_class_attribute is None:
-            expert_count = self.hparams["num_local_experts"] if "num_local_experts" in self.hparams else None
+            expert_count = self.hparams.get("num_local_experts", 0)
             sum_weight_estimate = self.calculate_total_weight_count()
 
             # Calculate weight estimate per model
-            per_model_weight_estimate = (sum_weight_estimate / expert_count) if expert_count is not None and (expert_count > 0) else sum_weight_estimate
+            per_model_weight_estimate: int = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
 
             self.metadata.parameter_class_attribute = gguf.parameter_class_attribute(expert_count, per_model_weight_estimate)
 
@@ -400,7 +400,7 @@ class Model:
     def write(self):
         self.prepare_tensors_for_writing()
         self.prepare_key_value_store()
-        self.gguf_writer.write_header_to_file(self.fname_out)
+        self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
         self.gguf_writer.close()
@@ -414,7 +414,7 @@ class Model:
             self.prepare_tensors_for_writing()
 
         self.prepare_key_value_store()
-        self.gguf_writer.write_header_to_file(self.fname_out)
+        self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
 
@@ -2525,7 +2525,6 @@ class Gemma2Model(Model):
         hparams = self.hparams
         block_count = hparams["num_hidden_layers"]
 
-        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
         self.gguf_writer.add_embedding_length(hparams["hidden_size"])
         self.gguf_writer.add_block_count(block_count)
@@ -2778,7 +2777,6 @@ class OpenELMModel(Model):
         assert self.block_count == len(self._num_query_heads)
         assert self.block_count == len(self._ffn_dims)
 
-        self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_block_count(self.block_count)
         self.gguf_writer.add_context_length(self.hparams["max_context_length"])
         self.gguf_writer.add_embedding_length(n_embd)
@@ -3618,11 +3616,10 @@ def main() -> None:
         logger.error("Error: Cannot use temp file when splitting")
         sys.exit(1)
 
+    fname_out = None
+
     if args.outfile is not None:
         fname_out = args.outfile
-    else:
-        # output in the same directory as the model by default
-        fname_out = dir_model / 'ggml-model-{ftype}.gguf'
 
     logger.info(f"Loading model: {dir_model.name}")
 
@@ -3638,8 +3635,9 @@ def main() -> None:
             logger.error(f"Model {hparams['architectures'][0]} is not supported")
             sys.exit(1)
 
-        model_instance = model_class(dir_model, output_type, fname_out, args.bigendian, args.use_temp_file,
-                                     args.no_lazy, metadata, split_max_tensors=args.split_max_tensors,
+        model_instance = model_class(dir_model=dir_model, ftype=output_type, fname_out=fname_out,
+                                     is_big_endian=args.bigendian, use_temp_file=args.use_temp_file,
+                                     eager=args.no_lazy, metadata=metadata, split_max_tensors=args.split_max_tensors,
                                      split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
                                      small_first_shard=args.no_tensor_first_split)
 

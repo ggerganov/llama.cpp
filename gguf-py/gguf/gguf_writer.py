@@ -369,7 +369,7 @@ class GGUFWriter:
 
         self.state = WriterState.WEIGHTS
 
-    def generate_tensors_uuid(self) -> None:
+    def generate_tensors_uuid(self) -> str:
         uuidv5_sha1 = hashlib.sha1()
         uuidv5_sha1.update(uuid.UUID('ef001206-dadc-5f6d-a15f-3359e577d4e5').bytes)
 
@@ -520,28 +520,28 @@ class GGUFWriter:
         self.add_uint32(Keys.General.BASE_MODEL_COUNT, source_count)
 
     def add_base_model_name(self, source_id: int, name: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_NAME.format(id=self.source_id), name)
+        self.add_string(Keys.General.BASE_MODEL_NAME.format(id=source_id), name)
 
     def add_base_model_author(self, source_id: int, author: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_AUTHOR.format(id=self.source_id), author)
+        self.add_string(Keys.General.BASE_MODEL_AUTHOR.format(id=source_id), author)
 
     def add_base_model_version(self, source_id: int, version: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_VERSION.format(id=self.source_id), version)
+        self.add_string(Keys.General.BASE_MODEL_VERSION.format(id=source_id), version)
 
     def add_base_model_organization(self, source_id: int, organization: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_ORGANIZATION.format(id=self.source_id), organization)
+        self.add_string(Keys.General.BASE_MODEL_ORGANIZATION.format(id=source_id), organization)
 
     def add_base_model_url(self, source_id: int, url: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_URL.format(id=self.source_id), url)
+        self.add_string(Keys.General.BASE_MODEL_URL.format(id=source_id), url)
 
     def add_base_model_doi(self, source_id: int, doi: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_DOI.format(id=self.source_id), doi)
+        self.add_string(Keys.General.BASE_MODEL_DOI.format(id=source_id), doi)
 
     def add_base_model_uuid(self, source_id: int, uuid: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_UUID.format(id=self.source_id), uuid)
+        self.add_string(Keys.General.BASE_MODEL_UUID.format(id=source_id), uuid)
 
     def add_base_model_repo_url(self, source_id: int, repo_url: str) -> None:
-        self.add_string(Keys.General.BASE_MODEL_REPO_URL.format(id=self.source_id), repo_url)
+        self.add_string(Keys.General.BASE_MODEL_REPO_URL.format(id=source_id), repo_url)
 
     def add_tags(self, tags: Sequence[str]) -> None:
         self.add_array(Keys.General.TAGS, tags)

@@ -25,6 +25,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, IO, Iterable, Literal, TypeVar
+from _collections_abc import dict_items
 
 import numpy as np
 
@@ -773,7 +774,7 @@ class OutputFile:
     def add_meta_model(self, params: Params, metadata: gguf.Metadata | None) -> None:
         # Metadata About The Model And Its Provenence
         name = "LLaMA"
-        if metadata.name is not None:
+        if metadata is not None and metadata.name is not None:
             name = metadata.name
         elif params.path_model is not None:
             name = params.path_model.name
@@ -783,52 +784,52 @@ class OutputFile:
 
         self.gguf.add_name(name)
 
-        if metadata.author is not None:
+        if metadata is not None and metadata.author is not None:
             self.gguf.add_author(metadata.author)
-        if metadata.version is not None:
+        if metadata is not None and metadata.version is not None:
             self.gguf.add_version(metadata.version)
-        if metadata.organization is not None:
+        if metadata is not None and metadata.organization is not None:
             self.gguf.add_organization(metadata.organization)
 
-        if metadata.finetune is not None:
+        if metadata is not None and metadata.finetune is not None:
             self.gguf.add_finetune(metadata.finetune)
-        if metadata.basename is not None:
+        if metadata is not None and metadata.basename is not None:
             self.gguf.add_basename(metadata.basename)
 
-        if metadata.description is not None:
+        if metadata is not None and metadata.description is not None:
             self.gguf.add_description(metadata.description)
-        if metadata.quantized_by is not None:
+        if metadata is not None and metadata.quantized_by is not None:
             self.gguf.add_quantized_by(metadata.quantized_by)
 
-        if metadata.parameter_class_attribute is not None:
+        if metadata is not None and metadata.parameter_class_attribute is not None:
             self.gguf.add_parameter_class_attribute(metadata.parameter_class_attribute)
 
-        if metadata.license is not None:
+        if metadata is not None and metadata.license is not None:
             self.gguf.add_license(metadata.license)
-        if metadata.license_name is not None:
+        if metadata is not None and metadata.license_name is not None:
             self.gguf.add_license_name(metadata.license_name)
-        if metadata.license_link is not None:
+        if metadata is not None and metadata.license_link is not None:
             self.gguf.add_license_link(metadata.license_link)
 
-        if metadata.url is not None:
+        if metadata is not None and metadata.url is not None:
             self.gguf.add_url(metadata.url)
-        if metadata.doi is not None:
+        if metadata is not None and metadata.doi is not None:
             self.gguf.add_doi(metadata.doi)
-        if metadata.uuid is not None:
+        if metadata is not None and metadata.uuid is not None:
             self.gguf.add_uuid(metadata.uuid)
-        if metadata.repo_url is not None:
+        if metadata is not None and metadata.repo_url is not None:
             self.gguf.add_repo_url(metadata.repo_url)
 
-        if metadata.source_url is not None:
+        if metadata is not None and metadata.source_url is not None:
             self.gguf.add_source_url(metadata.source_url)
-        if metadata.source_doi is not None:
+        if metadata is not None and metadata.source_doi is not None:
             self.gguf.add_source_doi(metadata.source_doi)
-        if metadata.source_uuid is not None:
+        if metadata is not None and metadata.source_uuid is not None:
             self.gguf.add_source_uuid(metadata.source_uuid)
-        if metadata.source_repo_url is not None:
+        if metadata is not None and metadata.source_repo_url is not None:
             self.gguf.add_source_repo_url(metadata.source_repo_url)
 
-        if metadata.base_models is not None:
+        if metadata is not None and metadata.base_models is not None:
             self.gguf.add_base_model_count(len(metadata.base_models))
             for key, base_model_entry in enumerate(metadata.base_models):
                 if "name" in base_model_entry:
@@ -848,11 +849,11 @@ class OutputFile:
                 if "repo_url" in base_model_entry:
                     self.gguf.add_base_model_repo_url(key, base_model_entry["repo_url"])
 
-        if metadata.tags is not None:
+        if metadata is not None and metadata.tags is not None:
             self.gguf.add_tags(metadata.tags)
-        if metadata.languages is not None:
+        if metadata is not None and metadata.languages is not None:
             self.gguf.add_languages(metadata.languages)
-        if metadata.datasets is not None:
+        if metadata is not None and metadata.datasets is not None:
             self.gguf.add_datasets(metadata.datasets)
 
     def add_meta_arch(self, params: Params) -> None:
@@ -1041,16 +1042,16 @@ def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileT
     raise ValueError(f"Unexpected combination of types: {name_to_type}")
 
 
-def per_model_weight_count_estimation(tensors: dict[str, LazyTensor], expert_count:int) -> int:
+def per_model_weight_count_estimation(tensors: dict_items[str, LazyTensor], expert_count:int | None) -> int:
     # TODO: Ensure parameter count is accurate throughout various model type
-    sum_weight_estimate = 0
+    sum_weight_estimate: int = 0
     for name, lazy_tensor in tensors:
         # We don't need these
         if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
             continue
 
         # Got A Tensor
-        sum_weights_in_tensor = 1
+        sum_weights_in_tensor: int = 1
 
         # Tensor Volume
         for dim in lazy_tensor.shape:
@@ -1059,10 +1060,14 @@ def per_model_weight_count_estimation(tensors: dict[str, LazyTensor], expert_cou
         # Add Tensor Volume To Running Count
         sum_weight_estimate += sum_weights_in_tensor
 
-    # Calculate weight estimate per model
-    per_model_weight_estimate = (sum_weight_estimate / expert_count) if expert_count is not None and (expert_count > 0) else sum_weight_estimate
+    if expert_count is None:
+        return sum_weight_estimate
 
-    return per_model_weight_estimate
+    if expert_count is not None and expert_count == 0:
+        return sum_weight_estimate
+
+    # Calculate weight estimate per model
+    return int(sum_weight_estimate / expert_count)
 
 
 def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
@@ -1244,7 +1249,7 @@ class VocabFactory:
         return vocab, special_vocab
 
 
-def default_convention_outfile(file_type: GGMLFileType, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> str:
+def default_convention_outfile(file_type: GGMLFileType, expert_count:int | None, model_params_count: int, metadata: gguf.Metadata) -> str:
     name = metadata.name if metadata.name is not None else None
     basename = metadata.basename if metadata.basename is not None else None
     finetune = metadata.finetune if metadata.finetune is not None else None
@@ -1260,7 +1265,7 @@ def default_convention_outfile(file_type: GGMLFileType, expert_count:int, model_
     return gguf.naming_convention(name, basename, finetune, version, parameter_class_attribute, output_type)
 
 
-def default_outfile(model_paths: list[Path], file_type: GGMLFileType, expert_count:int, model_params_count: int, metadata: gguf.Metadata) -> Path:
+def default_outfile(model_paths: list[Path], file_type: GGMLFileType, expert_count:int | None, model_params_count: int, metadata: gguf.Metadata) -> Path:
     default_filename = default_convention_outfile(file_type, expert_count, model_params_count, metadata)
     ret = model_paths[0].parent / f"{default_filename}.gguf"
     if ret in model_paths:
@@ -1326,7 +1331,7 @@ def main(args_in: list[str] | None = None) -> None:
         model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
         ftype = pick_output_type(model, args.outtype)
 
-        if metadata.name is None:
+        if (metadata is None or metadata.name is None) and params.path_model is not None:
             metadata.name = params.path_model.name
 
         print(f"{default_convention_outfile(ftype, params.n_experts, model_params_count, metadata)}") # noqa: NP100
@@ -1407,7 +1412,7 @@ def main(args_in: list[str] | None = None) -> None:
 
     assert params is not None
 
-    if metadata.name is None:
+    if metadata.name is None and params.path_model is not None:
         metadata.name = params.path_model.name
 
     model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)

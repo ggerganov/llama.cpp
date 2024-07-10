@@ -34,7 +34,7 @@ def model_weight_count_rounded_notation(model_params_count: int) -> str:
     return f"{round(scaled_model_params)}{scale_suffix}"
 
 
-def parameter_class_attribute(expert_count_int:int, model_params_count: int) -> str:
+def parameter_class_attribute(expert_count_int:int | None, model_params_count: int) -> str:
     per_model_rounded_weight_estimate = model_weight_count_rounded_notation(model_params_count)
 
     if expert_count_int is not None and expert_count_int > 0:
@@ -45,7 +45,7 @@ def parameter_class_attribute(expert_count_int:int, model_params_count: int) -> 
     return size_class
 
 
-def naming_convention(model_name: str, base_name: str, finetune_string:str, version_string:str, parameter_class_attribute: str, output_type: str) -> str:
+def naming_convention(model_name: str | None, base_name: str | None, finetune_string:str | None, version_string:str | None, parameter_class_attribute: str | None, output_type: str | None) -> str:
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
 
     if base_name is not None:
@@ -61,6 +61,6 @@ def naming_convention(model_name: str, base_name: str, finetune_string:str, vers
 
     version = f"-{version_string.strip().replace(' ', '-')}" if version_string is not None else ""
 
-    precision = f"-{output_type.strip().replace(' ', '-').upper()}"
+    precision = f"-{output_type.strip().replace(' ', '-').upper()}" if output_type is not None else ""
 
     return f"{name}{parameters}{finetune}{version}{precision}"
