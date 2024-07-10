@@ -269,168 +269,35 @@ void qnn_binary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, 
 
 } // namespace
 
-static void ggml_qnn_add(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {
-    qnn_binary_op_impl<GGML_OP_ADD>(ctx, src0, src1, dst);
-}
-
-static void ggml_qnn_mul(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {
-    qnn_binary_op_impl<GGML_OP_MUL>(ctx, src0, src1, dst);
-}
-
-/*
- * ggml_qnn_mul_mat was re-added as a standalone function because
- * the following comments came from https://github.com/ggerganov/llama.cpp/pull/1632
- * MUL_MAT take most of the compute time (about 95%).
- * So to speed up llama, we have to focus on MUL_MAT.
- *
- * We have three kinds of MUL_MAT to compute:
- * mul_mat_f32:     both src0 and src1 are F32.
- * mul_mat_f16_f32: src0 is F16 and src1 is F32.
- * mul_mat_q_f32:   src0 is quantized (Q4_0, Q4_1, ...), and src1 is F32.
- */
-static void ggml_qnn_mul_mat(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                             ggml_tensor *dst) {
-    qnn_binary_op_impl<GGML_OP_MUL_MAT>(ctx, src0, src1, dst);
-}
-
-static void ggml_qnn_repeat(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                            ggml_tensor *dst) {}
-
-static void ggml_qnn_get_rows(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                              ggml_tensor *dst) {}
-
-static void ggml_qnn_acc(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {}
-
-static void ggml_qnn_div(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {}
-
-static void ggml_qnn_gelu(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                          ggml_tensor *dst) {}
-
-static void ggml_qnn_silu(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                          ggml_tensor *dst) {}
-
-static void ggml_qnn_gelu_quick(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                                ggml_tensor *dst) {}
-
-static void ggml_qnn_tanh(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                          ggml_tensor *dst) {}
-
-static void ggml_qnn_relu(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                          ggml_tensor *dst) {}
-
-static void ggml_qnn_hardsigmoid(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                                 ggml_tensor *dst) {}
-
-static void ggml_qnn_hardswish(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                               ggml_tensor *dst) {}
-
-static void ggml_qnn_leaky_relu(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                                ggml_tensor *dst) {}
-
-static void ggml_qnn_sqr(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {}
-
-static void ggml_qnn_sqrt(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                          ggml_tensor *dst) {
-    qnn_binary_op_impl<GGML_OP_SQRT>(ctx, src0, src1, dst);
-}
-
-static void ggml_qnn_norm(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                          ggml_tensor *dst) {}
-
-static void ggml_qnn_group_norm(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                                ggml_tensor *dst) {}
-
-static void ggml_qnn_concat(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                            ggml_tensor *dst) {}
-
-static void ggml_qnn_upscale(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                             ggml_tensor *dst) {}
-
-static void ggml_qnn_pad(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {}
-
-static void ggml_qnn_rms_norm(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                              ggml_tensor *dst) {}
-
-static void ggml_qnn_cpy(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {}
-
-static void ggml_qnn_dup(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                         ggml_tensor *dst) {
-    ggml_qnn_cpy(ctx, src0, dst, nullptr);
-    (void)src1;
-}
-
-static void ggml_qnn_mul_mat_id(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                                ggml_tensor *dst) {}
-
-static void ggml_qnn_scale(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                           ggml_tensor *dst) {}
-
-static void ggml_qnn_clamp(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                           ggml_tensor *dst) {}
-
-static void ggml_qnn_diag_mask_inf(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                                   ggml_tensor *dst) {}
-
-static void ggml_qnn_soft_max(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                              ggml_tensor *dst) {}
-
-static void ggml_qnn_rope(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                          ggml_tensor *dst) {
-    GGML_ASSERT(ggml_is_contiguous(src0));
-}
-
-static void ggml_qnn_pool2d(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                            ggml_tensor *dst) {}
-
-static void ggml_qnn_im2col(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                            ggml_tensor *dst) {}
-
-static void ggml_qnn_sum_rows(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                              ggml_tensor *dst) {
-    GGML_ASSERT(ggml_is_contiguous(src0));
-}
-
-static void ggml_qnn_argsort(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                             ggml_tensor *dst) {
-    GGML_ASSERT(ggml_is_contiguous(src0));
-}
-
 qnn::ggml_qnn_op_array_t qnn::ggml_qnn_op_array() {
     static constexpr const qnn::ggml_qnn_op_t kQnnOpsTable[] = {
-        nullptr,       // GGML_OP_NONE
-        nullptr,       // GGML_OP_DUP
-        ggml_qnn_add,  // GGML_OP_ADD
-        nullptr,       // GGML_OP_ADD1
-        nullptr,       // GGML_OP_ACC
-        nullptr,       // GGML_OP_SUB
-        ggml_qnn_mul,  // GGML_OP_MUL
-        nullptr,       // GGML_OP_DIV
-        nullptr,       // GGML_OP_SQR
-        ggml_qnn_sqrt, // GGML_OP_SQRT
-        nullptr,       // GGML_OP_LOG
-        nullptr,       // GGML_OP_SUM
-        nullptr,       // GGML_OP_SUM_ROWS
-        nullptr,       // GGML_OP_MEAN
-        nullptr,       // GGML_OP_ARGMAX
-        nullptr,       // GGML_OP_REPEAT
-        nullptr,       // GGML_OP_REPEAT_BACK
-        nullptr,       // GGML_OP_CONCAT
-        nullptr,       // GGML_OP_SILU_BACK
-        nullptr,       // GGML_OP_NORM
-        nullptr,       // GGML_OP_RMS_NORM
-        nullptr,       // GGML_OP_RMS_NORM_BACK
-        nullptr,       // GGML_OP_GROUP_NORM
+        nullptr,                          // GGML_OP_NONE
+        nullptr,                          // GGML_OP_DUP
+        qnn_binary_op_impl<GGML_OP_ADD>,  // GGML_OP_ADD
+        nullptr,                          // GGML_OP_ADD1
+        nullptr,                          // GGML_OP_ACC
+        nullptr,                          // GGML_OP_SUB
+        qnn_binary_op_impl<GGML_OP_MUL>,  // GGML_OP_MUL
+        nullptr,                          // GGML_OP_DIV
+        nullptr,                          // GGML_OP_SQR
+        qnn_binary_op_impl<GGML_OP_SQRT>, // GGML_OP_SQRT
+        nullptr,                          // GGML_OP_LOG
+        nullptr,                          // GGML_OP_SUM
+        nullptr,                          // GGML_OP_SUM_ROWS
+        nullptr,                          // GGML_OP_MEAN
+        nullptr,                          // GGML_OP_ARGMAX
+        nullptr,                          // GGML_OP_REPEAT
+        nullptr,                          // GGML_OP_REPEAT_BACK
+        nullptr,                          // GGML_OP_CONCAT
+        nullptr,                          // GGML_OP_SILU_BACK
+        nullptr,                          // GGML_OP_NORM
+        nullptr,                          // GGML_OP_RMS_NORM
+        nullptr,                          // GGML_OP_RMS_NORM_BACK
+        nullptr,                          // GGML_OP_GROUP_NORM
 
-        ggml_qnn_mul_mat, // GGML_OP_MUL_MAT
-        nullptr,          // GGML_OP_MUL_MAT_ID
-        nullptr,          // GGML_OP_OUT_PROD
+        qnn_binary_op_impl<GGML_OP_MUL_MAT>, // GGML_OP_MUL_MAT
+        nullptr,                             // GGML_OP_MUL_MAT_ID
+        nullptr,                             // GGML_OP_OUT_PROD
 
         nullptr, // GGML_OP_SCALE
         nullptr, // GGML_OP_SET
