@@ -98,7 +98,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [GPT-NeoX](https://github.com/EleutherAI/gpt-neox) + [Pythia](https://github.com/EleutherAI/pythia)
 - [x] [ChatGLM3-6b](https://huggingface.co/THUDM/chatglm3-6b) + [ChatGLM4-9b](https://huggingface.co/THUDM/glm-4-9b)
 
-(instructions for supporting more models: [HOWTO-add-model.md](./docs/HOWTO-add-model.md))
+(instructions for supporting more models: [HOWTO-add-model.md](./docs/development/HOWTO-add-model.md))
 
 **Multimodal models:**
 
@@ -453,7 +453,7 @@ To learn more how to measure perplexity using llama.cpp, [read this documentatio
 - [How to build](./docs/build.md)
 - [Running on Docker](./docs/docker.md)
 - [Build on Android](./docs/android.md)
-- [Performance troubleshooting](./docs/token_generation_performance_tips.md)
+- [Performance troubleshooting](./docs/development/token_generation_performance_tips.md)
 - [GGML tips & tricks](https://github.com/ggerganov/llama.cpp/wiki/GGML-Tips-&-Tricks)
 
 **Seminal papers and background on the models**

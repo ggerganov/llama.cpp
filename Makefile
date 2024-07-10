@@ -64,9 +64,13 @@ TEST_TARGETS = \
 	tests/test-tokenizer-1-spm
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
-LEGACY_TARGETS = main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
+LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
 	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm
+
+# Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
+#  We don't want to clutter things too much, so we only build replacements for the most commonly used binaries.
+LEGACY_TARGETS_BUILD = main quantize perplexity embedding server finetune
 
 # Deprecation aliases
 ifdef LLAMA_CUBLAS
@@ -197,7 +201,7 @@ ifdef GGML_VULKAN
 	BUILD_TARGETS += vulkan-shaders-gen
 endif
 
-default: $(BUILD_TARGETS)
+default: $(BUILD_TARGETS) $(LEGACY_TARGETS_BUILD)
 
 test: $(TEST_TARGETS)
 	@failures=0; \
@@ -232,7 +236,7 @@ test: $(TEST_TARGETS)
 	fi
 	@echo 'All tests passed.'
 
-all: $(BUILD_TARGETS) $(TEST_TARGETS)
+all: $(BUILD_TARGETS) $(TEST_TARGETS) $(LEGACY_TARGETS_BUILD)
 
 ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
@@ -249,17 +253,22 @@ MK_CFLAGS    = -std=c11   -fPIC
 MK_CXXFLAGS  = -std=c++11 -fPIC
 MK_NVCCFLAGS = -std=c++11
 
-ifndef LLAMA_NO_CCACHE
+ifdef LLAMA_NO_CCACHE
+GGML_NO_CCACHE := 1
+DEPRECATE_WARNING := 1
+endif
+
+ifndef GGML_NO_CCACHE
 CCACHE := $(shell which ccache)
 ifdef CCACHE
 export CCACHE_SLOPPINESS = time_macros
-$(info I ccache found, compilation results will be cached. Disable with LLAMA_NO_CCACHE.)
+$(info I ccache found, compilation results will be cached. Disable with GGML_NO_CCACHE.)
 CC    := $(CCACHE) $(CC)
 CXX   := $(CCACHE) $(CXX)
 else
 $(info I ccache not found. Consider installing it for faster compilation.)
 endif # CCACHE
-endif # LLAMA_NO_CCACHE
+endif # GGML_NO_CCACHE
 
 # clock_gettime came in POSIX.1b (1993)
 # CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
@@ -948,6 +957,7 @@ $(info   - LLAMA_NO_LLAMAFILE)
 $(info   - LLAMA_NO_ACCELERATE)
 $(info   - LLAMA_NO_OPENMP)
 $(info   - LLAMA_NO_METAL)
+$(info   - LLAMA_NO_CCACHE)
 $(info )
 endif
 
@@ -1115,7 +1125,7 @@ clean:
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
 	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
-	rm -rvf $(LEGACY_TARGETS)
+	rm -rvf $(LEGACY_TARGETS_CLEAN)
 	find examples pocs -type f -name "*.o" -delete
 
 #
@@ -1511,3 +1521,69 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+#
+# Deprecated binaries that we want to keep around long enough for people to migrate to the new filenames, then these can be removed.
+#
+# Mark legacy binary targets as .PHONY so that they are always checked.
+.PHONY: main quantize perplexity embedding server finetune
+
+main: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard main))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'main' binary is deprecated. Please use 'llama-cli' instead."
+	@echo "  Remove the 'main' binary to remove this warning."
+	@echo "#########"
+endif
+
+quantize: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard quantize))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
+	@echo "  Remove the 'quantize' binary to remove this warning."
+	@echo "#########"
+endif
+
+perplexity: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard perplexity))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
+	@echo "  Remove the 'perplexity' binary to remove this warning."
+	@echo "#########"
+endif
+
+embedding: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard embedding))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
+	@echo "  Remove the 'embedding' binary to remove this warning."
+	@echo "#########"
+endif
+
+server: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard server))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'server' binary is deprecated. Please use 'llama-server' instead."
+	@echo "  Remove the 'server' binary to remove this warning."
+	@echo "#########"
+endif
+
+finetune: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard finetune))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'finetune' binary is deprecated. Please use 'llama-finetune' instead."
+	@echo "  Remove the 'finetune' binary to remove this warning."
+	@echo "#########"
+endif
