@@ -272,7 +272,7 @@ class Model:
 
         return False
 
-    def write_tensors(self):
+    def prepare_tensors_for_writing(self):
         max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
 
         for name, data_torch in self.get_tensors():
@@ -377,7 +377,7 @@ class Model:
         self.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
 
     def write(self):
-        self.write_tensors()
+        self.prepare_tensors_for_writing()
         self.prepare_key_value_store()
         self.gguf_writer.write_header_to_file(self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
@@ -390,7 +390,7 @@ class Model:
 
         if self.metadata.uuid is None:
             # Required tensor data least for uuid generation if in vocab_only mode
-            self.write_tensors()
+            self.prepare_tensors_for_writing()
 
         self.prepare_key_value_store()
         self.gguf_writer.write_header_to_file(self.fname_out)
@@ -1445,8 +1445,8 @@ class StableLMModel(Model):
 
         return [(new_name, data_torch)]
 
-    def write_tensors(self):
-        super().write_tensors()
+    def prepare_tensors_for_writing(self):
+        super().prepare_tensors_for_writing()
 
         if self._q_norms is not None or self._k_norms is not None:
             # flatten two `list[dict[str, Tensor]]` into a single `list[str]`
@@ -1562,8 +1562,8 @@ class LlamaModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def write_tensors(self):
-        super().write_tensors()
+    def prepare_tensors_for_writing(self):
+        super().prepare_tensors_for_writing()
 
         if self._experts is not None:
             # flatten `list[dict[str, Tensor]]` into `list[str]`
@@ -1886,8 +1886,8 @@ class Qwen2MoeModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def write_tensors(self):
-        super().write_tensors()
+    def prepare_tensors_for_writing(self):
+        super().prepare_tensors_for_writing()
 
         if self._experts is not None:
             # flatten `list[dict[str, Tensor]]` into `list[str]`
@@ -2956,8 +2956,8 @@ class ArcticModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def write_tensors(self):
-        super().write_tensors()
+    def prepare_tensors_for_writing(self):
+        super().prepare_tensors_for_writing()
 
         if self._experts is not None:
             # flatten `list[dict[str, Tensor]]` into `list[str]`
@@ -3035,8 +3035,8 @@ class DeepseekV2Model(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def write_tensors(self):
-        super().write_tensors()
+    def prepare_tensors_for_writing(self):
+        super().prepare_tensors_for_writing()
 
         if self._experts is not None:
             # flatten `list[dict[str, Tensor]]` into `list[str]`
@@ -3274,8 +3274,8 @@ class JaisModel(Model):
 
         return tensors
 
-    def write_tensors(self):
-        super().write_tensors()
+    def prepare_tensors_for_writing(self):
+        super().prepare_tensors_for_writing()
         self.gguf_writer.add_max_alibi_bias(self.max_alibi_bias)
 
 
