@@ -3148,7 +3148,6 @@ class T5Model(Model):
         self.gguf_writer.add_add_eos_token(True)
 
     def set_gguf_parameters(self):
-        self.gguf_writer.add_name("T5")
         if (n_ctx := self.find_hparam(["n_positions"], optional=True)) is None:
             logger.warning("Couldn't find context length in config.json, assuming default value of 512")
             n_ctx = 512
@@ -3222,7 +3221,6 @@ class JaisModel(Model):
         self._set_vocab_gpt2()
 
     def set_gguf_parameters(self):
-        self.gguf_writer.add_name(self.dir_model.name)
         self.gguf_writer.add_block_count(self.hparams["n_layer"])
         self.gguf_writer.add_context_length(self.hparams["n_positions"])
         self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
