@@ -152,8 +152,8 @@ class TokenizerGroundtruth (Tokenizer):
         # build vocab
         self.vocab = self.get_vocab(detokenize=True)
         # tokens and lists
-        self.special_tokens = list(self.model.all_special_tokens)
-        self.added_tokens   = list(self.model.added_tokens_encoder)
+        self.special_tokens = [self.vocab[i] for i in sorted(self.model.all_special_ids)]
+        self.added_tokens   = [self.vocab[i] for i in sorted(self.model.added_tokens_encoder.values())]
         self.bos_token = self.model.bos_token
         self.eos_token = self.model.eos_token
 
