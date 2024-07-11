@@ -104,7 +104,7 @@
 #define cudaStreamWaitEvent(stream, event, flags) hipStreamWaitEvent(stream, event, flags)
 #define cudaStream_t hipStream_t
 #define cudaSuccess hipSuccess
-#define __trap abort
+#define __trap() do { abort(); __builtin_unreachable(); } while(0)
 #define CUBLAS_STATUS_SUCCESS HIPBLAS_STATUS_SUCCESS
 #define CUBLAS_STATUS_NOT_INITIALIZED HIPBLAS_STATUS_NOT_INITIALIZED
 #define CUBLAS_STATUS_ALLOC_FAILED HIPBLAS_STATUS_ALLOC_FAILED
@@ -341,9 +341,6 @@ static __device__ void no_device_code(
            file_name, line, function_name, arch, arch_list);
 #endif // defined(GGML_USE_HIPBLAS) && defined(__HIP_PLATFORM_AMD__)
     __trap();
-
-    // Suppress "function declared 'noreturn' but has a return statement" warning.
-    while(true);
 
     GGML_UNUSED(no_device_code); // suppress unused function warning
 }
