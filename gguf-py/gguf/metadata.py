@@ -4,7 +4,7 @@ import re
 import json
 import frontmatter
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from dataclasses import dataclass
 
 from .constants import Keys
@@ -69,7 +69,7 @@ class Metadata:
         metadata.description               = metadata_override.get(Keys.General.DESCRIPTION,               metadata.description)
         metadata.quantized_by              = metadata_override.get(Keys.General.QUANTIZED_BY,              metadata.quantized_by)
 
-        metadata.size_label = metadata_override.get(Keys.General.SIZE_LABEL, metadata.size_label)
+        metadata.size_label                = metadata_override.get(Keys.General.SIZE_LABEL,                metadata.size_label)
         metadata.license_name              = metadata_override.get(Keys.General.LICENSE_NAME,              metadata.license_name)
         metadata.license_link              = metadata_override.get(Keys.General.LICENSE_LINK,              metadata.license_link)
 
@@ -105,7 +105,7 @@ class Metadata:
             return json.load(f)
 
     @staticmethod
-    def load_model_card(model_path: Optional[Path] = None) -> dict[str, object]:
+    def load_model_card(model_path: Optional[Path] = None) -> dict[str, Any]:
         if model_path is None or not model_path.exists():
             return {}
 
@@ -115,10 +115,10 @@ class Metadata:
             return {}
 
         with open(model_card_path, "r", encoding="utf-8") as f:
-            return cast("dict[str, object]", frontmatter.load(f))
+            return cast("dict[str, Any]", frontmatter.load(f))
 
     @staticmethod
-    def load_hf_parameters(model_path: Optional[Path] = None) -> dict[str, object]:
+    def load_hf_parameters(model_path: Optional[Path] = None) -> dict[str, Any]:
         if model_path is None or not model_path.exists():
             return {}
 
