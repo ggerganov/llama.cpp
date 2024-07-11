@@ -784,77 +784,78 @@ class OutputFile:
 
         self.gguf.add_name(name)
 
-        if metadata is not None and metadata.author is not None:
-            self.gguf.add_author(metadata.author)
-        if metadata is not None and metadata.version is not None:
-            self.gguf.add_version(metadata.version)
-        if metadata is not None and metadata.organization is not None:
-            self.gguf.add_organization(metadata.organization)
+        if metadata is not None:
+            if metadata.author is not None:
+                self.gguf.add_author(metadata.author)
+            if metadata.version is not None:
+                self.gguf.add_version(metadata.version)
+            if metadata.organization is not None:
+                self.gguf.add_organization(metadata.organization)
 
-        if metadata is not None and metadata.finetune is not None:
-            self.gguf.add_finetune(metadata.finetune)
-        if metadata is not None and metadata.basename is not None:
-            self.gguf.add_basename(metadata.basename)
+            if metadata.finetune is not None:
+                self.gguf.add_finetune(metadata.finetune)
+            if metadata.basename is not None:
+                self.gguf.add_basename(metadata.basename)
 
-        if metadata is not None and metadata.description is not None:
-            self.gguf.add_description(metadata.description)
-        if metadata is not None and metadata.quantized_by is not None:
-            self.gguf.add_quantized_by(metadata.quantized_by)
+            if metadata.description is not None:
+                self.gguf.add_description(metadata.description)
+            if metadata.quantized_by is not None:
+                self.gguf.add_quantized_by(metadata.quantized_by)
 
-        if metadata is not None and metadata.parameter_class_attribute is not None:
-            self.gguf.add_parameter_class_attribute(metadata.parameter_class_attribute)
+            if metadata.parameter_class_attribute is not None:
+                self.gguf.add_parameter_class_attribute(metadata.parameter_class_attribute)
 
-        if metadata is not None and metadata.license is not None:
-            self.gguf.add_license(metadata.license)
-        if metadata is not None and metadata.license_name is not None:
-            self.gguf.add_license_name(metadata.license_name)
-        if metadata is not None and metadata.license_link is not None:
-            self.gguf.add_license_link(metadata.license_link)
+            if metadata.license is not None:
+                self.gguf.add_license(metadata.license)
+            if metadata.license_name is not None:
+                self.gguf.add_license_name(metadata.license_name)
+            if metadata.license_link is not None:
+                self.gguf.add_license_link(metadata.license_link)
 
-        if metadata is not None and metadata.url is not None:
-            self.gguf.add_url(metadata.url)
-        if metadata is not None and metadata.doi is not None:
-            self.gguf.add_doi(metadata.doi)
-        if metadata is not None and metadata.uuid is not None:
-            self.gguf.add_uuid(metadata.uuid)
-        if metadata is not None and metadata.repo_url is not None:
-            self.gguf.add_repo_url(metadata.repo_url)
+            if metadata.url is not None:
+                self.gguf.add_url(metadata.url)
+            if metadata.doi is not None:
+                self.gguf.add_doi(metadata.doi)
+            if metadata.uuid is not None:
+                self.gguf.add_uuid(metadata.uuid)
+            if metadata.repo_url is not None:
+                self.gguf.add_repo_url(metadata.repo_url)
 
-        if metadata is not None and metadata.source_url is not None:
-            self.gguf.add_source_url(metadata.source_url)
-        if metadata is not None and metadata.source_doi is not None:
-            self.gguf.add_source_doi(metadata.source_doi)
-        if metadata is not None and metadata.source_uuid is not None:
-            self.gguf.add_source_uuid(metadata.source_uuid)
-        if metadata is not None and metadata.source_repo_url is not None:
-            self.gguf.add_source_repo_url(metadata.source_repo_url)
+            if metadata.source_url is not None:
+                self.gguf.add_source_url(metadata.source_url)
+            if metadata.source_doi is not None:
+                self.gguf.add_source_doi(metadata.source_doi)
+            if metadata.source_uuid is not None:
+                self.gguf.add_source_uuid(metadata.source_uuid)
+            if metadata.source_repo_url is not None:
+                self.gguf.add_source_repo_url(metadata.source_repo_url)
 
-        if metadata is not None and metadata.base_models is not None:
-            self.gguf.add_base_model_count(len(metadata.base_models))
-            for key, base_model_entry in enumerate(metadata.base_models):
-                if "name" in base_model_entry:
-                    self.gguf.add_base_model_name(key, base_model_entry["name"])
-                if "author" in base_model_entry:
-                    self.gguf.add_base_model_author(key, base_model_entry["author"])
-                if "version" in base_model_entry:
-                    self.gguf.add_base_model_version(key, base_model_entry["version"])
-                if "organization" in base_model_entry:
-                    self.gguf.add_base_model_organization(key, base_model_entry["organization"])
-                if "url" in base_model_entry:
-                    self.gguf.add_base_model_url(key, base_model_entry["url"])
-                if "doi" in base_model_entry:
-                    self.gguf.add_base_model_doi(key, base_model_entry["doi"])
-                if "uuid" in base_model_entry:
-                    self.gguf.add_base_model_uuid(key, base_model_entry["uuid"])
-                if "repo_url" in base_model_entry:
-                    self.gguf.add_base_model_repo_url(key, base_model_entry["repo_url"])
+            if metadata.base_models is not None:
+                self.gguf.add_base_model_count(len(metadata.base_models))
+                for key, base_model_entry in enumerate(metadata.base_models):
+                    if "name" in base_model_entry:
+                        self.gguf.add_base_model_name(key, base_model_entry["name"])
+                    if "author" in base_model_entry:
+                        self.gguf.add_base_model_author(key, base_model_entry["author"])
+                    if "version" in base_model_entry:
+                        self.gguf.add_base_model_version(key, base_model_entry["version"])
+                    if "organization" in base_model_entry:
+                        self.gguf.add_base_model_organization(key, base_model_entry["organization"])
+                    if "url" in base_model_entry:
+                        self.gguf.add_base_model_url(key, base_model_entry["url"])
+                    if "doi" in base_model_entry:
+                        self.gguf.add_base_model_doi(key, base_model_entry["doi"])
+                    if "uuid" in base_model_entry:
+                        self.gguf.add_base_model_uuid(key, base_model_entry["uuid"])
+                    if "repo_url" in base_model_entry:
+                        self.gguf.add_base_model_repo_url(key, base_model_entry["repo_url"])
 
-        if metadata is not None and metadata.tags is not None:
-            self.gguf.add_tags(metadata.tags)
-        if metadata is not None and metadata.languages is not None:
-            self.gguf.add_languages(metadata.languages)
-        if metadata is not None and metadata.datasets is not None:
-            self.gguf.add_datasets(metadata.datasets)
+            if metadata.tags is not None:
+                self.gguf.add_tags(metadata.tags)
+            if metadata.languages is not None:
+                self.gguf.add_languages(metadata.languages)
+            if metadata.datasets is not None:
+                self.gguf.add_datasets(metadata.datasets)
 
     def add_meta_arch(self, params: Params) -> None:
         # Metadata About The Neural Architecture Itself
