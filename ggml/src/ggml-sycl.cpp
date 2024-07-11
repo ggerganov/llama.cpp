@@ -5194,6 +5194,10 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
                         return false;
                     }
                 }
+                ggml_type src0_type = op->src[0]->type;
+                if (src0_type == GGML_TYPE_BF16) {
+                    return false;
+                }
                 return true;
             } break;
         case GGML_OP_GET_ROWS:
