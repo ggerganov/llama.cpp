@@ -12641,7 +12641,7 @@ static struct ggml_cgraph * llama_build_graph(
 
     struct ggml_cgraph * result = NULL;
 
-    struct llm_build_context llm(lctx, lctx.model, batch, cb, worst_case);
+    struct llm_build_context llm(lctx, model, batch, cb, worst_case);
 
     llm.init();
 
