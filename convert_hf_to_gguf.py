@@ -106,20 +106,20 @@ class Model:
             self.metadata.name = dir_model.name
 
         # Generate parameter weight class (useful for leader boards) if not yet determined
-        if self.metadata.parameter_class_attribute is None:
+        if self.metadata.size_label is None:
             expert_count = self.hparams.get("num_local_experts", 0)
             sum_weight_estimate = self.calculate_total_weight_count()
 
             # Calculate weight estimate per model
             per_model_weight_estimate: int = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
 
-            self.metadata.parameter_class_attribute = gguf.parameter_class_attribute(expert_count, per_model_weight_estimate)
+            self.metadata.size_label = gguf.size_label(expert_count, per_model_weight_estimate)
 
         # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
         output_type = self.ftype.name.partition("_")[2]
 
         # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.parameter_class_attribute, output_type)
+        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type)
 
         # Filename Output
         if fname_out is not None:

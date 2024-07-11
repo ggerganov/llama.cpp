@@ -23,7 +23,7 @@ class Metadata:
     basename: Optional[str] = None
     description: Optional[str] = None
     quantized_by: Optional[str] = None
-    parameter_class_attribute: Optional[str] = None
+    size_label: Optional[str] = None
     url: Optional[str] = None
     doi: Optional[str] = None
     uuid: Optional[str] = None
@@ -69,7 +69,7 @@ class Metadata:
         metadata.description               = metadata_override.get(Keys.General.DESCRIPTION,               metadata.description)
         metadata.quantized_by              = metadata_override.get(Keys.General.QUANTIZED_BY,              metadata.quantized_by)
 
-        metadata.parameter_class_attribute = metadata_override.get(Keys.General.PARAMETER_CLASS_ATTRIBUTE, metadata.parameter_class_attribute)
+        metadata.size_label = metadata_override.get(Keys.General.SIZE_LABEL, metadata.size_label)
         metadata.license_name              = metadata_override.get(Keys.General.LICENSE_NAME,              metadata.license_name)
         metadata.license_link              = metadata_override.get(Keys.General.LICENSE_LINK,              metadata.license_link)
 
@@ -164,7 +164,7 @@ class Metadata:
         # Regular expression to extract model name components
         # Heuristic to match against cases such as 'Mixtral-8x7B-Instruct-v0.1' or 'Codestral-22B-v0.1'
         regex_match = re.compile(r'^(?P<basename>[A-Za-z0-9\s]*(?:(?:-(?:(?:[A-Za-z\s][A-Za-z0-9\s]*)|(?:[0-9\s]*)))*))'
-                                 r'(?:-(?P<parameter_class_attribute>(?:\d+x)?\d+[A-Za-z]+)(?:-(?P<finetune>[A-Za-z0-9\s-]+))?)?'
+                                 r'(?:-(?P<size_label>(?:\d+x)?\d+[A-Za-z]+)(?:-(?P<finetune>[A-Za-z0-9\s-]+))?)?'
                                  r'(?:-(?P<version>v\d+(?:\.\d+)*))?$').match(model_full_name_component)
 
         if not regex_match:
@@ -174,9 +174,9 @@ class Metadata:
         basename = components.get("basename")
         finetune = components.get("finetune")
         version = components.get("version")
-        parameter_class_attribute = components.get("parameter_class_attribute")
+        size_label = components.get("size_label")
 
-        return model_full_name_component, org_component, basename, finetune, version, parameter_class_attribute
+        return model_full_name_component, org_component, basename, finetune, version, size_label
 
     @staticmethod
     def apply_metadata_heuristic(metadata: Metadata, model_card: Optional[dict] = None, hf_params: Optional[dict] = None, model_path: Optional[Path] = None) -> Metadata:
@@ -218,7 +218,7 @@ class Metadata:
                     metadata.base_models = []
 
                 for model_id in metadata_base_models:
-                    model_full_name_component, org_component, basename, finetune, version, parameter_class_attribute = Metadata.get_model_id_components(model_id)
+                    model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id)
                     base_model = {}
                     if model_full_name_component is not None:
                         base_model["name"] = Metadata.id_to_title(model_full_name_component)
@@ -297,7 +297,7 @@ class Metadata:
                 # Use _name_or_path only if its actually a model name and not some computer path
                 # e.g. 'meta-llama/Llama-2-7b-hf'
                 model_id = hf_name_or_path
-                model_full_name_component, org_component, basename, finetune, version, parameter_class_attribute = Metadata.get_model_id_components(model_id)
+                model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id)
                 if metadata.name is None and model_full_name_component is not None:
                     metadata.name = Metadata.id_to_title(model_full_name_component)
                 if metadata.organization is None and org_component is not None:
@@ -308,14 +308,14 @@ class Metadata:
                     metadata.finetune = finetune
                 if metadata.version is None and version is not None:
                     metadata.version = version
-                if metadata.parameter_class_attribute is None and parameter_class_attribute is not None:
-                    metadata.parameter_class_attribute = parameter_class_attribute
+                if metadata.size_label is None and size_label is not None:
+                    metadata.size_label = size_label
 
         # Directory Folder Name Fallback Heuristics
         ############################################
         if model_path is not None:
             model_id = model_path.name
-            model_full_name_component, org_component, basename, finetune, version, parameter_class_attribute = Metadata.get_model_id_components(model_id)
+            model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id)
             if metadata.name is None and model_full_name_component is not None:
                 metadata.name = Metadata.id_to_title(model_full_name_component)
             if metadata.organization is None and org_component is not None:
@@ -326,8 +326,8 @@ class Metadata:
                 metadata.finetune = finetune
             if metadata.version is None and version is not None:
                 metadata.version = version
-            if metadata.parameter_class_attribute is None and parameter_class_attribute is not None:
-                metadata.parameter_class_attribute = parameter_class_attribute
+            if metadata.size_label is None and size_label is not None:
+                metadata.size_label = size_label
 
         return metadata
 
@@ -352,8 +352,8 @@ class Metadata:
         if self.quantized_by is not None:
             gguf_writer.add_quantized_by(self.quantized_by)
 
-        if self.parameter_class_attribute is not None:
-            gguf_writer.add_parameter_class_attribute(self.parameter_class_attribute)
+        if self.size_label is not None:
+            gguf_writer.add_size_label(self.size_label)
 
         if self.license is not None:
             gguf_writer.add_license(self.license)

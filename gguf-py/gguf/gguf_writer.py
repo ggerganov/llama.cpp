@@ -480,8 +480,8 @@ class GGUFWriter:
     def add_quantized_by(self, quantized: str) -> None:
         self.add_string(Keys.General.QUANTIZED_BY, quantized)
 
-    def add_parameter_class_attribute(self, parameter_class_attribute: str) -> None:
-        self.add_string(Keys.General.PARAMETER_CLASS_ATTRIBUTE, parameter_class_attribute)
+    def add_size_label(self, size_label: str) -> None:
+        self.add_string(Keys.General.SIZE_LABEL, size_label)
 
     def add_license(self, license: str) -> None:
         self.add_string(Keys.General.LICENSE, license)

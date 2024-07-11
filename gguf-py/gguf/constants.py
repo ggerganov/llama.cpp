@@ -37,7 +37,7 @@ class Keys:
         DESCRIPTION                = "general.description"
         QUANTIZED_BY               = "general.quantized_by"
 
-        PARAMETER_CLASS_ATTRIBUTE  = "general.parameter_class_attribute"
+        SIZE_LABEL  = "general.size_label"
 
         # Licensing details
         LICENSE                    = "general.license"
