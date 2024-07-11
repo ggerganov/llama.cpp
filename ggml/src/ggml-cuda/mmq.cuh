@@ -15,12 +15,62 @@ typedef void (*load_tiles_mmq_t)(const char * __restrict__ x, int * x_tile, cons
 typedef void (*vec_dot_mmq_t)(const int * __restrict__ x, const int * __restrict__ y, float * __restrict__ sum, const int & k00);
 typedef void (*mmq_write_back_t)(const float * __restrict__ sum, float * __restrict__ dst, const int & stride, const int & i_max, const int & j_max);
 
+enum mmq_q8_1_ds_layout {
+    MMQ_Q8_1_DS_LAYOUT_D4,
+    MMQ_Q8_1_DS_LAYOUT_DS4,
+    MMQ_Q8_1_DS_LAYOUT_D2S6,
+};
+
 struct block_q8_1_mmq {
-    half2  ds[4];
-    int8_t qs[4*QK8_1];
+    // The y float data is converted to a data layout that can simply be copied to shared memory as a contiguous block.
+    // The y float data is first grouped as blocks of 128 values.
+    // These blocks are then treated as individual data values and transposed.
+    //
+    // To avoid shared memory bank conflicts each block is padded with 16 bytes.
+    // This padding is also used to store block scales/partial sums.
+    // The scales multiplied with the quantized data are equal to the unquantized values.
+    // The partial sums are obtained by summing up a subgroup of the contained values (prior to quantization)
+    //     and are only needed for performance reasons.
+    //
+    // The exact data stored depends on the x data type.
+    union {
+        float d4[4];    // 1 32 bit scale per 32 values, stored as d0,d1,d2,d3
+        half2 ds4[4];   // 1 16 bit scale + 1 16 bit partial sum per 32 values, stored as d0,s0,d1,s1,d2,s2,d3,s3
+        half  d2s6[8];  // 1 16 bit scale per 64 values + 1 16 bit partial sum per 16 values for the first 96 values,
+                        //     stored as d0,d1,s1,s2,s3,s4,s5
+    };
+    int8_t qs[4*QK8_1]; // 128 values quantized to 8 bit each
 };
 static_assert(sizeof(block_q8_1_mmq) == 4*QK8_1 + 4*sizeof(half2), "Unexpected block_q8_1_mmq size");
 static_assert(sizeof(block_q8_1_mmq) == 4*sizeof(block_q8_1),      "Unexpected block_q8_1_mmq size");
+
+static mmq_q8_1_ds_layout mmq_get_q8_1_ds_layout(const ggml_type type_x) {
+    switch (type_x) {
+        case GGML_TYPE_Q4_0:
+        case GGML_TYPE_Q4_1:
+            return MMQ_Q8_1_DS_LAYOUT_DS4;
+        case GGML_TYPE_Q5_0:
+            return MMQ_Q8_1_DS_LAYOUT_D4;
+        case GGML_TYPE_Q5_1:
+            return MMQ_Q8_1_DS_LAYOUT_DS4;
+        case GGML_TYPE_Q8_0:
+            return MMQ_Q8_1_DS_LAYOUT_D4;
+        case GGML_TYPE_Q2_K:
+            return MMQ_Q8_1_DS_LAYOUT_D2S6;
+        case GGML_TYPE_Q3_K:
+            return MMQ_Q8_1_DS_LAYOUT_D4;
+        case GGML_TYPE_Q4_K:
+        case GGML_TYPE_Q5_K:
+            return MMQ_Q8_1_DS_LAYOUT_DS4;
+        case GGML_TYPE_Q6_K:
+        case GGML_TYPE_IQ4_XS:
+        case GGML_TYPE_IQ4_NL:
+            return MMQ_Q8_1_DS_LAYOUT_D4;
+        default:
+            GGML_ASSERT(false);
+            break;
+    }
+}
 
 struct tile_x_sizes {
     int qs;
@@ -2361,35 +2411,6 @@ struct mmq_type_traits<mmq_x, mmq_y, nwarps, need_check, GGML_TYPE_IQ4_XS> {
     static constexpr vec_dot_mmq_t    vec_dot_mma  = vec_dot_q8_0_q8_1_mma<mmq_x, mmq_y, nwarps>;
     static constexpr vec_dot_mmq_t    vec_dot_dp4a = vec_dot_q8_0_q8_1_dp4a<mmq_x, mmq_y, nwarps>;
 };
-
-static int mmq_need_sum(const ggml_type type_x) {
-    switch (type_x) {
-        case GGML_TYPE_Q4_0:
-        case GGML_TYPE_Q4_1:
-            return 1;
-        case GGML_TYPE_Q5_0:
-            return 0;
-        case GGML_TYPE_Q5_1:
-            return 1;
-        case GGML_TYPE_Q8_0:
-            return 0;
-        case GGML_TYPE_Q2_K:
-            return 2;
-        case GGML_TYPE_Q3_K:
-            return 0;
-        case GGML_TYPE_Q4_K:
-        case GGML_TYPE_Q5_K:
-            return 1;
-        case GGML_TYPE_Q6_K:
-        case GGML_TYPE_IQ4_XS:
-        case GGML_TYPE_IQ4_NL:
-            return 0;
-        default:
-            GGML_ASSERT(false);
-            break;
-    }
-    return -1;
-}
 
 template <ggml_type type, int mmq_x, int nwarps, bool need_check, bool fixup>
 static __device__ void mul_mat_q_process_tile(
