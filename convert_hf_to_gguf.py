@@ -72,7 +72,7 @@ class Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
 
         if metadata is None:
-            raise TypeError("authorship metadata must be provided")
+            metadata = gguf.Metadata()
 
         self.dir_model = dir_model
         self.ftype = ftype
@@ -101,9 +101,9 @@ class Model:
                 logger.info(f"choosing --outtype bf16 from first tensor type ({first_tensor.dtype})")
                 self.ftype = gguf.LlamaFileType.MOSTLY_BF16
 
-        # Fallback to model architecture name if metadata name is still missing
+        # Fallback to model directory name if metadata name is still missing
         if self.metadata.name is None:
-            self.metadata.name = gguf.MODEL_ARCH_NAMES[self.model_arch]
+            self.metadata.name = dir_model.name
 
         # Generate parameter weight class (useful for leader boards) if not yet determined
         if self.metadata.parameter_class_attribute is None:
