@@ -8,9 +8,9 @@
 #   include <Accelerate/Accelerate.h>
 #elif defined(GGML_BLAS_USE_MKL)
 #   include <mkl.h>
-#elif defined(BLIS_ENABLE_CBLAS)
+#elif defined(GGML_BLAS_USE_BLIS)
 #   include <blis.h>
-#elif defined(NVPL_ENABLE_CBLAS)
+#elif defined(GGML_BLAS_USE_NVPL)
 #   include <nvpl_blas.h>
 #else
 #   include <cblas.h>
@@ -141,11 +141,11 @@ static void ggml_backend_blas_mul_mat(ggml_backend_blas_context * ctx, struct gg
     openblas_set_num_threads(ctx->n_threads);
 #endif
 
-#if defined(BLIS_ENABLE_CBLAS)
+#if defined(GGML_BLAS_USE_BLIS)
     bli_thread_set_num_threads(ctx->n_threads);
 #endif
 
-#if defined(NVPL_ENABLE_CBLAS)
+#if defined(GGML_BLAS_USE_NVPL)
     nvpl_blas_set_num_threads(ctx->n_threads);
 #endif
 
