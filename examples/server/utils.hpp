@@ -132,7 +132,7 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
             } else if (curr_msg["content"].is_array()) {
                 for (const auto & part : curr_msg["content"]) {
                     if (part.contains("text")) {
-                        content += part["text"].get<std::string>();
+                        content += "\n" + part["text"].get<std::string>();
                     }
                 }
             } else {
