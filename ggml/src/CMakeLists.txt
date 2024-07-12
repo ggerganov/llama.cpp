@@ -238,12 +238,12 @@ if (GGML_BLAS)
 endif()
 
 if (GGML_LLAMAFILE)
-    message(STATUS "Using ggml SGEMM")
+    message(STATUS "Using llamafile")
 
     add_compile_definitions(GGML_USE_LLAMAFILE)
 
-    set(GGML_HEADERS_LLAMAFILE sgemm.h)
-    set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
+    set(GGML_HEADERS_LLAMAFILE llamafile/sgemm.h)
+    set(GGML_SOURCES_LLAMAFILE llamafile/sgemm.cpp)
 endif()
 
 if (GGML_CUDA)
@@ -486,9 +486,11 @@ if (GGML_SYCL)
     add_compile_options(-I./) #include DPCT
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
+        add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
+    else()
+        add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
     endif()
 
     file(GLOB   GGML_HEADERS_SYCL "ggml-sycl/*.hpp")
@@ -1151,6 +1153,7 @@ add_library(ggml
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
+            ggml-aarch64.c            ggml-aarch64.h
             )
 
 if (EMSCRIPTEN)
@@ -1166,9 +1169,12 @@ target_link_libraries(ggml PRIVATE Threads::Threads ${GGML_EXTRA_LIBS})
 
 find_library(MATH_LIBRARY m)
 if (MATH_LIBRARY)
-    target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
+    if (NOT WIN32 OR NOT GGML_SYCL)
+        target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
+    endif()
 endif()
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_compile_definitions(ggml PRIVATE GGML_SHARED GGML_BUILD)
 endif()
