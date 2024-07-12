@@ -238,12 +238,12 @@ if (GGML_BLAS)
 endif()
 
 if (GGML_LLAMAFILE)
-    message(STATUS "Using ggml SGEMM")
+    message(STATUS "Using llamafile")
 
     add_compile_definitions(GGML_USE_LLAMAFILE)
 
-    set(GGML_HEADERS_LLAMAFILE sgemm.h)
-    set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
+    set(GGML_HEADERS_LLAMAFILE llamafile/sgemm.h)
+    set(GGML_SOURCES_LLAMAFILE llamafile/sgemm.cpp)
 endif()
 
 if (GGML_CUDA)
@@ -1180,6 +1180,7 @@ add_library(ggml
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
+            ggml-aarch64.c            ggml-aarch64.h
             )
 
 if (EMSCRIPTEN)
