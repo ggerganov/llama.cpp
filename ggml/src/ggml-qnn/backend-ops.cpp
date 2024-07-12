@@ -156,29 +156,29 @@ qnn::ggml_qnn_graph_binary *get_qnn_graph_from_cache(ggml_backend_qnn_context *c
 }
 
 constexpr const char *kGgmlOpToQnnOp[] = {
-    nullptr,                         // GGML_OP_NONE
-    nullptr,                         // GGML_OP_DUP
-    QNN_OP_ELEMENT_WISE_ADD,         // GGML_OP_ADD
-    nullptr,                         // GGML_OP_ADD1
-    nullptr,                         // GGML_OP_ACC
-    nullptr,                         // GGML_OP_SUB
-    QNN_OP_ELEMENT_WISE_MULTIPLY,    // GGML_OP_MUL
-    nullptr,                         // GGML_OP_DIV
-    nullptr,                         // GGML_OP_SQR
-    QNN_OP_ELEMENT_WISE_SQUARE_ROOT, // GGML_OP_SQRT
-    nullptr,                         // GGML_OP_LOG
-    nullptr,                         // GGML_OP_SUM
-    nullptr,                         // GGML_OP_SUM_ROWS
-    nullptr,                         // GGML_OP_MEAN
-    nullptr,                         // GGML_OP_ARGMAX
-    nullptr,                         // GGML_OP_REPEAT
-    nullptr,                         // GGML_OP_REPEAT_BACK
-    nullptr,                         // GGML_OP_CONCAT
-    nullptr,                         // GGML_OP_SILU_BACK
-    nullptr,                         // GGML_OP_NORM
-    nullptr,                         // GGML_OP_RMS_NORM
-    nullptr,                         // GGML_OP_RMS_NORM_BACK
-    nullptr,                         // GGML_OP_GROUP_NORM
+    nullptr,                      // GGML_OP_NONE
+    nullptr,                      // GGML_OP_DUP
+    QNN_OP_ELEMENT_WISE_ADD,      // GGML_OP_ADD
+    nullptr,                      // GGML_OP_ADD1
+    nullptr,                      // GGML_OP_ACC
+    nullptr,                      // GGML_OP_SUB
+    QNN_OP_ELEMENT_WISE_MULTIPLY, // GGML_OP_MUL
+    nullptr,                      // GGML_OP_DIV
+    nullptr,                      // GGML_OP_SQR
+    nullptr,                      // GGML_OP_SQRT
+    nullptr,                      // GGML_OP_LOG
+    nullptr,                      // GGML_OP_SUM
+    nullptr,                      // GGML_OP_SUM_ROWS
+    nullptr,                      // GGML_OP_MEAN
+    nullptr,                      // GGML_OP_ARGMAX
+    nullptr,                      // GGML_OP_REPEAT
+    nullptr,                      // GGML_OP_REPEAT_BACK
+    nullptr,                      // GGML_OP_CONCAT
+    nullptr,                      // GGML_OP_SILU_BACK
+    nullptr,                      // GGML_OP_NORM
+    nullptr,                      // GGML_OP_RMS_NORM
+    nullptr,                      // GGML_OP_RMS_NORM_BACK
+    nullptr,                      // GGML_OP_GROUP_NORM
 
     QNN_OP_MAT_MUL, // GGML_OP_MUL_MAT
     nullptr,        // GGML_OP_MUL_MAT_ID
@@ -271,29 +271,29 @@ void qnn_binary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, 
 
 qnn::ggml_qnn_op_array_t qnn::ggml_qnn_op_array() {
     static constexpr const qnn::ggml_qnn_op_t kQnnOpsTable[] = {
-        nullptr,                          // GGML_OP_NONE
-        nullptr,                          // GGML_OP_DUP
-        qnn_binary_op_impl<GGML_OP_ADD>,  // GGML_OP_ADD
-        nullptr,                          // GGML_OP_ADD1
-        nullptr,                          // GGML_OP_ACC
-        nullptr,                          // GGML_OP_SUB
-        qnn_binary_op_impl<GGML_OP_MUL>,  // GGML_OP_MUL
-        nullptr,                          // GGML_OP_DIV
-        nullptr,                          // GGML_OP_SQR
-        qnn_binary_op_impl<GGML_OP_SQRT>, // GGML_OP_SQRT
-        nullptr,                          // GGML_OP_LOG
-        nullptr,                          // GGML_OP_SUM
-        nullptr,                          // GGML_OP_SUM_ROWS
-        nullptr,                          // GGML_OP_MEAN
-        nullptr,                          // GGML_OP_ARGMAX
-        nullptr,                          // GGML_OP_REPEAT
-        nullptr,                          // GGML_OP_REPEAT_BACK
-        nullptr,                          // GGML_OP_CONCAT
-        nullptr,                          // GGML_OP_SILU_BACK
-        nullptr,                          // GGML_OP_NORM
-        nullptr,                          // GGML_OP_RMS_NORM
-        nullptr,                          // GGML_OP_RMS_NORM_BACK
-        nullptr,                          // GGML_OP_GROUP_NORM
+        nullptr,                         // GGML_OP_NONE
+        nullptr,                         // GGML_OP_DUP
+        qnn_binary_op_impl<GGML_OP_ADD>, // GGML_OP_ADD
+        nullptr,                         // GGML_OP_ADD1
+        nullptr,                         // GGML_OP_ACC
+        nullptr,                         // GGML_OP_SUB
+        qnn_binary_op_impl<GGML_OP_MUL>, // GGML_OP_MUL
+        nullptr,                         // GGML_OP_DIV
+        nullptr,                         // GGML_OP_SQR
+        nullptr,                         // GGML_OP_SQRT
+        nullptr,                         // GGML_OP_LOG
+        nullptr,                         // GGML_OP_SUM
+        nullptr,                         // GGML_OP_SUM_ROWS
+        nullptr,                         // GGML_OP_MEAN
+        nullptr,                         // GGML_OP_ARGMAX
+        nullptr,                         // GGML_OP_REPEAT
+        nullptr,                         // GGML_OP_REPEAT_BACK
+        nullptr,                         // GGML_OP_CONCAT
+        nullptr,                         // GGML_OP_SILU_BACK
+        nullptr,                         // GGML_OP_NORM
+        nullptr,                         // GGML_OP_RMS_NORM
+        nullptr,                         // GGML_OP_RMS_NORM_BACK
+        nullptr,                         // GGML_OP_GROUP_NORM
 
         qnn_binary_op_impl<GGML_OP_MUL_MAT>, // GGML_OP_MUL_MAT
         nullptr,                             // GGML_OP_MUL_MAT_ID
