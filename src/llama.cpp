@@ -17436,7 +17436,7 @@ void llama_sample_apply_guidance(
     llama_log_softmax(logits, n_vocab);
     llama_log_softmax(logits_guidance, n_vocab);
 
-    for (int i = 0; i < n_vocab; ++i) {
+    for (uint32_t i = 0; i < n_vocab; ++i) {
               auto & l = logits[i];
         const auto & g = logits_guidance[i];
 
@@ -19398,19 +19398,19 @@ enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
     return ctx->cparams.pooling_type;
 }
 
-int32_t llama_n_vocab(const struct llama_model * model) {
+uint32_t llama_n_vocab(const struct llama_model * model) {
     return model->hparams.n_vocab;
 }
 
-int32_t llama_n_ctx_train(const struct llama_model * model) {
+uint32_t llama_n_ctx_train(const struct llama_model * model) {
     return model->hparams.n_ctx_train;
 }
 
-int32_t llama_n_embd(const struct llama_model * model) {
+uint32_t llama_n_embd(const struct llama_model * model) {
     return model->hparams.n_embd;
 }
 
-int32_t llama_n_layer(const struct llama_model * model) {
+uint32_t llama_n_layer(const struct llama_model * model) {
     return model->hparams.n_layer;
 }
 
@@ -21160,7 +21160,7 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
         }
     }
 
-    if (0 <= token && token < llama_n_vocab(model)) {
+    if (0 <= token && token < (llama_token)llama_n_vocab(model)) {
         const std::string & token_text = model->vocab.id_to_token[token].text;
         switch (llama_vocab_get_type(model->vocab)) {
             case LLAMA_VOCAB_TYPE_WPM:

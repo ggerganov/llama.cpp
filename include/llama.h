@@ -460,10 +460,10 @@ extern "C" {
     LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
     LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
 
-    LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
-    LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);
-    LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
-    LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
+    LLAMA_API uint32_t llama_n_vocab    (const struct llama_model * model);
+    LLAMA_API uint32_t llama_n_ctx_train(const struct llama_model * model);
+    LLAMA_API uint32_t llama_n_embd     (const struct llama_model * model);
+    LLAMA_API uint32_t llama_n_layer    (const struct llama_model * model);
 
     // Get the model's RoPE frequency scaling factor
     LLAMA_API float llama_rope_freq_scale_train(const struct llama_model * model);
