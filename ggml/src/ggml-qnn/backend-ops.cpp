@@ -9,24 +9,8 @@
 #include "utils.hpp"
 
 #ifndef NDEBUG
-#define CHECK_PARAMS(ctx, src0, src1, dst)                        \
-    do {                                                          \
-        if (!qnn_is_valid_params((ctx), (src0), (src1), (dst))) { \
-            return;                                               \
-        }                                                         \
-    } while (0)
-
-#else
-#define CHECK_PARAMS(ctx, src0, src1, dst)
-#endif
 
 namespace {
-
-void print_ggml_tensor(const ggml_tensor *tensor) {
-    QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
-                  tensor->name, tensor->type, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1], tensor->ne[2],
-                  tensor->nb[0], tensor->nb[1], tensor->nb[2]);
-}
 
 bool qnn_is_valid_params(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
                          ggml_tensor *dst) {
@@ -45,6 +29,27 @@ bool qnn_is_valid_params(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
     }
 
     return true;
+}
+
+} // namespace
+
+#define CHECK_PARAMS(ctx, src0, src1, dst)                        \
+    do {                                                          \
+        if (!qnn_is_valid_params((ctx), (src0), (src1), (dst))) { \
+            return;                                               \
+        }                                                         \
+    } while (0)
+
+#else
+#define CHECK_PARAMS(ctx, src0, src1, dst)
+#endif
+
+namespace {
+
+void print_ggml_tensor(const ggml_tensor *tensor) {
+    QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
+                  tensor->name, tensor->type, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1], tensor->ne[2],
+                  tensor->nb[0], tensor->nb[1], tensor->nb[2]);
 }
 
 template <size_t _InputSize, size_t _OutputSize>
