@@ -1,6 +1,5 @@
 #include "ggml-qnn.h"
 
-#include <list>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +14,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -142,7 +142,8 @@ struct ggml_backend_qnn_buffer_type_context {
 // =================================================================================================
 static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct ggml_tensor *tensor,
                                    bool b_dump_tensor_info) {
-    if (ggml_is_empty(tensor) || !qnn::ggml_qnn_op_array()[tensor->op]) {
+    if (ggml_is_empty(tensor) || 
+        (!qnn::ggml_qnn_unary_op_array()[tensor->op] && !qnn::ggml_qnn_binary_op_array()[tensor->op])) {
         return false;
     }
 
@@ -158,19 +159,6 @@ static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct g
     const auto ne11 = src1->ne[1];
     // make qnn_get_ggml_tensor_rank and QNN SDK happy
     if (ne00 <= 1 || ne01 <= 1 || ne10 <= 1 || ne11 <= 1) {
-        return false;
-    }
-
-    // TODO: support other GGML OPs using QNN API
-    // a GENERAL approach could fix this problem in a standalone PR of refine ggml backend
-    // subsystem for hybrid inference between CPU&GPU / CPU&NPU easily(less the 100 LoC and no
-    // side-effect to the existing codes) for ANY ggml backends which the backend's
-    // ggml_backend_xxx_buffer_is_host return true. this approach could be found at:
-    // https://github.com/ggerganov/llama.cpp/pull/7641
-    bool supported_op = false;
-    supported_op = (tensor->op == GGML_OP_ADD);
-    supported_op = ((tensor->op == GGML_OP_ADD) || (tensor->op == GGML_OP_MUL_MAT));
-    if (!supported_op) {
         return false;
     }
 
@@ -192,14 +180,18 @@ static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct g
 }
 
 bool ggml_qnn_compute_forward(ggml_backend_qnn_context *ctx, struct ggml_tensor *tensor) {
-    auto func = qnn::ggml_qnn_op_array()[tensor->op];
-    if (!func) {
-        QNN_LOG_WARN("unsupported op %d", tensor->op);
-        return false;
+    auto unary_op = qnn::ggml_qnn_unary_op_array()[tensor->op];
+    if (unary_op) {
+        return unary_op(ctx, tensor->src[0], tensor);
     }
 
-    func(ctx, tensor->src[0], tensor->src[1], tensor);
-    return true;
+    auto binary_op = qnn::ggml_qnn_binary_op_array()[tensor->op];
+    if (binary_op) {
+        return binary_op(ctx, tensor->src[0], tensor->src[1], tensor);
+    }
+
+    QNN_LOG_WARN("unsupported op %d", tensor->op);
+    return false;
 }
 
 static const char *ggml_backend_qnn_buffer_get_name(ggml_backend_buffer_t buffer) {
@@ -232,7 +224,7 @@ GGML_CALL static void ggml_backend_qnn_buffer_init_tensor(ggml_backend_buffer_t 
         QNN_LOG_WARN("Create ggml_qnn_tensor failed");
         return;
     }
-    
+
     ctx->tensors.push_back(std::move(qnn_tensor));
 }
 
@@ -343,6 +335,7 @@ GGML_CALL static void ggml_backend_qnn_free(ggml_backend_t backend) {
 
     auto instance = g_qnn_mgr[ctx->device].instance;
     if (instance) {
+        ctx->qnn_unary_graph_cache.clear();
         for (const auto &graph_item : ctx->qnn_binary_graph_cache) {
             QNN_LOG_INFO("graph type:%s", graph_item.first.c_str());
         }

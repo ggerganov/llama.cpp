@@ -11,6 +11,11 @@
 #include "graph.hpp"
 #include "qnn.hpp"
 
+namespace qnn {
+typedef std::unordered_map<std::string, std::unique_ptr<qnn::ggml_qnn_graph_unary>> ggml_qnn_unary_graph_cache_t;
+typedef std::unordered_map<std::string, std::unique_ptr<qnn::ggml_qnn_graph_binary>> ggml_qnn_binary_graph_cache_t;
+} // namespace qnn
+
 struct ggml_backend_qnn_context {
     int device;
     int threads;
@@ -21,5 +26,6 @@ struct ggml_backend_qnn_context {
     QNN_INTERFACE_VER_TYPE raw_interface;
     QNN_SYSTEM_INTERFACE_VER_TYPE raw_system_interface;
     qnn::qcom_socinfo socinfo;
-    std::unordered_map<std::string, std::unique_ptr<qnn::ggml_qnn_graph_binary>> qnn_binary_graph_cache;
+    qnn::ggml_qnn_unary_graph_cache_t qnn_unary_graph_cache;
+    qnn::ggml_qnn_binary_graph_cache_t qnn_binary_graph_cache;
 };
