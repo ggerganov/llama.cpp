@@ -507,6 +507,7 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
 static const std::unordered_map<std::string, int> kMapStringToGGMLOp = {
     {"GGML_OP_ADD", GGML_OP_ADD},
     {"GGML_OP_MUL_MAT", GGML_OP_MUL_MAT},
+    {"GGML_OP_MUL", GGML_OP_MUL},
 };
 
 int main(int argc, char * argv[]) {
