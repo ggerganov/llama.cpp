@@ -19,7 +19,6 @@
   vulkan-loader,
   curl,
   shaderc,
-  clblast,
   useBlas ? builtins.all (x: !x) [
     useCuda
     useMetalKit
