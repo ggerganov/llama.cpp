@@ -144,9 +144,9 @@ static void soft_max_f32_submitter(const float * x, const float * mask, float * 
 static void soft_max_f32_sycl(const float * x, const float * mask,
                               float * dst, const int ncols_x, const int nrows_x,
                               const int nrows_y, const float scale, const float max_bias,
-                              queue_ptr stream, int device) {
+                              queue_ptr stream, int device_id) {
     int nth = WARP_SIZE;
-    int max_block_size = ggml_sycl_info().max_work_group_sizes[device];
+    int max_block_size = ggml_sycl_info().work_group_size(device_id);
     while (nth < ncols_x && nth < max_block_size) nth *= 2;
     if (nth>max_block_size) nth = max_block_size;
 
