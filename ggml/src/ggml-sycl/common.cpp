@@ -314,6 +314,7 @@ void sycl_device_mgr::detect_all_sycl_device_list() try {
         dpct::get_device_info(prop, device);
         work_group_sizes.push_back(prop.get_max_work_group_size());
         max_compute_units.push_back(prop.get_max_compute_units());
+        hw_familys.push_back(get_device_family(&device));
     }
     return;
 } catch (sycl::exception const &exc) {
@@ -496,6 +497,10 @@ int ggml_sycl_device_info::get_device_id(int device_index) {
                   << " is out of range:[" << devices_list() << "]" << std::endl;
         std::exit(1);
     }
+}
+
+int ggml_sycl_device_info::hw_family(int device_id) {
+    return device_mgr->hw_familys[device_id];
 }
 
 //--ggml_sycl_device_info--

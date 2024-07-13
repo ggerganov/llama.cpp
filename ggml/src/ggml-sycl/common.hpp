@@ -20,6 +20,7 @@
 #include "dpct/helper.hpp"
 #include "ggml-sycl.h"
 #include "presets.hpp"
+#include "sycl_hw.hpp"
 
 #define GGML_COMMON_DECL_SYCL
 #define GGML_COMMON_IMPL_SYCL
@@ -188,6 +189,8 @@ class sycl_device_mgr {
     std::vector<sycl::device> devices;
     std::vector<int> max_compute_units;
     std::vector<int> work_group_sizes;
+    std::vector<int> hw_familys;
+
     sycl::queue *first_queue;
     std::vector<sycl::queue> _queues;
     std::vector<sycl::context> ctxs;
@@ -236,6 +239,7 @@ struct ggml_sycl_device_info {
     bool is_allowed_device(int device_id);
     const char* devices_list();
     int get_device_id(int device_index);
+    int hw_family(int device_id);
 };
 
 struct ggml_sycl_pool {
