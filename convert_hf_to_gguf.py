@@ -3624,7 +3624,7 @@ def main() -> None:
         try:
             model_class = Model.from_model_architecture(model_architecture)
         except NotImplementedError:
-            logger.error(f"Model {hparams['architectures'][0]} is not supported")
+            logger.error(f"Model {model_architecture} is not supported")
             sys.exit(1)
 
         model_instance = model_class(dir_model=dir_model, ftype=output_type, fname_out=fname_out,
