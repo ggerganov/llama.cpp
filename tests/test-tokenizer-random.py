@@ -232,6 +232,7 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         'a\na',            # bert fail
         '"`',              # falcon
         ' \u2e4e',         # falcon
+        '\n\x0b  ',        # falcon
         'a\xa0\xa0\x00b',  # jina-v2-es
         'one <mask>',      # jina-v2-es  <mask> lstrip=true
         'a </s> b',        # rstrip phi-3
@@ -458,8 +459,8 @@ def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLl
             i = find_first_mismatch(ids1, ids2)
             ids1 = list(ids1)[max(0, i - 2) : i + 5 + 1]
             ids2 = list(ids2)[max(0, i - 2) : i + 5 + 1]
-            logger.error(" Expected: " + str(ids1) + f" {[tokenizer1.decode([id]) for id in ids1]}")
-            logger.error("   Result: " + str(ids2) + f" {[tokenizer2.decode([id]) for id in ids2]}")
+            logger.error(" Expected: " + str(ids1))
+            logger.error("   Result: " + str(ids2))
             encode_errors += 1
             logger.error(f" {encode_errors=}")
         if decode_errors < MAX_ERRORS and not check_detokenizer(text, text1, text2):
