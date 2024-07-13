@@ -1273,6 +1273,7 @@ KEY_GENERAL_AUTHOR               = Keys.General.AUTHOR
 KEY_GENERAL_URL                  = Keys.General.URL
 KEY_GENERAL_DESCRIPTION          = Keys.General.DESCRIPTION
 KEY_GENERAL_LICENSE              = Keys.General.LICENSE
+KEY_GENERAL_SOURCE_URL           = Keys.General.SOURCE_URL
 KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
