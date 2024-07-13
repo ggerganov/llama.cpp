@@ -403,10 +403,6 @@ class Model:
         if len(self.gguf_writer.tensors) != 1:
             raise ValueError('Splitting the vocabulary is not supported')
 
-        if self.metadata.uuid is None:
-            # Required tensor data least for uuid generation if in vocab_only mode
-            self.prepare_tensors()
-
         self.prepare_key_value_store()
         self.gguf_writer.write_header_to_file()
         self.gguf_writer.write_kv_data_to_file()
