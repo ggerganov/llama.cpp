@@ -57,6 +57,7 @@ static void group_norm_f32(const float* x, float* dst, const int group_size, con
     const int nwarps = nthreads / WARP_SIZE;
     assert(nwarps % WARP_SIZE == 0);
     start += item_ct1.get_local_id(2);
+    int nreduce = nwarps / WARP_SIZE;
 
     if (end >= ne_elements) {
         end = ne_elements;
@@ -87,7 +88,6 @@ static void group_norm_f32(const float* x, float* dst, const int group_size, con
         */
         item_ct1.barrier();
         tmp = 0.f;
-        int nreduce = nwarps / WARP_SIZE;
         for (size_t i = 0; i < nreduce; i += 1)
         {
             tmp += s_sum[lane_id + i * WARP_SIZE];
@@ -122,7 +122,11 @@ static void group_norm_f32(const float* x, float* dst, const int group_size, con
         better performance if there is no access to global memory.
         */
         item_ct1.barrier();
-        tmp = s_sum[lane_id];
+        tmp = 0.f;
+        for (size_t i = 0; i < nreduce; i += 1)
+        {
+            tmp += s_sum[lane_id + i * WARP_SIZE];
+        }
         tmp = warp_reduce_sum(tmp, item_ct1);
     }
 
@@ -186,13 +190,15 @@ static void norm_f32_sycl(const float* x, float* dst, const int ncols,
     if (ncols < 1024) {
         const sycl::range<3> block_dims(1, 1, WARP_SIZE);
         stream->submit([&](sycl::handler& cgh) {
+            sycl::local_accessor<sycl::float2, 1> s_sum_acc_ct1(
+                sycl::range<1>(32), cgh);
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, nrows) * block_dims,
                     block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                 [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                     norm_f32(x, dst, ncols, eps, item_ct1,
-                        nullptr, WARP_SIZE);
+                        s_sum_acc_ct1.get_pointer(), WARP_SIZE);
                 });
             });
     }
@@ -227,6 +233,8 @@ static void group_norm_f32_sycl(const float* x, float* dst,
     if (group_size < 1024) {
         const sycl::range<3> block_dims(1, 1, WARP_SIZE);
         stream->submit([&](sycl::handler& cgh) {
+            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(32),
+                                                         cgh);
             const float eps_ct4 = eps;
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, num_groups) * block_dims,
@@ -235,7 +243,7 @@ static void group_norm_f32_sycl(const float* x, float* dst,
                 [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                     group_norm_f32(
                         x, dst, group_size, ne_elements, eps_ct4, item_ct1,
-                        nullptr, WARP_SIZE);
+                        s_sum_acc_ct1.get_pointer(), WARP_SIZE);
                 });
             });
     }
@@ -275,13 +283,15 @@ static void rms_norm_f32_sycl(const float* x, float* dst, const int ncols,
     if (ncols < 1024) {
         const sycl::range<3> block_dims(1, 1, WARP_SIZE);
         stream->submit([&](sycl::handler& cgh) {
+            sycl::local_accessor<float, 1> s_sum_acc_ct1(sycl::range<1>(32),
+                                                         cgh);
             cgh.parallel_for(
                 sycl::nd_range<3>(sycl::range<3>(1, 1, nrows) * block_dims,
                     block_dims),
                 [=](sycl::nd_item<3> item_ct1)
                 [[intel::reqd_sub_group_size(WARP_SIZE)]] {
                     rms_norm_f32(x, dst, ncols, eps, item_ct1,
-                        nullptr, WARP_SIZE);
+                        s_sum_acc_ct1.get_pointer(), WARP_SIZE);
                 });
             });
     }
