@@ -3551,7 +3551,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--get-outfile", action="store_true",
-        help="get calculated default outfile name"
+        help="print calculated output file name then exit"
     )
 
     return parser.parse_args()
