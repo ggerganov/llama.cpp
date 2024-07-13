@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import uuid
-import hashlib
 import shutil
 import struct
 import tempfile
@@ -368,19 +366,6 @@ class GGUFWriter:
         self.write_padding(fout, tensor.nbytes)
 
         self.state = WriterState.WEIGHTS
-
-    def generate_tensors_uuid(self) -> str:
-        uuidv5_sha1 = hashlib.sha1()
-        uuidv5_sha1.update(uuid.UUID('ef001206-dadc-5f6d-a15f-3359e577d4e5').bytes)
-
-        for tensors in self.tensors:
-            # relying on the fact that Python dicts preserve insertion order (since 3.7)
-            for name, ti in tensors.items():
-                assert ti.tensor is not None
-                assert ti.tensor.nbytes == ti.nbytes
-                uuidv5_sha1.update(ti.tensor.tobytes('C'))
-
-        return str(uuid.UUID(bytes=uuidv5_sha1.digest()[:16], version=5))
 
     def write_tensors_to_file(self, *, progress: bool = False) -> None:
         self.write_ti_data_to_file()

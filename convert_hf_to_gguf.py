@@ -378,12 +378,6 @@ class Model:
 
     def prepare_key_value_store(self):
 
-        # Upon missing model uuid, generate uuid based on tensor content
-        if self.metadata.uuid is None:
-            self.metadata.uuid = self.gguf_writer.generate_tensors_uuid()
-            max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
-            logger.info(f"{f'%-{max_name_len}s' % f'generating general.uuid'} {self.metadata.uuid}")
-
         logger.info("Set meta model")
         self.metadata.set_gguf_meta_model(self.gguf_writer)
 
