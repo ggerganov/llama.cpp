@@ -307,14 +307,7 @@ void sycl_device_mgr::detect_all_sycl_device_list() try {
     int device_count = dpct::dev_mgr::instance().device_count();
 
     for (int id = 0; id < device_count; id++) {
-        sycl::device device = dpct::dev_mgr::instance().get_device(id);
-        device_ids.push_back(id);
-        devices.push_back(device);
-        dpct::device_info prop;
-        dpct::get_device_info(prop, device);
-        work_group_sizes.push_back(prop.get_max_work_group_size());
-        max_compute_units.push_back(prop.get_max_compute_units());
-        hw_familys.push_back(get_device_family(&device));
+        add_device_info(id);
     }
     return;
 } catch (sycl::exception const &exc) {
@@ -343,13 +336,7 @@ void sycl_device_mgr::detect_sycl_visible_device_list() try {
             }
             std::cerr << std::endl;
         }
-        sycl::device device = dpct::dev_mgr::instance().get_device(id);
-        device_ids.push_back(id);
-        devices.push_back(device);
-        dpct::device_info prop;
-        dpct::get_device_info(prop, device);
-        work_group_sizes.push_back(prop.get_max_work_group_size());
-        max_compute_units.push_back(prop.get_max_compute_units());
+        add_device_info(id);
     }
     return;
 } catch (sycl::exception const &exc) {
@@ -382,10 +369,7 @@ void sycl_device_mgr::detect_sycl_gpu_list_with_max_cu() try {
         dpct::get_device_info(prop, device);
         if (local_max_compute_units == prop.get_max_compute_units() &&
             is_ext_oneapi_device(device)) {
-            device_ids.push_back(id);
-            devices.push_back(device);
-            work_group_sizes.push_back(prop.get_max_work_group_size());
-            max_compute_units.push_back(prop.get_max_compute_units());
+            add_device_info(id);
         }
     }
     return;
@@ -405,6 +389,18 @@ bool sycl_device_mgr::is_ext_oneapi_device(const sycl::device &dev) {
         return true;
     return false;
 }
+
+void sycl_device_mgr::add_device_info(int id) {
+    sycl::device device = dpct::dev_mgr::instance().get_device(id);
+    device_ids.push_back(id);
+    devices.push_back(device);
+    dpct::device_info prop;
+    dpct::get_device_info(prop, device);
+    work_group_sizes.push_back(prop.get_max_work_group_size());
+    max_compute_units.push_back(prop.get_max_compute_units());
+    hw_familys.push_back(get_device_family(&device));
+}
+
 //--sycl_device_mgr--
 
 //--ggml_sycl_device_info--

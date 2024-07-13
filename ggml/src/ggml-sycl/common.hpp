@@ -183,6 +183,7 @@ inline dpct::err0 ggml_sycl_set_device(const int device_id) try {
   std::exit(1);
 }
 
+
 class sycl_device_mgr {
   public:
     std::vector<int> device_ids;
@@ -211,6 +212,7 @@ class sycl_device_mgr {
     void detect_sycl_gpu_list_with_max_cu();
     int get_device_count();
     bool is_ext_oneapi_device(const sycl::device &dev);
+    void add_device_info(int id);
 };
 
 
