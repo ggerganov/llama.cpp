@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import json
+import yaml
 import logging
 from pathlib import Path
 from typing import Any, Optional
@@ -116,13 +117,19 @@ class Metadata:
         if not model_card_path.is_file():
             return {}
 
-        try:
-            import frontmatter
-            with open(model_card_path, "r", encoding="utf-8") as f:
-                return frontmatter.load(f).to_dict()
-        except ModuleNotFoundError:
-            logger.warning("module 'frontmatter' not available. Metadata from README.md will NOT be read.")
-            return {}
+        # The model card metadata is assumed to always be in YAML
+        # ref: https://github.com/huggingface/transformers/blob/a5c642fe7a1f25d3bdcd76991443ba6ff7ee34b2/src/transformers/modelcard.py#L468-L473
+        with open(model_card_path, "r", encoding="utf-8") as f:
+            if f.readline() == "---\n":
+                raw = f.read().partition("---\n")[0]
+                data = yaml.safe_load(raw)
+                if isinstance(data, dict):
+                    return data
+                else:
+                    logger.error(f"while reading YAML model card frontmatter, data is {type(data)} instead of dict")
+                    return {}
+            else:
+                return {}
 
     @staticmethod
     def load_hf_parameters(model_path: Optional[Path] = None) -> dict[str, Any]:
