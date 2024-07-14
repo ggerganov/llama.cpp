@@ -63,7 +63,7 @@
   # nix-repl> :lf github:ggerganov/llama.cpp
   # Added 13 variables.
   # nix-repl> outputs.apps.x86_64-linux.quantize
-  # { program = "/nix/store/00000000000000000000000000000000-llama.cpp/bin/quantize"; type = "app"; }
+  # { program = "/nix/store/00000000000000000000000000000000-llama.cpp/bin/llama-quantize"; type = "app"; }
   # ```
   outputs =
     { self, flake-parts, ... }@inputs:
@@ -159,7 +159,6 @@
                 windows = config.legacyPackages.llamaPackagesWindows.llama-cpp;
               }
               // lib.optionalAttrs pkgs.stdenv.isLinux {
-                opencl = config.packages.default.override { useOpenCL = true; };
                 cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };

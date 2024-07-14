@@ -58,4 +58,4 @@ echo "$2
 model=$1
 
 # generate the most likely continuation until the string "===" is found
-./main -m $model -f $ftmp -n 64 --temp 0 --repeat-penalty 1.0 --no-penalize-nl -r "===" $eargs
+./llama-cli -m $model -f $ftmp -n 64 --temp 0 --repeat-penalty 1.0 --no-penalize-nl -r "===" $eargs

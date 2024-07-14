@@ -99,7 +99,7 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 
     char src1_str[128] = {0};
     if (src1) {
-        sprintf(src1_str, "%s{%s}", src1->name, ggml_ne_string(src1).c_str());
+        snprintf(src1_str, sizeof(src1_str), "%s{%s}", src1->name, ggml_ne_string(src1).c_str());
     }
 
     printf("%s: %24s = (%s) %10s(%s{%s}, %s}) = {%s}\n", __func__,
@@ -140,20 +140,18 @@ static bool run(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-
     callback_data cb_data;
 
     gpt_params params;
+
     if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
 
     print_build_info();
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = string_random_prompt(rng);
-    }
 
     llama_backend_init();
     llama_numa_init(params.numa);

@@ -29,13 +29,13 @@ You can also run multiple `rpc-server` instances on the same host, each with a d
 
 ## Usage
 
-On each host, build the corresponding backend with `cmake` and add `-DLLAMA_RPC=ON` to the build options.
+On each host, build the corresponding backend with `cmake` and add `-DGGML_RPC=ON` to the build options.
 For example, to build the CUDA backend with RPC support:
 
 ```bash
 mkdir build-rpc-cuda
 cd build-rpc-cuda
-cmake .. -DLLAMA_CUDA=ON -DLLAMA_RPC=ON
+cmake .. -DGGML_CUDA=ON -DGGML_RPC=ON
 cmake --build . --config Release
 ```
 
@@ -58,17 +58,17 @@ $ CUDA_VISIBLE_DEVICES=0 bin/rpc-server -p 50052
 This way you can run multiple `rpc-server` instances on the same host, each with a different CUDA device.
 
 
-On the main host build `llama.cpp` only with `-DLLAMA_RPC=ON`:
+On the main host build `llama.cpp` only with `-DGGML_RPC=ON`:
 
 ```bash
 mkdir build-rpc
 cd build-rpc
-cmake .. -DLLAMA_RPC=ON
+cmake .. -DGGML_RPC=ON
 cmake --build . --config Release
 ```
 
 Finally, use the `--rpc` option to specify the host and port of each `rpc-server`:
 
 ```bash
-$ bin/main -m ../models/tinyllama-1b/ggml-model-f16.gguf -p "Hello, my name is" --repeat-penalty 1.0 -n 64 --rpc 192.168.88.10:50052,192.168.88.11:50052 -ngl 99
+$ bin/llama-cli -m ../models/tinyllama-1b/ggml-model-f16.gguf -p "Hello, my name is" --repeat-penalty 1.0 -n 64 --rpc 192.168.88.10:50052,192.168.88.11:50052 -ngl 99
 ```

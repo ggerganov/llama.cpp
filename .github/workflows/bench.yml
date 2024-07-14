@@ -109,7 +109,7 @@ jobs:
         run: |
           set -eux
           cmake -B build \
-              -DLLAMA_NATIVE=OFF \
+              -DGGML_NATIVE=OFF \
               -DLLAMA_BUILD_SERVER=ON \
               -DLLAMA_CURL=ON \
               -DLLAMA_CUBLAS=ON \
@@ -119,7 +119,7 @@ jobs:
               -DLLAMA_FATAL_WARNINGS=OFF \
               -DLLAMA_ALL_WARNINGS=OFF \
               -DCMAKE_BUILD_TYPE=Release;
-          cmake --build build --config Release -j $(nproc) --target server
+          cmake --build build --config Release -j $(nproc) --target llama-server
 
       - name: Download the dataset
         id: download_dataset

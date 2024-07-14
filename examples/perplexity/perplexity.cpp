@@ -476,7 +476,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     }
 
     // Download: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-    // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Run `./llama-perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
@@ -1032,7 +1032,7 @@ struct winogrande_entry {
     std::vector<llama_token> seq_tokens[2];
 };
 
-static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string& prompt) {
+static std::vector<winogrande_entry> load_winogrande_from_csv(const std::string & prompt) {
     std::vector<winogrande_entry> result;
     std::istringstream in(prompt);
     std::string line;
@@ -1964,11 +1964,13 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
+    params.n_ctx = 512;
+    params.logits_all = true;
+
     if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
-
-    params.logits_all = true;
 
     const int32_t n_ctx = params.n_ctx;
 
@@ -1989,6 +1991,12 @@ int main(int argc, char ** argv) {
         params.n_batch = std::min(params.n_batch, n_kv);
     } else {
         params.n_batch = std::min(params.n_batch, params.n_ctx);
+        if (params.kl_divergence) {
+            params.n_parallel = 1;
+        } else {
+            // ensure there's at least enough seq_ids for HellaSwag
+            params.n_parallel = std::max(4, params.n_parallel);
+        }
     }
 
     if (params.ppl_stride > 0) {
@@ -2006,18 +2014,12 @@ int main(int argc, char ** argv) {
     fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
 
     std::mt19937 rng(params.seed);
-    if (params.random_prompt) {
-        params.prompt = string_random_prompt(rng);
-    }
 
     llama_backend_init();
     llama_numa_init(params.numa);
 
     llama_model * model;
     llama_context * ctx;
-
-    // ensure there's at least enough seq_ids for HellaSwag
-    params.n_parallel = std::max(4, params.n_parallel);
 
     // load the model and apply lora adapter, if any
     std::tie(model, ctx) = llama_init_from_gpt_params(params);
@@ -2027,6 +2029,7 @@ int main(int argc, char ** argv) {
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
+
     if (params.n_ctx > n_ctx_train) {
         fprintf(stderr, "%s: warning: model was trained on only %d context tokens (%d specified)\n",
                 __func__, n_ctx_train, params.n_ctx);

@@ -38,9 +38,9 @@ make -j
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p main %{buildroot}%{_bindir}/llama
-cp -p server %{buildroot}%{_bindir}/llamaserver
-cp -p simple %{buildroot}%{_bindir}/llamasimple
+cp -p llama-cli %{buildroot}%{_bindir}/llama-cli
+cp -p llama-server %{buildroot}%{_bindir}/llama-server
+cp -p llama-simple %{buildroot}%{_bindir}/llama-simple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system
 %{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llama.service
@@ -51,7 +51,7 @@ After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.t
 [Service]
 Type=simple
 EnvironmentFile=/etc/sysconfig/llama
-ExecStart=/usr/bin/llamaserver $LLAMA_ARGS
+ExecStart=/usr/bin/llama-server $LLAMA_ARGS
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=never
 
@@ -69,9 +69,9 @@ rm -rf %{buildroot}
 rm -rf %{_builddir}/*
 
 %files
-%{_bindir}/llama
-%{_bindir}/llamaserver
-%{_bindir}/llamasimple
+%{_bindir}/llama-cli
+%{_bindir}/llama-server
+%{_bindir}/llama-simple
 /usr/lib/systemd/system/llama.service
 %config /etc/sysconfig/llama
 
