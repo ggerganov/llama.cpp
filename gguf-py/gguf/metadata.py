@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import re
 import json
-import frontmatter
+import logging
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, Optional
 from dataclasses import dataclass
 
 from .constants import Keys
 
 import gguf
 
+logger = logging.getLogger("metadata")
 
 @dataclass
 class Metadata:
@@ -106,16 +107,21 @@ class Metadata:
 
     @staticmethod
     def load_model_card(model_path: Optional[Path] = None) -> dict[str, Any]:
-        if model_path is None or not model_path.exists():
+        if model_path is None or not model_path.is_dir():
             return {}
 
         model_card_path = model_path / "README.md"
 
-        if not model_card_path.exists():
+        if not model_card_path.is_file():
             return {}
 
-        with open(model_card_path, "r", encoding="utf-8") as f:
-            return frontmatter.load(f).to_dict()
+        try:
+            import frontmatter
+            with open(model_card_path, "r", encoding="utf-8") as f:
+                return frontmatter.load(f).to_dict()
+        except ModuleNotFoundError:
+            logger.warning("module 'frontmatter' not available. Metadata from README.md will NOT be read.")
+            return {}
 
     @staticmethod
     def load_hf_parameters(model_path: Optional[Path] = None) -> dict[str, Any]:
