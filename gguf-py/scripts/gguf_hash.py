@@ -27,7 +27,7 @@ UUID_NAMESPACE_LLAMA_CPP = uuid.UUID('ef001206-dadc-5f6d-a15f-3359e577d4e5')
 
 # For more information about what field.parts and field.data represent,
 # please see the comments in the modify_gguf.py example.
-def gguf_hash(reader: GGUFReader, filename: str, disable_progress_bar: bool, no_layer:bool) -> None:
+def gguf_hash(reader: GGUFReader, filename: str, disable_progress_bar: bool, no_layer: bool) -> None:
     sha1 = hashlib.sha1()
     sha256 = hashlib.sha256()
     uuidv5_sha1 = hashlib.sha1()
