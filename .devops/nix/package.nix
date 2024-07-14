@@ -90,6 +90,7 @@ let
       ps.tiktoken
       ps.torchWithoutCuda
       ps.transformers
+      ps.python-frontmatter
 
       # server bench
       ps.matplotlib
