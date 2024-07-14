@@ -1,5 +1,5 @@
 """
-gguf-template.py - example file to extract the chat template from the models metadata
+gguf_template.py - example file to extract the chat template from the models metadata
 """
 
 from __future__ import annotations
