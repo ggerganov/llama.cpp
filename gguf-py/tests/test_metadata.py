@@ -73,7 +73,6 @@ class TestMetadataMethod(unittest.TestCase):
         self.assertEqual(gguf.Metadata.get_model_id_components("crestf411/daybreak-kunoichi-2dpo-7b"),
                          ('daybreak-kunoichi-2dpo-7b', 'crestf411', None, None, None, None))
 
-
     def test_apply_metadata_heuristic_from_model_card(self):
         model_card = {
             'tags': ['Llama-3', 'instruct', 'finetune', 'chatml', 'DPO', 'RLHF', 'gpt4', 'synthetic data', 'distillation', 'function calling', 'json mode', 'axolotl'],
