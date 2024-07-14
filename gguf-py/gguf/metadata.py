@@ -13,6 +13,7 @@ import gguf
 
 logger = logging.getLogger("metadata")
 
+
 @dataclass
 class Metadata:
     # Authorship Metadata to be written to GGUF KV Store
