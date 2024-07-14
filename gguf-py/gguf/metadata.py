@@ -236,10 +236,6 @@ class Metadata:
                         base_model["repo_url"] = f"https://huggingface.co/{org_component}/{model_full_name_component}"
                     metadata.base_models.append(base_model)
 
-            if "quantized_by" in model_card and metadata.quantized_by is None:
-                # Not part of hugging face model card standard, but is used by TheBloke to credit them self for quantizing 3rd party models
-                metadata.quantized_by = model_card.get("quantized_by")
-
             if "license" in model_card and metadata.license is None:
                 metadata.license = model_card.get("license")
 
