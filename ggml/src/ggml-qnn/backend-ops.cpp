@@ -204,7 +204,7 @@ constexpr const char *kGgmlOpToQnnOp[] = {
     QNN_OP_ELEMENT_WISE_DIVIDE,      // GGML_OP_DIV
     nullptr,                         // GGML_OP_SQR
     QNN_OP_ELEMENT_WISE_SQUARE_ROOT, // GGML_OP_SQRT
-    nullptr,                         // GGML_OP_LOG
+    QNN_OP_ELEMENT_WISE_LOG,         // GGML_OP_LOG
     nullptr,                         // GGML_OP_SUM
     nullptr,                         // GGML_OP_SUM_ROWS
     nullptr,                         // GGML_OP_MEAN
@@ -344,7 +344,7 @@ qnn::ggml_qnn_unary_op_array_t qnn::ggml_qnn_unary_op_array() {
         nullptr,                         // GGML_OP_DIV
         nullptr,                         // GGML_OP_SQR
         qnn_unary_op_impl<GGML_OP_SQRT>, // GGML_OP_SQRT
-        nullptr,                         // GGML_OP_LOG
+        qnn_unary_op_impl<GGML_OP_LOG>,  // GGML_OP_LOG
         nullptr,                         // GGML_OP_SUM
         nullptr,                         // GGML_OP_SUM_ROWS
         nullptr,                         // GGML_OP_MEAN

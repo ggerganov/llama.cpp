@@ -347,7 +347,7 @@ static constexpr const ggml_op_unary_t kUnaryOps[] = {
     nullptr,                      // GGML_OP_DIV
     nullptr,                      // GGML_OP_SQR
     ggml_sqrt,                    // GGML_OP_SQRT
-    nullptr,                      // GGML_OP_LOG
+    ggml_log,                     // GGML_OP_LOG
     nullptr,                      // GGML_OP_SUM
     nullptr,                      // GGML_OP_SUM_ROWS
     nullptr,                      // GGML_OP_MEAN
@@ -546,6 +546,7 @@ static const std::unordered_map<std::string, int> kMapStringToGGMLOp = {
     DEFINE_OP(GGML_OP_DIV),
     DEFINE_OP(GGML_OP_SQRT),
     DEFINE_OP(GGML_OP_MUL_MAT),
+    DEFINE_OP(GGML_OP_LOG),
 };
 
 int main(int argc, char * argv[]) {
