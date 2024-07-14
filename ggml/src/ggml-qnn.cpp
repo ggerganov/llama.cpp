@@ -142,7 +142,7 @@ struct ggml_backend_qnn_buffer_type_context {
 // =================================================================================================
 static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct ggml_tensor *tensor,
                                    bool b_dump_tensor_info) {
-    if (ggml_is_empty(tensor) || 
+    if (ggml_is_empty(tensor) ||
         (!qnn::ggml_qnn_unary_op_array()[tensor->op] && !qnn::ggml_qnn_binary_op_array()[tensor->op])) {
         return false;
     }
@@ -569,9 +569,7 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char *qnn_lib_path) {
     return qnn_backend;
 }
 
-extern "C" GGML_CALL int ggml_backend_qnn_reg_devices(void);
-
-GGML_CALL int ggml_backend_qnn_reg_devices() {
+int ggml_backend_qnn_reg_devices() {
     for (size_t idx = 0; idx < GGML_QNN_MAX_DEVICES; idx++) {
         char name[GGML_MAX_NAME];
         ggml_backend_qnn_get_device_description(idx, name, GGML_MAX_NAME);
