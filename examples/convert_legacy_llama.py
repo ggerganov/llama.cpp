@@ -1042,7 +1042,7 @@ def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileT
     raise ValueError(f"Unexpected combination of types: {name_to_type}")
 
 
-def per_model_weight_count_estimation(tensors: Iterable[str, LazyTensor], expert_count:int | None) -> int:
+def per_model_weight_count_estimation(tensors: Iterable[tuple[str, LazyTensor]], expert_count:int | None) -> int:
     # TODO: Ensure parameter count is accurate throughout various model type
     sum_weight_estimate: int = 0
     for name, lazy_tensor in tensors:
