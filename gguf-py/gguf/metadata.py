@@ -99,7 +99,7 @@ class Metadata:
 
     @staticmethod
     def load_metadata_override(metadata_override_path: Optional[Path] = None) -> dict[str, Any]:
-        if metadata_override_path is None or not metadata_override_path.exists():
+        if metadata_override_path is None or not metadata_override_path.is_file():
             return {}
 
         with open(metadata_override_path, "r", encoding="utf-8") as f:
@@ -125,12 +125,12 @@ class Metadata:
 
     @staticmethod
     def load_hf_parameters(model_path: Optional[Path] = None) -> dict[str, Any]:
-        if model_path is None or not model_path.exists():
+        if model_path is None or not model_path.is_dir():
             return {}
 
         config_path = model_path / "config.json"
 
-        if not config_path.exists():
+        if not config_path.is_file():
             return {}
 
         with open(config_path, "r", encoding="utf-8") as f:
