@@ -170,18 +170,28 @@ class Metadata:
 
         # Regular expression to extract model name components
         # Heuristic to match against cases such as 'Mixtral-8x7B-Instruct-v0.1' or 'Codestral-22B-v0.1'
-        regex_match = re.compile(r'^(?P<basename>[A-Za-z0-9\s]*(?:(?:-(?:(?:[A-Za-z\s][A-Za-z0-9\s]*)|(?:[0-9\s]*)))*))'
-                                 r'(?:-(?P<size_label>(?:\d+x)?\d+[A-Za-z]+)(?:-(?P<finetune>[A-Za-z0-9\s-]+))?)?'
-                                 r'(?:-(?P<version>v\d+(?:\.\d+)*))?$').match(model_full_name_component)
+        regex_match = re.compile(r'^'
+                                 r'(?P<basename>[A-Za-z0-9\s]*(?:(?:-(?:(?:[A-Za-z\s][A-Za-z0-9\s]*)|(?:[0-9\s]*)))*))'
+                                 r'(?:-(?P<size_label>(?:\d+x)?\d+[A-Za-z](?:-[A-Za-z]+(?:\d+x)?\d+[A-Za-z]+)?)(?:-(?P<finetune>[A-Za-z0-9\s-]+))?)?'
+                                 r'(?:-(?P<version>v\d+(?:\.\d+)*))?'
+                                 r'$').match(model_full_name_component)
 
         if not regex_match:
             return model_full_name_component, org_component, None, None, None, None
 
         components = regex_match.groupdict()
         basename = components.get("basename")
+        size_label = components.get("size_label")
         finetune = components.get("finetune")
         version = components.get("version")
-        size_label = components.get("size_label")
+
+        # Base name required at a minimum
+        if basename is None:
+            return model_full_name_component, None, None, None, None, None
+
+        # Need to capture at least one component that is not basename
+        if size_label is None and version is None and finetune is None:
+            return model_full_name_component, None, None, None, None, None
 
         return model_full_name_component, org_component, basename, finetune, version, size_label
 
