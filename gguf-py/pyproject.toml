@@ -25,6 +25,7 @@ tqdm = ">=4.27"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
+jinja2 = ">=3.1.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
