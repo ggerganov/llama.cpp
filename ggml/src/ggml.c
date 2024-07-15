@@ -1041,7 +1041,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_q4_0_b16,
         .from_float               = quantize_row_q4_0_b16,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q4_0_b16_ref,
+        .from_float_ref           = (ggml_from_float_t) quantize_row_q4_0_b16_ref,
         .vec_dot                  = ggml_vec_dot_q4_0_b16_q8_0_b16,
         .vec_dot_type             = GGML_TYPE_Q8_0_B16,
         .nrows                    = 1,
@@ -1053,7 +1053,7 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .is_quantized             = true,
         .to_float                 = (ggml_to_float_t) dequantize_row_q8_0_b16,
         .from_float               = quantize_row_q8_0_b16,
-        .from_float_reference     = (ggml_from_float_t) quantize_row_q8_0_b16_ref,
+        .from_float_ref           = (ggml_from_float_t) quantize_row_q8_0_b16_ref,
         .vec_dot                  = ggml_vec_dot_q8_0_b16_q8_0_b16,
         .vec_dot_type             = GGML_TYPE_Q8_0_B16,
         .nrows                    = 1,
@@ -3334,15 +3334,16 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
     enum ggml_type wtype = GGML_TYPE_COUNT;
 
     switch (ftype) {
-<<<<<<< HEAD
         case GGML_FTYPE_ALL_F32:              wtype = GGML_TYPE_F32;   break;
         case GGML_FTYPE_MOSTLY_F16:           wtype = GGML_TYPE_F16;   break;
         case GGML_FTYPE_MOSTLY_BF16:          wtype = GGML_TYPE_BF16;  break;
         case GGML_FTYPE_MOSTLY_Q4_0:          wtype = GGML_TYPE_Q4_0;  break;
+        case GGML_FTYPE_MOSTLY_Q4_0_B16:      wtype = GGML_TYPE_Q4_0_B16;  break;
         case GGML_FTYPE_MOSTLY_Q4_1:          wtype = GGML_TYPE_Q4_1;  break;
         case GGML_FTYPE_MOSTLY_Q5_0:          wtype = GGML_TYPE_Q5_0;  break;
         case GGML_FTYPE_MOSTLY_Q5_1:          wtype = GGML_TYPE_Q5_1;  break;
         case GGML_FTYPE_MOSTLY_Q8_0:          wtype = GGML_TYPE_Q8_0;  break;
+        case GGML_FTYPE_MOSTLY_Q8_0_B16:      wtype = GGML_TYPE_Q8_0_B16;  break;
         case GGML_FTYPE_MOSTLY_Q2_K:          wtype = GGML_TYPE_Q2_K;  break;
         case GGML_FTYPE_MOSTLY_Q3_K:          wtype = GGML_TYPE_Q3_K;  break;
         case GGML_FTYPE_MOSTLY_Q4_K:          wtype = GGML_TYPE_Q4_K;  break;
@@ -3362,34 +3363,6 @@ enum ggml_type ggml_ftype_to_ggml_type(enum ggml_ftype ftype) {
         case GGML_FTYPE_MOSTLY_Q4_0_8_8:      wtype = GGML_TYPE_Q4_0_8_8; break;
         case GGML_FTYPE_UNKNOWN:              wtype = GGML_TYPE_COUNT; break;
         case GGML_FTYPE_MOSTLY_Q4_1_SOME_F16: wtype = GGML_TYPE_COUNT; break;
-=======
-        case GGML_FTYPE_ALL_F32:              wtype = GGML_TYPE_F32;       break;
-        case GGML_FTYPE_MOSTLY_F16:           wtype = GGML_TYPE_F16;       break;
-        case GGML_FTYPE_MOSTLY_BF16:          wtype = GGML_TYPE_BF16;      break;
-        case GGML_FTYPE_MOSTLY_Q4_0:          wtype = GGML_TYPE_Q4_0;      break;
-        case GGML_FTYPE_MOSTLY_Q4_0_B16:      wtype = GGML_TYPE_Q4_0_B16;  break;
-        case GGML_FTYPE_MOSTLY_Q4_1:          wtype = GGML_TYPE_Q4_1;      break;
-        case GGML_FTYPE_MOSTLY_Q5_0:          wtype = GGML_TYPE_Q5_0;      break;
-        case GGML_FTYPE_MOSTLY_Q5_1:          wtype = GGML_TYPE_Q5_1;      break;
-        case GGML_FTYPE_MOSTLY_Q8_0:          wtype = GGML_TYPE_Q8_0;      break;
-        case GGML_FTYPE_MOSTLY_Q8_0_B16:      wtype = GGML_TYPE_Q8_0_B16;  break;
-        case GGML_FTYPE_MOSTLY_Q2_K:          wtype = GGML_TYPE_Q2_K;      break;
-        case GGML_FTYPE_MOSTLY_Q3_K:          wtype = GGML_TYPE_Q3_K;      break;
-        case GGML_FTYPE_MOSTLY_Q4_K:          wtype = GGML_TYPE_Q4_K;      break;
-        case GGML_FTYPE_MOSTLY_Q5_K:          wtype = GGML_TYPE_Q5_K;      break;
-        case GGML_FTYPE_MOSTLY_Q6_K:          wtype = GGML_TYPE_Q6_K;      break;
-        case GGML_FTYPE_MOSTLY_IQ2_XXS:       wtype = GGML_TYPE_IQ2_XXS;   break;
-        case GGML_FTYPE_MOSTLY_IQ2_XS:        wtype = GGML_TYPE_IQ2_XS;    break;
-        case GGML_FTYPE_MOSTLY_IQ3_XXS:       wtype = GGML_TYPE_IQ3_XXS;   break;
-        case GGML_FTYPE_MOSTLY_IQ1_S:         wtype = GGML_TYPE_IQ1_S;     break;
-        case GGML_FTYPE_MOSTLY_IQ1_M:         wtype = GGML_TYPE_IQ1_M;     break;
-        case GGML_FTYPE_MOSTLY_IQ4_NL:        wtype = GGML_TYPE_IQ4_NL;    break;
-        case GGML_FTYPE_MOSTLY_IQ4_XS:        wtype = GGML_TYPE_IQ4_XS;    break;
-        case GGML_FTYPE_MOSTLY_IQ3_S:         wtype = GGML_TYPE_IQ3_S;     break;
-        case GGML_FTYPE_MOSTLY_IQ2_S:         wtype = GGML_TYPE_IQ2_S;     break;
-        case GGML_FTYPE_UNKNOWN:              wtype = GGML_TYPE_COUNT;     break;
-        case GGML_FTYPE_MOSTLY_Q4_1_SOME_F16: wtype = GGML_TYPE_COUNT;     break;
->>>>>>> ed837022 (Introduce Q4_0 and Q8_0 quantizations with BF16 delta values)
     }
 
     GGML_ASSERT(wtype != GGML_TYPE_COUNT);
