@@ -513,32 +513,11 @@ extern "C" {
             const char * fname_out,
             const llama_model_quantize_params * params);
 
-    // Apply a loaded control vector to a llama_context, or if data is NULL, clear
-    // the currently loaded vector.
-    // n_embd should be the size of a single layer's control, and data should point
-    // to an n_embd x n_layers buffer starting from layer 1.
-    // il_start and il_end are the layer range the vector should apply to (both inclusive)
-    // See llama_control_vector_load in common to load a control vector.
-    LLAMA_API int32_t llama_control_vector_apply(
-            struct llama_context * lctx,
-                     const float * data,
-                          size_t   len,
-                         int32_t   n_embd,
-                         int32_t   il_start,
-                         int32_t   il_end);
-
-    //
-    // LoRA
-    //
-
     // Load a LoRA adapter from file
     // The loaded adapter will be associated to the given model, and will be free when the model is deleted
     LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
             struct llama_model * model,
             const char * path_lora);
-
-    // Get default scale of an adapter
-    LLAMA_API float llama_lora_adapter_get_default_scale(struct llama_lora_adapter * adapter);
 
     // Add a loaded LoRA adapter to given context
     // This will not modify model's weight
@@ -556,6 +535,20 @@ extern "C" {
     // Manually free a LoRA adapter
     // Note: loaded adapters will be free when the associated model is deleted
     LLAMA_API void llama_lora_adapter_free(struct llama_lora_adapter * adapter);
+
+    // Apply a loaded control vector to a llama_context, or if data is NULL, clear
+    // the currently loaded vector.
+    // n_embd should be the size of a single layer's control, and data should point
+    // to an n_embd x n_layers buffer starting from layer 1.
+    // il_start and il_end are the layer range the vector should apply to (both inclusive)
+    // See llama_control_vector_load in common to load a control vector.
+    LLAMA_API int32_t llama_control_vector_apply(
+            struct llama_context * lctx,
+                     const float * data,
+                          size_t   len,
+                         int32_t   n_embd,
+                         int32_t   il_start,
+                         int32_t   il_end);
 
     //
     // KV cache

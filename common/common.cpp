@@ -684,7 +684,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--lora") {
         CHECK_ARG
-        params.lora_adapter.emplace_back(argv[i], 0.0f);
+        params.lora_adapter.emplace_back(argv[i], 1.0f);
         return true;
     }
     if (arg == "--lora-scaled") {
@@ -2088,9 +2088,6 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
             llama_free(lctx);
             llama_free_model(model);
             return std::make_tuple(nullptr, nullptr);
-        }
-        if (lora_scale == 0.0f) {
-            lora_scale = llama_lora_adapter_get_default_scale(adapter);
         }
         llama_lora_adapter_set(lctx, adapter, lora_scale);
     }
