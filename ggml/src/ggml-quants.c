@@ -15279,7 +15279,6 @@ static bool validate_bf16(ggml_half f, size_t i) {
         } \
     }
 
-<<<<<<< HEAD
 #define VALIDATE_ROW_DATA_DVEC_F16_IMPL(type, data, nb, nr) \
     const type * q = (const type *) (data); \
     for (size_t i = 0; i < (nb); ++i) { \
@@ -15287,13 +15286,14 @@ static bool validate_bf16(ggml_half f, size_t i) {
             if (!validate_fp16(q[i].d[j], i)) { \
                 return false; \
             } \
-=======
+        } \
+    }
+
 #define VALIDATE_ROW_DATA_D_B16_IMPL(type, data, nb) \
     const type * q = (const type *) (data); \
     for (size_t i = 0; i < (nb); ++i) { \
         if (!validate_bf16((q[i].d), i)) { \
             return false; \
->>>>>>> ed837022 (Introduce Q4_0 and Q8_0 quantizations with BF16 delta values)
         } \
     }
 
