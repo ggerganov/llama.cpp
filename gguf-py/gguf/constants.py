@@ -129,9 +129,11 @@ class Keys:
 # recommended mapping of model tensor names for storage in gguf
 #
 
+
 class GGUFType:
     MODEL   = "model"
     ADAPTER = "adapter"
+
 
 class MODEL_ARCH(IntEnum):
     LLAMA        = auto()
