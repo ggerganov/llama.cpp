@@ -5477,6 +5477,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "command-r") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_COMMAND_R;
+                vocab.tokenizer_clean_spaces = false;
             } else if (
                 tokenizer_pre == "qwen2") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_QWEN2;
@@ -5710,7 +5711,7 @@ static void llm_load_vocab(
     // build special tokens cache
     {
         for (llama_vocab::id id = 0; id < (llama_vocab::id)n_vocab; ++id) {
-            if (!(vocab.id_to_token[id].attr & LLAMA_TOKEN_ATTR_NORMAL)) {
+            if (vocab.id_to_token[id].attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_USER_DEFINED | LLAMA_TOKEN_ATTR_UNKNOWN)) {
                 vocab.cache_special_tokens.push_back(id);
             }
         }
@@ -5940,13 +5941,6 @@ static bool llm_load_tensors(
     model.t_start_us = ggml_time_us();
 
     auto & hparams = model.hparams;
-
-#ifdef GGML_USE_SYCL
-    // disable MoE with SYCL until mul_mat_id is updated
-    if (hparams.n_expert > 0) {
-        n_gpu_layers = 0;
-    }
-#endif
 
     model.split_mode   = split_mode;
     model.main_gpu     = main_gpu;
@@ -8247,7 +8241,7 @@ static struct ggml_tensor * llm_build_kqv(
         struct ggml_tensor * kq = ggml_mul_mat(ctx, k, q);
         cb(kq, "kq", il);
 
-        if (model.arch == LLM_ARCH_PHI2 || model.arch == LLM_ARCH_PHI3 || model.arch == LLM_ARCH_GPTNEOX) {
+        if (model.arch == LLM_ARCH_PHI2 || model.arch == LLM_ARCH_PHI3 || model.arch == LLM_ARCH_GPTNEOX || model.arch == LLM_ARCH_QWEN2) {
             // for this arch, we need to perform the KQ multiplication with F32 precision, otherwise we get NaNs
             // ref: https://github.com/ggerganov/llama.cpp/pull/4490#issuecomment-1859055847
             ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
@@ -11800,7 +11794,12 @@ struct llm_build_context {
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Qcur, "Qcur", il);
 
-                Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd / n_head)));
+                // ref: https://github.com/google/gemma_pytorch/commit/03e657582d17cb5a8617ebf333c1c16f3694670e
+                switch (model.type) {
+                    case e_model::MODEL_9B:  Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd_head_k)));   break;
+                    case e_model::MODEL_27B: Qcur = ggml_scale(ctx0, Qcur, 1.0f / sqrtf(float(n_embd / n_head))); break;
+                    default: GGML_ASSERT(false);
+                };
                 cb(Qcur, "Qcur_scaled", il);
 
                 Kcur = ggml_rope_ext(
@@ -15532,17 +15531,6 @@ struct llm_tokenizer_bpe {
                     "[0-9][0-9][0-9]",
                 };
                 break;
-            case LLAMA_VOCAB_PRE_TYPE_MPT:
-                // TODO: MPT pre-tokenization regexes are unknown
-                //       the following are close, but not exact. run the following:
-                //       ./bin/test-tokenizer-0 ../models/ggml-vocab-mpt.gguf
-                GGML_ASSERT("MPT pre-tokenization regexes are unknown - fixes needed");
-                regex_exprs = {
-                    "\\s?\\p{L}+",
-                    "\\s?\\p{P}+",
-                    "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
-                };
-                break;
             case LLAMA_VOCAB_PRE_TYPE_STARCODER:
             case LLAMA_VOCAB_PRE_TYPE_REFACT:
             case LLAMA_VOCAB_PRE_TYPE_COMMAND_R:
@@ -15552,6 +15540,7 @@ struct llm_tokenizer_bpe {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_GPT2:
+            case LLAMA_VOCAB_PRE_TYPE_MPT:
             case LLAMA_VOCAB_PRE_TYPE_OLMO:
             case LLAMA_VOCAB_PRE_TYPE_JAIS:
                 regex_exprs = {
@@ -15578,8 +15567,8 @@ struct llm_tokenizer_bpe {
                 break;
             case LLAMA_VOCAB_PRE_TYPE_VIKING:
                 regex_exprs = {
-                    "\\p{N}",
                     " ?[^(\\s|.,!?…。，、।۔،)]+",
+                    "\\p{N}",
                 };
                 break;
             default:
@@ -16299,11 +16288,19 @@ struct fragment_buffer_variant {
 
 // #define PRETOKENIZERDEBUG
 
-static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer) {
+static void tokenizer_st_partition(const llama_vocab & vocab, std::forward_list<fragment_buffer_variant> & buffer, bool parse_special) {
     // for each special token
     for (const llama_vocab::id special_id : vocab.cache_special_tokens) {
         const auto & data = vocab.id_to_token[special_id];
         const auto & special_token = data.text;
+
+        if (!parse_special && (data.attr & (LLAMA_TOKEN_ATTR_CONTROL | LLAMA_TOKEN_ATTR_UNKNOWN))) {
+            // Ignore control and unknown tokens when parse_special == false
+            continue;
+            // User-defined tokens are still pre-tokenized before everything else
+            // ref: https://github.com/huggingface/tokenizers/blob/fdd26ba9a3f0c133427aab0423888cbde91362d7/tokenizers/src/tokenizer/mod.rs#L726
+            // This is mostly relevant for neox-style tokenizers (mpt, olmo, stablelm, etc.)
+        }
 
         // for each text fragment
         std::forward_list<fragment_buffer_variant>::iterator it = buffer.begin();
@@ -16417,7 +16414,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 
     if (!raw_text.empty()) {
         fragment_buffer.emplace_front(raw_text, 0, raw_text.length());
-        if (parse_special) tokenizer_st_partition(vocab, fragment_buffer);
+        tokenizer_st_partition(vocab, fragment_buffer, parse_special);
     }
 
     switch (vocab.type) {
@@ -21188,7 +21185,7 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
             size--;
         }
         if (length < (int32_t)size) {
-            return (int32_t) -size;
+            return -(int32_t) size;
         }
         memcpy(buf, token, size);
         return (int32_t) size;
