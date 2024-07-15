@@ -8079,8 +8079,8 @@ static struct ggml_tensor * llm_build_ffn(
 }
 
 static struct ggml_tensor * llm_build_moe_ffn(
-       struct llama_context & lctx,
         struct ggml_context * ctx,
+       struct llama_context & lctx,
          struct ggml_tensor * cur,
          struct ggml_tensor * gate_inp,
          struct ggml_tensor * up_exps,
@@ -8180,11 +8180,8 @@ static struct ggml_tensor * llm_build_moe_ffn(
 }
 
 static struct ggml_tensor * llm_build_kqv(
-       struct llama_context & lctx,
         struct ggml_context * ctx,
-          const llama_model & model,
-        const llama_hparams & hparams,
-        const llama_cparams & cparams,
+       struct llama_context & lctx,
        const llama_kv_cache & kv,
          struct ggml_cgraph * graph,
          struct ggml_tensor * wo,
@@ -8196,6 +8193,10 @@ static struct ggml_tensor * llm_build_kqv(
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
+    const llama_model   & model   = lctx.model;
+    const llama_hparams & hparams = lctx.model.hparams;
+    const llama_cparams & cparams = lctx.cparams;
+
     const int64_t n_ctx         = cparams.n_ctx;
     const int64_t n_head        = hparams.n_head(il);
     const int64_t n_head_kv     = hparams.n_head_kv(il);
@@ -8309,11 +8310,8 @@ static struct ggml_tensor * llm_build_kqv(
 }
 
 static struct ggml_tensor * llm_build_kv(
-       struct llama_context & lctx,
         struct ggml_context * ctx,
-          const llama_model & model,
-        const llama_hparams & hparams,
-        const llama_cparams & cparams,
+       struct llama_context & lctx,
        const llama_kv_cache & kv,
          struct ggml_cgraph * graph,
          struct ggml_tensor * wo,
@@ -8328,6 +8326,8 @@ static struct ggml_tensor * llm_build_kv(
                     float     kq_scale,
          const llm_build_cb & cb,
                     int       il) {
+    const llama_hparams & hparams = lctx.model.hparams;
+    const llama_cparams & cparams = lctx.cparams;
 
     // these nodes are added to the graph together so that they are not reordered
     // by doing so, the number of splits in the graph is reduced
@@ -8339,7 +8339,7 @@ static struct ggml_tensor * llm_build_kv(
 
     struct ggml_tensor * cur;
 
-    cur  = llm_build_kqv(lctx, ctx, model, hparams, cparams, kv, graph, wo, wo_b,
+    cur  = llm_build_kqv(ctx, lctx, kv, graph, wo, wo_b,
             q_cur, kq_mask, n_tokens, n_kv, kq_scale, cb, il);
     cb(cur, "kqv_out", il);
 
@@ -8836,7 +8836,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -8873,7 +8873,7 @@ struct llm_build_context {
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
 
-                cur = llm_build_moe_ffn(lctx, ctx0, cur,
+                cur = llm_build_moe_ffn(ctx0, lctx, cur,
                         model.layers[il].ffn_gate_inp,
                         model.layers[il].ffn_up_exps,
                         model.layers[il].ffn_gate_exps,
@@ -8971,7 +8971,7 @@ struct llm_build_context {
                 cb(Qcur, "Qcur", il);
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -9076,7 +9076,7 @@ struct llm_build_context {
                     ext_factor, attn_factor, beta_fast, beta_slow
                 );
                 cb(Kcur, "Kcur", il);
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -9197,7 +9197,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -9321,7 +9321,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
@@ -9353,7 +9353,7 @@ struct llm_build_context {
                     LLM_NORM_RMS, cb, il);
             cb(cur, "ffn_norm", il);
 
-            cur = llm_build_moe_ffn(lctx, ctx0, cur,
+            cur = llm_build_moe_ffn(ctx0, lctx, cur,
                     model.layers[il].ffn_gate_inp,
                     model.layers[il].ffn_up_exps,
                     model.layers[il].ffn_gate_exps,
@@ -9471,7 +9471,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -9494,7 +9494,7 @@ struct llm_build_context {
                                  LLM_NORM, cb, il);
             cb(cur, "attn_out_norm", il);
 
-            cur = llm_build_moe_ffn(lctx, ctx0, cur,
+            cur = llm_build_moe_ffn(ctx0, lctx, cur,
                     model.layers[il].ffn_gate_inp,
                     model.layers[il].ffn_up_exps,
                     model.layers[il].ffn_gate_exps,
@@ -9581,7 +9581,7 @@ struct llm_build_context {
 
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -9675,7 +9675,7 @@ struct llm_build_context {
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
                 cb(Qcur, "Qcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -9970,7 +9970,7 @@ struct llm_build_context {
 
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -10102,13 +10102,13 @@ struct llm_build_context {
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head,    n_tokens);
                     Kcur = ggml_reshape_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens);
 
-                    cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                    cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                             model.layers[il].wo, model.layers[il].bo,
                             Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 } else {
                     Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
-                    cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                    cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                             model.layers[il].wo, model.layers[il].bo,
                             Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
                 }
@@ -10253,7 +10253,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -10372,7 +10372,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -10486,7 +10486,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -10601,7 +10601,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -10624,7 +10624,7 @@ struct llm_build_context {
             cb(cur, "ffn_norm", il);
 
             ggml_tensor * moe_out =
-                    llm_build_moe_ffn(lctx, ctx0, cur,
+                    llm_build_moe_ffn(ctx0, lctx, cur,
                         model.layers[il].ffn_gate_inp,
                         model.layers[il].ffn_up_exps,
                         model.layers[il].ffn_gate_exps,
@@ -10758,7 +10758,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
@@ -10878,7 +10878,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
@@ -10986,7 +10986,7 @@ struct llm_build_context {
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -11088,7 +11088,7 @@ struct llm_build_context {
 
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -11199,7 +11199,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -11319,7 +11319,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -11437,7 +11437,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -11568,7 +11568,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -11690,7 +11690,7 @@ struct llm_build_context {
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
@@ -11808,7 +11808,7 @@ struct llm_build_context {
                         ext_factor, attn_factor, beta_fast, beta_slow);
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask_l, n_tokens, kv_head, n_kv, 1.0f, cb, il);
             }
@@ -11945,7 +11945,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -12238,7 +12238,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -12370,7 +12370,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, nullptr,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -12497,7 +12497,7 @@ struct llm_build_context {
                 Vcur = ggml_reshape_2d(ctx0, Vcur, n_embd_head * n_head_kv, n_tokens);
                 cb(Qcur, "Vcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -12606,7 +12606,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -12749,7 +12749,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
             }
@@ -12788,7 +12788,7 @@ struct llm_build_context {
                     LLM_NORM_RMS, cb, il);
             cb(cur, "ffn_norm_exps", il);
 
-            cur = llm_build_moe_ffn(lctx, ctx0, cur,
+            cur = llm_build_moe_ffn(ctx0, lctx, cur,
                     model.layers[il].ffn_gate_inp,
                     model.layers[il].ffn_up_exps,
                     model.layers[il].ffn_gate_exps,
@@ -12971,7 +12971,7 @@ struct llm_build_context {
                 struct ggml_tensor * k_states = ggml_concat(ctx0, k_nope, ggml_repeat(ctx0, k_pe, q_pe), 0);
                 cb(k_states, "k_states", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         k_states, v_states, q_states, KQ_mask, n_tokens, kv_head, n_kv, kq_scale, cb, il);
             }
@@ -13008,7 +13008,7 @@ struct llm_build_context {
                 cb(cur, "ffn_norm", il);
 
                 ggml_tensor * moe_out =
-                        llm_build_moe_ffn(lctx, ctx0, cur,
+                        llm_build_moe_ffn(ctx0, lctx, cur,
                             model.layers[il].ffn_gate_inp,
                             model.layers[il].ffn_up_exps,
                             model.layers[il].ffn_gate_exps,
@@ -13126,7 +13126,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         NULL, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
@@ -13555,7 +13555,7 @@ struct llm_build_context {
 
                 Qcur = ggml_reshape_3d(ctx0, Qcur, n_embd_head, n_head, n_tokens);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, model.layers[il].bo,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/float(n_embd_head), cb, il);
             }
@@ -13668,7 +13668,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur_rope", il);
 
-                cur = llm_build_kv(lctx, ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, NULL,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
@@ -18578,7 +18578,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 }
 
 static void llama_lora_adapter_init_internal(struct llama_model * model, const char * path_lora, struct llama_lora_adapter & adapter) {
-    LLAMA_LOG_INFO("%s: applying lora adapter from '%s' ...\n", __func__, path_lora);
+    LLAMA_LOG_INFO("%s: loading lora adapter from '%s' ...\n", __func__, path_lora);
 
     ggml_context * ctx = nullptr;
     struct gguf_init_params meta_gguf_params = {
