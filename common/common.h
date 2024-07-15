@@ -99,6 +99,7 @@ struct gpt_params {
     enum llama_split_mode        split_mode        = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
+    enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
     // // sampling parameters
     struct llama_sampling_params sparams;
@@ -107,6 +108,7 @@ struct gpt_params {
     std::string model_draft          = ""; // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = ""; // model url to download
+    std::string hf_token             = ""; // HF token
     std::string hf_repo              = ""; // HF repo
     std::string hf_file              = ""; // HF file
     std::string prompt               = "";
@@ -200,6 +202,7 @@ struct gpt_params {
     std::string public_path   = "";
     std::string chat_template = "";
     std::string system_prompt = "";
+    bool enable_chat_template = true;
 
     std::vector<std::string> api_keys;
 
@@ -250,8 +253,11 @@ struct gpt_params {
     std::string cvector_outfile       = "control_vector.gguf";
     std::string cvector_positive_file = "examples/cvector-generator/positive.txt";
     std::string cvector_negative_file = "examples/cvector-generator/negative.txt";
+
+    bool spm_infill = false; // suffix/prefix/middle pattern for infill
 };
 
+void gpt_params_handle_hf_token(gpt_params & params);
 void gpt_params_handle_model_default(gpt_params & params);
 
 bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
@@ -307,8 +313,8 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
-struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const struct llama_model_params & params);
-struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
 
 // Batch utils
 
@@ -346,21 +352,13 @@ std::string llama_token_to_piece(
                        llama_token   token,
                        bool          special = true);
 
-// TODO: these should be moved in llama.h C-style API under single `llama_detokenize` function
-//       that takes into account the tokenizer type and decides how to handle the leading space
-//
 // detokenizes a vector of tokens into a string
 // should work similar to Python's `tokenizer.decode`
-// removes the leading space from the first non-BOS token
-std::string llama_detokenize_spm(
+// optionally renders special/control tokens
+std::string llama_detokenize(
                          llama_context * ctx,
-        const std::vector<llama_token> & tokens);
-
-// detokenizes a vector of tokens into a string
-// should work similar to Python's `tokenizer.decode`
-std::string llama_detokenize_bpe(
-                         llama_context * ctx,
-        const std::vector<llama_token> & tokens);
+        const std::vector<llama_token> & tokens,
+                                  bool   special = true);
 
 // Uses the value from the model metadata if possible, otherwise
 // defaults to true when model type is SPM, otherwise false.
@@ -380,6 +378,8 @@ struct llama_chat_msg {
 bool llama_chat_verify_template(const std::string & tmpl);
 
 // CPP wrapper for llama_chat_apply_template
+// If the built-in template is not supported, we default to chatml
+// If the custom "tmpl" is not supported, we throw an error
 std::string llama_chat_apply_template(const struct llama_model * model,
         const std::string & tmpl,
         const std::vector<llama_chat_msg> & chat,
@@ -454,4 +454,3 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
 void yaml_dump_non_result_info(
     FILE * stream, const gpt_params & params, const llama_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
-

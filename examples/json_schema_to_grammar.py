@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import argparse
 import itertools
 import json
 import re
 import sys
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
-
+from typing import Any, List, Optional, Set, Tuple, Union
 
 def _build_repetition(item_rule, min_items, max_items, separator_rule=None):
 
@@ -189,7 +190,7 @@ def _generate_min_max_int(min_value: Optional[int], max_value: Optional[int], ou
     raise RuntimeError("At least one of min_value or max_value must be set")
 
 class BuiltinRule:
-    def __init__(self, content: str, deps: list = None):
+    def __init__(self, content: str, deps: list | None = None):
         self.content = content
         self.deps = deps or []
 
@@ -232,7 +233,7 @@ GRAMMAR_RANGE_LITERAL_ESCAPE_RE = re.compile(r'[\r\n"\]\-\\]')
 GRAMMAR_LITERAL_ESCAPES = {'\r': '\\r', '\n': '\\n', '"': '\\"', '-': '\\-', ']': '\\]'}
 
 NON_LITERAL_SET = set('|.()[]{}*+?')
-ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('[]()|{}*+?')
+ESCAPED_IN_REGEXPS_BUT_NOT_IN_LITERALS = set('^$.[]()|{}*+?')
 
 
 class SchemaConverter:
@@ -249,7 +250,7 @@ class SchemaConverter:
 
     def _format_literal(self, literal):
         escaped = GRAMMAR_LITERAL_ESCAPE_RE.sub(
-            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)), literal
+            lambda m: GRAMMAR_LITERAL_ESCAPES.get(m.group(0)) or m.group(0), literal
         )
         return f'"{escaped}"'
 
@@ -275,6 +276,51 @@ class SchemaConverter:
                 yield ')?'
 
         return ''.join(('(', *recurse(0), ')'))
+
+    def _not_strings(self, strings):
+        class TrieNode:
+            def __init__(self):
+                self.children = {}
+                self.is_end_of_string = False
+
+            def insert(self, string):
+                node = self
+                for c in string:
+                    node = node.children.setdefault(c, TrieNode())
+                node.is_end_of_string = True
+
+        trie = TrieNode()
+        for s in strings:
+            trie.insert(s)
+
+        char_rule = self._add_primitive('char', PRIMITIVE_RULES['char'])
+        out = ['["] ( ']
+
+        def visit(node):
+            rejects = []
+            first = True
+            for c in sorted(node.children.keys()):
+                child = node.children[c]
+                rejects.append(c)
+                if first:
+                    first = False
+                else:
+                    out.append(' | ')
+                out.append(f'[{c}]')
+                if child.children:
+                    out.append(f' (')
+                    visit(child)
+                    out.append(')')
+                elif child.is_end_of_string:
+                    out.append(f' {char_rule}+')
+            if node.children:
+                if not first:
+                    out.append(' | ')
+                out.append(f'[^"{"".join(rejects)}] {char_rule}*')
+        visit(trie)
+
+        out.append(f' ){"" if trie.is_end_of_string else "?"} ["] space')
+        return ''.join(out)
 
     def _add_rule(self, name, rule):
         esc_name = INVALID_RULE_CHARS_RE.sub('-', name)
@@ -359,11 +405,11 @@ class SchemaConverter:
         i = 0
         length = len(pattern)
 
-        def to_rule(s: Tuple[str, bool]) -> str:
+        def to_rule(s: tuple[str, bool]) -> str:
             (txt, is_literal) = s
             return "\"" + txt + "\"" if is_literal else txt
 
-        def transform() -> Tuple[str, bool]:
+        def transform() -> tuple[str, bool]:
             '''
                 Parse a unit at index i (advancing it), and return its string representation + whether it's a literal.
             '''
@@ -376,7 +422,7 @@ class SchemaConverter:
             # We only need a flat structure here to apply repetition operators to the last item, and
             # to merge literals at the and (we're parsing grouped ( sequences ) recursively and don't treat '|' specially
             # (GBNF's syntax is luckily very close to regular expressions!)
-            seq: list[Tuple[str, bool]] = []
+            seq: list[tuple[str, bool]] = []
 
             def get_dot():
                 if self._dotall:
@@ -521,13 +567,13 @@ class SchemaConverter:
             return self._add_rule(rule_name, self._generate_union_rule(name, schema.get('oneOf') or schema['anyOf']))
 
         elif isinstance(schema_type, list):
-            return self._add_rule(rule_name, self._generate_union_rule(name, [{'type': t} for t in schema_type]))
+            return self._add_rule(rule_name, self._generate_union_rule(name, [{**schema, 'type': t} for t in schema_type]))
 
         elif 'const' in schema:
-            return self._add_rule(rule_name, self._generate_constant_rule(schema['const']))
+            return self._add_rule(rule_name, self._generate_constant_rule(schema['const']) + ' space')
 
         elif 'enum' in schema:
-            rule = ' | '.join((self._generate_constant_rule(v) for v in schema['enum']))
+            rule = '(' + ' | '.join((self._generate_constant_rule(v) for v in schema['enum'])) + ') space'
             return self._add_rule(rule_name, rule)
 
         elif schema_type in (None, 'object') and \
@@ -558,7 +604,7 @@ class SchemaConverter:
                 else:
                     add_component(t, is_required=True)
 
-            return self._add_rule(rule_name, self._build_object_rule(properties, required, hybrid_name, additional_properties=[]))
+            return self._add_rule(rule_name, self._build_object_rule(properties, required, hybrid_name, additional_properties=None))
 
         elif schema_type in (None, 'array') and ('items' in schema or 'prefixItems' in schema):
             items = schema.get('items') or schema['prefixItems']
@@ -632,7 +678,7 @@ class SchemaConverter:
                 self._add_primitive(dep, dep_rule)
         return n
 
-    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str, additional_properties: Union[bool, Any]):
+    def _build_object_rule(self, properties: List[Tuple[str, Any]], required: Set[str], name: str, additional_properties: Optional[Union[bool, Any]]):
         prop_order = self._prop_order
         # sort by position in prop_order (if specified) then by original order
         sorted_props = [kv[0] for _, kv in sorted(enumerate(properties), key=lambda ikv: (prop_order.get(ikv[1][0], len(prop_order)), ikv[0]))]
@@ -647,12 +693,16 @@ class SchemaConverter:
         required_props = [k for k in sorted_props if k in required]
         optional_props = [k for k in sorted_props if k not in required]
 
-        if additional_properties == True or isinstance(additional_properties, dict):
+        if additional_properties is not None and additional_properties != False:
             sub_name = f'{name}{"-" if name else ""}additional'
-            value_rule = self.visit({} if additional_properties == True else additional_properties, f'{sub_name}-value')
+            value_rule = self.visit(additional_properties, f'{sub_name}-value') if isinstance(additional_properties, dict) else \
+                self._add_primitive('value', PRIMITIVE_RULES['value'])
+            key_rule = self._add_primitive('string', PRIMITIVE_RULES['string']) if not sorted_props \
+                else self._add_rule(f'{sub_name}-k', self._not_strings(sorted_props))
+
             prop_kv_rule_names["*"] = self._add_rule(
                 f'{sub_name}-kv',
-                self._add_primitive('string', PRIMITIVE_RULES['string']) + f' ":" space {value_rule}'
+                f'{key_rule} ":" space {value_rule}'
             )
             optional_props.append("*")
 
@@ -667,15 +717,11 @@ class SchemaConverter:
             def get_recursive_refs(ks, first_is_optional):
                 [k, *rest] = ks
                 kv_rule_name = prop_kv_rule_names[k]
-                if k == '*':
-                    res = self._add_rule(
-                        f'{name}{"-" if name else ""}additional-kvs',
-                        f'{kv_rule_name} ( "," space ' + kv_rule_name + ' )*'
-                    )
-                elif first_is_optional:
-                    res = f'( "," space {kv_rule_name} )?'
+                comma_ref = f'( "," space {kv_rule_name} )'
+                if first_is_optional:
+                    res = comma_ref + ('*' if k == '*' else '?')
                 else:
-                    res = kv_rule_name
+                    res = kv_rule_name + (' ' + comma_ref + "*" if k == '*' else '')
                 if len(rest) > 0:
                     res += ' ' + self._add_rule(
                         f'{name}{"-" if name else ""}{k}-rest',

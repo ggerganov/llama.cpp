@@ -47,6 +47,7 @@ build*
 !build-info.cpp.in
 !build-info.sh
 !build.zig
+!docs/build.md
 /libllama.so
 /llama-*
 android-ndk-*
@@ -56,8 +57,14 @@ CMakeSettings.json
 compile_commands.json
 ggml-metal-embed.metal
 llama-batched-swift
+/rpc-server
 out/
 tmp/
+
+# Deprecated
+
+/main
+/server
 
 # CI
 
@@ -97,12 +104,13 @@ examples/server/*.mjs.hpp
 
 # Python
 
-__pycache__
-.venv
-/Pipfile
-dist
-poetry.lock
+/.venv
+__pycache__/
+*/poetry.lock
 poetry.toml
+
+# Nix
+/result
 
 # Test binaries
 /tests/test-backend-ops
