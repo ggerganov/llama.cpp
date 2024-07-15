@@ -521,6 +521,9 @@ class Model:
         if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
             # ref: https://huggingface.co/core42/jais-13b
             res = "jais"
+        if chkhsh == "60824e3c0d9401f89943cbb2fff727f0e2d4c545ba4df2d6e4f09a6db0f5b450":
+            # ref: https://huggingface.co/facebook/chameleon-7b
+            res = "chameleon"
 
         if res is None:
             logger.warning("\n")
@@ -3417,6 +3420,28 @@ class ChatGLMModel(Model):
             return []
 
         name = name.removeprefix("transformer.")
+        return [(self.map_tensor_name(name), data_torch)]
+
+@Model.register("ChameleonForCausalLM")
+class ChameleonModel(Model):
+    model_arch = gguf.MODEL_ARCH.CHAMELEON
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # ignore image tokenizer for now
+        if name.startswith("model.vqmodel"):
+            return []
+
+        n_head = self.hparams["num_attention_heads"]
+        n_kv_head = self.hparams.get("num_key_value_heads")
+
+        if name.endswith(("q_proj.weight", "q_proj.bias")):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+        if name.endswith(("k_proj.weight", "k_proj.bias")):
+            data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+
         return [(self.map_tensor_name(name), data_torch)]
 
 ###### CONVERSION LOGIC ######
