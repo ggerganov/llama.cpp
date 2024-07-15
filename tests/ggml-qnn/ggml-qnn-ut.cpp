@@ -211,6 +211,7 @@ static uint32_t get_tensor_rank(const ggml_tensor *tensor) {
 }
 
 static uint32_t get_tensor_data_size(const ggml_tensor *tensor) {
+#if ENABLE_QNNSDK_LOG
     size_t data_size = ggml_row_size(tensor->type, tensor->ne[0]);
     size_t n_dims = get_tensor_rank(tensor);
     for (size_t i = 1; i < n_dims; i++) {
@@ -219,6 +220,7 @@ static uint32_t get_tensor_data_size(const ggml_tensor *tensor) {
 
     QNN_LOG_DEBUG("get_tensor_data_size %d", data_size);
     QNN_LOG_DEBUG("ggml_nbytes(tensor) %d", ggml_nbytes(tensor));
+#endif
 
     return ggml_nbytes(tensor);
 }
@@ -530,6 +532,8 @@ int main(int argc, char *argv[]) {
     std::vector<uint8_t> cpu_results;
     qnn_op_ut(num_threads, QNN_BACKEND_GGML, n_ggml_op_type, GGML_TYPE_F32, cpu_results);
 
+    // TODO: theoretically, the results should be the same, but the results may be different due to the different hardware
+    //       a better way to compare the results is to compare the floating point numbers with allowed error
     if (results == cpu_results) {
         QNN_LOG_INFO(CONSOLE_GREEN "[Success] results equal to CPU backend!" CONSOLE_RESET);
         return 0;
