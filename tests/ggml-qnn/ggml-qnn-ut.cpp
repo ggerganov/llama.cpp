@@ -43,40 +43,7 @@
 #include "ggml-backend.h"
 #include "ggml-qnn.h"
 
-#define GGML_QNN_DEBUG 1
-#define GGML_QNN_LOGBUF_LEN 4096
-
-#define QNN_LOG_ERROR(...) ggml_qnn_log_internal(GGML_LOG_LEVEL_DEBUG, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
-#define QNN_LOG_WARN(...) ggml_qnn_log_internal(GGML_LOG_LEVEL_DEBUG, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
-#define QNN_LOG_INFO(...) ggml_qnn_log_internal(GGML_LOG_LEVEL_DEBUG, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
-
-#if GGML_QNN_DEBUG
-#define QNN_LOG_DEBUG(...) ggml_qnn_log_internal(GGML_LOG_LEVEL_DEBUG, __FILE__, __FUNCTION__, __LINE__, __VA_ARGS__)
-#else
-#define QNN_LOG_DEBUG(...)
-#endif
-
-static void tensor_dump(const ggml_tensor *tensor, const char *name);
-
-#define TENSOR_DUMP(tensor) tensor_dump(tensor, #tensor)
-
-static void ggml_qnn_log_internal(ggml_log_level level, const char *file, const char *func, int line,
-                                  const char *format, ...) {
-    static std::mutex ggml_qnn_log_internal_mutex;
-    static char s_ggml_qnn_log_internal_buf[GGML_QNN_LOGBUF_LEN];
-
-    {
-        std::lock_guard<std::mutex> lock(ggml_qnn_log_internal_mutex);
-        va_list args;
-        va_start(args, format);
-        int len_prefix = snprintf(s_ggml_qnn_log_internal_buf, GGML_QNN_LOGBUF_LEN, "[%s, %d]: ", func, line);
-        int len = vsnprintf(s_ggml_qnn_log_internal_buf + len_prefix, GGML_QNN_LOGBUF_LEN - len_prefix, format, args);
-        if (len < (GGML_QNN_LOGBUF_LEN - len_prefix)) {
-            printf("%s\n", s_ggml_qnn_log_internal_buf);
-        }
-        va_end(args);
-    }
-}
+#include "logger.hpp"
 
 static const char *get_qnn_backend_name(int n_backend_type) {
     switch (n_backend_type) {
@@ -86,7 +53,7 @@ static const char *get_qnn_backend_name(int n_backend_type) {
             return "QNN-GPU";
         case QNN_BACKEND_NPU:
             return "QNN-NPU";
-        case 3:
+        case QNN_BACKEND_GGML:
             return "ggml";
         default:
             return "unknown";
@@ -137,11 +104,13 @@ static inline float ggml_compute_fp16_to_fp32(uint16_t h) {
 
 #define GGML_FP16_TO_FP32(x) ggml_compute_fp16_to_fp32(x)
 
+#define TENSOR_DUMP(tensor) tensor_dump(tensor, #tensor)
+
 static void tensor_dump(const ggml_tensor *tensor, const char *name) {
-    QNN_LOG_DEBUG("dump ggml tensor %s(%s): type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64
-                  ", nb = (%5zi, %5zi, %5zi)\n",
-                  name, tensor->name, tensor->type, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1],
-                  tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
+    QNN_LOG_INFO("dump ggml tensor %s(%s): type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64
+                 ", nb = (%5zi, %5zi, %5zi)\n",
+                 name, tensor->name, tensor->type, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1],
+                 tensor->ne[2], tensor->nb[0], tensor->nb[1], tensor->nb[2]);
 
     float value = 0;
     std::ostringstream tmposs;
@@ -162,8 +131,8 @@ static void tensor_dump(const ggml_tensor *tensor, const char *name) {
                 }
             }
         }
-        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
-            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+        if (strlen(tmposs.str().c_str()) <= (QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_INFO("\n%s\n", tmposs.str().c_str());
             tmposs.clear();
             tmposs.str("");
         }
@@ -181,8 +150,8 @@ static void tensor_dump(const ggml_tensor *tensor, const char *name) {
                 }
             }
         }
-        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
-            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+        if (strlen(tmposs.str().c_str()) <= (QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_INFO("\n%s\n", tmposs.str().c_str());
             tmposs.clear();
             tmposs.str("");
         }
@@ -203,8 +172,8 @@ static void tensor_dump(const ggml_tensor *tensor, const char *name) {
                 }
             }
         }
-        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
-            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+        if (strlen(tmposs.str().c_str()) <= (QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_INFO("\n%s\n", tmposs.str().c_str());
             tmposs.clear();
             tmposs.str("");
         }
@@ -223,8 +192,8 @@ static void tensor_dump(const ggml_tensor *tensor, const char *name) {
             }
             tmposs << "\n";
         }
-        if (strlen(tmposs.str().c_str()) <= (GGML_QNN_LOGBUF_LEN - 96)) {
-            QNN_LOG_DEBUG("\n%s\n", tmposs.str().c_str());
+        if (strlen(tmposs.str().c_str()) <= (QNN_LOGBUF_LEN - 96)) {
+            QNN_LOG_INFO("\n%s\n", tmposs.str().c_str());
             tmposs.clear();
             tmposs.str("");
         }
@@ -480,8 +449,6 @@ static void qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type, g
         TENSOR_DUMP(src0);
         TENSOR_DUMP(src1);
         TENSOR_DUMP(dst);
-        results.resize(ggml_nbytes(dst));
-        memcpy(results.data(), ggml_get_data(dst), ggml_nbytes(dst));
     } else {
         QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64
                       ", nb = (%5zi, %5zi, %5zi)\n",
@@ -497,6 +464,8 @@ static void qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type, g
                       dst->nb[1], dst->nb[2]);
     }
 
+    results.resize(ggml_nbytes(dst));
+    memcpy(results.data(), ggml_get_data(dst), ggml_nbytes(dst));
     ggml_free(ctx);
     ggml_backend_buffer_free(buffer);
     ggml_backend_free(backend);
@@ -562,10 +531,10 @@ int main(int argc, char *argv[]) {
     qnn_op_ut(num_threads, QNN_BACKEND_GGML, n_ggml_op_type, GGML_TYPE_F32, cpu_results);
 
     if (results == cpu_results) {
-        QNN_LOG_INFO(CONSOLE_GREEN "[Result] results equal!" CONSOLE_RESET);
+        QNN_LOG_INFO(CONSOLE_GREEN "[Success] results equal to CPU backend!" CONSOLE_RESET);
         return 0;
     } else {
-        QNN_LOG_ERROR(CONSOLE_RED "[Result] results not equal!" CONSOLE_RESET);
+        QNN_LOG_ERROR(CONSOLE_RED "[Failed] results mismatch with CPU backend!" CONSOLE_RESET);
         return 1;
     }
 }

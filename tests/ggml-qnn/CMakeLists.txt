@@ -61,3 +61,7 @@ link_libraries(${LOG_LIB} android)
 add_executable(${TARGET_NAME}
     ${SOURCE_FILES}
 )
+
+target_include_directories(${TARGET_NAME} PRIVATE 
+    ../../ggml/src/ggml-qnn/
+)

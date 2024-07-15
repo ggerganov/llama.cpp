@@ -9,6 +9,8 @@
 #include "QnnTypes.h"
 #include "System/QnnSystemInterface.h"
 
+#define QNN_LOGBUF_LEN 4096
+
 namespace qnn {
 void internal_log(ggml_log_level level, const char *file, const char *func, int line, const char *format, ...);
 

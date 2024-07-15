@@ -9,8 +9,6 @@
 #include <android/log.h>
 #endif
 
-#define QNN_LOGBUF_LEN 4096
-
 void qnn::internal_log(ggml_log_level level, const char *file, const char *func, int line, const char *format, ...) {
     static std::mutex qnn_internal_log_mutex;
     static char s_qnn_internal_log_buf[QNN_LOGBUF_LEN];
