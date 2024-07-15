@@ -701,6 +701,9 @@ class GGUFWriter:
     def add_eot_token_id(self, id: int) -> None:
         self.add_uint32(Keys.Tokenizer.EOT_ID, id)
 
+    def add_swin_norm(self, value: bool) -> None:
+        self.add_bool(Keys.LLM.SWIN_NORM.format(arch=self.arch), value)
+
     def _pack(self, fmt: str, value: Any, skip_pack_prefix: bool = False) -> bytes:
         pack_prefix = ''
         if not skip_pack_prefix:

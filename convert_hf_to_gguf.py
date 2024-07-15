@@ -3427,6 +3427,10 @@ class ChatGLMModel(Model):
 class ChameleonModel(Model):
     model_arch = gguf.MODEL_ARCH.CHAMELEON
 
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_swin_norm(self.hparams.get("swin_norm", False))
+
     def set_vocab(self):
         self._set_vocab_gpt2()
 
