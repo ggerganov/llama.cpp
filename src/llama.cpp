@@ -379,6 +379,7 @@ enum llm_kv {
     LLM_KV_TOKENIZER_EOT_ID,
 
     LLM_KV_TRAINING_TYPE,
+    LLM_KV_TRAINING_LORA_ALPHA,
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -473,7 +474,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TOKENIZER_MIDDLE_ID,            "tokenizer.ggml.middle_token_id"          },
     { LLM_KV_TOKENIZER_EOT_ID,               "tokenizer.ggml.eot_token_id"             },
 
-    { LLM_KV_TRAINING_TYPE,                  "training.type" },
+    { LLM_KV_TRAINING_TYPE,                  "training.type"       },
+    { LLM_KV_TRAINING_LORA_ALPHA,            "training.lora.alpha" },
 };
 
 struct LLM_KV {
@@ -2847,6 +2849,8 @@ struct llama_lora_adapter {
     std::unordered_map<std::string, struct llama_lora_weight> ab_map;
     std::vector<struct ggml_context *> ctxs;
     std::vector<ggml_backend_buffer_t> bufs;
+
+    float alpha;
 
     llama_lora_adapter(struct llama_model * base_model): base_model(base_model) {
         base_model->lora_adapters.insert(this);
@@ -7878,10 +7882,12 @@ static struct ggml_tensor * llm_build_lora_mm(
     struct ggml_tensor * res = ggml_mul_mat(ctx0, w, cur);
     for (auto & it : lctx.lora_adapters) {
         struct llama_lora_weight * lora = it.first->get_weight(w);
-        float scale = it.second;
         if (lora == nullptr) {
             continue;
         }
+        const float alpha = it.first->alpha;
+        const float rank  = (float) lora->b->ne[0];
+        const float scale = alpha ? it.second * alpha / rank : it.second;
         struct ggml_tensor * ab_cur = ggml_mul_mat(
             ctx0, lora->b,
             ggml_mul_mat(ctx0, lora->a, cur)
@@ -7902,10 +7908,12 @@ static struct ggml_tensor * llm_build_lora_mm_id(
     struct ggml_tensor * res = ggml_mul_mat_id(ctx0, w, cur, ids);
     for (auto & it : lctx.lora_adapters) {
         struct llama_lora_weight * lora = it.first->get_weight(w);
-        float scale = it.second;
         if (lora == nullptr) {
             continue;
         }
+        const float alpha = it.first->alpha;
+        const float rank  = (float) lora->b->ne[0];
+        const float scale = alpha ? it.second * alpha / rank : it.second;
         struct ggml_tensor * ab_cur = ggml_mul_mat_id(
             ctx0, lora->b,
             ggml_mul_mat_id(ctx0, lora->a, cur, ids),
@@ -18587,9 +18595,13 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
 
     // check metadata
     {
-        auto get_kv_str = [&](std::string key) -> std::string {
+        auto get_kv_str = [&](const std::string & key) -> std::string {
             int id = gguf_find_key(ctx_gguf, key.c_str());
             return id < 0 ? "" : std::string(gguf_get_val_str(ctx_gguf, id));
+        };
+        auto get_kv_f32 = [&](const std::string & key) -> float {
+            int id = gguf_find_key(ctx_gguf, key.c_str());
+            return id < 0 ? 0.0f : gguf_get_val_f32(ctx_gguf, id);
         };
         LLM_KV llm_kv = LLM_KV(LLM_ARCH_UNKNOWN);
         auto lora_arch_name = get_kv_str(llm_kv(LLM_KV_GENERAL_ARCHITECTURE));
@@ -18604,6 +18616,8 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
             gguf_free(ctx_gguf);
             throw std::runtime_error("expect training.type to be finetune_lora, but got: " + train_type);
         }
+
+        adapter.alpha = get_kv_f32(llm_kv(LLM_KV_TRAINING_LORA_ALPHA));
     }
 
     int n_tensors = gguf_get_n_tensors(ctx_gguf);
