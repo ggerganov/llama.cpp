@@ -380,6 +380,7 @@ enum llm_kv {
 
     LLM_KV_TRAINING_TYPE,
     LLM_KV_TRAINING_LORA_ALPHA,
+    LLM_KV_TRAINING_LORA_SCALE,
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
@@ -476,6 +477,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
 
     { LLM_KV_TRAINING_TYPE,                  "training.type"       },
     { LLM_KV_TRAINING_LORA_ALPHA,            "training.lora.alpha" },
+    { LLM_KV_TRAINING_LORA_SCALE,            "training.lora.scale" },
 };
 
 struct LLM_KV {
@@ -2851,6 +2853,7 @@ struct llama_lora_adapter {
     std::vector<ggml_backend_buffer_t> bufs;
 
     float alpha;
+    float scale; // default scale
 
     llama_lora_adapter(struct llama_model * base_model): base_model(base_model) {
         base_model->lora_adapters.insert(this);
@@ -18578,7 +18581,7 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
 }
 
 static void llama_lora_adapter_init_internal(struct llama_model * model, const char * path_lora, struct llama_lora_adapter & adapter) {
-    LLAMA_LOG_INFO("%s: applying lora adapter from '%s' ...\n", __func__, path_lora);
+    LLAMA_LOG_INFO("%s: loading lora adapter from '%s' ...\n", __func__, path_lora);
 
     ggml_context * ctx = nullptr;
     struct gguf_init_params meta_gguf_params = {
@@ -18615,6 +18618,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
         }
 
         adapter.alpha = get_kv_f32(llm_kv(LLM_KV_TRAINING_LORA_ALPHA));
+        adapter.scale = get_kv_f32(llm_kv(LLM_KV_TRAINING_LORA_SCALE));
     }
 
     int n_tensors = gguf_get_n_tensors(ctx_gguf);
@@ -18747,6 +18751,10 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
     // free ctx for reading gguf
     gguf_free(ctx_gguf);
     ggml_free(ctx);
+}
+
+float llama_lora_adapter_get_default_scale(struct llama_lora_adapter * adapter) {
+    return adapter->scale;
 }
 
 int32_t llama_lora_adapter_set(

@@ -366,9 +366,11 @@ if __name__ == '__main__':
             lparams: dict[str, Any] = json.load(f)
 
         alpha = lparams["lora_alpha"]
+        rank = lparams["r"]
 
         model_instance.gguf_writer.add_string("training.type", "finetune_lora")
         model_instance.gguf_writer.add_float32("training.lora.alpha", float(alpha))
+        model_instance.gguf_writer.add_float32("training.lora.scale", float(alpha) / float(rank))
 
         model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
         logger.info("Exporting model...")
