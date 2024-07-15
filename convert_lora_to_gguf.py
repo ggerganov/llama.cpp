@@ -359,17 +359,16 @@ if __name__ == '__main__':
             eager=args.no_lazy,
             model_name=None,
         )
-        logger.info("Set model parameters")
-        model_instance.set_gguf_parameters()
 
         with open(lora_config, "r") as f:
             lparams: dict[str, Any] = json.load(f)
 
         alpha = lparams["lora_alpha"]
 
-        model_instance.gguf_writer.add_string("training.type", "finetune_lora")
-        model_instance.gguf_writer.add_float32("training.lora.alpha", float(alpha))
-
+        model_instance.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[model_instance.model_arch])
+        model_instance.gguf_writer.add_string(gguf.Keys.General.TYPE, gguf.GGUFType.ADAPTER)
+        model_instance.gguf_writer.add_string(gguf.Keys.Adapter.TYPE, "lora")
+        model_instance.gguf_writer.add_float32(gguf.Keys.Adapter.LORA_ALPHA, float(alpha))
         model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
         logger.info("Exporting model...")
         model_instance.write()

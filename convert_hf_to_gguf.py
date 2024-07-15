@@ -186,6 +186,7 @@ class Model:
         return new_name
 
     def set_gguf_parameters(self):
+        self.gguf_writer.add_type(gguf.GGUFType.MODEL)
         self.gguf_writer.add_name(self.dir_model.name if self.model_name is None else self.model_name)
         self.gguf_writer.add_block_count(self.block_count)
 

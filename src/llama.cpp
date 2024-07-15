@@ -287,6 +287,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
 };
 
 enum llm_kv {
+    LLM_KV_GENERAL_TYPE,
     LLM_KV_GENERAL_ARCHITECTURE,
     LLM_KV_GENERAL_QUANTIZATION_VERSION,
     LLM_KV_GENERAL_ALIGNMENT,
@@ -378,11 +379,12 @@ enum llm_kv {
     LLM_KV_TOKENIZER_MIDDLE_ID,
     LLM_KV_TOKENIZER_EOT_ID,
 
-    LLM_KV_TRAINING_TYPE,
-    LLM_KV_TRAINING_LORA_ALPHA,
+    LLM_KV_ADAPTER_TYPE,
+    LLM_KV_ADAPTER_LORA_ALPHA,
 };
 
 static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
+    { LLM_KV_GENERAL_TYPE,                  "general.type"                          },
     { LLM_KV_GENERAL_ARCHITECTURE,          "general.architecture"                  },
     { LLM_KV_GENERAL_QUANTIZATION_VERSION,  "general.quantization_version"          },
     { LLM_KV_GENERAL_ALIGNMENT,             "general.alignment"                     },
@@ -474,8 +476,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_TOKENIZER_MIDDLE_ID,            "tokenizer.ggml.middle_token_id"          },
     { LLM_KV_TOKENIZER_EOT_ID,               "tokenizer.ggml.eot_token_id"             },
 
-    { LLM_KV_TRAINING_TYPE,                  "training.type"       },
-    { LLM_KV_TRAINING_LORA_ALPHA,            "training.lora.alpha" },
+    { LLM_KV_ADAPTER_TYPE,                  "adapter.type"       },
+    { LLM_KV_ADAPTER_LORA_ALPHA,            "adapter.lora.alpha" },
 };
 
 struct LLM_KV {
@@ -18596,20 +18598,27 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
             return id < 0 ? 0.0f : gguf_get_val_f32(ctx_gguf, id);
         };
         LLM_KV llm_kv = LLM_KV(LLM_ARCH_UNKNOWN);
-        auto lora_arch_name = get_kv_str(llm_kv(LLM_KV_GENERAL_ARCHITECTURE));
-        auto lora_arch = llm_arch_from_string(lora_arch_name);
-        if (lora_arch != model->arch) {
+
+        auto general_type = get_kv_str(llm_kv(LLM_KV_GENERAL_TYPE));
+        if (general_type != "adapter") {
+            gguf_free(ctx_gguf);
+            throw std::runtime_error("expect general.type to be 'adapter', but got: " + general_type);
+        }
+
+        auto general_arch_str = get_kv_str(llm_kv(LLM_KV_GENERAL_ARCHITECTURE));
+        auto general_arch = llm_arch_from_string(general_arch_str);
+        if (general_arch != model->arch) {
             gguf_free(ctx_gguf);
             throw std::runtime_error("model arch and LoRA arch mismatch");
         }
 
-        auto train_type = get_kv_str(llm_kv(LLM_KV_TRAINING_TYPE));
-        if (train_type != "finetune_lora") {
+        auto adapter_type = get_kv_str(llm_kv(LLM_KV_ADAPTER_TYPE));
+        if (adapter_type != "lora") {
             gguf_free(ctx_gguf);
-            throw std::runtime_error("expect training.type to be finetune_lora, but got: " + train_type);
+            throw std::runtime_error("expect adapter.type to be 'lora', but got: " + adapter_type);
         }
 
-        adapter.alpha = get_kv_f32(llm_kv(LLM_KV_TRAINING_LORA_ALPHA));
+        adapter.alpha = get_kv_f32(llm_kv(LLM_KV_ADAPTER_LORA_ALPHA));
     }
 
     int n_tensors = gguf_get_n_tensors(ctx_gguf);
