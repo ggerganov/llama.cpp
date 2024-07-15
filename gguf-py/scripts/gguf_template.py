@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 gguf_template.py - example file to extract the chat template from the models metadata
 """
