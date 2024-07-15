@@ -179,7 +179,7 @@ class Metadata:
         # Heuristic to match against cases such as 'Mixtral-8x7B-Instruct-v0.1' or 'Codestral-22B-v0.1'
         regex_match = re.compile(r'^'
                                  r'(?P<basename>[A-Za-z0-9\s]*(?:(?:-(?:(?:[A-Za-z\s][A-Za-z0-9\s]*)|(?:[0-9\s]*)))*))'
-                                 r'(?:-(?P<size_label>(?:\d+x)?\d+[A-Za-z](?:-[A-Za-z]+(?:\d+x)?\d+[A-Za-z]+)?)(?:-(?P<finetune>[A-Za-z0-9\s-]+))?)?'
+                                 r'(?:-(?P<size_label>(?:\d+x)?(\d+\.)?\d+[A-Za-z](?:-[A-Za-z]+(\d+\.)?\d+[A-Za-z]+)?)(?:-(?P<finetune>[A-Za-z0-9\s-]+))?)?'
                                  r'(?:-(?P<version>v\d+(?:\.\d+)*))?'
                                  r'$').match(model_full_name_component)
 

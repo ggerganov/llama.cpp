@@ -73,6 +73,10 @@ class TestMetadataMethod(unittest.TestCase):
         self.assertEqual(gguf.Metadata.get_model_id_components("crestf411/daybreak-kunoichi-2dpo-7b"),
                          ('daybreak-kunoichi-2dpo-7b', 'crestf411', None, None, None, None))
 
+        # This is a real model id where the weight size has a decimal point
+        self.assertEqual(gguf.Metadata.get_model_id_components("Qwen2-0.5B-Instruct"),
+                         ('Qwen2-0.5B-Instruct', None, 'Qwen2', 'Instruct', None, '0.5B'))
+
     def test_apply_metadata_heuristic_from_model_card(self):
         model_card = {
             'tags': ['Llama-3', 'instruct', 'finetune', 'chatml', 'DPO', 'RLHF', 'gpt4', 'synthetic data', 'distillation', 'function calling', 'json mode', 'axolotl'],
