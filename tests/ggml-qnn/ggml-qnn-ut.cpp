@@ -80,11 +80,11 @@ static void ggml_qnn_log_internal(ggml_log_level level, const char * file, const
 
 static const char * get_qnn_backend_name(int n_backend_type) {
     switch (n_backend_type) {
-        case 0:
+        case QNN_BACKEND_CPU:
             return "QNN-CPU";
-        case 1:
+        case QNN_BACKEND_GPU:
             return "QNN-GPU";
-        case 2:
+        case QNN_BACKEND_NPU:
             return "QNN-NPU";
         case 3:
             return "ggml";
@@ -494,16 +494,7 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     gf = ggml_new_graph(ctx);
     ggml_build_forward_expand(gf, dst);
 
-    if (n_backend_type != QNN_BACKEND_GGML) {
-        initialize_tensors(ctx);
-    } else {
-        if (qtype == GGML_TYPE_F32) {
-            ggml_set_f32(src0, 2.f);
-        } else {
-            initialize_tensors(ctx);
-        }
-        ggml_set_f32(src1, 3.f);
-    }
+    initialize_tensors(ctx);
 
     ggml_graph_compute_helper(backend, gf, work_buffer, num_threads, nullptr, nullptr);
 
