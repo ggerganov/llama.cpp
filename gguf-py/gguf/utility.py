@@ -10,12 +10,8 @@ def fill_templated_filename(filename: str, output_type: str):
                            OUTTYPE=ftype_uppercase, FTYPE=ftype_uppercase)
 
 
-def model_weight_count_rounded_notation(model_params_count: int) -> str:
-    if model_params_count > 1e15 :
-        # Quadrillion Of Parameters
-        scaled_model_params = model_params_count * 1e-15
-        scale_suffix = "Q"
-    elif model_params_count > 1e12 :
+def model_weight_count_rounded_notation(model_params_count: int, min_digits: int = 2) -> str:
+    if model_params_count > 1e12 :
         # Trillions Of Parameters
         scaled_model_params = model_params_count * 1e-12
         scale_suffix = "T"
@@ -31,21 +27,24 @@ def model_weight_count_rounded_notation(model_params_count: int) -> str:
         # Thousands Of Parameters
         scaled_model_params = model_params_count * 1e-3
         scale_suffix = "K"
-    return f"{round(scaled_model_params)}{scale_suffix}"
+
+    fix = max(min_digits - len(str(round(scaled_model_params)).lstrip('0')), 0)
+
+    return f"{scaled_model_params:.{fix}f}{scale_suffix}"
 
 
-def size_label(expert_count_int:int | None, model_params_count: int) -> str:
-    per_model_rounded_weight_estimate = model_weight_count_rounded_notation(model_params_count)
+def size_label(total_params: int, shared_params: int, expert_params: int, expert_count: int) -> str:
 
-    if expert_count_int is not None and expert_count_int > 0:
-        size_class = f"{expert_count_int}x{per_model_rounded_weight_estimate}"
+    if expert_count > 0:
+        pretty_size = model_weight_count_rounded_notation(shared_params + expert_params, min_digits=2)
+        size_class = f"{expert_count}x{pretty_size}"
     else:
-        size_class = f"{per_model_rounded_weight_estimate}"
+        size_class = model_weight_count_rounded_notation(total_params, min_digits=2)
 
     return size_class
 
 
-def naming_convention(model_name: str | None, base_name: str | None, finetune_string:str | None, version_string:str | None, size_label: str | None, output_type: str | None) -> str:
+def naming_convention(model_name: str | None, base_name: str | None, finetune_string: str | None, version_string: str | None, size_label: str | None, output_type: str | None) -> str:
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
 
     if base_name is not None:

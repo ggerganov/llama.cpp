@@ -1042,9 +1042,11 @@ def pick_output_type(model: LazyModel, output_type_str: str | None) -> GGMLFileT
     raise ValueError(f"Unexpected combination of types: {name_to_type}")
 
 
-def per_model_weight_count_estimation(tensors: Iterable[tuple[str, LazyTensor]], expert_count:int | None) -> int:
-    # TODO: Ensure parameter count is accurate throughout various model type
-    sum_weight_estimate: int = 0
+def per_model_weight_count_estimation(tensors: Iterable[tuple[str, LazyTensor]]) -> tuple[int, int, int]:
+    total_params = 0
+    shared_params = 0
+    expert_params = 0
+
     for name, lazy_tensor in tensors:
         # We don't need these
         if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
@@ -1057,17 +1059,15 @@ def per_model_weight_count_estimation(tensors: Iterable[tuple[str, LazyTensor]],
         for dim in lazy_tensor.shape:
             sum_weights_in_tensor *= dim
 
-        # Add Tensor Volume To Running Count
-        sum_weight_estimate += sum_weights_in_tensor
+        if ".experts." in name:
+            if ".experts.0." in name:
+                expert_params += sum_weights_in_tensor
+        else:
+            shared_params += sum_weights_in_tensor
 
-    if expert_count is None:
-        return sum_weight_estimate
+        total_params += sum_weights_in_tensor
 
-    if expert_count is not None and expert_count == 0:
-        return sum_weight_estimate
-
-    # Calculate weight estimate per model
-    return int(sum_weight_estimate / expert_count)
+    return total_params, shared_params, expert_params
 
 
 def convert_to_output_type(model: LazyModel, output_type: GGMLFileType) -> LazyModel:
@@ -1249,12 +1249,12 @@ class VocabFactory:
         return vocab, special_vocab
 
 
-def default_convention_outfile(file_type: GGMLFileType, expert_count:int | None, model_params_count: int, metadata: gguf.Metadata) -> str:
+def default_convention_outfile(file_type: GGMLFileType, expert_count: int | None, model_params_count: tuple[int, int, int], metadata: gguf.Metadata) -> str:
     name = metadata.name if metadata.name is not None else None
     basename = metadata.basename if metadata.basename is not None else None
     finetune = metadata.finetune if metadata.finetune is not None else None
     version = metadata.version if metadata.version is not None else None
-    size_label = metadata.size_label if metadata.size_label is not None else gguf.size_label(expert_count, model_params_count)
+    size_label = metadata.size_label if metadata.size_label is not None else gguf.size_label(*model_params_count, expert_count=expert_count or 0)
 
     output_type = {
         GGMLFileType.AllF32:    "F32",
@@ -1265,7 +1265,7 @@ def default_convention_outfile(file_type: GGMLFileType, expert_count:int | None,
     return gguf.naming_convention(name, basename, finetune, version, size_label, output_type)
 
 
-def default_outfile(model_paths: list[Path], file_type: GGMLFileType, expert_count:int | None, model_params_count: int, metadata: gguf.Metadata) -> Path:
+def default_outfile(model_paths: list[Path], file_type: GGMLFileType, expert_count: int | None, model_params_count: tuple[int, int, int], metadata: gguf.Metadata) -> Path:
     default_filename = default_convention_outfile(file_type, expert_count, model_params_count, metadata)
     ret = model_paths[0].parent / f"{default_filename}.gguf"
     if ret in model_paths:
@@ -1328,7 +1328,7 @@ def main(args_in: list[str] | None = None) -> None:
         model_plus = load_some_model(dir_model)
         params = Params.load(model_plus)
         model = convert_model_names(model_plus.model, params, args.skip_unknown)
-        model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
+        model_params_count = per_model_weight_count_estimation(model_plus.model.items())
         ftype = pick_output_type(model, args.outtype)
 
         if (metadata is None or metadata.name is None) and params.path_model is not None:
@@ -1415,8 +1415,8 @@ def main(args_in: list[str] | None = None) -> None:
     if metadata.name is None and params.path_model is not None:
         metadata.name = params.path_model.name
 
-    model_params_count = per_model_weight_count_estimation(model_plus.model.items(), params.n_experts)
-    logger.info(f"model parameters count : {model_params_count} ({gguf.model_weight_count_rounded_notation(model_params_count)})")
+    model_params_count = per_model_weight_count_estimation(model_plus.model.items())
+    logger.info(f"model parameters count : {model_params_count} ({gguf.model_weight_count_rounded_notation(model_params_count[0])})")
 
     logger.info(f"Vocab info: {vocab}")
     logger.info(f"Special vocab info: {special_vocab}")
@@ -1426,7 +1426,7 @@ def main(args_in: list[str] | None = None) -> None:
     model   = convert_to_output_type(model, ftype)
     outfile = args.outfile or default_outfile(model_plus.paths, ftype, params.n_experts, model_params_count, metadata=metadata)
 
-    metadata.size_label = gguf.size_label(params.n_experts, model_params_count)
+    metadata.size_label = gguf.size_label(*model_params_count, expert_count=params.n_experts or 0)
 
     params.ftype = ftype
     logger.info(f"Writing {outfile}, format {ftype}")

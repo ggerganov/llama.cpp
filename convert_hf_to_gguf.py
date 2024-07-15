@@ -48,6 +48,7 @@ class Model:
 
     dir_model: Path
     ftype: gguf.LlamaFileType
+    fname_out: Path | None
     is_big_endian: bool
     endianess: gguf.GGUFEndian
     use_temp_file: bool
@@ -58,8 +59,6 @@ class Model:
     block_count: int
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
-    fname_out: Path
-    fname_default: str
     gguf_writer: gguf.GGUFWriter
     metadata: gguf.Metadata
 
@@ -76,6 +75,7 @@ class Model:
 
         self.dir_model = dir_model
         self.ftype = ftype
+        self.fname_out = fname_out
         self.is_big_endian = is_big_endian
         self.endianess = gguf.GGUFEndian.BIG if is_big_endian else gguf.GGUFEndian.LITTLE
         self.use_temp_file = use_temp_file
@@ -101,37 +101,8 @@ class Model:
                 logger.info(f"choosing --outtype bf16 from first tensor type ({first_tensor.dtype})")
                 self.ftype = gguf.LlamaFileType.MOSTLY_BF16
 
-        # Fallback to model directory name if metadata name is still missing
-        if self.metadata.name is None:
-            self.metadata.name = dir_model.name
-
-        # Generate parameter weight class (useful for leader boards) if not yet determined
-        if self.metadata.size_label is None:
-            expert_count = self.hparams.get("num_local_experts", 0)
-            sum_weight_estimate = self.calculate_total_weight_count()
-
-            # Calculate weight estimate per model
-            per_model_weight_estimate: int = (sum_weight_estimate / expert_count) if (expert_count > 0) else sum_weight_estimate
-
-            self.metadata.size_label = gguf.size_label(expert_count, per_model_weight_estimate)
-
-        # Extracts and converts the encoding scheme from the given file type name. e.g. 'gguf.LlamaFileType.ALL_F32' --> 'F32'
-        output_type = self.ftype.name.partition("_")[2]
-
-        # Generate default filename based on model specification and available metadata
-        self.fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type)
-
-        # Filename Output
-        if fname_out is not None:
-            # custom defined filename and path was provided
-            # allow templating the file name with the output ftype, useful with the "auto" ftype
-            self.fname_out = fname_out.parent / gguf.fill_templated_filename(fname_out.name, output_type)
-        else:
-            # output in the same directory as the model by default
-            self.fname_out = dir_model / f"{self.fname_default}.gguf"
-
         # Configure GGUF Writer
-        self.gguf_writer = gguf.GGUFWriter(path=self.fname_out, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
+        self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
                                            split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
 
     @classmethod
@@ -190,23 +161,6 @@ class Model:
         # only verify tensor name presence; it doesn't matter if they are not in the right files
         if len(sym_diff := tensor_names_from_parts.symmetric_difference(self.tensor_names)) > 0:
             raise ValueError(f"Mismatch between weight map and model parts for tensor names: {sym_diff}")
-
-    def calculate_total_weight_count(self) -> int:
-        sum_weight_estimate = 0
-        for name, data_torch in self.get_tensors():
-            # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
-                continue
-
-            # Calculate Tensor Volume
-            sum_weights_in_tensor = 1
-            for dim in data_torch.shape:
-                sum_weights_in_tensor *= dim
-
-            # Add Tensor Volume To Running Count
-            sum_weight_estimate += sum_weights_in_tensor
-
-        return sum_weight_estimate
 
     def format_tensor_name(self, key: gguf.MODEL_TENSOR, bid: int | None = None, suffix: str = ".weight") -> str:
         if key not in gguf.MODEL_TENSORS[self.model_arch]:
@@ -376,7 +330,37 @@ class Model:
 
                 self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
 
-    def prepare_key_value_store(self):
+    def prepare_metadata(self):
+
+        # Fallback to model directory name if metadata name is still missing
+        if self.metadata.name is None:
+            self.metadata.name = self.dir_model.name
+
+        # Generate parameter weight class (useful for leader boards) if not yet determined
+        if self.metadata.size_label is None:
+            total_params, shared_params, expert_params, expert_count = self.gguf_writer.get_total_parameter_count()
+
+            if (total_params > 0):
+                self.metadata.size_label = gguf.size_label(total_params, shared_params, expert_params, expert_count)
+
+        # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
+        output_type = self.ftype.name.partition("_")[2]
+
+        # Generate default filename based on model specification and available metadata
+        fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type)
+
+        # Filename Output
+        if self.fname_out is not None:
+            if not self.fname_out.is_dir():
+                # custom defined filename and path was provided
+                # allow templating the file name with the output ftype, useful with the "auto" ftype
+                self.fname_out = self.fname_out.parent / gguf.fill_templated_filename(self.fname_out.name, output_type)
+            else:
+                # the target file is a directory
+                self.fname_out = self.fname_out / f"{fname_default}.gguf"
+        else:
+            # output in the same directory as the model by default
+            self.fname_out = self.dir_model / f"{fname_default}.gguf"
 
         logger.info("Set meta model")
         self.metadata.set_gguf_meta_model(self.gguf_writer)
@@ -393,8 +377,8 @@ class Model:
 
     def write(self):
         self.prepare_tensors()
-        self.prepare_key_value_store()
-        self.gguf_writer.write_header_to_file()
+        self.prepare_metadata()
+        self.gguf_writer.write_header_to_file(path=self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
         self.gguf_writer.close()
@@ -403,8 +387,8 @@ class Model:
         if len(self.gguf_writer.tensors) != 1:
             raise ValueError('Splitting the vocabulary is not supported')
 
-        self.prepare_key_value_store()
-        self.gguf_writer.write_header_to_file()
+        self.prepare_metadata()
+        self.gguf_writer.write_header_to_file(path=self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()
 
@@ -3545,10 +3529,6 @@ def parse_args() -> argparse.Namespace:
         "--metadata", type=Path,
         help="Specify the path for an authorship metadata override file"
     )
-    parser.add_argument(
-        "--get-outfile", action="store_true",
-        help="print calculated output file name then exit"
-    )
 
     return parser.parse_args()
 
@@ -3576,9 +3556,6 @@ def main() -> None:
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
-    elif args.get_outfile:
-        # Avoid printing anything besides the dump output
-        logging.basicConfig(level=logging.WARNING)
     else:
         logging.basicConfig(level=logging.INFO)
 
@@ -3629,10 +3606,6 @@ def main() -> None:
                                      split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
                                      small_first_shard=args.no_tensor_first_split)
 
-        if args.get_outfile:
-            print(f"{model_instance.fname_default}") # noqa: NP100
-            return
-
         if args.vocab_only:
             logger.info("Exporting model vocab...")
             model_instance.write_vocab()
@@ -3640,6 +3613,7 @@ def main() -> None:
         else:
             logger.info("Exporting model...")
             model_instance.write()
+            assert model_instance.fname_out is not None
             out_path = f"{model_instance.fname_out.parent}{os.sep}" if is_split else model_instance.fname_out
             logger.info(f"Model successfully exported to {out_path}")
 

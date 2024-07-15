@@ -17,6 +17,7 @@ import numpy as np
 from .constants import (
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
+    GGML_QUANT_SIZES,
     GGUF_VERSION,
     GGMLQuantizationType,
     GGUFEndian,
@@ -105,6 +106,36 @@ class GGUFWriter:
             self.tensors.append({})
 
         self.add_architecture()
+
+    def get_total_parameter_count(self) -> tuple[int, int, int, int]:
+        total_params = 0
+        shared_params = 0
+        expert_params = 0
+
+        expert_sum = 0
+        n_expert_tensors = 0
+
+        for tensors in self.tensors:
+            for name, info in tensors.items():
+
+                block_size, type_size = GGML_QUANT_SIZES[info.dtype]
+
+                size = (info.nbytes // type_size) * block_size
+
+                if "_exps." in name:
+                    expert_params += (size // info.shape[-3])
+                    expert_sum += info.shape[-3]
+                    n_expert_tensors += 1
+                else:
+                    shared_params += size
+
+                total_params += size
+
+        # Hopefully this should work even for variable-expert-count models
+        expert_count = (expert_sum // n_expert_tensors) if n_expert_tensors > 0 else 0
+
+        # NOTE: keep the output in the same order as accepted by 'size_label' in gguf-py/gguf/utility.py
+        return total_params, shared_params, expert_params, expert_count
 
     def format_shard_names(self, path: Path) -> list[Path]:
         if len(self.tensors) == 1:
