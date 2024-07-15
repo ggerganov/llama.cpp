@@ -7886,7 +7886,7 @@ static struct ggml_tensor * llm_build_lora_mm(
             ctx0, lora->b,
             ggml_mul_mat(ctx0, lora->a, cur)
         );
-        ab_cur = ggml_scale_inplace(ctx0, ab_cur, scale);
+        ab_cur = ggml_scale(ctx0, ab_cur, scale);
         res = ggml_add(ctx0, res, ab_cur);
     }
     return res;
@@ -7913,7 +7913,7 @@ static struct ggml_tensor * llm_build_lora_mm_id(
             ggml_mul_mat_id(ctx0, lora->a, cur, ids),
             ids
         );
-        ab_cur = ggml_scale_inplace(ctx0, ab_cur, scale);
+        ab_cur = ggml_scale(ctx0, ab_cur, scale);
         res = ggml_add(ctx0, res, ab_cur);
     }
     return res;
