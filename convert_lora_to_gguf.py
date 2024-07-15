@@ -365,7 +365,6 @@ if __name__ == '__main__':
 
         alpha = lparams["lora_alpha"]
 
-        model_instance.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[model_instance.model_arch])
         model_instance.gguf_writer.add_string(gguf.Keys.General.TYPE, gguf.GGUFType.ADAPTER)
         model_instance.gguf_writer.add_string(gguf.Keys.Adapter.TYPE, "lora")
         model_instance.gguf_writer.add_float32(gguf.Keys.Adapter.LORA_ALPHA, float(alpha))

@@ -99,7 +99,6 @@ class Model:
         self.fname_out = fname_out.parent / fname_out.name.format(ftype_lw, outtype=ftype_lw, ftype=ftype_lw, OUTTYPE=ftype_up, FTYPE=ftype_up)
         self.gguf_writer = gguf.GGUFWriter(path=None, arch=gguf.MODEL_ARCH_NAMES[self.model_arch], endianess=self.endianess, use_temp_file=self.use_temp_file,
                                            split_max_tensors=split_max_tensors, split_max_size=split_max_size, dry_run=dry_run, small_first_shard=small_first_shard)
-        self.gguf_writer.add_type(gguf.GGUFType.MODEL)
 
     @classmethod
     def __init_subclass__(cls):
@@ -3575,6 +3574,7 @@ def main() -> None:
                                      small_first_shard=args.no_tensor_first_split)
 
         logger.info("Set model parameters")
+        model_instance.gguf_writer.add_type(gguf.GGUFType.MODEL)
         model_instance.set_gguf_parameters()
 
         logger.info("Set model tokenizer")
