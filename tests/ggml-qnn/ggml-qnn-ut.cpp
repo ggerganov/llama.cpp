@@ -244,7 +244,7 @@ static uint32_t get_tensor_rank(const ggml_tensor *tensor) {
 static uint32_t get_tensor_data_size(const ggml_tensor *tensor) {
     size_t data_size = ggml_row_size(tensor->type, tensor->ne[0]);
     size_t n_dims = get_tensor_rank(tensor);
-    for (int i = 1; i < n_dims; i++) {
+    for (size_t i = 1; i < n_dims; i++) {
         data_size *= tensor->ne[i];
     }
 
@@ -377,7 +377,8 @@ static constexpr const ggml_op_binary_t kBinaryOps[] = {
 
 static_assert(kBinaryOps[GGML_OP_MUL_MAT] == ggml_mul_mat, "ggml_mul_mat at wrong index, check kBinaryOps");
 
-static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
+static void qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type, ggml_type qtype,
+                      std::vector<uint8_t> &results) {
     int64_t n_begin_time = 0LL;
     int64_t n_end_time = 0LL;
     int64_t n_duration = 0LL;
@@ -392,11 +393,6 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     struct ggml_tensor *dst = nullptr;
     ggml_backend_t backend = nullptr;
     ggml_backend_buffer_t buffer = nullptr;
-
-    ggml_type qtype = GGML_TYPE_I8;
-    qtype = GGML_TYPE_F16;
-    qtype = GGML_TYPE_Q8_0;
-    qtype = GGML_TYPE_F32;
 
     std::vector<uint8_t> work_buffer;
     QNN_LOG_DEBUG("enter qnn_ggml_op\n");
@@ -416,14 +412,14 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
         backend = ggml_backend_qnn_init(n_backend_type, "/data/local/tmp/");
         if (nullptr == backend) {
             QNN_LOG_ERROR("create qnn backend %d(%s) failed\n", n_backend_type, get_qnn_backend_name(n_backend_type));
-            return 1;
+            return;
         }
     }
 
     ctx = ggml_init(params);
     if (!ctx) {
         QNN_LOG_ERROR("%s: ggml_init() failed\n");
-        return 2;
+        return;
     }
 
     QNN_LOG_DEBUG("creating new tensors\n");
@@ -455,7 +451,7 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
         QNN_LOG_WARN("ggml op %d(%s) not supported", n_ggml_op_type, ggml_op_name((enum ggml_op)n_ggml_op_type));
         ggml_free(ctx);
         ggml_backend_free(backend);
-        return 3;
+        return;
     }
 
     ggml_set_output(dst);
@@ -466,7 +462,7 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
             QNN_LOG_ERROR("%s: failed to allocate backend buffer\n", __func__);
             ggml_free(ctx);
             ggml_backend_free(backend);
-            return 4;
+            return;
         }
     }
 #endif
@@ -484,6 +480,8 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
         TENSOR_DUMP(src0);
         TENSOR_DUMP(src1);
         TENSOR_DUMP(dst);
+        results.resize(ggml_nbytes(dst));
+        memcpy(results.data(), ggml_get_data(dst), ggml_nbytes(dst));
     } else {
         QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64
                       ", nb = (%5zi, %5zi, %5zi)\n",
@@ -507,7 +505,6 @@ static int qnn_op_ut(int num_threads, int n_backend_type, int n_ggml_op_type) {
     n_duration = (n_end_time - n_begin_time) / 1000;
     QNN_LOG_DEBUG("duration of ut GGML_OP_%s using QNN backend %s: %lld milliseconds\n",
                   ggml_op_name((enum ggml_op)n_ggml_op_type), get_qnn_backend_name(n_backend_type), n_duration);
-    return 0;
 }
 
 #define DEFINE_OP(op) { #op, op }
@@ -516,6 +513,10 @@ static const std::unordered_map<std::string, int> kMapStringToGGMLOp = {
     DEFINE_OP(GGML_OP_ADD),  DEFINE_OP(GGML_OP_SUB),     DEFINE_OP(GGML_OP_MUL), DEFINE_OP(GGML_OP_DIV),
     DEFINE_OP(GGML_OP_SQRT), DEFINE_OP(GGML_OP_MUL_MAT), DEFINE_OP(GGML_OP_LOG),
 };
+
+#define CONSOLE_RED "\033[31m"
+#define CONSOLE_GREEN "\033[32m"
+#define CONSOLE_RESET "\033[0m"
 
 int main(int argc, char *argv[]) {
     int num_threads = 4;
@@ -554,7 +555,17 @@ int main(int argc, char *argv[]) {
     QNN_LOG_DEBUG("enter qnn_ggml_op\n");
     QNN_LOG_DEBUG("backend %d, ggml op:%d(%s)", n_backend_type, n_ggml_op_type,
                   ggml_op_name((enum ggml_op)n_ggml_op_type));
-    qnn_op_ut(num_threads, n_backend_type, n_ggml_op_type);
 
-    return 0;
+    std::vector<uint8_t> results;
+    qnn_op_ut(num_threads, n_backend_type, n_ggml_op_type, GGML_TYPE_F32, results);
+    std::vector<uint8_t> cpu_results;
+    qnn_op_ut(num_threads, QNN_BACKEND_GGML, n_ggml_op_type, GGML_TYPE_F32, cpu_results);
+
+    if (results == cpu_results) {
+        QNN_LOG_INFO(CONSOLE_GREEN "[Result] results equal!" CONSOLE_RESET);
+        return 0;
+    } else {
+        QNN_LOG_ERROR(CONSOLE_RED "[Result] results not equal!" CONSOLE_RESET);
+        return 1;
+    }
 }
