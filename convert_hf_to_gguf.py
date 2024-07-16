@@ -337,7 +337,7 @@ class Model:
 
                 self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
 
-    def prepare_metadata(self):
+    def prepare_metadata(self, vocab_only: bool):
 
         # Fallback to model directory name if metadata name is still missing
         if self.metadata.name is None:
@@ -350,24 +350,38 @@ class Model:
             if (total_params > 0):
                 self.metadata.size_label = gguf.size_label(total_params, shared_params, expert_params, expert_count)
 
-        # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
-        output_type = self.ftype.name.partition("_")[2]
-
-        # Generate default filename based on model specification and available metadata
-        fname_default = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type)
-
         # Filename Output
-        if self.fname_out is not None:
-            if not self.fname_out.is_dir():
-                # custom defined filename and path was provided
-                # allow templating the file name with the output ftype, useful with the "auto" ftype
-                self.fname_out = self.fname_out.parent / gguf.fill_templated_filename(self.fname_out.name, output_type)
-            else:
-                # the target file is a directory
-                self.fname_out = self.fname_out / f"{fname_default}.gguf"
+        if self.fname_out is not None and not self.fname_out.is_dir():
+            # Output path is a custom defined templated filename
+            # Note: `not is_dir()` is used because `.is_file()` will not detect
+            #       file template strings as it doesn't actually exist as a file
+
+            # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
+            output_type: str = self.ftype.name.partition("_")[2]
+
+            # Process templated file name with the output ftype, useful with the "auto" ftype
+            self.fname_out = self.fname_out.parent / gguf.fill_templated_filename(self.fname_out.name, output_type)
         else:
-            # output in the same directory as the model by default
-            self.fname_out = self.dir_model / f"{fname_default}.gguf"
+
+            # Generate default filename based on model specification and available metadata
+            if vocab_only:
+                # Vocab based default filename
+                fname_default: str = gguf.naming_convention_vocab_only(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version)
+            else:
+
+                # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
+                output_type: str = self.ftype.name.partition("_")[2]
+
+                # Standard default filename
+                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type)
+
+            # Check if preferred output directory path was provided
+            if self.fname_out is not None and self.fname_out.is_dir():
+                # output path is a directory
+                self.fname_out = self.fname_out / f"{fname_default}.gguf"
+            else:
+                # output in the same directory as the model by default
+                self.fname_out = self.dir_model / f"{fname_default}.gguf"
 
         logger.info("Set meta model")
         self.metadata.set_gguf_meta_model(self.gguf_writer)
@@ -384,7 +398,7 @@ class Model:
 
     def write(self):
         self.prepare_tensors()
-        self.prepare_metadata()
+        self.prepare_metadata(vocab_only=False)
         self.gguf_writer.write_header_to_file(path=self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.write_tensors_to_file(progress=True)
@@ -394,7 +408,7 @@ class Model:
         if len(self.gguf_writer.tensors) != 1:
             raise ValueError('Splitting the vocabulary is not supported')
 
-        self.prepare_metadata()
+        self.prepare_metadata(vocab_only=True)
         self.gguf_writer.write_header_to_file(path=self.fname_out)
         self.gguf_writer.write_kv_data_to_file()
         self.gguf_writer.close()

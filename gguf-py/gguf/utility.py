@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 
-def fill_templated_filename(filename: str, output_type: str):
+def fill_templated_filename(filename: str, output_type: str | None) -> str:
     # Given a file name fill in any type templates e.g. 'some-model-name.{ftype}.gguf'
-    ftype_uppercase: str = output_type.upper()
-    ftype_lowercase: str = output_type.lower()
+    ftype_lowercase: str = output_type.lower() if output_type is not None else ""
+    ftype_uppercase: str = output_type.upper() if output_type is not None else ""
     return filename.format(ftype_lowercase,
                            outtype=ftype_lowercase, ftype=ftype_lowercase,
                            OUTTYPE=ftype_uppercase, FTYPE=ftype_uppercase)
@@ -63,3 +63,20 @@ def naming_convention(model_name: str | None, base_name: str | None, finetune_st
     precision = f"-{output_type.strip().replace(' ', '-').upper()}" if output_type is not None else ""
 
     return f"{name}{parameters}{finetune}{version}{precision}"
+
+
+def naming_convention_vocab_only(model_name: str | None, base_name: str | None, finetune_string: str | None, version_string: str | None) -> str:
+    # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
+
+    if base_name is not None:
+        name = base_name.strip().title().replace(' ', '-').replace('/', '-')
+    elif model_name is not None:
+        name = model_name.strip().title().replace(' ', '-').replace('/', '-')
+    else:
+        name = "ggml-model"
+
+    finetune = f"-{finetune_string.strip().title().replace(' ', '-')}" if finetune_string is not None else ""
+
+    version = f"-{version_string.strip().replace(' ', '-')}" if version_string is not None else ""
+
+    return f"{name}{finetune}{version}-vocab"
