@@ -109,9 +109,9 @@ void ggml_cann_repeat(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
  * @brief Adds two tensors element-wise and stores the result in a destination
  * tensor.
  *
- * This function performs the operation: 
+ * This function performs the operation:
  * \f[
- *    dst = acl\_src0 + alpha \times acl\_src1 
+ *    dst = acl\_src0 + alpha \times acl\_src1
  * \f]
  * where alpha is a scalar value and defaults to 1.0f.
  *
@@ -250,9 +250,9 @@ void ggml_cann_concat(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
  * @brief Creates a tensor with values starting from `start`, incremented by
  * `step`, and ending before `stop`.
  *
- * This function performs the operation: 
+ * This function performs the operation:
  * \f[
- *    \text {out }_{i+1}=\text {out }_i+\text {step} 
+ *    \text {out }_{i+1}=\text {out }_i+\text {step}
  * \f]
  * the range is [start, stop).
  *
@@ -1568,7 +1568,7 @@ static void aclnn_mul(ggml_backend_cann_context& ctx,
 
 /**
  * @brief Applies element-wise cosine function to the elements of a tensor.
- * 
+ *
  * This function computes the cosine of each element in the source tensor `acl_src`
  * and stores the result in the destination tensor `acl_dst`.
  * The operation is defined as:
@@ -1598,7 +1598,7 @@ static void aclnn_cos(ggml_backend_cann_context& ctx, aclTensor* acl_src,
 
 /**
  * @brief Applies element-wise sine function to the elements of a tensor.
- * 
+ *
  * This function computes the sine of each element in the source tensor `acl_src`
  * and stores the result in the destination tensor `acl_dst`.
  * The operation is defined as:

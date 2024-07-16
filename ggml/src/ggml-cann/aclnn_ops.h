@@ -308,7 +308,7 @@ void ggml_cann_upsample_nearest2d(ggml_backend_cann_context& ctx,
 void ggml_cann_pad(ggml_backend_cann_context& ctx, ggml_tensor* dst);
 
 /**
- * @brief   Executes a 2D pooling operation on a ggml tensor using the CANN 
+ * @brief   Executes a 2D pooling operation on a ggml tensor using the CANN
  *          backend.
  *
  * @details This function dispatches the execution of a 2D pooling operation on
@@ -355,7 +355,7 @@ void ggml_cann_dup(ggml_backend_cann_context& ctx, ggml_tensor* dst);
  *          prevent division by zero.
  *          The operation is defined as:
  *          \f[
- *               \text{RmsNorm}\left(x_i\right)=\frac{x_i}{\text{Rms}(\mathbf{x})} g_i, 
+ *               \text{RmsNorm}\left(x_i\right)=\frac{x_i}{\text{Rms}(\mathbf{x})} g_i,
  *               \quad \text { where } \text{Rms}(\mathbf{x})=\sqrt{\frac{1}{n} \sum_{i=1}^n x_i^2+e p s}
  *          \f]
  *          `eps` is in dst->op_params.

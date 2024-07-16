@@ -31,7 +31,7 @@
  *
  * @details	This function takes a ggml_type as input and returns the corresponding
  *			aclDataType. It supports mapping for various ggml_types. If the input type
- *			does not match any of the predefined ggml_types, the function returns 
+ *			does not match any of the predefined ggml_types, the function returns
  *          ACL_DT_UNDEFINED.
  *
  * @param	type    The ggml_type to be mapped.
@@ -51,7 +51,7 @@ aclDataType type_mapping(ggml_type type);
  * @param   tensor      Pointer to the ggml_tensor to be converted to ACL tensor.
  * @param   ne          Pointer to an array containing dimensions. Defaults to nullptr
  *                      if no customer shape is applied.
- * @param   nb          Pointer to an array containing strides. Defaults to nullptr 
+ * @param   nb          Pointer to an array containing strides. Defaults to nullptr
  *                      if no customer shape is applied.
  * @param   dims        Number of dimensions in the tensor. Defaults to 0 if no customer
  *                      shape is applied.
@@ -132,7 +132,7 @@ bool need_bcast(const ggml_tensor* t0, const ggml_tensor* t1);
  *          that src1 can be element-wise broadcasted to src0's shape.
  *
  *  How it works:
- * 
+ *
  *  if dim0 has padding.
  *  a -> (2, 2) padding = 2
  *   a: [[1, 2, *, *]
