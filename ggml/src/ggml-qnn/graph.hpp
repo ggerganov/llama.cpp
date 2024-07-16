@@ -2,11 +2,12 @@
 #pragma once
 
 #include <array>
+#include <memory>
 
 #include "ggml-qnn.h"
 
 #include "logger.hpp"
-#include "qnn.hpp"
+#include "qnn-lib.hpp"
 
 namespace qnn {
 
@@ -17,7 +18,7 @@ public:
     typedef std::array<Qnn_Tensor_t, _OutputSize> output_tensor_array_t;
 
     explicit ggml_qnn_graph(const std::string &graph_name, QNNBackend device, Qnn_ContextHandle_t qnn_context,
-                            QNN_INTERFACE_VER_TYPE qnn_interface, size_t vtcm_size_in_mb) :
+                            std::shared_ptr<qnn_interface> qnn_interface, size_t vtcm_size_in_mb) :
         _graph_name(graph_name), _device(device), _qnn_interface(qnn_interface) {
         QNN_LOG_INFO("graph name %s", graph_name.c_str());
 
@@ -56,9 +57,9 @@ public:
 
             const QnnGraph_Config_t *graph_configs[] = { &graph_hvx_config, &graph_dlbc_config, &graph_vtcm_config,
                                                          &graph_opt_config, nullptr };
-            error = qnn_interface.graphCreate(qnn_context, graph_name.c_str(), graph_configs, &graph_handle);
+            error = qnn_interface->qnn_graph_create(qnn_context, graph_name.c_str(), graph_configs, &graph_handle);
         } else {
-            error = qnn_interface.graphCreate(qnn_context, graph_name.c_str(), nullptr, &graph_handle);
+            error = qnn_interface->qnn_graph_create(qnn_context, graph_name.c_str(), nullptr, &graph_handle);
         }
 
         if (error != QNN_SUCCESS) {
@@ -79,7 +80,7 @@ public:
             return false;
         }
 
-        auto err = _qnn_interface.tensorCreateGraphTensor(_graph_handle, &tensor);
+        auto err = _qnn_interface->qnn_tensor_create_graph_tensor(_graph_handle, &tensor);
         if (err != QNN_SUCCESS) {
             QNN_LOG_INFO("error = %d\n", err);
             QNN_LOG_DEBUG("tensor%p name %s", &tensor, QNN_TENSOR_GET_NAME(tensor));
@@ -105,13 +106,13 @@ public:
                                      .v1 = { _graph_name.c_str(), QNN_OP_PACKAGE_NAME_QTI_AISW, op_name.c_str(), 0,
                                              qnn_params, (uint32_t)_tensor_inputs.size(), _tensor_inputs.data(),
                                              (uint32_t)_tensor_outputs.size(), _tensor_outputs.data() } };
-        auto error = _qnn_interface.graphAddNode(_graph_handle, op_config);
+        auto error = _qnn_interface->qnn_graph_add_node(_graph_handle, op_config);
         if (error != QNN_SUCCESS) {
             QNN_LOG_ERROR("graphAddNode.error = %d\n", error);
             return false;
         }
 
-        error = _qnn_interface.graphFinalize(_graph_handle, nullptr, nullptr);
+        error = _qnn_interface->qnn_graph_finalize(_graph_handle, nullptr, nullptr);
         if (error != QNN_SUCCESS) {
             QNN_LOG_ERROR("graphFinalize.error = %d\n", error);
             return false;
@@ -124,8 +125,9 @@ public:
     bool execute(const input_tensor_array_t &tensor_inputs, const output_tensor_array_t &tensor_outputs) {
         _tensor_inputs = tensor_inputs;
         _tensor_outputs = tensor_outputs;
-        auto error = _qnn_interface.graphExecute(_graph_handle, _tensor_inputs.data(), _tensor_inputs.size(),
-                                                 _tensor_outputs.data(), _tensor_outputs.size(), nullptr, nullptr);
+        auto error =
+            _qnn_interface->qnn_graph_execute(_graph_handle, _tensor_inputs.data(), _tensor_inputs.size(),
+                                              _tensor_outputs.data(), _tensor_outputs.size(), nullptr, nullptr);
         if (_device == QNN_BACKEND_NPU) {
             if (error == QNN_COMMON_ERROR_SYSTEM_COMMUNICATION) {
                 QNN_LOG_WARN("NPU crashed. SSR detected. Caused QNN graph execute error\n");
@@ -149,7 +151,7 @@ public:
 private:
     const std::string _graph_name;
     const QNNBackend _device;
-    const QNN_INTERFACE_VER_TYPE _qnn_interface;
+    std::shared_ptr<qnn_interface> _qnn_interface;
     Qnn_GraphHandle_t _graph_handle = nullptr;
     std::array<Qnn_Tensor_t, _InputSize> _tensor_inputs;
     std::array<Qnn_Tensor_t, _OutputSize> _tensor_outputs;

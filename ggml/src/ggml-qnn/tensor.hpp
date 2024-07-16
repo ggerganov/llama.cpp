@@ -12,7 +12,7 @@
 #include "System/QnnSystemInterface.h"
 #include "graph.hpp"
 #include "logger.hpp"
-#include "qnn.hpp"
+#include "qnn-lib.hpp"
 #include "utils.hpp"
 
 namespace qnn {

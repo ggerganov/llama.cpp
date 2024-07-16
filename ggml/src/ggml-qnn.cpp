@@ -78,32 +78,9 @@ static struct qnn::qcom_socinfo g_qnn_soc_info_table[] = {
 //                    HMX(Hexagon Matrix eXtensions)/HTA(Hexagon Tensor Accelerator)
 
 static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
-    [QNN_BACKEND_CPU] = { .device = 0,
-                          .threads = 1,
-                          .name = "qnn-cpu",
-                          .lib = "libQnnCpu.so",
-                          .backend = nullptr,
-                          .raw_interface = {},
-                          .raw_system_interface = {},
-                          .socinfo = {} },
-
-    [QNN_BACKEND_GPU] = { .device = 1,
-                          .threads = 1,
-                          .name = "qnn-gpu",
-                          .lib = "libQnnGpu.so",
-                          .backend = nullptr,
-                          .raw_interface = {},
-                          .raw_system_interface = {},
-                          .socinfo = {} },
-
-    [QNN_BACKEND_NPU] = { .device = 2,
-                          .threads = 1,
-                          .name = "qnn-npu",
-                          .lib = "libQnnHtp.so",
-                          .backend = nullptr,
-                          .raw_interface = {},
-                          .raw_system_interface = {},
-                          .socinfo = {} },
+    ggml_backend_qnn_context(QNN_BACKEND_CPU, 1, "qnn-cpu", "libQnnCpu.so"), /* QNN_BACKEND_CPU */
+    ggml_backend_qnn_context(QNN_BACKEND_GPU, 1, "qnn-gpu", "libQnnGpu.so"), /* QNN_BACKEND_GPU */
+    ggml_backend_qnn_context(QNN_BACKEND_NPU, 1, "qnn-npu", "libQnnHtp.so"), /* QNN_BACKEND_NPU */
 };
 
 struct ggml_backend_qnn_buffer_context {
@@ -549,17 +526,17 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char *qnn_lib_path) {
         return nullptr;
     }
     auto qnn_interface = instance->get_qnn_interface();
-    if (!qnn_interface.is_loaded()) {
+    if (!qnn_interface) {
         QNN_LOG_WARN("qnn subsystem failure\n");
         return nullptr;
     }
 
     std::string device_name = qnn::get_backend_name(device);
     QNN_LOG_INFO("qnn device name %s", device_name.c_str());
-    g_qnn_mgr[device].instance = instance;
-    g_qnn_mgr[device].raw_interface = instance->get_qnn_raw_interface();
-    g_qnn_mgr[device].raw_system_interface = instance->get_qnn_raw_system_interface();
-    g_qnn_mgr[device].socinfo = instance->get_soc_info();
+    auto &qnn_device = g_qnn_mgr[device];
+    qnn_device.instance = instance;
+    qnn_device.qnn_interface = qnn_interface;
+    qnn_device.socinfo = instance->get_soc_info();
 
     ggml_backend_t qnn_backend = new ggml_backend{ /* .guid      = */ ggml_backend_qnn_guid(),
                                                    /* .iface     = */ ggml_backend_qnn_interface,

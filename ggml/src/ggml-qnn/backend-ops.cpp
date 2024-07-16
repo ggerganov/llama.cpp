@@ -176,7 +176,7 @@ qnn::ggml_qnn_graph<_InputSize, _OutputSize> *get_qnn_graph_from_cache(
         }
         auto graph =
             std::make_unique<graph_t>(graph_name, (QNNBackend)(ctx->device), ctx->instance->get_qnn_context_handle(),
-                                      ctx->raw_interface, ctx->socinfo.vtcm_size_in_mb);
+                                      ctx->qnn_interface, ctx->socinfo.vtcm_size_in_mb);
 
         if (!graph->is_valid()) {
             return nullptr;
