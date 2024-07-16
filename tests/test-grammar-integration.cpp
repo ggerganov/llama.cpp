@@ -49,12 +49,14 @@ static bool match_string(const std::string & input, llama_grammar * grammar) {
 
     const auto & code_points = decoded.first;
 
-    llama_grammar_stacks & cur_stacks = llama_grammar_get_stacks(grammar);
+    const llama_grammar_rules  & prev_rules = llama_grammar_get_rules (grammar);
+          llama_grammar_stacks & cur_stacks = llama_grammar_get_stacks(grammar);
 
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
-        const llama_grammar_rules  & prev_rules  = llama_grammar_get_rules (grammar);
-        const llama_grammar_stacks   prev_stacks = llama_grammar_get_stacks(grammar); // copy
+        const llama_grammar_stacks prev_stacks = llama_grammar_get_stacks(grammar); // copy
+
         llama_grammar_accept(prev_rules, prev_stacks, *it, cur_stacks);
+
         if (cur_stacks.empty()) {
             // no stacks means that the grammar failed to match at this point
             return false;
