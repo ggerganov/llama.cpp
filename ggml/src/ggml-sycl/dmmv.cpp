@@ -905,30 +905,6 @@ static void dequantize_mul_mat_vec_q4_0_sycl(const void *vx, const dfloat *y,
     GGML_ASSERT(ncols % WARP_SIZE == 0);
     const sycl::range<3> block_nums(1, 1, nrows);
     const sycl::range<3> block_dims(1, 1, WARP_SIZE);
-    stream->parallel_for(
-        nrows * ncols / QK4_0,
-        [=](auto i) [[intel::reqd_sub_group_size(WARP_SIZE)]] {
-            const block_q4_0 *x = (const block_q4_0 *)vx;
-            int ib = i;
-            typedef sycl::vec<uint8_t, QK4_0 / 2> CT;
-            CT tmp = *(CT *)x[ib].qs;
-            for (int j = 0; j < QK4_0 / 2; j += 2)
-            {
-                const int vui = tmp[j];
-                const int vui1 = tmp[j + 1];
-                uint8_t nv = (vui & 0xF) | (vui1 << 4);
-                *(uint8_t *)(vx_tmp + ib * QK4_0 / 2 + j / 2) = nv;
-            }
-            for (int j = 0; j < QK4_0 / 2; j += 2)
-            {
-                const int vui = tmp[j];
-                const int vui1 = tmp[j + 1];
-                uint8_t nv = (vui >> 4) | (vui1 & 0xf0);
-                *(uint8_t *)(vx_tmp + ib * QK4_0 / 2 + j / 2 + QK4_0 / 4) = nv;
-            }
-            *(sycl::half *)(vx_tmp + ncols * nrows / 2 + ib * 2) = x[ib].d;
-
-        });
     {
         dpct::has_capability_or_fail(stream->get_device(),
                                      {sycl::aspect::fp16});
