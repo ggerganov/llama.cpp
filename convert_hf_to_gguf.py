@@ -3456,20 +3456,19 @@ class LazyTorchTensor(gguf.LazyBase):
         dtype = self._dtype_map[self.dtype]
         return gguf.LazyNumpyTensor(
             meta=gguf.LazyNumpyTensor.meta_with_dtype_and_shape(dtype, self.shape),
-            lazy=self._lazy,
             args=(self,),
-            func=(lambda s: s[0].numpy())
+            func=(lambda s: s.numpy())
         )
 
     @classmethod
-    def meta_with_dtype_and_shape(cls, dtype: torch.dtype, shape: torch.Size) -> Tensor:
+    def meta_with_dtype_and_shape(cls, dtype: torch.dtype, shape: tuple[int, ...]) -> Tensor:
         return torch.empty(size=shape, dtype=dtype, device="meta")
 
     @classmethod
     def from_safetensors_slice(cls, st_slice: Any) -> Tensor:
         dtype = cls._dtype_str_map[st_slice.get_dtype()]
-        shape = st_slice.get_shape()
-        lazy = cls(meta=cls.meta_with_dtype_and_shape(dtype, shape), args=(st_slice,), func=lambda s: s[0][:])
+        shape: tuple[int, ...] = tuple(st_slice.get_shape())
+        lazy = cls(meta=cls.meta_with_dtype_and_shape(dtype, shape), args=(st_slice,), func=lambda s: s[:])
         return cast(torch.Tensor, lazy)
 
     @classmethod
@@ -3482,7 +3481,7 @@ class LazyTorchTensor(gguf.LazyBase):
         if func is torch.Tensor.numpy:
             return args[0].numpy()
 
-        return LazyTorchTensor._wrap_fn(func)(*args, **kwargs)
+        return cls._wrap_fn(func)(*args, **kwargs)
 
 
 def parse_args() -> argparse.Namespace:
