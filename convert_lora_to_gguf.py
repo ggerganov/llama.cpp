@@ -356,8 +356,7 @@ if __name__ == '__main__':
             fname_out,
             is_big_endian=args.bigendian,
             use_temp_file=False,
-            eager=args.no_lazy,
-            model_name=None,
+            eager=args.no_lazy
         )
 
         with open(lora_config, "r") as f:
