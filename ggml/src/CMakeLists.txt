@@ -766,7 +766,7 @@ if (GGML_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
 
-if (LLAMA_CANN)
+if (GGML_CANN)
     if ("cann${CANN_INSTALL_DIR}" STREQUAL "cann" AND DEFINED ENV{ASCEND_TOOLKIT_HOME})
         set(CANN_INSTALL_DIR $ENV{ASCEND_TOOLKIT_HOME})
         message(STATUS "CANN: updated CANN_INSTALL_DIR from ASCEND_TOOLKIT_HOME=$ENV{ASCEND_TOOLKIT_HOME}")
@@ -774,25 +774,25 @@ if (LLAMA_CANN)
 
     if (CANN_INSTALL_DIR)
         # Only Support Linux.
-        if (LLAMA_CANN)
+        if (GGML_CANN)
             if (NOT UNIX)
-                set(LLAMA_CANN OFF)
-                message(WARNING "CANN: CANN toolkit supports unix but not ${CMAKE_SYSTEM_NAME}. Turning off LLAMA_CANN")
+                set(GGML_CANN OFF)
+                message(WARNING "CANN: CANN toolkit supports unix but not ${CMAKE_SYSTEM_NAME}. Turning off GGML_CANN")
             endif()
         endif()
 
         # Supported platforms: x86-64, arm64
-        if (LLAMA_CANN)
+        if (GGML_CANN)
             if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
             elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "amd64")
             else()
-                set(LLAMA_CANN OFF)
-                message(WARNING "CANN: CANN toolkit supports x86-64 and arm64 but not ${CMAKE_SYSTEM_PROCESSOR}. Turning off LLAMA_CANN")
+                set(GGML_CANN OFF)
+                message(WARNING "CANN: CANN toolkit supports x86-64 and arm64 but not ${CMAKE_SYSTEM_PROCESSOR}. Turning off GGML_CANN")
             endif()
         endif()
 
         # Set header and libs
-        if(LLAMA_CANN)
+        if(GGML_CANN)
             set(CANN_INCLUDE_DIRS
                 ${CANN_INSTALL_DIR}/include
                 ${CANN_INSTALL_DIR}/include/aclnn
@@ -825,12 +825,12 @@ if (LLAMA_CANN)
             list(APPEND GGML_CDEF_PUBLIC GGML_USE_CANN)
         endif()
     else()
-        set(LLAMA_CANN OFF)
-        message(WARNING "CANN: Can't find CANN_INSTALL_DIR, do you forget to source set_var.sh. Turning off LLAMA_CANN")
+        set(GGML_CANN OFF)
+        message(WARNING "CANN: Can't find CANN_INSTALL_DIR, do you forget to source set_var.sh. Turning off GGML_CANN")
     endif()
 
-    if(NOT LLAMA_CANN)
-        message(WARNING "CANN: LLAMA_CANN is turned OFF, see above for details.")
+    if(NOT GGML_CANN)
+        message(WARNING "CANN: GGML_CANN is turned OFF, see above for details.")
     endif()
 endif()
 
