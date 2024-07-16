@@ -2213,7 +2213,7 @@ class InternLM2Model(Model):
 
         chat_eos_token = '<|im_end|>'
         chat_eos_token_id = None
-
+        func_call_tokens =('<|plugin|>', '<|interpreter|>', '<|action_end|>', '<|action_start|>')
         tokenizer_config_file = self.dir_model / 'tokenizer_config.json'
         if tokenizer_config_file.is_file():
             with open(tokenizer_config_file, "r", encoding="utf-8") as f:
@@ -2230,7 +2230,7 @@ class InternLM2Model(Model):
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
-                    if foken_data.get("special"):
+                    if foken_data.get("special") and not foken_data["content"] in func_call_tokens:
                         toktypes[token_id] = SentencePieceTokenTypes.CONTROL
 
         tokenizer_file = self.dir_model / 'tokenizer.json'
@@ -2249,7 +2249,7 @@ class InternLM2Model(Model):
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
-                    if foken_data.get("special"):
+                    if foken_data.get("special") and not foken_data["content"] in func_call_tokens:
                         toktypes[token_id] = SentencePieceTokenTypes.CONTROL
 
         self.gguf_writer.add_tokenizer_model("llama")
