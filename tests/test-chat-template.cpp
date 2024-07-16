@@ -66,6 +66,8 @@ int main(void) {
         u8"{% for message in messages %}{% if message['role'] == 'user' %}{{'<用户>' + message['content'].strip() + '<AI>'}}{% else %}{{message['content'].strip()}}{% endif %}{% endfor %}",
         // DeepSeek-V2
         "{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}{{ 'User: ' + message['content'] + '\n\n' }}{% elif message['role'] == 'assistant' %}{{ 'Assistant: ' + message['content'] + eos_token }}{% elif message['role'] == 'system' %}{{ message['content'] + '\n\n' }}{% endif %}{% endfor %}{% if add_generation_prompt %}{{ 'Assistant:' }}{% endif %}",
+        // OuteAI/Lite-Mistral-150M-v2-Instruct
+        "{% for message in messages %}{% if message['role'] == 'user' %}{{'<s>user\n' + message['content'] + '</s>\n'}}{% elif message['role'] == 'assistant' %}{{'<s>assistant\n' + message['content'] + '</s>\n'}}{% elif message['role'] == 'system' %}{{'<s>system\n' + message['content'] + '</s>\n'}}{% endif %}{% endfor %}{% if add_generation_prompt %}{{'<s>assistant\n'}}{% endif %}",
     };
     std::vector<std::string> expected_output = {
         // teknium/OpenHermes-2.5-Mistral-7B
@@ -110,6 +112,8 @@ int main(void) {
         u8"You are a helpful assistant<用户>Hello<AI>Hi there<用户>Who are you<AI>I am an assistant<用户>Another question<AI>",
         // DeepSeek-V2
         u8"You are a helpful assistant\n\nUser: Hello\n\nAssistant: Hi there<｜end▁of▁sentence｜>User: Who are you\n\nAssistant:    I am an assistant   <｜end▁of▁sentence｜>User: Another question\n\nAssistant:",
+        // OuteAI/Lite-Mistral-150M-v2-Instruct
+        "<s>user\nHello</s>\n<s>assistant\nHi there</s>\n<s>user\nWho are you</s>\n<s>assistant\n   I am an assistant   </s>\n<s>user\nAnother question</s>\n<s>assistant\n",
     };
     std::vector<char> formatted_chat(1024);
     int32_t res;

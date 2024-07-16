@@ -21600,6 +21600,14 @@ static int32_t llama_chat_apply_template_internal(
         if (add_ass) {
             ss << "Assistant:";
         }
+    } else if (tmpl == "lite-mistral" || tmpl_contains("'<s>system\n' + message['content'] + '</s>\n'")) {
+        // OuteAI/Lite-Mistral-150M-v2-Instruct
+        for (auto message : chat) {
+            ss << "<s>" << message->role << "\n" << message->content << "</s>\n";
+        }
+        if (add_ass) {
+            ss << "<s>assistant\n";
+        }
     } else {
         // template not supported
         return -1;
