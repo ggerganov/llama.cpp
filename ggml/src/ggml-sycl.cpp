@@ -4341,6 +4341,9 @@ static void ggml_backend_sycl_buffer_set_tensor(ggml_backend_buffer_t buffer,
     if (tensor->type == GGML_TYPE_Q4_0)
     {
         auto tmp_buf = sycl::malloc_shared<char>(size, *stream);
+        SYCL_CHECK(
+            CHECK_TRY_ERROR((*stream).memcpy(tmp_buf, data, size)
+                .wait()));
         GGML_ASSERT((size % sizeof(block_q4_0) == 0));
         GGML_ASSERT((offset % sizeof(block_q4_0) == 0));
         int blk_offset = offset / sizeof(block_q4_0);
@@ -4349,9 +4352,9 @@ static void ggml_backend_sycl_buffer_set_tensor(ggml_backend_buffer_t buffer,
         size_t nrows = tensor->ne[1];
         auto d_ptr = (sycl::half*)(qs_ptr + ncols * nrows / 2) + blk_offset;
         stream->parallel_for(
-            size / QK4_0,
+            size / sizeof(block_q4_0),
             [=](auto i) [[intel::reqd_sub_group_size(WARP_SIZE)]] {
-                const block_q4_0* x = (const block_q4_0*)data;
+                const block_q4_0* x = (const block_q4_0*)tmp_buf;
                 int ib = i;
                 typedef sycl::vec<uint8_t, QK4_0 / 2> CT;
                 CT tmp = *(CT*)x[ib].qs;
@@ -4371,7 +4374,7 @@ static void ggml_backend_sycl_buffer_set_tensor(ggml_backend_buffer_t buffer,
                 }
                 *(d_ptr + ib) = x[ib].d;
 
-            });
+            }).wait();
         sycl::free(tmp_buf, *stream);
     }
     else
