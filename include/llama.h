@@ -1190,8 +1190,12 @@ struct llama_grammar_candidate {
     llama_partial_utf8   partial_utf8;
 };
 
-using llama_grammar_rules  = std::vector<std::vector<llama_grammar_element>>;
-using llama_grammar_stacks = std::vector<std::vector<const llama_grammar_element *>>;
+using llama_grammar_rule  = std::vector<      llama_grammar_element>;
+using llama_grammar_stack = std::vector<const llama_grammar_element *>;
+
+using llama_grammar_rules      = std::vector<llama_grammar_rule>;
+using llama_grammar_stacks     = std::vector<llama_grammar_stack>;
+using llama_grammar_candidates = std::vector<llama_grammar_candidate>;
 
 const llama_grammar_rules  & llama_grammar_get_rules (const struct llama_grammar * grammar);
       llama_grammar_stacks & llama_grammar_get_stacks(      struct llama_grammar * grammar);
@@ -1203,9 +1207,9 @@ void llama_grammar_accept(
               llama_grammar_stacks & new_stacks);
 
 std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_stack(
-        const std::vector<std::vector<llama_grammar_element>> & rules,
-        const std::vector<const llama_grammar_element *>      & stack,
-        const std::vector<llama_grammar_candidate>            & candidates);
+        const llama_grammar_rules & rules,
+        const llama_grammar_stack & stack,
+        const llama_grammar_candidates & candidates);
 
 std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
         const std::string & src,
