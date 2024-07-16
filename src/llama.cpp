@@ -18916,10 +18916,6 @@ void llama_backend_init(void) {
         struct ggml_context * ctx = ggml_init(params);
         ggml_free(ctx);
     }
-
-#if defined(GGML_USE_CANN)
-    ggml_cann_backend_init();
-#endif
 }
 
 void llama_numa_init(enum ggml_numa_strategy numa) {
@@ -18929,10 +18925,6 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
 }
 
 void llama_backend_free(void) {
-#if defined(GGML_USE_CANN)
-    ggml_cann_backend_free();
-#endif
-
     ggml_quantize_free();
 }
 

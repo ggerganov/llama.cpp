@@ -221,7 +221,7 @@ struct ggml_backend_cann_context {
      * @param device Device ID.
      */
     explicit ggml_backend_cann_context(int device)
-        : device(device), name(GGML_CANN_NAME + std::to_string(device)) {}
+        : device(device), name("CANN" + std::to_string(device)) {}
 
     /**
      * @brief Destructor for cleaning up resources.

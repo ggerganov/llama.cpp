@@ -22,6 +22,9 @@
 
 #pragma once
 
+#define GGML_COMMON_DECL_C
+
+#include "../src/ggml-common.h"
 #include "ggml-backend.h"
 #include "ggml.h"
 
@@ -30,33 +33,9 @@ extern "C" {
 #endif
 
 /**
- * @def GGML_CANN_NAME
- * @brief Define for the name of the CANN backend.
- */
-#define GGML_CANN_NAME "CANN"
-
-/**
  * @brief Maximum number of CANN devices supported.
  */
 #define GGML_CANN_MAX_DEVICES 16
-
-/**
- * @brief Structure for QK4_0 data format.
- */
-#define QK4_0 32
-typedef struct {
-    uint16_t d;            /**< Delta */
-    uint8_t qs[QK4_0 / 2]; /**< Nibbles / quants */
-} block_q4_0;
-
-/**
- * @brief Structure for QK8_0 data format.
- */
-#define QK8_0 32
-typedef struct {
-    uint16_t d;       /**< Delta */
-    int8_t qs[QK8_0]; /**< Quants */
-} block_q8_0;
 
 /**
  * @brief Initializes the CANN backend for a specified device.
@@ -132,16 +111,6 @@ GGML_API GGML_CALL void ggml_backend_cann_get_device_description(
 GGML_API GGML_CALL void ggml_backend_cann_get_device_memory(int32_t device,
                                                             size_t* free,
                                                             size_t* total);
-
-/**
- * @brief Initializes resources required by the CANN backend.
- */
-void ggml_cann_backend_init(void);
-
-/**
- * @brief Frees resources used by the CANN backend.
- */
-void ggml_cann_backend_free(void);
 
 #ifdef __cplusplus
 }
