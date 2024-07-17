@@ -38,7 +38,7 @@
  * @return	The corresponding aclDataType. If the input type is not recognized,
  *			ACL_DT_UNDEFINED is returned.
  */
-aclDataType type_mapping(ggml_type type);
+aclDataType ggml_cann_type_mapping(ggml_type type);
 
 /**
  * @brief   Creates an ACL tensor from a ggml_tensor with optional shape.
@@ -59,7 +59,7 @@ aclDataType type_mapping(ggml_type type);
  * @param   offset      Offset in bytes for the ACL tensor data. Defaults to 0.
  * @return  Pointer to the created ACL tensor.
  */
-aclTensor* create_acl_tensor(const ggml_tensor* tensor, int64_t* ne = nullptr,
+aclTensor* ggml_cann_create_tensor(const ggml_tensor* tensor, int64_t* ne = nullptr,
                              size_t* nb = nullptr, int64_t dims = 0,
                              aclFormat format = ACL_FORMAT_ND,
                              size_t offset = 0);
@@ -83,7 +83,7 @@ aclTensor* create_acl_tensor(const ggml_tensor* tensor, int64_t* ne = nullptr,
  * @param   offset      Offset in bytes for the ACL tensor data. Defaults to 0.
  * @return  Pointer to the created ACL tensor.
  */
-aclTensor* create_acl_tensor(void* data_ptr, aclDataType dtype,
+aclTensor* ggml_cann_create_tensor(void* data_ptr, aclDataType dtype,
                              size_t type_size, int64_t* ne, size_t* nb,
                              int64_t dims, aclFormat format = ACL_FORMAT_ND,
                              size_t offset = 0);
@@ -104,7 +104,7 @@ aclTensor* create_acl_tensor(void* data_ptr, aclDataType dtype,
  *          to 1. If such a dimension is found, broadcasting is required to align t1
  *          with t0 for element-wise operations.
  */
-bool need_bcast(const ggml_tensor* t0, const ggml_tensor* t1);
+bool ggml_cann_need_bcast(const ggml_tensor* t0, const ggml_tensor* t1);
 
 /**
  * @brief   Computes broadcast shapes and strides for two ggml_tensors.
@@ -159,19 +159,19 @@ bool need_bcast(const ggml_tensor* t0, const ggml_tensor* t1);
  *  dim1 in a inserted dim, should add nb for dim1,
  *  and all other nb moves to next in order.
  */
-int64_t get_bcast_shape(const ggml_tensor* src0, const ggml_tensor* src1,
+int64_t ggml_cann_get_bcast_shape(const ggml_tensor* src0, const ggml_tensor* src1,
                         int64_t* bcast_ne_src0, int64_t* bcast_ne_src1,
                         size_t* bcast_nb_src0, size_t* bcast_nb_src1);
 
 // Bcast macro to avoid duplicate code.
-#define BCAST_SHAPE(src0, src1)                                           \
-    int64_t bcast_##src0##_ne[GGML_MAX_DIMS * 2];                         \
-    int64_t bcast_##src1##_ne[GGML_MAX_DIMS * 2];                         \
-    size_t bcast_##src0##_nb[GGML_MAX_DIMS * 2];                          \
-    size_t bcast_##src1##_nb[GGML_MAX_DIMS * 2];                          \
-    int64_t bcast_dims =                                                  \
-        get_bcast_shape(src0, src1, bcast_##src0##_ne, bcast_##src1##_ne, \
-                        bcast_##src0##_nb, bcast_##src1##_nb);
+#define BCAST_SHAPE(src0, src1)                                              \
+    int64_t bcast_##src0##_ne[GGML_MAX_DIMS * 2];                            \
+    int64_t bcast_##src1##_ne[GGML_MAX_DIMS * 2];                            \
+    size_t bcast_##src0##_nb[GGML_MAX_DIMS * 2];                             \
+    size_t bcast_##src1##_nb[GGML_MAX_DIMS * 2];                             \
+    int64_t bcast_dims = ggml_cann_get_bcast_shape(                          \
+        src0, src1, bcast_##src0##_ne, bcast_##src1##_ne, bcast_##src0##_nb, \
+        bcast_##src1##_nb);
 
 #define BCAST_PARAM(tensor) bcast_##tensor##_ne, bcast_##tensor##_nb, bcast_dims
 
@@ -201,17 +201,15 @@ int64_t get_bcast_shape(const ggml_tensor* src0, const ggml_tensor* src1,
  *          shapes needed for matrix multiplication. It ensures that dimensions where
  *          weight tensor requires expansion are appropriately handled to conform with
  *          broadcasting rules.
- * @note compare with get_bcast_shape，mul_mat broadcast need add this new dim before
- *       cast dim.
- * @sa get_bcast_shape
+ * @note compare with ggml_cann_get_bcast_shape，mul_mat broadcast need add this new dim 
+ *       before cast dim.
+ * @sa ggml_cann_get_bcast_shape
  */
-int64_t get_mul_mat_bcast_shape(const int64_t* input_ne,
-                                const int64_t* weight_ne, const int64_t* dst_ne,
-                                const size_t* input_nb, const size_t* weight_nb,
-                                const size_t* dst_nb, int64_t* bcast_input_ne,
-                                int64_t* bcast_weight_ne, int64_t* bcast_dst_ne,
-                                size_t* bcast_input_nb, size_t* bcast_weight_nb,
-                                size_t* bcast_dst_nb);
+int64_t ggml_cann_get_mulmat_bcast_shape(
+    const int64_t* input_ne, const int64_t* weight_ne, const int64_t* dst_ne,
+    const size_t* input_nb, const size_t* weight_nb, const size_t* dst_nb,
+    int64_t* bcast_input_ne, int64_t* bcast_weight_ne, int64_t* bcast_dst_ne,
+    size_t* bcast_input_nb, size_t* bcast_weight_nb, size_t* bcast_dst_nb);
 
 // Bcast macro to avoid duplicate code.
 #define BCAST_MUL_MAT_SHAPE(input, weight, dst)                         \
@@ -221,7 +219,7 @@ int64_t get_mul_mat_bcast_shape(const int64_t* input_ne,
     size_t bcast_##input##_nb[GGML_MAX_DIMS * 2];                       \
     size_t bcast_##weight##_nb[GGML_MAX_DIMS * 2];                      \
     size_t bcast_##dst##_nb[GGML_MAX_DIMS * 2];                         \
-    int64_t bcast_dims = get_mul_mat_bcast_shape(                       \
+    int64_t bcast_dims = ggml_cann_get_mulmat_bcast_shape(              \
         input->ne, weight->ne, dst->ne, input->nb, weight->nb, dst->nb, \
         bcast_##input##_ne, bcast_##weight##_ne, bcast_##dst##_ne,      \
         bcast_##input##_nb, bcast_##weight##_nb, bcast_##dst##_nb);

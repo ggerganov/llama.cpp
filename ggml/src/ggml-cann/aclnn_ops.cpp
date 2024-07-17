@@ -98,8 +98,8 @@ void ggml_cann_repeat(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
     GGML_ASSERT(ggml_can_repeat(src, dst));
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     int64_t repeatsArray[] = {dst->ne[3] / src->ne[3], dst->ne[2] / src->ne[2],
                               dst->ne[1] / src->ne[1], dst->ne[0] / src->ne[0]};
@@ -156,15 +156,15 @@ void ggml_cann_add(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     aclTensor* acl_dst;
 
     // Need bcast
-    if (!ggml_are_same_shape(src0, src1) && need_bcast(src0, src1)) {
+    if (!ggml_are_same_shape(src0, src1) && ggml_cann_need_bcast(src0, src1)) {
         BCAST_SHAPE(src0, src1)
-        acl_src0 = create_acl_tensor(src0, BCAST_PARAM(src0));
-        acl_src1 = create_acl_tensor(src1, BCAST_PARAM(src1));
-        acl_dst = create_acl_tensor(dst, BCAST_PARAM(src0));
+        acl_src0 = ggml_cann_create_tensor(src0, BCAST_PARAM(src0));
+        acl_src1 = ggml_cann_create_tensor(src1, BCAST_PARAM(src1));
+        acl_dst = ggml_cann_create_tensor(dst, BCAST_PARAM(src0));
     } else {
-        acl_src0 = create_acl_tensor(src0);
-        acl_src1 = create_acl_tensor(src1);
-        acl_dst = create_acl_tensor(dst);
+        acl_src0 = ggml_cann_create_tensor(src0);
+        acl_src1 = ggml_cann_create_tensor(src1);
+        acl_dst = ggml_cann_create_tensor(dst);
     }
 
     aclnn_add(ctx, acl_src0, acl_src1, acl_dst);
@@ -180,8 +180,8 @@ void ggml_cann_leaky_relu(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     GGML_ASSERT(src->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     float negative_slope;
     memcpy(&negative_slope, dst->op_params, sizeof(float));
@@ -237,9 +237,9 @@ static void aclnn_concat(ggml_backend_cann_context& ctx,
 void ggml_cann_concat(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src0 = dst->src[0];
     ggml_tensor* src1 = dst->src[1];
-    aclTensor* acl_src0 = create_acl_tensor(src0);
-    aclTensor* acl_src1 = create_acl_tensor(src1);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src0 = ggml_cann_create_tensor(src0);
+    aclTensor* acl_src1 = ggml_cann_create_tensor(src1);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     int64_t concat_dim = 1;
     aclTensor* tensors[] = {acl_src0, acl_src1};
@@ -299,7 +299,7 @@ static void aclnn_arange(ggml_backend_cann_context& ctx, aclTensor* acl_dst,
 void ggml_cann_arange(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     int64_t n_elements = ggml_nelements(dst);
     float start;
@@ -328,8 +328,8 @@ void ggml_cann_clamp(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     memcpy(&min, dst->op_params, sizeof(float));
     memcpy(&max, (float*)dst->op_params + 1, sizeof(float));
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     aclScalar* acl_min = aclCreateScalar(&min, aclDataType::ACL_FLOAT);
     aclScalar* acl_max = aclCreateScalar(&max, aclDataType::ACL_FLOAT);
@@ -361,8 +361,8 @@ void ggml_cann_scale(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     memcpy(&v, dst->op_params, sizeof(float));
 
     aclScalar* scale = aclCreateScalar(&v, aclDataType::ACL_FLOAT);
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
@@ -386,14 +386,14 @@ void ggml_cann_argsort(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
     enum ggml_sort_order order = (enum ggml_sort_order)dst->op_params[0];
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
     ggml_cann_pool_alloc temp_buffer_allocator(
         ctx.pool(), ggml_nelements(dst) * sizeof(int64_t));
     void* buffer = temp_buffer_allocator.get();
     aclTensor* tmp_tensor =
-        create_acl_tensor(buffer, ACL_INT64, ggml_type_size(dst->type), dst->ne,
-                          dst->nb, GGML_MAX_DIMS);
+        ggml_cann_create_tensor(buffer, ACL_INT64, ggml_type_size(dst->type),
+                                dst->ne, dst->nb, GGML_MAX_DIMS);
 
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
@@ -411,7 +411,8 @@ void ggml_cann_argsort(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         aclnnArgsort(workspaceAddr, workspaceSize, executor, ctx.stream()));
 
     workspaceSize = 0;
-    ACL_CHECK(aclnnCastGetWorkspaceSize(tmp_tensor, type_mapping(dst->type),
+    ACL_CHECK(aclnnCastGetWorkspaceSize(tmp_tensor,
+                                        ggml_cann_type_mapping(dst->type),
                                         acl_dst, &workspaceSize, &executor));
     if (workspaceSize > 0) {
         ggml_cann_pool_alloc workspace_allocator(ctx.pool(), workspaceSize);
@@ -428,8 +429,8 @@ void ggml_cann_argsort(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
 void ggml_cann_norm(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     float eps;
     memcpy(&eps, dst->op_params, sizeof(float));
@@ -460,8 +461,8 @@ void ggml_cann_norm(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
 void ggml_cann_group_norm(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     const float eps = 1e-6f;  // TODO: make this a parameter
     int n_groups = dst->op_params[0];
@@ -481,9 +482,9 @@ void ggml_cann_group_norm(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
 
     ggml_cann_pool_alloc temp_buffer_allocator(ctx.pool(), n_bytes * 2);
     void* buffer = temp_buffer_allocator.get();
-    aclTensor* acl_mean_out =
-        create_acl_tensor(buffer, ACL_FLOAT, type_size, ne, nb, ACL_FORMAT_ND);
-    aclTensor* acl_rstd_out = create_acl_tensor(
+    aclTensor* acl_mean_out = ggml_cann_create_tensor(
+        buffer, ACL_FLOAT, type_size, ne, nb, ACL_FORMAT_ND);
+    aclTensor* acl_rstd_out = ggml_cann_create_tensor(
         (char*)buffer + n_bytes, ACL_FLOAT, type_size, ne, nb, ACL_FORMAT_ND);
 
     ACL_CHECK(aclnnGroupNormGetWorkspaceSize(
@@ -516,9 +517,9 @@ void ggml_cann_acc(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
 
     size_t param_nb[] = {ggml_element_size(src0), nb1, nb2, nb3};
 
-    aclTensor* acl_dst = create_acl_tensor(
+    aclTensor* acl_dst = ggml_cann_create_tensor(
         dst, src1->ne, param_nb, GGML_MAX_DIMS, ACL_FORMAT_ND, offset);
-    aclTensor* acl_src1 = create_acl_tensor(src1);
+    aclTensor* acl_src1 = ggml_cann_create_tensor(src1);
 
     aclScalar* alpha = nullptr;
     float alphaValue = 1.0f;
@@ -532,7 +533,7 @@ void ggml_cann_acc(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         size_t cpy_size = ggml_nbytes(dst);
         ACL_CHECK(aclrtMemcpyAsync(dst->data, cpy_size, src0->data, cpy_size,
                                    ACL_MEMCPY_DEVICE_TO_DEVICE, ctx.stream()));
-        aclTensor* acl_src0 = create_acl_tensor(
+        aclTensor* acl_src0 = ggml_cann_create_tensor(
             src0, src1->ne, src0->nb, GGML_MAX_DIMS, ACL_FORMAT_ND, offset);
         ACL_CHECK(aclnnAddGetWorkspaceSize(acl_src0, acl_src1, alpha, acl_dst,
                                            &workspaceSize, &executor));
@@ -561,10 +562,10 @@ void ggml_cann_acc(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
 void ggml_cann_sum_rows(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
 
-    aclTensor* acl_src = create_acl_tensor(src);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
 
     GGML_ASSERT(dst->ne[0] == 1);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     int64_t reduce_dims_host[] = {3};
     aclIntArray* reduce_dims = aclCreateIntArray(reduce_dims_host, 1);
@@ -573,9 +574,9 @@ void ggml_cann_sum_rows(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     aclOpExecutor* executor;
     void* workspaceAddr = nullptr;
 
-    ACL_CHECK(aclnnReduceSumGetWorkspaceSize(acl_src, reduce_dims, true,
-                                             type_mapping(src->type), acl_dst,
-                                             &workspaceSize, &executor));
+    ACL_CHECK(aclnnReduceSumGetWorkspaceSize(
+        acl_src, reduce_dims, true, ggml_cann_type_mapping(src->type), acl_dst,
+        &workspaceSize, &executor));
     if (workspaceSize > 0) {
         ggml_cann_pool_alloc workspace_allocator(ctx.pool(), workspaceSize);
         workspaceAddr = workspace_allocator.get();
@@ -592,9 +593,9 @@ void ggml_cann_upsample_nearest2d(ggml_backend_cann_context& ctx,
                                   ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
     aclTensor* acl_src =
-        create_acl_tensor(src, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
+        ggml_cann_create_tensor(src, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
     aclTensor* acl_dst =
-        create_acl_tensor(dst, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
+        ggml_cann_create_tensor(dst, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
 
     std::vector<int64_t> output_size{dst->ne[1], dst->ne[0]};
     auto output_size_array = aclCreateIntArray(output_size.data(), 2);
@@ -659,8 +660,8 @@ static void aclnn_pad(ggml_backend_cann_context& ctx, aclTensor* acl_src,
 
 void ggml_cann_pad(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     // padding: value in the array means how much distance will be padding.
     // the position of elements in the array means which dirction to padding,
@@ -694,9 +695,9 @@ static void ggml_cann_avg_pool2d(ggml_backend_cann_context& ctx,
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
     aclTensor* acl_src =
-        create_acl_tensor(src, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
+        ggml_cann_create_tensor(src, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
     aclTensor* acl_dst =
-        create_acl_tensor(dst, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
+        ggml_cann_create_tensor(dst, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
 
     const int32_t* opts = (const int32_t*)dst->op_params;
     const int k0 = opts[1];
@@ -732,7 +733,8 @@ static void ggml_cann_avg_pool2d(ggml_backend_cann_context& ctx,
         ggml_cann_pool_alloc workspace_allocator(ctx.pool(), workspaceSize);
         workspaceAddr = workspace_allocator.get();
     }
-    ACL_CHECK(aclnnAvgPool2d(workspaceAddr, workspaceSize, executor, ctx.stream()));
+    ACL_CHECK(
+        aclnnAvgPool2d(workspaceAddr, workspaceSize, executor, ctx.stream()));
 
     ACL_CHECK(aclDestroyTensor(acl_src));
     ACL_CHECK(aclDestroyTensor(acl_dst));
@@ -760,9 +762,9 @@ static void ggml_cann_max_pool2d(ggml_backend_cann_context& ctx,
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
     aclTensor* acl_src =
-        create_acl_tensor(src, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
+        ggml_cann_create_tensor(src, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
     aclTensor* acl_dst =
-        create_acl_tensor(dst, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
+        ggml_cann_create_tensor(dst, nullptr, nullptr, 0, ACL_FORMAT_NCHW);
 
     const int32_t* opts = (const int32_t*)dst->op_params;
     const int k0 = opts[1];
@@ -784,9 +786,9 @@ static void ggml_cann_max_pool2d(ggml_backend_cann_context& ctx,
     ggml_cann_pool_alloc temp_buffer_allocator(
         ctx.pool(), ggml_nbytes(src) + p0 * 2 + p1 * 2 * src->nb[1]);
     void* buffer = temp_buffer_allocator.get();
-    aclTensor* tmp_tensor =
-        create_acl_tensor(buffer, ACL_FLOAT, ggml_element_size(src), temp_ne,
-                          temp_nb, GGML_MAX_DIMS, ACL_FORMAT_NCHW);
+    aclTensor* tmp_tensor = ggml_cann_create_tensor(
+        buffer, ACL_FLOAT, ggml_element_size(src), temp_ne, temp_nb,
+        GGML_MAX_DIMS, ACL_FORMAT_NCHW);
 
     // pad: see padding in ggml_cann_pad()
     int64_t paddings[] = {p0, p0, p1, p1, 0, 0, 0, 0};
@@ -819,7 +821,8 @@ static void ggml_cann_max_pool2d(ggml_backend_cann_context& ctx,
         workspaceAddr = workspace_allocator.get();
     }
 
-    ACL_CHECK(aclnnMaxPool(workspaceAddr, workspaceSize, executor, ctx.stream()));
+    ACL_CHECK(
+        aclnnMaxPool(workspaceAddr, workspaceSize, executor, ctx.stream()));
 
     ACL_CHECK(aclDestroyTensor(acl_src));
     ACL_CHECK(aclDestroyTensor(acl_dst));
@@ -870,14 +873,15 @@ static void cann_copy(ggml_backend_cann_context& ctx, aclTensor* acl_src,
         workspaceAddr = workspace_allocator.get();
     }
 
-    ACL_CHECK(aclnnInplaceCopy(workspaceAddr, workspaceSize, executor, ctx.stream()));
+    ACL_CHECK(
+        aclnnInplaceCopy(workspaceAddr, workspaceSize, executor, ctx.stream()));
 }
 
 void ggml_cann_dup(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     ggml_cann_pool_alloc src_extra_allocator(ctx.pool(), sizeof(ggml_tensor));
     ggml_cann_pool_alloc dst_extra_allocator(ctx.pool(), sizeof(ggml_tensor));
@@ -891,7 +895,7 @@ void ggml_cann_dup(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
                                ctx.stream()));
 
     if ((dst->type == GGML_TYPE_F16 || dst->type == GGML_TYPE_F32) &&
-         ggml_are_same_shape(src, dst)) {
+        ggml_are_same_shape(src, dst)) {
         cann_copy(ctx, acl_src, acl_dst);
         ACL_CHECK(aclDestroyTensor(acl_src));
         ACL_CHECK(aclDestroyTensor(acl_dst));
@@ -1070,7 +1074,8 @@ static aclTensor* aclnn_zero(ggml_backend_cann_context& ctx, void* buffer,
     }
 
     ACL_CHECK(aclrtMemsetAsync(buffer, n_bytes, 0, n_bytes, ctx.stream()));
-    aclTensor* zero = create_acl_tensor(buffer, type, type_size, ne, nb, dims);
+    aclTensor* zero =
+        ggml_cann_create_tensor(buffer, type, type_size, ne, nb, dims);
     return zero;
 }
 
@@ -1122,8 +1127,8 @@ static aclTensor* aclnn_ones(ggml_backend_cann_context& ctx, void* buffer,
 void ggml_cann_rms_norm(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src = dst->src[0];
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     float eps;
     memcpy(&eps, dst->op_params, sizeof(float));
@@ -1137,16 +1142,17 @@ void ggml_cann_rms_norm(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     size_t one_tensor_n_bytes = src->ne[0] * ggml_element_size(src);
     ggml_cann_pool_alloc one_tensor_allocator(ctx.pool(), one_tensor_n_bytes);
 
-    aclTensor* acl_gamma =
-        aclnn_ones(ctx, one_tensor_allocator.get(), one_tensor_n_bytes, src->ne,
-                   1, type_mapping(src->type), ggml_element_size(src));
+    aclTensor* acl_gamma = aclnn_ones(
+        ctx, one_tensor_allocator.get(), one_tensor_n_bytes, src->ne, 1,
+        ggml_cann_type_mapping(src->type), ggml_element_size(src));
 
     size_t zero_tensor_n_bytes =
         src->ne[1] * src->ne[2] * src->ne[3] * ggml_element_size(src);
     ggml_cann_pool_alloc zero_tensor_allocator(ctx.pool(), zero_tensor_n_bytes);
-    aclTensor* acl_rstd = aclnn_zero(
-        ctx, zero_tensor_allocator.get(), zero_tensor_n_bytes, src->ne,
-        GGML_MAX_DIMS, type_mapping(src->type), ggml_element_size(src));
+    aclTensor* acl_rstd =
+        aclnn_zero(ctx, zero_tensor_allocator.get(), zero_tensor_n_bytes,
+                   src->ne, GGML_MAX_DIMS, ggml_cann_type_mapping(src->type),
+                   ggml_element_size(src));
 
     ACL_CHECK(aclnnRmsNormGetWorkspaceSize(
         acl_src, acl_gamma, eps, acl_dst, acl_rstd, &workspaceSize, &executor));
@@ -1170,8 +1176,8 @@ void ggml_cann_diag_mask(ggml_backend_cann_context& ctx, ggml_tensor* dst,
                          float value) {
     ggml_tensor* src = dst->src[0];
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     const int n_past = ((int32_t*)dst->op_params)[0];
 
@@ -1179,9 +1185,10 @@ void ggml_cann_diag_mask(ggml_backend_cann_context& ctx, ggml_tensor* dst,
                                 src->ne[3] * ggml_element_size(src);
     ggml_cann_pool_alloc one_tensor_allocator(ctx.pool(), one_tensor_n_bytes);
 
-    aclTensor* mask_tensor = aclnn_ones(
-        ctx, one_tensor_allocator.get(), one_tensor_n_bytes, src->ne,
-        GGML_MAX_DIMS, type_mapping(src->type), ggml_element_size(src), value);
+    aclTensor* mask_tensor =
+        aclnn_ones(ctx, one_tensor_allocator.get(), one_tensor_n_bytes, src->ne,
+                   GGML_MAX_DIMS, ggml_cann_type_mapping(src->type),
+                   ggml_element_size(src), value);
 
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
@@ -1336,7 +1343,7 @@ void ggml_cann_im2col(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     GGML_ASSERT(nb10 == sizeof(float));
 
     // im2col: [N,C,H,W] -> [N, IC * KH * KW, OW * OH]
-    aclTensor* acl_src1 = create_acl_tensor(src1);
+    aclTensor* acl_src1 = ggml_cann_create_tensor(src1);
     int64_t tmp_im2col_ne[] = {OW * OH, IC * KH * KW, N};
     size_t tmp_im2col_nb[GGML_MAX_DIMS - 1];
 
@@ -1351,9 +1358,10 @@ void ggml_cann_im2col(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_cann_pool_alloc im2col_allocator(
         ctx.pool(), ggml_nelements(dst) * ggml_element_size(src1));
     void* tmp_im2col_buffer = im2col_allocator.get();
-    aclTensor* tmp_im2col_tensor = create_acl_tensor(
-        tmp_im2col_buffer, type_mapping(src1->type), ggml_type_size(src1->type),
-        tmp_im2col_ne, tmp_im2col_nb, GGML_MAX_DIMS - 1, ACL_FORMAT_ND);
+    aclTensor* tmp_im2col_tensor = ggml_cann_create_tensor(
+        tmp_im2col_buffer, ggml_cann_type_mapping(src1->type),
+        ggml_type_size(src1->type), tmp_im2col_ne, tmp_im2col_nb,
+        GGML_MAX_DIMS - 1, ACL_FORMAT_ND);
 
     std::vector<int64_t> kernel_dims = {KH, KW};
     std::vector<int64_t> dilation_size = {d1, d0};
@@ -1377,7 +1385,8 @@ void ggml_cann_im2col(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         workspaceAddr = workspace_allocator.get();
     }
 
-    ACL_CHECK(aclnnIm2col(workspaceAddr, workspaceSize, executor, ctx.stream()));
+    ACL_CHECK(
+        aclnnIm2col(workspaceAddr, workspaceSize, executor, ctx.stream()));
 
     // Cast if dst is f16.
     aclTensor* tmp_cast_tensor = nullptr;
@@ -1391,18 +1400,19 @@ void ggml_cann_im2col(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
             temp_cast_nb[i] = temp_cast_nb[i - 1] * tmp_im2col_ne[i - 1];
         }
 
-        tmp_cast_tensor = create_acl_tensor(
-            tmp_cast_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-            tmp_im2col_ne, temp_cast_nb, GGML_MAX_DIMS - 1, ACL_FORMAT_ND);
+        tmp_cast_tensor = ggml_cann_create_tensor(
+            tmp_cast_buffer, ggml_cann_type_mapping(dst->type),
+            ggml_type_size(dst->type), tmp_im2col_ne, temp_cast_nb,
+            GGML_MAX_DIMS - 1, ACL_FORMAT_ND);
         aclnn_cast(ctx, tmp_im2col_tensor, tmp_cast_tensor,
-                   type_mapping(dst->type));
+                   ggml_cann_type_mapping(dst->type));
     }
 
     // Permute: [N, IC * KH * KW, OW * OH] -> [N, OW * OH, IC * KH * KW]
     int64_t dst_ne[] = {dst->ne[0], dst->ne[1] * dst->ne[2], dst->ne[3]};
     size_t dst_nb[] = {dst->nb[0], dst->nb[1], dst->nb[3]};
     aclTensor* acl_dst =
-        create_acl_tensor(dst, dst_ne, dst_nb, GGML_MAX_DIMS - 1);
+        ggml_cann_create_tensor(dst, dst_ne, dst_nb, GGML_MAX_DIMS - 1);
 
     int64_t permute_dim[] = {0, 2, 1};
     if (src1->type != dst->type) {
@@ -1517,7 +1527,8 @@ static void aclnn_muls(ggml_backend_cann_context& ctx, aclTensor* acl_src,
  * \f]
  *
  * @param ctx The context for the CANN backend operations.
- * @param acl_src The source tensor where the multiplication result will be stored.
+ * @param acl_src The source tensor where the multiplication result will be
+ * stored.
  * @param acl_other The tensor whose elements will be multiplied with `acl_src`.
  */
 static void aclnn_inplace_mul(ggml_backend_cann_context& ctx,
@@ -1553,9 +1564,8 @@ static void aclnn_inplace_mul(ggml_backend_cann_context& ctx,
  * @param acl_other The second tensor for element-wise multiplication.
  * @param acl_dst The destination tensor where the result will be stored.
  */
-static void aclnn_mul(ggml_backend_cann_context& ctx,
-                                 aclTensor* acl_src, aclTensor* acl_other,
-                                 aclTensor* acl_dst) {
+static void aclnn_mul(ggml_backend_cann_context& ctx, aclTensor* acl_src,
+                      aclTensor* acl_other, aclTensor* acl_dst) {
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
     void* workspaceAddr = nullptr;
@@ -1573,16 +1583,16 @@ static void aclnn_mul(ggml_backend_cann_context& ctx,
 /**
  * @brief Applies element-wise cosine function to the elements of a tensor.
  *
- * This function computes the cosine of each element in the source tensor `acl_src`
- * and stores the result in the destination tensor `acl_dst`.
- * The operation is defined as:
- * \f[
- *     \text {acl_dst }_i=\cos \left(\text {acl_src }_i\right)
- * \f]
+ * This function computes the cosine of each element in the source tensor
+ * `acl_src` and stores the result in the destination tensor `acl_dst`. The
+ * operation is defined as: \f[ \text {acl_dst }_i=\cos \left(\text {acl_src
+ * }_i\right) \f]
  *
  * @param ctx The context for the CANN backend operations.
- * @param acl_src The source tensor on which the cosine function will be applied.
- * @param acl_dst The destination tensor where the cosine results will be stored.
+ * @param acl_src The source tensor on which the cosine function will be
+ * applied.
+ * @param acl_dst The destination tensor where the cosine results will be
+ * stored.
  */
 static void aclnn_cos(ggml_backend_cann_context& ctx, aclTensor* acl_src,
                       aclTensor* acl_dst) {
@@ -1603,7 +1613,8 @@ static void aclnn_cos(ggml_backend_cann_context& ctx, aclTensor* acl_src,
 /**
  * @brief Applies element-wise sine function to the elements of a tensor.
  *
- * This function computes the sine of each element in the source tensor `acl_src`
+ * This function computes the sine of each element in the source tensor
+ `acl_src`
  * and stores the result in the destination tensor `acl_dst`.
  * The operation is defined as:
  * \f[
@@ -1641,7 +1652,7 @@ void ggml_cann_timestep_embedding(ggml_backend_cann_context& ctx,
     const int max_period = dst->op_params[1];
     int half = dim / 2;
 
-    aclTensor* acl_src = create_acl_tensor(src);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
 
     // arange: [0, ..., half)
     float start = 0;
@@ -1653,9 +1664,10 @@ void ggml_cann_timestep_embedding(ggml_backend_cann_context& ctx,
 
     ggml_cann_pool_alloc arange_allocator(ctx.pool(), half * sizeof(dst->type));
     void* tmp_arange_buffer = arange_allocator.get();
-    aclTensor* tmp_arange_tensor = create_acl_tensor(
-        tmp_arange_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_arange_ne, tmp_arange_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
+    aclTensor* tmp_arange_tensor = ggml_cann_create_tensor(
+        tmp_arange_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_arange_ne, tmp_arange_nb,
+        GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
 
     aclnn_arange(ctx, tmp_arange_tensor, start, stop, step, n_elements_arange);
 
@@ -1675,9 +1687,10 @@ void ggml_cann_timestep_embedding(ggml_backend_cann_context& ctx,
 
     ggml_cann_pool_alloc permute_allocator(ctx.pool(), ggml_nbytes(src));
     void* tmp_permute_buffer = permute_allocator.get();
-    aclTensor* tmp_permute_tenosr = create_acl_tensor(
-        tmp_permute_buffer, type_mapping(src->type), ggml_type_size(src->type),
-        tmp_permute_ne, tmp_permute_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* tmp_permute_tenosr = ggml_cann_create_tensor(
+        tmp_permute_buffer, ggml_cann_type_mapping(src->type),
+        ggml_type_size(src->type), tmp_permute_ne, tmp_permute_nb,
+        GGML_MAX_DIMS, ACL_FORMAT_ND);
     int64_t permute_dim[] = {0, 1, 3, 2};
     int64_t num_dims = 4;
     aclnn_permute(ctx, acl_src, tmp_permute_tenosr, permute_dim, num_dims);
@@ -1697,19 +1710,20 @@ void ggml_cann_timestep_embedding(ggml_backend_cann_context& ctx,
     ggml_cann_pool_alloc mul_allocator(
         ctx.pool(), mul_nelements * ggml_type_size(src->type));
     void* tmp_mul_buffer = mul_allocator.get();
-    aclTensor* tmp_mul_tensor = create_acl_tensor(
-        tmp_mul_buffer, type_mapping(src->type), ggml_type_size(src->type),
-        tmp_mul_ne, tmp_mul_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
-    aclnn_mul(ctx, tmp_permute_tenosr, tmp_arange_tensor,
-                         tmp_mul_tensor);
+    aclTensor* tmp_mul_tensor = ggml_cann_create_tensor(
+        tmp_mul_buffer, ggml_cann_type_mapping(src->type),
+        ggml_type_size(src->type), tmp_mul_ne, tmp_mul_nb, GGML_MAX_DIMS,
+        ACL_FORMAT_ND);
+    aclnn_mul(ctx, tmp_permute_tenosr, tmp_arange_tensor, tmp_mul_tensor);
 
     // cos
     ggml_cann_pool_alloc cos_allocator(
         ctx.pool(), mul_nelements * ggml_type_size(src->type));
     void* tmp_cos_buffer = cos_allocator.get();
-    aclTensor* tmp_cos_tensor = create_acl_tensor(
-        tmp_cos_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_mul_ne, tmp_mul_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* tmp_cos_tensor = ggml_cann_create_tensor(
+        tmp_cos_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_mul_ne, tmp_mul_nb, GGML_MAX_DIMS,
+        ACL_FORMAT_ND);
 
     aclnn_cos(ctx, tmp_mul_tensor, tmp_cos_tensor);
 
@@ -1717,15 +1731,16 @@ void ggml_cann_timestep_embedding(ggml_backend_cann_context& ctx,
     ggml_cann_pool_alloc sin_allocator(
         ctx.pool(), mul_nelements * ggml_type_size(src->type));
     void* tmp_sin_buffer = sin_allocator.get();
-    aclTensor* tmp_sin_tensor = create_acl_tensor(
-        tmp_sin_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_mul_ne, tmp_mul_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* tmp_sin_tensor = ggml_cann_create_tensor(
+        tmp_sin_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_mul_ne, tmp_mul_nb, GGML_MAX_DIMS,
+        ACL_FORMAT_ND);
 
     aclnn_sin(ctx, tmp_mul_tensor, tmp_sin_tensor);
 
     // concat
     int64_t concat_dim = 3;
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
     aclTensor* tensors[] = {tmp_cos_tensor, tmp_sin_tensor};
     aclTensorList* tensorList = aclCreateTensorList(tensors, 2);
     aclnn_concat(ctx, tensorList, acl_dst, concat_dim);
@@ -1816,7 +1831,8 @@ static void aclnn_pow_tensor_tensor(ggml_backend_cann_context& ctx,
  * @param acl_dst      The destination tensor where the result will be stored.
  * @param n_head       The number of attention heads.
  * @param src_ne       The dimensions of the source tensor.
- * @param src_nb0      The byte size of the first dimension of the source tensor.
+ * @param src_nb0      The byte size of the first dimension of the source
+ tensor.
  * @param max_bias     The maximum bias value used in the Alibi mechanism.
  * @param dst          The destination tensor object for additional metadata.
  *
@@ -1858,9 +1874,10 @@ static void aclnn_alibi(ggml_backend_cann_context& ctx, aclTensor* acl_src,
 
     int64_t tmp_arange1_ne[] = {n_heads_log2_floor};
     size_t tmp_arange1_nb[] = {sizeof(dst->type)};
-    aclTensor* tmp_arange1_tensor = create_acl_tensor(
-        tmp_arange_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_arange1_ne, tmp_arange1_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
+    aclTensor* tmp_arange1_tensor = ggml_cann_create_tensor(
+        tmp_arange_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_arange1_ne, tmp_arange1_nb,
+        GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
 
     aclnn_arange(ctx, tmp_arange1_tensor, start, stop, step, n_elements_arange);
 
@@ -1874,11 +1891,11 @@ static void aclnn_alibi(ggml_backend_cann_context& ctx, aclTensor* acl_src,
         int64_t tmp_arange2_ne[] = {ne2_ne3 - n_heads_log2_floor};
         size_t tmp_arange2_nb[] = {sizeof(dst->type)};
 
-        aclTensor* tmp_arange2_tensor = create_acl_tensor(
+        aclTensor* tmp_arange2_tensor = ggml_cann_create_tensor(
             (char*)tmp_arange_buffer +
                 n_heads_log2_floor * ggml_type_size(dst->type),
-            type_mapping(dst->type), ggml_type_size(dst->type), tmp_arange2_ne,
-            tmp_arange2_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
+            ggml_cann_type_mapping(dst->type), ggml_type_size(dst->type),
+            tmp_arange2_ne, tmp_arange2_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
         aclnn_arange(ctx, tmp_arange2_tensor, start, stop, step,
                      n_elements_arange);
     }
@@ -1889,9 +1906,10 @@ static void aclnn_alibi(ggml_backend_cann_context& ctx, aclTensor* acl_src,
     void* tmp_mk_base_buffer = mk_base_allocator.get();
     int64_t tmp_mk_base1_ne[] = {n_heads_log2_floor};
     size_t tmp_mk_base1_nb[] = {sizeof(dst->type)};
-    aclTensor* tmp_mk_base1_tensor = create_acl_tensor(
-        tmp_mk_base_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_mk_base1_ne, tmp_mk_base1_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
+    aclTensor* tmp_mk_base1_tensor = ggml_cann_create_tensor(
+        tmp_mk_base_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_mk_base1_ne, tmp_mk_base1_nb,
+        GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
 
     aclnn_fill_scalar(ctx, m0, tmp_mk_base1_tensor);
 
@@ -1899,23 +1917,25 @@ static void aclnn_alibi(ggml_backend_cann_context& ctx, aclTensor* acl_src,
     if (n_heads_log2_floor < ne2_ne3) {
         int64_t tmp_mk_base2_ne[] = {ne2_ne3 - n_heads_log2_floor};
         size_t tmp_mk_base2_nb[] = {sizeof(dst->type)};
-        aclTensor* tmp_mk_base2_tensor = create_acl_tensor(
+        aclTensor* tmp_mk_base2_tensor = ggml_cann_create_tensor(
             (char*)tmp_mk_base_buffer +
                 n_heads_log2_floor * ggml_type_size(dst->type),
-            type_mapping(dst->type), ggml_type_size(dst->type), tmp_mk_base2_ne,
-            tmp_mk_base2_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
+            ggml_cann_type_mapping(dst->type), ggml_type_size(dst->type),
+            tmp_mk_base2_ne, tmp_mk_base2_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
         aclnn_fill_scalar(ctx, m1, tmp_mk_base2_tensor);
     }
 
     // init mk
     int64_t tmp_mk_base_ne[] = {ne2_ne3};
     size_t tmp_mk_base_nb[] = {sizeof(dst->type)};
-    aclTensor* tmp_mk_base_tensor = create_acl_tensor(
-        tmp_mk_base_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_mk_base_ne, tmp_mk_base_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
-    aclTensor* tmp_arange_tensor = create_acl_tensor(
-        tmp_arange_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_mk_base_ne, tmp_mk_base_nb, GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
+    aclTensor* tmp_mk_base_tensor = ggml_cann_create_tensor(
+        tmp_mk_base_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_mk_base_ne, tmp_mk_base_nb,
+        GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
+    aclTensor* tmp_arange_tensor = ggml_cann_create_tensor(
+        tmp_arange_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_mk_base_ne, tmp_mk_base_nb,
+        GGML_MAX_DIMS - 3, ACL_FORMAT_ND);
     aclnn_pow_tensor_tensor(ctx, tmp_mk_base_tensor, tmp_arange_tensor);
 
     // reshape mk
@@ -1925,9 +1945,10 @@ static void aclnn_alibi(ggml_backend_cann_context& ctx, aclTensor* acl_src,
     for (int i = 1; i < GGML_MAX_DIMS; i++) {
         tmp_mk_nb[i] = tmp_mk_nb[i - 1] * tmp_mk_ne[i - 1];
     }
-    aclTensor* tmp_mk_tensor = create_acl_tensor(
-        tmp_mk_base_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_mk_ne, tmp_mk_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* tmp_mk_tensor = ggml_cann_create_tensor(
+        tmp_mk_base_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_mk_ne, tmp_mk_nb, GGML_MAX_DIMS,
+        ACL_FORMAT_ND);
 
     // acl_position * mk
     int64_t tmp_output_ne[] = {src_ne[0], src_ne[1], src_ne[2], src_ne[3]};
@@ -1938,9 +1959,10 @@ static void aclnn_alibi(ggml_backend_cann_context& ctx, aclTensor* acl_src,
     }
     ggml_cann_pool_alloc output_allocator(ctx.pool(), ggml_nbytes(dst));
     void* tmp_output_buffer = output_allocator.get();
-    aclTensor* tmp_output_tensor = create_acl_tensor(
-        tmp_output_buffer, type_mapping(dst->type), ggml_type_size(dst->type),
-        tmp_output_ne, tmp_output_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* tmp_output_tensor = ggml_cann_create_tensor(
+        tmp_output_buffer, ggml_cann_type_mapping(dst->type),
+        ggml_type_size(dst->type), tmp_output_ne, tmp_output_nb, GGML_MAX_DIMS,
+        ACL_FORMAT_ND);
     aclnn_mul(ctx, acl_position, tmp_mk_tensor, tmp_output_tensor);
 
     // add
@@ -2031,8 +2053,8 @@ void ggml_cann_softmax(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_tensor* src0 = dst->src[0];
     ggml_tensor* src1 = dst->src[1];  // mask
 
-    aclTensor* acl_src0 = create_acl_tensor(src0);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src0 = ggml_cann_create_tensor(src0);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     float scale = 1.0f;
     float max_bias = 0.0f;
@@ -2046,7 +2068,7 @@ void ggml_cann_softmax(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     size_t n_bytes = ggml_nbytes(src0);
     ggml_cann_pool_alloc mul_scale_allocator(ctx.pool(), n_bytes);
     void* input_mul_scale_buffer = mul_scale_allocator.get();
-    aclTensor* acl_input_mul_scale_tensor = create_acl_tensor(
+    aclTensor* acl_input_mul_scale_tensor = ggml_cann_create_tensor(
         input_mul_scale_buffer, ACL_FLOAT, ggml_type_size(src0->type), src0->ne,
         src0->nb, GGML_MAX_DIMS);
 
@@ -2069,18 +2091,15 @@ void ggml_cann_softmax(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
             }
             src1_fp32_allocator.alloc(n_bytes);
             void* src1_fp32_buffer = src1_fp32_allocator.get();
-            acl_src1_fp32_tensor = create_acl_tensor(src1_fp32_buffer,
-                                                            ACL_FLOAT,
-                                                            sizeof(float),
-                                                            src1->ne,
-                                                            src1_fp32_nb,
-                                                            GGML_MAX_DIMS);
-            aclTensor* acl_src1 = create_acl_tensor(src1);
+            acl_src1_fp32_tensor = ggml_cann_create_tensor(
+                src1_fp32_buffer, ACL_FLOAT, sizeof(float), src1->ne,
+                src1_fp32_nb, GGML_MAX_DIMS);
+            aclTensor* acl_src1 = ggml_cann_create_tensor(src1);
             aclnn_cast(ctx, acl_src1, acl_src1_fp32_tensor, ACL_FLOAT);
 
             ACL_CHECK(aclDestroyTensor(acl_src1));
         } else {
-            acl_src1_fp32_tensor = create_acl_tensor(src1);
+            acl_src1_fp32_tensor = ggml_cann_create_tensor(src1);
         }
 
         // broadcast the mask across rows, only use ne11 of ne01 in mask
@@ -2092,7 +2111,7 @@ void ggml_cann_softmax(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
             for (int i = 1; i < GGML_MAX_DIMS; i++) {
                 tmp_mask_nb[i] = tmp_mask_nb[i - 1] * tmp_mask_ne[i - 1];
             }
-            tmp_mask_tensor = create_acl_tensor(
+            tmp_mask_tensor = ggml_cann_create_tensor(
                 src1->data, ACL_FLOAT, sizeof(float), tmp_mask_ne, tmp_mask_nb,
                 GGML_MAX_DIMS, ACL_FORMAT_ND);
         }
@@ -2104,7 +2123,7 @@ void ggml_cann_softmax(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         n_bytes = ggml_nbytes(dst);
         ggml_cann_pool_alloc output_allocator(ctx.pool(), n_bytes);
         void* output_buffer = output_allocator.get();
-        aclTensor* alibi_output_tensor = create_acl_tensor(
+        aclTensor* alibi_output_tensor = ggml_cann_create_tensor(
             output_buffer, ACL_FLOAT, ggml_type_size(dst->type), dst->ne,
             dst->nb, GGML_MAX_DIMS);
         if (max_bias <= 0.0f) {
@@ -2116,18 +2135,16 @@ void ggml_cann_softmax(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
                 aclnn_add(ctx, acl_src1_fp32_tensor, acl_input_mul_scale_tensor,
                           alibi_output_tensor);
             }
-        }
-        else {
+        } else {
             // slope != 1.0
             if (tmp_mask_tensor) {
                 aclnn_alibi(ctx, acl_input_mul_scale_tensor, tmp_mask_tensor,
-                            alibi_output_tensor, n_head, src0->ne, src_nb0, max_bias,
-                            dst);
-            }
-            else {
-                aclnn_alibi(ctx, acl_input_mul_scale_tensor, acl_src1_fp32_tensor,
-                            alibi_output_tensor, n_head, src0->ne, src_nb0, max_bias,
-                            dst);
+                            alibi_output_tensor, n_head, src0->ne, src_nb0,
+                            max_bias, dst);
+            } else {
+                aclnn_alibi(ctx, acl_input_mul_scale_tensor,
+                            acl_src1_fp32_tensor, alibi_output_tensor, n_head,
+                            src0->ne, src_nb0, max_bias, dst);
             }
         }
 
@@ -2277,7 +2294,8 @@ static void aclnn_mat_mul(ggml_backend_cann_context& ctx, aclTensor* acl_input,
         workspaceAddr = workspace_allocator.get();
     }
 
-    ACL_CHECK(aclnnMatmul(workspaceAddr, workspaceSize, executor,  ctx.stream()));
+    ACL_CHECK(
+        aclnnMatmul(workspaceAddr, workspaceSize, executor, ctx.stream()));
 }
 
 /**
@@ -2310,10 +2328,10 @@ static void ggml_cann_mat_mul_fp(ggml_backend_cann_context& ctx,
                              bcast_weight_nb[4], bcast_weight_nb[5]};
 
     aclTensor* acl_weight_tensor =
-        create_acl_tensor(weight, transpose_ne, transpose_nb, bcast_dims);
+        ggml_cann_create_tensor(weight, transpose_ne, transpose_nb, bcast_dims);
     aclTensor* acl_input_tensor =
-        create_acl_tensor(input, BCAST_MUL_MAT_PARAM(input));
-    aclTensor* acl_dst = create_acl_tensor(dst, BCAST_MUL_MAT_PARAM(dst));
+        ggml_cann_create_tensor(input, BCAST_MUL_MAT_PARAM(input));
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst, BCAST_MUL_MAT_PARAM(dst));
     aclnn_mat_mul(ctx, acl_input_tensor, acl_weight_tensor, acl_dst);
 
     ACL_CHECK(aclDestroyTensor(acl_weight_tensor));
@@ -2364,7 +2382,7 @@ static void ggml_cann_mul_mat_q8_0(ggml_backend_cann_context& ctx,
     size_t input_stride = input_elem_size * src1->ne[0] * src1->ne[1];
 
     if (src1->type != GGML_TYPE_F16) {
-        aclTensor* acl_src1_tensor = create_acl_tensor(src1);
+        aclTensor* acl_src1_tensor = ggml_cann_create_tensor(src1);
         ggml_cann_pool_alloc input_alloctor(
             ctx.pool(), ggml_nelements(src1) * input_elem_size);
         input_buffer = input_alloctor.get();
@@ -2376,9 +2394,9 @@ static void ggml_cann_mul_mat_q8_0(ggml_backend_cann_context& ctx,
             input_cast_nb[i] = input_cast_nb[i - 1] * input_cast_ne[i - 1];
         }
 
-        aclTensor* acl_input_tensor =
-            create_acl_tensor(input_buffer, ACL_FLOAT16, input_elem_size,
-                              input_cast_ne, input_cast_nb, GGML_MAX_DIMS);
+        aclTensor* acl_input_tensor = ggml_cann_create_tensor(
+            input_buffer, ACL_FLOAT16, input_elem_size, input_cast_ne,
+            input_cast_nb, GGML_MAX_DIMS);
         aclnn_cast(ctx, acl_src1_tensor, acl_input_tensor, ACL_FLOAT16);
         ACL_CHECK(aclDestroyTensor(acl_input_tensor));
         ACL_CHECK(aclDestroyTensor(acl_src1_tensor));
@@ -2408,16 +2426,16 @@ static void ggml_cann_mul_mat_q8_0(ggml_backend_cann_context& ctx,
             int64_t batch1 = n1 * src1->ne[2] + c1;
             int64_t batch0 = n0 * src0->ne[2] + c0;
 
-            aclTensor* acl_input_tensor = create_acl_tensor(
+            aclTensor* acl_input_tensor = ggml_cann_create_tensor(
                 (char*)input_buffer + batch1 * input_stride, ACL_FLOAT16,
                 input_elem_size, input_ne, input_nb, 2);
-            aclTensor* acl_weight_tensor = create_acl_tensor(
+            aclTensor* acl_weight_tensor = ggml_cann_create_tensor(
                 (char*)src0->data + batch0 * weight_stride, ACL_INT8,
                 weight_elem_size, weight_ne, weight_nb, 2);
-            aclTensor* acl_scale_tensor = create_acl_tensor(
+            aclTensor* acl_scale_tensor = ggml_cann_create_tensor(
                 scale_offset + batch0 * scale_stride, ACL_FLOAT16,
                 scale_elem_size, scale_ne, scale_nb, 2);
-            aclTensor* acl_output_tensor = create_acl_tensor(
+            aclTensor* acl_output_tensor = ggml_cann_create_tensor(
                 (char*)output_buffer + batch1 * output_stride, ACL_FLOAT16,
                 output_elem_size, output_ne, output_nb, 2);
 
@@ -2451,9 +2469,9 @@ static void ggml_cann_mul_mat_q8_0(ggml_backend_cann_context& ctx,
     }
 
     aclTensor* acl_output_tensor =
-        create_acl_tensor(output_buffer, ACL_FLOAT16, output_elem_size,
-                          output_cast_ne, output_cast_nb, GGML_MAX_DIMS);
-    aclTensor* acl_dst_tensor = create_acl_tensor(dst);
+        ggml_cann_create_tensor(output_buffer, ACL_FLOAT16, output_elem_size,
+                                output_cast_ne, output_cast_nb, GGML_MAX_DIMS);
+    aclTensor* acl_dst_tensor = ggml_cann_create_tensor(dst);
     aclnn_cast(ctx, acl_output_tensor, acl_dst_tensor, ACL_FLOAT);
 
     ACL_CHECK(aclDestroyTensor(acl_output_tensor));
@@ -2575,8 +2593,8 @@ static void aclnn_cache_init(ggml_backend_cann_context& ctx, ggml_tensor* dst,
                           arange_length * sizeof(float_t)};
 
     aclTensor* acl_arange_tensor =
-        create_acl_tensor(arange_buffer, ACL_FLOAT, sizeof(float_t), arange_ne,
-                          arange_nb, GGML_MAX_DIMS);
+        ggml_cann_create_tensor(arange_buffer, ACL_FLOAT, sizeof(float_t),
+                                arange_ne, arange_nb, GGML_MAX_DIMS);
     float start = 0;
     float step = 1;
     float stop = src0->ne[0] / 2;
@@ -2604,9 +2622,9 @@ static void aclnn_cache_init(ggml_backend_cann_context& ctx, ggml_tensor* dst,
     size_t position_nb[] = {sizeof(int32_t), sizeof(int32_t),
                             sizeof(int32_t) * position_length,
                             sizeof(int32_t) * position_length};
-    aclTensor* acl_position_tensor = create_acl_tensor(
-        src1->data, type_mapping(src1->type), ggml_type_size(src1->type),
-        position_ne, position_nb, GGML_MAX_DIMS);
+    aclTensor* acl_position_tensor = ggml_cann_create_tensor(
+        src1->data, ggml_cann_type_mapping(src1->type),
+        ggml_type_size(src1->type), position_ne, position_nb, GGML_MAX_DIMS);
 
     // power * position
     int64_t theta_length = arange_length * position_length;
@@ -2620,10 +2638,10 @@ static void aclnn_cache_init(ggml_backend_cann_context& ctx, ggml_tensor* dst,
         theta_nb[i] = theta_nb[i - 1] * theta_ne[i - 1];
     }
     aclTensor* acl_theta_tensor =
-        create_acl_tensor(theta_buffer, ACL_FLOAT, sizeof(float_t), theta_ne,
-                          theta_nb, GGML_MAX_DIMS);
+        ggml_cann_create_tensor(theta_buffer, ACL_FLOAT, sizeof(float_t),
+                                theta_ne, theta_nb, GGML_MAX_DIMS);
     aclnn_mul(ctx, acl_position_tensor, acl_theta_scale_tensor,
-                         acl_theta_tensor);
+              acl_theta_tensor);
 
     // permute: [0,1,2,3]->[0,2,1,3]
     int64_t permute_ne[] = {arange_length, 1, position_length, 1};
@@ -2635,9 +2653,9 @@ static void aclnn_cache_init(ggml_backend_cann_context& ctx, ggml_tensor* dst,
     ggml_cann_pool_alloc permute_allocator(ctx.pool(),
                                            theta_length * sizeof(float_t));
     void* permute_buffer = permute_allocator.get();
-    aclTensor* acl_permute_tensor =
-        create_acl_tensor(permute_buffer, ACL_FLOAT, sizeof(float_t),
-                          permute_ne, permute_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* acl_permute_tensor = ggml_cann_create_tensor(
+        permute_buffer, ACL_FLOAT, sizeof(float_t), permute_ne, permute_nb,
+        GGML_MAX_DIMS, ACL_FORMAT_ND);
     int64_t permute_dim[] = {0, 2, 1, 3};
     int64_t num_dims = 4;
     aclnn_permute(ctx, acl_theta_tensor, acl_permute_tensor, permute_dim,
@@ -2647,17 +2665,17 @@ static void aclnn_cache_init(ggml_backend_cann_context& ctx, ggml_tensor* dst,
     ggml_cann_pool_alloc sin_allocator(ctx.pool(),
                                        theta_length * sizeof(float_t));
     void* sin_buffer = sin_allocator.get();
-    aclTensor* acl_sin_tensor =
-        create_acl_tensor(sin_buffer, ACL_FLOAT, sizeof(float_t), permute_ne,
-                          permute_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* acl_sin_tensor = ggml_cann_create_tensor(
+        sin_buffer, ACL_FLOAT, sizeof(float_t), permute_ne, permute_nb,
+        GGML_MAX_DIMS, ACL_FORMAT_ND);
     aclnn_sin(ctx, acl_permute_tensor, acl_sin_tensor);
 
     ggml_cann_pool_alloc cos_allocator(ctx.pool(),
                                        theta_length * sizeof(float_t));
     void* cos_buffer = cos_allocator.get();
-    aclTensor* acl_cos_tensor =
-        create_acl_tensor(cos_buffer, ACL_FLOAT, sizeof(float_t), permute_ne,
-                          permute_nb, GGML_MAX_DIMS, ACL_FORMAT_ND);
+    aclTensor* acl_cos_tensor = ggml_cann_create_tensor(
+        cos_buffer, ACL_FLOAT, sizeof(float_t), permute_ne, permute_nb,
+        GGML_MAX_DIMS, ACL_FORMAT_ND);
     aclnn_cos(ctx, acl_permute_tensor, acl_cos_tensor);
 
     // repeat
@@ -2742,11 +2760,11 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         sin_reshape_nb[i] = sin_reshape_nb[i - 1] * sin_reshape_ne[i - 1];
     }
     aclTensor* acl_sin_reshape_tensor =
-        create_acl_tensor(sin_buffer, ACL_FLOAT, sizeof(float_t),
-                          sin_reshape_ne, sin_reshape_nb, GGML_MAX_DIMS);
+        ggml_cann_create_tensor(sin_buffer, ACL_FLOAT, sizeof(float_t),
+                                sin_reshape_ne, sin_reshape_nb, GGML_MAX_DIMS);
     aclTensor* acl_cos_reshape_tensor =
-        create_acl_tensor(cos_buffer, ACL_FLOAT, sizeof(float_t),
-                          sin_reshape_ne, sin_reshape_nb, GGML_MAX_DIMS);
+        ggml_cann_create_tensor(cos_buffer, ACL_FLOAT, sizeof(float_t),
+                                sin_reshape_ne, sin_reshape_nb, GGML_MAX_DIMS);
     aclnn_cache_init(ctx, dst, acl_cos_reshape_tensor, acl_sin_reshape_tensor,
                      theta_scale, is_neox);
 
@@ -2767,13 +2785,14 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         for (int i = 1; i < GGML_MAX_DIMS; i++) {
             input_roll_nb[i] = input_roll_nb[i - 1] * input_roll_ne[i - 1];
         }
-        aclTensor* acl_input_roll_tensor =
-            create_acl_tensor(input_roll_buffer, type_mapping(src0->type),
-                              ggml_type_size(src0->type), input_roll_ne,
-                              input_roll_nb, GGML_MAX_DIMS);
-        aclTensor* acl_input_tensor = create_acl_tensor(
-            src0->data, type_mapping(src0->type), ggml_type_size(src0->type),
-            input_roll_ne, input_roll_nb, GGML_MAX_DIMS);
+        aclTensor* acl_input_roll_tensor = ggml_cann_create_tensor(
+            input_roll_buffer, ggml_cann_type_mapping(src0->type),
+            ggml_type_size(src0->type), input_roll_ne, input_roll_nb,
+            GGML_MAX_DIMS);
+        aclTensor* acl_input_tensor = ggml_cann_create_tensor(
+            src0->data, ggml_cann_type_mapping(src0->type),
+            ggml_type_size(src0->type), input_roll_ne, input_roll_nb,
+            GGML_MAX_DIMS);
 
         int64_t shifts[] = {1};
         int64_t dims[] = {3};
@@ -2806,10 +2825,10 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         // roll input: [q0,q1,q2,...] ->
         // [q_half,q_half+1,...,q_end,q0,q1,...q_half-1]
         input_roll_buffer = roll_allocator.get();
-        aclTensor* acl_input_roll_tensor = create_acl_tensor(
-            input_roll_buffer, type_mapping(src0->type),
+        aclTensor* acl_input_roll_tensor = ggml_cann_create_tensor(
+            input_roll_buffer, ggml_cann_type_mapping(src0->type),
             ggml_type_size(src0->type), src0->ne, src0->nb, GGML_MAX_DIMS);
-        aclTensor* acl_input_tensor = create_acl_tensor(src0);
+        aclTensor* acl_input_tensor = ggml_cann_create_tensor(src0);
 
         int64_t shifts[] = {src0->ne[0] / 2};
         int64_t dims[] = {3};
@@ -2837,7 +2856,7 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         for (int i = 1; i < GGML_MAX_DIMS; i++) {
             first_half_nb[i] = first_half_nb[i - 1] * first_half_ne[i - 1];
         }
-        aclTensor* acl_first_half_tensor = create_acl_tensor(
+        aclTensor* acl_first_half_tensor = ggml_cann_create_tensor(
             minus_one_scale_buffer, ACL_FLOAT, sizeof(float_t), first_half_ne,
             first_half_nb, GGML_MAX_DIMS);
         bool inplace = true;
@@ -2858,19 +2877,19 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     for (int i = 1; i < GGML_MAX_DIMS; i++) {
         input_nb[i] = input_nb[i - 1] * src0->ne[i - 1];
     }
-    aclTensor* acl_input_roll_mul_scale_tensor = create_acl_tensor(
-        input_roll_mul_scale_buffer, type_mapping(src0->type),
+    aclTensor* acl_input_roll_mul_scale_tensor = ggml_cann_create_tensor(
+        input_roll_mul_scale_buffer, ggml_cann_type_mapping(src0->type),
         ggml_type_size(src0->type), src0->ne, input_nb, GGML_MAX_DIMS);
-    aclTensor* acl_input_roll_reshape_tensor = create_acl_tensor(
-        input_roll_buffer, type_mapping(src0->type), ggml_type_size(src0->type),
-        src0->ne, input_nb, GGML_MAX_DIMS);
+    aclTensor* acl_input_roll_reshape_tensor = ggml_cann_create_tensor(
+        input_roll_buffer, ggml_cann_type_mapping(src0->type),
+        ggml_type_size(src0->type), src0->ne, input_nb, GGML_MAX_DIMS);
 
-    aclnn_mul(ctx, acl_input_roll_reshape_tensor,
-                         acl_minus_one_tensor, acl_input_roll_mul_scale_tensor);
+    aclnn_mul(ctx, acl_input_roll_reshape_tensor, acl_minus_one_tensor,
+              acl_input_roll_mul_scale_tensor);
 
     // output
-    aclTensor* acl_src0 = create_acl_tensor(src0);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src0 = ggml_cann_create_tensor(src0);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
     void* output_fp32_buffer;
     if (src0->type == GGML_TYPE_F32) {
         aclnn_inplace_mul(ctx, acl_src0, acl_cos_reshape_tensor);
@@ -2887,26 +2906,25 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
         ggml_cann_pool_alloc fp32_allocator1(
             ctx.pool(), ggml_nelements(dst) * sizeof(float_t));
         void* input_fp32_buffer1 = fp32_allocator1.get();
-        aclTensor* input_fp32_tensor1 =
-            create_acl_tensor(input_fp32_buffer1, ACL_FLOAT, sizeof(float_t),
-                              dst->ne, input_fp32_nb, GGML_MAX_DIMS);
+        aclTensor* input_fp32_tensor1 = ggml_cann_create_tensor(
+            input_fp32_buffer1, ACL_FLOAT, sizeof(float_t), dst->ne,
+            input_fp32_nb, GGML_MAX_DIMS);
         ggml_cann_pool_alloc fp32_allocator2(
             ctx.pool(), ggml_nelements(dst) * sizeof(float_t));
         void* input_fp32_buffer2 = fp32_allocator2.get();
-        aclTensor* input_fp32_tensor2 =
-            create_acl_tensor(input_fp32_buffer2, ACL_FLOAT, sizeof(float_t),
-                              dst->ne, input_fp32_nb, GGML_MAX_DIMS);
+        aclTensor* input_fp32_tensor2 = ggml_cann_create_tensor(
+            input_fp32_buffer2, ACL_FLOAT, sizeof(float_t), dst->ne,
+            input_fp32_nb, GGML_MAX_DIMS);
 
         ggml_cann_pool_alloc fp32_allocator(
             ctx.pool(), ggml_nelements(dst) * sizeof(float_t));
         output_fp32_buffer = fp32_allocator.get();
-        aclTensor* output_fp32_tensor =
-            create_acl_tensor(output_fp32_buffer, ACL_FLOAT, sizeof(float_t),
-                              dst->ne, input_fp32_nb, GGML_MAX_DIMS);
-        aclnn_mul(ctx, acl_src0, acl_cos_reshape_tensor,
-                             input_fp32_tensor1);
-        aclnn_mul(ctx, acl_input_roll_mul_scale_tensor,
-                             acl_sin_reshape_tensor, input_fp32_tensor2);
+        aclTensor* output_fp32_tensor = ggml_cann_create_tensor(
+            output_fp32_buffer, ACL_FLOAT, sizeof(float_t), dst->ne,
+            input_fp32_nb, GGML_MAX_DIMS);
+        aclnn_mul(ctx, acl_src0, acl_cos_reshape_tensor, input_fp32_tensor1);
+        aclnn_mul(ctx, acl_input_roll_mul_scale_tensor, acl_sin_reshape_tensor,
+                  input_fp32_tensor2);
         aclnn_add(ctx, input_fp32_tensor1, input_fp32_tensor2,
                   output_fp32_tensor);
         aclnn_cast(ctx, output_fp32_tensor, acl_dst, ACL_FLOAT16);

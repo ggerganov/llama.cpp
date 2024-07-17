@@ -497,15 +497,15 @@ void ggml_cann_mul_div(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     aclTensor* acl_dst;
 
     // Need bcast
-    if (!ggml_are_same_shape(src0, src1) && need_bcast(src0, src1)) {
+    if (!ggml_are_same_shape(src0, src1) && ggml_cann_need_bcast(src0, src1)) {
         BCAST_SHAPE(src0, src1)
-        acl_src0 = create_acl_tensor(src0, BCAST_PARAM(src0));
-        acl_src1 = create_acl_tensor(src1, BCAST_PARAM(src1));
-        acl_dst = create_acl_tensor(dst, BCAST_PARAM(src0));
+        acl_src0 = ggml_cann_create_tensor(src0, BCAST_PARAM(src0));
+        acl_src1 = ggml_cann_create_tensor(src1, BCAST_PARAM(src1));
+        acl_dst = ggml_cann_create_tensor(dst, BCAST_PARAM(src0));
     } else {
-        acl_src0 = create_acl_tensor(src0);
-        acl_src1 = create_acl_tensor(src1);
-        acl_dst = create_acl_tensor(dst);
+        acl_src0 = ggml_cann_create_tensor(src0);
+        acl_src1 = ggml_cann_create_tensor(src1);
+        acl_dst = ggml_cann_create_tensor(dst);
     }
 
     uint64_t workspaceSize = 0;
@@ -538,8 +538,8 @@ void ggml_cann_activation(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     GGML_ASSERT(src->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
@@ -569,8 +569,8 @@ void ggml_cann_activation(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     GGML_ASSERT(src->type == GGML_TYPE_F32);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
-    aclTensor* acl_src = create_acl_tensor(src);
-    aclTensor* acl_dst = create_acl_tensor(dst);
+    aclTensor* acl_src = ggml_cann_create_tensor(src);
+    aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
