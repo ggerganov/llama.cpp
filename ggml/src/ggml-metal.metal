@@ -667,6 +667,54 @@ kernel void kernel_diag_mask_inf_8(
     }
 }
 
+// ref: ggml.c:ggml_compute_forward_ssm_conv_f32
+// TODO: optimize
+kernel void kernel_ssm_conv_f32(
+        device const  void * src0,
+        device const  void * src1,
+        device       float * dst,
+        constant   int64_t & ne00,
+        constant   int64_t & ne01,
+        constant   int64_t & ne02,
+        constant  uint64_t & nb00,
+        constant  uint64_t & nb01,
+        constant  uint64_t & nb02,
+        constant   int64_t & ne10,
+        constant   int64_t & ne11,
+        constant  uint64_t & nb10,
+        constant  uint64_t & nb11,
+        constant   int64_t & ne0,
+        constant   int64_t & ne1,
+        constant   int64_t & ne2,
+        constant  uint64_t & nb0,
+        constant  uint64_t & nb1,
+        constant  uint64_t & nb2,
+        uint3 tgpig[[threadgroup_position_in_grid]],
+        uint3 tpitg[[thread_position_in_threadgroup]],
+        uint3   ntg[[threads_per_threadgroup]]) {
+    const int64_t ir = tgpig.x;
+    const int64_t i2 = tgpig.y;
+    const int64_t i3 = tgpig.z;
+
+    const int64_t nc  = ne10;
+    const int64_t ncs = ne00;
+    const int64_t nr  = ne01;
+    const int64_t n_t = ne1;
+    const int64_t n_s = ne2;
+
+    device const float * s = (device const float *) ((device const char *) src0 + ir*nb01 + i2*nb00 + i3*nb02);
+    device const float * c = (device const float *) ((device const char *) src1 + ir*nb11);
+    device       float * x = (device       float *) ((device       char *) dst  + ir*nb0  + i2*nb1  + i3*nb2);
+
+    float sumf = 0.0f;
+
+    for (int64_t i0 = 0; i0 < nc; ++i0) {
+        sumf += s[i0] * c[i0];
+    }
+
+    x[0] = sumf;
+}
+
 kernel void kernel_norm(
         device const  void * src0,
         device       float * dst,

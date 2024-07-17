@@ -949,6 +949,29 @@ struct test_rms_norm : public test_case {
     }
 };
 
+// GGML_OP_SSM_CONV
+struct test_ssm_conv : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne_a;
+    const std::array<int64_t, 4> ne_b;
+
+    std::string vars() override {
+        return VARS_TO_STR3(type, ne_a, ne_b);
+    }
+
+    test_ssm_conv(ggml_type type = GGML_TYPE_F32,
+            std::array<int64_t, 4> ne_a = {10, 10, 10, 1},
+            std::array<int64_t, 4> ne_b = {3, 3, 1, 1})
+        : type(type), ne_a(ne_a), ne_b(ne_b) {}
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a   = ggml_new_tensor(ctx, type, 4, ne_a.data());
+        ggml_tensor * b   = ggml_new_tensor(ctx, type, 4, ne_b.data());
+        ggml_tensor * out = ggml_ssm_conv(ctx, a, b);
+        return out;
+    }
+};
+
 // GGML_OP_MUL_MAT
 struct test_mul_mat : public test_case {
     const ggml_type type_a;
@@ -2239,6 +2262,10 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         test_cases.emplace_back(new test_norm(GGML_TYPE_F32, {64, 10, 10, 10}, eps));
         test_cases.emplace_back(new test_rms_norm(GGML_TYPE_F32, {64, 10, 10, 10}, eps));
     }
+
+    test_cases.emplace_back(new test_ssm_conv(GGML_TYPE_F32, {4, 1536, 1, 1}, {4, 1536, 1, 1}));
+    test_cases.emplace_back(new test_ssm_conv(GGML_TYPE_F32, {8, 1536, 1, 1}, {4, 1536, 1, 1}));
+    test_cases.emplace_back(new test_ssm_conv(GGML_TYPE_F32, {4, 1536, 4, 1}, {4, 1536, 1, 1}));
 
 #if 1
     for (ggml_type type_a : base_types) {

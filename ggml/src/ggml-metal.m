@@ -82,6 +82,7 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_RMS_NORM,
     GGML_METAL_KERNEL_TYPE_GROUP_NORM,
     GGML_METAL_KERNEL_TYPE_NORM,
+    GGML_METAL_KERNEL_TYPE_SSM_CONV_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_F32_F32,
     GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F16,
     GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32,
@@ -542,6 +543,7 @@ static struct ggml_backend_metal_context * ggml_metal_init(int n_cb) {
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_RMS_NORM,                      rms_norm,                       ctx->support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_GROUP_NORM,                    group_norm,                     ctx->support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_NORM,                          norm,                           true);
+        GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_SSM_CONV_F32,                  ssm_conv_f32,                   true);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_F32_F32,                mul_mv_f32_f32,                 ctx->support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F16,                mul_mv_f16_f16,                 ctx->support_simdgroup_reduction);
         GGML_METAL_ADD_KERNEL(GGML_METAL_KERNEL_TYPE_MUL_MV_F16_F32,                mul_mv_f16_f32,                 ctx->support_simdgroup_reduction);
@@ -803,6 +805,8 @@ static bool ggml_metal_supports_op(const struct ggml_backend_metal_context * ctx
                 return false;
             }
             return ctx->support_simdgroup_mm; // TODO: over-restricted for vec-kernels
+        case GGML_OP_SSM_CONV:
+            return true;
         case GGML_OP_MUL_MAT:
         case GGML_OP_MUL_MAT_ID:
             return ctx->support_simdgroup_reduction &&
@@ -1537,6 +1541,39 @@ static enum ggml_status ggml_metal_graph_compute(
                         else {
                             [encoder dispatchThreadgroups:MTLSizeMake(ne00, ne01, ne02) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                         }
+                    } break;
+                case GGML_OP_SSM_CONV:
+                    {
+                        GGML_ASSERT(src0t == GGML_TYPE_F32);
+                        GGML_ASSERT(src1t == GGML_TYPE_F32);
+
+                        GGML_ASSERT(ggml_is_contiguous(src0));
+                        GGML_ASSERT(ggml_is_contiguous(src1));
+
+                        id<MTLComputePipelineState> pipeline = ctx->kernels[GGML_METAL_KERNEL_TYPE_SSM_CONV_F32].pipeline;
+
+                        [encoder setComputePipelineState:pipeline];
+                        [encoder setBuffer:id_src0 offset:offs_src0    atIndex:0];
+                        [encoder setBuffer:id_src1 offset:offs_src1    atIndex:1];
+                        [encoder setBuffer:id_dst  offset:offs_dst     atIndex:2];
+                        [encoder setBytes:&ne00    length:sizeof(ne00) atIndex:3];
+                        [encoder setBytes:&ne01    length:sizeof(ne01) atIndex:4];
+                        [encoder setBytes:&ne02    length:sizeof(ne02) atIndex:5];
+                        [encoder setBytes:&nb00    length:sizeof(nb00) atIndex:6];
+                        [encoder setBytes:&nb01    length:sizeof(nb01) atIndex:7];
+                        [encoder setBytes:&nb02    length:sizeof(nb02) atIndex:8];
+                        [encoder setBytes:&ne10    length:sizeof(ne10) atIndex:9];
+                        [encoder setBytes:&ne11    length:sizeof(ne11) atIndex:10];
+                        [encoder setBytes:&nb10    length:sizeof(nb10) atIndex:11];
+                        [encoder setBytes:&nb11    length:sizeof(nb11) atIndex:12];
+                        [encoder setBytes:&ne0     length:sizeof(ne0)  atIndex:13];
+                        [encoder setBytes:&ne1     length:sizeof(ne1)  atIndex:14];
+                        [encoder setBytes:&ne2     length:sizeof(ne2)  atIndex:15];
+                        [encoder setBytes:&nb0     length:sizeof(nb0)  atIndex:16];
+                        [encoder setBytes:&nb1     length:sizeof(nb1)  atIndex:17];
+                        [encoder setBytes:&nb2     length:sizeof(nb2)  atIndex:18];
+
+                        [encoder dispatchThreadgroups:MTLSizeMake(ne01, ne1, ne02) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
                     } break;
                 case GGML_OP_MUL_MAT:
                     {
