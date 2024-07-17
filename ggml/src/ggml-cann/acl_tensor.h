@@ -201,7 +201,7 @@ int64_t ggml_cann_get_bcast_shape(const ggml_tensor* src0, const ggml_tensor* sr
  *          shapes needed for matrix multiplication. It ensures that dimensions where
  *          weight tensor requires expansion are appropriately handled to conform with
  *          broadcasting rules.
- * @note compare with ggml_cann_get_bcast_shape，mul_mat broadcast need add this new dim 
+ * @note compare with ggml_cann_get_bcast_shape, mul_mat broadcast need add this new dim
  *       before cast dim.
  * @sa ggml_cann_get_bcast_shape
  */
