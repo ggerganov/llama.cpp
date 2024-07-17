@@ -5244,7 +5244,7 @@ static void llm_load_hparams(
         case LLM_ARCH_CHAMELEON:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
-		hparams.f_norm_eps = 1e-5;  // eps for qk-norm, torch default
+                hparams.f_norm_eps = 1e-5;  // eps for qk-norm, torch default
                 ml.get_key(LLM_KV_SWIN_NORM, hparams.swin_norm);
 
                 switch (hparams.n_layer) {
@@ -13718,11 +13718,11 @@ struct llm_build_context {
             struct ggml_tensor * inpSA = inpL;
 
             // norm
-	    if (!hparams.swin_norm) {
+            if (!hparams.swin_norm) {
                 cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
-	    }
+            }
             cb(cur, "attn_norm", il);
 
             // self-attention
@@ -13780,11 +13780,11 @@ struct llm_build_context {
                         model.layers[il].wo, nullptr,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
-	        if (hparams.swin_norm) {
+                if (hparams.swin_norm) {
                     cur = llm_build_norm(ctx0, cur, hparams,
                         model.layers[il].attn_norm, NULL,
                         LLM_NORM_RMS, cb, il);
-	        }
+                }
             }
 
             if (il == n_layer - 1) {
@@ -13799,12 +13799,12 @@ struct llm_build_context {
             cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
-	    if (!hparams.swin_norm) {
+            if (!hparams.swin_norm) {
                 cur = llm_build_norm(ctx0, ffn_inp, hparams,
                         model.layers[il].ffn_norm, NULL,
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
-	    }
+            }
 
             cur = llm_build_ffn(ctx0, cur,
                     model.layers[il].ffn_up,   NULL, NULL,
@@ -13814,12 +13814,12 @@ struct llm_build_context {
                     LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
             cb(cur, "ffn_out", il);
 
-	    if (hparams.swin_norm) {
+            if (hparams.swin_norm) {
                 cur = llm_build_norm(ctx0, cur, hparams,
                         model.layers[il].ffn_norm, NULL,
                         LLM_NORM_RMS, cb, il);
                 cb(cur, "ffn_norm", il);
-	    }
+            }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
@@ -13842,13 +13842,15 @@ struct llm_build_context {
         cur = ggml_mul_mat(ctx0, model.output, cur);
         cb(cur, "result_output_with_img_logits", -1);
 
-	int img_token_end_idx = 8196;
-	int img_token_start_idx = 4;
-	int num_img_tokens = img_token_end_idx - img_token_start_idx;
-	struct ggml_tensor * img_logits = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, num_img_tokens);
-	img_logits = ggml_add1(ctx0, img_logits, ggml_new_f32(ctx0, -FLT_MAX));
-	cb(img_logits, "img_logits", -1);
-	cur = ggml_set_1d(ctx0, cur, img_logits, ggml_element_size(cur) * img_token_start_idx);
+        // TODO: this suppresses the output of image tokens, which is required to enable text-only outputs.
+        // Needs to be removed once image outputs are supported.
+        int img_token_end_idx = 8196;
+        int img_token_start_idx = 4;
+        int num_img_tokens = img_token_end_idx - img_token_start_idx;
+        struct ggml_tensor * img_logits = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, num_img_tokens);
+        img_logits = ggml_add1(ctx0, img_logits, ggml_new_f32(ctx0, -FLT_MAX));
+        cb(img_logits, "img_logits", -1);
+        cur = ggml_set_1d(ctx0, cur, img_logits, ggml_element_size(cur) * img_token_start_idx);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
@@ -15713,8 +15715,8 @@ struct llm_tokenizer_bpe {
                 break;
             case LLAMA_VOCAB_PRE_TYPE_CHAMELEON:
                 regex_exprs = {
-		    "<sentinel:[0-9]+>",  // Sentinel tokens
-		    "(IMGIMG)((A|B|C|D|E|F|G|H|I){1,4})Z",  // Image tokens
+                    "<sentinel:[0-9]+>",  // Sentinel tokens
+                    "(IMGIMG)((A|B|C|D|E|F|G|H|I){1,4})Z",  // Image tokens
                     "([\t\n]|    |  )",  // directly from tokenizer.json
                     "\\p{N}", // Individual digits
                     "[\\p{P}\\$\\+<=>\\^~\\|`]+",  // Punctuation
