@@ -134,8 +134,7 @@ struct ggml_backend_qnn_buffer_type_context {
 //  implementation of QNN backend for GGML
 //
 // =================================================================================================
-static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct ggml_tensor *tensor,
-                                   bool b_dump_tensor_info) {
+static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct ggml_tensor *tensor) {
     if (ggml_is_empty(tensor) ||
         (!qnn::ggml_qnn_unary_op_array()[tensor->op] && !qnn::ggml_qnn_binary_op_array()[tensor->op])) {
         return false;
@@ -353,13 +352,13 @@ GGML_CALL static ggml_status ggml_backend_qnn_graph_compute(ggml_backend_t backe
 GGML_CALL static bool ggml_backend_qnn_supports_op(ggml_backend_t backend, const ggml_tensor *op) {
     ggml_backend_qnn_context *ctx = (ggml_backend_qnn_context *)backend->context;
 
-    return (ggml_qnn_can_handle_op(ctx, op, false));
+    return ggml_qnn_can_handle_op(ctx, op);
 }
 
 GGML_CALL static bool ggml_backend_qnn_offload_op(ggml_backend_t backend, const ggml_tensor *tensor) {
     ggml_backend_qnn_context *ctx = (ggml_backend_qnn_context *)backend->context;
 
-    return ggml_qnn_can_handle_op(ctx, tensor, false);
+    return ggml_qnn_can_handle_op(ctx, tensor);
 }
 
 static ggml_backend_i ggml_backend_qnn_interface = {
