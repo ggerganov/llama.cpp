@@ -202,7 +202,7 @@ private:
 #else
 class qnn_perf {
 public:
-    qnn_perf(const std::string &perf_name) {}
+    qnn_perf(const std::string &) {}
     ~qnn_perf() { info(); }
     qnn_perf() = delete;
     qnn_perf(const qnn_perf &) = delete;

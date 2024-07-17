@@ -47,6 +47,10 @@ Fn dl_sym_typed(dl_handler_t handle, const std::string &function_name) {
 // ref:https://github.com/pytorch/executorch/tree/main/backends/qualcomm
 // =================================================================================================
 
+// TODO: fix this for other compilers
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wextra-semi"
+
 class qnn_system_interface {
 
 #define DEFINE_SHIM_FUNCTION_SYS_INTERFACE(F, pointer_name)                                                  \
@@ -176,12 +180,14 @@ private:
     const QnnInterface_t _qnn_interface = {};
 };
 
+#pragma GCC diagnostic pop
+
 class qnn_instance {
 public:
     using BackendIdType = decltype(QnnInterface_t{}.backendId);
 
     explicit qnn_instance(const std::string &lib_path, const std::string &backend_name, const std::string &model_name) :
-        _lib_path(std::move(lib_path)), _backend_name(std::move(backend_name)), _model_name(std::move(model_name)) {};
+        _lib_path(std::move(lib_path)), _backend_name(std::move(backend_name)), _model_name(std::move(model_name)) {}
 
     ~qnn_instance() {}
 
@@ -250,7 +256,7 @@ public:
             QNN_LOG_INFO("device counts %d", p_info->v1.numHwDevices);
             QnnDevice_HardwareDeviceInfo_t *infos = p_info->v1.hwDevices;
             QnnHtpDevice_OnChipDeviceInfoExtension_t chipinfo = {};
-            for (int i = 0; i < p_info->v1.numHwDevices; i++) {
+            for (uint32_t i = 0; i < p_info->v1.numHwDevices; i++) {
                 QNN_LOG_INFO("deviceID:%d, deviceType:%d, numCores %d", infos[i].v1.deviceId, infos[i].v1.deviceType,
                              infos[i].v1.numCores);
                 QnnDevice_DeviceInfoExtension_t devinfo = infos[i].v1.deviceInfoExtension;
@@ -464,17 +470,17 @@ public:
         return _qnn_interface;
     }
 
-    const Qnn_LogHandle_t get_qnn_log_handle() { return _qnn_log_handle; }
+    Qnn_LogHandle_t get_qnn_log_handle() { return _qnn_log_handle; }
 
-    const Qnn_ProfileHandle_t get_qnn_profile_handle() { return _qnn_profile_handle; }
+    Qnn_ProfileHandle_t get_qnn_profile_handle() { return _qnn_profile_handle; }
 
-    const Qnn_DeviceHandle_t get_qnn_device_handle() { return _qnn_device_handle; }
+    Qnn_DeviceHandle_t get_qnn_device_handle() { return _qnn_device_handle; }
 
-    const Qnn_BackendHandle_t get_qnn_backend_handle() { return _qnn_backend_handle; }
+    Qnn_BackendHandle_t get_qnn_backend_handle() { return _qnn_backend_handle; }
 
-    const Qnn_ContextHandle_t get_qnn_context_handle() { return _qnn_context_handle; }
+    Qnn_ContextHandle_t get_qnn_context_handle() { return _qnn_context_handle; }
 
-    const Qnn_GraphHandle_t get_qnn_graph_handle() { return _qnn_graph_handle; }
+    Qnn_GraphHandle_t get_qnn_graph_handle() { return _qnn_graph_handle; }
 
     int init_htp_perfinfra() {
         QnnDevice_Infrastructure_t device_infra = nullptr;
@@ -779,7 +785,7 @@ private:
         return 0;
     }
 
-    int load_backend(std::string &lib_path, const QnnSaver_Config_t **saver_config) {
+    int load_backend(std::string &lib_path, const QnnSaver_Config_t ** /*saver_config*/) {
         Qnn_ErrorHandle_t error = QNN_SUCCESS;
         QNN_LOG_DEBUG("lib_path:%s\n", lib_path.c_str());
 

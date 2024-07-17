@@ -173,7 +173,7 @@ static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct g
     return true;
 }
 
-bool ggml_qnn_compute_forward(ggml_backend_qnn_context *ctx, struct ggml_tensor *tensor) {
+static bool ggml_qnn_compute_forward(ggml_backend_qnn_context *ctx, struct ggml_tensor *tensor) {
     auto unary_op = qnn::ggml_qnn_unary_op_array()[tensor->op];
     if (unary_op) {
         return unary_op(ctx, tensor->src[0], tensor);
@@ -260,7 +260,10 @@ static ggml_backend_buffer_i ggml_backend_qnn_buffer_interface = {
     /* .reset           = */ nullptr,
 };
 
-GGML_CALL static const char *ggml_backend_qnn_buffer_type_name(ggml_backend_buffer_type_t buft) { return "QNN"; }
+GGML_CALL static const char *ggml_backend_qnn_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    GGML_UNUSED(buft);
+    return "QNN";
+}
 
 GGML_CALL static ggml_backend_buffer_t ggml_backend_qnn_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
                                                                                  size_t size) {
@@ -291,7 +294,10 @@ GGML_CALL static bool ggml_backend_qnn_buffer_is_host(ggml_backend_buffer_type_t
     return true;
 }
 
-GGML_CALL static const char *ggml_backend_qnn_name(ggml_backend_t backend) { return "QNN"; }
+GGML_CALL static const char *ggml_backend_qnn_name(ggml_backend_t backend) {
+    GGML_UNUSED(backend);
+    return "QNN";
+}
 
 GGML_CALL static void ggml_backend_qnn_free(ggml_backend_t backend) {
     QNN_LOG_INFO("enter %s", __func__);
@@ -407,8 +413,6 @@ void ggml_backend_qnn_set_n_threads(ggml_backend_t backend, int n_threads) {
     auto *ctx = (ggml_backend_qnn_context *)backend->context;
     ctx->threads = n_threads;
 }
-
-const char *ggml_backend_qnn_get_name(ggml_backend_t backend) { return backend->iface.get_name(backend); }
 
 int ggml_backend_qnn_get_device_count() { return GGML_QNN_MAX_DEVICES; }
 
@@ -534,7 +538,9 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char *qnn_lib_path) {
     return qnn_backend;
 }
 
-extern "C" GGML_CALL void ggml_backend_qnn_reg_devices() {
+extern "C" GGML_CALL void ggml_backend_qnn_reg_devices();
+
+GGML_CALL void ggml_backend_qnn_reg_devices() {
     for (size_t idx = 0; idx < GGML_QNN_MAX_DEVICES; idx++) {
         char name[GGML_MAX_NAME];
         ggml_backend_qnn_get_device_description(idx, name, GGML_MAX_NAME);

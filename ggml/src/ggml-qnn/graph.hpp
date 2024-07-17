@@ -101,10 +101,9 @@ public:
         _tensor_inputs = tensor_inputs;
         _tensor_outputs = tensor_outputs;
 
-        Qnn_Param_t qnn_params[] = {};
         Qnn_OpConfig_t op_config = { .version = QNN_OPCONFIG_VERSION_1,
                                      .v1 = { _graph_name.c_str(), QNN_OP_PACKAGE_NAME_QTI_AISW, op_name.c_str(), 0,
-                                             qnn_params, (uint32_t)_tensor_inputs.size(), _tensor_inputs.data(),
+                                             nullptr, (uint32_t)_tensor_inputs.size(), _tensor_inputs.data(),
                                              (uint32_t)_tensor_outputs.size(), _tensor_outputs.data() } };
         auto error = _qnn_interface->qnn_graph_add_node(_graph_handle, op_config);
         if (error != QNN_SUCCESS) {

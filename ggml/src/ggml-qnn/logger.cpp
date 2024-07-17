@@ -9,7 +9,8 @@
 #include <android/log.h>
 #endif
 
-void qnn::internal_log(ggml_log_level level, const char *file, const char *func, int line, const char *format, ...) {
+void qnn::internal_log(ggml_log_level level, const char * /*file*/, const char *func, int line, const char *format,
+                       ...) {
     static std::mutex qnn_internal_log_mutex;
     static char s_qnn_internal_log_buf[QNN_LOGBUF_LEN];
 
@@ -32,8 +33,8 @@ void qnn::internal_log(ggml_log_level level, const char *file, const char *func,
     }
 }
 
-void qnn::sdk_logcallback(const char *fmt, QnnLog_Level_t level, uint64_t timestamp, va_list argp) {
 #if ENABLE_QNNSDK_LOG
+void qnn::sdk_logcallback(const char *fmt, QnnLog_Level_t level, uint64_t timestamp, va_list argp) {
     static std::mutex log_mutex;
     static unsigned char s_ggml_qnn_logbuf[QNN_LOGBUF_LEN];
 
@@ -67,5 +68,7 @@ void qnn::sdk_logcallback(const char *fmt, QnnLog_Level_t level, uint64_t timest
         vsnprintf(reinterpret_cast<char *const>(s_ggml_qnn_logbuf), QNN_LOGBUF_LEN, fmt, argp);
         QNN_LOG_INFO("%8.1fms [%-7s] %s", ms, log_level_desc, s_ggml_qnn_logbuf);
     }
-#endif
 }
+#else
+void qnn::sdk_logcallback(const char *, QnnLog_Level_t, uint64_t, va_list) {}
+#endif
