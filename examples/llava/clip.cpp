@@ -1007,7 +1007,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 
 #ifdef GGML_USE_CANN
     new_clip->backend = ggml_backend_cann_init(0);
-    printf("%s: CLIP using CANN backend\n", __func__);
+    LOG_TEE("%s: CLIP using CANN backend\n", __func__);
 #endif
 
 
