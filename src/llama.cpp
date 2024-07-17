@@ -15377,11 +15377,13 @@ static int llama_encode_internal(
 
         ggml_backend_tensor_get_async(backend_embd, embd, embd_out, 0, n_tokens*n_embd*sizeof(float));
 
+        GGML_ASSERT(!ubatch.equal_seqs); // TODO: use batch.n_seqs instead of failing
+
         // remember the sequence ids used during the encoding - needed for cross attention later
         lctx.seq_ids_enc.resize(n_tokens);
         for (uint32_t i = 0; i < n_tokens; i++) {
-            for (int s = 0; s < batch.n_seq_id[i]; s++) {
-                llama_seq_id seq_id = batch.seq_id[i][s];
+            for (int s = 0; s < ubatch.n_seq_id[i]; s++) {
+                llama_seq_id seq_id = ubatch.seq_id[i][s];
                 lctx.seq_ids_enc[i].insert(seq_id);
             }
         }
