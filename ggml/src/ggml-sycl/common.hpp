@@ -47,10 +47,6 @@ static int g_ggml_sycl_debug = 0;
     }                                                                    \
   }()
 
-// #define DEBUG_SYCL_MALLOC
-
-static int g_work_group_size = 0;
-// typedef sycl::half ggml_fp16_t;
 
 #define __SYCL_ARCH__ DPCT_COMPATIBILITY_TEMP
 #define VER_4VEC 610 // todo for hardward optimize.
@@ -193,6 +189,8 @@ struct ggml_sycl_device_info {
     sycl_device_info devices[GGML_SYCL_MAX_DEVICES] = {};
 
     std::array<float, GGML_SYCL_MAX_DEVICES> default_tensor_split = {};
+
+    int max_work_group_sizes[GGML_SYCL_MAX_DEVICES] = {0};
 };
 
 const ggml_sycl_device_info & ggml_sycl_info();
@@ -295,15 +293,6 @@ struct ggml_backend_sycl_context {
     }
 };
 
-// common host functions
-
-static inline int get_work_group_size(const sycl::device& device) {
-    dpct::device_info prop;
-    dpct::get_device_info(prop, device);
-    return prop.get_max_work_group_size();
-}
-
-
 // common device functions
 
 static __dpct_inline__ float warp_reduce_sum(float x,
@@ -355,6 +344,12 @@ static __dpct_inline__ float warp_reduce_max(float x,
 template <typename Tp, int n>
 inline sycl::vec<Tp, n> vec_aligned_load(const Tp* aligned_ptr) {
     return *reinterpret_cast<const sycl::vec<Tp, n>*>(aligned_ptr);
+}
+
+// Helper for accessing pointers with no warnings
+template <typename Tp, int dim>
+static __dpct_inline__ Tp* get_pointer(sycl::local_accessor<Tp, dim> acc) {
+    return acc.template get_multi_ptr<sycl::access::decorated::no>().get();
 }
 
 #endif // GGML_SYCL_COMMON_HPP

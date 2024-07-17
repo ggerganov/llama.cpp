@@ -88,8 +88,10 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_DBRX           = 13,
         LLAMA_VOCAB_PRE_TYPE_SMAUG          = 14,
         LLAMA_VOCAB_PRE_TYPE_PORO           = 15,
-        LLAMA_VOCAB_PRE_TYPE_VIKING         = 16,
-        LLAMA_VOCAB_PRE_TYPE_JAIS           = 17,
+        LLAMA_VOCAB_PRE_TYPE_CHATGLM3       = 16,
+        LLAMA_VOCAB_PRE_TYPE_CHATGLM4       = 17,
+        LLAMA_VOCAB_PRE_TYPE_VIKING         = 18,
+        LLAMA_VOCAB_PRE_TYPE_JAIS           = 19,
     };
 
     // note: these values should be synchronized with ggml_rope
@@ -131,7 +133,7 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_F16           = 1,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_0          = 2,  // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_1          = 3,  // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4,  // tok_embeddings.weight and output.weight are F16
+        // LLAMA_FTYPE_MOSTLY_Q4_1_SOME_F16 = 4,  // tok_embeddings.weight and output.weight are F16
         // LLAMA_FTYPE_MOSTLY_Q4_2       = 5,  // support has been removed
         // LLAMA_FTYPE_MOSTLY_Q4_3       = 6,  // support has been removed
         LLAMA_FTYPE_MOSTLY_Q8_0          = 7,  // except 1d tensors
@@ -160,6 +162,9 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_IQ4_XS        = 30, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_IQ1_M         = 31, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_BF16          = 32, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0_4_4      = 33, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0_4_8      = 34, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // except 1d tensors
 
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
@@ -178,6 +183,12 @@ extern "C" {
         LLAMA_POOLING_TYPE_MEAN = 1,
         LLAMA_POOLING_TYPE_CLS  = 2,
         LLAMA_POOLING_TYPE_LAST = 3,
+    };
+
+    enum llama_attention_type {
+        LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1,
+        LLAMA_ATTENTION_TYPE_CAUSAL      = 0,
+        LLAMA_ATTENTION_TYPE_NON_CAUSAL  = 1,
     };
 
     enum llama_split_mode {
@@ -297,6 +308,7 @@ extern "C" {
 
         enum llama_rope_scaling_type rope_scaling_type; // RoPE scaling type, from `enum llama_rope_scaling_type`
         enum llama_pooling_type      pooling_type;      // whether to pool (sum) embedding results by sequence id
+        enum llama_attention_type    attention_type;    // attention type to use for embeddings
 
         // ref: https://github.com/ggerganov/llama.cpp/pull/2054
         float    rope_freq_base;   // RoPE base frequency, 0 = from model
@@ -399,6 +411,9 @@ extern "C" {
         const char * content;
     } llama_chat_message;
 
+    // lora adapter
+    struct llama_lora_adapter;
+
     // Helpers for getting default parameters
     LLAMA_API struct llama_model_params llama_model_default_params(void);
     LLAMA_API struct llama_context_params llama_context_default_params(void);
@@ -498,18 +513,28 @@ extern "C" {
             const char * fname_out,
             const llama_model_quantize_params * params);
 
-    // Apply a LoRA adapter to a loaded model
-    // path_base_model is the path to a higher quality model to use as a base for
-    // the layers modified by the adapter. Can be NULL to use the current loaded model.
-    // The model needs to be reloaded before applying a new adapter, otherwise the adapter
-    // will be applied on top of the previous one
-    // Returns 0 on success
-    LLAMA_API int32_t llama_model_apply_lora_from_file(
-            const struct llama_model * model,
-                          const char * path_lora,
-                               float   scale,
-                          const char * path_base_model,
-                             int32_t   n_threads);
+    // Load a LoRA adapter from file
+    // The loaded adapter will be associated to the given model, and will be free when the model is deleted
+    LLAMA_API struct llama_lora_adapter * llama_lora_adapter_init(
+            struct llama_model * model,
+            const char * path_lora);
+
+    // Add a loaded LoRA adapter to given context
+    // This will not modify model's weight
+    LLAMA_API int32_t llama_lora_adapter_set(
+            struct llama_context * ctx,
+            struct llama_lora_adapter * adapter,
+            float scale);
+
+    // Remove a LoRA adapter from given context
+    // Return -1 if the adapter is not present in the context
+    LLAMA_API int32_t llama_lora_adapter_remove(
+            struct llama_context * ctx,
+            struct llama_lora_adapter * adapter);
+
+    // Manually free a LoRA adapter
+    // Note: loaded adapters will be free when the associated model is deleted
+    LLAMA_API void llama_lora_adapter_free(struct llama_lora_adapter * adapter);
 
     // Apply a loaded control vector to a llama_context, or if data is NULL, clear
     // the currently loaded vector.
@@ -897,6 +922,7 @@ extern "C" {
     /// @param tokens The tokens pointer must be large enough to hold the resulting tokens.
     /// @return Returns the number of tokens on success, no more than n_tokens_max
     /// @return Returns a negative number on failure - the number of tokens that would have been returned
+    /// @param add_special Allow to add BOS and EOS tokens if model is configured to do so.
     /// @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated
     ///                      as plaintext. Does not insert a leading space.
     LLAMA_API int32_t llama_tokenize(
@@ -911,14 +937,30 @@ extern "C" {
     // Token Id -> Piece.
     // Uses the vocabulary in the provided context.
     // Does not write null terminator to the buffer.
-    // User code is responsible to remove the leading whitespace of the first non-BOS token when decoding multiple tokens.
+    // User can skip up to 'lstrip' leading spaces before copying (useful when encoding/decoding multiple tokens with 'add_space_prefix')
     // @param special If true, special tokens are rendered in the output.
     LLAMA_API int32_t llama_token_to_piece(
               const struct llama_model * model,
                            llama_token   token,
                                   char * buf,
                                int32_t   length,
+                               int32_t   lstrip,
                                   bool   special);
+
+    /// @details Convert the provided tokens into text (inverse of llama_tokenize()).
+    /// @param text The char pointer must be large enough to hold the resulting text.
+    /// @return Returns the number of chars/bytes on success, no more than text_len_max.
+    /// @return Returns a negative number on failure - the number of chars/bytes that would have been returned.
+    /// @param remove_special Allow to remove BOS and EOS tokens if model is configured to do so.
+    /// @param unparse_special If true, special tokens are rendered in the output.
+    LLAMA_API int32_t llama_detokenize(
+        const struct llama_model * model,
+               const llama_token * tokens,
+                         int32_t   n_tokens,
+                            char * text,
+                         int32_t   text_len_max,
+                            bool   remove_special,
+                            bool   unparse_special);
 
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
