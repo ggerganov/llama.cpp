@@ -320,6 +320,7 @@ enum llm_kv {
     LLM_KV_DECODER_START_TOKEN_ID,
     LLM_KV_ATTN_LOGIT_SOFTCAPPING,
     LLM_KV_FINAL_LOGIT_SOFTCAPPING,
+    LLM_KV_SWIN_NORM,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -413,6 +414,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_DECODER_START_TOKEN_ID,            "%s.decoder_start_token_id"            },
     { LLM_KV_ATTN_LOGIT_SOFTCAPPING,            "%s.attn_logit_softcapping"            },
     { LLM_KV_FINAL_LOGIT_SOFTCAPPING,           "%s.final_logit_softcapping"           },
+    { LLM_KV_SWIN_NORM,                         "%s.swin_norm"                         },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,             "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,          "%s.attention.head_count_kv"          },
@@ -2172,6 +2174,7 @@ struct llama_hparams {
     bool vocab_only;
     bool rope_finetuned;
     bool use_par_res;
+    bool swin_norm;
 
     uint32_t n_vocab;
     uint32_t n_ctx_train; // context size the model was trained on
@@ -5242,6 +5245,7 @@ static void llm_load_hparams(
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 		hparams.f_norm_eps = 1e-5;  // eps for qk-norm, torch default
+                ml.get_key(LLM_KV_SWIN_NORM, hparams.swin_norm);
 
                 switch (hparams.n_layer) {
                     case 32: model.type = e_model::MODEL_7B; break;
@@ -7560,7 +7564,7 @@ static bool llm_load_tensors(
                         layer.attn_q_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "weight", i), {n_embd_head_k, n_head});
                         layer.attn_k_norm = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "weight", i), {n_embd_head_k, n_head_kv});
                         layer.attn_q_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q_NORM, "bias", i),  {n_embd_head_k, n_head}, llama_model_loader::TENSOR_NOT_REQUIRED);
-                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias", i),  {n_embd_head_k, n_head}, llama_model_loader::TENSOR_NOT_REQUIRED);
+                        layer.attn_k_norm_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_K_NORM, "bias", i),  {n_embd_head_k, n_head_kv}, llama_model_loader::TENSOR_NOT_REQUIRED);
 
                         layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
                         layer.wk = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_K,   "weight", i), {n_embd, n_embd_gqa});
@@ -13686,7 +13690,7 @@ struct llm_build_context {
     // ref: https://github.com/facebookresearch/chameleon
     // based on the original build_llama() function, changes:
     //   * qk-norm
-    //   * swin-norm (TODO)
+    //   * swin-norm
     //   * removed bias
     //   * removed MoE
     struct ggml_cgraph * build_chameleon() {
@@ -13714,9 +13718,11 @@ struct llm_build_context {
             struct ggml_tensor * inpSA = inpL;
 
             // norm
-            cur = llm_build_norm(ctx0, inpL, hparams,
+	    if (!hparams.swin_norm) {
+                cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
+	    }
             cb(cur, "attn_norm", il);
 
             // self-attention
@@ -13773,6 +13779,12 @@ struct llm_build_context {
                 cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
                         model.layers[il].wo, nullptr,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
+
+	        if (hparams.swin_norm) {
+                    cur = llm_build_norm(ctx0, cur, hparams,
+                        model.layers[il].attn_norm, NULL,
+                        LLM_NORM_RMS, cb, il);
+	        }
             }
 
             if (il == n_layer - 1) {
@@ -13787,10 +13799,12 @@ struct llm_build_context {
             cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
-            cur = llm_build_norm(ctx0, ffn_inp, hparams,
-                    model.layers[il].ffn_norm, NULL,
-                    LLM_NORM_RMS, cb, il);
-            cb(cur, "ffn_norm", il);
+	    if (!hparams.swin_norm) {
+                cur = llm_build_norm(ctx0, ffn_inp, hparams,
+                        model.layers[il].ffn_norm, NULL,
+                        LLM_NORM_RMS, cb, il);
+                cb(cur, "ffn_norm", il);
+	    }
 
             cur = llm_build_ffn(ctx0, cur,
                     model.layers[il].ffn_up,   NULL, NULL,
@@ -13799,6 +13813,13 @@ struct llm_build_context {
                     NULL,
                     LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
             cb(cur, "ffn_out", il);
+
+	    if (hparams.swin_norm) {
+                cur = llm_build_norm(ctx0, cur, hparams,
+                        model.layers[il].ffn_norm, NULL,
+                        LLM_NORM_RMS, cb, il);
+                cb(cur, "ffn_norm", il);
+	    }
 
             cur = ggml_add(ctx0, cur, ffn_inp);
             cb(cur, "ffn_out", il);
@@ -14818,6 +14839,7 @@ static int llama_decode_internal(
                 GGML_ASSERT((n_outputs_prev + n_outputs_new)*n_vocab <= (int64_t) lctx.logits_size);
                 ggml_backend_tensor_get_async(backend_res, res, logits_out, 0, n_outputs_new*n_vocab*sizeof(float));
             }
+
         }
 
         // extract embeddings
