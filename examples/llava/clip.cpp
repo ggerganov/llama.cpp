@@ -554,7 +554,7 @@ struct clip_ctx {
     ggml_gallocr_t compute_alloc = NULL;
 };
 
-static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, std::pair<int, int> load_image_size = {448, 448}, bool is_inf = false) {
+static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32_batch * imgs, struct load_image_size * load_image_size, bool is_inf = false) {
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
         return nullptr;
@@ -567,8 +567,12 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     int image_size_width     = image_size;
     int image_size_height    = image_size;
     if (ctx->has_minicpmv_projector) {
-        image_size_width     = load_image_size.first;
-        image_size_height    = load_image_size.second;
+        if(load_image_size==nullptr){
+            load_image_size= load_image_size_init();
+        }
+        LOG_TEE("%s : %d %d\n", __func__, load_image_size->image_size_width, load_image_size->image_size_height);
+        image_size_width     = load_image_size->image_size_width;
+        image_size_height    = load_image_size->image_size_height;
         if (is_inf){
             image_size_width = imgs->data->nx;
             image_size_height = imgs->data->ny;
@@ -995,7 +999,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 }
 
 // read and create ggml_context containing the tensors and their data
-struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1, std::pair<int, int> load_image_size) {
+struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1, struct load_image_size * load_image_size) {
     struct ggml_context * meta = NULL;
 
     struct gguf_init_params params = {
@@ -1462,6 +1466,13 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1, s
     }
 
     return new_clip;
+}
+
+struct load_image_size * load_image_size_init() {
+    struct load_image_size * load_image_size = new struct load_image_size();
+    load_image_size->image_size_width = 448;
+    load_image_size->image_size_height = 448;
+    return load_image_size;
 }
 
 struct clip_image_u8 * clip_image_u8_init() {
@@ -2058,7 +2069,7 @@ static std::vector<std::vector<float>> get_2d_sincos_pos_embed(int embed_dim, co
     return pos_embed_2d;
 }
 
-bool clip_image_encode(struct clip_ctx * ctx, const int n_threads, clip_image_f32 * img, float * vec, std::pair<int, int> load_image_size) {
+bool clip_image_encode(struct clip_ctx * ctx, const int n_threads, clip_image_f32 * img, float * vec, struct load_image_size * load_image_size) {
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
         return false;
@@ -2070,7 +2081,7 @@ bool clip_image_encode(struct clip_ctx * ctx, const int n_threads, clip_image_f3
     return clip_image_batch_encode(ctx, n_threads, &imgs, vec, load_image_size);
 }
 
-bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_image_f32_batch * imgs, float * vec, std::pair<int, int> load_image_size) {
+bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_image_f32_batch * imgs, float * vec, struct load_image_size * load_image_size) {
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
         return false;
@@ -2148,8 +2159,12 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             //    -> https://huggingface.co/Qwen/Qwen-VL/tree/main
             //    -> https://huggingface.co/Qwen/Qwen-VL/blob/0547ed36a86561e2e42fecec8fd0c4f6953e33c4/visual.py#L23
             struct ggml_tensor * pos_embed = ggml_graph_get_tensor(gf, "pos_embed");
-            int pos_w = load_image_size.first/patch_size;
-            int pos_h = load_image_size.second/patch_size;
+            if(load_image_size==nullptr){
+                load_image_size= load_image_size_init();
+            }
+            LOG_TEE("%s : %d %d\n", __func__, load_image_size->image_size_width, load_image_size->image_size_height);
+            int pos_w = load_image_size->image_size_width/patch_size;
+            int pos_h = load_image_size->image_size_height/patch_size;
             int embed_dim = 4096;
             auto pos_embed_t = get_2d_sincos_pos_embed(embed_dim, std::make_pair(pos_w, pos_h));
 

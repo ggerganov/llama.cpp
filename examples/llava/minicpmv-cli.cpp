@@ -10,6 +10,10 @@
 #include <cstdlib>
 #include <vector>
 
+struct uhd_image_embed {
+    std::vector<std::vector<struct llava_image_embed *>> image_embeds;
+};
+
 static void show_additional_info(int /*argc*/, char ** argv) {
     LOG_TEE("\n example usage: %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> --image <path/to/another/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
     LOG_TEE("  note: a lower temperature value like 0.1 is recommended for better quality.\n");

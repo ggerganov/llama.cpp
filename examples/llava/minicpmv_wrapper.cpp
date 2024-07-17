@@ -58,7 +58,7 @@ struct clip_ctx * clip_init_context(gpt_params * params) {
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
     }
-    std::pair<int, int> load_image_size = std::make_pair(448, 448);
+    struct load_image_size * load_image_size = load_image_size_init();
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1, load_image_size);
     return ctx_clip;
 }

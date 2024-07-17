@@ -3,7 +3,6 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <utility>
 
 #ifdef LLAMA_SHARED
 #    if defined(_WIN32) && !defined(__MINGW32__)
@@ -27,6 +26,10 @@ extern "C" {
 
 struct clip_ctx;
 
+struct load_image_size {
+    int image_size_width;
+    int image_size_height;
+};
 struct clip_image_u8_batch {
     struct clip_image_u8 * data;
     size_t size;
@@ -37,7 +40,7 @@ struct clip_image_f32_batch {
     size_t size;
 };
 
-CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity, std::pair<int, int> load_image_size = {448, 448});
+CLIP_API struct clip_ctx * clip_model_load    (const char * fname, int verbosity, struct load_image_size * load_image_size = nullptr);
 CLIP_API struct clip_ctx * clip_model_load_cpu(const char * fname, int verbosity);
 
 CLIP_API void clip_free(struct clip_ctx * ctx);
@@ -56,6 +59,7 @@ CLIP_API const int32_t * clip_image_grid(const struct clip_ctx * ctx);
 CLIP_API int clip_n_patches    (const struct clip_ctx * ctx);
 CLIP_API int clip_n_mmproj_embd(const struct clip_ctx * ctx);
 
+CLIP_API struct load_image_size * load_image_size_init();
 CLIP_API struct clip_image_u8  * clip_image_u8_init ();
 CLIP_API struct clip_image_f32 * clip_image_f32_init();
 
@@ -76,8 +80,8 @@ CLIP_API void uhd_normalize_image_u8_to_f32(struct clip_ctx * ctx, const clip_im
 
 CLIP_API struct ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx);
 
-CLIP_API bool clip_image_encode      (struct clip_ctx * ctx, int n_threads, struct clip_image_f32 * img, float * vec, std::pair<int, int> load_image_size = {448, 448});
-CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec, std::pair<int, int> load_image_size = {448, 448});
+CLIP_API bool clip_image_encode      (struct clip_ctx * ctx, int n_threads, struct clip_image_f32 * img, float * vec, struct load_image_size * load_image_size = nullptr);
+CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec, struct load_image_size * load_image_size = nullptr);
 
 CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out, int itype);
 

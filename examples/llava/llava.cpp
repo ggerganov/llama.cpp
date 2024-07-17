@@ -31,6 +31,9 @@ struct clip_image_grid_shape {
     int second;
 };
 
+struct uhd_image_embed {
+    std::vector<std::vector<struct llava_image_embed *>> image_embeds;
+};
 /**
  * Selects the best resolution from a list of possible resolutions based on the original size.
  *
@@ -410,7 +413,7 @@ void llava_image_embed_free(struct llava_image_embed * embed) {
     free(embed);
 }
 
-static bool encode_image_with_clip_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos, std::pair<int, int> load_image_size) {
+static bool encode_image_with_clip_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos, struct load_image_size * load_image_size) {
     // std::vector<clip_image_f32*> img_res_v; 
     // format VectN x H x W x RGB (N x 448 x 448 x 3)
     clip_image_f32 * img_res_v = clip_image_f32_init();
@@ -683,9 +686,10 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
             float* image_embed = NULL;
             int n_image_pos = 0;
             int patch_size=14;
-            std::pair<int, int> load_image_size;
-            load_image_size.first = imgs[i][j]->nx;
-            load_image_size.second = imgs[i][j]->ny;
+            struct load_image_size * load_image_size = load_image_size_init();
+            load_image_size->image_size_width = imgs[i][j]->nx;
+            load_image_size->image_size_height = imgs[i][j]->ny; 
+            LOG_TEE("%s : %d %d\n", __func__, load_image_size->image_size_width, load_image_size->image_size_height);
             bool image_embed_result = llava_image_embed_make_with_clip_img_uhd(ctx_clip, n_threads, only_v2_5_reshape_by_patch(imgs[i][j], patch_size), &image_embed, &n_image_pos, load_image_size);
             if (!image_embed_result) {
                 LOG_TEE("%s: coulnd't embed the image\n", __func__);
@@ -701,7 +705,7 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
     return results;
 }
 
-bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out, std::pair<int, int> load_image_size) {
+bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out, struct load_image_size * load_image_size) {
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*6); // TODO: base on gridsize/llava model
     if (!image_embd) {
         LOG_TEE("Unable to allocate memory for image embeddings\n");
