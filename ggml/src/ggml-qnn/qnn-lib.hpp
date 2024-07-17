@@ -36,6 +36,11 @@ inline int dl_unload(dl_handler_t handle) { return dlclose(handle); }
 
 inline const char *dl_error() { return dlerror(); }
 
+template <typename Fn>
+Fn dl_sym_typed(dl_handler_t handle, const std::string &function_name) {
+    return reinterpret_cast<Fn>(dl_sym(handle, function_name));
+}
+
 // =================================================================================================
 //
 // wrapper class of Qualcomm QNN(Qualcomm Neural Network, aka Qualcomm AI Engine Direct) SDK
@@ -722,8 +727,8 @@ private:
             return 1;
         }
 
-        auto *get_providers = reinterpret_cast<qnn::pfn_qnnsysteminterface_getproviders *>(
-            dl_sym(system_lib_handle, "QnnSystemInterface_getProviders"));
+        auto *get_providers = dl_sym_typed<qnn::pfn_qnnsysteminterface_getproviders *>(
+            system_lib_handle, "QnnSystemInterface_getProviders");
         if (!get_providers) {
             QNN_LOG_WARN("can not load QNN symbol QnnSystemInterface_getProviders: %s\n", dl_error());
             return 2;
@@ -784,8 +789,8 @@ private:
             return 1;
         }
 
-        auto get_providers = qnn::load_qnn_functionpointers<qnn::pfn_qnninterface_getproviders *>(
-            lib_handle, "QnnInterface_getProviders");
+        auto get_providers =
+            qnn::dl_sym_typed<qnn::pfn_qnninterface_getproviders *>(lib_handle, "QnnInterface_getProviders");
         if (!get_providers) {
             QNN_LOG_WARN("can not load symbol QnnInterface_getProviders : %s", dl_error());
             return 2;
