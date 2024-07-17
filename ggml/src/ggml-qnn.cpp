@@ -83,22 +83,54 @@ static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
     ggml_backend_qnn_context(QNN_BACKEND_NPU, 1, "qnn-npu", "libQnnHtp.so"), /* QNN_BACKEND_NPU */
 };
 
-struct ggml_backend_qnn_buffer_context {
-    ggml_backend_qnn_buffer_context(size_t device) : device(device), name(QNN_BACKEND_NAME + std::to_string(device)) {}
+class ggml_backend_qnn_buffer_context {
+public:
+    ggml_backend_qnn_buffer_context(QNNBackend device, std::shared_ptr<qnn::qnn_instance> instance, size_t size) :
+        _device(device), _instance(instance), _name(QNN_BACKEND_NAME + std::to_string(device)) {
 
-    ~ggml_backend_qnn_buffer_context() {
-        tensors.clear();
-        if (buffer) {
-            free(buffer);
+        size_t size_page = sysconf(_SC_PAGESIZE);
+
+        // TODO: for qnn npu, a better way here is to reuse the buffer allocated by qnn rpc, will save an extra copy
+        _buffer = qnn::align_alloc(size_page, size);
+
+        if (!_buffer) {
+            QNN_LOG_WARN("failed to allocate %.2f MiB\n", float(size / (1 << 20)));
+            return;
         }
+
+        _buffer_size = size;
     }
 
-    void *buffer = nullptr;
-    struct ggml_backend_qnn_context *backend_ctx = nullptr;
-    std::list<std::unique_ptr<qnn::ggml_qnn_tensor>> tensors;
-    size_t buffer_size = 0;
-    size_t device;
-    std::string name;
+    ~ggml_backend_qnn_buffer_context() {
+        _tensors.clear();
+
+        // the free will do nothing if the _buffer is nullptr
+        qnn::align_free(_buffer);
+    }
+
+    bool is_valid() const { return _buffer != nullptr; }
+
+    bool init_tensor(ggml_tensor *tensor) {
+        auto qnn_tensor = std::make_unique<qnn::ggml_qnn_tensor>(tensor, _device, _instance);
+        if (!qnn_tensor->is_valid()) {
+            QNN_LOG_WARN("Create ggml_qnn_tensor failed");
+            return false;
+        }
+
+        _tensors.push_back(std::move(qnn_tensor));
+        return true;
+    }
+
+    void *get_buffer() { return _buffer; }
+    size_t get_buffer_size() { return _buffer_size; }
+
+private:
+    QNNBackend _device;
+    std::shared_ptr<qnn::qnn_instance> _instance;
+    std::string _name;
+    std::list<std::unique_ptr<qnn::ggml_qnn_tensor>> _tensors;
+    void *_buffer = nullptr;
+    size_t _buffer_size = 0;
 };
 
 struct ggml_backend_qnn_buffer_type_context {
@@ -189,20 +221,16 @@ GGML_CALL static void ggml_backend_qnn_buffer_free_buffer(ggml_backend_buffer_t 
 GGML_CALL static void *ggml_backend_qnn_buffer_get_base(ggml_backend_buffer_t buffer) {
     ggml_backend_qnn_buffer_context *ctx = (ggml_backend_qnn_buffer_context *)buffer->context;
 
-    return ctx->buffer;
+    return ctx->get_buffer();
 }
 
 GGML_CALL static void ggml_backend_qnn_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor *tensor) {
     ggml_backend_qnn_buffer_context *ctx = (ggml_backend_qnn_buffer_context *)buffer->context;
 
-    auto instance = ctx->backend_ctx->instance;
-    auto qnn_tensor = std::make_unique<qnn::ggml_qnn_tensor>(tensor, (QNNBackend)(ctx->device), instance);
-    if (!qnn_tensor->is_valid()) {
-        QNN_LOG_WARN("Create ggml_qnn_tensor failed");
+    if (!ctx->init_tensor(tensor)) {
+        QNN_LOG_WARN("init ggml_qnn_tensor failed");
         return;
     }
-
-    ctx->tensors.push_back(std::move(qnn_tensor));
 }
 
 GGML_CALL static void ggml_backend_qnn_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor *tensor,
@@ -232,7 +260,7 @@ GGML_CALL static bool ggml_backend_qnn_buffer_cpy_tensor(ggml_backend_buffer_t b
 GGML_CALL static void ggml_backend_qnn_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
     ggml_backend_qnn_buffer_context *ctx = (ggml_backend_qnn_buffer_context *)buffer->context;
 
-    memset(ctx->buffer, value, ctx->buffer_size);
+    memset(ctx->get_buffer(), value, ctx->get_buffer_size());
 }
 
 static ggml_backend_buffer_i ggml_backend_qnn_buffer_interface = {
@@ -263,23 +291,9 @@ static void *ggml_qnn_host_malloc(size_t n) {
 GGML_CALL static ggml_backend_buffer_t ggml_backend_qnn_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
                                                                                  size_t size) {
     ggml_backend_qnn_buffer_type_context *buft_ctx = (ggml_backend_qnn_buffer_type_context *)buft->context;
-    ggml_backend_qnn_buffer_context *ctx = new ggml_backend_qnn_buffer_context(buft_ctx->device);
-
-    size_t size_page = sysconf(_SC_PAGESIZE);
-
-    size_t size_aligned = size;
-    if ((size_aligned % size_page) != 0) {
-        size_aligned += (size_page - (size_aligned % size_page));
-    }
-
-    // TODO:use pre-allocated buffer in internal memory pool
-    ctx->buffer = ggml_qnn_host_malloc(size_aligned);
-    ctx->buffer_size = size_aligned;
-
-    ctx->backend_ctx = &g_qnn_mgr[buft_ctx->device];
-
-    if (nullptr == ctx->buffer) {
-        QNN_LOG_WARN("%s: failed to allocate %.2f MiB\n", __func__, size / (1 << 20));
+    ggml_backend_qnn_buffer_context *ctx =
+        new ggml_backend_qnn_buffer_context((QNNBackend)buft_ctx->device, g_qnn_mgr[buft_ctx->device].instance, size);
+    if (!ctx->is_valid()) {
         return nullptr;
     }
 

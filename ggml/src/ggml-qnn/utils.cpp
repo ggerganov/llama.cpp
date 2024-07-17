@@ -1,6 +1,8 @@
 
 #include "utils.hpp"
 
+#include <cstdlib>
+
 #include "ggml-qnn.h"
 
 #include "qnn-types.hpp"
@@ -111,7 +113,7 @@ const char *get_htparch_desc(size_t htp_arch) {
 intptr_t align_to(size_t alignment, intptr_t offset) {
     return offset % alignment == 0
                ? offset
-               : offset + (static_cast<intptr_t>(alignment) - offset % static_cast<intptr_t>(alignment));
+               : offset + (static_cast<intptr_t>(alignment) - (offset % static_cast<intptr_t>(alignment)));
 }
 
 uint32_t get_ggml_tensor_data_size(const ggml_tensor *tensor) {
@@ -126,6 +128,23 @@ uint32_t get_ggml_tensor_data_size(const ggml_tensor *tensor) {
     */
     return ggml_nbytes(tensor);
 }
+
+void *align_alloc(size_t alignment, size_t size) {
+    size_t size_aligned = size;
+    if ((size_aligned % alignment) != 0) {
+        size_aligned += (alignment - (size_aligned % alignment));
+    }
+
+    void *data = std::aligned_alloc(alignment, size_aligned);
+    if (!data) {
+        QNN_LOG_WARN("aligned_alloc failed\n");
+        return nullptr;
+    }
+
+    return data;
+}
+
+void align_free(void *ptr) { std::free(ptr); }
 
 // =================================================================================================
 //

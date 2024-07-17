@@ -22,6 +22,9 @@ const char *get_htparch_desc(size_t htp_arch);
 intptr_t align_to(size_t alignment, intptr_t offset);
 uint32_t get_ggml_tensor_data_size(const ggml_tensor *tensor);
 
+void *align_alloc(size_t alignment, size_t size);
+void align_free(void *ptr);
+
 const char *opname_from_ggmlop(enum ggml_op ggmlop);
 
 inline int validate_tensor_version(const Qnn_Tensor_t &tensor) {
