@@ -770,6 +770,33 @@ if (GGML_CPU_HBM)
     target_link_libraries(ggml PUBLIC memkind)
 endif()
 
+if (GGML_QNN)
+    if (CMAKE_SYSTEM_NAME STREQUAL "Android")
+        find_library(LOG_LIB log)
+        find_library(ANDROID_LIB android)
+        set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} ${LOG_LIB} ${ANDROID_LIB})
+    else()
+        message(FATAL_ERROR "QNN now only available on Android")
+    endif()
+
+    if (NOT DEFINED GGML_QNN_SDK_PATH)
+        # try read from environment variable
+        if (DEFINED ENV{QNN_SDK_PATH})
+            set(GGML_QNN_SDK_PATH $ENV{QNN_SDK_PATH})
+        else()
+            message(FATAL_ERROR "GGML_QNN_SDK_PATH not defined")
+        endif()
+    endif()
+
+    message("QNN_SDK_PATH: ${GGML_QNN_SDK_PATH}")
+    file(GLOB   GGML_SOURCES_QNN "ggml-qnn/*.cpp")
+    list(APPEND GGML_SOURCES_QNN "ggml-qnn.cpp")
+    set(GGML_HEADERS_QNN ../include/ggml-qnn.h)
+    set(QNN_INC_PATH ${GGML_QNN_SDK_PATH}/include/QNN)
+    set(GGML_EXTRA_INCLUDES ${GGML_EXTRA_INCLUDES} ${QNN_INC_PATH} "ggml-qnn")
+    list(APPEND GGML_CDEF_PUBLIC GGML_USE_QNN)
+endif()
+
 function(get_flags CCID CCVER)
     set(C_FLAGS "")
     set(CXX_FLAGS "")
@@ -1184,6 +1211,7 @@ add_library(ggml
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
+            ${GGML_SOURCES_QNN}       ${GGML_HEADERS_QNN}
             ggml-aarch64.c            ggml-aarch64.h
             )
 

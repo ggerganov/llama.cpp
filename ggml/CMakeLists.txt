@@ -145,6 +145,7 @@ option(GGML_SYCL                            "ggml: use SYCL"                    
 option(GGML_SYCL_F16                        "ggml: use 16 bit floats for sycl calculations"   OFF)
 set   (GGML_SYCL_TARGET "INTEL" CACHE STRING
                                             "ggml: sycl target device")
+option(GGML_QNN                             "ggml: use QNN"                                   OFF)
 
 # extra artifacts
 option(GGML_BUILD_TESTS    "ggml: build tests"    ${GGML_STANDALONE})
@@ -157,7 +158,7 @@ option(GGML_BUILD_EXAMPLES "ggml: build examples" ${GGML_STANDALONE})
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED true)
 
-if (GGML_SYCL)
+if (GGML_SYCL OR GGML_QNN)
     set(CMAKE_CXX_STANDARD 17)
 else()
     set(CMAKE_CXX_STANDARD 11)
