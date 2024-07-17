@@ -7123,9 +7123,6 @@ struct ggml_tensor * ggml_flash_attn_ext(
     int64_t ne[4] = { q->ne[0], q->ne[2], q->ne[1], q->ne[3] };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
-    if (logit_softcap != 0.0f) {
-        scale /= logit_softcap;
-    }
     float params[] = { scale, max_bias, logit_softcap };
     ggml_set_op_params(result, params, sizeof(params));
 
@@ -15282,6 +15279,10 @@ static void ggml_compute_forward_flash_attn_ext_f16(
     memcpy(&scale,         (float *) dst->op_params + 0, sizeof(float));
     memcpy(&max_bias,      (float *) dst->op_params + 1, sizeof(float));
     memcpy(&logit_softcap, (float *) dst->op_params + 2, sizeof(float));
+
+    if (logit_softcap != 0) {
+        scale /= logit_softcap;
+    }
 
     const uint32_t n_head      = neq2;
     const uint32_t n_head_log2 = 1u << (uint32_t) floor(log2(n_head));

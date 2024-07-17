@@ -666,6 +666,10 @@ void launch_fattn(
     memcpy(&max_bias,      (float *) KQV->op_params + 1, sizeof(float));
     memcpy(&logit_softcap, (float *) KQV->op_params + 2, sizeof(float));
 
+    if (logit_softcap != 0.0f) {
+        scale /= logit_softcap;
+    }
+
     const uint32_t n_head      = Q->ne[2];
     const uint32_t n_head_log2 = 1u << (uint32_t) floorf(log2f((float) n_head));
 
