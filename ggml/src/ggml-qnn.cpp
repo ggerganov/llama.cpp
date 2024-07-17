@@ -49,21 +49,6 @@
 
 #define QNN_BACKEND_NAME "qnn"
 
-static struct qnn::qcom_socinfo g_qnn_soc_info_table[] = {
-    /* Qualcomm SnapDragon 8 Gen 1 */
-    [qnn::SM8450] = { .soc_model = qnn::SM8450, .htp_arch = qnn::V69, .vtcm_size_in_mb = 8 },
-
-    /* Qualcomm SnapDragon 8 Gen 1+ */
-    [qnn::SM8475] = { .soc_model = qnn::SM8475, .htp_arch = qnn::V69, .vtcm_size_in_mb = 8 },
-
-    /* Qualcomm SnapDragon 8 Gen 2 */
-    [qnn::SM8550] = { .soc_model = qnn::SM8550, .htp_arch = qnn::V73, .vtcm_size_in_mb = 8 },
-
-    /* Qualcomm SnapDragon 8 Gen 3 */
-    [qnn::SM8650] = { .soc_model = qnn::SM8650, .htp_arch = qnn::V75, .vtcm_size_in_mb = 8 },
-
-};
-
 // according to the QNN SDK Reference Guide,
 // CPU - Choose a non-quantized model.Quantized models are currently incompatible with the CPU backend
 // GPU - Choose a non-quantized model.Quantized models are currently incompatible with the GPU backend
@@ -276,17 +261,6 @@ static ggml_backend_buffer_i ggml_backend_qnn_buffer_interface = {
 };
 
 GGML_CALL static const char *ggml_backend_qnn_buffer_type_name(ggml_backend_buffer_type_t buft) { return "QNN"; }
-
-static void *ggml_qnn_host_malloc(size_t n) {
-    void *data = nullptr;
-    int result = posix_memalign((void **)&data, sysconf(_SC_PAGESIZE), n);
-    if (result != 0) {
-        QNN_LOG_WARN("%s: error: posix_memalign failed\n", __func__);
-        return nullptr;
-    }
-
-    return data;
-}
 
 GGML_CALL static ggml_backend_buffer_t ggml_backend_qnn_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
                                                                                  size_t size) {

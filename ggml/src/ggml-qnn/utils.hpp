@@ -176,13 +176,6 @@ inline void set_qnn_tensor_memhandle(Qnn_Tensor_t &tensor, Qnn_MemHandle_t handl
 Qnn_DataType_t device_datatype_from_ggml_datatype(ggml_type ggml_type);
 Qnn_TensorType_t device_tensortype_from_ggml_tensor(ggml_tensor *ggml_tensor);
 
-void device_tensor_init(Qnn_Tensor_t &tensor, uint32_t rank, Qnn_TensorMemType_t mem_type, const char *tensor_name,
-                        Qnn_TensorType_t qnn_tensor_type, Qnn_DataType_t qnn_data_type, uint32_t *dimensions);
-
-Qnn_ErrorHandle_t device_tensor_deep_copy(const Qnn_Tensor_t &src, Qnn_Tensor_t &dst);
-
-void device_tensor_free(Qnn_Tensor_t &tensor);
-
 #if ENABLE_QNNBACKEND_PERF
 class qnn_perf {
 public:
