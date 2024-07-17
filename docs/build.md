@@ -16,7 +16,7 @@ In order to build llama.cpp you have four different options.
       make
       ```
 
-  - On Windows:
+  - On Windows (x86/x64 only, arm64 requires cmake):
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
     2. Extract `w64devkit` on your pc.
@@ -31,6 +31,13 @@ In order to build llama.cpp you have four different options.
     - For `Q4_0_4_4` quantization type build, add the `GGML_NO_LLAMAFILE=1` flag. For example, use `make GGML_NO_LLAMAFILE=1`.
     - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
     - For faster repeated compilation, install [ccache](https://ccache.dev/).
+    - For Windows:
+      - Install cmake e.g. via `winget install cmake`:
+      - As alternative to the w64devkit mentioned in "using make" above, install MSVC (e.g. via Visual Studio 2022 Community Edition).
+      - For Windows on ARM you need MSVC installed and _additonally_:
+        - Install [clang via LLVM for woa64](https://releases.llvm.org) to enable better ARM optimizations (clang needs the MSVC backend).
+        - For using clang, the first build step needs to be `cmake --preset arm64-windows-llvm-release` (instead of the `cmake -B ...` which defaults to MSVC).
+        - Note: Building for ARM can also be done just with MSVC (without installing clang or using the preset), but this does not support e.g. the accelerated Q_4_0_4_4/Q_4_0_4_8 kernels (a 2-2.5x prompt-processing speed improvement on the CPU), because the MSVC frontend cannot inline ARM assembly-code.
     - For debug builds, run `make LLAMA_DEBUG=1`
 
 - Using `CMake`:
