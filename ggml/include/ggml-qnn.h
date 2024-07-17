@@ -18,8 +18,6 @@ enum QNNBackend {
                       // QNN and original GGML
 };
 
-GGML_API int ggml_backend_qnn_reg_devices(void);
-
 /**
  *
  * @param device            0: QNN_BACKEND_CPU 1: QNN_BACKEND_GPU 2:

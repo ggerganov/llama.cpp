@@ -534,13 +534,11 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char *qnn_lib_path) {
     return qnn_backend;
 }
 
-int ggml_backend_qnn_reg_devices() {
+extern "C" GGML_CALL void ggml_backend_qnn_reg_devices() {
     for (size_t idx = 0; idx < GGML_QNN_MAX_DEVICES; idx++) {
         char name[GGML_MAX_NAME];
         ggml_backend_qnn_get_device_description(idx, name, GGML_MAX_NAME);
         ggml_backend_register(name, ggml_backend_qnn_reg_init, ggml_backend_qnn_buffer_type(idx),
                               (void *)(intptr_t)idx);
     }
-
-    return GGML_QNN_MAX_DEVICES;
 }
