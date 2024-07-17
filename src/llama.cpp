@@ -112,7 +112,7 @@
 
 // bump if necessary
 #define LLAMA_MAX_NODES   8192
-#define LLAMA_MAX_LAYERS  256
+#define LLAMA_MAX_LAYERS  512
 #define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
 //
@@ -19877,7 +19877,7 @@ size_t llama_state_get_size(const struct llama_context * ctx) {
     );
 
     // on session change it is very likely that the state size has changed - so we need to update this function
-    static_assert(LLAMA_SESSION_VERSION == 6, "So you just bumped the session version - good. But did you remember to update llama_state_get_size?");
+    static_assert(LLAMA_SESSION_VERSION == 7, "So you just bumped the session version - good. But did you remember to update llama_state_get_size?");
 
     return s_total;
 }
