@@ -3561,7 +3561,7 @@ static bool llama_kv_cache_find_slot(
         }
 
         // gather and re-order
-        for (int32_t s = 0; s < n_seqs; ++s) {
+        for (uint32_t s = 0; s < n_seqs; ++s) {
             int32_t dst_id = s + min;
             int32_t src_id = cache.cells[batch.seq_id[s][0]].tail;
             if (dst_id != src_id) {
@@ -3588,7 +3588,7 @@ static bool llama_kv_cache_find_slot(
             int32_t cell_id = s + min;
             llama_kv_cell & cell = cache.cells[cell_id];
 
-            if (last_pos != cell.pos + n_seq_tokens) {
+            if (last_pos != cell.pos + (llama_pos) n_seq_tokens) {
                 // What should happen when the pos backtracks or skips a value?
                 // Clearing the state mid-batch would require special-casing which isn't done.
                 LLAMA_LOG_WARN("%s: non-consecutive token position %d after %d for sequence %d\n",
@@ -3596,7 +3596,7 @@ static bool llama_kv_cache_find_slot(
             }
             cell.pos = last_pos;
             cell.seq_id.clear();
-            for (uint32_t j = 0; j < batch.n_seq_id[s]; ++ j) {
+            for (int32_t j = 0; j < batch.n_seq_id[s]; ++j) {
                 const llama_seq_id seq_id = batch.seq_id[s][j];
                 cell.seq_id.insert(seq_id);
                 cache.cells[seq_id].tail = cell_id;
@@ -3803,7 +3803,7 @@ static void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id 
     uint32_t new_head = cache.size;
 
     for (uint32_t i = 0; i < cache.size; ++i) {
-        if (cache.recurrent && i != seq_id) {
+        if (cache.recurrent && (llama_seq_id) i != seq_id) {
             cache.cells[i].tail = -1;
         }
         if (!cache.cells[i].has_seq_id(seq_id)) {
@@ -8992,6 +8992,7 @@ static struct ggml_tensor * llm_build_mamba(
 
     // {n_embd, n_seq_tokens, n_seqs} => {n_embd, n_tokens}
     cur = ggml_reshape_2d(ctx, cur, cur->ne[0], n_seq_tokens * n_seqs);
+    cb(cur, "mamba_out", il);
 
     return cur;
 }
