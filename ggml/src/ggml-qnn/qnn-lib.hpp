@@ -2,6 +2,7 @@
 
 #include <math.h>
 
+#include <algorithm>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -366,8 +367,8 @@ public:
             size_t probe_counts = sizeof(probe_slots) / sizeof(size_t);
             for (size_t idx = 0; idx < probe_counts; idx++) {
                 rpc_buffer = static_cast<uint8_t *>(alloc_rpcmem(probe_slots[idx] * size_in_mb, 4));
-                if (nullptr == rpc_buffer) {
-                    QNN_LOG_INFO("alloc rpcmem %d (MB) failure, %s\n", probe_slots[idx], strerror(errno));
+                if (!rpc_buffer) {
+                    QNN_LOG_DEBUG("alloc rpcmem %d (MB) failure, %s\n", probe_slots[idx], strerror(errno));
                     break;
                 } else {
                     candidate_size = probe_slots[idx];
@@ -375,7 +376,8 @@ public:
                     rpc_buffer = nullptr;
                 }
             }
-            if (candidate_size > _rpcmem_capacity) _rpcmem_capacity = candidate_size;
+
+            _rpcmem_capacity = std::max(candidate_size, _rpcmem_capacity);
             QNN_LOG_INFO("capacity of QNN rpc ion memory is about %d MB\n", _rpcmem_capacity);
 
             if (0 != init_htp_perfinfra()) {
@@ -600,7 +602,7 @@ public:
         auto allocate_bytes = static_cast<int32_t>(bytes + alignment);
         void *buf = _pfn_rpc_mem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, allocate_bytes);
         if (buf == nullptr) {
-            QNN_LOG_WARN("failed to allocate rpc memory\n");
+            QNN_LOG_WARN("failed to allocate rpc memory, size: %d MB\n", (int)(allocate_bytes / (1 << 20)));
             return nullptr;
         }
 
