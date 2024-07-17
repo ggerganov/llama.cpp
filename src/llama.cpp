@@ -13840,6 +13840,15 @@ struct llm_build_context {
 
         // lm_head
         cur = ggml_mul_mat(ctx0, model.output, cur);
+        cb(cur, "result_output_with_img_logits", -1);
+
+	int img_token_end_idx = 8196;
+	int img_token_start_idx = 4;
+	int num_img_tokens = img_token_end_idx - img_token_start_idx;
+	struct ggml_tensor * img_logits = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, num_img_tokens);
+	img_logits = ggml_add1(ctx0, img_logits, ggml_new_f32(ctx0, -FLT_MAX));
+	cb(img_logits, "img_logits", -1);
+	cur = ggml_set_1d(ctx0, cur, img_logits, ggml_element_size(cur) * img_token_start_idx);
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
