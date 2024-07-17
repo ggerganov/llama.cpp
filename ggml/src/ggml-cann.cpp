@@ -33,6 +33,10 @@
 #include "ggml-cann/aclnn_ops.h"
 #include "ggml-cann/common.h"
 
+#define GGML_COMMON_DECL_C
+
+#include "ggml-common.h"
+
 /**
  * @brief Handles CANN errors by printing an error message and aborting.
  *

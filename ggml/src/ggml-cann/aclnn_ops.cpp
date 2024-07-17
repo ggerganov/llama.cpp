@@ -55,6 +55,10 @@
 
 #include "kernels/ascendc_kernels.h"
 
+#define GGML_COMMON_DECL_C
+
+#include "../ggml-common.h"
+
 /**
  * @brief Repeats elements of a tensor along each dimension according to the
  * specified repeat array.

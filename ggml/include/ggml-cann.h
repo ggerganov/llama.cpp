@@ -22,9 +22,6 @@
 
 #pragma once
 
-#define GGML_COMMON_DECL_C
-
-#include "../src/ggml-common.h"
 #include "ggml-backend.h"
 #include "ggml.h"
 
