@@ -882,7 +882,11 @@ private:
 
     QnnLog_Level_t _qnn_log_level = QNN_LOG_LEVEL_DEBUG;
 
+#ifdef NDEBUG
+    qnn::sdk_profile_level _profile_level = qnn::sdk_profile_level::profile_off;
+#else
     qnn::sdk_profile_level _profile_level = qnn::sdk_profile_level::profile_detail;
+#endif
 
     std::shared_ptr<qnn::qnn_system_interface> _qnn_sys_interface;
     std::shared_ptr<qnn::qnn_interface> _qnn_interface;
