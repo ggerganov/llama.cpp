@@ -139,8 +139,8 @@ static void dequantize_row_q4_0_sycl(const void *vx, dst_t *y, const int k,
 #pragma unroll
                 for (int l = 0; l < QK4_0 / 2; ++l) {
                     int vq = qs[l];
-                    y[l * 2 + 0] = d * ((vq & 0xF) - 8);
-                    y[l * 2 + 1] = d * ((vq >> 4) - 8);
+                    y_ptr[l * 2 + 0] = d * ((vq & 0xF) - 8);
+                    y_ptr[l * 2 + 1] = d * ((vq >> 4) - 8);
                 }
             });
 #else
