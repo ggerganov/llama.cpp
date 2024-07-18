@@ -148,9 +148,16 @@ class Model:
                 tensor_names_from_parts.update(model_part.keys())
 
                 for name in model_part.keys():
-                    data = model_part.get_tensor(name) if self.is_safetensors else model_part[name]
-                    if self.lazy:
-                        data = LazyTorchTensor.from_eager(data)
+                    if self.is_safetensors:
+                        if self.lazy:
+                            data = model_part.get_slice(name)
+                            data = LazyTorchTensor.from_safetensors_slice(data)
+                        else:
+                            data = model_part.get_tensor(name)
+                    else:
+                        data = model_part[name]
+                        if self.lazy:
+                            data = LazyTorchTensor.from_eager(data)
                     yield name, data
 
         # only verify tensor name presence; it doesn't matter if they are not in the right files
@@ -2267,13 +2274,6 @@ class InternLM2Model(Model):
 
         special_vocab.add_to_gguf(self.gguf_writer)
 
-    def _hf_permute_qk(self, weights, n_head: int, n_head_kv: int):
-        if n_head_kv is not None and n_head != n_head_kv:
-            n_head = n_head_kv
-        return (weights.reshape(n_head, 2, weights.shape[0] // n_head // 2, *weights.shape[1:])
-                .swapaxes(1, 2)
-                .reshape(weights.shape))
-
     def set_gguf_parameters(self):
         self.gguf_writer.add_name("InternLM2")
         self.gguf_writer.add_context_length(self.hparams["max_position_embeddings"])
@@ -2293,26 +2293,22 @@ class InternLM2Model(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         num_heads = self.hparams["num_attention_heads"]
         num_kv_heads = self.hparams["num_key_value_heads"]
-        hidden_size = self.hparams["hidden_size"]
+        n_embd = self.hparams["hidden_size"]
         q_per_kv = num_heads // num_kv_heads
-        head_dim = hidden_size // num_heads
+        head_dim = n_embd // num_heads
         num_groups = num_heads // q_per_kv
 
-        qkv_pattern = r"model\.layers\.(\d+)\.attention\.wqkv"
-
-        if re.match(qkv_pattern, name):
-            bid = re.findall(qkv_pattern, name)[0]
+        if bid is not None and f"model.layers.{bid}.attention.wqkv" in name:
             qkv = data_torch
-            # qkv = rearrange(qkv.T, " o (g n i) ->o g n i", g=num_groups, n=q_per_kv + 2, i=head_dim)
-            qkv = qkv.T.reshape((-1, num_groups, q_per_kv + 2, head_dim))
-            q, k, v = qkv[..., : q_per_kv, :], qkv[..., q_per_kv: q_per_kv + 1, :], qkv[..., q_per_kv + 1: q_per_kv + 2, :]
+
+            qkv = qkv.reshape((num_groups, q_per_kv + 2, head_dim, n_embd))
+            q, k, v = qkv[:, : q_per_kv], qkv[:, -2], qkv[:, -1]
+
             # The model weights of q and k equire additional reshape.
-            # q = self._hf_permute_qk(rearrange(q, " o g n i ->  o (g n i)").T, num_heads, num_heads)
-            q = self._hf_permute_qk(q.reshape((q.shape[0], -1)).T, num_heads, num_heads)
-            # k = self._hf_permute_qk(rearrange(k, " o g n i ->  o (g n i)").T, num_heads, num_kv_heads)
-            k = self._hf_permute_qk(k.reshape((k.shape[0], -1)).T, num_heads, num_kv_heads)
-            # v = rearrange(v, " o g n i ->  o (g n i)").T
-            v = v.reshape((v.shape[0], -1)).T
+            q = LlamaModel.permute(q.reshape((-1, q.shape[-1])), num_heads, num_heads)
+            k = LlamaModel.permute(k.reshape((-1, k.shape[-1])), num_heads, num_kv_heads)
+            v = v.reshape((-1, v.shape[-1]))
+
             return [
                 (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_Q, bid), q),
                 (self.format_tensor_name(gguf.MODEL_TENSOR.ATTN_K, bid), k),
@@ -3479,18 +3475,45 @@ class LazyTorchTensor(gguf.LazyBase):
         torch.float32: np.float32,
     }
 
+    # used for safetensors slices
+    # ref: https://github.com/huggingface/safetensors/blob/079781fd0dc455ba0fe851e2b4507c33d0c0d407/bindings/python/src/lib.rs#L1046
+    # TODO: uncomment U64, U32, and U16, ref: https://github.com/pytorch/pytorch/issues/58734
+    _dtype_str_map: dict[str, torch.dtype] = {
+        "F64": torch.float64,
+        "F32": torch.float32,
+        "BF16": torch.bfloat16,
+        "F16": torch.float16,
+        # "U64": torch.uint64,
+        "I64": torch.int64,
+        # "U32": torch.uint32,
+        "I32": torch.int32,
+        # "U16": torch.uint16,
+        "I16": torch.int16,
+        "U8": torch.uint8,
+        "I8": torch.int8,
+        "BOOL": torch.bool,
+        "F8_E4M3": torch.float8_e4m3fn,
+        "F8_E5M2": torch.float8_e5m2,
+    }
+
     def numpy(self) -> gguf.LazyNumpyTensor:
         dtype = self._dtype_map[self.dtype]
         return gguf.LazyNumpyTensor(
             meta=gguf.LazyNumpyTensor.meta_with_dtype_and_shape(dtype, self.shape),
-            lazy=self._lazy,
             args=(self,),
-            func=(lambda s: s[0].numpy())
+            func=(lambda s: s.numpy())
         )
 
     @classmethod
-    def meta_with_dtype_and_shape(cls, dtype: torch.dtype, shape: torch.Size) -> Tensor:
+    def meta_with_dtype_and_shape(cls, dtype: torch.dtype, shape: tuple[int, ...]) -> Tensor:
         return torch.empty(size=shape, dtype=dtype, device="meta")
+
+    @classmethod
+    def from_safetensors_slice(cls, st_slice: Any) -> Tensor:
+        dtype = cls._dtype_str_map[st_slice.get_dtype()]
+        shape: tuple[int, ...] = tuple(st_slice.get_shape())
+        lazy = cls(meta=cls.meta_with_dtype_and_shape(dtype, shape), args=(st_slice,), func=lambda s: s[:])
+        return cast(torch.Tensor, lazy)
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -3502,7 +3525,7 @@ class LazyTorchTensor(gguf.LazyBase):
         if func is torch.Tensor.numpy:
             return args[0].numpy()
 
-        return LazyTorchTensor._wrap_fn(func)(*args, **kwargs)
+        return cls._wrap_fn(func)(*args, **kwargs)
 
 
 def parse_args() -> argparse.Namespace:
@@ -3629,6 +3652,7 @@ def main() -> None:
                                      small_first_shard=args.no_tensor_first_split)
 
         logger.info("Set model parameters")
+        model_instance.gguf_writer.add_type(gguf.GGUFType.MODEL)
         model_instance.set_gguf_parameters()
 
         logger.info("Set model tokenizer")
