@@ -61,7 +61,7 @@ In order to build llama.cpp you have four different options.
       cmake --build build --config Debug
       ```
     - Building for Windows on ARM:
-      - Install MSVC / Visual Studio 2022 (VS2022), e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). The latest VS2022 automatically installs the required CMake and Ninja tools.
+      - Install MSVC / Visual Studio 2022 (VS2022), e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer select the workload "Desktop-development with C++". This also automatically installs the required toola CMake and Ninja.
       - Also install the clang compiler + tools (LLVM). Either via direct download [clang/LLVM for Windows](https://github.com/llvm/llvm-project/releases/) (use the file "LLVM-\<version\>-woa64.exe"), or alternatively install via the [Chocolatey (choco) package manager](https://chocolatey.org/install) with `choco install llvm`. This LLVM for Windows requires an installed MSVC, and therefore always use it in a Develoer Command Prompt / PowerShell.
       - Then build _in a Developer Command Prompt / PowerShell for VS2022_ with:
         ```bash
