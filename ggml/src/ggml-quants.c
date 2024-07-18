@@ -3964,58 +3964,6 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     __m128 acc_2 = _mm_setzero_ps();
     __m128 acc_3 = _mm_setzero_ps();
 
-    // First round without accumulation
-    {
-        _mm_prefetch(&x[0] + sizeof(block_q4_0), _MM_HINT_T0);
-        _mm_prefetch(&y[0] + sizeof(block_q8_0), _MM_HINT_T0);
-
-        // Compute combined scale for the block 0 and 1
-        const __m128 d_0_1 = _mm_set1_ps( GGML_FP16_TO_FP32(x[0].d) * GGML_FP16_TO_FP32(y[0].d) );
-
-        const __m128i tmp_0_1 = _mm_loadu_si128((const __m128i *)x[0].qs);
-
-        __m128i bx_0 = _mm_and_si128(lowMask, tmp_0_1);
-        __m128i by_0 = _mm_loadu_si128((const __m128i *)y[0].qs);
-        bx_0 = _mm_sub_epi8(bx_0, off);
-        const __m128i i32_0 = mul_sum_i8_pairs(bx_0, by_0);
-
-        __m128i bx_1 = _mm_and_si128(lowMask, _mm_srli_epi64(tmp_0_1, 4));
-        __m128i by_1 = _mm_loadu_si128((const __m128i *)(y[0].qs + 16));
-        bx_1 = _mm_sub_epi8(bx_1, off);
-        const __m128i i32_1 = mul_sum_i8_pairs(bx_1, by_1);
-
-        _mm_prefetch(&x[1] + sizeof(block_q4_0), _MM_HINT_T0);
-        _mm_prefetch(&y[1] + sizeof(block_q8_0), _MM_HINT_T0);
-
-        // Compute combined scale for the block 2 and 3
-        const __m128 d_2_3 = _mm_set1_ps( GGML_FP16_TO_FP32(x[1].d) * GGML_FP16_TO_FP32(y[1].d) );
-
-        const __m128i tmp_2_3 = _mm_loadu_si128((const __m128i *)x[1].qs);
-
-        __m128i bx_2 = _mm_and_si128(lowMask, tmp_2_3);
-        __m128i by_2 = _mm_loadu_si128((const __m128i *)y[1].qs);
-        bx_2 = _mm_sub_epi8(bx_2, off);
-        const __m128i i32_2 = mul_sum_i8_pairs(bx_2, by_2);
-
-        __m128i bx_3 = _mm_and_si128(lowMask, _mm_srli_epi64(tmp_2_3, 4));
-        __m128i by_3 = _mm_loadu_si128((const __m128i *)(y[1].qs + 16));
-        bx_3 = _mm_sub_epi8(bx_3, off);
-        const __m128i i32_3 = mul_sum_i8_pairs(bx_3, by_3);
-
-        // Convert int32_t to float
-        __m128 p0 = _mm_cvtepi32_ps(i32_0);
-        __m128 p1 = _mm_cvtepi32_ps(i32_1);
-        __m128 p2 = _mm_cvtepi32_ps(i32_2);
-        __m128 p3 = _mm_cvtepi32_ps(i32_3);
-
-        // Apply the scale
-        acc_0 = _mm_mul_ps( d_0_1, p0 );
-        acc_1 = _mm_mul_ps( d_0_1, p1 );
-        acc_2 = _mm_mul_ps( d_2_3, p2 );
-        acc_3 = _mm_mul_ps( d_2_3, p3 );
-    }
-
-    // Main loop
     for (; ib + 1 < nb; ib += 2) {
         _mm_prefetch(&x[ib] + sizeof(block_q4_0), _MM_HINT_T0);
         _mm_prefetch(&y[ib] + sizeof(block_q8_0), _MM_HINT_T0);
@@ -4187,55 +4135,6 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     __m128 acc_2 = __lsx_vldi(0);
     __m128 acc_3 = __lsx_vldi(0);
 
-    // First round without accumulation
-    {
-        _mm_prefetch(&x[0] + sizeof(block_q4_0), _MM_HINT_T0);
-        _mm_prefetch(&y[0] + sizeof(block_q8_0), _MM_HINT_T0);
-
-        // Compute combined scale for the block 0 and 1
-        const __m128 d_0_1 = __lsx_vreplgr2vr_w( GGML_FP16_TO_FP32(x[0].d) * GGML_FP16_TO_FP32(y[0].d) );
-
-        const __m128i tmp_0_1 = __lsx_vld((const __m128i *)x[0].qs, 0);
-
-        __m128i bx_0 = __lsx_vand_v(low_mask, tmp_0_1);
-        __m128i by_0 = __lsx_vld((const __m128i *)y[0].qs, 0);
-        bx_0 = __lsx_vsub_b(bx_0, off);
-        const __m128i i32_0 = mul_sum_i8_pairs(bx_0, by_0);
-
-        __m128i bx_1 = __lsx_vand_v(low_mask, __lsx_vsrli_d(tmp_0_1, 4));
-        __m128i by_1 = __lsx_vld((const __m128i *)(y[0].qs + 16), 0);
-        bx_1 = __lsx_vsub_b(bx_1, off);
-        const __m128i i32_1 = mul_sum_i8_pairs(bx_1, by_1);
-
-        // Compute combined scale for the block 2 and 3
-        const __m128 d_2_3 = __lsx_vreplgr2vr_w( GGML_FP16_TO_FP32(x[1].d) * GGML_FP16_TO_FP32(y[1].d) );
-
-        const __m128i tmp_2_3 = __lsx_vld((const __m128i *)x[1].qs, 0);
-
-        __m128i bx_2 = __lsx_vand_v(low_mask, tmp_2_3);
-        __m128i by_2 = __lsx_vld((const __m128i *)y[1].qs, 0);
-        bx_2 = __lsx_vsub_b(bx_2, off);
-        const __m128i i32_2 = mul_sum_i8_pairs(bx_2, by_2);
-
-        __m128i bx_3 = __lsx_vand_v(low_mask, __lsx_vsrli_d(tmp_2_3, 4));
-        __m128i by_3 = __lsx_vld((const __m128i *)(y[1].qs + 16), 0);
-        bx_3 = __lsx_vsub_b(bx_3, off);
-        const __m128i i32_3 = mul_sum_i8_pairs(bx_3, by_3);
-
-        // Convert int32_t to float
-        __m128 p0 = __lsx_vffint_s_w(i32_0);
-        __m128 p1 = __lsx_vffint_s_w(i32_1);
-        __m128 p2 = __lsx_vffint_s_w(i32_2);
-        __m128 p3 = __lsx_vffint_s_w(i32_3);
-
-        // Apply the scale
-        acc_0 = __lsx_vfmul_s( d_0_1, p0 );
-        acc_1 = __lsx_vfmul_s( d_0_1, p1 );
-        acc_2 = __lsx_vfmul_s( d_2_3, p2 );
-        acc_3 = __lsx_vfmul_s( d_2_3, p3 );
-    }
-
-    // Main loop
     for (; ib + 1 < nb; ib += 2) {
 
         // Compute combined scale for the block 0 and 1
