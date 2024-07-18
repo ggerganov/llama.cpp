@@ -1042,7 +1042,6 @@ static void get_rows_sycl_q4_0(ggml_backend_sycl_context & ctx, const ggml_tenso
 
     GGML_ASSERT(ne00 % 2 == 0);
 
-    
     const sycl::range<3> block_dims(1, 1, SYCL_GET_ROWS_BLOCK_SIZE);
     const int block_num_x = (ne00 + 2 * SYCL_GET_ROWS_BLOCK_SIZE - 1) / (2 * SYCL_GET_ROWS_BLOCK_SIZE);
     const sycl::range<3> block_nums(ne11 * ne12, ne10, block_num_x);
