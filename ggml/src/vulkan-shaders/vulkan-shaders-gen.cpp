@@ -193,7 +193,11 @@ void string_to_spv(const std::string& _name, const std::string& in_fname, const 
     std::string out_fname = join_paths(output_dir, name + ".spv");
     std::string in_path = join_paths(input_dir, in_fname);
 
-    std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", "\"" + in_path + "\"", "-o", "\"" + out_fname + "\""};
+    #ifdef _WIN32
+        std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", "\"" + in_path + "\"", "-o", "\"" + out_fname + "\""};
+    #else
+        std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", in_path, "-o",  out_fname};
+    #endif
     for (const auto& define : defines) {
         cmd.push_back("-D" + define.first + "=" + define.second);
     }
@@ -451,7 +455,7 @@ void write_output_files() {
         size_t read_size = fread(data.data(), 1, size, spv);
         fclose(spv);
         if (read_size != size) {
-            std::cerr << "Error reading SPIR-V file: " << path << " (" << strerror(errno) << "\n";
+            std::cerr << "Error reading SPIR-V file: " << path << " (" << strerror(errno) << ")\n";
             continue;
         }
 
