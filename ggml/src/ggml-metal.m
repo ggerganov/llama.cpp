@@ -289,6 +289,13 @@ static void * ggml_metal_host_malloc(size_t n) {
     return data;
 }
 
+char* get_metal_device_info(void) {
+    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+    char* info = [[device name] UTF8String];
+
+    return info;
+}
+
 static struct ggml_metal_context * metal_init(int n_cb) {
     GGML_METAL_LOG_INFO("%s: allocating\n", __func__);
 
