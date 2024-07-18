@@ -255,7 +255,7 @@ namespace dpct
         void set_pitch(size_t pitch) { _pitch = pitch; }
 
         size_t get_x() { return _x; }
-        void set_x(size_t x) { _x = x; };
+        void set_x(size_t x) { _x = x; }
 
         size_t get_y() { return _y; }
         void set_y(size_t y) { _y = y; }
@@ -978,7 +978,6 @@ namespace dpct
         static bool compare_backend(std::string &backend1, std::string &backend2) {
             return convert_backend_index(backend1) < convert_backend_index(backend2);
         }
-
         dev_mgr()
         {
             sycl::device default_device =
@@ -992,17 +991,17 @@ namespace dpct
 
             auto Platforms = sycl::platform::get_platforms();
             // Keep track of the number of devices per backend
-	    std::map<sycl::backend, size_t> DeviceNums;
+            std::map<sycl::backend, size_t> DeviceNums;
             std::map<std::string, std::vector<sycl::device>> backend_devices;
             auto preferred_platform_name = get_preferred_gpu_platform_name();
 
             while (!Platforms.empty()) {
                 auto Platform = Platforms.back();
                 Platforms.pop_back();
-		auto platform_name = Platform.get_info<sycl::info::platform::name>();
-		if (platform_name.compare(preferred_platform_name) != 0) {
-		    continue;
-		}
+                auto platform_name = Platform.get_info<sycl::info::platform::name>();
+                if (platform_name.compare(preferred_platform_name) != 0) {
+                    continue;
+                }
                 auto devices = Platform.get_devices();
                 std::string backend_type = get_device_backend_and_type(devices[0]);
                 for (const auto &device : devices) {
@@ -1016,7 +1015,6 @@ namespace dpct
             }
 
             std::sort(keys.begin(), keys.end(), compare_backend);
-
             for (auto &key : keys) {
                 std::vector<sycl::device> devs = backend_devices[key];
                 std::sort(devs.begin(), devs.end(), compare_dev);
