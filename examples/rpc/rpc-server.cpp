@@ -183,18 +183,23 @@ void printAntigmaLogo() {
     )" << '\n';
 }
 
-static ggml_backend_t create_backend() {
+static ggml_backend_t create_backend(Registry& registry) {
     ggml_backend_t backend = NULL;
     printAntigmaLogo();
 #ifdef GGML_USE_CUDA
+    std::string device_info = "";
     fprintf(stderr, "%s: using CUDA backend\n", __func__);
     backend = ggml_backend_cuda_init(0); // init device 0
+    get_cuda_device_info(0, *device_info);
+    registry.add_field("device_info", device_info);
     if (!backend) {
         fprintf(stderr, "%s: ggml_backend_cuda_init() failed\n", __func__);
     }
 #elif GGML_USE_METAL
     fprintf(stderr, "%s: using Metal backend\n", __func__);
     backend = ggml_backend_metal_init();
+    std::string device_info = get_metal_device_info();
+    registry.add_field("device_info", device_info);
     if (!backend) {
         fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
     }
@@ -235,7 +240,7 @@ int main(int argc, char * argv[]) {
         fprintf(stderr, "Invalid parameters\n");
         return 1;
     }
-    ggml_backend_t backend = create_backend();
+    ggml_backend_t backend = create_backend(registry);
     if (!backend) {
         fprintf(stderr, "Failed to create backend\n");
         return 1;
@@ -253,7 +258,7 @@ int main(int argc, char * argv[]) {
     if (registry.register_with_central(endpoint)) {
         print_colored("Registered successfully", "32");
     } else {
-        print_colored("Registered successfully", "31");
+        print_colored("Registered failed", "31");
     }
     start_rpc_server(backend, endpoint.c_str(), free_mem, total_mem);
     ggml_backend_free(backend);

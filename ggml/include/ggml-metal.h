@@ -44,6 +44,8 @@ GGML_API void ggml_backend_metal_log_set_callback(ggml_log_callback log_callback
 
 GGML_API ggml_backend_t ggml_backend_metal_init(void);
 
+GGML_API char* get_metal_device_info(void);
+
 GGML_API bool ggml_backend_is_metal(ggml_backend_t backend);
 
 GGML_API GGML_CALL ggml_backend_buffer_t ggml_backend_metal_buffer_from_ptr(void * data, size_t size, size_t max_size);
