@@ -147,6 +147,10 @@ class GGUFWriter:
         # Hopefully this should work even for variable-expert-count models
         expert_count = (expert_sum // n_expert_tensors) if n_expert_tensors > 0 else 0
 
+        # Negate the total to signal it's likely not exact
+        if last_lora_a is not None:
+            total_params = -total_params
+
         # NOTE: keep the output in the same order as accepted by 'size_label' in gguf-py/gguf/utility.py
         return total_params, shared_params, expert_params, expert_count
 
@@ -181,6 +185,8 @@ class GGUFWriter:
 
         if self.dry_run:
             logger.info("Dry run, not writing files")
+            for name in filenames:
+                print(name)  # noqa: NP100
             exit()
 
         return filenames

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 
 def fill_templated_filename(filename: str, output_type: str | None) -> str:
     # Given a file name fill in any type templates e.g. 'some-model-name.{ftype}.gguf'
@@ -36,15 +38,15 @@ def model_weight_count_rounded_notation(model_params_count: int, min_digits: int
 def size_label(total_params: int, shared_params: int, expert_params: int, expert_count: int) -> str:
 
     if expert_count > 0:
-        pretty_size = model_weight_count_rounded_notation(shared_params + expert_params, min_digits=2)
+        pretty_size = model_weight_count_rounded_notation(abs(shared_params) + abs(expert_params), min_digits=2)
         size_class = f"{expert_count}x{pretty_size}"
     else:
-        size_class = model_weight_count_rounded_notation(total_params, min_digits=2)
+        size_class = model_weight_count_rounded_notation(abs(total_params), min_digits=2)
 
     return size_class
 
 
-def naming_convention(model_name: str | None, base_name: str | None, finetune_string: str | None, version_string: str | None, size_label: str | None, output_type: str | None) -> str:
+def naming_convention(model_name: str | None, base_name: str | None, finetune_string: str | None, version_string: str | None, size_label: str | None, output_type: str | None, model_type: Literal['vocab', 'LoRA'] | None = None) -> str:
     # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
 
     if base_name is not None:
@@ -60,23 +62,8 @@ def naming_convention(model_name: str | None, base_name: str | None, finetune_st
 
     version = f"-{version_string.strip().replace(' ', '-')}" if version_string is not None else ""
 
-    precision = f"-{output_type.strip().replace(' ', '-').upper()}" if output_type is not None else ""
+    encoding = f"-{output_type.strip().replace(' ', '-').upper()}" if output_type is not None else ""
 
-    return f"{name}{parameters}{finetune}{version}{precision}"
+    kind = f"-{model_type.strip().replace(' ', '-')}" if model_type is not None else ""
 
-
-def naming_convention_vocab_only(model_name: str | None, base_name: str | None, finetune_string: str | None, version_string: str | None) -> str:
-    # Reference: https://github.com/ggerganov/ggml/blob/master/docs/gguf.md#gguf-naming-convention
-
-    if base_name is not None:
-        name = base_name.strip().title().replace(' ', '-').replace('/', '-')
-    elif model_name is not None:
-        name = model_name.strip().title().replace(' ', '-').replace('/', '-')
-    else:
-        name = "ggml-model"
-
-    finetune = f"-{finetune_string.strip().title().replace(' ', '-')}" if finetune_string is not None else ""
-
-    version = f"-{version_string.strip().replace(' ', '-')}" if version_string is not None else ""
-
-    return f"{name}{finetune}{version}-vocab"
+    return f"{name}{parameters}{finetune}{version}{encoding}{kind}"

@@ -186,27 +186,34 @@ class Metadata:
             if re.fullmatch(r'(v|iter)?\d+([.]\d+)*', part, re.IGNORECASE):
                 name_types[i].add("version")
             # Quant type (should not be there for base models, but still annotated)
-            elif re.fullmatch(r'[iI]?[qQ]\d(_\w)*', part):
+            elif re.fullmatch(r'i?q\d(_\w)*|b?fp?(16|32)', part, re.IGNORECASE):
                 name_types[i].add("type")
                 name_parts[i] = part.upper()
             # Model size
-            elif i > 0 and re.fullmatch(r'(([A]|\d+[x])?\d+([._]\d+)?[kMBT]|small|mini|medium|large|xl)', part, re.IGNORECASE):
+            elif i > 0 and re.fullmatch(r'(([A]|\d+[x])?\d+([._]\d+)?[KMBT][\d]?|small|mini|medium|large|x?xl)', part, re.IGNORECASE):
                 part = part.replace("_", ".")
+                # Handle weird bloom-7b1 notation
+                if part[-1].isdecimal():
+                    part = part[:-2] + "." + part[-1] + part[-2]
+                # Normalize the size suffixes
                 if len(part) > 1 and part[-2].isdecimal():
-                    if part[-1] in "mbt":
+                    if part[-1] in "kmbt":
                         part = part[:-1] + part[-1].upper()
-                    elif part[-1] in "k":
-                        part = part[:-1] + part[-1].lower()
-                if total_params > 0:
+                if total_params != 0:
                     try:
-                        label_params = float(part[:-1]) * pow(1000, " kMBT".find(part[-1]))
+                        label_params = float(part[:-1]) * pow(1000, " KMBT".find(part[-1]))
                         # Only use it as a size label if it's close or bigger than the model size
                         # Note that LoRA adapters don't necessarily include all layers,
                         # so this is why bigger label sizes are accepted.
-                        # Do not use the size label when it's smaller than 3/4 of the model size
-                        if total_params - label_params > total_params // 4:
+                        # Do not use the size label when it's smaller than 1/8 of the model size
+                        if (total_params < 0 and label_params < abs(total_params) // 8) or (
+                            # Check both directions when the current model isn't a LoRA adapter
+                            total_params > 0 and abs(label_params - total_params) > 7 * total_params // 8
+                        ):
                             # Likely a context length
                             name_types[i].add("finetune")
+                            # Lowercase the size when it's a context length
+                            part = part[:-1] + part[-1].lower()
                     except ValueError:
                         # Failed to convert the size label to float, use it anyway
                         pass
@@ -214,8 +221,10 @@ class Metadata:
                     name_types[i].add("size_label")
                 name_parts[i] = part
             # Some easy to recognize finetune names
-            elif i > 0 and re.fullmatch(r'chat|instruct|vision', part, re.IGNORECASE):
+            elif i > 0 and re.fullmatch(r'chat|instruct|vision|lora', part, re.IGNORECASE):
                 name_types[i].add("finetune")
+                if part.lower() == "lora":
+                    name_parts[i] = "LoRA"
 
         at_start = True
         # Find the basename through the annotated name

@@ -69,7 +69,7 @@ class TestMetadataMethod(unittest.TestCase):
 
         # There is some legitimate models with only thousands of parameters
         self.assertEqual(gguf.Metadata.get_model_id_components("delphi-suite/stories-llama2-50k", 50 * 10**3),
-                         ('stories-llama2-50k', 'delphi-suite', 'stories-llama2', None, None, '50k'))
+                         ('stories-llama2-50k', 'delphi-suite', 'stories-llama2', None, None, '50K'))
 
         # None standard and not easy to disambiguate
         self.assertEqual(gguf.Metadata.get_model_id_components("DeepSeek-Coder-V2-Lite-Instruct"),
@@ -86,6 +86,42 @@ class TestMetadataMethod(unittest.TestCase):
         # Uses an underscore in the size label
         self.assertEqual(gguf.Metadata.get_model_id_components("smallcloudai/Refact-1_6B-fim"),
                          ('Refact-1_6B-fim', 'smallcloudai', 'Refact', 'fim', None, '1.6B'))
+
+        # Uses Iter3 for the version
+        self.assertEqual(gguf.Metadata.get_model_id_components("UCLA-AGI/Gemma-2-9B-It-SPPO-Iter3"),
+                         ('Gemma-2-9B-It-SPPO-Iter3', 'UCLA-AGI', 'Gemma-2', 'It-SPPO', 'Iter3', '9B'))
+
+        # Has two potential versions in the basename
+        self.assertEqual(gguf.Metadata.get_model_id_components("NousResearch/Hermes-2-Theta-Llama-3-8B"),
+                         ('Hermes-2-Theta-Llama-3-8B', 'NousResearch', 'Hermes-2-Theta-Llama-3', None, None, '8B'))
+
+        # Potential version in the basename
+        self.assertEqual(gguf.Metadata.get_model_id_components("SeaLLMs/SeaLLMs-v3-7B-Chat"),
+                         ('SeaLLMs-v3-7B-Chat', 'SeaLLMs', 'SeaLLMs-v3', 'Chat', None, '7B'))
+
+        # Underscore in the basename, and 1m for the context size
+        self.assertEqual(gguf.Metadata.get_model_id_components("internlm/internlm2_5-7b-chat-1m", 7 * 10**9),
+                         ('internlm2_5-7b-chat-1m', 'internlm', 'internlm2_5', 'chat-1m', None, '7B'))
+
+        # Version before the finetune name
+        self.assertEqual(gguf.Metadata.get_model_id_components("pszemraj/jamba-900M-v0.13-KIx2"),
+                         ('jamba-900M-v0.13-KIx2', 'pszemraj', 'jamba', 'KIx2', 'v0.13', '900M'))
+
+        # TODO: hf suffix which could be ignored but isn't
+        self.assertEqual(gguf.Metadata.get_model_id_components("state-spaces/mamba-2.8b-hf"),
+                         ('mamba-2.8b-hf', 'state-spaces', 'mamba', 'hf', None, '2.8B'))
+
+        # Two sizes, don't merge them, the other is the number of tokens on which it was trained
+        self.assertEqual(gguf.Metadata.get_model_id_components("abacaj/llama-161M-100B", 161 * 10**6),
+                         ('llama-161M-100B', 'abacaj', 'llama', '100b', None, '161M'))
+
+        # It's a trap, there is no size label
+        self.assertEqual(gguf.Metadata.get_model_id_components("SparseLLM/relu-100B", 1340 * 10**6),
+                         ('relu-100B', 'SparseLLM', 'relu', '100b', None, None))
+
+        # Weird size notation
+        self.assertEqual(gguf.Metadata.get_model_id_components("bigscience/bloom-7b1-petals"),
+                         ('bloom-7b1-petals', 'bigscience', 'bloom', 'petals', None, '7.1B'))
 
     def test_apply_metadata_heuristic_from_model_card(self):
         model_card = {

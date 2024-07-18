@@ -355,30 +355,23 @@ class Model:
         if self.metadata.size_label is None and total_params > 0:
             self.metadata.size_label = gguf.size_label(total_params, shared_params, expert_params, expert_count)
 
+        # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
+        output_type: str = self.ftype.name.partition("_")[2]
+
         # Filename Output
+        # Note: `not is_dir()` is used because `.is_file()` will not detect
+        #       file template strings as it doesn't actually exist as a file
         if self.fname_out is not None and not self.fname_out.is_dir():
             # Output path is a custom defined templated filename
-            # Note: `not is_dir()` is used because `.is_file()` will not detect
-            #       file template strings as it doesn't actually exist as a file
-
-            # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
-            output_type: str = self.ftype.name.partition("_")[2]
 
             # Process templated file name with the output ftype, useful with the "auto" ftype
             self.fname_out = self.fname_out.parent / gguf.fill_templated_filename(self.fname_out.name, output_type)
         else:
-
             # Generate default filename based on model specification and available metadata
-            if vocab_only:
-                # Vocab based default filename
-                fname_default: str = gguf.naming_convention_vocab_only(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version)
+            if not vocab_only:
+                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type, model_type="LoRA" if total_params < 0 else None)
             else:
-
-                # Extract the encoding scheme from the file type name. e.g. 'gguf.LlamaFileType.MOSTLY_Q8_0' --> 'Q8_0'
-                output_type: str = self.ftype.name.partition("_")[2]
-
-                # Standard default filename
-                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type)
+                fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, size_label=None, output_type=None, model_type="vocab")
 
             # Check if preferred output directory path was provided
             if self.fname_out is not None and self.fname_out.is_dir():
