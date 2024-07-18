@@ -135,14 +135,19 @@ struct ggml_backend_qnn_buffer_type_context {
 //
 // =================================================================================================
 static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct ggml_tensor *tensor) {
-    if (ggml_is_empty(tensor) ||
-        (!qnn::ggml_qnn_unary_op_array()[tensor->op] && !qnn::ggml_qnn_binary_op_array()[tensor->op])) {
+    if (ggml_is_empty(tensor)) {
+        return false;
+    }
+
+    if (!qnn::ggml_qnn_unary_op_array()[tensor->op] && !qnn::ggml_qnn_binary_op_array()[tensor->op] &&
+        (tensor->op != GGML_OP_UNARY ||
+         qnn::ggml_qnn_unary_op_array()[qnn::kGgmlUnaryOpStart + ggml_get_unary_op(tensor)])) {
         return false;
     }
 
     const struct ggml_tensor *src0 = tensor->src[0];
     const struct ggml_tensor *src1 = tensor->src[1];
-    if (nullptr == src0 || nullptr == src1) {
+    if (!src0 || !src1) {
         return false;
     }
 
@@ -162,18 +167,16 @@ static bool ggml_qnn_can_handle_op(ggml_backend_qnn_context *ctx, const struct g
         }
     }
 
-    if (tensor->op == GGML_OP_MUL_MAT) {
-        if (ne00 <= 32 || ne01 <= 32 || ne10 <= 32 || ne11 <= 32) {
-            // comment it for make UT of mul_mat with QNN RPC happy
-            // return false;
-        }
-    }
-
     return true;
 }
 
 static bool ggml_qnn_compute_forward(ggml_backend_qnn_context *ctx, struct ggml_tensor *tensor) {
-    auto unary_op = qnn::ggml_qnn_unary_op_array()[tensor->op];
+    size_t unary_op_idx = tensor->op;
+    if (tensor->op == GGML_OP_UNARY) {
+        unary_op_idx = qnn::kGgmlUnaryOpStart + ggml_get_unary_op(tensor);
+    }
+
+    auto unary_op = qnn::ggml_qnn_unary_op_array()[unary_op_idx];
     if (unary_op) {
         return unary_op(ctx, tensor->src[0], tensor);
     }

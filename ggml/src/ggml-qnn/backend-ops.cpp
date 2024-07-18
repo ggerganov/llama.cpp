@@ -158,12 +158,16 @@ qnn::ggml_qnn_binary_graph_cache_t &get_qnn_graph_cache(ggml_backend_qnn_context
 
 template <size_t _InputSize, size_t _OutputSize>
 qnn::ggml_qnn_graph<_InputSize, _OutputSize> *get_qnn_graph_from_cache(
-    ggml_backend_qnn_context *ctx, ggml_op op, const std::string &qnn_op,
+    ggml_backend_qnn_context *ctx, size_t op, const std::string &qnn_op,
     const std::array<const ggml_tensor *, _InputSize> &inputs, const std::array<ggml_tensor *, _OutputSize> &outputs) {
     using graph_t = qnn::ggml_qnn_graph<_InputSize, _OutputSize>;
 
+    GGML_ASSERT(op < (GGML_OP_COUNT + GGML_UNARY_OP_COUNT));
+
     auto &graph_cache = get_qnn_graph_cache(ctx, inputs, outputs);
-    const std::string graph_key(ggml_op_name(op));
+    const auto *op_name = op < qnn::kGgmlUnaryOpStart ? ggml_op_name(ggml_op(op))
+                                                      : ggml_unary_op_name(ggml_unary_op(op - qnn::kGgmlUnaryOpStart));
+    const std::string graph_key(op_name);
     auto it = graph_cache.find(graph_key);
     graph_t *graph_ptr = nullptr;
     if (it != graph_cache.end()) {
@@ -276,10 +280,27 @@ constexpr const char *kGgmlOpToQnnOp[] = {
 
     nullptr, // GGML_OP_CROSS_ENTROPY_LOSS
     nullptr, // GGML_OP_CROSS_ENTROPY_LOSS_BACK
+
+    // ggml_unary_op
+    nullptr,     // GGML_UNARY_OP_ABS
+    nullptr,     // GGML_UNARY_OP_SGN
+    nullptr,     // GGML_UNARY_OP_NEG
+    nullptr,     // GGML_UNARY_OP_STEP
+    nullptr,     // GGML_UNARY_OP_TANH
+    nullptr,     // GGML_UNARY_OP_ELU
+    nullptr,     // GGML_UNARY_OP_RELU
+    nullptr,     // GGML_UNARY_OP_SIGMOID
+    QNN_OP_GELU, // GGML_UNARY_OP_GELU
+    nullptr,     // GGML_UNARY_OP_GELU_QUICK
+    nullptr,     // GGML_UNARY_OP_SILU
+    nullptr,     // GGML_UNARY_OP_HARDSWISH
+    nullptr,     // GGML_UNARY_OP_HARDSIGMOID
 };
 
-static_assert(sizeof(kGgmlOpToQnnOp) / sizeof(kGgmlOpToQnnOp[0]) == GGML_OP_COUNT,
-              "GGML_OP_COUNT does not match the size of the ops table");
+static_assert(sizeof(kGgmlOpToQnnOp) / sizeof(kGgmlOpToQnnOp[0]) == (GGML_OP_COUNT + GGML_UNARY_OP_COUNT),
+              "GGML_OP_COUNT does not match the size of the kGgmlOpToQnnOp table");
+static_assert(kGgmlOpToQnnOp[GGML_UNARY_OP_GELU + qnn::kGgmlUnaryOpStart] != nullptr,
+              "GGML_UNARY_OP_GELU does not correspond to QNN_OP_GELU");
 
 template <ggml_op _GgmlOp>
 bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
@@ -287,9 +308,6 @@ bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, 
     static_assert(kGgmlOpToQnnOp[_GgmlOp] != nullptr, "GGML_OP does not have a corresponding QNN_OP");
 
     CHECK_PARAMS(ctx, src0, src1, dst);
-
-    qnn::qnn_perf perf(ggml_op_name(_GgmlOp));
-    perf.start();
 
     bool succeed = false;
     qnn::ggml_qnn_graph_binary *graph_ptr =
@@ -307,14 +325,11 @@ bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, 
     return succeed;
 }
 
-template <ggml_op _GgmlOp>
+template <size_t _GgmlOp>
 bool qnn_unary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src, ggml_tensor *dst) {
     static_assert(kGgmlOpToQnnOp[_GgmlOp] != nullptr, "GGML_OP does not have a corresponding QNN_OP");
 
     CHECK_PARAMS(ctx, src, dst);
-
-    qnn::qnn_perf perf(ggml_op_name(_GgmlOp));
-    perf.start();
 
     bool succeed = false;
     auto *graph_ptr = get_qnn_graph_from_cache<1, 1>(ctx, _GgmlOp, kGgmlOpToQnnOp[_GgmlOp], { src }, { dst });
@@ -416,10 +431,25 @@ qnn::ggml_qnn_unary_op_array_t qnn::ggml_qnn_unary_op_array() {
 
         nullptr, // GGML_OP_CROSS_ENTROPY_LOSS
         nullptr, // GGML_OP_CROSS_ENTROPY_LOSS_BACK
+
+        // ggml_unary_op
+        nullptr,                                                        // GGML_UNARY_OP_ABS
+        nullptr,                                                        // GGML_UNARY_OP_SGN
+        nullptr,                                                        // GGML_UNARY_OP_NEG
+        nullptr,                                                        // GGML_UNARY_OP_STEP
+        nullptr,                                                        // GGML_UNARY_OP_TANH
+        nullptr,                                                        // GGML_UNARY_OP_ELU
+        nullptr,                                                        // GGML_UNARY_OP_RELU
+        nullptr,                                                        // GGML_UNARY_OP_SIGMOID
+        qnn_unary_op_impl<GGML_UNARY_OP_GELU + qnn::kGgmlUnaryOpStart>, // GGML_UNARY_OP_GELU
+        nullptr,                                                        // GGML_UNARY_OP_GELU_QUICK
+        nullptr,                                                        // GGML_UNARY_OP_SILU
+        nullptr,                                                        // GGML_UNARY_OP_HARDSWISH
+        nullptr,                                                        // GGML_UNARY_OP_HARDSIGMOID
     };
 
-    static_assert(sizeof(kQnnOpsTable) / sizeof(kQnnOpsTable[0]) == GGML_OP_COUNT,
-                  "GGML_OP_COUNT does not match the size of the ops table");
+    static_assert(sizeof(kQnnOpsTable) / sizeof(kQnnOpsTable[0]) == (GGML_OP_COUNT + GGML_UNARY_OP_COUNT),
+                  "GGML_OP_COUNT does not match the size of the kQnnOpsTable table");
     return kQnnOpsTable;
 }
 
