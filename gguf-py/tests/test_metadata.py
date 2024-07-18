@@ -11,6 +11,7 @@ if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 
 
 import gguf
 
+
 class TestMetadataMethod(unittest.TestCase):
 
     def test_id_to_title(self):
@@ -63,11 +64,11 @@ class TestMetadataMethod(unittest.TestCase):
 
         # Check that it can handle a real model id with no version code
         # Note that 4k in this string is non standard and microsoft were referring to context length rather than weight count
-        self.assertEqual(gguf.Metadata.get_model_id_components("microsoft/Phi-3-mini-4k-instruct", 4*10**9),
+        self.assertEqual(gguf.Metadata.get_model_id_components("microsoft/Phi-3-mini-4k-instruct", 4 * 10**9),
                          ('Phi-3-mini-4k-instruct', 'microsoft', 'Phi-3', '4k-instruct', None, 'mini'))
 
         # There is some legitimate models with only thousands of parameters
-        self.assertEqual(gguf.Metadata.get_model_id_components("delphi-suite/stories-llama2-50k", 50*10**3),
+        self.assertEqual(gguf.Metadata.get_model_id_components("delphi-suite/stories-llama2-50k", 50 * 10**3),
                          ('stories-llama2-50k', 'delphi-suite', 'stories-llama2', None, None, '50k'))
 
         # None standard and not easy to disambiguate
@@ -115,6 +116,7 @@ class TestMetadataMethod(unittest.TestCase):
         got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card=None, hf_params=None, model_path=model_dir_path)
         expect = gguf.Metadata(name='Hermes 2 Pro Llama 3 8b DPO', finetune='DPO', basename='hermes-2-pro-llama-3', size_label='8B')
         self.assertEqual(got, expect)
+
 
 if __name__ == "__main__":
     unittest.main()
