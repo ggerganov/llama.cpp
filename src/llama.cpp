@@ -13863,17 +13863,20 @@ struct llm_build_context {
                                 ggml_element_size(Qcur) * n_embd_head * n_head,
                                 0);
                     cb(Qcur, "Qcur", il);
-                    Kcur = ggml_view_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens,
-                                ggml_element_size(Kcur) * n_embd_head,
-                                ggml_element_size(Kcur) * n_embd_head * n_head_kv,
-                                0);
-                    cb(Kcur, "Kcur", il);
 
                     Qcur = llm_build_norm(ctx0, Qcur, hparams,
                                 model.layers[il].attn_q_norm,
                                 model.layers[il].attn_q_norm_b,
                                 LLM_NORM, cb, il);
                     cb(Qcur, "Qcur", il);
+                }
+
+                if (model.layers[il].attn_k_norm) {
+                    Kcur = ggml_view_3d(ctx0, Kcur, n_embd_head, n_head_kv, n_tokens,
+                                ggml_element_size(Kcur) * n_embd_head,
+                                ggml_element_size(Kcur) * n_embd_head * n_head_kv,
+                                0);
+                    cb(Kcur, "Kcur", il);
 
                     Kcur = llm_build_norm(ctx0, Kcur, hparams,
                                model.layers[il].attn_k_norm,
