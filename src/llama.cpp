@@ -5520,6 +5520,9 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "jais") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JAIS;
+            } else if (
+                tokenizer_pre == "tekken") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_TEKKEN;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
