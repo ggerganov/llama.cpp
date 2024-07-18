@@ -20830,6 +20830,7 @@ struct gguf_context * gguf_init_empty(void) {
 struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
     FILE * file = ggml_fopen(fname, "rb");
     if (!file) {
+        fprintf(stderr, "%s: failed to open file '%s' with error '%s'\n", __func__, fname, strerror(errno));
         return NULL;
     }
 
