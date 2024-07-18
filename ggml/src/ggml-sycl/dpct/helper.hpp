@@ -1035,7 +1035,7 @@ namespace dpct
                     _cpu_device = _devs.size() - 1;
                 }
             }
-	}
+        }
         void check_id(unsigned int id) const
         {
             if (id >= _devs.size())
