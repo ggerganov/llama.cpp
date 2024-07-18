@@ -1013,8 +1013,8 @@ namespace dpct
             for(auto it = backend_devices.begin(); it != backend_devices.end(); ++it) {
                 keys.push_back(it->first);
             }
-
             std::sort(keys.begin(), keys.end(), compare_backend);
+
             for (auto &key : keys) {
                 std::vector<sycl::device> devs = backend_devices[key];
                 std::sort(devs.begin(), devs.end(), compare_dev);
@@ -1035,9 +1035,7 @@ namespace dpct
                     _cpu_device = _devs.size() - 1;
                 }
             }
-
 	}
-
         void check_id(unsigned int id) const
         {
             if (id >= _devs.size())
@@ -1126,7 +1124,7 @@ namespace dpct
 #error "Only support Windows and Linux."
 #endif
                 next_free = mapped_address_space;
-            };
+            }
 
         public:
             using buffer_id_t = int;
@@ -1147,7 +1145,7 @@ namespace dpct
 #else
 #error "Only support Windows and Linux."
 #endif
-            };
+            }
 
             mem_mgr(const mem_mgr &) = delete;
             mem_mgr &operator=(const mem_mgr &) = delete;
