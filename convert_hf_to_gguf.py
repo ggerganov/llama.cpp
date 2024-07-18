@@ -60,18 +60,18 @@ class Model:
     tensor_map: gguf.TensorNameMap
     tensor_names: set[str] | None
     gguf_writer: gguf.GGUFWriter
-    metadata: gguf.Metadata
+    model_name: str | None
+    metadata_override: Path | None
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path | None, is_big_endian: bool = False, use_temp_file: bool = False, eager: bool = False, metadata: gguf.Metadata | None = None,
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path | None, is_big_endian: bool = False,
+                 use_temp_file: bool = False, eager: bool = False,
+                 metadata_override: Path | None = None, model_name: str | None = None,
                  split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
-
-        if metadata is None:
-            metadata = gguf.Metadata()
 
         self.dir_model = dir_model
         self.ftype = ftype
@@ -88,7 +88,8 @@ class Model:
         self.block_count = self.find_hparam(["n_layers", "num_hidden_layers", "n_layer", "num_layers"])
         self.tensor_map = gguf.get_tensor_name_map(self.model_arch, self.block_count)
         self.tensor_names = None
-        self.metadata = metadata
+        self.metadata_override = metadata_override
+        self.model_name = model_name
 
         # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -337,18 +338,22 @@ class Model:
 
                 self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
 
+    def set_type(self):
+        self.gguf_writer.add_type(gguf.GGUFType.MODEL)
+
     def prepare_metadata(self, vocab_only: bool):
+
+        total_params, shared_params, expert_params, expert_count = self.gguf_writer.get_total_parameter_count()
+
+        self.metadata = gguf.Metadata.load(self.metadata_override, self.dir_model, self.model_name, total_params)
 
         # Fallback to model directory name if metadata name is still missing
         if self.metadata.name is None:
             self.metadata.name = self.dir_model.name
 
         # Generate parameter weight class (useful for leader boards) if not yet determined
-        if self.metadata.size_label is None:
-            total_params, shared_params, expert_params, expert_count = self.gguf_writer.get_total_parameter_count()
-
-            if (total_params > 0):
-                self.metadata.size_label = gguf.size_label(total_params, shared_params, expert_params, expert_count)
+        if self.metadata.size_label is None and total_params > 0:
+            self.metadata.size_label = gguf.size_label(total_params, shared_params, expert_params, expert_count)
 
         # Filename Output
         if self.fname_out is not None and not self.fname_out.is_dir():
@@ -383,11 +388,12 @@ class Model:
                 # output in the same directory as the model by default
                 self.fname_out = self.dir_model / f"{fname_default}.gguf"
 
+        self.set_type()
+
         logger.info("Set meta model")
         self.metadata.set_gguf_meta_model(self.gguf_writer)
 
         logger.info("Set model parameters")
-        self.gguf_writer.add_type(gguf.GGUFType.MODEL)
         self.set_gguf_parameters()
 
         logger.info("Set model tokenizer")
@@ -3607,10 +3613,7 @@ def main() -> None:
     else:
         logging.basicConfig(level=logging.INFO)
 
-    model_name = args.model_name
     dir_model = args.model
-
-    metadata = gguf.Metadata.load(args.metadata, dir_model, model_name)
 
     if not dir_model.is_dir():
         logger.error(f'Error: {args.model} is not a directory')
@@ -3650,7 +3653,9 @@ def main() -> None:
 
         model_instance = model_class(dir_model=dir_model, ftype=output_type, fname_out=fname_out,
                                      is_big_endian=args.bigendian, use_temp_file=args.use_temp_file,
-                                     eager=args.no_lazy, metadata=metadata, split_max_tensors=args.split_max_tensors,
+                                     eager=args.no_lazy,
+                                     metadata_override=args.metadata, model_name=args.model_name,
+                                     split_max_tensors=args.split_max_tensors,
                                      split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
                                      small_first_shard=args.no_tensor_first_split)
 

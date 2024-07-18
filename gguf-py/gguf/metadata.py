@@ -5,7 +5,7 @@ import json
 import yaml
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from dataclasses import dataclass
 
 from .constants import Keys
@@ -44,7 +44,7 @@ class Metadata:
     datasets: Optional[list[str]] = None
 
     @staticmethod
-    def load(metadata_override_path: Optional[Path] = None, model_path: Optional[Path] = None, model_name: Optional[str] = None) -> Metadata:
+    def load(metadata_override_path: Optional[Path] = None, model_path: Optional[Path] = None, model_name: Optional[str] = None, total_params: int = 0) -> Metadata:
         # This grabs as many contextual authorship metadata as possible from the model repository
         # making any conversion as required to match the gguf kv store metadata format
         # as well as giving users the ability to override any authorship metadata that may be incorrect
@@ -56,7 +56,7 @@ class Metadata:
         hf_params = Metadata.load_hf_parameters(model_path)
 
         # heuristics
-        metadata = Metadata.apply_metadata_heuristic(metadata, model_card, hf_params, model_path)
+        metadata = Metadata.apply_metadata_heuristic(metadata, model_card, hf_params, model_path, total_params)
 
         # Metadata Override File Provided
         # This is based on LLM_KV_NAMES mapping in llama.cpp
@@ -150,7 +150,7 @@ class Metadata:
         return ' '.join([w.title() if w.islower() and not re.match(r'^(v\d+(?:\.\d+)*|\d.*)$', w) else w for w in string.strip().replace('-', ' ').split()])
 
     @staticmethod
-    def get_model_id_components(model_id: Optional[str] = None) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
+    def get_model_id_components(model_id: Optional[str] = None, total_params: int = 0) -> tuple[str | None, str | None, str | None, str | None, str | None, str | None]:
         # Huggingface often store model id as '<org>/<model name>'
         # so let's parse it and apply some heuristics if possible for model name components
 
@@ -175,35 +175,82 @@ class Metadata:
         if org_component is not None and org_component[0] == '.':
             org_component = None
 
-        # Regular expression to extract model name components
-        # Heuristic to match against cases such as 'Mixtral-8x7B-Instruct-v0.1' or 'Codestral-22B-v0.1'
-        regex_match = re.compile(r'^'
-                                 r'(?P<basename>[A-Za-z0-9\s]*(?:(?:-(?:(?:[A-Za-z\s][A-Za-z0-9\s]*)|(?:[0-9\s]*)))*))'
-                                 r'(?:-(?P<size_label>(?:\d+x)?(\d+\.)?\d+[A-Za-z](?:-[A-Za-z]+(\d+\.)?\d+[A-Za-z]+)?)(?:-(?P<finetune>[A-Za-z0-9\s-]+))?)?'
-                                 r'(?:-(?P<version>v\d+(?:\.\d+)*))?'
-                                 r'$').match(model_full_name_component)
+        name_parts: list[str] = model_full_name_component.split('-')
+        name_types: list[
+            set[Literal["basename", "size_label", "finetune", "version", "type"]]
+        ] = [set() for _ in name_parts]
 
-        if not regex_match:
-            return model_full_name_component, org_component, None, None, None, None
+        # Annotate the name
+        for i, part in enumerate(name_parts):
+            # Version
+            if re.fullmatch(r'(v|iter)?\d+([.]\d+)*', part, re.IGNORECASE):
+                name_types[i].add("version")
+            # Quant type (should not be there for base models, but still annotated)
+            elif re.fullmatch(r'[iI]?[qQ]\d(_\w)*', part):
+                name_types[i].add("type")
+                name_parts[i] = part.upper()
+            # Model size
+            elif i > 0 and re.fullmatch(r'(([A]|\d+[x])?\d+([._]\d+)?[kMBT]|small|mini|medium|large|xl)', part, re.IGNORECASE):
+                part = part.replace("_", ".")
+                if len(part) > 1 and part[-2].isdecimal():
+                    if part[-1] in "mbt":
+                        part = part[:-1] + part[-1].upper()
+                    elif part[-1] in "k":
+                        part = part[:-1] + part[-1].lower()
+                if total_params > 0:
+                    try:
+                        label_params = float(part[:-1]) * pow(1000, " kMBT".find(part[-1]))
+                        # Only use it as a size label if it's close or bigger than the model size
+                        # Note that LoRA adapters don't necessarily include all layers,
+                        # so this is why bigger label sizes are accepted.
+                        # Do not use the size label when it's smaller than 3/4 of the model size
+                        if total_params - label_params > total_params // 4:
+                            # Likely a context length
+                            name_types[i].add("finetune")
+                    except ValueError:
+                        # Failed to convert the size label to float, use it anyway
+                        pass
+                if len(name_types[i]) == 0:
+                    name_types[i].add("size_label")
+                name_parts[i] = part
+            # Some easy to recognize finetune names
+            elif i > 0 and re.fullmatch(r'chat|instruct|vision', part, re.IGNORECASE):
+                name_types[i].add("finetune")
 
-        components = regex_match.groupdict()
-        basename = components.get("basename")
-        size_label = components.get("size_label")
-        finetune = components.get("finetune")
-        version = components.get("version")
+        at_start = True
+        # Find the basename through the annotated name
+        for part, t in zip(name_parts, name_types):
+            if at_start and ((len(t) == 0 and part[0].isalpha()) or "version" in t):
+                t.add("basename")
+            else:
+                if at_start:
+                    at_start = False
+                if len(t) == 0:
+                    t.add("finetune")
 
-        # Base name required at a minimum
-        if basename is None:
-            return model_full_name_component, None, None, None, None, None
+        # Remove the basename annotation from trailing version
+        for part, t in zip(reversed(name_parts), reversed(name_types)):
+            if "basename" in t:
+                if len(t) > 1:
+                    t.remove("basename")
+            else:
+                break
 
-        # Need to capture at least one component that is not basename
-        if size_label is None and version is None and finetune is None:
-            return model_full_name_component, None, None, None, None, None
+        basename = "-".join(n for n, t in zip(name_parts, name_types) if "basename" in t) or None
+        size_label = "-".join(s for s, t in zip(name_parts, name_types) if "size_label" in t) or None
+        finetune = "-".join(f for f, t in zip(name_parts, name_types) if "finetune" in t) or None
+        # TODO: should the basename version always be excluded?
+        # TODO: should multiple versions be joined together?
+        version = ([v for v, t, in zip(name_parts, name_types) if "version" in t and "basename" not in t] or [None])[-1]
+
+        if size_label is None and finetune is None and version is None:
+            # Too ambiguous, output nothing
+            basename = None
 
         return model_full_name_component, org_component, basename, finetune, version, size_label
 
     @staticmethod
-    def apply_metadata_heuristic(metadata: Metadata, model_card: Optional[dict] = None, hf_params: Optional[dict] = None, model_path: Optional[Path] = None) -> Metadata:
+    def apply_metadata_heuristic(metadata: Metadata, model_card: Optional[dict] = None, hf_params: Optional[dict] = None, model_path: Optional[Path] = None, total_params: int = 0) -> Metadata:
         # Reference Model Card Metadata: https://github.com/huggingface/hub-docs/blob/main/modelcard.md?plain=1
 
         # Model Card Heuristics
@@ -242,7 +289,8 @@ class Metadata:
                     metadata.base_models = []
 
                 for model_id in metadata_base_models:
-                    model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id)
+                    # NOTE: model size of base model is assumed to be similar to the size of the current model
+                    model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id, total_params)
                     base_model = {}
                     if model_full_name_component is not None:
                         base_model["name"] = Metadata.id_to_title(model_full_name_component)
@@ -317,7 +365,7 @@ class Metadata:
                 # Use _name_or_path only if its actually a model name and not some computer path
                 # e.g. 'meta-llama/Llama-2-7b-hf'
                 model_id = hf_name_or_path
-                model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id)
+                model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id, total_params)
                 if metadata.name is None and model_full_name_component is not None:
                     metadata.name = Metadata.id_to_title(model_full_name_component)
                 if metadata.organization is None and org_component is not None:
@@ -335,7 +383,7 @@ class Metadata:
         ############################################
         if model_path is not None:
             model_id = model_path.name
-            model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id)
+            model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id, total_params)
             if metadata.name is None and model_full_name_component is not None:
                 metadata.name = Metadata.id_to_title(model_full_name_component)
             if metadata.organization is None and org_component is not None:

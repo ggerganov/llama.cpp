@@ -7,6 +7,7 @@ import struct
 import tempfile
 from dataclasses import dataclass
 from enum import Enum, auto
+from math import prod
 from pathlib import Path
 from io import BufferedWriter
 from typing import IO, Any, Sequence, Mapping
@@ -17,7 +18,6 @@ import numpy as np
 from .constants import (
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
-    GGML_QUANT_SIZES,
     GGUF_VERSION,
     GGMLQuantizationType,
     GGUFEndian,
@@ -115,16 +115,29 @@ class GGUFWriter:
         expert_sum = 0
         n_expert_tensors = 0
 
+        last_lora_a: tuple[str, TensorInfo] | None = None
+
         for tensors in self.tensors:
             for name, info in tensors.items():
 
-                block_size, type_size = GGML_QUANT_SIZES[info.dtype]
+                shape = info.shape
 
-                size = (info.nbytes // type_size) * block_size
+                if name.endswith(".lora_a"):
+                    last_lora_a = (name, info)
+                    continue
+                elif name.endswith(".lora_b"):
+                    if last_lora_a is None or last_lora_a[0] != name[:-1] + "a":
+                        # Bail when the LoRA pair can't be found trivially
+                        logger.warning("can't measure LoRA size correctly, tensor order is unusual")
+                        return 0, 0, 0, 0
+                    else:
+                        shape = (*shape[:-1], last_lora_a[1].shape[-1])
+
+                size = prod(shape)
 
                 if "_exps." in name:
-                    expert_params += (size // info.shape[-3])
-                    expert_sum += info.shape[-3]
+                    expert_params += (size // shape[-3])
+                    expert_sum += shape[-3]
                     n_expert_tensors += 1
                 else:
                     shared_params += size

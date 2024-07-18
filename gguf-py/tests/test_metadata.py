@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 
 import unittest
-import gguf  # noqa: F401
 from pathlib import Path
+import os
+import sys
 
+# Necessary to load the local gguf package
+if "NO_LOCAL_GGUF" not in os.environ and (Path(__file__).parent.parent.parent / 'gguf-py').exists():
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import gguf
 
 class TestMetadataMethod(unittest.TestCase):
 
@@ -49,7 +55,7 @@ class TestMetadataMethod(unittest.TestCase):
 
         # Can't detect all non standard form in a heuristically safe way... best to err in caution and output nothing...
         self.assertEqual(gguf.Metadata.get_model_id_components("Qwen1.5-MoE-A2.7B-Chat"),
-                         ('Qwen1.5-MoE-A2.7B-Chat', None, None, None, None, None))
+                         ('Qwen1.5-MoE-A2.7B-Chat', None, 'Qwen1.5-MoE', 'Chat', None, 'A2.7B'))
 
         # Capture 'sub size labels' e.g. A14B in '57B-A14B' usually refers to activated params/weight count
         self.assertEqual(gguf.Metadata.get_model_id_components("Qwen2-57B-A14B-Instruct"),
@@ -57,25 +63,28 @@ class TestMetadataMethod(unittest.TestCase):
 
         # Check that it can handle a real model id with no version code
         # Note that 4k in this string is non standard and microsoft were referring to context length rather than weight count
-        self.assertEqual(gguf.Metadata.get_model_id_components("microsoft/Phi-3-mini-4k-instruct"),
-                         ('Phi-3-mini-4k-instruct', 'microsoft', 'Phi-3-mini', 'instruct', None, '4k'))
+        self.assertEqual(gguf.Metadata.get_model_id_components("microsoft/Phi-3-mini-4k-instruct", 4*10**9),
+                         ('Phi-3-mini-4k-instruct', 'microsoft', 'Phi-3', '4k-instruct', None, 'mini'))
 
         # There is some legitimate models with only thousands of parameters
-        self.assertEqual(gguf.Metadata.get_model_id_components("delphi-suite/stories-llama2-50k"),
+        self.assertEqual(gguf.Metadata.get_model_id_components("delphi-suite/stories-llama2-50k", 50*10**3),
                          ('stories-llama2-50k', 'delphi-suite', 'stories-llama2', None, None, '50k'))
 
-        # None standard and not easy to disambiguate, best to err in caution and output nothing
+        # None standard and not easy to disambiguate
         self.assertEqual(gguf.Metadata.get_model_id_components("DeepSeek-Coder-V2-Lite-Instruct"),
-                         ('DeepSeek-Coder-V2-Lite-Instruct', None, None, None, None, None))
+                         ('DeepSeek-Coder-V2-Lite-Instruct', None, 'DeepSeek-Coder-V2-Lite', 'Instruct', None, None))
 
         # This is a real model_id where they append 2DPO to refer to Direct Preference Optimization
-        # Not able to easily reject '2dpo' while keeping to simple regexp, so best to reject
         self.assertEqual(gguf.Metadata.get_model_id_components("crestf411/daybreak-kunoichi-2dpo-7b"),
-                         ('daybreak-kunoichi-2dpo-7b', 'crestf411', None, None, None, None))
+                         ('daybreak-kunoichi-2dpo-7b', 'crestf411', 'daybreak-kunoichi', '2dpo', None, '7B'))
 
         # This is a real model id where the weight size has a decimal point
         self.assertEqual(gguf.Metadata.get_model_id_components("Qwen2-0.5B-Instruct"),
                          ('Qwen2-0.5B-Instruct', None, 'Qwen2', 'Instruct', None, '0.5B'))
+
+        # Uses an underscore in the size label
+        self.assertEqual(gguf.Metadata.get_model_id_components("smallcloudai/Refact-1_6B-fim"),
+                         ('Refact-1_6B-fim', 'smallcloudai', 'Refact', 'fim', None, '1.6B'))
 
     def test_apply_metadata_heuristic_from_model_card(self):
         model_card = {
@@ -88,7 +97,7 @@ class TestMetadataMethod(unittest.TestCase):
         }
         got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card, None, None)
         expect = gguf.Metadata()
-        expect.base_models=[{'name': 'Mistral 7B Merge 14 v0', 'organization': 'EmbeddedLLM', 'repo_url': 'https://huggingface.co/EmbeddedLLM/Mistral-7B-Merge-14-v0'}, {'name': 'Trinity v1'}]
+        expect.base_models=[{'name': 'Mistral 7B Merge 14 v0', 'organization': 'EmbeddedLLM', 'version': 'v0', 'repo_url': 'https://huggingface.co/EmbeddedLLM/Mistral-7B-Merge-14-v0'}, {'name': 'Trinity v1', 'organization': 'Janai Hq', 'version': 'v1', 'repo_url': 'https://huggingface.co/janai-hq/trinity-v1'}]
         expect.tags=['Llama-3', 'instruct', 'finetune', 'chatml', 'DPO', 'RLHF', 'gpt4', 'synthetic data', 'distillation', 'function calling', 'json mode', 'axolotl']
         expect.languages=['en']
         expect.datasets=['teknium/OpenHermes-2.5']
@@ -97,12 +106,15 @@ class TestMetadataMethod(unittest.TestCase):
 
     def test_apply_metadata_heuristic_from_hf_parameters(self):
         hf_params = {"_name_or_path": "./hermes-2-pro-llama-3-8b-DPO"}
-        got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), None, hf_params, None)
-        expect = gguf.Metadata(name='Hermes 2 Pro Llama 3 8b DPO', author=None, version=None, organization=None, finetune='DPO', basename='hermes-2-pro-llama-3', description=None, quantized_by=None, size_label='8b', url=None, doi=None, uuid=None, repo_url=None, license=None, license_name=None, license_link=None, base_models=None, tags=None, languages=None, datasets=None)
+        got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card=None, hf_params=hf_params, model_path=None)
+        expect = gguf.Metadata(name='Hermes 2 Pro Llama 3 8b DPO', finetune='DPO', basename='hermes-2-pro-llama-3', size_label='8B')
         self.assertEqual(got, expect)
 
     def test_apply_metadata_heuristic_from_model_dir(self):
         model_dir_path = Path("./hermes-2-pro-llama-3-8b-DPO")
-        got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), None, None, model_dir_path)
-        expect = gguf.Metadata(name='Hermes 2 Pro Llama 3 8b DPO', author=None, version=None, organization=None, finetune='DPO', basename='hermes-2-pro-llama-3', description=None, quantized_by=None, size_label='8b', url=None, doi=None, uuid=None, repo_url=None, license=None, license_name=None, license_link=None, base_models=None, tags=None, languages=None, datasets=None)
+        got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card=None, hf_params=None, model_path=model_dir_path)
+        expect = gguf.Metadata(name='Hermes 2 Pro Llama 3 8b DPO', finetune='DPO', basename='hermes-2-pro-llama-3', size_label='8B')
         self.assertEqual(got, expect)
+
+if __name__ == "__main__":
+    unittest.main()
