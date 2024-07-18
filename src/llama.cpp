@@ -13896,7 +13896,7 @@ struct llm_build_context {
                 );
                 cb(Kcur, "Kcur", il);
 
-                cur = llm_build_kv(ctx0, model, hparams, cparams, kv_self, gf,
+                cur = llm_build_kv(ctx0, lctx, kv_self, gf,
                         model.layers[il].wo, nullptr,
                         Kcur, Vcur, Qcur, KQ_mask, n_tokens, kv_head, n_kv, 1.0f/sqrtf(float(n_embd_head)), cb, il);
 
@@ -13926,7 +13926,7 @@ struct llm_build_context {
                 cb(cur, "ffn_norm", il);
             }
 
-            cur = llm_build_ffn(ctx0, cur,
+            cur = llm_build_ffn(ctx0, lctx, cur,
                     model.layers[il].ffn_up,   NULL, NULL,
                     model.layers[il].ffn_gate, NULL, NULL,
                     model.layers[il].ffn_down, NULL, NULL,
