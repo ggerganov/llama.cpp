@@ -1113,7 +1113,7 @@ void ggml_sycl_op_dequantize_mul_mat_vec(
     char *src0_test_ptr = src0_test.alloc(ggml_nbytes(src0));
     for (int i = 0; i < src1_ncols; i++)
     {
-        const dfloat* src1_dfloat_bs = src1_dfloat + i * src1_padded_col_size;
+        const dfloat* src1_dfloat_bs = src1_dfloat + i * ne00;
         float* dst_dd_i_bs = dst_dd_i + i * dst->ne[0];
         switch (src0->type) {
         case GGML_TYPE_Q4_0:
