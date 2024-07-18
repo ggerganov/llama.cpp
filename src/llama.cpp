@@ -13838,12 +13838,14 @@ struct llm_build_context {
             struct ggml_tensor * inpSA = inpL;
 
             // norm
-            if (!hparams.swin_norm) {
+            if (hparams.swin_norm) {
+                cur = inpL;
+            } else {
                 cur = llm_build_norm(ctx0, inpL, hparams,
                     model.layers[il].attn_norm, NULL,
                     LLM_NORM_RMS, cb, il);
+                cb(cur, "attn_norm", il);
             }
-            cb(cur, "attn_norm", il);
 
             // self-attention
             {
