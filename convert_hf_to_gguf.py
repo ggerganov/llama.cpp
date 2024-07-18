@@ -381,6 +381,12 @@ class Model:
                 # output in the same directory as the model by default
                 self.fname_out = self.dir_model / f"{fname_default}.gguf"
 
+        # Upon missing model uuid, generate uuid based on tensor content
+        if not vocab_only and self.metadata.uuid is None:
+            self.metadata.uuid = self.gguf_writer.generate_tensors_uuid()
+            max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
+            logger.info(f"{f'%-{max_name_len}s' % f'generating general.uuid'} {self.metadata.uuid}")
+
         self.set_type()
 
         logger.info("Set meta model")
