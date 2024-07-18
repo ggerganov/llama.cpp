@@ -3432,6 +3432,7 @@ class ChameleonModel(Model):
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         # ignore image tokenizer for now
+        # TODO: remove this once image support is implemented for Chameleon
         if name.startswith("model.vqmodel"):
             return []
 
