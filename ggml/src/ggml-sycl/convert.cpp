@@ -125,7 +125,7 @@ static void dequantize_row_q4_0_sycl(const void *vx, dst_t *y, const int k,
                 const int warp_id = item_ct1.get_group(2);
                 const int lane_id = item_ct1.get_local_id(2);
                 const int lane_ib = warp_id * WARP_SIZE + lane_id;
-                if (lane_ib >= k / Q4_0) {
+                if (lane_ib >= k / QK4_0) {
                     return;
                 }
 
