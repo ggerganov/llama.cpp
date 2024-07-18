@@ -599,9 +599,9 @@ public:
             return nullptr;
         }
 
-        auto allocate_bytes = static_cast<int32_t>(bytes + alignment);
-        void *buf = _pfn_rpc_mem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, allocate_bytes);
-        if (buf == nullptr) {
+        auto allocate_bytes = static_cast<int64_t>(bytes + alignment);
+        void *buf = _pfn_rpc_mem_alloc(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS, (int)allocate_bytes);
+        if (!buf) {
             QNN_LOG_WARN("failed to allocate rpc memory, size: %d MB\n", (int)(allocate_bytes / (1 << 20)));
             return nullptr;
         }
