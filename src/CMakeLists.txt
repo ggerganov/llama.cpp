@@ -14,6 +14,7 @@ endif()
 add_library(llama
             ../include/llama.h
             llama.cpp
+            llama-sampling.cpp
             unicode.h
             unicode.cpp
             unicode-data.cpp
