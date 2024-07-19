@@ -256,9 +256,8 @@ class Metadata:
 
         # Remove the basename annotation from trailing version
         for part, t in zip(reversed(name_parts), reversed(name_types)):
-            if "basename" in t:
-                if len(t) > 1:
-                    t.remove("basename")
+            if "basename" in t and len(t) > 1:
+                t.remove("basename")
             else:
                 break
 
@@ -267,8 +266,8 @@ class Metadata:
         size_label = "-".join(dict.fromkeys(s for s, t in zip(name_parts, name_types) if "size_label" in t).keys()) or None
         finetune = "-".join(f for f, t in zip(name_parts, name_types) if "finetune" in t) or None
         # TODO: should the basename version always be excluded?
-        # TODO: should multiple versions be joined together?
-        version = ([v for v, t, in zip(name_parts, name_types) if "version" in t and "basename" not in t] or [None])[-1]
+        # NOTE: multiple finetune versions are joined together
+        version = "-".join(v for v, t, in zip(name_parts, name_types) if "version" in t and "basename" not in t) or None
 
         if size_label is None and finetune is None and version is None:
             # Too ambiguous, output nothing

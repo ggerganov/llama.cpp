@@ -127,9 +127,23 @@ class TestMetadataMethod(unittest.TestCase):
         self.assertEqual(gguf.Metadata.get_model_id_components("MaziyarPanahi/GreenNode-mini-7B-multilingual-v1olet-Mistral-7B-Instruct-v0.1"),
                          ('GreenNode-mini-7B-multilingual-v1olet-Mistral-7B-Instruct-v0.1', 'MaziyarPanahi', 'GreenNode-mini', 'multilingual-v1olet-Mistral-Instruct', 'v0.1', '7B'))
 
-        # Version at the end with a long basename
-        self.assertEqual(gguf.Metadata.get_model_id_components("mistralai/Mistral-Nemo-Base-2407"),
-                         ('Mistral-Nemo-Base-2407', 'mistralai', 'Mistral-Nemo-Base', None, '2407', None))
+        # Instruct in a name without a size label
+        self.assertEqual(gguf.Metadata.get_model_id_components("mistralai/Mistral-Nemo-Instruct-2407"),
+                         ('Mistral-Nemo-Instruct-2407', 'mistralai', 'Mistral-Nemo', 'Instruct', '2407', None))
+
+        # Non-obvious splitting relying on 'chat' keyword
+        self.assertEqual(gguf.Metadata.get_model_id_components("deepseek-ai/DeepSeek-V2-Chat-0628"),
+                         ('DeepSeek-V2-Chat-0628', 'deepseek-ai', 'DeepSeek-V2', 'Chat', '0628', None))
+
+        # Multiple versions
+        self.assertEqual(gguf.Metadata.get_model_id_components("OpenGVLab/Mini-InternVL-Chat-2B-V1-5"),
+                         ('Mini-InternVL-Chat-2B-V1-5', 'OpenGVLab', 'Mini-InternVL', 'Chat', 'V1-5', '2B'))
+
+        # Too ambiguous
+        # TODO: should "base" be a 'finetune' or 'size_label'?
+        # (in this case it should be a size label, but other models use it to signal that they are not finetuned)
+        self.assertEqual(gguf.Metadata.get_model_id_components("microsoft/Florence-2-base"),
+                         ('Florence-2-base', 'microsoft', None, None, None, None))
 
         ## Invalid cases ##
 
@@ -148,7 +162,7 @@ class TestMetadataMethod(unittest.TestCase):
         }
         got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card, None, None)
         expect = gguf.Metadata()
-        expect.base_models=[{'name': 'Mistral 7B Merge 14 v0', 'organization': 'EmbeddedLLM', 'version': 'v0', 'repo_url': 'https://huggingface.co/EmbeddedLLM/Mistral-7B-Merge-14-v0'}, {'name': 'Trinity v1', 'organization': 'Janai Hq', 'version': 'v1', 'repo_url': 'https://huggingface.co/janai-hq/trinity-v1'}]
+        expect.base_models=[{'name': 'Mistral 7B Merge 14 v0', 'organization': 'EmbeddedLLM', 'version': '14-v0', 'repo_url': 'https://huggingface.co/EmbeddedLLM/Mistral-7B-Merge-14-v0'}, {'name': 'Trinity v1', 'organization': 'Janai Hq', 'version': 'v1', 'repo_url': 'https://huggingface.co/janai-hq/trinity-v1'}]
         expect.tags=['Llama-3', 'instruct', 'finetune', 'chatml', 'DPO', 'RLHF', 'gpt4', 'synthetic data', 'distillation', 'function calling', 'json mode', 'axolotl']
         expect.languages=['en']
         expect.datasets=['teknium/OpenHermes-2.5']
