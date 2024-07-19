@@ -108,13 +108,23 @@ public:
                                                   (uint32_t)_tensor_outputs.size(), _tensor_outputs.data() } };
         auto error = _qnn_interface->qnn_graph_add_node(_graph_handle, op_config);
         if (error != QNN_SUCCESS) {
-            QNN_LOG_ERROR("graphAddNode.error = %d\n", error);
+            auto *error_str = get_qnn_error_string(error);
+            if (error_str) {
+                QNN_LOG_ERROR("qnn_graph_add_node.error: %s\n", error_str);
+            } else {
+                QNN_LOG_ERROR("qnn_graph_add_node.error: %d\n", error);
+            }
             return false;
         }
 
         error = _qnn_interface->qnn_graph_finalize(_graph_handle, nullptr, nullptr);
         if (error != QNN_SUCCESS) {
-            QNN_LOG_ERROR("graphFinalize.error = %d\n", error);
+            auto *error_str = get_qnn_error_string(error);
+            if (error_str) {
+                QNN_LOG_ERROR("qnn_graph_finalize.error: %s\n", error_str);
+            } else {
+                QNN_LOG_ERROR("qnn_graph_finalize.error: %d\n", error);
+            }
             return false;
         }
 

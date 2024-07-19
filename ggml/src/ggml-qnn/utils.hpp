@@ -27,6 +27,8 @@ void align_free(void *ptr);
 
 const char *opname_from_ggmlop(enum ggml_op ggmlop);
 
+const char *get_qnn_error_string(Qnn_ErrorHandle_t error);
+
 inline int validate_tensor_version(const Qnn_Tensor_t &tensor) {
     if (tensor.version != QNN_TENSOR_VERSION_1) {
         QNN_LOG_WARN("validate_tensor_version() tensor %s, got unsupported version %d\n", tensor.v1.name,

@@ -152,4 +152,37 @@ const char *opname_from_ggmlop(enum ggml_op ggmlop) {
     return nullptr;
 }
 
+const char *get_qnn_error_string(Qnn_ErrorHandle_t error) {
+    switch (error) {
+        case QNN_SUCCESS:
+            return "QNN_SUCCESS";
+        case QNN_GRAPH_ERROR_UNSUPPORTED_FEATURE:
+            return "QNN_GRAPH_ERROR_UNSUPPORTED_FEATURE";
+        case QNN_GRAPH_ERROR_MEM_ALLOC:
+            return "QNN_GRAPH_ERROR_MEM_ALLOC";
+        case QNN_GRAPH_ERROR_GENERAL:
+            return "QNN_GRAPH_ERROR_GENERAL";
+        case QNN_GRAPH_ERROR_INVALID_ARGUMENT:
+            return "QNN_GRAPH_ERROR_INVALID_ARGUMENT";
+        case QNN_GRAPH_ERROR_INVALID_HANDLE:
+            return "QNN_GRAPH_ERROR_INVALID_HANDLE";
+        case QNN_GRAPH_ERROR_GRAPH_DOES_NOT_EXIST:
+            return "QNN_GRAPH_ERROR_GRAPH_DOES_NOT_EXIST";
+        case QNN_GRAPH_ERROR_INVALID_NAME:
+            return "QNN_GRAPH_ERROR_INVALID_NAME";
+        case QNN_GRAPH_ERROR_INVALID_TENSOR:
+            return "QNN_GRAPH_ERROR_INVALID_TENSOR";
+        case QNN_GRAPH_ERROR_INVALID_OP_CONFIG:
+            return "QNN_GRAPH_ERROR_INVALID_OP_CONFIG";
+        case QNN_GRAPH_ERROR_SET_PROFILE:
+            return "QNN_GRAPH_ERROR_SET_PROFILE";
+        case QNN_GRAPH_ERROR_UNCONNECTED_NODE:
+            return "QNN_GRAPH_ERROR_UNCONNECTED_NODE";
+        case QNN_GRAPH_ERROR_CREATE_FAILED:
+            return "QNN_GRAPH_ERROR_CREATE_FAILED";
+        default:
+            return nullptr;
+    }
+}
+
 } // namespace qnn
