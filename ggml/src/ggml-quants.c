@@ -4022,8 +4022,6 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
     sumf = hsum_float_4x4(acc_0, acc_1, acc_2, acc_3);
 #elif defined(__riscv_v_intrinsic)
-    float sumf = 0.0;
-
     size_t vl = __riscv_vsetvl_e8m1(qk/2);
 
     for (; ib < nb; ++ib) {
@@ -4375,8 +4373,6 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 
     sumf = hsum_float_8(acc) + summs;
 #elif defined(__riscv_v_intrinsic)
-    float sumf = 0.0;
-
     size_t vl = __riscv_vsetvl_e8m1(qk/2);
 
     for (; ib < nb; ++ib) {
@@ -4694,8 +4690,6 @@ void ggml_vec_dot_q5_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
     sumf = hsum_float_8(acc);
 #elif defined(__riscv_v_intrinsic)
-    float sumf = 0.0;
-
     uint32_t qh;
 
     size_t vl = __riscv_vsetvl_e8m1(qk/2);
@@ -5064,8 +5058,6 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
 
     sumf = hsum_float_8(acc) + summs;
 #elif defined(__riscv_v_intrinsic)
-    float sumf = 0.0;
-
     uint32_t qh;
 
     size_t vl = __riscv_vsetvl_e8m1(qk/2);
@@ -5377,7 +5369,6 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
     sumf = hsum_float_8(acc);
 #elif defined(__riscv_v_intrinsic)
-    float sumf = 0.0;
     size_t vl = __riscv_vsetvl_e8m1(qk);
 
     for (; ib < nb; ++ib) {
