@@ -1008,6 +1008,11 @@ extern "C" {
             struct llama_context * ctx,
           llama_token_data_array * candidates,
       const struct llama_grammar * grammar);
+    LLAMA_API DEPRECATED(bool llama_sample_grammar(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+      const struct llama_grammar * grammar),
+        "use llama_grammar_sample instead");
 
     /// @details Accepts the sampled token into the grammar
     LLAMA_API void llama_grammar_accept_token(
