@@ -48,6 +48,12 @@
     #include <io.h>
 #endif
 
+#if __cplusplus >= 202000L
+    #define LU8(x) (const char*)(u8##x)
+#else
+    #define LU8(x) u8##x
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -84,6 +90,19 @@
 //
 // helpers
 //
+
+// trim whitespace from the beginning and end of a string
+static std::string trim(const std::string & str) {
+    size_t start = 0;
+    size_t end = str.size();
+    while (start < end && isspace(str[start])) {
+        start += 1;
+    }
+    while (end > start && isspace(str[end - 1])) {
+        end -= 1;
+    }
+    return str.substr(start, end - start);
+}
 
 static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
     std::string result;
@@ -18485,6 +18504,527 @@ float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id
     }
 
     return it->second.data();
+}
+
+//
+// vocab
+//
+
+const char * llama_token_get_text(const struct llama_model * model, llama_token token) {
+    return llama_token_get_text(model->vocab, token);
+}
+
+float llama_token_get_score(const struct llama_model * model, llama_token token) {
+    return llama_token_get_score(model->vocab, token);
+}
+
+enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token) {
+    return llama_token_get_attr(model->vocab, token);
+}
+
+bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
+    return llama_token_is_eog(model->vocab, token);
+}
+
+bool llama_token_is_control(const struct llama_model * model, llama_token token) {
+    return llama_token_is_control(model->vocab, token);
+}
+
+llama_token llama_token_bos(const struct llama_model * model) {
+    return llama_token_bos(model->vocab);
+}
+
+llama_token llama_token_eos(const struct llama_model * model) {
+    return llama_token_eos(model->vocab);
+}
+
+llama_token llama_token_cls(const struct llama_model * model) {
+    return llama_token_cls(model->vocab);
+}
+
+llama_token llama_token_sep(const struct llama_model * model) {
+    return llama_token_sep(model->vocab);
+}
+
+llama_token llama_token_nl (const struct llama_model * model) {
+    return llama_token_nl (model->vocab);
+}
+
+llama_token llama_token_pad(const struct llama_model * model) {
+    return llama_token_pad(model->vocab);
+}
+
+int32_t llama_add_bos_token(const struct llama_model * model) {
+    return llama_add_bos_token(model->vocab);
+}
+
+int32_t llama_add_eos_token(const struct llama_model * model) {
+    return llama_add_eos_token(model->vocab);
+}
+
+llama_token llama_token_prefix(const struct llama_model * model) {
+    return llama_token_prefix(model->vocab);
+}
+
+llama_token llama_token_middle(const struct llama_model * model) {
+    return llama_token_middle(model->vocab);
+}
+
+llama_token llama_token_suffix(const struct llama_model * model) {
+    return llama_token_suffix(model->vocab);
+}
+
+llama_token llama_token_eot(const struct llama_model * model) {
+    return llama_token_eot(model->vocab);
+}
+
+//
+// tokenization
+//
+
+int32_t llama_tokenize(
+    const struct llama_model * model,
+                  const char * text,
+                     int32_t   text_len,
+                 llama_token * tokens,
+                     int32_t   n_tokens_max,
+                        bool   add_special,
+                        bool   parse_special) {
+    return llama_tokenize(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
+}
+
+int32_t llama_token_to_piece(
+    const struct llama_model * model,
+                 llama_token   token,
+                        char * buf,
+                     int32_t   length,
+                     int32_t   lstrip,
+                        bool   special) {
+    return llama_token_to_piece(model->vocab, token, buf, length, lstrip, special);
+}
+
+int32_t llama_detokenize(
+    const struct llama_model * model,
+           const llama_token * tokens,
+                     int32_t   n_tokens,
+                        char * text,
+                     int32_t   text_len_max,
+                        bool   remove_special,
+                        bool   unparse_special) {
+    return llama_detokenize(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
+}
+
+//
+// chat templates
+//
+
+// Simple version of "llama_apply_chat_template" that only works with strings
+// This function uses heuristic checks to determine commonly used template. It is not a jinja parser.
+static int32_t llama_chat_apply_template_internal(
+    const std::string & tmpl,
+    const std::vector<const llama_chat_message *> & chat,
+    std::string & dest, bool add_ass) {
+    // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
+    std::stringstream ss;
+    auto tmpl_contains = [&tmpl](std::string haystack) -> bool {
+        return tmpl.find(haystack) != std::string::npos;
+    };
+    if (tmpl == "chatml" || tmpl_contains("<|im_start|>")) {
+        // chatml template
+        for (auto message : chat) {
+            ss << "<|im_start|>" << message->role << "\n" << message->content << "<|im_end|>\n";
+        }
+        if (add_ass) {
+            ss << "<|im_start|>assistant\n";
+        }
+    } else if (tmpl == "llama2" || tmpl == "mistral" || tmpl_contains("[INST]")) {
+        // llama2 template and its variants
+        // [variant] support system message
+        bool support_system_message = tmpl_contains("<<SYS>>") || tmpl == "mistral";
+        // [variant] space before + after response
+        bool space_around_response = tmpl_contains("' ' + eos_token");
+        // [variant] add BOS inside history
+        bool add_bos_inside_history = tmpl_contains("bos_token + '[INST]");
+        // [variant] trim spaces from the input message
+        bool strip_message = tmpl_contains("content.strip()");
+        // construct the prompt
+        bool is_inside_turn = true; // skip BOS at the beginning
+        ss << "[INST] ";
+        for (auto message : chat) {
+            std::string content = strip_message ? trim(message->content) : message->content;
+            std::string role(message->role);
+            if (!is_inside_turn) {
+                is_inside_turn = true;
+                ss << (add_bos_inside_history ? "<s>[INST] " : "[INST] ");
+            }
+            if (role == "system") {
+                if (support_system_message) {
+                    ss << "<<SYS>>\n" << content << "\n<</SYS>>\n\n";
+                } else {
+                    // if the model does not support system message, we still include it in the first message, but without <<SYS>>
+                    ss << content << "\n";
+                }
+            } else if (role == "user") {
+                ss << content << " [/INST]";
+            } else {
+                ss << (space_around_response ? " " : "") << content << (space_around_response ? " " : "") << "</s>";
+                is_inside_turn = false;
+            }
+        }
+        // llama2 templates seem to not care about "add_generation_prompt"
+    } else if (tmpl == "phi3" || (tmpl_contains("<|assistant|>") && tmpl_contains("<|end|>"))) {
+        // Phi 3
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|" << role << "|>\n" << message->content << "<|end|>\n";
+        }
+        if (add_ass) {
+            ss << "<|assistant|>\n";
+        }
+    } else if (tmpl == "zephyr" || tmpl_contains("<|user|>")) {
+        // zephyr template
+        for (auto message : chat) {
+            ss << "<|" << message->role << "|>" << "\n" << message->content << "<|endoftext|>\n";
+        }
+        if (add_ass) {
+            ss << "<|assistant|>\n";
+        }
+    } else if (tmpl == "monarch" || tmpl_contains("bos_token + message['role']")) {
+        // mlabonne/AlphaMonarch-7B template (the <s> is included inside history)
+        for (auto message : chat) {
+            std::string bos = (message == chat.front()) ? "" : "<s>"; // skip BOS for first message
+            ss << bos << message->role << "\n" << message->content << "</s>\n";
+        }
+        if (add_ass) {
+            ss << "<s>assistant\n";
+        }
+    } else if (tmpl == "gemma" || tmpl == "gemma2" || tmpl_contains("<start_of_turn>")) {
+        // google/gemma-7b-it
+        std::string system_prompt = "";
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                // there is no system message for gemma, but we will merge it with user prompt, so nothing is broken
+                system_prompt = trim(message->content);
+                continue;
+            }
+            // in gemma, "assistant" is "model"
+            role = role == "assistant" ? "model" : message->role;
+            ss << "<start_of_turn>" << role << "\n";
+            if (!system_prompt.empty() && role != "model") {
+                ss << system_prompt << "\n\n";
+                system_prompt = "";
+            }
+            ss << trim(message->content) << "<end_of_turn>\n";
+        }
+        if (add_ass) {
+            ss << "<start_of_turn>model\n";
+        }
+    } else if (tmpl == "orion" || tmpl_contains("'\\n\\nAssistant: ' + eos_token")) {
+        // OrionStarAI/Orion-14B-Chat
+        std::string system_prompt = "";
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                // there is no system message support, we will merge it with user prompt
+                system_prompt = message->content;
+                continue;
+            } else if (role == "user") {
+                ss << "Human: ";
+                if (!system_prompt.empty()) {
+                    ss << system_prompt << "\n\n";
+                    system_prompt = "";
+                }
+                ss << message->content << "\n\nAssistant: </s>";
+            } else {
+                ss << message->content << "</s>";
+            }
+        }
+    } else if (tmpl == "openchat" || tmpl_contains("GPT4 Correct ")) {
+        // openchat/openchat-3.5-0106,
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << message->content << "<|end_of_turn|>";
+            } else {
+                role[0] = toupper(role[0]);
+                ss << "GPT4 Correct " << role << ": " << message->content << "<|end_of_turn|>";
+            }
+        }
+        if (add_ass) {
+            ss << "GPT4 Correct Assistant:";
+        }
+    } else if (tmpl == "vicuna" || tmpl == "vicuna-orca" || (tmpl_contains("USER: ") && tmpl_contains("ASSISTANT: "))) {
+        // eachadea/vicuna-13b-1.1 (and Orca variant)
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                // Orca-Vicuna variant uses a system prefix
+                if (tmpl == "vicuna-orca" || tmpl_contains("SYSTEM: ")) {
+                    ss << "SYSTEM: " << message->content << "\n";
+                } else {
+                    ss << message->content << "\n\n";
+                }
+            } else if (role == "user") {
+                ss << "USER: " << message->content << "\n";
+            } else if (role == "assistant") {
+                ss << "ASSISTANT: " << message->content << "</s>\n";
+            }
+        }
+        if (add_ass) {
+            ss << "ASSISTANT:";
+        }
+    } else if (tmpl == "deepseek" || (tmpl_contains("### Instruction:") && tmpl_contains("<|EOT|>"))) {
+        // deepseek-ai/deepseek-coder-33b-instruct
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << message->content;
+            } else if (role == "user") {
+                ss << "### Instruction:\n" << message->content << "\n";
+            } else if (role == "assistant") {
+                ss << "### Response:\n" << message->content << "\n<|EOT|>\n";
+            }
+        }
+        if (add_ass) {
+            ss << "### Response:\n";
+        }
+    } else if (tmpl == "command-r" || (tmpl_contains("<|START_OF_TURN_TOKEN|>") && tmpl_contains("<|USER_TOKEN|>"))) {
+        // CohereForAI/c4ai-command-r-plus
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            } else if (role == "user") {
+                ss << "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            } else if (role == "assistant") {
+                ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>" << trim(message->content) << "<|END_OF_TURN_TOKEN|>";
+            }
+        }
+        if (add_ass) {
+            ss << "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>";
+        }
+    } else if (tmpl == "llama3" || (tmpl_contains("<|start_header_id|>") && tmpl_contains("<|end_header_id|>"))) {
+        // Llama 3
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|start_header_id|>" << role << "<|end_header_id|>\n\n" << trim(message->content) << "<|eot_id|>";
+        }
+        if (add_ass) {
+            ss << "<|start_header_id|>assistant<|end_header_id|>\n\n";
+        }
+    } else if (tmpl == "chatglm3" || tmpl_contains("[gMASK]sop")) {
+        // chatglm3-6b
+        ss << "[gMASK]" << "sop";
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|" << role << "|>" << "\n " << message->content;
+        }
+        if (add_ass) {
+            ss << "<|assistant|>";
+        }
+    } else if (tmpl == "chatglm4" || tmpl_contains("[gMASK]<sop>")) {
+        ss << "[gMASK]" << "<sop>";
+        for (auto message : chat) {
+            std::string role(message->role);
+            ss << "<|" << role << "|>" << "\n" << message->content;
+        }
+        if (add_ass) {
+            ss << "<|assistant|>";
+        }
+    } else if (tmpl == "minicpm" || tmpl_contains(LU8("<用户>"))) {
+        // MiniCPM-3B-OpenHermes-2.5-v2-GGUF
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "user") {
+                ss << LU8("<用户>");
+                ss << trim(message->content);
+                ss << "<AI>";
+            } else {
+                ss << trim(message->content);
+            }
+        }
+    } else if (tmpl == "deepseek2" || tmpl_contains("'Assistant: ' + message['content'] + eos_token")) {
+        // DeepSeek-V2
+        for (auto message : chat) {
+            std::string role(message->role);
+            if (role == "system") {
+                ss << message->content << "\n\n";
+            } else if (role == "user") {
+                ss << "User: " << message->content << "\n\n";
+            } else if (role == "assistant") {
+                ss << "Assistant: " << message->content << LU8("<｜end▁of▁sentence｜>");
+            }
+        }
+        if (add_ass) {
+            ss << "Assistant:";
+        }
+    } else {
+        // template not supported
+        return -1;
+    }
+    dest = ss.str();
+    return dest.size();
+}
+
+int32_t llama_chat_apply_template(
+                const struct llama_model * model,
+                              const char * tmpl,
+         const struct llama_chat_message * chat,
+                                  size_t   n_msg,
+                                    bool   add_ass,
+                                    char * buf,
+                                 int32_t   length) {
+    std::string curr_tmpl(tmpl == nullptr ? "" : tmpl);
+    if (tmpl == nullptr) {
+        GGML_ASSERT(model != nullptr);
+        // load template from model
+        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
+        std::string template_key = "tokenizer.chat_template";
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        if (res < 0) {
+            // worst case: there is no information about template, we will use chatml by default
+            curr_tmpl = "chatml"; // see llama_chat_apply_template_internal
+        } else {
+            curr_tmpl = std::string(model_template.data(), model_template.size());
+        }
+    }
+
+    // format the chat to string
+    std::vector<const llama_chat_message *> chat_vec;
+    chat_vec.resize(n_msg);
+    for (size_t i = 0; i < n_msg; i++) {
+        chat_vec[i] = &chat[i];
+    }
+
+    std::string formatted_chat;
+    int32_t res = llama_chat_apply_template_internal(curr_tmpl, chat_vec, formatted_chat, add_ass);
+    if (res < 0) {
+        return res;
+    }
+    if (buf && length > 0) {
+        strncpy(buf, formatted_chat.c_str(), length);
+    }
+    return res;
+}
+
+//
+// grammar
+//
+
+struct llama_grammar * llama_grammar_init(
+        const llama_grammar_element ** rules,
+        size_t    n_rules,
+        size_t    start_rule_index) {
+    return llama_grammar_init_impl(rules, n_rules, start_rule_index);
+}
+
+void llama_grammar_free(struct llama_grammar * grammar) {
+    llama_grammar_free_impl(grammar);
+}
+
+struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar) {
+    return llama_grammar_copy_impl(grammar);
+}
+
+void llama_grammar_sample(
+      const struct llama_grammar * grammar,
+      const struct llama_context * ctx,
+          llama_token_data_array * candidates) {
+    llama_grammar_sample(grammar, &ctx->model.vocab, &ctx->sampling, candidates);
+}
+
+void llama_sample_grammar(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+      const struct llama_grammar * grammar) {
+    llama_grammar_sample(grammar, ctx, candidates);
+}
+
+void llama_grammar_accept_token(
+            struct llama_grammar * grammar,
+            struct llama_context * ctx,
+                     llama_token   token) {
+    llama_grammar_accept_token(grammar, &ctx->model.vocab, &ctx->sampling, token);
+}
+
+//
+// sampling
+//
+
+void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed) {
+    llama_set_rng_seed(&ctx->sampling, seed);
+}
+
+void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates) {
+    llama_sample_softmax(ctx ? &ctx->sampling : nullptr, candidates);
+}
+
+void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int32_t k, size_t min_keep) {
+    llama_sample_top_k(ctx ? &ctx->sampling : nullptr, candidates, k, min_keep);
+}
+
+void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
+    llama_sample_top_p(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+}
+
+void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
+    llama_sample_min_p(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+}
+
+void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep) {
+    llama_sample_tail_free(ctx ? &ctx->sampling : nullptr, candidates, z, min_keep);
+}
+
+void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
+    llama_sample_typical(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+}
+
+void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp, float max_temp, float exponent_val) {
+    llama_sample_entropy(ctx ? &ctx->sampling : nullptr, candidates_p, min_temp, max_temp, exponent_val);
+}
+
+void llama_sample_temp(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
+    llama_sample_temp(ctx ? &ctx->sampling : nullptr, candidates_p, temp);
+}
+
+void llama_sample_repetition_penalties(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+               const llama_token * last_tokens,
+                          size_t   penalty_last_n,
+                           float   penalty_repeat,
+                           float   penalty_freq,
+                           float   penalty_present) {
+    llama_sample_repetition_penalties(ctx ? &ctx->sampling : nullptr, candidates, last_tokens, penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
+}
+
+void llama_sample_apply_guidance(
+          struct llama_context * ctx,
+                         float * logits,
+                         float * logits_guidance,
+                         float   scale) {
+    llama_sample_apply_guidance(&ctx->sampling, logits, logits_guidance, scale);
+}
+
+llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
+    return llama_sample_token_mirostat(&ctx->sampling, candidates, tau, eta, m, mu);
+}
+
+llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, float * mu) {
+    return llama_sample_token_mirostat_v2(ctx ? &ctx->sampling : nullptr, candidates, tau, eta, mu);
+}
+
+llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_data_array * candidates) {
+    return llama_sample_token_greedy(ctx ? &ctx->sampling : nullptr, candidates);
+}
+
+llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng) {
+    return llama_sample_token_with_rng(&ctx->sampling, candidates, rng);
+}
+
+llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates) {
+    return llama_sample_token_with_rng(&ctx->sampling, candidates, ctx->sampling.rng);
 }
 
 int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {

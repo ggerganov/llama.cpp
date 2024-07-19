@@ -384,7 +384,7 @@ static bool llama_grammar_detect_left_recursion(
 // grammar - external
 //
 
-struct llama_grammar * llama_grammar_init(
+struct llama_grammar * llama_grammar_init_impl(
             const llama_grammar_element ** rules,
                                  size_t    n_rules,
                                  size_t    start_rule_index) {
@@ -441,11 +441,11 @@ struct llama_grammar * llama_grammar_init(
     return new llama_grammar{ std::move(vec_rules), std::move(stacks), {} };
 }
 
-void llama_grammar_free(struct llama_grammar * grammar) {
+void llama_grammar_free_impl(struct llama_grammar * grammar) {
     delete grammar;
 }
 
-struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar) {
+struct llama_grammar * llama_grammar_copy_impl(const struct llama_grammar * grammar) {
     llama_grammar * result = new llama_grammar{ grammar->rules, grammar->stacks, grammar->partial_utf8 };
 
     // redirect elements in stacks to point to new rules
@@ -464,8 +464,10 @@ struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar) 
     return result;
 }
 
-void llama_grammar_sample(struct llama_context * ctx, llama_token_data_array * candidates, const struct llama_grammar * grammar) {
-    GGML_ASSERT(ctx);
+void llama_grammar_sample(const struct llama_grammar * grammar, const struct llama_vocab * vocab, const struct llama_sampling * smpl, llama_token_data_array * candidates) {
+    GGML_ASSERT(grammar);
+    GGML_ASSERT(vocab);
+
     int64_t t_start_sample_us = ggml_time_us();
 
     bool allow_eog = false;
@@ -484,9 +486,9 @@ void llama_grammar_sample(struct llama_context * ctx, llama_token_data_array * c
 
     for (size_t i = 0; i < candidates->size; ++i) {
         const llama_token id      = candidates->data[i].id;
-        const std::string & piece = llama_get_vocab(ctx)->cache_token_to_piece.at(id);
+        const std::string & piece = vocab->cache_token_to_piece.at(id);
 
-        if (llama_token_is_eog(llama_get_model(ctx), id)) {
+        if (llama_token_is_eog(*vocab, id)) {
             if (!allow_eog) {
                 candidates->data[i].logit = -INFINITY;
             }
@@ -503,13 +505,13 @@ void llama_grammar_sample(struct llama_context * ctx, llama_token_data_array * c
         candidates->data[reject.index].logit = -INFINITY;
     }
 
-    llama_get_sampling(ctx)->t_sample_us += ggml_time_us() - t_start_sample_us;
+    smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
 }
 
-void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar * grammar, llama_token token) {
+void llama_grammar_accept_token(struct llama_grammar * grammar, const struct llama_vocab * vocab, const struct llama_sampling * smpl, llama_token token) {
     const int64_t t_start_sample_us = ggml_time_us();
 
-    if (llama_token_is_eog(llama_get_model(ctx), token)) {
+    if (llama_token_is_eog(*vocab, token)) {
         for (const auto & stack : grammar->stacks) {
             if (stack.empty()) {
                 return;
@@ -518,7 +520,7 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
         GGML_ASSERT(false);
     }
 
-    const std::string & piece = llama_get_vocab(ctx)->cache_token_to_piece.at(token);
+    const std::string & piece = vocab->cache_token_to_piece.at(token);
 
     // Note terminating 0 in decoded string
     const auto   decoded     = decode_utf8(piece, grammar->partial_utf8);
@@ -533,5 +535,5 @@ void llama_grammar_accept_token(struct llama_context * ctx, struct llama_grammar
     grammar->partial_utf8 = decoded.second;
     GGML_ASSERT(!grammar->stacks.empty());
 
-    llama_get_sampling(ctx)->t_sample_us += ggml_time_us() - t_start_sample_us;
+    smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
 }

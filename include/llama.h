@@ -965,6 +965,10 @@ extern "C" {
                             bool   remove_special,
                             bool   unparse_special);
 
+    //
+    // Chat templates
+    //
+
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
     /// NOTE: This function does not use a jinja parser. It only support a pre-defined list of template. See more: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
@@ -1005,10 +1009,10 @@ extern "C" {
 
     /// @details Apply constraints from grammar
     LLAMA_API void llama_grammar_sample(
-            struct llama_context * ctx,
-          llama_token_data_array * candidates,
-      const struct llama_grammar * grammar);
-    LLAMA_API DEPRECATED(bool llama_sample_grammar(
+            const struct llama_grammar * grammar,
+            const struct llama_context * ctx,
+                llama_token_data_array * candidates);
+    LLAMA_API DEPRECATED(void llama_sample_grammar(
             struct llama_context * ctx,
           llama_token_data_array * candidates,
       const struct llama_grammar * grammar),
@@ -1016,8 +1020,8 @@ extern "C" {
 
     /// @details Accepts the sampled token into the grammar
     LLAMA_API void llama_grammar_accept_token(
-            struct llama_context * ctx,
             struct llama_grammar * grammar,
+            struct llama_context * ctx,
                      llama_token   token);
 
     //
