@@ -1059,6 +1059,9 @@ src/unicode-data.o: \
 src/llama.o: \
 	src/llama.cpp \
 	src/llama-impl.h \
+	src/llama-vocab.h \
+	src/llama-grammar.h \
+	src/llama-sampling.h \
 	src/unicode.h \
 	include/llama.h \
 	ggml/include/ggml-cuda.h \
@@ -1079,6 +1082,8 @@ src/llama-grammar.o: \
 	src/llama-grammar.cpp \
 	src/llama-grammar.h \
 	src/llama-impl.h \
+	src/llama-vocab.h \
+	src/llama-sampling.h \
 	include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
