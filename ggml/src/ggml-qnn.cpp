@@ -359,7 +359,16 @@ GGML_CALL static bool ggml_backend_qnn_supports_op(ggml_backend_t backend, const
 GGML_CALL static bool ggml_backend_qnn_offload_op(ggml_backend_t backend, const ggml_tensor *op) {
     GGML_UNUSED(backend);
 
-    return op->ne[0] > 1 && op->ne[1] > 1;
+    size_t dims = ggml_n_dims(op);
+    bool can_offload = false;
+    for (size_t i = 0; i < dims; i++) {
+        if (op->ne[i] > 1) {
+            can_offload = true;
+            break;
+        }
+    }
+
+    return can_offload;
 }
 
 static ggml_backend_i ggml_backend_qnn_interface = {

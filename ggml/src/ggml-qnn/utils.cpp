@@ -153,6 +153,8 @@ const char *opname_from_ggmlop(enum ggml_op ggmlop) {
 }
 
 const char *get_qnn_error_string(Qnn_ErrorHandle_t error) {
+    // A complete list of error codes can be found at here:
+    // https://docs.qualcomm.com/bundle/publicresource/topics/80-63442-50/api_error_codes.html
     switch (error) {
         case QNN_SUCCESS:
             return "QNN_SUCCESS";
