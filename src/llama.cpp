@@ -5518,13 +5518,13 @@ static void llm_load_vocab(
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_VIKING;
                 vocab.tokenizer_clean_spaces = false;
             } else if (
+                tokenizer_pre == "jais") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JAIS;
+            } else if (
                 tokenizer_pre == "tekken") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_TEKKEN;
                 vocab.tokenizer_ignore_merges = true;
                 vocab.tokenizer_add_bos = true;
-            } else if (
-                tokenizer_pre == "jais") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JAIS;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
