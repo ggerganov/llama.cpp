@@ -319,10 +319,6 @@ GGML_CALL static ggml_status ggml_backend_qnn_graph_compute(ggml_backend_t backe
 GGML_CALL static bool ggml_backend_qnn_supports_op(ggml_backend_t backend, const ggml_tensor *op) {
     GGML_UNUSED(backend);
 
-    if (op->op == GGML_OP_NONE) {
-        return true;
-    }
-
     if (op->op == GGML_OP_UNARY) {
         if (!qnn::ggml_qnn_unary_op_array()[qnn::kGgmlUnaryOpStart + ggml_get_unary_op(op)]) {
             QNN_LOG_DEBUG("unsupported unary op %d", ggml_get_unary_op(op));
@@ -333,7 +329,7 @@ GGML_CALL static bool ggml_backend_qnn_supports_op(ggml_backend_t backend, const
             QNN_LOG_DEBUG("src0 is nullptr");
             return false;
         }
-    } else {
+    } else if (op->op != GGML_OP_NONE) {
         if (!qnn::ggml_qnn_unary_op_array()[op->op] && !qnn::ggml_qnn_binary_op_array()[op->op]) {
             QNN_LOG_DEBUG("unsupported op %d", op->op);
             return false;
