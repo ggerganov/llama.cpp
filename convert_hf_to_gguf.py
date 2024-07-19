@@ -62,6 +62,7 @@ class Model:
     gguf_writer: gguf.GGUFWriter
     model_name: str | None
     metadata_override: Path | None
+    dir_model_card: Path
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
@@ -90,6 +91,7 @@ class Model:
         self.tensor_names = None
         self.metadata_override = metadata_override
         self.model_name = model_name
+        self.dir_model_card = dir_model  # overridden in convert_lora_to_gguf.py
 
         # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -345,7 +347,7 @@ class Model:
 
         total_params, shared_params, expert_params, expert_count = self.gguf_writer.get_total_parameter_count()
 
-        self.metadata = gguf.Metadata.load(self.metadata_override, self.dir_model, self.model_name, total_params)
+        self.metadata = gguf.Metadata.load(self.metadata_override, self.dir_model, self.model_name, self.dir_model_card, total_params)
 
         # Fallback to model directory name if metadata name is still missing
         if self.metadata.name is None:

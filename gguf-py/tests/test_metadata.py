@@ -54,7 +54,7 @@ class TestMetadataMethod(unittest.TestCase):
         self.assertEqual(gguf.Metadata.get_model_id_components("NousResearch/Meta-Llama-3-8B"),
                          ('Meta-Llama-3-8B', "NousResearch", 'Meta-Llama-3', None, None, '8B'))
 
-        # Can't detect all non standard form in a heuristically safe way... best to err in caution and output nothing...
+        # Non standard naming
         self.assertEqual(gguf.Metadata.get_model_id_components("Qwen1.5-MoE-A2.7B-Chat"),
                          ('Qwen1.5-MoE-A2.7B-Chat', None, 'Qwen1.5-MoE', 'Chat', None, 'A2.7B'))
 
@@ -71,7 +71,7 @@ class TestMetadataMethod(unittest.TestCase):
         self.assertEqual(gguf.Metadata.get_model_id_components("delphi-suite/stories-llama2-50k", 50 * 10**3),
                          ('stories-llama2-50k', 'delphi-suite', 'stories-llama2', None, None, '50K'))
 
-        # None standard and not easy to disambiguate
+        # Non standard and not easy to disambiguate
         self.assertEqual(gguf.Metadata.get_model_id_components("DeepSeek-Coder-V2-Lite-Instruct"),
                          ('DeepSeek-Coder-V2-Lite-Instruct', None, 'DeepSeek-Coder-V2-Lite', 'Instruct', None, None))
 
@@ -122,6 +122,20 @@ class TestMetadataMethod(unittest.TestCase):
         # Weird size notation
         self.assertEqual(gguf.Metadata.get_model_id_components("bigscience/bloom-7b1-petals"),
                          ('bloom-7b1-petals', 'bigscience', 'bloom', 'petals', None, '7.1B'))
+
+        # Ignore full-text size labels when there are number-based ones, and deduplicate size labels
+        self.assertEqual(gguf.Metadata.get_model_id_components("MaziyarPanahi/GreenNode-mini-7B-multilingual-v1olet-Mistral-7B-Instruct-v0.1"),
+                         ('GreenNode-mini-7B-multilingual-v1olet-Mistral-7B-Instruct-v0.1', 'MaziyarPanahi', 'GreenNode-mini', 'multilingual-v1olet-Mistral-Instruct', 'v0.1', '7B'))
+
+        # Version at the end with a long basename
+        self.assertEqual(gguf.Metadata.get_model_id_components("mistralai/Mistral-Nemo-Base-2407"),
+                         ('Mistral-Nemo-Base-2407', 'mistralai', 'Mistral-Nemo-Base', None, '2407', None))
+
+        ## Invalid cases ##
+
+        # Start with a dash and has dashes in rows
+        self.assertEqual(gguf.Metadata.get_model_id_components("mistralai/-Mistral--Nemo-Base-2407-"),
+                         ('-Mistral--Nemo-Base-2407-', 'mistralai', 'Mistral-Nemo-Base', None, '2407', None))
 
     def test_apply_metadata_heuristic_from_model_card(self):
         model_card = {
