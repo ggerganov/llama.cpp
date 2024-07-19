@@ -5523,6 +5523,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "tekken") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_TEKKEN;
+                vocab.tokenizer_clean_spaces = false;
                 vocab.tokenizer_ignore_merges = true;
                 vocab.tokenizer_add_bos = true;
             } else {
