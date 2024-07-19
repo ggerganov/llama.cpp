@@ -62,3 +62,13 @@ struct llama_vocab {
 };
 
 const struct llama_vocab * llama_get_vocab(const struct llama_context * ctx);
+const struct llama_vocab * llama_get_vocab(const struct llama_model   * model);
+
+// TODO: This should probably be in llama.h
+std::vector<llama_vocab::id> llama_tokenize_internal(
+        const llama_vocab & vocab,
+        std::string raw_text,
+        bool add_special,
+        bool parse_special = false);
+
+llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch);
