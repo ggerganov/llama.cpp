@@ -750,7 +750,8 @@ class Model:
                     token_id = int(token_id)
                     token: str = token_data["content"]
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert tokens[token_id] == token.encode("utf-8")
+                        if tokens[token_id] != token.encode("utf-8"):
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token!r}')
                     if token_data.get("special") or self.does_token_look_special(token):
                         toktypes[token_id] = SentencePieceTokenTypes.CONTROL
                     else:
@@ -2011,7 +2012,8 @@ class Phi3MiniModel(Model):
                     token_id = int(token_id)
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert tokens[token_id] == token
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2027,7 +2029,8 @@ class Phi3MiniModel(Model):
                     token_id = int(foken_data["id"])
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert tokens[token_id] == token
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2266,7 +2269,8 @@ class InternLM2Model(Model):
                         chat_eos_token_id = token_id
                     token = token.encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert(tokens[token_id] == token)
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2285,7 +2289,8 @@ class InternLM2Model(Model):
                         chat_eos_token_id = token_id
                     token = token.encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert(tokens[token_id] == token)
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2461,7 +2466,13 @@ class GemmaModel(Model):
     model_arch = gguf.MODEL_ARCH.GEMMA
 
     def set_vocab(self):
-        self._set_vocab_sentencepiece()
+        tokens, scores, toktypes = self._create_vocab_sentencepiece()
+
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre("default")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_scores(scores)
+        self.gguf_writer.add_token_types(toktypes)
 
         # TODO: these special tokens should be exported only for the CodeGemma family
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
