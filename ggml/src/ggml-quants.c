@@ -11750,7 +11750,7 @@ void ggml_vec_dot_iq4_nl_q8_0(int n, float * restrict s, size_t bs, const void *
 
     __m256 accum1 = (__m256)__lasx_xvldi(0);
     __m256 accum2 = (__m256)__lasx_xvldi(0);
-    for (; ib < nb; ib += 2) {
+    for (; ib + 1 < nb; ib += 2) {
         const __m128i q4bits_1 = __lsx_vld((const __m128i*)x[ib + 0].qs, 0);
         const __m128i q4bits_2 = __lsx_vld((const __m128i*)x[ib + 1].qs, 0);
         const __m256i q8b_1 = __lasx_xvld((const __m256i *)y[ib + 0].qs, 0);
