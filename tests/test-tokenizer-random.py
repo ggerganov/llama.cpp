@@ -20,7 +20,7 @@ from typing import Any, Iterator, cast
 from typing_extensions import Buffer
 
 import cffi
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizer
 
 
 logger = logging.getLogger("test-tokenizer-random")
@@ -145,7 +145,7 @@ class Tokenizer:
 class TokenizerGroundtruth (Tokenizer):
 
     def __init__(self, dir_tokenizer: str):
-        self.model = AutoTokenizer.from_pretrained(dir_tokenizer, trust_remote_code=False)
+        self.model: PreTrainedTokenizer = AutoTokenizer.from_pretrained(dir_tokenizer, trust_remote_code=False)
         # guess BOS and EOS
         ids = self.encode("a")
         assert 1 <= len(ids) <= 3
@@ -260,6 +260,7 @@ def generator_custom_text_edge_cases() -> Iterator[str]:
         'a\na',            # bert fail
         '"`',              # falcon
         ' \u2e4e',         # falcon
+        '\n\x0b  ',        # falcon
         'a\xa0\xa0\x00b',  # jina-v2-es
         'one <mask>',      # jina-v2-es  <mask> lstrip=true
         'a </s> b',        # rstrip phi-3
