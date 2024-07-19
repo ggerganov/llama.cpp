@@ -3,12 +3,6 @@
 #define LLAMA_API_INTERNAL
 #include "llama.h"
 
-#include <array>
-#include <set>
-#include <map>
-#include <cstdint>
-#include <random>
-
 #ifdef __has_include
     #if __has_include(<unistd.h>)
         #include <unistd.h>
@@ -24,7 +18,7 @@
 
 // bump if necessary
 #define LLAMA_MAX_NODES   8192
-#define LLAMA_MAX_LAYERS  256
+#define LLAMA_MAX_LAYERS  512
 #define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
 #ifdef __GNUC__
