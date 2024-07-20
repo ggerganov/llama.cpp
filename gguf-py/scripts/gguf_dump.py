@@ -266,7 +266,7 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                         else:
                             value += value_string
                         displayed_values += 1
-                        if (total_elements - 1)  > element_pos:
+                        if (total_elements - 1) > element_pos:
                             value += ", "
                 elif curr_type in reader.gguf_scalar_to_np:
                     render_element = min(7, total_elements)
