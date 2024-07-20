@@ -121,6 +121,14 @@ struct codepoint_categ {
     inline auto is_Zp() const { return (encoded & SUBMASK) == Zp; }
     inline auto is_Zs() const { return (encoded & SUBMASK) == Zs; }
 
+    inline bool operator == (const codepoint_categ other) const {
+        return encoded == other.encoded;
+    }
+
+    inline bool operator != (const codepoint_categ other) const {
+        return encoded != other.encoded;
+    }
+
     const char * c_str() const {
         static const std::map<uint16_t, const char *> map = {
             {UNDEF, "UNDEF"}, {C, "C"}, {L, "L"}, {M, "M"}, {N, "N"}, {P, "P"}, {S, "S"}, {Z, "Z"},
