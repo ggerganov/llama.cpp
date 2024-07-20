@@ -249,29 +249,41 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
         if len(field.types) == 1:
             curr_type = field.types[0]
             if curr_type == GGUFValueType.STRING:
-                value = "\"`{strval}`\"".format(strval=str(bytes(field.parts[-1]), encoding='utf-8')[:60])
+                truncate_length = 60
+                value_string = str(bytes(field.parts[-1]), encoding='utf-8')
+                if len(value_string) > truncate_length:
+                    head = value_string[:truncate_length // 2].replace("`", "\\`").rstrip()
+                    tail = value_string[-truncate_length // 2:].replace("`", "\\`").rstrip()
+                    value = "`{head}`...`{tail}`".format(head=head, tail=tail)
+                else:
+                    value = "`{strval}`".format(strval=value_string.replace("`", "\\`"))
             elif curr_type in reader.gguf_scalar_to_np:
                 value = str(field.parts[-1][0])
         else:
             if field.types[0] == GGUFValueType.ARRAY:
                 curr_type = field.types[1]
                 array_elements = []
+
                 if curr_type == GGUFValueType.STRING:
                     render_element = min(5, total_elements)
                     for element_pos in range(render_element):
                         truncate_length = 30
                         value_string = str(bytes(field.parts[-1 - (total_elements - element_pos - 1) * 2]), encoding='utf-8')
                         if len(value_string) > truncate_length:
-                            array_elements.append(value_string[:truncate_length // 2] + "`...`" + value_string[-truncate_length // 2:])
+                            head = value_string[:truncate_length // 2].replace("`", "\\`").rstrip()
+                            tail = value_string[-truncate_length // 2:].replace("`", "\\`").rstrip()
+                            value = "`{head}`...`{tail}`".format(head=head, tail=tail)
                         else:
-                            array_elements.append(value_string)
-                    value_array_inner = ["\"`{strval}`\"".format(strval=strval) for strval in array_elements]
-                    value = f'[ {", ".join(value_array_inner).strip()}{", ..." if total_elements > len(array_elements) else ""} ]'
+                            value = "`{strval}`".format(strval=value_string.replace("`", "\\`"))
+                        array_elements.append(value)
+
                 elif curr_type in reader.gguf_scalar_to_np:
                     render_element = min(7, total_elements)
                     for element_pos in range(render_element):
                         array_elements.append(str(field.parts[-1 - (total_elements - element_pos - 1)][0]))
-                    value = f'[ {", ".join(array_elements).strip()}{", ..." if total_elements > len(array_elements) else ""} ]'
+
+                value = f'[ {", ".join(array_elements).strip()}{", ..." if total_elements > len(array_elements) else ""} ]'
+
         kv_dump_table.append({"n":n, "pretty_type":pretty_type, "total_elements":total_elements, "field_name":field.name, "value":value})
 
     kv_dump_table_header_map = [
