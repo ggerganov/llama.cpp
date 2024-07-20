@@ -48,7 +48,7 @@ public:
         QNN_TENSOR_SET_DATA_FORMAT(_qnn_tensor, QNN_TENSOR_DATA_FORMAT_FLAT_BUFFER);
         QNN_TENSOR_SET_DATA_TYPE(_qnn_tensor, device_datatype_from_ggml_datatype(tensor->type));
         // TODO: set the quantizeParams base on the tensor type
-        QNN_TENSOR_SET_RANK(_qnn_tensor, qnn::get_ggml_tensor_rank(tensor));
+        QNN_TENSOR_SET_RANK(_qnn_tensor, (uint32_t)ggml_n_dims(tensor));
 
         QNN_TENSOR_SET_MEM_TYPE(_qnn_tensor, QNN_TENSORMEMTYPE_RAW);
         Qnn_ClientBuffer_t client_buf = {};
