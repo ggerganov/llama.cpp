@@ -737,6 +737,8 @@ struct server_context {
             slot.ga_n = ga_n;
             slot.ga_w = ga_w;
 
+            slot.sparams = params.sparams;
+
             slot.reset();
 
             slots.push_back(slot);
@@ -884,7 +886,8 @@ struct server_context {
 
     bool launch_slot_with_task(server_slot & slot, const server_task & task) {
         slot_params default_params;
-        llama_sampling_params default_sparams;
+        // Sampling parameter defaults are loaded from the global server context (but individual requests can still override them)
+        llama_sampling_params default_sparams = params.sparams;
         auto & data = task.data;
 
         if (data.count("__oaicompat") != 0) {
@@ -2002,6 +2005,11 @@ struct server_context {
         int32_t n_batch  = llama_n_batch(ctx);
         int32_t n_ubatch = llama_n_ubatch(ctx);
 
+        // track if this is an embedding or non-embedding batch
+        // if we've added sampled tokens above, we are in non-embedding mode
+        // -1: none, 0: non-embedding, 1: embedding
+        int32_t batch_type = batch.n_tokens > 0 ? 0 : -1;
+
         // next, batch any pending prompts without exceeding n_batch
         if (params.cont_batching || batch.n_tokens == 0) {
             for (auto & slot : slots) {
@@ -2020,6 +2028,7 @@ struct server_context {
                         slot.t_start_generation = 0;
 
                         if (slot.infill) {
+                            const bool add_bos = llama_should_add_bos_token(model);
                             bool suff_rm_leading_spc = true;
                             if (params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
                                 params.input_suffix.erase(0, 1);
@@ -2035,16 +2044,21 @@ struct server_context {
                             }
 
                             prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(model));
-                            prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(model)); // always add BOS
-                            prefix_tokens.insert(prefix_tokens.end(),   llama_token_suffix(model));
-                            prefix_tokens.insert(prefix_tokens.end(),   suffix_tokens.begin(), suffix_tokens.end());
+                            suffix_tokens.insert(suffix_tokens.begin(), llama_token_suffix(model));
+
+                            auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
+                            auto embd_end = params.spm_infill ? prefix_tokens : suffix_tokens;
+                            if (add_bos) {
+                                embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+                            }
+                            embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
 
                             const llama_token middle_token = llama_token_middle(model);
                             if (middle_token >= 0) {
-                                prefix_tokens.push_back(middle_token);
+                                embd_inp.push_back(middle_token);
                             }
 
-                            prompt_tokens = prefix_tokens;
+                            prompt_tokens = embd_inp;
                         } else {
                             prompt_tokens = tokenize(slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
                         }
@@ -2166,6 +2180,14 @@ struct server_context {
                         }
                     }
 
+                    // check that we are in the right batch_type, if not defer the slot
+                    bool slot_type = slot.embedding ? 1 : 0;
+                    if (batch_type == -1) {
+                        batch_type = slot_type;
+                    } else if (batch_type != slot_type) {
+                        continue;
+                    }
+
                     // keep only the common part
                     int p0 = (int) system_tokens.size() + slot.n_past;
                     if (!llama_kv_cache_seq_rm(ctx, slot.id + 1, p0, -1)) {
@@ -2266,6 +2288,9 @@ struct server_context {
         LOG_VERBOSE("decoding batch", {
             {"n_tokens", batch.n_tokens},
         });
+
+        // make sure we're in the right embedding mode
+        llama_set_embeddings(ctx, batch_type == 1);
 
         // process the created batch of tokens
         for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
@@ -2599,7 +2624,7 @@ int main(int argc, char ** argv) {
     // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
     if (params.chat_template.empty()) {
         if (!ctx_server.validate_model_chat_template()) {
-            LOG_ERROR("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
+            LOG_WARNING("The chat template that comes with this model is not yet supported, falling back to chatml. This may cause the model to output suboptimal responses", {});
             params.chat_template = "chatml";
         }
     }
@@ -2961,17 +2986,31 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_props = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+        std::string template_key = "tokenizer.chat_template", curr_tmpl;
+        int32_t tlen = llama_model_meta_val_str(ctx_server.model, template_key.c_str(), nullptr, 0);
+        if (tlen > 0) {
+            std::vector<char> curr_tmpl_buf(tlen + 1, 0);
+            if (llama_model_meta_val_str(ctx_server.model, template_key.c_str(), curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
+                curr_tmpl = std::string(curr_tmpl_buf.data(), tlen);
+            }
+        }
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = {
             { "system_prompt",               ctx_server.system_prompt.c_str() },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
-            { "total_slots",                 ctx_server.params.n_parallel }
+            { "total_slots",                 ctx_server.params.n_parallel },
+            { "chat_template",               curr_tmpl.c_str() }
         };
 
         res.set_content(data.dump(), "application/json; charset=utf-8");
     };
 
     const auto handle_completions = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
 
         json data = json::parse(req.body);
@@ -3067,6 +3106,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_chat_completions = [&ctx_server, &params, &res_error](const httplib::Request & req, httplib::Response & res) {
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support chat completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
 
@@ -3139,6 +3183,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_infill = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support infill. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
 
         json data = json::parse(req.body);
@@ -3225,13 +3274,8 @@ int main(int argc, char ** argv) {
         return res.set_content(data.dump(), "application/json; charset=utf-8");
     };
 
-    const auto handle_embeddings = [&params, &ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        if (!params.embedding) {
-            res.status = 501;
-            res.set_content("This server does not support embeddings. Start it with `--embeddings`", "text/plain; charset=utf-8");
-            return;
-        }
 
         const json body = json::parse(req.body);
         bool is_openai = false;

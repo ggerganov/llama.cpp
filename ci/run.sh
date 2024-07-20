@@ -36,11 +36,11 @@ SRC=`pwd`
 CMAKE_EXTRA="-DLLAMA_FATAL_WARNINGS=ON"
 
 if [ ! -z ${GG_BUILD_METAL} ]; then
-    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_METAL_SHADER_DEBUG=ON"
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DGGML_METAL=ON"
 fi
 
 if [ ! -z ${GG_BUILD_CUDA} ]; then
-    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_CUDA=1"
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DGGML_CUDA=1"
 fi
 
 if [ ! -z ${GG_BUILD_SYCL} ]; then
@@ -50,7 +50,7 @@ if [ ! -z ${GG_BUILD_SYCL} ]; then
         exit 1
     fi
 
-    CMAKE_EXTRA="${CMAKE_EXTRA} -DLLAMA_SYCL=1 DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DLLAMA_SYCL_F16=ON"
+    CMAKE_EXTRA="${CMAKE_EXTRA} -DGGML_SYCL=1 DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=ON"
 fi
 ## helpers
 
@@ -103,6 +103,9 @@ function gg_run_ctest_debug {
 
     set -e
 
+    # Check cmake, make and ctest are installed
+    gg_check_build_requirements
+
     (time cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                          ) 2>&1 | tee -a $OUT/${ci}-make.log
 
@@ -130,6 +133,9 @@ function gg_run_ctest_release {
     rm -rf build-ci-release && mkdir build-ci-release && cd build-ci-release
 
     set -e
+
+    # Check cmake, make and ctest are installed
+    gg_check_build_requirements
 
     (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                            ) 2>&1 | tee -a $OUT/${ci}-make.log
@@ -284,10 +290,10 @@ function gg_run_open_llama_7b_v2 {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUDA=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DGGML_CUDA=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                                           ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../examples/convert-legacy-llama.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
+    python3 ../examples/convert_legacy_llama.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
 
     model_f16="${path_models}/ggml-model-f16.gguf"
     model_q8_0="${path_models}/ggml-model-q8_0.gguf"
@@ -421,7 +427,7 @@ function gg_run_pythia_1_4b {
     (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                            ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert-hf-to-gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
+    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
 
     model_f16="${path_models}/ggml-model-f16.gguf"
     model_q8_0="${path_models}/ggml-model-q8_0.gguf"
@@ -550,10 +556,10 @@ function gg_run_pythia_2_8b {
 
     set -e
 
-    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DLLAMA_CUDA=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
+    (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} -DGGML_CUDA=1 .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                                           ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert-hf-to-gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
+    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
 
     model_f16="${path_models}/ggml-model-f16.gguf"
     model_q8_0="${path_models}/ggml-model-q8_0.gguf"
@@ -688,7 +694,7 @@ function gg_run_embd_bge_small {
     (time cmake -DCMAKE_BUILD_TYPE=Release ${CMAKE_EXTRA} .. ) 2>&1 | tee -a $OUT/${ci}-cmake.log
     (time make -j                                            ) 2>&1 | tee -a $OUT/${ci}-make.log
 
-    python3 ../convert-hf-to-gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
+    python3 ../convert_hf_to_gguf.py ${path_models} --outfile ${path_models}/ggml-model-f16.gguf
 
     model_f16="${path_models}/ggml-model-f16.gguf"
     model_q8_0="${path_models}/ggml-model-q8_0.gguf"
@@ -699,6 +705,20 @@ function gg_run_embd_bge_small {
     (time ./bin/llama-embedding --model ${model_q8_0} -p "I believe the meaning of life is" ) 2>&1 | tee -a $OUT/${ci}-tg-q8_0.log
 
     set +e
+}
+
+function gg_check_build_requirements {
+    if ! command -v cmake &> /dev/null; then
+        gg_printf 'cmake not found, please install'
+    fi
+
+    if ! command -v make &> /dev/null; then
+        gg_printf 'make not found, please install'
+    fi
+
+    if ! command -v ctest &> /dev/null; then
+        gg_printf 'ctest not found, please install'
+    fi
 }
 
 function gg_sum_embd_bge_small {
