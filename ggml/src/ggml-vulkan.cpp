@@ -4623,22 +4623,22 @@ static void ggml_vk_test_matmul(ggml_backend_vk_context * ctx, size_t m, size_t 
         }
     }
 
-    ggml_pipeline_allocate_descriptor_sets(ctx, p, num_it);
+    ggml_pipeline_allocate_descriptor_sets(ctx->device, p, num_it);
     if (split_k > 1) {
-        ggml_pipeline_allocate_descriptor_sets(ctx, ctx->device->pipeline_matmul_split_k_reduce, num_it);
+        ggml_pipeline_allocate_descriptor_sets(ctx->device, ctx->device->pipeline_matmul_split_k_reduce, num_it);
 
         if (ctx->prealloc_split_k == nullptr || ctx->prealloc_split_k->size < sizeof(float) * d_ne * split_k) {
             // Resize buffer
             if (ctx->prealloc_split_k != nullptr) {
                 ggml_vk_destroy_buffer(ctx->prealloc_split_k);
             }
-            ctx->prealloc_split_k = ggml_vk_create_buffer_check(ctx, sizeof(float) * d_ne * split_k, vk::MemoryPropertyFlagBits::eDeviceLocal);
+            ctx->prealloc_split_k = ggml_vk_create_buffer_check(ctx->device, sizeof(float) * d_ne * split_k, vk::MemoryPropertyFlagBits::eDeviceLocal);
         }
     }
 
-    vk_buffer d_X = ggml_vk_create_buffer_check(ctx, sizeof(X_TYPE) * x_ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    vk_buffer d_Y = ggml_vk_create_buffer_check(ctx, sizeof(Y_TYPE) * y_ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    vk_buffer d_D = ggml_vk_create_buffer_check(ctx, sizeof(float) * d_ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer d_X = ggml_vk_create_buffer_check(ctx->device, sizeof(X_TYPE) * x_ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer d_Y = ggml_vk_create_buffer_check(ctx->device, sizeof(Y_TYPE) * y_ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer d_D = ggml_vk_create_buffer_check(ctx->device, sizeof(float) * d_ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     X_TYPE* x = (X_TYPE *) malloc(sizeof(X_TYPE) * x_ne);
     Y_TYPE* y = (Y_TYPE *) malloc(sizeof(Y_TYPE) * y_ne);
@@ -4665,12 +4665,12 @@ static void ggml_vk_test_matmul(ggml_backend_vk_context * ctx, size_t m, size_t 
         }
     }
 
-    ggml_vk_buffer_write(ctx, d_X, 0, x, sizeof(X_TYPE) * k * m * batch);
-    ggml_vk_buffer_write(ctx, d_Y, 0, y, sizeof(Y_TYPE) * k * n * batch);
+    ggml_vk_buffer_write(d_X, 0, x, sizeof(X_TYPE) * k * m * batch);
+    ggml_vk_buffer_write(d_Y, 0, y, sizeof(Y_TYPE) * k * n * batch);
 
     vk_context * subctx = ggml_vk_create_context(ctx, ctx->device->compute_queue);
     for (size_t i = 0; i < num_it; i++) {
-        ggml_vk_ctx_begin(ctx, subctx);
+        ggml_vk_ctx_begin(ctx->device, subctx);
         ggml_vk_matmul(
             ctx, subctx, p, ggml_vk_subbuffer(d_X), ggml_vk_subbuffer(d_Y), ggml_vk_subbuffer(d_D), ggml_vk_subbuffer(ctx->prealloc_split_k),
             m, n, k,
@@ -4689,7 +4689,7 @@ static void ggml_vk_test_matmul(ggml_backend_vk_context * ctx, size_t m, size_t 
     double time = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
 
     // copy dst to host
-    ggml_vk_buffer_read(ctx, d_D, 0, d, sizeof(float) * d_ne);
+    ggml_vk_buffer_read(d_D, 0, d, sizeof(float) * d_ne);
 
     float * d_chk = (float *) malloc(sizeof(float) * d_ne);
 
@@ -4765,7 +4765,7 @@ static void ggml_vk_test_matmul(ggml_backend_vk_context * ctx, size_t m, size_t 
 
         if (split_k > 1) {
             float * split_k_buf = (float *) malloc(sizeof(float) * d_ne * split_k);
-            ggml_vk_buffer_read(ctx, ctx->prealloc_split_k, 0, split_k_buf, sizeof(float) * d_ne * split_k);
+            ggml_vk_buffer_read(ctx->prealloc_split_k, 0, split_k_buf, sizeof(float) * d_ne * split_k);
 
             std::cerr << "d_buf0: " << std::endl << std::endl;
             ggml_vk_print_matrix_area(split_k_buf, GGML_TYPE_F32, m, n, first_err_m, first_err_n, first_err_b);
@@ -4785,8 +4785,8 @@ static void ggml_vk_test_matmul(ggml_backend_vk_context * ctx, size_t m, size_t 
 
     free(d_chk);
 
-    ggml_vk_queue_cleanup(ctx, ctx->device->transfer_queue);
-    ggml_vk_queue_cleanup(ctx, ctx->device->compute_queue);
+    ggml_vk_queue_cleanup(ctx->device, ctx->device->transfer_queue);
+    ggml_vk_queue_cleanup(ctx->device, ctx->device->compute_queue);
 
     ggml_vk_destroy_buffer(d_X);
     ggml_vk_destroy_buffer(d_Y);
@@ -4834,86 +4834,6 @@ static void ggml_vk_print_tensor_area(const ggml_tensor * tensor, int i0, int i1
     }
 }
 
-static void ggml_vk_test_transfer(ggml_backend_vk_context * ctx, size_t ne, bool pinned) {
-    VK_LOG_DEBUG("ggml_vk_test_transfer(" << ne << ")");
-    // Check transfers are correct
-    vk_buffer buffer = ggml_vk_create_buffer_check(ctx, sizeof(float) * ne, vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    float * x;
-    float * y;
-    if (pinned) {
-        x = (float *) ggml_vk_host_malloc(ctx, sizeof(float) * ne);
-        y = (float *) ggml_vk_host_malloc(ctx, sizeof(float) * ne);
-    } else {
-        x = (float *) malloc(sizeof(float) * ne);
-        y = (float *) malloc(sizeof(float) * ne);
-    }
-
-    for (size_t i = 0; i < ne; i++) {
-        x[i] = rand() / (float)RAND_MAX;
-    }
-
-    vk_context * subctx = ggml_vk_create_context(ctx, ctx->device->compute_queue);
-    ggml_vk_ctx_begin(ctx, subctx);
-
-    auto begin = std::chrono::high_resolution_clock::now();
-
-    ggml_vk_buffer_write_async(ctx, subctx, buffer, 0, x, sizeof(float) * ne);
-
-    for (auto& cpy : subctx->in_memcpys) {
-        memcpy(cpy.dst, cpy.src, cpy.n);
-    }
-    subctx->in_memcpys.clear();
-
-    ggml_vk_ctx_end(subctx);
-    ggml_vk_submit(subctx, ctx->fence);
-    VK_CHECK(ctx->device->device.waitForFences({ ctx->fence }, true, UINT64_MAX), "ggml_vk_test_transfer waitForFences");
-    ctx->device->device.resetFences({ ctx->fence });
-
-    auto end = std::chrono::high_resolution_clock::now();
-
-    double ms_to_gpu = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
-
-    ggml_vk_ctx_begin(ctx, subctx);
-
-    begin = std::chrono::high_resolution_clock::now();
-
-    ggml_vk_buffer_read_async(ctx, subctx, buffer, 0, y, sizeof(float) * ne);
-
-    ggml_vk_ctx_end(subctx);
-    ggml_vk_submit(subctx, ctx->fence);
-    VK_CHECK(ctx->device->device.waitForFences({ ctx->fence }, true, UINT64_MAX), "ggml_vk_test_transfer waitForFences");
-    ctx->device->device.resetFences({ ctx->fence });
-
-    for (auto& cpy : subctx->out_memcpys) {
-        memcpy(cpy.dst, cpy.src, cpy.n);
-    }
-    subctx->out_memcpys.clear();
-
-    end = std::chrono::high_resolution_clock::now();
-
-    double ms_from_gpu = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
-
-    double avg_err = 0.0;
-    for (size_t i = 0; i < ne; i++) {
-        avg_err += std::fabs(x[i] - y[i]);
-    }
-
-    double kb = ne * sizeof(float) / 1024.0;
-
-    std::cerr << "TEST TRANSFER " << kb << " KB to_gpu " << ms_to_gpu << "ms (" << kb / ms_to_gpu * 1000.0 / 1024.0 << " MB/s) from_gpu " << ms_from_gpu << "ms (" << kb / ms_from_gpu * 1000.0 / 1024.0 << " MB/s) avg_err=" << avg_err / ne << std::endl;
-
-    ggml_vk_destroy_buffer(buffer);
-
-    if (pinned) {
-        ggml_vk_host_free(ctx, x);
-        ggml_vk_host_free(ctx, y);
-    } else {
-        free(x);
-        free(y);
-    }
-}
-
 static void ggml_vk_quantize_data(const float * from, void * to, size_t ne, ggml_type quant) {
     ggml_quantize_chunk(quant, from, to, 0, 1, ne, nullptr);
 }
@@ -4925,8 +4845,8 @@ static void ggml_vk_test_dequant(ggml_backend_vk_context * ctx, size_t ne, ggml_
     const size_t qx_sz = ne * ggml_type_size(quant)/ggml_blck_size(quant);
     float * x = (float *) malloc(x_sz);
     void * qx = malloc(qx_sz);
-    vk_buffer qx_buf = ggml_vk_create_buffer_check(ctx, qx_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    vk_buffer x_buf = ggml_vk_create_buffer_check(ctx, x_sz_f16, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer qx_buf = ggml_vk_create_buffer_check(ctx->device, qx_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer x_buf = ggml_vk_create_buffer_check(ctx->device, x_sz_f16, vk::MemoryPropertyFlagBits::eDeviceLocal);
     ggml_fp16_t * x_chk = (ggml_fp16_t *) malloc(x_sz_f16);
 
     for (size_t i = 0; i < ne; i++) {
@@ -4937,12 +4857,12 @@ static void ggml_vk_test_dequant(ggml_backend_vk_context * ctx, size_t ne, ggml_
 
     ggml_vk_quantize_data(x, qx, ne, quant);
 
-    ggml_pipeline_allocate_descriptor_sets(ctx, p, 1);
+    ggml_pipeline_allocate_descriptor_sets(ctx->device, p, 1);
 
-    ggml_vk_buffer_write(ctx, qx_buf, 0, qx, qx_sz);
+    ggml_vk_buffer_write(qx_buf, 0, qx, qx_sz);
 
     vk_context * subctx = ggml_vk_create_context(ctx, ctx->device->compute_queue);
-    ggml_vk_ctx_begin(ctx, subctx);
+    ggml_vk_ctx_begin(ctx->device, subctx);
     const std::vector<uint32_t> pc = { 1, (uint32_t)ne, (uint32_t)ne, (uint32_t)ne, (uint32_t)ne };
     ggml_vk_dispatch_pipeline(ctx, subctx, p, { { qx_buf, 0, qx_sz }, { x_buf, 0, x_sz_f16 } }, pc.size() * sizeof(int), pc.data(), { (uint32_t)ne, 1, 1});
     ggml_vk_ctx_end(subctx);
@@ -4956,7 +4876,7 @@ static void ggml_vk_test_dequant(ggml_backend_vk_context * ctx, size_t ne, ggml_
     auto end = std::chrono::high_resolution_clock::now();
 
     double ms_dequant = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
-    ggml_vk_buffer_read(ctx, x_buf, 0, x_chk, x_sz_f16);
+    ggml_vk_buffer_read(x_buf, 0, x_chk, x_sz_f16);
 
     int first_err = -1;
 
@@ -5040,9 +4960,9 @@ static void ggml_vk_test_dequant_matmul(ggml_backend_vk_context * ctx, size_t m,
     float * x = (float *) malloc(x_sz);
     float * y = (float *) malloc(y_sz);
     void * qx = malloc(qx_sz);
-    vk_buffer qx_buf = ggml_vk_create_buffer_check(ctx, qx_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    vk_buffer y_buf = ggml_vk_create_buffer_check(ctx, y_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
-    vk_buffer d_buf = ggml_vk_create_buffer_check(ctx, d_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer qx_buf = ggml_vk_create_buffer_check(ctx->device, qx_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer y_buf = ggml_vk_create_buffer_check(ctx->device, y_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
+    vk_buffer d_buf = ggml_vk_create_buffer_check(ctx->device, d_sz, vk::MemoryPropertyFlagBits::eDeviceLocal);
     float * d = (float *) malloc(d_sz);
     float * d_chk = (float *) malloc(d_sz);
 
@@ -5057,25 +4977,25 @@ static void ggml_vk_test_dequant_matmul(ggml_backend_vk_context * ctx, size_t m,
         y[i] = (i % k == i / k) ? 1.0f : 0.0f;
     }
 
-    ggml_pipeline_allocate_descriptor_sets(ctx, p, num_it);
+    ggml_pipeline_allocate_descriptor_sets(ctx->device, p, num_it);
     if (split_k > 1) {
-        ggml_pipeline_allocate_descriptor_sets(ctx, ctx->device->pipeline_matmul_split_k_reduce, num_it);
+        ggml_pipeline_allocate_descriptor_sets(ctx->device, ctx->device->pipeline_matmul_split_k_reduce, num_it);
 
         if (ctx->prealloc_split_k == nullptr || ctx->prealloc_split_k->size < sizeof(float) * d_ne * split_k) {
             // Resize buffer
             if (ctx->prealloc_split_k != nullptr) {
                 ggml_vk_destroy_buffer(ctx->prealloc_split_k);
             }
-            ctx->prealloc_split_k = ggml_vk_create_buffer_check(ctx, sizeof(float) * d_ne * split_k, vk::MemoryPropertyFlagBits::eDeviceLocal);
+            ctx->prealloc_split_k = ggml_vk_create_buffer_check(ctx->device, sizeof(float) * d_ne * split_k, vk::MemoryPropertyFlagBits::eDeviceLocal);
         }
     }
 
-    ggml_vk_buffer_write(ctx, qx_buf, 0, qx, qx_sz);
-    ggml_vk_buffer_write(ctx, y_buf, 0, y, y_sz);
+    ggml_vk_buffer_write(qx_buf, 0, qx, qx_sz);
+    ggml_vk_buffer_write(y_buf, 0, y, y_sz);
 
     vk_context * subctx = ggml_vk_create_context(ctx, ctx->device->compute_queue);
     for (size_t i = 0; i < num_it; i++) {
-        ggml_vk_ctx_begin(ctx, subctx);
+        ggml_vk_ctx_begin(ctx->device, subctx);
         ggml_vk_matmul(
             ctx, subctx, p, ggml_vk_subbuffer(qx_buf), ggml_vk_subbuffer(y_buf), ggml_vk_subbuffer(d_buf), ggml_vk_subbuffer(ctx->prealloc_split_k),
             m, n, k,
@@ -5094,7 +5014,7 @@ static void ggml_vk_test_dequant_matmul(ggml_backend_vk_context * ctx, size_t m,
     auto end = std::chrono::high_resolution_clock::now();
 
     double time_ms = std::chrono::duration_cast<std::chrono::microseconds>(end-begin).count() / 1000.0;
-    ggml_vk_buffer_read(ctx, d_buf, 0, d, d_sz);
+    ggml_vk_buffer_read(d_buf, 0, d, d_sz);
 
     ggml_init_params iparams = {
         /*.mem_size   =*/ 1024*1024*1024,
@@ -5149,7 +5069,7 @@ static void ggml_vk_test_dequant_matmul(ggml_backend_vk_context * ctx, size_t m,
 
         if (split_k > 1) {
             float * split_k_buf = (float *) malloc(sizeof(float) * d_ne * split_k);
-            ggml_vk_buffer_read(ctx, ctx->prealloc_split_k, 0, split_k_buf, sizeof(float) * d_ne * split_k);
+            ggml_vk_buffer_read(ctx->prealloc_split_k, 0, split_k_buf, sizeof(float) * d_ne * split_k);
 
             std::cerr << "d_buf0: " << std::endl << std::endl;
             ggml_vk_print_matrix_area(split_k_buf, GGML_TYPE_F32, m, n, first_err_m, first_err_n, first_err_b);
@@ -5302,12 +5222,9 @@ static void ggml_vk_preallocate_buffers_graph(ggml_backend_vk_context * ctx, ggm
 
 static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
 #if defined(GGML_VULKAN_RUN_TESTS)
-    ctx->staging = ggml_vk_create_buffer_check(ctx, 100ul * 1024ul * 1024ul,
+    ctx->staging = ggml_vk_create_buffer_check(ctx->device, 100ul * 1024ul * 1024ul,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-    ggml_vk_test_transfer(ctx, 8192 * 1000, false);
-    ggml_vk_test_transfer(ctx, 8192 * 1000, true);
-
     ggml_vk_test_dequant(ctx, 7680, GGML_TYPE_F32);
     ggml_vk_test_dequant(ctx, 7680, GGML_TYPE_Q4_0);
     ggml_vk_test_dequant(ctx, 7680, GGML_TYPE_Q4_1);
@@ -5325,79 +5242,79 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
     ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 1, 0);
     ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 1, 1);
     ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 1, 2);
-    ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 4, 0);
-    ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 4, 1);
-    ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 4, 2);
+    // ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 4, 0);
+    // ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 4, 1);
+    // ggml_vk_test_matmul<float, float>(ctx, 128, 512, 512, 2, 100, 4, 2);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q4_0);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q4_0);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q4_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q4_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q4_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q4_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q4_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q4_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q4_0);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q4_1);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q4_1);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q4_1);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q4_1);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q4_1);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q4_1);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q4_1);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q4_1);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q4_1);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q5_0);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q5_0);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q5_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q5_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q5_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q5_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q5_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q5_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q5_0);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q5_1);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q5_1);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q5_1);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q5_1);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q5_1);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q5_1);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q5_1);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q5_1);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q5_1);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q8_0);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q8_0);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q8_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q8_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q8_0);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q8_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q8_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q8_0);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q8_0);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q2_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q2_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q2_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q2_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q2_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q2_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q2_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q2_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q2_K);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q3_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q3_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q3_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q3_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q3_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q3_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q3_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q3_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q3_K);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q4_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q4_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q4_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q4_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q4_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q4_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q4_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q4_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q4_K);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q5_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q5_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q5_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q5_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q5_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q5_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q5_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q5_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q5_K);
 
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 0, GGML_TYPE_Q6_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 1, GGML_TYPE_Q6_K);
     ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 1, 2, GGML_TYPE_Q6_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q6_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q6_K);
-    ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q6_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 0, GGML_TYPE_Q6_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 1, GGML_TYPE_Q6_K);
+    // ggml_vk_test_dequant_matmul(ctx, 128, 512, 512, 2, 100, 4, 2, GGML_TYPE_Q6_K);
 
     std::cerr << std::endl;
 
@@ -5429,9 +5346,9 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
         ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 1, 0);
         ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 1, 1);
         ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 1, 2);
-        ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 4, 0);
-        ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 4, 1);
-        ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 4, 2);
+        // ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 4, 0);
+        // ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 4, 1);
+        // ggml_vk_test_matmul<ggml_fp16_t, float>(ctx, vals[i], vals[i + 1], vals[i + 2], 2, num_it, 4, 2);
         std::cerr << std::endl;
     }
 
