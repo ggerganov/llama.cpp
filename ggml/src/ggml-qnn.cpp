@@ -96,9 +96,14 @@ public:
     bool is_valid() const { return _buffer != nullptr; }
 
     bool init_tensor(ggml_tensor *tensor) {
+        if (qnn::ggml_qnn_tensor::from_ggml_tensor(tensor)) {
+            QNN_LOG_INFO("tensor %s already initialized", tensor->name);
+            return true;
+        }
+
         auto qnn_tensor = std::make_unique<qnn::ggml_qnn_tensor>(tensor, _device, _instance);
         if (!qnn_tensor->is_valid()) {
-            QNN_LOG_WARN("Create ggml_qnn_tensor failed");
+            QNN_LOG_WARN("create ggml_qnn_tensor failed");
             return false;
         }
 

@@ -167,19 +167,23 @@ qnn::ggml_qnn_graph<_InputSize, _OutputSize> *get_qnn_graph_from_cache(
     auto &graph_cache = get_qnn_graph_cache(ctx, inputs, outputs);
     const auto *op_name = op < qnn::kGgmlUnaryOpStart ? ggml_op_name(ggml_op(op))
                                                       : ggml_unary_op_name(ggml_unary_op(op - qnn::kGgmlUnaryOpStart));
-    const std::string graph_key(op_name);
+    std::string graph_key(op_name);
+    for (auto &input : inputs) {
+        graph_key += "_";
+        graph_key += input->name;
+    }
+    for (auto &output : outputs) {
+        graph_key += "_";
+        graph_key += output->name;
+    }
+
     auto it = graph_cache.find(graph_key);
     graph_t *graph_ptr = nullptr;
     if (it != graph_cache.end()) {
         graph_ptr = it->second.get();
     } else {
-        std::string graph_name = graph_key + "_" + std::to_string(ctx->threads);
-        for (auto &input : inputs) {
-            graph_name += "_";
-            graph_name += input->name;
-        }
         auto graph =
-            std::make_unique<graph_t>(graph_name, (QNNBackend)(ctx->device), ctx->instance->get_qnn_context_handle(),
+            std::make_unique<graph_t>(graph_key, (QNNBackend)(ctx->device), ctx->instance->get_qnn_context_handle(),
                                       ctx->qnn_interface, ctx->socinfo.vtcm_size_in_mb);
 
         if (!graph->is_valid()) {
@@ -187,6 +191,7 @@ qnn::ggml_qnn_graph<_InputSize, _OutputSize> *get_qnn_graph_from_cache(
         }
 
         if (!qnn_bind_tensors_to_graph<_InputSize, _OutputSize>(graph.get(), qnn_op.c_str(), inputs, outputs)) {
+            QNN_LOG_ERROR("qnn_bind_tensors_to_graph failed\n");
             return nullptr;
         }
 
