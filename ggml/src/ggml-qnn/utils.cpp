@@ -30,7 +30,7 @@ Qnn_DataType_t device_datatype_from_ggml_datatype(ggml_type ggml_type) {
 }
 
 Qnn_TensorType_t device_tensortype_from_ggml_tensor(ggml_tensor *ggml_tensor) {
-    Qnn_TensorType_t qnn_tensor_type = QNN_TENSOR_TYPE_APP_WRITE;
+    Qnn_TensorType_t qnn_tensor_type = QNN_TENSOR_TYPE_NATIVE;
 
     if (ggml_tensor->flags & GGML_TENSOR_FLAG_INPUT) {
         qnn_tensor_type = QNN_TENSOR_TYPE_APP_WRITE;

@@ -74,7 +74,7 @@ bool qnn_bind_tensors_to_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *gra
     std::array<Qnn_Tensor_t, _InputSize> qnn_input_tensors;
     for (size_t i = 0; i < inputs.size(); ++i) {
         auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(inputs[i]);
-        if (!tensor || !tensor->bind_to_graph(*graph)) {
+        if (!tensor || !tensor->bind_to_graph(*graph, true)) {
             return false;
         }
 
@@ -84,7 +84,7 @@ bool qnn_bind_tensors_to_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *gra
     std::array<Qnn_Tensor_t, _OutputSize> qnn_output_tensors;
     for (size_t i = 0; i < outputs.size(); ++i) {
         auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(outputs[i]);
-        if (!tensor || !tensor->bind_to_graph(*graph)) {
+        if (!tensor || !tensor->bind_to_graph(*graph, false)) {
             return false;
         }
 
