@@ -180,6 +180,7 @@ qnn::ggml_qnn_graph<_InputSize, _OutputSize> *get_qnn_graph_from_cache(
     auto it = graph_cache.find(graph_key);
     graph_t *graph_ptr = nullptr;
     if (it != graph_cache.end()) {
+        QNN_LOG_DEBUG("found graph %s in cache\n", graph_key.c_str());
         graph_ptr = it->second.get();
     } else {
         auto graph =
