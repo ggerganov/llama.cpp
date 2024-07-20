@@ -101,12 +101,19 @@ public:
         _tensor_inputs = tensor_inputs;
         _tensor_outputs = tensor_outputs;
 
-        Qnn_OpConfig_t op_config = { /*.version = */ QNN_OPCONFIG_VERSION_1,
-                                     /*.v1 = */ { _graph_name.c_str(), QNN_OP_PACKAGE_NAME_QTI_AISW, op_name.c_str(),
-                                                  (uint32_t)_param_types.size(), _param_types.data(),
-                                                  (uint32_t)_tensor_inputs.size(), _tensor_inputs.data(),
-                                                  (uint32_t)_tensor_outputs.size(), _tensor_outputs.data() } };
-        auto error = _qnn_interface->qnn_graph_add_node(_graph_handle, op_config);
+        Qnn_OpConfig_t config = QNN_OPCONFIG_INIT;
+        config.version = QNN_OPCONFIG_VERSION_1;
+        auto &op_config = config.v1;
+        op_config.name = _graph_name.c_str();
+        op_config.packageName = QNN_OP_PACKAGE_NAME_QTI_AISW;
+        op_config.typeName = op_name.c_str();
+        op_config.numOfParams = (uint32_t)_param_types.size();
+        op_config.params = _param_types.data();
+        op_config.numOfInputs = (uint32_t)_tensor_inputs.size();
+        op_config.inputTensors = _tensor_inputs.data();
+        op_config.numOfOutputs = (uint32_t)_tensor_outputs.size();
+        op_config.outputTensors = _tensor_outputs.data();
+        auto error = _qnn_interface->qnn_graph_add_node(_graph_handle, config);
         if (error != QNN_SUCCESS) {
             auto *error_str = get_qnn_error_string(error);
             if (error_str) {
