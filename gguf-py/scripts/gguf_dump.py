@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -244,6 +245,13 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
         else:
             pretty_type = str(field.types[-1].name)
 
+        def escape_markdown_inline_code(value_string):
+            # Find the longest contiguous sequence of backticks in the string then
+            # wrap string with appropriate number of backticks required to escape it
+            max_backticks = max((len(match.group(0)) for match in re.finditer(r'`+', value_string)), default=0)
+            inline_code_marker = '`' * (max_backticks + 1)
+            return f"{inline_code_marker}{value_string}{inline_code_marker}"
+
         total_elements = len(field.data)
         value = ""
         if len(field.types) == 1:
@@ -252,11 +260,11 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                 truncate_length = 60
                 value_string = str(bytes(field.parts[-1]), encoding='utf-8')
                 if len(value_string) > truncate_length:
-                    head = value_string[:truncate_length // 2].replace("`", "\\`").rstrip()
-                    tail = value_string[-truncate_length // 2:].replace("`", "\\`").rstrip()
-                    value = "`{head}`...`{tail}`".format(head=head, tail=tail)
+                    head = escape_markdown_inline_code(value_string[:truncate_length // 2])
+                    tail = escape_markdown_inline_code(value_string[-truncate_length // 2:])
+                    value = "{head}...{tail}".format(head=head, tail=tail)
                 else:
-                    value = "`{strval}`".format(strval=value_string.replace("`", "\\`"))
+                    value = escape_markdown_inline_code(value_string)
             elif curr_type in reader.gguf_scalar_to_np:
                 value = str(field.parts[-1][0])
         else:
@@ -270,11 +278,11 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
                         truncate_length = 30
                         value_string = str(bytes(field.parts[-1 - (total_elements - element_pos - 1) * 2]), encoding='utf-8')
                         if len(value_string) > truncate_length:
-                            head = value_string[:truncate_length // 2].replace("`", "\\`").rstrip()
-                            tail = value_string[-truncate_length // 2:].replace("`", "\\`").rstrip()
-                            value = "`{head}`...`{tail}`".format(head=head, tail=tail)
+                            head = escape_markdown_inline_code(value_string[:truncate_length // 2])
+                            tail = escape_markdown_inline_code(value_string[-truncate_length // 2:])
+                            value = "{head}...{tail}".format(head=head, tail=tail)
                         else:
-                            value = "`{strval}`".format(strval=value_string.replace("`", "\\`"))
+                            value = escape_markdown_inline_code(value_string)
                         array_elements.append(value)
 
                 elif curr_type in reader.gguf_scalar_to_np:
