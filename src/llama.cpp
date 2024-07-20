@@ -5530,6 +5530,9 @@ static void llm_load_vocab(
                 vocab.tokenizer_clean_spaces = false;
                 vocab.tokenizer_ignore_merges = true;
                 vocab.tokenizer_add_bos = true;
+            } else if (
+                tokenizer_pre == "smollm") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMOLLM;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
