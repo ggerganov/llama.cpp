@@ -49,6 +49,7 @@ def unicode_data_iter():
         yield (cpt, cpt_lower, cpt_upper, categ, bidir)
 
 
+# see codepoint_categ::from_index() in unicode.h
 UNICODE_CATEGORY_TO_INDEX = {
     "Cn":  0,  # \p{Cn} Undefined
     "Cc":  1,  # \p{Cc} Control
@@ -123,7 +124,7 @@ table_uppercase.sort()
 table_nfd.sort()
 
 
-# run length encoding
+# run length encoding, see unicode_cpt_category() in unicode.cpp
 assert (max(UNICODE_CATEGORY_TO_INDEX.values()) < 32)
 codepoint_categs_runs = [codepoint_categs[0]]  # 5 bits categ + 11 bits length
 for cpt, categ in enumerate(codepoint_categs[1:], 1):

@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <array>
+#include <map>
 
 struct codepoint_categ {
     enum _category : uint16_t {
@@ -59,6 +61,18 @@ struct codepoint_categ {
 
     inline codepoint_categ(const uint16_t categ=0) : encoded{categ} {}
 
+    static codepoint_categ from_index(int index) {
+        static const std::array<codepoint_categ, 32> table = {
+            UNDEF, Cc, Cf, Co, Cs, Ll, Lm, Lo, Lt, Lu, Mc, Me, Mn, Nd, Nl, No, Pc, Pd, Pe, Pf, Pi, Po, Ps, Sc, Sk, Sm, So, Zl, Zp, Zs, UNDEF, UNDEF
+        };
+        return (size_t)index < table.size() ? table[index] : table[0];
+    }
+
+    inline void set_flag(_flags flags, bool value = true) {
+        flags = (_flags) (flags & ~SUBMASK);  // ignore category bits
+        encoded = value ? (encoded | flags) : (encoded & ~flags);
+    }
+
     inline uint8_t get_category() const { return encoded & MASK; }
     inline uint8_t get_subcategory() const { return encoded & SUBMASK; }
 
@@ -106,6 +120,18 @@ struct codepoint_categ {
     inline auto is_Zl() const { return (encoded & SUBMASK) == Zl; }
     inline auto is_Zp() const { return (encoded & SUBMASK) == Zp; }
     inline auto is_Zs() const { return (encoded & SUBMASK) == Zs; }
+
+    const char * c_str() const {
+        static const std::map<uint16_t, const char *> map = {
+            {UNDEF, "UNDEF"}, {C, "C"}, {L, "L"}, {M, "M"}, {N, "N"}, {P, "P"}, {S, "S"}, {Z, "Z"},
+            {Cc, "Cc"}, {Cf, "Cf"}, {Co, "Co"}, {Cs, "Cs"}, {Ll, "Ll"}, {Lm, "Lm"}, {Lo, "Lo"}, {Lt, "Lt"},
+            {Lu, "Lu"}, {Mc, "Mc"}, {Me, "Me"}, {Mn, "Mn"}, {Nd, "Nd"}, {Nl, "Nl"}, {No, "No"}, {Pc, "Pc"},
+            {Pd, "Pd"}, {Pe, "Pe"}, {Pf, "Pf"}, {Pi, "Pi"}, {Po, "Po"}, {Ps, "Ps"}, {Sc, "Sc"}, {Sk, "Sk"},
+            {Sm, "Sm"}, {So, "So"}, {Zl, "Zl"}, {Zp, "Zp"}, {Zs, "Zs"},
+        };
+        const auto it = map.find(encoded & SUBMASK);
+        return it == map.end() ? "INVALID" : it->second;
+    }
 
     uint16_t encoded;
 };

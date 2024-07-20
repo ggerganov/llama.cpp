@@ -113,38 +113,6 @@ uint32_t unicode_cpt_from_utf8(const std::string & utf8, size_t & offset) {
 //    return result;
 //}
 
-static std::vector<codepoint_flags> unicode_cpt_flags_array() {
-    std::vector<codepoint_flags> cpt_flags(MAX_CODEPOINTS, codepoint_flags::UNDEFINED);
-
-    assert (unicode_ranges_flags.front().first == 0);
-    assert (unicode_ranges_flags.back().first == MAX_CODEPOINTS);
-    for (size_t i = 1; i < unicode_ranges_flags.size(); ++i) {
-        const auto range_ini = unicode_ranges_flags[i-1];  // codepoint_ini, flags
-        const auto range_end = unicode_ranges_flags[i];    // codepoint_end, flags
-        for (uint32_t cpt = range_ini.first; cpt < range_end.first; ++cpt) {
-            cpt_flags[cpt] = range_ini.second;
-        }
-    }
-
-    for (auto cpt : unicode_set_whitespace) {
-        cpt_flags[cpt].is_whitespace = true;
-    }
-
-    for (auto p : unicode_map_lowercase) {
-        cpt_flags[p.second].is_lowercase = true;
-    }
-
-    for (auto p : unicode_map_uppercase) {
-        cpt_flags[p.second].is_uppercase = true;
-    }
-
-    for (auto &range : unicode_ranges_nfd) {  // start, last, nfd
-        cpt_flags[range.nfd].is_nfd = true;
-    }
-
-    return cpt_flags;
-}
-
 static std::unordered_map<uint8_t, std::string> unicode_byte_to_utf8_map() {
     std::unordered_map<uint8_t, std::string> map;
     for (int ch = 0x21; ch <= 0x7E; ++ch) {  // u'!' to u'~'
@@ -606,19 +574,48 @@ std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8) {
     return result;
 }
 
-codepoint_flags unicode_cpt_flags(const uint32_t cp) {
-    static const codepoint_flags undef(codepoint_flags::UNDEFINED);
-    static const auto cpt_flags = unicode_cpt_flags_array();
-    return cp < cpt_flags.size() ? cpt_flags[cp] : undef;
+codepoint_categ unicode_cpt_category(const uint32_t cp) {
+    static const std::vector<codepoint_categ> cpt_categs = [] {
+        std::vector<codepoint_categ> cpt_categs(MAX_CODEPOINTS, codepoint_categ::UNDEF);
+        uint32_t cpt = 0;
+        for (uint16_t rle : unicode_rle_codepoints_categs) {
+            const uint32_t index = rle & 31;
+            const uint32_t count = rle >> 5;
+            const auto categ = codepoint_categ::from_index(index);
+            //printf( "Codepoints 0x%05X to 0x%05X categ %s\n", cpt, cpt + count, categ.c_str());
+            for (uint32_t i = 0; i <= count; ++i) {
+                cpt_categs[cpt++] = categ;
+            }
+        }
+        assert (cpt == MAX_CODEPOINTS);
+
+        for (auto cpt : unicode_set_whitespace) {
+            cpt_categs[cpt].set_flag(codepoint_categ::WHITESPACE);
+        }
+
+        for (auto p : unicode_map_lowercase) {
+            cpt_categs[cpt].set_flag(codepoint_categ::LOWERCASE);
+        }
+
+        for (auto p : unicode_map_uppercase) {
+            cpt_categs[cpt].set_flag(codepoint_categ::UPPERCASE);
+        }
+
+        //for (auto &range : unicode_ranges_nfd) {  // start, last, nfd
+        //    cpt_categs[cpt].set_flag(codepoint_categ::NORM_NFD);
+        //}
+
+        return cpt_categs;
+    }();
+    return cp < cpt_categs.size() ? cpt_categs[cp] : codepoint_categ{};
 }
 
-codepoint_flags unicode_cpt_flags(const std::string & utf8) {
-    static const codepoint_flags undef(codepoint_flags::UNDEFINED);
+codepoint_categ unicode_cpt_category(const std::string & utf8) {
     if (utf8.empty()) {
-        return undef;  // undefined
+        return codepoint_categ{};  // undefined
     }
     size_t offset = 0;
-    return unicode_cpt_flags(unicode_cpt_from_utf8(utf8, offset));
+    return unicode_cpt_category(unicode_cpt_from_utf8(utf8, offset));
 }
 
 std::string unicode_byte_to_utf8(uint8_t byte) {
