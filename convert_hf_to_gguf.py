@@ -1310,6 +1310,7 @@ class RefactModel(Model):
         special_vocab._set_special_token("prefix", 1)
         special_vocab._set_special_token("suffix", 3)
         special_vocab._set_special_token("middle", 2)
+        special_vocab.chat_template = None  # do not add it twice
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -2466,13 +2467,7 @@ class GemmaModel(Model):
     model_arch = gguf.MODEL_ARCH.GEMMA
 
     def set_vocab(self):
-        tokens, scores, toktypes = self._create_vocab_sentencepiece()
-
-        self.gguf_writer.add_tokenizer_model("llama")
-        self.gguf_writer.add_tokenizer_pre("default")
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_scores(scores)
-        self.gguf_writer.add_token_types(toktypes)
+        self._set_vocab_sentencepiece()
 
         # TODO: these special tokens should be exported only for the CodeGemma family
         special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False,
@@ -2482,6 +2477,7 @@ class GemmaModel(Model):
         special_vocab._set_special_token("middle", 68)
         special_vocab._set_special_token("fsep",   70)
         special_vocab._set_special_token("eot",    107)
+        special_vocab.chat_template = None  # do not add it twice
         special_vocab.add_to_gguf(self.gguf_writer)
 
         self.gguf_writer.add_add_space_prefix(False)
