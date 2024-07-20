@@ -49,52 +49,41 @@ def unicode_data_iter():
         yield (cpt, cpt_lower, cpt_upper, categ, bidir)
 
 
-# see definition in unicode.h
-CODEPOINT_FLAG_UNDEFINED   = 0x0001  #
-CODEPOINT_FLAG_NUMBER      = 0x0002  # \p{N}
-CODEPOINT_FLAG_LETTER      = 0x0004  # \p{L}
-CODEPOINT_FLAG_SEPARATOR   = 0x0008  # \p{Z}
-CODEPOINT_FLAG_MARK        = 0x0010  # \p{M}
-CODEPOINT_FLAG_PUNCTUATION = 0x0020  # \p{P}
-CODEPOINT_FLAG_SYMBOL      = 0x0040  # \p{S}
-CODEPOINT_FLAG_CONTROL     = 0x0080  # \p{C}
-
-UNICODE_CATEGORY_TO_FLAG = {
-    "Cn": CODEPOINT_FLAG_UNDEFINED,    # Undefined
-    "Cc": CODEPOINT_FLAG_CONTROL,      # Control
-    "Cf": CODEPOINT_FLAG_CONTROL,      # Format
-    "Co": CODEPOINT_FLAG_CONTROL,      # Private Use
-    "Cs": CODEPOINT_FLAG_CONTROL,      # Surrrogate
-    "Ll": CODEPOINT_FLAG_LETTER,       # Lowercase Letter
-    "Lm": CODEPOINT_FLAG_LETTER,       # Modifier Letter
-    "Lo": CODEPOINT_FLAG_LETTER,       # Other Letter
-    "Lt": CODEPOINT_FLAG_LETTER,       # Titlecase Letter
-    "Lu": CODEPOINT_FLAG_LETTER,       # Uppercase Letter
-    "L&": CODEPOINT_FLAG_LETTER,       # Cased Letter
-    "Mc": CODEPOINT_FLAG_MARK,         # Spacing Mark
-    "Me": CODEPOINT_FLAG_MARK,         # Enclosing Mark
-    "Mn": CODEPOINT_FLAG_MARK,         # Nonspacing Mark
-    "Nd": CODEPOINT_FLAG_NUMBER,       # Decimal Number
-    "Nl": CODEPOINT_FLAG_NUMBER,       # Letter Number
-    "No": CODEPOINT_FLAG_NUMBER,       # Other Number
-    "Pc": CODEPOINT_FLAG_PUNCTUATION,  # Connector Punctuation
-    "Pd": CODEPOINT_FLAG_PUNCTUATION,  # Dash Punctuation
-    "Pe": CODEPOINT_FLAG_PUNCTUATION,  # Close Punctuation
-    "Pf": CODEPOINT_FLAG_PUNCTUATION,  # Final Punctuation
-    "Pi": CODEPOINT_FLAG_PUNCTUATION,  # Initial Punctuation
-    "Po": CODEPOINT_FLAG_PUNCTUATION,  # Other Punctuation
-    "Ps": CODEPOINT_FLAG_PUNCTUATION,  # Open Punctuation
-    "Sc": CODEPOINT_FLAG_SYMBOL,       # Currency Symbol
-    "Sk": CODEPOINT_FLAG_SYMBOL,       # Modifier Symbol
-    "Sm": CODEPOINT_FLAG_SYMBOL,       # Math Symbol
-    "So": CODEPOINT_FLAG_SYMBOL,       # Other Symbol
-    "Zl": CODEPOINT_FLAG_SEPARATOR,    # Line Separator
-    "Zp": CODEPOINT_FLAG_SEPARATOR,    # Paragraph Separator
-    "Zs": CODEPOINT_FLAG_SEPARATOR,    # Space Separator
+UNICODE_CATEGORY_TO_INDEX = {
+    "Cn":  0,  # \p{Cn} Undefined
+    "Cc":  1,  # \p{Cc} Control
+    "Cf":  2,  # \p{Cf} Format
+    "Co":  3,  # \p{Co} Private Use
+    "Cs":  4,  # \p{Cs} Surrrogate
+    "Ll":  5,  # \p{Ll} Lowercase Letter
+    "Lm":  6,  # \p{Lm} Modifier Letter
+    "Lo":  7,  # \p{Lo} Other Letter
+    "Lt":  8,  # \p{Lt} Titlecase Letter
+    "Lu":  9,  # \p{Lu} Uppercase Letter
+    "Mc": 10,  # \p{Mc} Spacing Mark
+    "Me": 11,  # \p{Me} Enclosing Mark
+    "Mn": 12,  # \p{Mn} Nonspacing Mark
+    "Nd": 13,  # \p{Nd} Decimal Number
+    "Nl": 14,  # \p{Nl} Letter Number
+    "No": 15,  # \p{No} Other Number
+    "Pc": 16,  # \p{Pc} Connector Punctuation
+    "Pd": 17,  # \p{Pd} Dash Punctuation
+    "Pe": 18,  # \p{Pe} Close Punctuation
+    "Pf": 19,  # \p{Pf} Final Punctuation
+    "Pi": 20,  # \p{Pi} Initial Punctuation
+    "Po": 21,  # \p{Po} Other Punctuation
+    "Ps": 22,  # \p{Ps} Open Punctuation
+    "Sc": 23,  # \p{Sc} Currency Symbol
+    "Sk": 24,  # \p{Sk} Modifier Symbol
+    "Sm": 25,  # \p{Sm} Math Symbol
+    "So": 26,  # \p{So} Other Symbol
+    "Zl": 27,  # \p{Zl} Line Separator
+    "Zp": 28,  # \p{Zp} Paragraph Separator
+    "Zs": 29,  # \p{Zs} Space Separator
 }
 
 
-codepoint_flags = array.array('H', [CODEPOINT_FLAG_UNDEFINED]) * MAX_CODEPOINTS
+codepoint_categs = array.array('B', [0]) * MAX_CODEPOINTS  # Undefined
 table_whitespace = []
 table_lowercase = []
 table_uppercase = []
@@ -105,7 +94,7 @@ for (cpt, cpt_lower, cpt_upper, categ, bidir) in unicode_data_iter():
     char = chr(cpt)
 
     # codepoint category flags
-    codepoint_flags[cpt] = UNICODE_CATEGORY_TO_FLAG[categ]
+    codepoint_categs[cpt] = UNICODE_CATEGORY_TO_INDEX[categ]
 
     # lowercase conversion
     if cpt_lower:
@@ -134,12 +123,17 @@ table_uppercase.sort()
 table_nfd.sort()
 
 
-# group ranges with same flags
-ranges_flags: list[tuple[int, int]] = [(0, codepoint_flags[0])]  # start, flags
-for codepoint, flags in enumerate(codepoint_flags):
-    if flags != ranges_flags[-1][1]:
-        ranges_flags.append((codepoint, flags))
-ranges_flags.append((MAX_CODEPOINTS, 0x0000))
+# run length encoding
+assert (max(UNICODE_CATEGORY_TO_INDEX.values()) < 32)
+codepoint_categs_runs = [codepoint_categs[0]]  # 5 bits categ + 11 bits length
+for cpt, categ in enumerate(codepoint_categs[1:], 1):
+    prev = codepoint_categs_runs[-1]
+    if prev <= (0xFFFF - 32) and (prev & 31) == categ:
+        codepoint_categs_runs[-1] += 32  # increment run length
+    else:
+        codepoint_categs_runs.append(categ)  # new run value
+    assert (codepoint_categs_runs[-1] < 0xFFFF)
+assert (MAX_CODEPOINTS == sum((rle >> 5) + 1 for rle in codepoint_categs_runs))
 
 
 # group ranges with same nfd
@@ -153,7 +147,7 @@ for codepoint, norm in table_nfd:
 
 
 # Generate 'unicode-data.cpp':
-#   python ./scripts//gen-unicode-data.py > unicode-data.cpp
+#   python ./scripts//gen-unicode-data.py > ./src/unicode-data.cpp
 
 def out(line=""):
     print(line, end='\n')  # noqa
@@ -170,9 +164,9 @@ out("""\
 #include <unordered_set>
 """)
 
-out("const std::vector<std::pair<uint32_t, uint16_t>> unicode_ranges_flags = {  // start, flags // last=next_start-1")
-for codepoint, flags in ranges_flags:
-    out("{0x%06X, 0x%04X}," % (codepoint, flags))
+out("const std::vector<uint16_t> unicode_rle_codepoints_categs = {  // run length encoding, 5 bits categ + 11 bits length")
+for rle in codepoint_categs_runs:
+    out("0x%04X," % rle)
 out("};\n")
 
 out("const std::unordered_set<uint32_t> unicode_set_whitespace = {")
