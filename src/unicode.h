@@ -4,46 +4,110 @@
 #include <string>
 #include <vector>
 
-struct codepoint_flags {
-    enum {
-        UNDEFINED       = 0x0001,
-        NUMBER          = 0x0002,  // regex: \p{N}
-        LETTER          = 0x0004,  // regex: \p{L}
-        SEPARATOR       = 0x0008,  // regex: \p{Z}
-        ACCENT_MARK     = 0x0010,  // regex: \p{M}
-        PUNCTUATION     = 0x0020,  // regex: \p{P}
-        SYMBOL          = 0x0040,  // regex: \p{S}
-        CONTROL         = 0x0080,  // regex: \p{C}
-        MASK_CATEGORIES = 0x00FF,
+struct codepoint_categ {
+    enum _category : uint16_t {
+        UNDEF = 0,   // \p{Cn} Undefined
+        C = 1 << 0,  // \p{C}  Control
+        L = 1 << 1,  // \p{L}  Letter
+        M = 1 << 2,  // \p{M}  Mark
+        N = 1 << 3,  // \p{N}  Number
+        P = 1 << 4,  // \p{P}  Punctuation
+        S = 1 << 5,  // \p{S}  Symbol
+        Z = 1 << 6,  // \p{Z}  Separator
+        MASK = (1 << 7) - 1  // 7 bits
     };
 
-    // codepoint type
-    uint16_t is_undefined   : 1;
-    uint16_t is_number      : 1;  // regex: \p{N}
-    uint16_t is_letter      : 1;  // regex: \p{L}
-    uint16_t is_separator   : 1;  // regex: \p{Z}
-    uint16_t is_accent_mark : 1;  // regex: \p{M}
-    uint16_t is_punctuation : 1;  // regex: \p{P}
-    uint16_t is_symbol      : 1;  // regex: \p{S}
-    uint16_t is_control     : 1;  // regex: \p{C}
-    // helper flags
-    uint16_t is_whitespace  : 1;  // regex: \s
-    uint16_t is_lowercase   : 1;
-    uint16_t is_uppercase   : 1;
-    uint16_t is_nfd         : 1;
+    enum _subcategory : uint16_t {
+        Cc = C | (1 << 7),  // \p{Cc} Control
+        Cf = C | (2 << 7),  // \p{Cf} Format
+        Co = C | (3 << 7),  // \p{Co} Private Use
+        Cs = C | (4 << 7),  // \p{Cs} Surrrogate
+        Ll = L | (1 << 7),  // \p{Ll} Lowercase Letter
+        Lm = L | (2 << 7),  // \p{Lm} Modifier Letter
+        Lo = L | (3 << 7),  // \p{Lo} Other Letter
+        Lt = L | (4 << 7),  // \p{Lt} Titlecase Letter
+        Lu = L | (5 << 7),  // \p{Lu} Uppercase Letter
+        Mc = M | (1 << 7),  // \p{Mc} Spacing Mark
+        Me = M | (2 << 7),  // \p{Me} Enclosing Mark
+        Mn = M | (3 << 7),  // \p{Mn} Nonspacing Mark
+        Nd = N | (1 << 7),  // \p{Nd} Decimal Number
+        Nl = N | (2 << 7),  // \p{Nl} Letter Number
+        No = N | (3 << 7),  // \p{No} Other Number
+        Pc = P | (1 << 7),  // \p{Pc} Connector Punctuation
+        Pd = P | (2 << 7),  // \p{Pd} Dash Punctuation
+        Pe = P | (3 << 7),  // \p{Pe} Close Punctuation
+        Pf = P | (4 << 7),  // \p{Pf} Final Punctuation
+        Pi = P | (5 << 7),  // \p{Pi} Initial Punctuation
+        Po = P | (6 << 7),  // \p{Po} Other Punctuation
+        Ps = P | (7 << 7),  // \p{Ps} Open Punctuation
+        Sc = S | (1 << 7),  // \p{Sc} Currency Symbol
+        Sk = S | (2 << 7),  // \p{Sk} Modifier Symbol
+        Sm = S | (3 << 7),  // \p{Sm} Math Symbol
+        So = S | (4 << 7),  // \p{So} Other Symbol
+        Zl = Z | (1 << 7),  // \p{Zl} Line Separator
+        Zp = Z | (2 << 7),  // \p{Zp} Paragraph Separator
+        Zs = Z | (3 << 7),  // \p{Zs} Space Separator
+        SUBMASK = (1 << 10) - 1  // 7+3 bits
+    };
 
-    // decode from uint16
-    inline codepoint_flags(const uint16_t flags=0) {
-        *reinterpret_cast<uint16_t*>(this) = flags;
-    }
+    enum _flags : uint16_t {
+        WHITESPACE = (1 << 10),  // regex: \s
+        LOWERCASE  = (1 << 11),
+        UPPERCASE  = (1 << 12),
+        //Norm NFD/NFC  = ...,
+    };
 
-    inline uint16_t as_uint() const {
-        return *reinterpret_cast<const uint16_t*>(this);
-    }
+    inline codepoint_categ(const uint16_t categ=0) : encoded{categ} {}
 
-    inline uint16_t category_flag() const {
-        return this->as_uint() & MASK_CATEGORIES;
-    }
+    inline uint8_t get_category() const { return encoded & MASK; }
+    inline uint8_t get_subcategory() const { return encoded & SUBMASK; }
+
+    inline bool is_undefined() const { return !encoded; }
+    inline bool is_defined() const { return encoded; }
+
+    inline auto is_whitespace() const { return encoded & WHITESPACE; }
+    inline auto is_lowercase()  const { return encoded & LOWERCASE; }
+    inline auto is_uppercase()  const { return encoded & UPPERCASE; }
+
+    inline auto is_C() const { return encoded & C; }
+    inline auto is_L() const { return encoded & L; }
+    inline auto is_M() const { return encoded & M; }
+    inline auto is_N() const { return encoded & N; }
+    inline auto is_P() const { return encoded & P; }
+    inline auto is_S() const { return encoded & S; }
+    inline auto is_Z() const { return encoded & Z; }
+
+    inline auto is_Cc() const { return (encoded & SUBMASK) == Cc; }
+    inline auto is_Cf() const { return (encoded & SUBMASK) == Cf; }
+    inline auto is_Co() const { return (encoded & SUBMASK) == Co; }
+    inline auto is_Cs() const { return (encoded & SUBMASK) == Cs; }
+    inline auto is_Ll() const { return (encoded & SUBMASK) == Ll; }
+    inline auto is_Lm() const { return (encoded & SUBMASK) == Lm; }
+    inline auto is_Lo() const { return (encoded & SUBMASK) == Lo; }
+    inline auto is_Lt() const { return (encoded & SUBMASK) == Lt; }
+    inline auto is_Lu() const { return (encoded & SUBMASK) == Lu; }
+    inline auto is_Mc() const { return (encoded & SUBMASK) == Mc; }
+    inline auto is_Me() const { return (encoded & SUBMASK) == Me; }
+    inline auto is_Mn() const { return (encoded & SUBMASK) == Mn; }
+    inline auto is_Nd() const { return (encoded & SUBMASK) == Nd; }
+    inline auto is_Nl() const { return (encoded & SUBMASK) == Nl; }
+    inline auto is_No() const { return (encoded & SUBMASK) == No; }
+    inline auto is_Pc() const { return (encoded & SUBMASK) == Pc; }
+    inline auto is_Pd() const { return (encoded & SUBMASK) == Pd; }
+    inline auto is_Pe() const { return (encoded & SUBMASK) == Pe; }
+    inline auto is_Pf() const { return (encoded & SUBMASK) == Pf; }
+    inline auto is_Pi() const { return (encoded & SUBMASK) == Pi; }
+    inline auto is_Po() const { return (encoded & SUBMASK) == Po; }
+    inline auto is_Ps() const { return (encoded & SUBMASK) == Ps; }
+    inline auto is_Sc() const { return (encoded & SUBMASK) == Sc; }
+    inline auto is_Sk() const { return (encoded & SUBMASK) == Sk; }
+    inline auto is_Sm() const { return (encoded & SUBMASK) == Sm; }
+    inline auto is_So() const { return (encoded & SUBMASK) == So; }
+    inline auto is_Zl() const { return (encoded & SUBMASK) == Zl; }
+    inline auto is_Zp() const { return (encoded & SUBMASK) == Zp; }
+    inline auto is_Zs() const { return (encoded & SUBMASK) == Zs; }
+
+    uint16_t encoded;
 };
 
 
@@ -53,8 +117,8 @@ std::vector<uint32_t> unicode_cpts_from_utf8(const std::string & utf8);
 
 std::vector<uint32_t> unicode_cpts_normalize_nfd(const std::vector<uint32_t> & cpts);
 
-codepoint_flags unicode_cpt_flags(const uint32_t cp);
-codepoint_flags unicode_cpt_flags(const std::string & utf8);
+codepoint_categ unicode_cpt_category(const uint32_t cp);
+codepoint_categ unicode_cpt_category(const std::string & utf8);
 
 std::string unicode_byte_to_utf8(uint8_t byte);
 uint8_t unicode_utf8_to_byte(const std::string & utf8);
