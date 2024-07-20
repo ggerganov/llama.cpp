@@ -250,6 +250,11 @@ def dump_markdown_metadata(reader: GGUFReader, args: argparse.Namespace) -> None
             # wrap string with appropriate number of backticks required to escape it
             max_backticks = max((len(match.group(0)) for match in re.finditer(r'`+', value_string)), default=0)
             inline_code_marker = '`' * (max_backticks + 1)
+
+            # If the string starts or ends with a backtick, add a space at the beginning and end
+            if value_string.startswith('`') or value_string.endswith('`'):
+                value_string = f" {value_string} "
+
             return f"{inline_code_marker}{value_string}{inline_code_marker}"
 
         total_elements = len(field.data)
