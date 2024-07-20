@@ -44,7 +44,7 @@ class Metadata:
     datasets: Optional[list[str]] = None
 
     @staticmethod
-    def load(metadata_override_path: Optional[Path] = None, model_path: Optional[Path] = None, model_name: Optional[str] = None, model_card_path: Optional[Path] = None, total_params: int = 0) -> Metadata:
+    def load(metadata_override_path: Optional[Path] = None, model_path: Optional[Path] = None, model_name: Optional[str] = None, total_params: int = 0) -> Metadata:
         # This grabs as many contextual authorship metadata as possible from the model repository
         # making any conversion as required to match the gguf kv store metadata format
         # as well as giving users the ability to override any authorship metadata that may be incorrect
@@ -52,14 +52,12 @@ class Metadata:
         # Create a new Metadata instance
         metadata = Metadata()
 
-        if model_card_path is None:
-            model_card_path = model_path
-
-        model_card = Metadata.load_model_card(model_card_path)
+        model_card = Metadata.load_model_card(model_path)
         hf_params = Metadata.load_hf_parameters(model_path)
+        # TODO: load adapter_config.json when possible, it usually contains the base model of the LoRA adapter
 
         # heuristics
-        metadata = Metadata.apply_metadata_heuristic(metadata, model_card, hf_params, model_card_path, total_params)
+        metadata = Metadata.apply_metadata_heuristic(metadata, model_card, hf_params, model_path, total_params)
 
         # Metadata Override File Provided
         # This is based on LLM_KV_NAMES mapping in llama.cpp
@@ -232,11 +230,14 @@ class Metadata:
                 name_parts[i] = part
             # Some easy to recognize finetune names
             elif i > 0 and re.fullmatch(r'chat|instruct|vision|lora', part, re.IGNORECASE):
-                name_types[i].add("finetune")
-                if part.lower() == "lora":
-                    name_parts[i] = "LoRA"
+                if total_params < 0 and part.lower() == "lora":
+                    # ignore redundant "lora" in the finetune part when the output is a lora adapter
+                    name_types[i].add("type")
+                else:
+                    name_types[i].add("finetune")
 
         # Ignore word-based size labels when there is at least a number-based one present
+        # TODO: should word-based size labels always be removed instead?
         if any(c.isdecimal() for n, t in zip(name_parts, name_types) if "size_label" in t for c in n):
             for n, t in zip(name_parts, name_types):
                 if "size_label" in t:

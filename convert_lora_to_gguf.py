@@ -290,7 +290,7 @@ if __name__ == '__main__':
         fname_out = args.outfile
     else:
         # output in the same directory as the model by default
-        fname_out = dir_lora / 'ggml-lora-{ftype}.gguf'
+        fname_out = dir_lora
 
     if os.path.exists(input_model):
         # lazy import load_file only if lora is in safetensors format.
