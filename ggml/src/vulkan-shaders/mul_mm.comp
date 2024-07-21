@@ -71,7 +71,7 @@ shared FLOAT_TYPE buf_a[BM * (BK+1)];
 shared FLOAT_TYPE buf_b[BN * (BK+1)];
 
 #ifdef MUL_MAT_ID
-shared u16vec2 row_ids[2048];
+shared u16vec2 row_ids[3072];
 #endif
 
 void main() {
