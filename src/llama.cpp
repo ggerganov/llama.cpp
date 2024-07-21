@@ -5533,6 +5533,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "smollm") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMOLLM;
+                vocab.tokenizer_clean_spaces = false;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
