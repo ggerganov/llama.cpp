@@ -15849,10 +15849,10 @@ struct llm_tokenizer_bpe {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_CHAMELEON:
-		// Note: in theory, the special token (sentinel and image token) regex_exprs below
-		// are unnecessary, as they are split in `tokenizer_st_partition` anyway.
-		// However, since the upstream pre-tokenizer uses them, they are also
-		// included here (see https://huggingface.co/facebook/chameleon-7b).
+                // Note: in theory, the special token (sentinel and image token) regex_exprs below
+                // are unnecessary, as they are split in `tokenizer_st_partition` anyway.
+                // However, since the upstream pre-tokenizer uses them, they are also
+                // included here (see https://huggingface.co/facebook/chameleon-7b).
                 regex_exprs = {
                     "<sentinel:[0-9]+>",  // Sentinel tokens
                     "(IMGIMG)((A|B|C|D|E|F|G|H|I){1,4})Z",  // Image tokens
