@@ -3,7 +3,7 @@
 #include "common.h"
 #include "clip.h"
 #include "llava.h"
-#include "minicpmv_wrapper.h"
+#include "minicpmv-wrapper.h"
 #include "llama.h"
 
 #include <cstdio>

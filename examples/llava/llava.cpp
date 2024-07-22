@@ -413,7 +413,7 @@ void llava_image_embed_free(struct llava_image_embed * embed) {
     free(embed);
 }
 
-static bool encode_image_with_clip_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos, struct load_image_size * load_image_size) {
+static bool encode_image_with_clip_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos, struct clip_image_size * load_image_size) {
     // std::vector<clip_image_f32*> img_res_v; 
     // format VectN x H x W x RGB (N x 448 x 448 x 3)
     clip_image_f32 * img_res_v = clip_image_f32_init();
@@ -686,10 +686,10 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
             float* image_embed = NULL;
             int n_image_pos = 0;
             int patch_size=14;
-            struct load_image_size * load_image_size = load_image_size_init();
-            load_image_size->image_size_width = imgs[i][j]->nx;
-            load_image_size->image_size_height = imgs[i][j]->ny; 
-            LOG_TEE("%s : %d %d\n", __func__, load_image_size->image_size_width, load_image_size->image_size_height);
+            struct clip_image_size * load_image_size = clip_image_size_init();
+            load_image_size->width = imgs[i][j]->nx;
+            load_image_size->height = imgs[i][j]->ny; 
+            LOG_TEE("%s : %d %d\n", __func__, load_image_size->width, load_image_size->height);
             bool image_embed_result = llava_image_embed_make_with_clip_img_uhd(ctx_clip, n_threads, only_v2_5_reshape_by_patch(imgs[i][j], patch_size), &image_embed, &n_image_pos, load_image_size);
             if (!image_embed_result) {
                 LOG_TEE("%s: coulnd't embed the image\n", __func__);
@@ -705,7 +705,7 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
     return results;
 }
 
-bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out, struct load_image_size * load_image_size) {
+bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out, struct clip_image_size * load_image_size) {
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*6); // TODO: base on gridsize/llava model
     if (!image_embd) {
         LOG_TEE("Unable to allocate memory for image embeddings\n");
@@ -721,50 +721,6 @@ bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads
     *image_embd_out = image_embd;
     *n_img_pos_out = n_img_pos;
 
-    return true;
-}
-
-bool llava_image_embed_make_with_clip_img_ollama(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
-    auto embeds = llava_image_embed_make_with_bytes_uhd(ctx_clip, n_threads, img);
-    auto image_embed_slices = embeds->image_embeds;
-    if (!image_embed_slices[0][0]){
-        LOG_TEE("%s: failed to embeding image\n", __func__);
-        return false;
-    }
-    std::string fname = "./examples/minicpm-v2.5/slice_token_for_ollama.raw";
-    unsigned char* slice_token;
-    long image_bytes_length;
-    auto loaded = load_file_to_bytes(fname.c_str(), &slice_token, &image_bytes_length);
-    if (!loaded) {
-        LOG_TEE("%s: failed to load %s\n", __func__, fname.c_str());
-        return false;
-    }
-
-    float * all_image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*61);
-    int all_n_img_pos=0;
-    int token_len = clip_n_mmproj_embd(ctx_clip)*sizeof(float);
-
-    std::memcpy(all_image_embd+token_len*all_n_img_pos++, slice_token, token_len);
-    std::memcpy(all_image_embd+token_len*all_n_img_pos, image_embed_slices[0][0]->embed, 96*token_len);
-    all_n_img_pos+=clip_n_patches(ctx_clip);
-    std::memcpy(all_image_embd+token_len*all_n_img_pos++, slice_token+token_len, token_len);
-    if (image_embed_slices.size() > 1) {
-        std::memcpy(all_image_embd+token_len*all_n_img_pos++, slice_token+token_len*2, token_len);
-        for (size_t i = 1; i < image_embed_slices.size(); ++i) {
-            for (size_t j = 0; j < image_embed_slices[i].size(); ++j) {
-                std::memcpy(all_image_embd+token_len*all_n_img_pos++, slice_token, token_len);
-                std::memcpy(all_image_embd+token_len*all_n_img_pos, image_embed_slices[i][j]->embed, 96*token_len);
-                all_n_img_pos+=clip_n_patches(ctx_clip);
-                std::memcpy(all_image_embd+token_len*all_n_img_pos++, slice_token+token_len, token_len);
-                if (j == image_embed_slices[i].size() - 1) {
-                    std::memcpy(all_image_embd+token_len*all_n_img_pos++, slice_token+token_len*4, token_len);
-                }
-            }
-        }
-        std::memcpy(all_image_embd+token_len*all_n_img_pos++, slice_token+token_len*3, token_len);
-    }
-    *image_embd_out = all_image_embd;
-    *n_img_pos_out = all_n_img_pos;
     return true;
 }
 

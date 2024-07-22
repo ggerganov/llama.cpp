@@ -2,7 +2,7 @@
 #include "common.h"
 #include "clip.h"
 #include "llava.h"
-#include "minicpmv_wrapper.h"
+#include "minicpmv-wrapper.h"
 #include "llama.h"
 #include <cstdio>
 #include <cstdlib>
@@ -58,7 +58,7 @@ struct clip_ctx * clip_init_context(gpt_params * params) {
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
     }
-    struct load_image_size * load_image_size = load_image_size_init();
+    struct clip_image_size * load_image_size = clip_image_size_init();
     auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1, load_image_size);
     return ctx_clip;
 }
@@ -99,8 +99,7 @@ bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
 bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
     std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
-    eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
-    return true;
+    return eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
 }
 
 void process_image(struct minicpmv_context * ctx_llava, std::vector<std::vector<struct llava_image_embed *>> image_embed_slices, gpt_params * params, int &n_past) {
