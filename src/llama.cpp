@@ -15850,7 +15850,7 @@ struct llm_tokenizer_bpe {
                 regex_exprs = {
                     "<sentinel:[0-9]+>",  // Sentinel tokens
                     "(IMGIMG)((A|B|C|D|E|F|G|H|I){1,4})Z",  // Image tokens
-                    "([\t\n]|    |  )",  // directly from tokenizer.json
+                    "([\\t\\n]|    |  )",  // directly from tokenizer.json
                     "\\p{N}", // Individual digits
                     "[\\p{P}\\$\\+<=>\\^~\\|`]+",  // Punctuation
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
