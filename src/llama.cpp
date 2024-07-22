@@ -14122,7 +14122,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
             if (lctx.inp_KQ_mask) {
                 GGML_ASSERT(ggml_backend_buffer_is_host(lctx.inp_KQ_mask->buffer));
-                data_swa = (float *) lctx.inp_KQ_mask->data;
+                data = (float *) lctx.inp_KQ_mask->data;
             }
 
             if (lctx.inp_KQ_mask_swa) {
