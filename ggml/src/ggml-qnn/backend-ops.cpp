@@ -19,10 +19,8 @@ bool qnn_is_valid_params(ggml_backend_qnn_context *ctx, const ggml_tensor *src, 
     }
 
     auto instance = ctx->instance;
-    auto *tensor0 = qnn::ggml_qnn_tensor::from_ggml_tensor(src);
-    auto *tensor1 = qnn::ggml_qnn_tensor::from_ggml_tensor(dst);
-    if (!instance || !tensor0 || !tensor1) {
-        QNN_LOG_WARN("invalid tensors\n");
+    if (!instance) {
+        QNN_LOG_WARN("invalid instance\n");
         return false;
     }
 
@@ -37,11 +35,8 @@ bool qnn_is_valid_params(ggml_backend_qnn_context *ctx, const ggml_tensor *src0,
     }
 
     auto instance = ctx->instance;
-    auto *tensor0 = qnn::ggml_qnn_tensor::from_ggml_tensor(src0);
-    auto *tensor1 = qnn::ggml_qnn_tensor::from_ggml_tensor(src1);
-    auto *tensor2 = qnn::ggml_qnn_tensor::from_ggml_tensor(dst);
-    if (!instance || !tensor0 || !tensor1 || !tensor2) {
-        QNN_LOG_WARN("invalid tensors\n");
+    if (!instance) {
+        QNN_LOG_WARN("invalid instance\n");
         return false;
     }
 
@@ -67,104 +62,29 @@ void print_ggml_tensor(const ggml_tensor *tensor) {
                   tensor->nb[0], tensor->nb[1], tensor->nb[2]);
 }
 
-template <size_t _InputSize, size_t _OutputSize>
-bool qnn_bind_tensors_to_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *graph, const std::string &op_name,
-                               const std::array<const ggml_tensor *, _InputSize> &inputs,
-                               const std::array<ggml_tensor *, _OutputSize> &outputs) {
-    std::array<Qnn_Tensor_t, _InputSize> qnn_input_tensors;
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(inputs[i]);
-        if (!tensor || !tensor->bind_to_graph(*graph, true)) {
-            return false;
-        }
-
-        qnn_input_tensors[i] = tensor->get_qnn_tensor();
-    }
-
-    std::array<Qnn_Tensor_t, _OutputSize> qnn_output_tensors;
-    for (size_t i = 0; i < outputs.size(); ++i) {
-        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(outputs[i]);
-        if (!tensor || !tensor->bind_to_graph(*graph, false)) {
-            return false;
-        }
-
-        qnn_output_tensors[i] = tensor->get_qnn_tensor();
-    }
-
-    if (!graph->add_nodes(op_name, qnn_input_tensors, qnn_output_tensors)) {
-        return false;
-    }
-
-    return true;
+template <size_t _Size>
+qnn::ggml_tensor_array_t to_ggml_tensor_array(const std::array<ggml_tensor *, _Size> &array) {
+    return qnn::ggml_tensor_array_t(array.data(), array.data() + _Size);
 }
 
 template <size_t _InputSize, size_t _OutputSize>
-bool execute_graph(qnn::ggml_qnn_graph<_InputSize, _OutputSize> *graph,
-                   const std::array<const ggml_tensor *, _InputSize> &inputs,
+bool execute_graph(qnn::ggml_qnn_graph *graph, const std::array<ggml_tensor *, _InputSize> &inputs,
                    const std::array<ggml_tensor *, _OutputSize> &outputs) {
-
-    std::array<Qnn_Tensor_t, _InputSize> qnn_input_tensors;
-    for (size_t i = 0; i < inputs.size(); ++i) {
-        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(inputs[i]);
-        if (!tensor || !tensor->write_to_qnn_tensor()) {
-            QNN_LOG_WARN("write_to_qnn_tensor failed\n");
-            return false;
-        }
-
-        qnn_input_tensors[i] = tensor->get_qnn_tensor();
-    }
-
-    std::array<Qnn_Tensor_t, _OutputSize> qnn_output_tensors;
-    for (size_t i = 0; i < outputs.size(); ++i) {
-        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(outputs[i]);
-        if (!tensor) {
-            return false;
-        }
-
-        qnn_output_tensors[i] = tensor->get_qnn_tensor();
-    }
-
-    if (!graph->execute(qnn_input_tensors, qnn_output_tensors)) {
+    if (!graph->execute(to_ggml_tensor_array<_InputSize>(inputs), to_ggml_tensor_array<_OutputSize>(outputs))) {
         QNN_LOG_WARN("execute failed\n");
         return false;
     }
 
-    for (auto &output : outputs) {
-        auto tensor = qnn::ggml_qnn_tensor::from_ggml_tensor(output);
-        if (!tensor || !tensor->read_from_qnn_tensor()) {
-            QNN_LOG_WARN("read_from_qnn_tensors failed\n");
-            return false;
-        }
-    }
-
     return true;
 }
 
-qnn::ggml_qnn_unary_graph_cache_t &get_qnn_graph_cache(ggml_backend_qnn_context *ctx,
-                                                       const std::array<const ggml_tensor *, 1> &inputs,
-                                                       const std::array<ggml_tensor *, 1> &outputs) {
-    GGML_UNUSED(inputs);
-    GGML_UNUSED(outputs);
-    return ctx->qnn_unary_graph_cache;
-}
-
-qnn::ggml_qnn_binary_graph_cache_t &get_qnn_graph_cache(ggml_backend_qnn_context *ctx,
-                                                        const std::array<const ggml_tensor *, 2> &inputs,
-                                                        const std::array<ggml_tensor *, 1> &outputs) {
-    GGML_UNUSED(inputs);
-    GGML_UNUSED(outputs);
-    return ctx->qnn_binary_graph_cache;
-}
-
 template <size_t _InputSize, size_t _OutputSize>
-qnn::ggml_qnn_graph<_InputSize, _OutputSize> *get_qnn_graph_from_cache(
-    ggml_backend_qnn_context *ctx, size_t op, const std::string &qnn_op,
-    const std::array<const ggml_tensor *, _InputSize> &inputs, const std::array<ggml_tensor *, _OutputSize> &outputs) {
-    using graph_t = qnn::ggml_qnn_graph<_InputSize, _OutputSize>;
-
+qnn::ggml_qnn_graph *get_qnn_graph_from_cache(ggml_backend_qnn_context *ctx, size_t op, const std::string &qnn_op,
+                                              const std::array<ggml_tensor *, _InputSize> &inputs,
+                                              const std::array<ggml_tensor *, _OutputSize> &outputs) {
     GGML_ASSERT(op < (GGML_OP_COUNT + GGML_UNARY_OP_COUNT));
 
-    auto &graph_cache = get_qnn_graph_cache(ctx, inputs, outputs);
+    auto &graph_cache = ctx->qnn_graph_cache;
     const auto *op_name = op < qnn::kGgmlUnaryOpStart ? ggml_op_name(ggml_op(op))
                                                       : ggml_unary_op_name(ggml_unary_op(op - qnn::kGgmlUnaryOpStart));
     std::string graph_key(op_name);
@@ -178,21 +98,21 @@ qnn::ggml_qnn_graph<_InputSize, _OutputSize> *get_qnn_graph_from_cache(
     }
 
     auto it = graph_cache.find(graph_key);
-    graph_t *graph_ptr = nullptr;
+    qnn::ggml_qnn_graph *graph_ptr = nullptr;
     if (it != graph_cache.end()) {
         QNN_LOG_DEBUG("found graph %s in cache\n", graph_key.c_str());
         graph_ptr = it->second.get();
     } else {
-        auto graph =
-            std::make_unique<graph_t>(graph_key, (QNNBackend)(ctx->device), ctx->instance->get_qnn_context_handle(),
-                                      ctx->qnn_interface, ctx->socinfo.vtcm_size_in_mb);
+        auto graph = std::make_unique<qnn::ggml_qnn_graph>(graph_key, (QNNBackend)(ctx->device), ctx->instance,
+                                                           ctx->socinfo.vtcm_size_in_mb);
 
         if (!graph->is_valid()) {
             return nullptr;
         }
 
-        if (!qnn_bind_tensors_to_graph<_InputSize, _OutputSize>(graph.get(), qnn_op.c_str(), inputs, outputs)) {
-            QNN_LOG_ERROR("qnn_bind_tensors_to_graph failed\n");
+        if (!graph->build_graph(qnn_op, to_ggml_tensor_array<_InputSize>(inputs),
+                                to_ggml_tensor_array<_OutputSize>(outputs))) {
+            QNN_LOG_ERROR("build_graph failed\n");
             return nullptr;
         }
 
@@ -309,15 +229,13 @@ static_assert(kGgmlOpToQnnOp[GGML_UNARY_OP_GELU + qnn::kGgmlUnaryOpStart] != nul
               "GGML_UNARY_OP_GELU does not correspond to QNN_OP_GELU");
 
 template <ggml_op _GgmlOp>
-bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, const ggml_tensor *src1,
-                        ggml_tensor *dst) {
+bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src0, ggml_tensor *src1, ggml_tensor *dst) {
     static_assert(kGgmlOpToQnnOp[_GgmlOp] != nullptr, "GGML_OP does not have a corresponding QNN_OP");
 
     CHECK_PARAMS(ctx, src0, src1, dst);
 
     bool succeed = false;
-    qnn::ggml_qnn_graph_binary *graph_ptr =
-        get_qnn_graph_from_cache<2, 1>(ctx, _GgmlOp, kGgmlOpToQnnOp[_GgmlOp], { src0, src1 }, { dst });
+    auto *graph_ptr = get_qnn_graph_from_cache<2, 1>(ctx, _GgmlOp, kGgmlOpToQnnOp[_GgmlOp], { src0, src1 }, { dst });
     if (graph_ptr) {
         succeed = execute_graph<2, 1>(graph_ptr, { src0, src1 }, { dst });
     }
@@ -332,7 +250,7 @@ bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src0, 
 }
 
 template <size_t _GgmlOp>
-bool qnn_unary_op_impl(ggml_backend_qnn_context *ctx, const ggml_tensor *src, ggml_tensor *dst) {
+bool qnn_unary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src, ggml_tensor *dst) {
     static_assert(kGgmlOpToQnnOp[_GgmlOp] != nullptr, "GGML_OP does not have a corresponding QNN_OP");
 
     CHECK_PARAMS(ctx, src, dst);

@@ -87,29 +87,11 @@ public:
     }
 
     ~ggml_backend_qnn_buffer_context() {
-        _tensors.clear();
-
         // the free will do nothing if the _buffer is nullptr
         qnn::align_free(_buffer);
     }
 
     bool is_valid() const { return _buffer != nullptr; }
-
-    bool init_tensor(ggml_tensor *tensor) {
-        if (qnn::ggml_qnn_tensor::from_ggml_tensor(tensor)) {
-            QNN_LOG_INFO("tensor %s already initialized", tensor->name);
-            return true;
-        }
-
-        auto qnn_tensor = std::make_unique<qnn::ggml_qnn_tensor>(tensor, _device, _instance);
-        if (!qnn_tensor->is_valid()) {
-            QNN_LOG_WARN("create ggml_qnn_tensor failed");
-            return false;
-        }
-
-        _tensors.push_back(std::move(qnn_tensor));
-        return true;
-    }
 
     void *get_buffer() { return _buffer; }
     size_t get_buffer_size() { return _buffer_size; }
@@ -118,7 +100,6 @@ private:
     QNNBackend _device;
     std::shared_ptr<qnn::qnn_instance> _instance;
     std::string _name;
-    std::list<std::unique_ptr<qnn::ggml_qnn_tensor>> _tensors;
     void *_buffer = nullptr;
     size_t _buffer_size = 0;
 };
@@ -175,12 +156,9 @@ GGML_CALL static void *ggml_backend_qnn_buffer_get_base(ggml_backend_buffer_t bu
 }
 
 GGML_CALL static void ggml_backend_qnn_buffer_init_tensor(ggml_backend_buffer_t buffer, ggml_tensor *tensor) {
-    ggml_backend_qnn_buffer_context *ctx = (ggml_backend_qnn_buffer_context *)buffer->context;
-
-    if (!ctx->init_tensor(tensor)) {
-        QNN_LOG_WARN("init ggml_qnn_tensor failed");
-        return;
-    }
+    // Do nothing here, the qnn tensor will be create along with the graph.
+    GGML_UNUSED(buffer);
+    GGML_UNUSED(tensor);
 }
 
 GGML_CALL static void ggml_backend_qnn_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor *tensor,
@@ -271,13 +249,7 @@ GGML_CALL static void ggml_backend_qnn_free(ggml_backend_t backend) {
 
     auto instance = g_qnn_mgr[ctx->device].instance;
     if (instance) {
-        ctx->qnn_unary_graph_cache.clear();
-        for (const auto &graph_item : ctx->qnn_binary_graph_cache) {
-            QNN_LOG_INFO("graph type:%s", graph_item.first.c_str());
-        }
-
-        ctx->qnn_binary_graph_cache.clear();
-
+        ctx->qnn_graph_cache.clear();
         instance->qnn_finalize();
         g_qnn_mgr[ctx->device].instance.reset();
     }

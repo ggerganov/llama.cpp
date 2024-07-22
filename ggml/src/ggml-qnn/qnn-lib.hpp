@@ -366,7 +366,7 @@ public:
             size_t probe_slots[] = { 1024, 1536, 2048 - 48, 2048 };
             size_t probe_counts = sizeof(probe_slots) / sizeof(size_t);
             for (size_t idx = 0; idx < probe_counts; idx++) {
-                rpc_buffer = static_cast<uint8_t *>(alloc_rpcmem(probe_slots[idx] * size_in_mb, 4));
+                rpc_buffer = static_cast<uint8_t *>(alloc_rpcmem(probe_slots[idx] * size_in_mb, sizeof(void *)));
                 if (!rpc_buffer) {
                     QNN_LOG_DEBUG("alloc rpcmem %d (MB) failure, %s\n", probe_slots[idx], strerror(errno));
                     break;
