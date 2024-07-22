@@ -15852,7 +15852,7 @@ struct llm_tokenizer_bpe {
                     "(IMGIMG)((A|B|C|D|E|F|G|H|I){1,4})Z",  // Image tokens
                     "([\\t\\n]|    |  )",  // directly from tokenizer.json
                     "\\p{N}", // Individual digits
-                    "[\\p{P}\\$\\+<=>\\^~\\|`]+",  // Punctuation
+                    "[\\p{P}!-/:-@\\[-`{-~]",  // Punctuation, Isolated
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
                 };
                 break;
