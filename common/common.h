@@ -185,6 +185,7 @@ struct gpt_params {
     // multimodal models (see examples/llava)
     std::string mmproj = "";        // path to multimodal projector
     std::vector<std::string> image; // path to image file(s)
+    std::string templ = "";         // output template
 
     // embedding
     bool embedding         = false; // get only sentence embedding
