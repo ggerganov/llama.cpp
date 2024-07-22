@@ -467,15 +467,23 @@ if (GGML_SYCL)
         message(FATAL_ERROR "Invalid backend chosen, supported options are INTEL or NVIDIA")
     endif()
 
-    if ( NOT DEFINED ENV{ONEAPI_ROOT})
-        message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+    if (GGML_SYCL_TARGET STREQUAL "INTEL")
+        find_package(MKL REQUIRED)
+    else()
+        find_package(oneMKL REQUIRED)
     endif()
+
+    check_cxx_compiler_flag("-fsycl" SUPPORTS_SYCL)
+    if ( DEFINED ENV{ONEAPI_ROOT})
+        message(STATUS "Using oneAPI Release SYCL compiler (icpx).")
+    elseif(SUPPORTS_SYCL)
+        message(WARNING "Using open-source SYCL compiler (clang++). Didn't detect ENV {ONEAPI_ROOT}. If you expected the oneAPI Release compiler, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+    else()
+        message(FATAL_ERROR, "C++ compiler lacks SYCL support.")
+    endif()
+    message(STATUS "SYCL found")
     #todo: AOT
 
-    find_package(IntelSYCL REQUIRED)
-    find_package(MKL REQUIRED)
-
-    message(STATUS "SYCL found")
 
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_SYCL)
 
@@ -489,9 +497,9 @@ if (GGML_SYCL)
 
     add_compile_options(-I./) #include DPCT
 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -fsycl")
+
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
         add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
     else()
         add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
@@ -504,15 +512,14 @@ if (GGML_SYCL)
     list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
 
     if (WIN32)
+        find_package(IntelSYCL REQUIRED)
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
     else()
-        add_compile_options(-I/${SYCL_INCLUDE_DIR})
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
-
         if (GGML_SYCL_TARGET STREQUAL "INTEL")
-            set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} -fsycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
+            set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
         elseif (GGML_SYCL_TARGET STREQUAL "NVIDIA")
-            set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} -fsycl pthread m dl onemkl)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
+            set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} pthread m dl onemkl)
         endif()
     endif()
 endif()
