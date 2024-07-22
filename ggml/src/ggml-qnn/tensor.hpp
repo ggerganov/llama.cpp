@@ -28,17 +28,22 @@ public:
         QNN_LOG_DEBUG("create tensor %s, device: %d", _tensor_name.c_str(), device);
     }
 
+    ~ggml_qnn_tensor() {
+        if (_qnn_instance && _qnn_rpc_buffer) {
+            _qnn_instance->free_rpcmem(_qnn_rpc_buffer);
+        }
+    }
+
     bool bind_ggml_tensor(ggml_tensor *tensor, bool is_input) {
         if (_tensor) {
             if (_tensor != tensor) {
                 QNN_LOG_WARN("tensor %s has been bound to another ggml tensor %s", _tensor_name.c_str(),
                              ggml_get_name(_tensor));
                 return false;
-            } else {
-                QNN_LOG_INFO("tensor %s already bound to same ggml tensor %s", _tensor_name.c_str(),
-                             ggml_get_name(_tensor));
-                return true;
             }
+            QNN_LOG_INFO("tensor %s already bound to same ggml tensor %s", _tensor_name.c_str(),
+                         ggml_get_name(_tensor));
+            return true;
         }
 
         update_params_from_ggml_tensor(tensor);
@@ -55,13 +60,16 @@ public:
                 return false;
             }
             QNN_TENSOR_SET_ID(_qnn_tensor, QNN_TENSOR_GET_ID(qnn_tensor));
+            QNN_LOG_DEBUG("create graph tensor %s, id: %d", _tensor_name.c_str(), QNN_TENSOR_GET_ID(qnn_tensor));
         }
 
         if (should_use_mem_handle()) {
-            _qnn_rpc_buffer = alloc_rpc_mem(ggml_nbytes(tensor));
             if (!_qnn_rpc_buffer) {
-                QNN_LOG_WARN("alloc rpc mem failed, tensor %s", _tensor_name.c_str());
-                return false;
+                _qnn_rpc_buffer = alloc_rpc_mem(ggml_nbytes(tensor));
+                if (!_qnn_rpc_buffer) {
+                    QNN_LOG_WARN("alloc rpc mem failed, tensor %s", _tensor_name.c_str());
+                    return false;
+                }
             }
 
             QNN_LOG_DEBUG("tensor %s, use mem handle %p", _tensor_name.c_str(), QNN_TENSOR_GET_MEM_HANDLE(_qnn_tensor));
@@ -107,8 +115,8 @@ public:
             QNN_LOG_DEBUG("tensor %s, clear client buffer", _tensor_name.c_str());
         }
 
+        QNN_LOG_DEBUG("unbind tensor: %s from ggml tensor: %s", _tensor_name.c_str(), ggml_get_name(_tensor));
         _tensor = nullptr;
-        QNN_LOG_DEBUG("unbind tensor: %s from ggml tensor: %s", _tensor_name.c_str(), _tensor->name);
         return true;
     }
 

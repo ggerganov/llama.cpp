@@ -86,7 +86,7 @@ public:
             return false;
         }
 
-        QNN_LOG_DEBUG("graph name %s, add_nodes start", _graph_name.c_str());
+        QNN_LOG_DEBUG("graph name %s, build_graph start", _graph_name.c_str());
         _qnn_tensor_inputs.resize(tensor_inputs.size());
         _tensor_inputs.resize(tensor_inputs.size());
         for (size_t i = 0; i < tensor_inputs.size(); i++) {
@@ -111,7 +111,7 @@ public:
             snprintf(buffer, GGML_MAX_NAME, "dst%d", (int)i);
             auto qnn_tensor =
                 std::make_shared<ggml_qnn_tensor>(std::string(buffer), _device, _graph_handle, _qnn_instance);
-            auto *ggml_tensor = tensor_inputs[i];
+            auto *ggml_tensor = tensor_outputs[i];
             if (!qnn_tensor->bind_ggml_tensor(ggml_tensor, false)) {
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
@@ -155,7 +155,7 @@ public:
             return false;
         }
 
-        QNN_LOG_DEBUG("graph name %s, add_nodes succeed", _graph_name.c_str());
+        QNN_LOG_DEBUG("graph name %s, build_graph succeed", _graph_name.c_str());
         return true;
     }
 
@@ -173,7 +173,7 @@ public:
         }
 
         for (size_t i = 0; i < tensor_outputs.size(); i++) {
-            auto *ggml_tensor = tensor_inputs[i];
+            auto *ggml_tensor = tensor_outputs[i];
             if (!_tensor_outputs[i]->bind_ggml_tensor(ggml_tensor, false)) {
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
@@ -189,6 +189,14 @@ public:
             if (error == QNN_COMMON_ERROR_SYSTEM_COMMUNICATION) {
                 QNN_LOG_WARN("NPU crashed. SSR detected. Caused QNN graph execute error\n");
             }
+        }
+
+        for (auto tensor : _tensor_inputs) {
+            tensor->unbind_ggml_tensor();
+        }
+
+        for (auto tensor : _tensor_outputs) {
+            tensor->unbind_ggml_tensor();
         }
 
         if (error != QNN_SUCCESS) {
