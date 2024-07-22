@@ -443,6 +443,10 @@ extern "C" {
                      struct llama_model * model,
             struct llama_context_params   params);
 
+    LLAMA_API void llama_ctx_switch_adaptor(
+        struct llama_context* ctx,
+        const char* adaptor_alias);
+
     // Frees all allocated memory
     LLAMA_API void llama_free(struct llama_context * ctx);
 
