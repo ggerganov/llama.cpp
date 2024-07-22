@@ -64,6 +64,11 @@ struct llama_vocab {
 const struct llama_vocab * llama_get_vocab(const struct llama_context * ctx);
 const struct llama_vocab * llama_get_vocab(const struct llama_model   * model);
 
+//
+// internal API
+//
+
+// TODO: rename to llama_tokenize_impl
 // TODO: This should probably be in llama.h
 std::vector<llama_vocab::id> llama_tokenize_internal(
         const llama_vocab & vocab,
@@ -71,44 +76,44 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
         bool add_special,
         bool parse_special = false);
 
-llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch);
+llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch);
 
-const char * llama_token_get_text(const struct llama_vocab & vocab, llama_token token);
+const char * llama_token_get_text_impl(const struct llama_vocab & vocab, llama_token token);
 
-float llama_token_get_score(const struct llama_vocab & vocab, llama_token token);
+float llama_token_get_score_impl(const struct llama_vocab & vocab, llama_token token);
 
-llama_token_attr llama_token_get_attr(const struct llama_vocab & vocab, llama_token token);
+llama_token_attr llama_token_get_attr_impl(const struct llama_vocab & vocab, llama_token token);
 
-bool llama_token_is_eog(const struct llama_vocab & vocab, llama_token token);
+bool llama_token_is_eog_impl(const struct llama_vocab & vocab, llama_token token);
 
-bool llama_token_is_control(const struct llama_vocab & vocab, llama_token token);
+bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token token);
 
-llama_token llama_token_bos(const struct llama_vocab & vocab);
-llama_token llama_token_eos(const struct llama_vocab & vocab);
-llama_token llama_token_cls(const struct llama_vocab & vocab);
-llama_token llama_token_sep(const struct llama_vocab & vocab);
-llama_token llama_token_nl (const struct llama_vocab & vocab);
-llama_token llama_token_pad(const struct llama_vocab & vocab);
+llama_token llama_token_bos_impl(const struct llama_vocab & vocab);
+llama_token llama_token_eos_impl(const struct llama_vocab & vocab);
+llama_token llama_token_cls_impl(const struct llama_vocab & vocab);
+llama_token llama_token_sep_impl(const struct llama_vocab & vocab);
+llama_token llama_token_nl_impl (const struct llama_vocab & vocab);
+llama_token llama_token_pad_impl(const struct llama_vocab & vocab);
 
-int32_t llama_add_bos_token(const struct llama_vocab & vocab);
-int32_t llama_add_eos_token(const struct llama_vocab & vocab);
+int32_t llama_add_bos_token_impl(const struct llama_vocab & vocab);
+int32_t llama_add_eos_token_impl(const struct llama_vocab & vocab);
 
-llama_token llama_token_prefix(const struct llama_vocab & vocab);
-llama_token llama_token_middle(const struct llama_vocab & vocab);
-llama_token llama_token_suffix(const struct llama_vocab & vocab);
-llama_token llama_token_eot   (const struct llama_vocab & vocab);
+llama_token llama_token_prefix_impl(const struct llama_vocab & vocab);
+llama_token llama_token_middle_impl(const struct llama_vocab & vocab);
+llama_token llama_token_suffix_impl(const struct llama_vocab & vocab);
+llama_token llama_token_eot_impl   (const struct llama_vocab & vocab);
 
-int32_t llama_tokenize(
-    const struct llama_vocab & vocab,
-                  const char * text,
-                     int32_t   text_len,
-                 llama_token * tokens,
-                     int32_t   n_tokens_max,
-                        bool   add_special,
-                        bool   parse_special);
+int32_t llama_tokenize_impl(
+        const struct llama_vocab & vocab,
+                      const char * text,
+                         int32_t   text_len,
+                     llama_token * tokens,
+                         int32_t   n_tokens_max,
+                            bool   add_special,
+                            bool   parse_special);
 
 // does not write null-terminator to buf
-int32_t llama_token_to_piece(
+int32_t llama_token_to_piece_impl(
         const struct llama_vocab & vocab,
                      llama_token   token,
                             char * buf,
@@ -116,7 +121,7 @@ int32_t llama_token_to_piece(
                          int32_t   lstrip,
                             bool   special);
 
-int32_t llama_detokenize(
+int32_t llama_detokenize_impl(
         const struct llama_vocab & vocab,
                const llama_token * tokens,
                          int32_t   n_tokens,

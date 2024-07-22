@@ -5535,7 +5535,7 @@ static void llm_load_vocab(
             }
         }
         try {
-            vocab.linefeed_id = llama_byte_to_token(vocab, '\n');
+            vocab.linefeed_id = llama_byte_to_token_impl(vocab, '\n');
         } catch (const std::exception & e) {
             LLAMA_LOG_WARN("%s: SPM vocabulary, but newline token not found: %s! Using special_pad_id instead.", __func__, e.what());
             vocab.linefeed_id = vocab.special_pad_id;
@@ -18511,71 +18511,71 @@ float * llama_get_embeddings_seq(struct llama_context * ctx, llama_seq_id seq_id
 //
 
 const char * llama_token_get_text(const struct llama_model * model, llama_token token) {
-    return llama_token_get_text(model->vocab, token);
+    return llama_token_get_text_impl(model->vocab, token);
 }
 
 float llama_token_get_score(const struct llama_model * model, llama_token token) {
-    return llama_token_get_score(model->vocab, token);
+    return llama_token_get_score_impl(model->vocab, token);
 }
 
 enum llama_token_attr llama_token_get_attr(const struct llama_model * model, llama_token token) {
-    return llama_token_get_attr(model->vocab, token);
+    return llama_token_get_attr_impl(model->vocab, token);
 }
 
 bool llama_token_is_eog(const struct llama_model * model, llama_token token) {
-    return llama_token_is_eog(model->vocab, token);
+    return llama_token_is_eog_impl(model->vocab, token);
 }
 
 bool llama_token_is_control(const struct llama_model * model, llama_token token) {
-    return llama_token_is_control(model->vocab, token);
+    return llama_token_is_control_impl(model->vocab, token);
 }
 
 llama_token llama_token_bos(const struct llama_model * model) {
-    return llama_token_bos(model->vocab);
+    return llama_token_bos_impl(model->vocab);
 }
 
 llama_token llama_token_eos(const struct llama_model * model) {
-    return llama_token_eos(model->vocab);
+    return llama_token_eos_impl(model->vocab);
 }
 
 llama_token llama_token_cls(const struct llama_model * model) {
-    return llama_token_cls(model->vocab);
+    return llama_token_cls_impl(model->vocab);
 }
 
 llama_token llama_token_sep(const struct llama_model * model) {
-    return llama_token_sep(model->vocab);
+    return llama_token_sep_impl(model->vocab);
 }
 
 llama_token llama_token_nl (const struct llama_model * model) {
-    return llama_token_nl (model->vocab);
+    return llama_token_nl_impl(model->vocab);
 }
 
 llama_token llama_token_pad(const struct llama_model * model) {
-    return llama_token_pad(model->vocab);
+    return llama_token_pad_impl(model->vocab);
 }
 
 int32_t llama_add_bos_token(const struct llama_model * model) {
-    return llama_add_bos_token(model->vocab);
+    return llama_add_bos_token_impl(model->vocab);
 }
 
 int32_t llama_add_eos_token(const struct llama_model * model) {
-    return llama_add_eos_token(model->vocab);
+    return llama_add_eos_token_impl(model->vocab);
 }
 
 llama_token llama_token_prefix(const struct llama_model * model) {
-    return llama_token_prefix(model->vocab);
+    return llama_token_prefix_impl(model->vocab);
 }
 
 llama_token llama_token_middle(const struct llama_model * model) {
-    return llama_token_middle(model->vocab);
+    return llama_token_middle_impl(model->vocab);
 }
 
 llama_token llama_token_suffix(const struct llama_model * model) {
-    return llama_token_suffix(model->vocab);
+    return llama_token_suffix_impl(model->vocab);
 }
 
 llama_token llama_token_eot(const struct llama_model * model) {
-    return llama_token_eot(model->vocab);
+    return llama_token_eot_impl(model->vocab);
 }
 
 //
@@ -18590,7 +18590,7 @@ int32_t llama_tokenize(
                      int32_t   n_tokens_max,
                         bool   add_special,
                         bool   parse_special) {
-    return llama_tokenize(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
+    return llama_tokenize_impl(model->vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 
 int32_t llama_token_to_piece(
@@ -18600,7 +18600,7 @@ int32_t llama_token_to_piece(
                      int32_t   length,
                      int32_t   lstrip,
                         bool   special) {
-    return llama_token_to_piece(model->vocab, token, buf, length, lstrip, special);
+    return llama_token_to_piece_impl(model->vocab, token, buf, length, lstrip, special);
 }
 
 int32_t llama_detokenize(
@@ -18611,7 +18611,7 @@ int32_t llama_detokenize(
                      int32_t   text_len_max,
                         bool   remove_special,
                         bool   unparse_special) {
-    return llama_detokenize(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
+    return llama_detokenize_impl(model->vocab, tokens, n_tokens, text, text_len_max, remove_special, unparse_special);
 }
 
 //
@@ -18931,7 +18931,7 @@ void llama_grammar_sample(
       const struct llama_grammar * grammar,
       const struct llama_context * ctx,
           llama_token_data_array * candidates) {
-    llama_grammar_sample(grammar, &ctx->model.vocab, &ctx->sampling, candidates);
+    llama_grammar_sample_impl(grammar, &ctx->model.vocab, &ctx->sampling, candidates);
 }
 
 void llama_sample_grammar(
@@ -18945,7 +18945,7 @@ void llama_grammar_accept_token(
             struct llama_grammar * grammar,
             struct llama_context * ctx,
                      llama_token   token) {
-    llama_grammar_accept_token(grammar, &ctx->model.vocab, &ctx->sampling, token);
+    llama_grammar_accept_token_impl(grammar, &ctx->model.vocab, &ctx->sampling, token);
 }
 
 //
@@ -18953,39 +18953,39 @@ void llama_grammar_accept_token(
 //
 
 void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed) {
-    llama_set_rng_seed(&ctx->sampling, seed);
+    llama_set_rng_seed_impl(&ctx->sampling, seed);
 }
 
 void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates) {
-    llama_sample_softmax(ctx ? &ctx->sampling : nullptr, candidates);
+    llama_sample_softmax_impl(ctx ? &ctx->sampling : nullptr, candidates);
 }
 
 void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int32_t k, size_t min_keep) {
-    llama_sample_top_k(ctx ? &ctx->sampling : nullptr, candidates, k, min_keep);
+    llama_sample_top_k_impl(ctx ? &ctx->sampling : nullptr, candidates, k, min_keep);
 }
 
 void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    llama_sample_top_p(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+    llama_sample_top_p_impl(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
 }
 
 void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    llama_sample_min_p(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+    llama_sample_min_p_impl(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
 }
 
 void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep) {
-    llama_sample_tail_free(ctx ? &ctx->sampling : nullptr, candidates, z, min_keep);
+    llama_sample_tail_free_impl(ctx ? &ctx->sampling : nullptr, candidates, z, min_keep);
 }
 
 void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    llama_sample_typical(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+    llama_sample_typical_impl(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
 }
 
 void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp, float max_temp, float exponent_val) {
-    llama_sample_entropy(ctx ? &ctx->sampling : nullptr, candidates_p, min_temp, max_temp, exponent_val);
+    llama_sample_entropy_impl(ctx ? &ctx->sampling : nullptr, candidates_p, min_temp, max_temp, exponent_val);
 }
 
 void llama_sample_temp(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
-    llama_sample_temp(ctx ? &ctx->sampling : nullptr, candidates_p, temp);
+    llama_sample_temp_impl(ctx ? &ctx->sampling : nullptr, candidates_p, temp);
 }
 
 void llama_sample_repetition_penalties(
@@ -18996,7 +18996,7 @@ void llama_sample_repetition_penalties(
                            float   penalty_repeat,
                            float   penalty_freq,
                            float   penalty_present) {
-    llama_sample_repetition_penalties(ctx ? &ctx->sampling : nullptr, candidates, last_tokens, penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
+    llama_sample_repetition_penalties_impl(ctx ? &ctx->sampling : nullptr, candidates, last_tokens, penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
 }
 
 void llama_sample_apply_guidance(
@@ -19004,27 +19004,27 @@ void llama_sample_apply_guidance(
                          float * logits,
                          float * logits_guidance,
                          float   scale) {
-    llama_sample_apply_guidance(&ctx->sampling, logits, logits_guidance, scale);
+    llama_sample_apply_guidance_impl(&ctx->sampling, logits, logits_guidance, scale);
 }
 
 llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
-    return llama_sample_token_mirostat(&ctx->sampling, candidates, tau, eta, m, mu);
+    return llama_sample_token_mirostat_impl(&ctx->sampling, candidates, tau, eta, m, mu);
 }
 
 llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, float * mu) {
-    return llama_sample_token_mirostat_v2(ctx ? &ctx->sampling : nullptr, candidates, tau, eta, mu);
+    return llama_sample_token_mirostat_v2_impl(ctx ? &ctx->sampling : nullptr, candidates, tau, eta, mu);
 }
 
 llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_data_array * candidates) {
-    return llama_sample_token_greedy(ctx ? &ctx->sampling : nullptr, candidates);
+    return llama_sample_token_greedy_impl(ctx ? &ctx->sampling : nullptr, candidates);
 }
 
 llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng) {
-    return llama_sample_token_with_rng(&ctx->sampling, candidates, rng);
+    return llama_sample_token_with_rng_impl(&ctx->sampling, candidates, rng);
 }
 
 llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates) {
-    return llama_sample_token_with_rng(&ctx->sampling, candidates, ctx->sampling.rng);
+    return llama_sample_token_with_rng_impl(&ctx->sampling, candidates, ctx->sampling.rng);
 }
 
 int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {

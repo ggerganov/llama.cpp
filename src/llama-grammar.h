@@ -15,6 +15,10 @@ struct llama_grammar {
 
 struct llama_grammar * llama_get_grammar(struct llama_context * ctx);
 
+//
+// internal API
+//
+
 struct llama_grammar * llama_grammar_init_impl(
             const llama_grammar_element ** rules,
                                  size_t    n_rules,
@@ -24,13 +28,13 @@ void llama_grammar_free_impl(struct llama_grammar * grammar);
 
 struct llama_grammar * llama_grammar_copy_impl(const struct llama_grammar * grammar);
 
-void llama_grammar_sample(
+void llama_grammar_sample_impl(
         const struct llama_grammar * grammar,
           const struct llama_vocab * vocab,
        const struct llama_sampling * smpl,
             llama_token_data_array * candidates);
 
-void llama_grammar_accept_token(
+void llama_grammar_accept_token_impl(
               struct llama_grammar * grammar,
           const struct llama_vocab * vocab,
        const struct llama_sampling * smpl,

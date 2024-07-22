@@ -163,30 +163,6 @@ static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
     }
 }
 
-llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
-    GGML_ASSERT(llama_vocab_get_type(vocab) != LLAMA_VOCAB_TYPE_NONE);
-    static const char * hex = "0123456789ABCDEF";
-    switch (llama_vocab_get_type(vocab)) {
-        case LLAMA_VOCAB_TYPE_SPM:
-        case LLAMA_VOCAB_TYPE_UGM: {
-            const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
-            auto token = vocab.token_to_id.find(buf);
-            if (token != vocab.token_to_id.end()) {
-                return (*token).second;
-            }
-            // Try to fall back to just the byte as a string
-            const char buf2[2] = { (char)ch, 0 };
-            return vocab.token_to_id.at(buf2);
-        }
-        case LLAMA_VOCAB_TYPE_WPM:
-        case LLAMA_VOCAB_TYPE_BPE: {
-            return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
-        }
-        default:
-            GGML_ASSERT(false);
-    }
-}
-
 static void llama_escape_whitespace(std::string & text) {
     replace_all(text, " ", "\xe2\x96\x81");
 }
@@ -303,7 +279,7 @@ private:
             // output any symbols that did not form tokens as bytes.
             output.reserve(output.size() + symbol.n);
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_byte_to_token(vocab, symbol.text[j]);
+                llama_vocab::id token_id = llama_byte_to_token_impl(vocab, symbol.text[j]);
                 output.push_back(token_id);
             }
             return;
@@ -1426,81 +1402,105 @@ std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, 
     return output;
 }
 
-const char * llama_token_get_text(const struct llama_vocab & vocab, llama_token token) {
+llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch) {
+    GGML_ASSERT(llama_vocab_get_type(vocab) != LLAMA_VOCAB_TYPE_NONE);
+    static const char * hex = "0123456789ABCDEF";
+    switch (llama_vocab_get_type(vocab)) {
+        case LLAMA_VOCAB_TYPE_SPM:
+        case LLAMA_VOCAB_TYPE_UGM: {
+            const char buf[7] = { '<', '0', 'x', hex[ch >> 4], hex[ch & 15], '>', 0 };
+            auto token = vocab.token_to_id.find(buf);
+            if (token != vocab.token_to_id.end()) {
+                return (*token).second;
+            }
+            // Try to fall back to just the byte as a string
+            const char buf2[2] = { (char)ch, 0 };
+            return vocab.token_to_id.at(buf2);
+        }
+        case LLAMA_VOCAB_TYPE_WPM:
+        case LLAMA_VOCAB_TYPE_BPE: {
+            return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
+        }
+        default:
+            GGML_ASSERT(false);
+    }
+}
+
+const char * llama_token_get_text_impl(const struct llama_vocab & vocab, llama_token token) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[token].text.c_str();
 }
 
-float llama_token_get_score(const struct llama_vocab & vocab, llama_token token) {
+float llama_token_get_score_impl(const struct llama_vocab & vocab, llama_token token) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[token].score;
 }
 
-llama_token_attr llama_token_get_attr(const struct llama_vocab & vocab, llama_token token) {
+llama_token_attr llama_token_get_attr_impl(const struct llama_vocab & vocab, llama_token token) {
     GGML_ASSERT(vocab.type != LLAMA_VOCAB_TYPE_NONE);
     return vocab.id_to_token[token].attr;
 }
 
-bool llama_token_is_eog(const struct llama_vocab & vocab, llama_token token) {
+bool llama_token_is_eog_impl(const struct llama_vocab & vocab, llama_token token) {
     return token != -1 && (
-        token == llama_token_eos(vocab) ||
-        token == llama_token_eot(vocab)
+        token == llama_token_eos_impl(vocab) ||
+        token == llama_token_eot_impl(vocab)
     );
 }
 
-bool llama_token_is_control(const struct llama_vocab & vocab, llama_token token) {
+bool llama_token_is_control_impl(const struct llama_vocab & vocab, llama_token token) {
     return llama_is_control_token(vocab, token);
 }
 
-llama_token llama_token_bos(const struct llama_vocab & vocab) {
+llama_token llama_token_bos_impl(const struct llama_vocab & vocab) {
     return vocab.special_bos_id;
 }
 
-llama_token llama_token_eos(const struct llama_vocab & vocab) {
+llama_token llama_token_eos_impl(const struct llama_vocab & vocab) {
     return vocab.special_eos_id;
 }
 
-llama_token llama_token_cls(const struct llama_vocab & vocab) {
+llama_token llama_token_cls_impl(const struct llama_vocab & vocab) {
     return vocab.special_cls_id;
 }
 
-llama_token llama_token_sep(const struct llama_vocab & vocab) {
+llama_token llama_token_sep_impl(const struct llama_vocab & vocab) {
     return vocab.special_sep_id;
 }
 
-llama_token llama_token_nl(const struct llama_vocab & vocab) {
+llama_token llama_token_nl_impl(const struct llama_vocab & vocab) {
     return vocab.linefeed_id;
 }
 
-llama_token llama_token_pad(const struct llama_vocab & vocab) {
+llama_token llama_token_pad_impl(const struct llama_vocab & vocab) {
     return vocab.special_pad_id;
 }
 
-int32_t llama_add_bos_token(const struct llama_vocab & vocab) {
+int32_t llama_add_bos_token_impl(const struct llama_vocab & vocab) {
     return vocab.tokenizer_add_bos;
 }
 
-int32_t llama_add_eos_token(const struct llama_vocab & vocab) {
+int32_t llama_add_eos_token_impl(const struct llama_vocab & vocab) {
     return vocab.tokenizer_add_eos;
 }
 
-llama_token llama_token_prefix(const struct llama_vocab & vocab) {
+llama_token llama_token_prefix_impl(const struct llama_vocab & vocab) {
     return vocab.special_prefix_id;
 }
 
-llama_token llama_token_middle(const struct llama_vocab & vocab) {
+llama_token llama_token_middle_impl(const struct llama_vocab & vocab) {
     return vocab.special_middle_id;
 }
 
-llama_token llama_token_suffix(const struct llama_vocab & vocab) {
+llama_token llama_token_suffix_impl(const struct llama_vocab & vocab) {
     return vocab.special_suffix_id;
 }
 
-llama_token llama_token_eot(const struct llama_vocab & vocab) {
+llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
     return vocab.special_eot_id;
 }
 
-int32_t llama_tokenize(
+int32_t llama_tokenize_impl(
     const struct llama_vocab & vocab,
                   const char * text,
                      int32_t   text_len,
@@ -1542,10 +1542,10 @@ static std::string llama_decode_text(const std::string & text) {
 }
 
 // does not write null-terminator to buf
-int32_t llama_token_to_piece(const struct llama_vocab & vocab, llama_token token, char * buf, int32_t length, int32_t lstrip, bool special) {
+int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token token, char * buf, int32_t length, int32_t lstrip, bool special) {
     // ref: https://github.com/ggerganov/llama.cpp/pull/7587#discussion_r1620983843
     static const int attr_special = LLAMA_TOKEN_ATTR_UNKNOWN | LLAMA_TOKEN_ATTR_CONTROL;
-    const llama_token_attr attr = llama_token_get_attr(vocab, token);
+    const llama_token_attr attr = llama_token_get_attr_impl(vocab, token);
     if (!special && (attr & attr_special)) {
         return 0;
     }
@@ -1613,7 +1613,7 @@ int32_t llama_token_to_piece(const struct llama_vocab & vocab, llama_token token
     return 0;
 }
 
-int32_t llama_detokenize(
+int32_t llama_detokenize_impl(
         const struct llama_vocab & vocab,
                const llama_token * tokens,
                          int32_t   n_tokens,
@@ -1643,7 +1643,7 @@ int32_t llama_detokenize(
 
     for (int32_t i = 0; i < n_tokens; ++i) {
         GGML_ASSERT(avail >= 0);
-        int32_t n_chars = llama_token_to_piece(vocab, tokens[i], text, avail, remove_space, unparse_special);
+        int32_t n_chars = llama_token_to_piece_impl(vocab, tokens[i], text, avail, remove_space, unparse_special);
         remove_space = false;
         if (n_chars < 0) {
             avail = 0;
