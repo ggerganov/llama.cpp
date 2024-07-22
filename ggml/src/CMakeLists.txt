@@ -495,8 +495,6 @@ if (GGML_SYCL)
         add_compile_definitions(GGML_SYCL_FORCE_MMQ)
     endif()
 
-    add_compile_options(-I./) #include DPCT
-
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -fsycl")
 
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
