@@ -5516,9 +5516,6 @@ static void llm_load_vocab(
                 tokenizer_pre == "jais") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_JAIS;
             } else if (
-                tokenizer_pre == "codeshell") {
-                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CODESHELL;
-            } else if (
                 tokenizer_pre == "tekken") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_TEKKEN;
                 vocab.tokenizer_clean_spaces = false;
@@ -5528,6 +5525,9 @@ static void llm_load_vocab(
                 tokenizer_pre == "smollm") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_SMOLLM;
                 vocab.tokenizer_clean_spaces = false;
+            } else if (
+                tokenizer_pre == "codeshell") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CODESHELL;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -15550,8 +15550,8 @@ struct llm_tokenizer_bpe {
             case LLAMA_VOCAB_PRE_TYPE_STARCODER:
             case LLAMA_VOCAB_PRE_TYPE_REFACT:
             case LLAMA_VOCAB_PRE_TYPE_COMMAND_R:
-            case LLAMA_VOCAB_PRE_TYPE_CODESHELL:
             case LLAMA_VOCAB_PRE_TYPE_SMOLLM:
+            case LLAMA_VOCAB_PRE_TYPE_CODESHELL:
                 regex_exprs = {
                     "\\p{N}",
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
