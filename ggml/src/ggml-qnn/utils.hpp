@@ -13,7 +13,7 @@
 #include "QnnTypes.h"
 #include "logger.hpp"
 
-#define QNN_TENSOR_VER(x) ((x).v2)
+#define QNN_TENSOR_VER(x) ((x).v1)
 
 namespace qnn {
 
@@ -31,7 +31,7 @@ const char *opname_from_ggmlop(enum ggml_op ggmlop);
 
 const char *get_qnn_error_string(Qnn_ErrorHandle_t error);
 
-constexpr const Qnn_TensorVersion_t kDefaultQnnTensorVersion = QNN_TENSOR_VERSION_2;
+constexpr const Qnn_TensorVersion_t kDefaultQnnTensorVersion = QNN_TENSOR_VERSION_1;
 
 inline Qnn_Tensor_t qnn_tensor_init(Qnn_TensorVersion_t version) {
     Qnn_Tensor_t tensor;
@@ -182,8 +182,8 @@ inline void set_qnn_tensor_memhandle(Qnn_Tensor_t &tensor, Qnn_MemHandle_t handl
 }
 
 inline void set_qnn_tensor_dyn_dimensions(Qnn_Tensor_t &tensor, uint8_t *isDynamicDimensions) {
-    if (tensor.version == kDefaultQnnTensorVersion) {
-        QNN_TENSOR_VER(tensor).isDynamicDimensions = isDynamicDimensions;
+    if (tensor.version == QNN_TENSOR_VERSION_2) {
+        tensor.v2.isDynamicDimensions = isDynamicDimensions;
     }
 }
 
