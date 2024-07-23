@@ -203,7 +203,7 @@ struct lora_merge_ctx {
                 if (adapters[0]->tensors.size() != adapters[i]->tensors.size()) {
                     throw std::runtime_error(err_no_subset_adapter);
                 }
-                for (auto & it : adapters[0]->tensors) {
+                for (auto & it : adapters[i]->tensors) {
                     if (adapters[0]->get_tensor(it.first) == nullptr) {
                         throw std::runtime_error(err_no_subset_adapter);
                     }
