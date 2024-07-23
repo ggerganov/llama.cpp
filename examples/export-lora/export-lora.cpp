@@ -197,12 +197,15 @@ struct lora_merge_ctx {
 
         // check if all lora adapters have the same tensors
         // TODO: remove this when we can support merging subset of adapters. Ref: https://github.com/ggerganov/llama.cpp/pull/8607#discussion_r1686027777
+        static const char * err_no_subset_adapter = "Input adapters do not have the same list of tensors. This is not yet supported. Please merge the adapter one-by-one instead of merging all at once.";
         if (adapters.size() > 1) {
-            auto & base_adapter = adapters[0];
             for (size_t i = 1; i < adapters.size(); ++i) {
-                for (auto & it : base_adapter->tensors) {
-                    if (base_adapter->get_tensor(it.first) == nullptr) {
-                        throw std::runtime_error("Input adapters do not have the same list of tensors. This is not yet supported. Please merge the adapter one-by-one instead of merging all at once.");
+                if (adapters[0]->tensors.size() != adapters[i]->tensors.size()) {
+                    throw std::runtime_error(err_no_subset_adapter);
+                }
+                for (auto & it : adapters[0]->tensors) {
+                    if (adapters[0]->get_tensor(it.first) == nullptr) {
+                        throw std::runtime_error(err_no_subset_adapter);
                     }
                 }
             }
