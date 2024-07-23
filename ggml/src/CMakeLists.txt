@@ -467,10 +467,6 @@ if (GGML_SYCL)
         message(FATAL_ERROR "Invalid backend chosen, supported options are INTEL or NVIDIA")
     endif()
 
-    if (GGML_SYCL_TARGET STREQUAL "INTEL")
-        find_package(MKL REQUIRED)
-    endif()
-
     check_cxx_compiler_flag("-fsycl" SUPPORTS_SYCL)
     if ( DEFINED ENV{ONEAPI_ROOT})
         message(STATUS "Using oneAPI Release SYCL compiler (icpx).")
@@ -483,7 +479,6 @@ if (GGML_SYCL)
     endif()
     message(STATUS "SYCL found")
     #todo: AOT
-
 
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_SYCL)
 
@@ -511,6 +506,7 @@ if (GGML_SYCL)
 
     if (WIN32)
         find_package(IntelSYCL REQUIRED)
+        find_package(MKL REQUIRED)
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
     else()
         if (GGML_SYCL_TARGET STREQUAL "INTEL")
