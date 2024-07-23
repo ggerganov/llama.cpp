@@ -25,6 +25,9 @@ class Keys:
         ALIGNMENT                  = "general.alignment"
         FILE_TYPE                  = "general.file_type"
 
+        # Tensor Hash
+        HASH_SHA256                = "general.hash.sha256"
+
         # Authorship Metadata
         NAME                       = "general.name"
         AUTHOR                     = "general.author"

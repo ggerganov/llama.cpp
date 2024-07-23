@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import hashlib
 import shutil
 import struct
 import tempfile
@@ -417,6 +418,18 @@ class GGUFWriter:
 
         self.state = WriterState.WEIGHTS
 
+    def calculate_tensor_hash_sha256(self) -> str:
+        sha256 = hashlib.sha256()
+
+        for tensors in self.tensors:
+            # relying on the fact that Python dicts preserve insertion order (since 3.7)
+            for _, ti in tensors.items():
+                assert ti.tensor is not None
+                assert ti.tensor.nbytes == ti.nbytes
+                sha256.update(ti.tensor.tobytes('C'))
+
+        return sha256.hexdigest()
+
     def write_tensors_to_file(self, *, progress: bool = False) -> None:
         self.write_ti_data_to_file()
 
@@ -490,6 +503,9 @@ class GGUFWriter:
 
     def add_file_type(self, ftype: int) -> None:
         self.add_uint32(Keys.General.FILE_TYPE, ftype)
+
+    def add_hash_sha256(self, hash: str) -> None:
+        self.add_string(Keys.General.HASH_SHA256, hash)
 
     def add_name(self, name: str) -> None:
         self.add_string(Keys.General.NAME, name)

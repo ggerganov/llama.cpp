@@ -384,6 +384,12 @@ class Model:
 
         self.set_type()
 
+        # Generate sha256 based on tensor content if required
+        if not vocab_only:
+            hash_sha256 = self.gguf_writer.calculate_tensor_hash_sha256()
+            self.gguf_writer.add_hash_sha256(hash_sha256)
+            logger.info(f"tensor hash (sha256): {hash_sha256}")
+
         logger.info("Set meta model")
         self.metadata.set_gguf_meta_model(self.gguf_writer)
 
