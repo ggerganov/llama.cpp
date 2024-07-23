@@ -52,7 +52,7 @@ static struct minicpmv_context * minicpmv_init(gpt_params * params, const std::s
     LOG_TEE("\n%s: llava init in %8.2f ms.\n", __func__, t_llava_init_ms);
 
     const int64_t t_process_image_start_us = ggml_time_us();
-    process_image(ctx_llava, image_embed_slices, params, n_past);
+    process_image(ctx_llava, embeds, params, n_past);
     const int64_t t_process_image_end_us = ggml_time_us();
     float t_process_image_ms = (t_process_image_end_us - t_process_image_start_us) / 1000.0;
     LOG_TEE("\n%s: llama process image in %8.2f ms.\n", __func__, t_process_image_ms);

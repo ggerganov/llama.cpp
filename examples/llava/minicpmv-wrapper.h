@@ -20,6 +20,12 @@
 #    define MINICPMV_API
 #endif
 
+bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past);
+bool eval_id(struct llama_context * ctx_llama, int id, int * n_past);
+bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos);
+void process_image(struct minicpmv_context * ctx_llava,  struct uhd_image_embed * image_embed_slices, gpt_params * params, int &n_past);
+const char * sample(struct llama_sampling_context * ctx_sampling, struct llama_context * ctx_llama, int * n_past);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -35,12 +41,6 @@ MINICPMV_API void llava_free(struct minicpmv_context * ctx_llava);
 
 MINICPMV_API struct clip_ctx * clip_init_context(gpt_params * params);
 MINICPMV_API struct uhd_image_embed * minicpmv_image_embed(gpt_params * params, const std::string & fname);
-
-MINICPMV_API bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past);
-MINICPMV_API bool eval_id(struct llama_context * ctx_llama, int id, int * n_past);
-MINICPMV_API bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos);
-MINICPMV_API void process_image(struct minicpmv_context * ctx_llava,  std::vector<std::vector<struct llava_image_embed *>> image_embed_slices, gpt_params * params, int &n_past);
-MINICPMV_API const char * sample(struct llama_sampling_context * ctx_sampling, struct llama_context * ctx_llama, int * n_past);
 
 #ifdef __cplusplus
 }

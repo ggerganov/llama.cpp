@@ -8,6 +8,10 @@
 #include <cstdlib>
 #include <vector>
 
+struct uhd_image_embed {
+    std::vector<std::vector<struct llava_image_embed *>> image_embeds;
+};
+
 struct llama_model * llava_init(gpt_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
@@ -64,8 +68,7 @@ struct clip_ctx * clip_init_context(gpt_params * params) {
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
     }
-    struct clip_image_size * load_image_size = clip_image_size_init();
-    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1, load_image_size);
+    auto ctx_clip = clip_model_load(clip_path, /*verbosity=*/ 1);
     return ctx_clip;
 }
 
@@ -108,22 +111,22 @@ bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch,
     return eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
 }
 
-void process_image(struct minicpmv_context * ctx_llava, std::vector<std::vector<struct llava_image_embed *>> image_embed_slices, gpt_params * params, int &n_past) {
+void process_image(struct minicpmv_context * ctx_llava, struct uhd_image_embed * image_embed_slices, gpt_params * params, int &n_past) {
     std::string system_prompt;
 
     system_prompt = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n";
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
     eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, false);
-    llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices[0][0], params->n_batch, &n_past);
+    llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices->image_embeds[0][0], params->n_batch, &n_past);
     eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
-    if (image_embed_slices.size() > 1) {
+    if (image_embed_slices->image_embeds.size() > 1) {
         eval_string(ctx_llava->ctx_llama, std::string("<slice>").c_str(), params->n_batch, &n_past, false);
-        for (size_t i = 1; i < image_embed_slices.size(); ++i) {
-            for (size_t j = 0; j < image_embed_slices[i].size(); ++j) {
+        for (size_t i = 1; i < image_embed_slices->image_embeds.size(); ++i) {
+            for (size_t j = 0; j < image_embed_slices->image_embeds[i].size(); ++j) {
                 eval_string(ctx_llava->ctx_llama, std::string("<image>").c_str(), params->n_batch, &n_past, false);
-                llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices[i][j], params->n_batch, &n_past);
+                llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices->image_embeds[i][j], params->n_batch, &n_past);
                 eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
-                if (j == image_embed_slices[i].size() - 1) {
+                if (j == image_embed_slices->image_embeds[i].size() - 1) {
                     eval_string(ctx_llava->ctx_llama, std::string("\n").c_str(), params->n_batch, &n_past, false);
                 }
             }
