@@ -2,12 +2,11 @@
 
 #include <random>
 
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_context * ctx, llama_seq_id seq_id) {
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_sampling * smpl) {
     struct llama_sampling_context * result = new llama_sampling_context();
 
     result->params  = params;
-    result->seq_id  = seq_id;
-    result->ctx     = ctx;
+    result->smpl    = smpl;
     result->grammar = nullptr;
 
     // if there is a grammar, parse it
@@ -43,7 +42,7 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 
     result->n_valid = 0;
 
-    llama_sampling_set_rng_seed(result, params.seed);
+    llama_sampling_set_rng_seed(result->smpl, params.seed);
 
     return result;
 }
@@ -77,13 +76,6 @@ void llama_sampling_reset(llama_sampling_context * ctx) {
     std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
     ctx->cur.clear();
     ctx->n_valid = 0;
-}
-
-void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t seed) {
-    if (seed == LLAMA_DEFAULT_SEED) {
-        seed = std::random_device{}();
-    }
-    llama_set_rng_seed_seq(ctx->ctx, seed, ctx->seq_id);
 }
 
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst) {
@@ -230,10 +222,13 @@ std::vector<llama_sampler_type> llama_sampling_types_from_chars(const std::strin
 
 // no reasons to expose this function in header
 static void sampler_queue(
-                   struct llama_context * ctx_main,
-            const llama_sampling_params & params,
+          struct llama_sampling_context * ctx_sampling,
                  llama_token_data_array & cur_p,
                                  size_t   min_keep) {
+    llama_sampling * smpl = ctx_sampling->smpl;
+
+    const llama_sampling_params & params = ctx_sampling->params;
+
     const float         temp              = params.temp;
     const float         dynatemp_range    = params.dynatemp_range;
     const float         dynatemp_exponent = params.dynatemp_exponent;
@@ -246,18 +241,18 @@ static void sampler_queue(
 
     for (auto sampler_type : samplers_sequence) {
         switch (sampler_type) {
-            case llama_sampler_type::TOP_K    : llama_sample_top_k    (ctx_main, &cur_p, top_k,     min_keep); break;
-            case llama_sampler_type::TFS_Z    : llama_sample_tail_free(ctx_main, &cur_p, tfs_z,     min_keep); break;
-            case llama_sampler_type::TYPICAL_P: llama_sample_typical  (ctx_main, &cur_p, typical_p, min_keep); break;
-            case llama_sampler_type::TOP_P    : llama_sample_top_p    (ctx_main, &cur_p, top_p,     min_keep); break;
-            case llama_sampler_type::MIN_P    : llama_sample_min_p    (ctx_main, &cur_p, min_p,     min_keep); break;
+            case llama_sampler_type::TOP_K    : llama_sampling_top_k    (smpl, &cur_p, top_k,     min_keep); break;
+            case llama_sampler_type::TFS_Z    : llama_sampling_tail_free(smpl, &cur_p, tfs_z,     min_keep); break;
+            case llama_sampler_type::TYPICAL_P: llama_sampling_typical  (smpl, &cur_p, typical_p, min_keep); break;
+            case llama_sampler_type::TOP_P    : llama_sampling_top_p    (smpl, &cur_p, top_p,     min_keep); break;
+            case llama_sampler_type::MIN_P    : llama_sampling_min_p    (smpl, &cur_p, min_p,     min_keep); break;
             case llama_sampler_type::TEMPERATURE:
                 if (dynatemp_range > 0) {
                     float dynatemp_min = std::max(0.0f, temp - dynatemp_range);
                     float dynatemp_max = std::max(0.0f, temp + dynatemp_range);
-                    llama_sample_entropy(ctx_main, &cur_p, dynatemp_min, dynatemp_max, dynatemp_exponent);
+                    llama_sampling_entropy(smpl, &cur_p, dynatemp_min, dynatemp_max, dynatemp_exponent);
                 } else {
-                    llama_sample_temp(ctx_main, &cur_p, temp);
+                    llama_sampling_temp(smpl, &cur_p, temp);
                 }
                 break;
             default : break;
@@ -271,6 +266,8 @@ static llama_token llama_sampling_sample_impl(
                   struct llama_context * ctx_cfg,
                   const int idx,
                   bool is_resampling) {
+    llama_sampling * smpl = ctx_sampling->smpl;
+
     const llama_sampling_params & params = ctx_sampling->params;
 
     const float temp         = params.temp;
@@ -287,26 +284,26 @@ static llama_token llama_sampling_sample_impl(
 
     if (temp < 0.0) {
         // greedy sampling, with probs
-        llama_sample_softmax(ctx_main, &cur_p);
+        llama_sampling_softmax(smpl, &cur_p);
         id = cur_p.data[0].id;
     } else if (temp == 0.0) {
         // greedy sampling, no probs
-        id = llama_sample_token_greedy(ctx_main, &cur_p);
+        id = llama_sampling_sample_greedy(smpl, &cur_p);
     } else {
         if (mirostat == 1) {
             const int mirostat_m = 100;
-            llama_sample_temp(ctx_main, &cur_p, temp);
-            id = llama_sample_token_mirostat(ctx_main, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &ctx_sampling->mirostat_mu);
+            llama_sampling_temp(smpl, &cur_p, temp);
+            id = llama_sampling_sample_mirostat(smpl, &cur_p, mirostat_tau, mirostat_eta, mirostat_m, &ctx_sampling->mirostat_mu);
         } else if (mirostat == 2) {
-            llama_sample_temp(ctx_main, &cur_p, temp);
-            id = llama_sample_token_mirostat_v2(ctx_main, &cur_p, mirostat_tau, mirostat_eta, &ctx_sampling->mirostat_mu);
+            llama_sampling_temp(smpl, &cur_p, temp);
+            id = llama_sampling_sample_mirostat_v2(smpl, &cur_p, mirostat_tau, mirostat_eta, &ctx_sampling->mirostat_mu);
         } else {
             // temperature sampling
             size_t min_keep = std::max(1, params.min_keep);
 
-            sampler_queue(ctx_main, params, cur_p, min_keep);
+            sampler_queue(ctx_sampling, cur_p, min_keep);
 
-            id = llama_sample_token_seq(ctx_main, &cur_p, ctx_sampling->seq_id);
+            id = llama_sampling_sample(smpl, &cur_p);
 
             //{
             //    const int n_top = 10;
@@ -315,11 +312,11 @@ static llama_token llama_sampling_sample_impl(
             //    for (int i = 0; i < n_top; i++) {
             //        const llama_token id = cur_p.data[i].id;
             //        (void)id; // To avoid a warning that id is unused when logging is disabled.
-            //        LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(ctx_main, id).c_str(), cur_p.data[i].p);
+            //        LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(smpl, id).c_str(), cur_p.data[i].p);
             //    }
             //}
 
-            //LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(ctx_main, id).c_str());
+            //LOG("sampled token: %5d: '%s'\n", id, llama_token_to_piece(smpl, id).c_str());
         }
     }
 
@@ -360,6 +357,8 @@ static llama_token_data_array llama_sampling_prepare_impl(
                   const int idx,
                   bool apply_grammar,
                   std::vector<float> * original_logits) {
+    llama_sampling * smpl = ctx_sampling->smpl;
+
     const llama_sampling_params & params = ctx_sampling->params;
 
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
@@ -390,7 +389,7 @@ static llama_token_data_array llama_sampling_prepare_impl(
 
     if (ctx_cfg) {
         float * logits_guidance = llama_get_logits_ith(ctx_cfg, idx);
-        llama_sample_apply_guidance(ctx_main, logits, logits_guidance, params.cfg_scale);
+        llama_sampling_apply_guidance(smpl, logits, logits_guidance, params.cfg_scale);
     }
 
     cur.resize(n_vocab);
@@ -407,7 +406,7 @@ static llama_token_data_array llama_sampling_prepare_impl(
     if (penalty_tokens_used_size) {
         const float nl_logit = logits[llama_token_nl(llama_get_model(ctx_main))];
 
-        llama_sample_repetition_penalties(ctx_main, &cur_p,
+        llama_sampling_repetition_penalties(smpl, &cur_p,
                 penalty_tokens.data() + penalty_tokens.size() - penalty_tokens_used_size,
                 penalty_tokens_used_size, penalty_repeat, penalty_freq, penalty_present);
 
@@ -445,7 +444,7 @@ llama_token_data_array llama_sampling_prepare(
                   const int idx,
                   bool apply_grammar,
                   std::vector<float> * original_logits) {
-    return llama_sampling_prepare_impl(ctx_sampling,ctx_main, ctx_cfg, idx, apply_grammar, original_logits);
+    return llama_sampling_prepare_impl(ctx_sampling, ctx_main, ctx_cfg, idx, apply_grammar, original_logits);
 }
 
 void llama_sampling_accept(

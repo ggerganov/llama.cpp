@@ -664,6 +664,7 @@ struct server_context {
         // Clear any sampling context
         for (server_slot & slot : slots) {
             if (slot.ctx_sampling != nullptr) {
+                llama_sampling_free(slot.ctx_sampling->smpl);
                 llama_sampling_free(slot.ctx_sampling);
             }
         }
@@ -1088,9 +1089,11 @@ struct server_context {
 
         {
             if (slot.ctx_sampling != nullptr) {
+                llama_sampling_free(slot.ctx_sampling->smpl);
                 llama_sampling_free(slot.ctx_sampling);
             }
-            slot.ctx_sampling = llama_sampling_init(slot.sparams, ctx, slot.id);
+
+            slot.ctx_sampling = llama_sampling_init(slot.sparams, llama_sampling_init(llama_n_vocab(model)));
             if (slot.ctx_sampling == nullptr) {
                 // for now, the only error that may happen here is invalid grammar
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
@@ -2402,7 +2405,7 @@ struct server_context {
 
                     // Make sure at least n_probs top tokens are at the front of the vector:
                     if (slot.sparams.temp == 0.0f && n_probs > n_valid) {
-                        llama_sample_top_k(ctx, &cur_p, n_probs, 0);
+                        llama_sampling_top_k(slot.ctx_sampling->smpl, &cur_p, n_probs, 0);
                     }
 
                     if (slot.sparams.temp == 0.0f) {

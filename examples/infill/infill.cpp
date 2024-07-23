@@ -34,6 +34,7 @@
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
+static llama_sampling_context  ** g_ctx_sampling;
 static gpt_params               * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
@@ -93,7 +94,7 @@ static void sigint_handler(int signo) {
         } else {
             console::cleanup();
             printf("\n");
-            llama_print_timings(*g_ctx);
+            llama_print_timings(*g_ctx, (*g_ctx_sampling)->smpl, (*g_ctx_sampling)->grammar);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
             _exit(130);
         }
@@ -171,11 +172,13 @@ int main(int argc, char ** argv) {
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    llama_model * model;
-    llama_context * ctx;
+    llama_model * model = nullptr;
+    llama_context * ctx = nullptr;
+    llama_sampling_context * ctx_sampling = nullptr;
 
     g_model = &model;
     g_ctx = &ctx;
+    g_ctx_sampling = &ctx_sampling;
 
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
@@ -346,7 +349,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams, ctx, 0);
+    ctx_sampling = llama_sampling_init(sparams, llama_get_sampling(ctx));
 
     while (n_remain != 0 || params.interactive) {
         // predict
@@ -635,7 +638,7 @@ int main(int argc, char ** argv) {
         fflush(stdout);
     }
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, ctx_sampling->smpl, ctx_sampling->grammar);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     llama_free(ctx);

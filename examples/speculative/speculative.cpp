@@ -174,8 +174,8 @@ int main(int argc, char ** argv) {
     // used to determine end of generation
     bool has_eos = false;
 
-    // target model sampling context
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, ctx_tgt, 0);
+    // target model sampling context (reuse the llama_context's sampling instance)
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, llama_get_sampling(ctx_tgt));
 
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
@@ -186,7 +186,8 @@ int main(int argc, char ** argv) {
     }
 
     for (int s = 0; s < n_seq_dft; ++s) {
-        drafts[s].ctx_sampling = llama_sampling_init(params.sparams, ctx_dft, s);
+        // allocate llama_sampling for each draft sequence
+        drafts[s].ctx_sampling = llama_sampling_init(params.sparams, llama_sampling_init(llama_n_vocab(model_dft)));
     }
 
     llama_batch batch_dft = llama_batch_init(params.n_ctx, 0, 1);
@@ -230,8 +231,10 @@ int main(int argc, char ** argv) {
                     // stochastic verification
 
                     llama_token_data_array dist_tgt = llama_sampling_prepare(ctx_sampling, ctx_tgt, NULL, drafts[s_keep].i_batch_tgt[i_dft], true, NULL);
-                    llama_sample_softmax(ctx_tgt, &dist_tgt);
-                    float p_tgt = 0, p_dft = 0;
+                    llama_sampling_softmax(ctx_sampling->smpl, &dist_tgt);
+
+                    float p_tgt = 0.0f;
+                    float p_dft = 0.0f;
 
                     // GGML_ASSERT(dist_tgt.size() == dist_dft.size());
 
@@ -327,7 +330,7 @@ int main(int argc, char ** argv) {
                         // all drafted tokens were rejected
                         // sample from the target model
                         LOG("all drafted tokens were rejected, sampling from residual distribution\n");
-                        token_id = llama_sample_token(ctx_tgt, &dist_tgt);
+                        token_id = llama_sampling_sample(ctx_sampling->smpl, &dist_tgt);
                         llama_sampling_accept(ctx_sampling, ctx_tgt, token_id, true);
                         token_str = llama_token_to_piece(ctx_tgt, token_id);
                     }
@@ -589,13 +592,15 @@ int main(int argc, char ** argv) {
     LOG_TEE("accept    = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
     LOG_TEE("\ndraft:\n");
-    llama_print_timings(ctx_dft);
+    // TODO: print sampling/grammar timings for all drafts
+    llama_print_timings(ctx_dft, nullptr, nullptr);
 
     LOG_TEE("\ntarget:\n");
-    llama_print_timings(ctx_tgt);
+    llama_print_timings(ctx_tgt, ctx_sampling->smpl, ctx_sampling->grammar);
 
     llama_sampling_free(ctx_sampling);
     for (int s = 0; s < n_seq_dft; ++s) {
+        llama_sampling_free(drafts[s].ctx_sampling->smpl);
         llama_sampling_free(drafts[s].ctx_sampling);
     }
 

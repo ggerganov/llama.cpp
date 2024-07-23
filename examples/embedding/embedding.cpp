@@ -258,7 +258,7 @@ int main(int argc, char ** argv) {
     }
 
     // clean up
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, nullptr, nullptr);
     llama_batch_free(batch);
     llama_free(ctx);
     llama_free_model(model);

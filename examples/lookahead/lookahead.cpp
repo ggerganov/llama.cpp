@@ -118,7 +118,7 @@ int main(int argc, char ** argv) {
     llama_batch batch = llama_batch_init(params.n_ctx, 0, W + G + 1);
 
     // target model sampling context
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, ctx, 0);
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, llama_get_sampling(ctx));
 
     // verification n-grams
     std::vector<ngram_data> ngrams_cur(G);
@@ -468,7 +468,7 @@ int main(int argc, char ** argv) {
     LOG_TEE("n_predict = %d\n", n_predict);
     LOG_TEE("n_accept  = %d\n", n_accept);
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, ctx_sampling->smpl, ctx_sampling->grammar);
 
     llama_kv_cache_view_free(&kvc_view);
     llama_sampling_free(ctx_sampling);

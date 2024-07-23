@@ -438,7 +438,7 @@ struct llama_grammar * llama_grammar_init_impl(
     // Important: vec_rules has to be moved here, not copied, because stacks contains
     // pointers to elements of vec_rules. If vec_rules were copied into llama_grammar
     // then the pointers would be invalidated when the local vec_rules goes out of scope.
-    return new llama_grammar{ std::move(vec_rules), std::move(stacks), {} };
+    return new llama_grammar{ std::move(vec_rules), std::move(stacks), {}, 0, 0, 0 };
 }
 
 void llama_grammar_free_impl(struct llama_grammar * grammar) {
@@ -446,7 +446,7 @@ void llama_grammar_free_impl(struct llama_grammar * grammar) {
 }
 
 struct llama_grammar * llama_grammar_copy_impl(const struct llama_grammar & grammar) {
-    llama_grammar * result = new llama_grammar{ grammar.rules, grammar.stacks, grammar.partial_utf8 };
+    llama_grammar * result = new llama_grammar{ grammar.rules, grammar.stacks, grammar.partial_utf8, 0, 0, 0 };
 
     // redirect elements in stacks to point to new rules
     for (size_t is = 0; is < result->stacks.size(); is++) {

@@ -70,12 +70,10 @@ struct llama_sampling_context {
     // parameters that will be used for sampling
     llama_sampling_params params;
 
-    llama_seq_id seq_id;
-
     // mirostat sampler state
     float mirostat_mu;
 
-    llama_context * ctx; // TMP
+    llama_sampling * smpl;
     llama_grammar * grammar;
 
     // internal
@@ -91,7 +89,7 @@ struct llama_sampling_context {
 #include "common.h"
 
 // Create a new sampling context instance.
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_context * ctx, llama_seq_id seq_id);
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_sampling * smpl);
 
 void llama_sampling_free(struct llama_sampling_context * ctx);
 
@@ -99,9 +97,6 @@ void llama_sampling_free(struct llama_sampling_context * ctx);
 // - clear prev tokens
 // - reset grammar
 void llama_sampling_reset(llama_sampling_context * ctx);
-
-// Set the sampler seed
-void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t seed);
 
 // Copy the sampler context
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst);

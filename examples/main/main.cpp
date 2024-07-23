@@ -33,6 +33,7 @@
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
+static llama_sampling_context  ** g_ctx_sampling;
 static gpt_params               * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
@@ -105,7 +106,7 @@ static void sigint_handler(int signo) {
         } else {
             console::cleanup();
             printf("\n");
-            llama_print_timings(*g_ctx);
+            llama_print_timings(*g_ctx, (*g_ctx_sampling)->smpl, (*g_ctx_sampling)->grammar);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
             _exit(130);
         }
@@ -121,8 +122,7 @@ static void llama_log_callback_logTee(ggml_log_level level, const char * text, v
 
 static std::string chat_add_and_format(struct llama_model * model, std::vector<llama_chat_msg> & chat_msgs, std::string role, std::string content) {
     llama_chat_msg new_msg{role, content};
-    auto formatted = llama_chat_format_single(
-        model, g_params->chat_template, chat_msgs, new_msg, role == "user");
+    auto formatted = llama_chat_format_single(model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
     return formatted;
 }
@@ -197,12 +197,16 @@ int main(int argc, char ** argv) {
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    llama_model * model;
-    llama_context * ctx;
-    llama_context * ctx_guidance = NULL;
+    llama_model * model = nullptr;
+    llama_context * ctx = nullptr;
+    llama_context * ctx_guidance = nullptr;
+    llama_sampling_context * ctx_sampling = nullptr;
+
     std::vector<llama_chat_msg> chat_msgs;
+
     g_model = &model;
     g_ctx = &ctx;
+    g_ctx_sampling = &ctx_sampling;
 
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
@@ -527,7 +531,7 @@ int main(int argc, char ** argv) {
         antiprompt_ids.emplace_back(::llama_tokenize(ctx, antiprompt, false, true));
     }
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(sparams, ctx, 0);
+    ctx_sampling = llama_sampling_init(sparams, llama_get_sampling(ctx));
     if (!ctx_sampling) {
         fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
@@ -975,7 +979,7 @@ int main(int argc, char ** argv) {
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, ctx_sampling->smpl, ctx_sampling->grammar);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     if (ctx_guidance) { llama_free(ctx_guidance); }

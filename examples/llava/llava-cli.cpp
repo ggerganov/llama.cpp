@@ -191,7 +191,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     LOG_TEE("\n");
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params->sparams, ctx_llava->ctx_llama, 0);
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params->sparams, llama_get_sampling(ctx_llava->ctx_llama));
     if (!ctx_sampling) {
         fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
@@ -310,7 +310,7 @@ int main(int argc, char ** argv) {
         // process the prompt
         process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-        llama_print_timings(ctx_llava->ctx_llama);
+        llama_print_timings(ctx_llava->ctx_llama, nullptr, nullptr);
         llava_image_embed_free(image_embed);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
@@ -327,7 +327,7 @@ int main(int argc, char ** argv) {
             // process the prompt
             process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-            llama_print_timings(ctx_llava->ctx_llama);
+            llama_print_timings(ctx_llava->ctx_llama, nullptr, nullptr);
             llava_image_embed_free(image_embed);
             ctx_llava->model = NULL;
             llava_free(ctx_llava);
