@@ -195,6 +195,19 @@ struct lora_merge_ctx {
         // output is forced to f16 for now
         gguf_set_val_u32(ctx_out, "general.file_type", LLAMA_FTYPE_MOSTLY_F16);
 
+        // check if all lora adapters have the same tensors
+        // TODO: remove this when we can support merging subset of adapters. Ref: https://github.com/ggerganov/llama.cpp/pull/8607#discussion_r1686027777
+        if (adapters.size() > 1) {
+            auto & base_adapter = adapters[0];
+            for (size_t i = 1; i < adapters.size(); ++i) {
+                for (auto & it : base_adapter->tensors) {
+                    if (base_adapter->get_tensor(it.first) == nullptr) {
+                        throw std::runtime_error("Input adapters do not have the same list of tensors. This is not yet supported. Please merge the adapter one-by-one instead of merging all at once.");
+                    }
+                }
+            }
+        }
+
         // if true, this tensor can be lora-merged. if false, we skip merging and just copy data to outfile
         std::vector<std::pair<struct ggml_tensor *, bool>> base_tensors;
         for (auto & it : base_model.tensors) {
@@ -319,8 +332,8 @@ struct lora_merge_ctx {
                 const float scale = alpha ? adapters[i]->scale * alpha / rank : adapters[i]->scale;
                 delta = ggml_scale(ctx0, delta, scale);
                 cur = ggml_add(ctx0, cur, delta);
-                printf("%s :   merging from adapter[%ld]\n", __func__, i);
-                printf("%s :   input_scale=%f calculated_scale=%f rank=%d\n", __func__, adapters[i]->scale, scale, (int) inp_b[i]->ne[0]);
+                printf("%s :   + merging from adapter[%ld]\n", __func__, i);
+                printf("%s :     input_scale=%f calculated_scale=%f rank=%d\n", __func__, adapters[i]->scale, scale, (int) inp_b[i]->ne[0]);
             }
             cur = ggml_cast(ctx0, cur, get_out_tensor_type(base));
             ggml_build_forward_expand(gf, cur);
