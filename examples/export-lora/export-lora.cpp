@@ -27,6 +27,17 @@ static void zeros(std::ofstream & file, size_t n) {
     }
 }
 
+static std::string ggml_ne_string(const ggml_tensor * t) {
+    std::string str;
+    for (int i = 0; i < GGML_MAX_DIMS; ++i) {
+        str += std::to_string(t->ne[i]);
+        if (i + 1 < GGML_MAX_DIMS) {
+            str += ", ";
+        }
+    }
+    return str;
+}
+
 static struct gguf_context * load_gguf(std::string & fname, struct ggml_context ** ctx_ggml) {
     struct gguf_init_params params = {
         /*.no_alloc = */ true,
@@ -242,7 +253,7 @@ struct lora_merge_ctx {
     }
 
     void copy_tensor(struct ggml_tensor * base) {
-        printf("%s :  %s\n", __func__, base->name);
+        printf("%s :  %s [%s]\n", __func__, base->name, ggml_ne_string(base).c_str());
         size_t len = ggml_nbytes(base);
         base_model.read_tensor_data(base->name, read_buf);
         fout.write((char* )read_buf.data(), len);
@@ -254,7 +265,7 @@ struct lora_merge_ctx {
         std::string name_lora_a = name_base + ".lora_a";
         std::string name_lora_b = name_base + ".lora_b";
 
-        printf("%s : %s\n", __func__, base->name);
+        printf("%s : %s [%s]\n", __func__, base->name, ggml_ne_string(base).c_str());
 
         // context for input tensor
         std::vector<struct ggml_tensor *> inp_a(adapters.size());
@@ -308,6 +319,8 @@ struct lora_merge_ctx {
                 const float scale = alpha ? adapters[i]->scale * alpha / rank : adapters[i]->scale;
                 delta = ggml_scale(ctx0, delta, scale);
                 cur = ggml_add(ctx0, cur, delta);
+                printf("%s :   merging from adapter[%ld]\n", __func__, i);
+                printf("%s :   input_scale=%f calculated_scale=%f rank=%d\n", __func__, adapters[i]->scale, scale, (int) inp_b[i]->ne[0]);
             }
             cur = ggml_cast(ctx0, cur, get_out_tensor_type(base));
             ggml_build_forward_expand(gf, cur);
