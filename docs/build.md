@@ -65,7 +65,7 @@ In order to build llama.cpp you have four different options.
         - Tab Workload: Desktop-development with C++
         - Tab Components (select quickly via search): C++-_CMake_ Tools for Windows, _Git_ for Windows, C++-_Clang_ Compiler for Windows, MS-Build Support for LLVM-Toolset (clang)
       - Please remember to always use a Developer Command Prompt / PowerShell for VS2022 for git, build, test
-      - For Wndows on ARM (arm64, WoA) build with:
+      - For Windows on ARM (arm64, WoA) build with:
         ```bash
         cmake --preset arm64-windows-llvm-release -D GGML_OPENMP=OFF
         cmake --build build-arm64-windows-llvm-release
