@@ -155,7 +155,7 @@ int main(void) {
 
 
     // test llama_chat_format_single for user message
-    std::cout << "\n\n=== llama_chat_format_single (system message) ===\n\n";
+    std::cout << "\n\n=== llama_chat_format_single (user message) ===\n\n";
     chat2.push_back({"system", "You are a helpful assistant"});
     chat2.push_back({"user", "Hello"});
     chat2.push_back({"assistant", "I am assistant"});
