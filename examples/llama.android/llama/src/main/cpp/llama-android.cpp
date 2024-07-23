@@ -385,6 +385,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
         jobject intvar_ncur
 ) {
     const auto context = reinterpret_cast<llama_context *>(context_pointer);
+    const auto sampling = reinterpret_cast<llama_sampling *>(llama_get_sampling(context));
     const auto batch = reinterpret_cast<llama_batch *>(batch_pointer);
     const auto model = llama_get_model(context);
 
@@ -405,7 +406,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
 
     // sample the most likely token
-    const auto new_token_id = llama_sample_token_greedy(context, &candidates_p);
+    const auto new_token_id = llama_sampling_sample_greedy(sampling, &candidates_p);
 
     const auto n_cur = env->CallIntMethod(intvar_ncur, la_int_var_value);
     if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
