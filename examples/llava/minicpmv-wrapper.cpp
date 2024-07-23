@@ -29,7 +29,13 @@ struct minicpmv_context * llava_init_context(gpt_params * params, llama_model * 
     }
 
     llama_context_params ctx_params = llama_context_params_from_gpt_params(*params);
-    ctx_params.n_ctx           = params->n_ctx < 2048 ? 2048 : params->n_ctx; // we need a longer context size to process image embeddings
+    if (params->n_ctx < 2048) {
+        // warn user here, "Image processing requires at least 2048 context, setting context to 2048"
+        LOG_TEE("%s: warn: Image processing requires at least 2048 context, setting context to 2048\n" , __func__);
+        ctx_params.n_ctx = 2048;
+    } else {
+        ctx_params.n_ctx = params->n_ctx;
+    }
 
     llama_context * ctx_llama = llama_new_context_with_model(model, ctx_params);
 
