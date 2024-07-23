@@ -413,7 +413,7 @@ void llava_image_embed_free(struct llava_image_embed * embed) {
     free(embed);
 }
 
-static bool encode_image_with_clip_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos, struct clip_image_size * load_image_size) {
+static bool encode_image_with_clip_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos) {
     // std::vector<clip_image_f32*> img_res_v; 
     // format VectN x H x W x RGB (N x 448 x 448 x 3)
     clip_image_f32 * img_res_v = clip_image_f32_init();
@@ -425,7 +425,7 @@ static bool encode_image_with_clip_uhd(clip_ctx * ctx_clip, int n_threads, const
     LOG_TEE("\n%s: mm_patch_merge_type is  %s.\n", __func__, mm_patch_merge_type);
     
     *n_img_pos = clip_n_patches(ctx_clip);
-    bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v, image_embd, load_image_size); // image_embd shape is 96 x 4096
+    bool encoded = clip_image_encode(ctx_clip, n_threads, img_res_v, image_embd); // image_embd shape is 96 x 4096
     if (!encoded) {
         LOG_TEE("Unable to encode image\n");
         return false;
@@ -690,7 +690,8 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
             load_image_size->width = imgs[i][j]->nx;
             load_image_size->height = imgs[i][j]->ny; 
             LOG_TEE("%s : %d %d\n", __func__, load_image_size->width, load_image_size->height);
-            bool image_embed_result = llava_image_embed_make_with_clip_img_uhd(ctx_clip, n_threads, only_v2_5_reshape_by_patch(imgs[i][j], patch_size), &image_embed, &n_image_pos, load_image_size);
+            clip_add_load_image_size(ctx_clip, load_image_size);
+            bool image_embed_result = llava_image_embed_make_with_clip_img_uhd(ctx_clip, n_threads, only_v2_5_reshape_by_patch(imgs[i][j], patch_size), &image_embed, &n_image_pos);
             if (!image_embed_result) {
                 LOG_TEE("%s: coulnd't embed the image\n", __func__);
                 return NULL;
@@ -705,7 +706,7 @@ struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx *
     return results;
 }
 
-bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out, struct clip_image_size * load_image_size) {
+bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
     float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*6); // TODO: base on gridsize/llava model
     if (!image_embd) {
         LOG_TEE("Unable to allocate memory for image embeddings\n");
@@ -713,7 +714,7 @@ bool llava_image_embed_make_with_clip_img_uhd(clip_ctx * ctx_clip, int n_threads
     }
 
     int n_img_pos;
-    if (!encode_image_with_clip_uhd(ctx_clip, n_threads, img, image_embd, &n_img_pos, load_image_size)) {
+    if (!encode_image_with_clip_uhd(ctx_clip, n_threads, img, image_embd, &n_img_pos)) {
         LOG_TEE("%s: cannot encode image, aborting\n", __func__);
         free(image_embd);
         return false;
