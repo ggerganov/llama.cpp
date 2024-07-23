@@ -21207,7 +21207,8 @@ int32_t llama_tokenize(
     return res.size();
 }
 
-static std::string llama_decode_text(const std::string & text) {
+// errors: 'c': copy, 'i': ignore, 'r': replace 0xFFFD, 'v': verbose
+static std::string llama_decode_text(const std::string & text, const char errors = 'v') {
     std::string decoded_text;
 
     const auto cpts = unicode_cpts_from_utf8(text);
@@ -21216,11 +21217,21 @@ static std::string llama_decode_text(const std::string & text) {
         try {
             decoded_text += unicode_utf8_to_byte(utf8);
         } catch (const std::out_of_range & /*e*/) {
-            decoded_text += "[UNK_BYTE_0x";
-            for (const auto c : utf8) {
-                decoded_text += format("%02x", (uint8_t) c);
+            switch (errors) {
+                case 'c':
+                    decoded_text += utf8;  // copy original
+                    break;
+                case 'r':
+                    decoded_text += "\xEF\xBF\xBD";  // 0xFFFD REPLACEMENT CHARACTER
+                    break;
+                case 'v':
+                    decoded_text += format("[UNK_BYTE_0x%02X]", cpt);
+                    break;
+                case 'i':
+                default:
+                    // ignore
+                    break;
             }
-            decoded_text += text + "]";
         }
     }
 
@@ -21286,7 +21297,7 @@ int32_t llama_token_to_piece(const struct llama_model * model, llama_token token
                 if (attr & (attr_special | LLAMA_TOKEN_ATTR_USER_DEFINED)) {
                     return _try_copy(token_text.data(), token_text.size());
                 } else if (attr & LLAMA_TOKEN_ATTR_NORMAL) {
-                    std::string result = llama_decode_text(token_text);
+                    std::string result = llama_decode_text(token_text, 'c');  // copy on error  //TODO: use a tokenizer variable
                     return _try_copy(result.data(), result.size());
                 }
                 break;
