@@ -30,6 +30,7 @@ else()
     else()
         set(BUILD_SHARED_LIBS_DEFAULT ON)
     endif()
+endif()
 
 
 #
