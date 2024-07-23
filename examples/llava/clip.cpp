@@ -1138,7 +1138,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1, s
             new_clip->has_llava_projector = gguf_get_val_bool(ctx, idx);
         }
 
-        idx = gguf_find_key(ctx, KEY_HAS_MiniCPMV_PROJ);
+        idx = gguf_find_key(ctx, KEY_HAS_MINICPMV_PROJ);
         if (idx != -1) {
             new_clip->has_minicpmv_projector = gguf_get_val_bool(ctx, idx);
         }
