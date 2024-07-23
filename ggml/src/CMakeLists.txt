@@ -469,15 +469,15 @@ if (GGML_SYCL)
 
     if (GGML_SYCL_TARGET STREQUAL "INTEL")
         find_package(MKL REQUIRED)
-    else()
-        find_package(oneMKL REQUIRED)
     endif()
 
     check_cxx_compiler_flag("-fsycl" SUPPORTS_SYCL)
     if ( DEFINED ENV{ONEAPI_ROOT})
         message(STATUS "Using oneAPI Release SYCL compiler (icpx).")
     elseif(SUPPORTS_SYCL)
-        message(WARNING "Using open-source SYCL compiler (clang++). Didn't detect ENV {ONEAPI_ROOT}. If you expected the oneAPI Release compiler, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+        message(WARNING "Using open-source SYCL compiler (clang++). Didn't detect ENV {ONEAPI_ROOT}.
+         If you expected the oneAPI Release compiler, please install oneAPI & source it, like: 
+         source /opt/intel/oneapi/setvars.sh")
     else()
         message(FATAL_ERROR, "C++ compiler lacks SYCL support.")
     endif()
