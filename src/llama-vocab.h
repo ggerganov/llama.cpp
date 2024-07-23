@@ -62,7 +62,6 @@ struct llama_vocab {
 };
 
 const struct llama_vocab * llama_get_vocab(const struct llama_context * ctx);
-const struct llama_vocab * llama_get_vocab(const struct llama_model   * model);
 
 //
 // internal API

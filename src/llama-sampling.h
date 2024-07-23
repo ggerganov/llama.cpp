@@ -18,8 +18,6 @@ struct llama_sampling {
     }
 };
 
-struct llama_sampling * llama_get_sampling(struct llama_context * ctx);
-
 //
 // internal API
 //

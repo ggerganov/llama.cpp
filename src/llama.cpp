@@ -36,6 +36,19 @@
 // TODO: replace with ggml API call
 #define QK_K 256
 
+#ifdef __has_include
+    #if __has_include(<unistd.h>)
+        #include <unistd.h>
+        #if defined(_POSIX_MAPPED_FILES)
+            #include <sys/mman.h>
+            #include <fcntl.h>
+        #endif
+        #if defined(_POSIX_MEMLOCK_RANGE)
+            #include <sys/resource.h>
+        #endif
+    #endif
+#endif
+
 #if defined(_WIN32)
     #define WIN32_LEAN_AND_MEAN
     #ifndef NOMINMAX
@@ -86,6 +99,11 @@
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
+
+// bump if necessary
+#define LLAMA_MAX_NODES   8192
+#define LLAMA_MAX_LAYERS  512
+#define LLAMA_MAX_EXPERTS 160  // DeepSeekV2
 
 //
 // helpers
@@ -16792,14 +16810,6 @@ const struct llama_model * llama_get_model(const struct llama_context * ctx) {
 
 const struct llama_vocab * llama_get_vocab(const struct llama_context * ctx) {
     return &ctx->model.vocab;
-}
-
-const struct llama_vocab * llama_get_vocab(const struct llama_model * model) {
-    return &model->vocab;
-}
-
-struct llama_sampling * llama_get_sampling(struct llama_context * ctx) {
-    return &ctx->sampling;
 }
 
 struct llama_grammar * llama_get_grammar(struct llama_context * ctx) {
