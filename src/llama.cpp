@@ -241,6 +241,7 @@ enum llm_arch {
     LLM_ARCH_BITNET,
     LLM_ARCH_T5,
     LLM_ARCH_JAIS,
+    LLM_ARCH_XLMROBERTA,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -285,6 +286,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_BITNET,          "bitnet"       },
     { LLM_ARCH_T5,              "t5"           },
     { LLM_ARCH_JAIS,            "jais"         },
+    { LLM_ARCH_XLMROBERTA,      "xlm-roberta"  },
     { LLM_ARCH_UNKNOWN,         "(unknown)"    },
 };
 
@@ -750,6 +752,23 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
     },
     {
         LLM_ARCH_BERT,
+        {
+            { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
+            { LLM_TENSOR_TOKEN_EMBD_NORM, "token_embd_norm" },
+            { LLM_TENSOR_TOKEN_TYPES,     "token_types" },
+            { LLM_TENSOR_POS_EMBD,        "position_embd" },
+            { LLM_TENSOR_ATTN_OUT_NORM,   "blk.%d.attn_output_norm" },
+            { LLM_TENSOR_ATTN_Q,          "blk.%d.attn_q" },
+            { LLM_TENSOR_ATTN_K,          "blk.%d.attn_k" },
+            { LLM_TENSOR_ATTN_V,          "blk.%d.attn_v" },
+            { LLM_TENSOR_ATTN_OUT,        "blk.%d.attn_output" },
+            { LLM_TENSOR_LAYER_OUT_NORM,  "blk.%d.layer_output_norm" },
+            { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
+            { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
+        },
+    },
+    {
+        LLM_ARCH_XLMROBERTA,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM, "token_embd_norm" },
@@ -4846,6 +4865,7 @@ static void llm_load_hparams(
                 hparams.f_max_alibi_bias = 8.0f;
             } break;
         case LLM_ARCH_BERT:
+        case LLM_ARCH_XLMROBERTA:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS,    hparams.f_norm_eps);
                 ml.get_key(LLM_KV_ATTENTION_CAUSAL,           hparams.causal_attn);
@@ -5532,7 +5552,12 @@ static void llm_load_vocab(
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
         } else if (vocab.type == LLAMA_VOCAB_TYPE_SPM) {
-            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            if (tokenizer_pre == "multilingual-e5-base") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_E5;
+            }
+            else{
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            }
             vocab.tokenizer_add_space_prefix = true;
             vocab.tokenizer_clean_spaces = false;
             vocab.tokenizer_add_bos = true;
@@ -6398,12 +6423,12 @@ static bool llm_load_tensors(
                 } break;
             case LLM_ARCH_BERT:
             case LLM_ARCH_NOMIC_BERT:
+            case LLM_ARCH_XLMROBERTA:
                 {
                     model.tok_embd     = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD,  "weight"), {n_embd, n_vocab});
                     model.type_embd    = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_TYPES, "weight"), {n_embd, n_vocab_type});
-
-                    if (model.arch == LLM_ARCH_BERT) {
-                        model.pos_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_POS_EMBD,    "weight"), {n_embd, n_ctx_train});
+                    if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_XLMROBERTA) {
+                        model.pos_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_POS_EMBD,    "weight"), {n_embd, hparams.n_ctx_train});
                     }
 
                     model.tok_norm   = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD_NORM, "weight"), {n_embd});
@@ -6415,7 +6440,7 @@ static bool llm_load_tensors(
 
                         auto & layer = model.layers[i];
 
-                        if (model.arch == LLM_ARCH_BERT) {
+                        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_XLMROBERTA) {
                             layer.wq = ml.create_tensor(ctx_split, tn(LLM_TENSOR_ATTN_Q,   "weight", i), {n_embd, n_embd});
                             layer.bq = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_Q,   "bias", i),   {n_embd});
 
@@ -6436,10 +6461,10 @@ static bool llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,        "weight", i), {n_embd, n_ff});
                         layer.ffn_down = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN,      "weight", i), {n_ff, n_embd});
 
-                        if (model.arch == LLM_ARCH_BERT) {
-                            layer.bo         = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i), {n_embd});
-                            layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff});
-                            layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd});
+                        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_XLMROBERTA) {
+                            layer.bo         = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_OUT, "bias", i),   {n_embd});
+                            layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
+                            layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd});
                         } else {
                             layer.ffn_gate = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE, "weight", i), {n_embd, n_ff});
                         }
@@ -9769,7 +9794,7 @@ struct llm_build_context {
         // token types are hardcoded to zero ("Sentence A")
         struct ggml_tensor * type_row0 = ggml_view_1d(ctx0, model.type_embd, n_embd, 0);
         inpL = ggml_add(ctx0, inpL, type_row0);
-        if (model.arch == LLM_ARCH_BERT) {
+        if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_XLMROBERTA) {
             inpL = ggml_add(ctx0, ggml_get_rows(ctx0, model.pos_embd, inp_pos), inpL);
         }
         cb(inpL, "inp_embd", -1);
@@ -9790,8 +9815,8 @@ struct llm_build_context {
             struct ggml_tensor * Vcur;
 
             // self-attention
-            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT_V2) {
-                Qcur = ggml_add(ctx0, llm_build_lora_mm(lctx, ctx0, model.layers[il].wq, cur), model.layers[il].bq);
+            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_JINA_BERT_V2 || model.arch == LLM_ARCH_XLMROBERTA) {
+                Qcur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].wq, cur), model.layers[il].bq);
                 cb(Qcur, "Qcur", il);
 
                 if (model.layers[il].attn_q_norm) {
@@ -9898,7 +9923,7 @@ struct llm_build_context {
             cb(ffn_inp, "ffn_inp", il);
 
             // feed-forward network
-            if (model.arch == LLM_ARCH_BERT) {
+            if (model.arch == LLM_ARCH_BERT || model.arch == LLM_ARCH_XLMROBERTA) {
                 cur = llm_build_ffn(ctx0, lctx, cur,
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,   NULL,
                         NULL,                      NULL,                        NULL,
@@ -13856,6 +13881,7 @@ static struct ggml_cgraph * llama_build_graph(
         case LLM_ARCH_BERT:
         case LLM_ARCH_JINA_BERT_V2:
         case LLM_ARCH_NOMIC_BERT:
+        case LLM_ARCH_XLMROBERTA:
             {
                 result = llm.build_bert();
             } break;
@@ -14065,8 +14091,17 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
 
     if (batch.pos && lctx.inp_pos) {
         const int64_t n_tokens = batch.n_tokens;
-
-        ggml_backend_tensor_set(lctx.inp_pos, batch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
+        if (lctx.model.arch != LLM_ARCH_XLMROBERTA) {
+            ggml_backend_tensor_set(lctx.inp_pos, batch.pos, 0, n_tokens*ggml_element_size(lctx.inp_pos));
+        } else {
+            std::vector<llama_pos> position_ids(n_tokens, 0);
+            for (int64_t i = 0; i < n_tokens; ++i) {
+                if (i == 0 || batch.pos[i] != 0) {
+                    position_ids[i] = batch.pos[i] + lctx.model.vocab.special_pad_id + 1;
+                }
+            }
+            ggml_backend_tensor_set(lctx.inp_pos, position_ids.data(), 0, n_tokens*ggml_element_size(lctx.inp_pos));
+        }
     }
 
     if (hparams.causal_attn || cparams.pooling_type == LLAMA_POOLING_TYPE_NONE) {
@@ -15306,7 +15341,7 @@ static llama_token llama_byte_to_token(const llama_vocab & vocab, uint8_t ch) {
             }
             // Try to fall back to just the byte as a string
             const char buf2[2] = { (char)ch, 0 };
-            return vocab.token_to_id.at(buf2);
+            return vocab.token_to_id.find(buf2) != vocab.token_to_id.end() ? token->second:vocab.special_unk_id;
         }
         case LLAMA_VOCAB_TYPE_WPM:
         case LLAMA_VOCAB_TYPE_BPE: {
@@ -16471,6 +16506,11 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
                         LLAMA_LOG_WARN("TT: (%ld %ld %ld) '%s'\n", raw_text.length(), fragment.offset, fragment.length, raw_text.c_str());
 #endif
                         llm_tokenizer_spm tokenizer(vocab);
+                        //Temporary workaround for SPM Preprocessor
+                        if(vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_E5){
+                            std::regex ws_re("\\s+");
+                            raw_text = std::regex_replace(raw_text, ws_re, " ");
+                        }
                         llama_escape_whitespace(raw_text);
                         tokenizer.tokenize(raw_text, output);
                         is_prev_special = false;
@@ -19480,6 +19520,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_STARCODER2:
         case LLM_ARCH_OPENELM:
         case LLM_ARCH_GPTNEOX:
+        case LLM_ARCH_XLMROBERTA:
         case LLM_ARCH_CODESHELL:
             return LLAMA_ROPE_TYPE_NEOX;
 

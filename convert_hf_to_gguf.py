@@ -585,6 +585,9 @@ class Model:
         if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
             res = "jina-v2-code"
+        if chkhsh == "a81863d07e75497e2194eb1a1574d5e5cd4d5f85a87a0728b922bf2bed6fb327":
+            # ref: https://huggingface.co/intfloat/multilingual-e5-base
+            res = "multilingual-e5-base"
         if chkhsh == "b6e8e1518dc4305be2fe39c313ed643381c4da5db34a98f6a04c093f8afbe99b":
             # ref: https://huggingface.co/THUDM/glm-4-9b-chat
             res = "chatglm-bpe"
@@ -2432,6 +2435,68 @@ class BertModel(Model):
         self.gguf_writer.add_tokenizer_pre(tokpre)
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
+
+        # handle special tokens
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        # we are only using BERT for embeddings so we don't need the pooling layer
+        if name in ("embeddings.position_ids", "pooler.dense.weight", "pooler.dense.bias"):
+            return [] # we don't need these
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("XLMRobertaModel")
+class XLMRobertaModel(Model):
+    model_arch = gguf.MODEL_ARCH.XLMROBERTA
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.vocab_size = None
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        self.gguf_writer.add_causal_attention(False)
+
+        # get pooling path
+        pooling_path = None
+        module_path = self.dir_model / "modules.json"
+        if module_path.is_file():
+            with open(module_path, encoding="utf-8") as f:
+                modules = json.load(f)
+            for mod in modules:
+                if mod["type"] == "sentence_transformers.models.Pooling":
+                    pooling_path = mod["path"]
+                    break
+
+        # get pooling type
+        if pooling_path is not None:
+            with open(self.dir_model / pooling_path / "config.json", encoding="utf-8") as f:
+                pooling = json.load(f)
+            if pooling["pooling_mode_mean_tokens"]:
+                pooling_type = gguf.PoolingType.MEAN
+            elif pooling["pooling_mode_cls_token"]:
+                pooling_type = gguf.PoolingType.CLS
+            else:
+                raise NotImplementedError("Only MEAN and CLS pooling types supported")
+            self.gguf_writer.add_pooling_type(pooling_type)
+
+    def set_vocab(self):
+        tokens, toktypes, tokpre = self.get_vocab_base()
+        self.vocab_size = len(tokens)
+
+        self.gguf_writer.add_token_type_count(int(self.hparams['type_vocab_size']))
+
+        # add vocab to gguf
+        self.gguf_writer.add_tokenizer_model("llama")
+        self.gguf_writer.add_tokenizer_pre(tokpre)
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+        self.gguf_writer.add_add_eos_token(True)
 
         # handle special tokens
         special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))

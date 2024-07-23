@@ -217,6 +217,7 @@ class MODEL_ARCH(IntEnum):
     BITNET       = auto()
     T5           = auto()
     JAIS         = auto()
+    XLMROBERTA   = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -344,6 +345,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.BITNET:         "bitnet",
     MODEL_ARCH.T5:             "t5",
     MODEL_ARCH.JAIS:           "jais",
+    MODEL_ARCH.XLMROBERTA:     "xlm-roberta",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -524,6 +526,21 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_UP,
     ],
     MODEL_ARCH.BERT: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.TOKEN_TYPES,
+        MODEL_TENSOR.POS_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_OUT_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+        MODEL_TENSOR.LAYER_OUT_NORM,
+    ],
+    MODEL_ARCH.XLMROBERTA: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.TOKEN_TYPES,

@@ -86,6 +86,7 @@ models = [
     {"name": "smaug-bpe",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/abacusai/Smaug-Llama-3-70B-Instruct", },
     {"name": "poro-chat",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Poro-34B-chat", },
     {"name": "jina-v2-code",   "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/jinaai/jina-embeddings-v2-base-code", },
+    {"name": "multilingual-e5-base",   "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/intfloat/multilingual-e5-base", },
     {"name": "viking",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/LumiOpen/Viking-7B", }, # Also used for Viking 13B and 33B
     {"name": "gemma",          "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/google/gemma-2b", },
     {"name": "gemma-2",        "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/google/gemma-2-9b", },
@@ -144,7 +145,7 @@ for model in models:
     name = model["name"]
     tokt = model["tokt"]
 
-    if tokt == TOKENIZER_TYPE.SPM or tokt == TOKENIZER_TYPE.UGM:
+    if (tokt == TOKENIZER_TYPE.SPM and name != "multilingual-e5-base") or tokt == TOKENIZER_TYPE.UGM:
         continue
 
     # Skip if the tokenizer folder does not exist or there are other download issues previously
