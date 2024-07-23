@@ -472,7 +472,7 @@ if (GGML_SYCL)
         message(STATUS "Using oneAPI Release SYCL compiler (icpx).")
     elseif(SUPPORTS_SYCL)
         message(WARNING "Using open-source SYCL compiler (clang++). Didn't detect ENV {ONEAPI_ROOT}.
-         If you expected the oneAPI Release compiler, please install oneAPI & source it, like: 
+         If you expected the oneAPI Release compiler, please install oneAPI & source it, like:
          source /opt/intel/oneapi/setvars.sh")
     else()
         message(FATAL_ERROR, "C++ compiler lacks SYCL support.")
