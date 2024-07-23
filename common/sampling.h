@@ -70,9 +70,12 @@ struct llama_sampling_context {
     // parameters that will be used for sampling
     llama_sampling_params params;
 
+    llama_seq_id seq_id;
+
     // mirostat sampler state
     float mirostat_mu;
 
+    llama_context * ctx; // TMP
     llama_grammar * grammar;
 
     // internal
@@ -81,15 +84,14 @@ struct llama_sampling_context {
     // TODO: replace with ring-buffer
     std::vector<llama_token>      prev;
     std::vector<llama_token_data> cur;
-    size_t n_valid; // Number of correct top tokens with correct probabilities.
 
-    std::mt19937 rng;
+    size_t n_valid; // Number of correct top tokens with correct probabilities.
 };
 
 #include "common.h"
 
 // Create a new sampling context instance.
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params);
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_context * ctx, llama_seq_id seq_id);
 
 void llama_sampling_free(struct llama_sampling_context * ctx);
 

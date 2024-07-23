@@ -2,8 +2,8 @@
 #undef NDEBUG
 #endif
 
-#define LLAMA_API_INTERNAL
 #include "llama.h"
+#include "llama-impl.h"
 #include "grammar-parser.h"
 
 #include <cassert>

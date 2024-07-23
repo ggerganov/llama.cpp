@@ -1,11 +1,13 @@
-#define LLAMA_API_INTERNAL
 #include "sampling.h"
+
 #include <random>
 
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params) {
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_context * ctx, llama_seq_id seq_id) {
     struct llama_sampling_context * result = new llama_sampling_context();
 
     result->params  = params;
+    result->seq_id  = seq_id;
+    result->ctx     = ctx;
     result->grammar = nullptr;
 
     // if there is a grammar, parse it
@@ -81,7 +83,7 @@ void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t s
     if (seed == LLAMA_DEFAULT_SEED) {
         seed = std::random_device{}();
     }
-    ctx->rng.seed(seed);
+    llama_set_rng_seed_seq(ctx->ctx, seed, ctx->seq_id);
 }
 
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst) {
@@ -271,10 +273,10 @@ static llama_token llama_sampling_sample_impl(
                   bool is_resampling) {
     const llama_sampling_params & params = ctx_sampling->params;
 
-    const float   temp            = params.temp;
-    const int     mirostat        = params.mirostat;
-    const float   mirostat_tau    = params.mirostat_tau;
-    const float   mirostat_eta    = params.mirostat_eta;
+    const float temp         = params.temp;
+    const int   mirostat     = params.mirostat;
+    const float mirostat_tau = params.mirostat_tau;
+    const float mirostat_eta = params.mirostat_eta;
 
     std::vector<float> original_logits;
     auto cur_p = llama_sampling_prepare(ctx_sampling, ctx_main, ctx_cfg, idx, /* apply_grammar= */ is_resampling, &original_logits);
@@ -304,7 +306,7 @@ static llama_token llama_sampling_sample_impl(
 
             sampler_queue(ctx_main, params, cur_p, min_keep);
 
-            id = llama_sample_token_with_rng(ctx_main, &cur_p, ctx_sampling->rng);
+            id = llama_sample_token_seq(ctx_main, &cur_p, ctx_sampling->seq_id);
 
             //{
             //    const int n_top = 10;

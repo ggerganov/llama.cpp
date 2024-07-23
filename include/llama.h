@@ -40,7 +40,7 @@
 #define LLAMA_FILE_MAGIC_GGSQ 0x67677371u // 'ggsq'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 7
+#define LLAMA_SESSION_VERSION 8
 
 #define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
 #define LLAMA_STATE_SEQ_VERSION 1
@@ -1031,6 +1031,9 @@ extern "C" {
     // Sets the current rng seed.
     LLAMA_API void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed);
 
+    LLAMA_API DEPRECATED(void llama_set_rng_seed_seq(struct llama_context * ctx, uint32_t seed, llama_seq_id),
+        "temporary API, until llama_sampling_context is implemented, do not use");
+
     /// @details Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
     /// @details Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
     LLAMA_API void llama_sample_repetition_penalties(
@@ -1137,10 +1140,17 @@ extern "C" {
             struct llama_context * ctx,
           llama_token_data_array * candidates);
 
-    /// @details Randomly selects a token from the candidates based on their probabilities using the RNG of ctx.
+    /// @details Randomly selects a token from the candidates based on their probabilities using RNG[0] of ctx.
     LLAMA_API llama_token llama_sample_token(
             struct llama_context * ctx,
           llama_token_data_array * candidates);
+
+    /// @details Same as llama_sample_token, but uses a seqeuence-specific RNG[seq_id].
+    LLAMA_API DEPRECATED(llama_token llama_sample_token_seq(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+                    llama_seq_id   seq_id),
+        "temporary API, until llama_sampling_context is implemented, do not use");
 
     //
     // Model split
@@ -1174,60 +1184,5 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
-
-// Internal API to be implemented by llama.cpp and used by tests/benchmarks only
-#ifdef LLAMA_API_INTERNAL
-
-#include <random>
-#include <string>
-#include <vector>
-
-struct ggml_tensor;
-
-const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
-    struct llama_context * ctx
-);
-
-struct llama_partial_utf8 {
-    uint32_t value;    // bit value so far (unshifted)
-    int      n_remain; // num bytes remaining; -1 indicates invalid sequence
-};
-
-struct llama_grammar_candidate {
-    size_t               index;
-    const uint32_t     * code_points;
-    llama_partial_utf8   partial_utf8;
-};
-
-using llama_grammar_rule  = std::vector<      llama_grammar_element>;
-using llama_grammar_stack = std::vector<const llama_grammar_element *>;
-
-using llama_grammar_rules      = std::vector<llama_grammar_rule>;
-using llama_grammar_stacks     = std::vector<llama_grammar_stack>;
-using llama_grammar_candidates = std::vector<llama_grammar_candidate>;
-
-const llama_grammar_rules  & llama_grammar_get_rules (const struct llama_grammar * grammar);
-      llama_grammar_stacks & llama_grammar_get_stacks(      struct llama_grammar * grammar);
-
-void llama_grammar_accept(
-        const llama_grammar_rules  & rules,
-        const llama_grammar_stacks & stacks,
-        const uint32_t chr,
-              llama_grammar_stacks & new_stacks);
-
-std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_stack(
-        const llama_grammar_rules & rules,
-        const llama_grammar_stack & stack,
-        const llama_grammar_candidates & candidates);
-
-std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
-        const std::string & src,
-        llama_partial_utf8 partial_start);
-
-// Randomly selects a token from the candidates based on their probabilities using given std::mt19937.
-// This is a temporary workaround in order to fix race conditions when sampling with multiple sequences.
-llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng);
-
-#endif // LLAMA_API_INTERNAL
 
 #endif // LLAMA_H

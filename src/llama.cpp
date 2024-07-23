@@ -163,6 +163,19 @@ static void zeros(std::ofstream & file, size_t n) {
     }
 }
 
+struct time_meas {
+    time_meas(int64_t & t_acc) : t_start_us(ggml_time_us()), t_acc(t_acc) {}
+
+    ~time_meas() {
+        t_acc += ggml_time_us() - t_start_us;
+    }
+
+    const int64_t t_start_us;
+
+    int64_t & t_acc;
+};
+
+
 LLAMA_ATTRIBUTE_FORMAT(1, 2)
 static std::string format(const char * fmt, ...) {
     va_list ap;
@@ -2656,7 +2669,6 @@ struct llama_model {
 struct llama_context {
     llama_context(const llama_model & model)
         : model(model)
-        , sampling(llama_n_vocab(&model))
         , grammar()
         , t_start_us(model.t_start_us)
         , t_load_us(model.t_load_us) {}
@@ -2674,10 +2686,11 @@ struct llama_context {
     const struct llama_model & model;
 
     struct llama_cparams        cparams;
-    struct llama_sampling       sampling;
     struct llama_grammar        grammar;
     struct llama_kv_cache       kv_self;
     struct llama_control_vector cvec;
+
+    std::vector<struct llama_sampling> sampling; // sampling context for each sequence
 
     std::unordered_map<struct llama_lora_adapter *, float> lora_adapters;
 
@@ -2692,16 +2705,18 @@ struct llama_context {
 
     bool has_evaluated_once = false;
 
-    int64_t t_start_us;
-    int64_t t_load_us;
-    int64_t t_p_eval_us = 0;
-    int64_t t_eval_us   = 0;
+    mutable int64_t t_start_us;
+    mutable int64_t t_load_us;
+    mutable int64_t t_sample_us = 0;
+    mutable int64_t t_p_eval_us = 0;
+    mutable int64_t t_eval_us   = 0;
 
-    int64_t t_compute_start_us = 0;
-    int64_t n_queued_tokens = 0;
+    mutable int64_t t_compute_start_us = 0;
+    mutable int64_t n_queued_tokens = 0;
 
-    int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
-    int32_t n_eval   = 0; // number of eval calls
+    mutable int32_t n_sample = 0;
+    mutable int32_t n_p_eval = 0; // number of tokens in eval calls for the prompt (with batch size > 1)
+    mutable int32_t n_eval   = 0; // number of eval calls
 
     // host buffer for the model output (logits and embeddings)
     ggml_backend_buffer_t buf_output = nullptr;
@@ -16527,8 +16542,12 @@ struct llama_context * llama_new_context_with_model(
     ctx->abort_callback      = params.abort_callback;
     ctx->abort_callback_data = params.abort_callback_data;
 
-    ctx->sampling.rng = std::mt19937(params.seed);
-    ctx->logits_all   = params.logits_all;
+    ctx->sampling.reserve(cparams.n_seq_max);
+    for (uint32_t i = 0; i < cparams.n_seq_max; ++i) {
+        ctx->sampling.emplace_back(params.seed, llama_n_vocab(model));
+    }
+
+    ctx->logits_all = params.logits_all;
 
     uint32_t kv_size = cparams.n_ctx;
     ggml_type type_k = params.type_k;
@@ -17303,6 +17322,7 @@ size_t llama_state_get_size(const struct llama_context * ctx) {
 
     // we don't know size of rng until we actually serialize it. so reserve more than enough memory for its serialized state.
     // for reference, std::mt19937(1337) serializes to 6701 bytes.
+    const size_t s_n_rng           = sizeof(uint32_t);
     const size_t s_rng_size        = sizeof(size_t);
     const size_t s_rng             = LLAMA_MAX_RNG_STATE;
     const size_t s_n_outputs       = sizeof(size_t);
@@ -17322,8 +17342,8 @@ size_t llama_state_get_size(const struct llama_context * ctx) {
     const size_t s_kv_cells        = ctx->kv_self.size * s_kv_cell;
 
     const size_t s_total = (
-        + s_rng_size
-        + s_rng
+        + s_n_rng
+        + cparams.n_seq_max*(s_rng_size + s_rng)
         + s_n_outputs
         + s_output_pos
         + s_logits_size
@@ -17340,7 +17360,7 @@ size_t llama_state_get_size(const struct llama_context * ctx) {
     );
 
     // on session change it is very likely that the state size has changed - so we need to update this function
-    static_assert(LLAMA_SESSION_VERSION == 7, "So you just bumped the session version - good. But did you remember to update llama_state_get_size?");
+    static_assert(LLAMA_SESSION_VERSION == 8, "So you just bumped the session version - good. But did you remember to update llama_state_get_size?");
 
     return s_total;
 }
@@ -17401,18 +17421,24 @@ struct llama_data_file_context : llama_data_context {
 static void llama_state_get_data_internal(struct llama_context * ctx, llama_data_context * data_ctx) {
     llama_synchronize(ctx);
 
-    // copy rng
+    // copy rngs
     {
-        std::ostringstream rng_ss;
-        rng_ss << ctx->sampling.rng;
+        const uint32_t n_rng = ctx->sampling.size();
 
-        const std::string & rng_str  = rng_ss.str();
-        const size_t        rng_size = rng_str.size();
+        data_ctx->write(&n_rng, sizeof(n_rng));
 
-        GGML_ASSERT(rng_size <= LLAMA_MAX_RNG_STATE);
+        for (const auto & smpl : ctx->sampling) {
+            std::ostringstream rng_ss;
+            rng_ss << smpl.rng;
 
-        data_ctx->write(&rng_size,      sizeof(rng_size));
-        data_ctx->write(rng_str.data(), rng_size);
+            const std::string & rng_str  = rng_ss.str();
+            const size_t        rng_size = rng_str.size();
+
+            GGML_ASSERT(rng_size <= LLAMA_MAX_RNG_STATE);
+
+            data_ctx->write(&rng_size,      sizeof(rng_size));
+            data_ctx->write(rng_str.data(), rng_size);
+        }
     }
 
     // copy outputs
@@ -17560,19 +17586,26 @@ size_t llama_state_set_data(struct llama_context * ctx, const uint8_t * src) {
 
     const uint8_t * inp = src;
 
-    // set rng
+    // set rngs
     {
-        size_t rng_size;
-        memcpy(&rng_size, inp, sizeof(rng_size)); inp += sizeof(rng_size);
+        uint32_t n_rng;
+        memcpy(&n_rng, inp, sizeof(n_rng)); inp += sizeof(n_rng);
 
-        GGML_ASSERT(rng_size <= LLAMA_MAX_RNG_STATE);
+        GGML_ASSERT(n_rng == ctx->cparams.n_seq_max);
 
-        std::string rng_str((const char *)inp, rng_size); inp += rng_size;
+        for (auto & smpl : ctx->sampling) {
+            size_t rng_size;
+            memcpy(&rng_size, inp, sizeof(rng_size)); inp += sizeof(rng_size);
 
-        std::istringstream rng_ss(rng_str);
-        rng_ss >> ctx->sampling.rng;
+            GGML_ASSERT(rng_size <= LLAMA_MAX_RNG_STATE);
 
-        GGML_ASSERT(!rng_ss.fail());
+            std::string rng_str((const char *)inp, rng_size); inp += rng_size;
+
+            std::istringstream rng_ss(rng_str);
+            rng_ss >> smpl.rng;
+
+            GGML_ASSERT(!rng_ss.fail());
+        }
     }
 
     // set output ids
@@ -18930,18 +18963,24 @@ struct llama_grammar * llama_grammar_init(
 }
 
 void llama_grammar_free(struct llama_grammar * grammar) {
+    if (grammar == nullptr) {
+        return;
+    }
+
     llama_grammar_free_impl(grammar);
 }
 
 struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar) {
-    return llama_grammar_copy_impl(grammar);
+    return llama_grammar_copy_impl(*grammar);
 }
 
 void llama_grammar_sample(
       const struct llama_grammar * grammar,
       const struct llama_context * ctx,
           llama_token_data_array * candidates) {
-    llama_grammar_sample_impl(grammar, &ctx->model.vocab, &ctx->sampling, candidates);
+    time_meas tm(ctx->t_sample_us); // TODO: measure grammar time separately from sampling
+
+    llama_grammar_sample_impl(*grammar, ctx->model.vocab, candidates);
 }
 
 void llama_sample_grammar(
@@ -18955,7 +18994,9 @@ void llama_grammar_accept_token(
             struct llama_grammar * grammar,
             struct llama_context * ctx,
                      llama_token   token) {
-    llama_grammar_accept_token_impl(grammar, &ctx->model.vocab, &ctx->sampling, token);
+    time_meas tm(ctx->t_sample_us); // TODO: measure grammar time separately from sampling
+
+    llama_grammar_accept_token_impl(*grammar, ctx->model.vocab, token);
 }
 
 //
@@ -18963,39 +19004,59 @@ void llama_grammar_accept_token(
 //
 
 void llama_set_rng_seed(struct llama_context * ctx, uint32_t seed) {
-    llama_set_rng_seed_impl(&ctx->sampling, seed);
+    llama_set_rng_seed_impl(ctx->sampling[0], seed);
+}
+
+void llama_set_rng_seed_seq(struct llama_context * ctx, uint32_t seed, llama_seq_id seq_id) {
+    llama_set_rng_seed_impl(ctx->sampling[seq_id], seed);
 }
 
 void llama_sample_softmax(struct llama_context * ctx, llama_token_data_array * candidates) {
-    llama_sample_softmax_impl(ctx ? &ctx->sampling : nullptr, candidates);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_softmax_impl(ctx->sampling[0], candidates);
 }
 
 void llama_sample_top_k(struct llama_context * ctx, llama_token_data_array * candidates, int32_t k, size_t min_keep) {
-    llama_sample_top_k_impl(ctx ? &ctx->sampling : nullptr, candidates, k, min_keep);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_top_k_impl(ctx->sampling[0], candidates, k, min_keep);
 }
 
 void llama_sample_top_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    llama_sample_top_p_impl(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_top_p_impl(ctx->sampling[0], candidates, p, min_keep);
 }
 
 void llama_sample_min_p(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    llama_sample_min_p_impl(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_min_p_impl(ctx->sampling[0], candidates, p, min_keep);
 }
 
 void llama_sample_tail_free(struct llama_context * ctx, llama_token_data_array * candidates, float z, size_t min_keep) {
-    llama_sample_tail_free_impl(ctx ? &ctx->sampling : nullptr, candidates, z, min_keep);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_tail_free_impl(ctx->sampling[0], candidates, z, min_keep);
 }
 
 void llama_sample_typical(struct llama_context * ctx, llama_token_data_array * candidates, float p, size_t min_keep) {
-    llama_sample_typical_impl(ctx ? &ctx->sampling : nullptr, candidates, p, min_keep);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_typical_impl(ctx->sampling[0], candidates, p, min_keep);
 }
 
 void llama_sample_entropy(struct llama_context * ctx, llama_token_data_array * candidates_p, float min_temp, float max_temp, float exponent_val) {
-    llama_sample_entropy_impl(ctx ? &ctx->sampling : nullptr, candidates_p, min_temp, max_temp, exponent_val);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_entropy_impl(ctx->sampling[0], candidates_p, min_temp, max_temp, exponent_val);
 }
 
 void llama_sample_temp(struct llama_context * ctx, llama_token_data_array * candidates_p, float temp) {
-    llama_sample_temp_impl(ctx ? &ctx->sampling : nullptr, candidates_p, temp);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_temp_impl(ctx->sampling[0], candidates_p, temp);
 }
 
 void llama_sample_repetition_penalties(
@@ -19006,7 +19067,9 @@ void llama_sample_repetition_penalties(
                            float   penalty_repeat,
                            float   penalty_freq,
                            float   penalty_present) {
-    llama_sample_repetition_penalties_impl(ctx ? &ctx->sampling : nullptr, candidates, last_tokens, penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_repetition_penalties_impl(ctx->sampling[0], candidates, last_tokens, penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
 }
 
 void llama_sample_apply_guidance(
@@ -19014,27 +19077,55 @@ void llama_sample_apply_guidance(
                          float * logits,
                          float * logits_guidance,
                          float   scale) {
-    llama_sample_apply_guidance_impl(&ctx->sampling, logits, logits_guidance, scale);
+    time_meas tm(ctx->t_sample_us);
+
+    llama_sample_apply_guidance_impl(ctx->sampling[0], logits, logits_guidance, scale);
 }
 
 llama_token llama_sample_token_mirostat(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
-    return llama_sample_token_mirostat_impl(&ctx->sampling, candidates, tau, eta, m, mu);
+    time_meas tm(ctx->t_sample_us);
+
+    auto res = llama_sample_token_mirostat_impl(ctx->sampling[0], candidates, tau, eta, m, mu);
+
+    ctx->n_sample++;
+
+    return res;
 }
 
 llama_token llama_sample_token_mirostat_v2(struct llama_context * ctx, llama_token_data_array * candidates, float tau, float eta, float * mu) {
-    return llama_sample_token_mirostat_v2_impl(ctx ? &ctx->sampling : nullptr, candidates, tau, eta, mu);
+    time_meas tm(ctx->t_sample_us);
+
+    auto res = llama_sample_token_mirostat_v2_impl(ctx->sampling[0], candidates, tau, eta, mu);
+
+    ctx->n_sample++;
+
+    return res;
 }
 
 llama_token llama_sample_token_greedy(struct llama_context * ctx, llama_token_data_array * candidates) {
-    return llama_sample_token_greedy_impl(ctx ? &ctx->sampling : nullptr, candidates);
-}
+    time_meas tm(ctx->t_sample_us);
 
-llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng) {
-    return llama_sample_token_with_rng_impl(&ctx->sampling, candidates, rng);
+    auto res = llama_sample_token_greedy_impl(ctx->sampling[0], candidates);
+
+    ctx->n_sample++;
+
+    return res;
 }
 
 llama_token llama_sample_token(struct llama_context * ctx, llama_token_data_array * candidates) {
-    return llama_sample_token_with_rng_impl(&ctx->sampling, candidates, ctx->sampling.rng);
+    return llama_sample_token_seq(ctx, candidates, 0);
+}
+
+llama_token llama_sample_token_seq(struct llama_context * ctx, llama_token_data_array * candidates, llama_seq_id seq_id) {
+    GGML_ASSERT(seq_id >= 0 && seq_id < (int32_t) ctx->cparams.n_seq_max);
+
+    time_meas tm(ctx->t_sample_us);
+
+    auto res = llama_sample_token_impl(ctx->sampling[seq_id], candidates);
+
+    ctx->n_sample++;
+
+    return res;
 }
 
 int llama_split_path(char * split_path, size_t maxlen, const char * path_prefix, int split_no, int split_count) {
@@ -19066,11 +19157,11 @@ struct llama_timings llama_get_timings(struct llama_context * ctx) {
         /*.t_start_ms  =*/ 1e-3 * ctx->t_start_us,
         /*.t_end_ms    =*/ 1.00 * ggml_time_ms(),
         /*.t_load_ms   =*/ 1e-3 * ctx->t_load_us,
-        /*.t_sample_ms =*/ 1e-3 * ctx->sampling.t_sample_us,
+        /*.t_sample_ms =*/ 1e-3 * ctx->t_sample_us,
         /*.t_p_eval_ms =*/ 1e-3 * ctx->t_p_eval_us,
         /*.t_eval_ms   =*/ 1e-3 * ctx->t_eval_us,
 
-        /*.n_sample =*/ std::max(1, ctx->sampling.n_sample),
+        /*.n_sample =*/ std::max(1, ctx->n_sample),
         /*.n_p_eval =*/ std::max(0, ctx->n_p_eval),
         /*.n_eval   =*/ std::max(1, ctx->n_eval),
     };
@@ -19095,9 +19186,8 @@ void llama_print_timings(struct llama_context * ctx) {
 void llama_reset_timings(struct llama_context * ctx) {
     ctx->t_start_us  = ggml_time_us();
     ctx->t_eval_us   = ctx->n_eval   = 0;
+    ctx->t_sample_us = ctx->n_sample = 0;
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
-
-    ctx->sampling.reset_timings();
 }
 
 const char * llama_print_system_info(void) {
@@ -19144,20 +19234,20 @@ void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
     fprintf(stream, "mst_p_eval: %.2f  # ms / token during prompt processing\n",
             1.0e-3 * ctx->t_p_eval_us / ctx->n_p_eval);
     fprintf(stream, "mst_sample: %.2f  # ms / token during sampling\n",
-            1.0e-3 * ctx->sampling.t_sample_us / ctx->sampling.n_sample);
+            1.0e-3 * ctx->t_sample_us / ctx->n_sample);
     fprintf(stream, "n_eval: %d  # number of tokens generated (excluding the first one)\n", ctx->n_eval);
     fprintf(stream, "n_p_eval: %d  # number of tokens processed in batches at the beginning\n", ctx->n_p_eval);
-    fprintf(stream, "n_sample: %d  # number of sampled tokens\n", ctx->sampling.n_sample);
+    fprintf(stream, "n_sample: %d  # number of sampled tokens\n", ctx->n_sample);
     fprintf(stream, "t_eval_us: %" PRId64 "  # total microseconds spent generating tokens\n", ctx->t_eval_us);
     fprintf(stream, "t_load_us: %" PRId64 "  # total microseconds spent loading the model\n", ctx->t_load_us);
     fprintf(stream, "t_p_eval_us: %" PRId64 "  # total microseconds spent prompt processing\n", ctx->t_p_eval_us);
-    fprintf(stream, "t_sample_us: %" PRId64 "  # total microseconds spent sampling\n", ctx->sampling.t_sample_us);
+    fprintf(stream, "t_sample_us: %" PRId64 "  # total microseconds spent sampling\n", ctx->t_sample_us);
     fprintf(stream, "ts_eval: %.2f  # tokens / second during generation\n",
             1.0e6 * ctx->n_eval / ctx->t_eval_us);
     fprintf(stream, "ts_p_eval: %.2f  # tokens / second during prompt processing\n",
             1.0e6 * ctx->n_p_eval / ctx->t_p_eval_us);
     fprintf(stream, "ts_sample: %.2f  # tokens / second during sampling\n",
-            1.0e6 * ctx->sampling.n_sample / ctx->sampling.t_sample_us);
+            1.0e6 * ctx->n_sample / ctx->t_sample_us);
 }
 
 // For internal test use

@@ -1,8 +1,7 @@
-#define LLAMA_API_INTERNAL
-
 #include "grammar-parser.h"
 #include "ggml.h"
 #include "llama.h"
+#include "llama-impl.h"
 #include "unicode.h"
 
 #include <cstdio>

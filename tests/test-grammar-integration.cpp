@@ -2,13 +2,13 @@
 #undef NDEBUG
 #endif
 
-#define LLAMA_API_INTERNAL
-
 #include "ggml.h"
 #include "llama.h"
+#include "llama-impl.h"
+#include "unicode.h"
 #include "grammar-parser.h"
 #include "json-schema-to-grammar.h"
-#include "unicode.h"
+
 #include <cassert>
 #include <string>
 #include <vector>
