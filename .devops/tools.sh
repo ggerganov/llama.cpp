@@ -13,8 +13,6 @@ elif [[ "$arg1" == '--quantize' || "$arg1" == '-q' ]]; then
     ./llama-quantize "$@"
 elif [[ "$arg1" == '--run' || "$arg1" == '-r' ]]; then
     ./llama-cli "$@"
-elif [[ "$arg1" == '--finetune' || "$arg1" == '-f' ]]; then
-    ./llama-finetune "$@"
 elif [[ "$arg1" == '--all-in-one' || "$arg1" == '-a' ]]; then
     echo "Converting PTH to GGML..."
     for i in `ls $1/$2/ggml-model-f16.bin*`; do

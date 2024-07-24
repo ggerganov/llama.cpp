@@ -11,7 +11,6 @@ BUILD_TARGETS = \
 	llama-embedding \
 	llama-eval-callback \
 	llama-export-lora \
-	llama-finetune \
 	llama-gbnf-validator \
 	llama-gguf \
 	llama-gguf-hash \
@@ -1608,15 +1607,5 @@ ifneq (,$(wildcard embedding))
 	@echo "#########"
 	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
 	@echo "  Remove the 'embedding' binary to remove this warning."
-	@echo "#########"
-endif
-
-finetune: examples/deprecation-warning/deprecation-warning.cpp
-ifneq (,$(wildcard finetune))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "#########"
-	@echo "WARNING: The 'finetune' binary is deprecated. Please use 'llama-finetune' instead."
-	@echo "  Remove the 'finetune' binary to remove this warning."
 	@echo "#########"
 endif
