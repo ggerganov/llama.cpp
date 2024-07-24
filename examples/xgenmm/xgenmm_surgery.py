@@ -41,29 +41,8 @@ if __name__ == "__main__":
         print(f"❗❗❗ Unexpected component keys: {unexpected_component_keys}. Proceed with caution.")
     
     save_dir = f"{args.save_pth}/{args.version}"
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    # get a list vl connector keys
-    projector_tensors = {v.float(): v for k, v in ckpt.items() if k.startswith(PROJECTOR)}
-    print("🟡 Saving project ckpt...")
-    save_path = f"{save_dir}/xgenmm.projector"
+    print("🟡 Instaiate the model.")
     start = time.time()
-    torch.save(projector_tensors, save_path)
-    end = time.time()
-    print(f"🟢 time used: [{end-start:.3f} s] | Save projector ckpt at: {save_path}")
-    
-    # here we use the siglip
-    vision_encoder_tensors = {v.float(): v for k, v in ckpt.items() if k.startswith(VISION_ENCODER_KEY)}
-    print("🟡 Saving vision encoder ckpt...")
-    save_path = f"{save_dir}/xgenmm.clip"
-    start = time.time()
-    torch.save(vision_encoder_tensors, save_path)
-    end = time.time()
-    print(f"🟢 time used: [{end-start:.3f} s] | Save projector ckpt at: {save_path}")
-    
-    
-    # hard code to load the model using open-flamingo
-    print("🟡 Saving llm ckpt...")
     cfg = dict(
         model_family = 'kosmos',
         lm_path = 'microsoft/Phi-3-mini-4k-instruct',
@@ -92,8 +71,27 @@ if __name__ == "__main__":
                                         model_family=cfg.model_family,
                                         **additional_kwargs)
     model.load_state_dict(ckpt, strict=True)
-    start = time.time()
-    llm = model.lang_model.save_pretrained(f"{save_dir}/model")
-    tokenizer.save_pretrained(f"{save_dir}/model")
     end = time.time()
-    print(f"🟢 time used: [{end-start:.3f} s] | Save projector ckpt at: {save_dir}/model")
+    print(f"🟢 time used: [{end-start:.3f} s] | Done with instaiating the model.")
+    
+
+    print("🟡 Peforming the surgery...")
+    
+    model.lang_model.save_pretrained(f"{save_dir}/llm")    
+    
+    model.vision_encoder.config.save_pretrained(f"{save_dir}/vision_encoder")
+    vision_encoder_tensors = {k.split(VISION_ENCODER_KEY + '.')[-1]: v.float() for k, v in ckpt.items() if k.startswith(VISION_ENCODER_KEY)}
+    save_path = f"{save_dir}/vision_encoder/xgenmm.vision_encoder"
+    torch.save(vision_encoder_tensors, save_path)
+    
+    
+    projector_tensors = {k.split(PROJECTOR + '.')[-1]: v.float() for k, v in ckpt.items() if k.startswith(PROJECTOR)}
+    save_path = f"{save_dir}/xgenmm.projector"
+    torch.save(projector_tensors, save_path)
+    
+    # processors
+    tokenizer.save_pretrained(f"{save_dir}/tokenizer")
+    # will hard code the image_processor in the convert_image_encoder_to_gguf.py
+    
+    end = time.time()
+    print(f"🟢 time used: [{end-start:.3f} s]")
