@@ -873,7 +873,7 @@ namespace dpct
 
         inline std::string get_preferred_gpu_platform_name() {
             std::string result;
-        
+
             std::string filter = "level-zero";
             char* env = getenv("ONEAPI_DEVICE_SELECTOR");
             if (env) {
@@ -893,41 +893,41 @@ namespace dpct
                     throw std::runtime_error("invalid device filter: " + std::string(env));
                 }
             }
-        
+
             auto plaform_list = sycl::platform::get_platforms();
-        
+
             for (const auto& platform : plaform_list) {
                 auto devices = platform.get_devices();
                 auto gpu_dev = std::find_if(devices.begin(), devices.end(), [](const sycl::device& d) {
                     return d.is_gpu();
                 });
-        
+
                 if (gpu_dev == devices.end()) {
                     // cout << "platform [" << platform_name
                     //      << "] does not contain GPU devices, skipping\n";
                     continue;
                 }
-        
+
                 auto platform_name = platform.get_info<sycl::info::platform::name>();
                 std::string platform_name_low_case;
                 platform_name_low_case.resize(platform_name.size());
-        
+
                 std::transform(
                     platform_name.begin(), platform_name.end(), platform_name_low_case.begin(), ::tolower);
-        
+
                 if (platform_name_low_case.find(filter) == std::string::npos) {
                     // cout << "platform [" << platform_name
                     //      << "] does not match with requested "
                     //      << filter << ", skipping\n";
                     continue;
                 }
-        
+
                 result = platform_name;
             }
-        
+
             if (result.empty())
                 throw std::runtime_error("can not find preferred GPU platform");
-        
+
             return result;
         }
 
