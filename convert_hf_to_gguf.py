@@ -2518,7 +2518,7 @@ class XLMRobertaModel(BertModel):
 
         tokens: list[bytes] = [f"[PAD{i}]".encode("utf-8") for i in range(vocab_size)]
         scores: list[float] = [-10000.0] * vocab_size
-        toktypes: list[int] = [SentencePieceTokenTypes.UNKNOWN] * vocab_size
+        toktypes: list[int] = [SentencePieceTokenTypes.UNUSED] * vocab_size
 
         for token_id in range(tokenizer.vocab_size()):
             piece = tokenizer.IdToPiece(token_id)
@@ -2549,7 +2549,7 @@ class XLMRobertaModel(BertModel):
 
         # realign tokens (see HF tokenizer code)
         tokens = [b'<s>', b'<pad>', b'</s>', b'<unk>'] + tokens[3:-1]
-        scores = [0.0, -10000.0, 0.0, -10000.0] + scores[3:-1]
+        scores = [0.0, 0.0, 0.0, 0.0] + scores[3:-1]
         toktypes = [
             SentencePieceTokenTypes.CONTROL,
             SentencePieceTokenTypes.CONTROL,
@@ -2577,14 +2577,11 @@ class XLMRobertaModel(BertModel):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         # position embeddings start at pad_token_id + 1, so just chop down the weight tensor
         if name == "embeddings.position_embeddings.weight":
-            del bid # unused
-
             if self._position_offset is not None:
                 data_torch = data_torch[self._position_offset:,:]
 
-            return [(self.map_tensor_name(name), data_torch)]
-
         return super().modify_tensors(data_torch, name, bid)
+
 
 @Model.register("GemmaForCausalLM")
 class GemmaModel(Model):
