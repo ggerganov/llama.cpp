@@ -1,4 +1,3 @@
-#include <iostream>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -133,19 +132,21 @@ int main(void) {
         );
         formatted_chat.resize(res);
         std::string output(formatted_chat.data(), formatted_chat.size());
-        std::cout << output << "\n-------------------------\n";
+        printf("%s\n", output.c_str());
+        printf("-------------------------\n");
         assert(output == expected);
     }
 
 
     // test llama_chat_format_single for system message
-    std::cout << "\n\n=== llama_chat_format_single (system message) ===\n\n";
+    printf("\n\n=== llama_chat_format_single (system message) ===\n\n");
     std::vector<llama_chat_msg> chat2;
     llama_chat_msg sys_msg{"system", "You are a helpful assistant"};
 
     auto fmt_sys = [&](std::string tmpl) {
         auto output = llama_chat_format_single(nullptr, tmpl, chat2, sys_msg, false);
-        std::cout << "fmt_sys(" << tmpl << ")\n" << output << "\n-------------------------\n";
+        printf("fmt_sys(%s) : %s\n", tmpl.c_str(), output.c_str());
+        printf("-------------------------\n", output.c_str());
         return output;
     };
     assert(fmt_sys("chatml") == "<|im_start|>system\nYou are a helpful assistant<|im_end|>\n");
@@ -155,7 +156,7 @@ int main(void) {
 
 
     // test llama_chat_format_single for user message
-    std::cout << "\n\n=== llama_chat_format_single (user message) ===\n\n";
+    printf("\n\n=== llama_chat_format_single (user message) ===\n\n");
     chat2.push_back({"system", "You are a helpful assistant"});
     chat2.push_back({"user", "Hello"});
     chat2.push_back({"assistant", "I am assistant"});
@@ -163,7 +164,8 @@ int main(void) {
 
     auto fmt_single = [&](std::string tmpl) {
         auto output = llama_chat_format_single(nullptr, tmpl, chat2, new_msg, true);
-        std::cout << "fmt_single(" << tmpl << ")\n" << output << "\n-------------------------\n";
+        printf("fmt_single(%s) : %s\n", tmpl.c_str(), output.c_str());
+        printf("-------------------------\n", output.c_str());
         return output;
     };
     assert(fmt_single("chatml") == "\n<|im_start|>user\nHow are you<|im_end|>\n<|im_start|>assistant\n");
