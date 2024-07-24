@@ -331,6 +331,21 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         }
         return true;
     }
+    if (arg == "--on-start") {
+        CHECK_ARG
+        params.on_start = argv[i];
+        return true;
+    }
+    if (arg == "--on-inference-start") {
+        CHECK_ARG
+        params.on_inference_start = argv[i];
+        return true;
+    }
+    if (arg == "--on-inference-end") {
+        CHECK_ARG
+        params.on_inference_end = argv[i];
+        return true;
+    }
     if (arg == "-p" || arg == "--prompt") {
         CHECK_ARG
         params.prompt = argv[i];
@@ -1403,6 +1418,11 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-s,    --seed SEED",            "RNG seed (default: %d, use random seed for < 0)", params.seed });
     options.push_back({ "*",           "-t,    --threads N",            "number of threads to use during generation (default: %d)", params.n_threads });
     options.push_back({ "*",           "-tb,   --threads-batch N",      "number of threads to use during batch and prompt processing (default: same as --threads)" });
+    options.push_back({ "*",           "       --on-start SCRIPT",      "call the specified script at application startup" });
+    options.push_back({ "*",           "       --on-inference-start SCRIPT",
+                                                                        "call the specified script before starting the inference" });
+    options.push_back({ "*",           "       --on-inference-end SCRIPT",
+                                                                        "call the specified script when the inference is complete" });
     options.push_back({ "speculative", "-td,   --threads-draft N",      "number of threads to use during generation (default: same as --threads)" });
     options.push_back({ "speculative", "-tbd,  --threads-batch-draft N",
                                                                         "number of threads to use during batch and prompt processing (default: same as --threads-draft)" });
@@ -3222,4 +3242,12 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
     fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
+}
+
+void script_execute(const std::string & script) {
+    int result = std::system(script.c_str());
+
+    if (result != 0) {
+        fprintf(stderr, "%s: error: unable to execute script '%s'. exit code: %d\n", __func__, script.c_str(), result);
+    }
 }

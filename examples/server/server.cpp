@@ -1106,6 +1106,10 @@ struct server_context {
             {"id_task", slot.id_task},
         });
 
+        if (!params.on_inference_start.empty()) {
+            script_execute(params.on_inference_start);
+        }
+
         return true;
     }
 
@@ -1913,6 +1917,10 @@ struct server_context {
                     kv_cache_clear();
                 }
 
+                if (!params.on_inference_end.empty()) {
+                    script_execute(params.on_inference_end);
+                }
+
                 return;
             }
         }
@@ -2494,6 +2502,10 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params)) {
         gpt_params_print_usage(argc, argv, params);
         return 1;
+    }
+
+    if (!params.on_start.empty()) {
+        script_execute(params.on_start);
     }
 
     // TODO: not great to use extern vars

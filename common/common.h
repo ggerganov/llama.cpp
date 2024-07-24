@@ -61,6 +61,11 @@ enum dimre_method {
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
+    // lifecycle scripts
+    std::string on_start           = ""; // script that will be called on application start
+    std::string on_inference_start = ""; // script that will be called when inference starts
+    std::string on_inference_end   = ""; // script that will be called when inference ends
+
     int32_t n_threads             = cpu_get_num_math();
     int32_t n_threads_draft       =    -1;
     int32_t n_threads_batch       =    -1; // number of threads to use for batch processing (-1 = use n_threads)
@@ -455,3 +460,9 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
 void yaml_dump_non_result_info(
     FILE * stream, const gpt_params & params, const llama_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
+
+//
+// Script utils
+//
+
+void script_execute(const std::string & script);

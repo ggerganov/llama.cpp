@@ -137,6 +137,10 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    if (!params.on_start.empty()) {
+        script_execute(params.on_start);
+    }
+
     llama_sampling_params & sparams = params.sparams;
 
 #ifndef LOG_DISABLE_LOGS
@@ -532,6 +536,10 @@ int main(int argc, char ** argv) {
     if (!ctx_sampling) {
         fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
+    }
+
+    if (!params.on_inference_start.empty()) {
+        script_execute(params.on_inference_start);
     }
 
     if (llama_model_has_encoder(model)) {
@@ -969,6 +977,10 @@ int main(int argc, char ** argv) {
             n_remain = params.n_predict;
             is_interacting = true;
         }
+    }
+
+    if (!params.on_inference_end.empty()) {
+        script_execute(params.on_inference_end);
     }
 
     if (!path_session.empty() && params.prompt_cache_all && !params.prompt_cache_ro) {
