@@ -1514,6 +1514,35 @@ class LlamaModel(Model):
         if self.hparams.get("vocab_size", 32000) == 49152:
             self.gguf_writer.add_add_bos_token(False)
 
+        if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
+            if rope_scaling.get("rope_type", '').lower() == "llama3":
+                base = hparams.get("rope_theta", 10000.0)
+                dim = int((hparams["hidden_size"] // hparams["num_attention_heads"]) * hparams.get("partial_rotary_embeddings", 1.0))
+                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+
+                factor = rope_scaling.get("factor", 8.0)
+                low_freq_factor = rope_scaling.get("low_freq_factor", 1.0)
+                high_freq_factor = rope_scaling.get("high_freq_factor", 4.0)
+                old_context_len = hparams.get("original_max_position_embeddings", 8192)
+
+                low_freq_wavelen = old_context_len / low_freq_factor
+                high_freq_wavelen = old_context_len / high_freq_factor
+
+                rope_factors = []
+                for freq in freqs:
+                    wavelen = 2 * math.pi / freq
+                    if wavelen < high_freq_wavelen:
+                        rope_factors.append(1)
+                    elif wavelen > low_freq_wavelen:
+                        rope_factors.append(factor)
+                    else:
+                        assert low_freq_wavelen != high_freq_wavelen
+                        smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
+                        rope_factors.append(1 / ((1 - smooth) / factor + smooth))
+
+                self.gguf_writer.add_rope_scaling_attn_factors(1.0)
+                self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FREQS] + ".weight", np.array(rope_factors, dtype=np.float32))
+
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
         if n_head_kv is not None and n_head != n_head_kv:
