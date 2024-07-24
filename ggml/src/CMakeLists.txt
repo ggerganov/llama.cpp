@@ -262,6 +262,14 @@ if (GGML_LLAMAFILE)
     set(GGML_SOURCES_LLAMAFILE llamafile/sgemm.cpp)
 endif()
 
+if (GGML_AMX)
+    message(STATUS "Using AMX")
+
+    add_compile_definitions(GGML_USE_AMX)
+    set(GGML_HEADERS_AMX ggml-amx/mmq.h)
+    set(GGML_SOURCES_AMX ggml-amx/mmq.cpp)
+endif()
+
 if (GGML_CUDA)
     cmake_minimum_required(VERSION 3.18)  # for CMAKE_CUDA_ARCHITECTURES
 
@@ -1296,6 +1304,7 @@ add_library(ggml
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
+            ${GGML_SOURCES_AMX}       ${GGML_HEADERS_AMX}
             ${GGML_SOURCES_CANN}      ${GGML_HEADERS_CANN}
             ggml-aarch64.c            ggml-aarch64.h
             )

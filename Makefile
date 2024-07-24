@@ -343,12 +343,6 @@ ifdef LLAMA_SANITIZE_UNDEFINED
 	MK_LDFLAGS  += -fsanitize=undefined -g
 endif
 
-ifdef LLAMA_OPENMP
-	MK_CPPFLAGS += -fopenmp
-	MK_CFLAGS   += -fopenmp
-	MK_CXXFLAGS += -fopenmp
-endif
-
 ifdef LLAMA_SERVER_VERBOSE
 	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
 endif
