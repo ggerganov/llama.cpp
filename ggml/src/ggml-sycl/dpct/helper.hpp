@@ -2670,6 +2670,7 @@ namespace dpct
                                            stride_c, batch_size);
             break;
         }
+#endif
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
             library_data_t::real_int32, library_data_t::real_int32):
@@ -2680,7 +2681,6 @@ namespace dpct
                                                   beta, c, ldc, stride_c, batch_size);
             break;
         }
-#endif
         case detail::get_type_combination_id(
             library_data_t::real_int8, library_data_t::real_int8,
             library_data_t::real_float, library_data_t::real_float):
