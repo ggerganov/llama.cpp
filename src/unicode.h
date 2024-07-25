@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <cassert>
+#include <cstring>
 #include <string>
 #include <vector>
 #include <array>
@@ -60,13 +62,6 @@ struct codepoint_categ {
     };
 
     inline codepoint_categ(const uint16_t categ=0) : encoded{categ} {}
-
-    static codepoint_categ from_index(int index) {
-        static const std::array<codepoint_categ, 32> table = {
-            UNDEF, Cc, Cf, Co, Cs, Ll, Lm, Lo, Lt, Lu, Mc, Me, Mn, Nd, Nl, No, Pc, Pd, Pe, Pf, Pi, Po, Ps, Sc, Sk, Sm, So, Zl, Zp, Zs, UNDEF, UNDEF
-        };
-        return (size_t)index < table.size() ? table[index] : table[0];
-    }
 
     inline void set_flag(_flags flags, bool value = true) {
         flags = (_flags) (flags & ~SUBMASK);  // ignore category bits
@@ -140,6 +135,34 @@ struct codepoint_categ {
         const auto it = map.find(encoded & SUBMASK);
         return it == map.end() ? "INVALID" : it->second;
     }
+
+    static codepoint_categ from_index(int index) {
+        static const std::array<codepoint_categ, 32> table = {
+            UNDEF, Cc, Cf, Co, Cs, Ll, Lm, Lo, Lt, Lu, Mc, Me, Mn, Nd, Nl, No, Pc, Pd, Pe, Pf, Pi, Po, Ps, Sc, Sk, Sm, So, Zl, Zp, Zs, UNDEF, UNDEF
+        };
+        return (size_t)index < table.size() ? table[index] : table[0];
+    }
+
+    static codepoint_categ from_chars(const char categ, const char subcateg = '\0') {
+        auto _subindex = [] (const char subcateg, const char subcategs[]) -> uint16_t {
+            if (!subcateg) {
+                return 0;
+            }
+            const char * p = strchr(subcategs, subcateg);
+            return p ? (p - subcategs + 1) : 0;
+        };
+        switch(categ) {
+            case 'C':  if(subcateg == 'n') return 0;  // undefined
+                       return C | (_subindex(subcateg, "cfos"   ) << 7);
+            case 'L':  return L | (_subindex(subcateg, "lmotu"  ) << 7);
+            case 'M':  return M | (_subindex(subcateg, "cen"    ) << 7);
+            case 'N':  return N | (_subindex(subcateg, "dlo"    ) << 7);
+            case 'P':  return P | (_subindex(subcateg, "cdefios") << 7);
+            case 'S':  return S | (_subindex(subcateg, "ckmo"   ) << 7);
+            case 'Z':  return Z | (_subindex(subcateg, "lps"    ) << 7);
+            default:   assert (false);  return 0;
+        }
+    };
 
     uint16_t encoded;
 };
