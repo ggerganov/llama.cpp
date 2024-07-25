@@ -293,7 +293,7 @@ Similar to the native `sycl-ls`, available SYCL devices can be queried as follow
 ```sh
 ./build/bin/llama-ls-sycl-device
 ```
-This command will only display the selected backend that is supported by SYCL. The default  backend is level_zero. For example, in a system with 2 *intel GPU* it would look like the following:
+This command will only display the selected backend that is supported by SYCL. The default backend is level_zero. For example, in a system with 2 *intel GPU* it would look like the following:
 ```
 found 2 SYCL devices:
 
@@ -469,7 +469,7 @@ Similar to the native `sycl-ls`, available SYCL devices can be queried as follow
 build\bin\ls-sycl-device.exe
 ```
 
-This command will only display the selected backend that is supported by SYCL. The default  backend is level_zero. For example, in a system with 2 *intel GPU* it would look like the following:
+This command will only display the selected backend that is supported by SYCL. The default backend is level_zero. For example, in a system with 2 *intel GPU* it would look like the following:
 ```
 found 2 SYCL devices:
 |  |                  |                                             |Compute   |Max compute|Max work|Max sub|               |
