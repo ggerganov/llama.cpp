@@ -317,7 +317,7 @@ void ggml_cuda_error(const char * stmt, const char * func, const char * file, in
 #define CUDA_CHECK(err) CUDA_CHECK_GEN(err, cudaSuccess, cudaGetErrorString)
 
 #if CUDART_VERSION >= 12000 || defined(GGML_USE_MUSA)
-    static const char * cublas_get_error_str(const mublasStatus_t err) {
+    static const char * cublas_get_error_str(const cublasStatus_t err) {
 #ifndef GGML_USE_MUSA
         return cublasGetStatusString(err);
 #else
