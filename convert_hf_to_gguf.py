@@ -1541,7 +1541,7 @@ class LlamaModel(Model):
                         rope_factors.append(1 / ((1 - smooth) / factor + smooth))
 
                 self.gguf_writer.add_rope_scaling_attn_factors(1.0)
-                self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FREQS] + ".weight", np.array(rope_factors, dtype=np.float32))
+                self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
 
     @staticmethod
     def permute(weights: Tensor, n_head: int, n_head_kv: int | None):
