@@ -17,7 +17,6 @@ Please update all scripts and workflows to use the new binary names.
 | tokenize | llama-tokenize |
 | export-lora | llama-export-lora |
 | libllava.a | libllava.a |
-| baby-llama | llama-baby-llama |
 | batched | llama-batched |
 | batched-bench | llama-batched-bench |
 | benchmark-matmult | llama-benchmark-matmult |
