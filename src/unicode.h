@@ -73,53 +73,53 @@ struct codepoint_categ {
         encoded = value ? (encoded | flags) : (encoded & ~flags);
     }
 
-    inline uint8_t get_category() const { return encoded & MASK; }
-    inline uint8_t get_subcategory() const { return encoded & SUBMASK; }
+    inline uint16_t get_category() const { return encoded & MASK; }
+    inline uint16_t get_subcategory() const { return encoded & SUBMASK; }
 
     inline bool is_undefined() const { return !encoded; }
     inline bool is_defined() const { return encoded; }
 
-    inline auto is_whitespace() const { return encoded & WHITESPACE; }
-    inline auto is_lowercase()  const { return encoded & LOWERCASE; }
-    inline auto is_uppercase()  const { return encoded & UPPERCASE; }
+    inline uint16_t is_whitespace() const { return encoded & WHITESPACE; }
+    inline uint16_t is_lowercase()  const { return encoded & LOWERCASE; }
+    inline uint16_t is_uppercase()  const { return encoded & UPPERCASE; }
 
-    inline auto is_C() const { return encoded & C; }
-    inline auto is_L() const { return encoded & L; }
-    inline auto is_M() const { return encoded & M; }
-    inline auto is_N() const { return encoded & N; }
-    inline auto is_P() const { return encoded & P; }
-    inline auto is_S() const { return encoded & S; }
-    inline auto is_Z() const { return encoded & Z; }
+    inline uint16_t is_C() const { return encoded & C; }
+    inline uint16_t is_L() const { return encoded & L; }
+    inline uint16_t is_M() const { return encoded & M; }
+    inline uint16_t is_N() const { return encoded & N; }
+    inline uint16_t is_P() const { return encoded & P; }
+    inline uint16_t is_S() const { return encoded & S; }
+    inline uint16_t is_Z() const { return encoded & Z; }
 
-    inline auto is_Cc() const { return (encoded & SUBMASK) == Cc; }
-    inline auto is_Cf() const { return (encoded & SUBMASK) == Cf; }
-    inline auto is_Co() const { return (encoded & SUBMASK) == Co; }
-    inline auto is_Cs() const { return (encoded & SUBMASK) == Cs; }
-    inline auto is_Ll() const { return (encoded & SUBMASK) == Ll; }
-    inline auto is_Lm() const { return (encoded & SUBMASK) == Lm; }
-    inline auto is_Lo() const { return (encoded & SUBMASK) == Lo; }
-    inline auto is_Lt() const { return (encoded & SUBMASK) == Lt; }
-    inline auto is_Lu() const { return (encoded & SUBMASK) == Lu; }
-    inline auto is_Mc() const { return (encoded & SUBMASK) == Mc; }
-    inline auto is_Me() const { return (encoded & SUBMASK) == Me; }
-    inline auto is_Mn() const { return (encoded & SUBMASK) == Mn; }
-    inline auto is_Nd() const { return (encoded & SUBMASK) == Nd; }
-    inline auto is_Nl() const { return (encoded & SUBMASK) == Nl; }
-    inline auto is_No() const { return (encoded & SUBMASK) == No; }
-    inline auto is_Pc() const { return (encoded & SUBMASK) == Pc; }
-    inline auto is_Pd() const { return (encoded & SUBMASK) == Pd; }
-    inline auto is_Pe() const { return (encoded & SUBMASK) == Pe; }
-    inline auto is_Pf() const { return (encoded & SUBMASK) == Pf; }
-    inline auto is_Pi() const { return (encoded & SUBMASK) == Pi; }
-    inline auto is_Po() const { return (encoded & SUBMASK) == Po; }
-    inline auto is_Ps() const { return (encoded & SUBMASK) == Ps; }
-    inline auto is_Sc() const { return (encoded & SUBMASK) == Sc; }
-    inline auto is_Sk() const { return (encoded & SUBMASK) == Sk; }
-    inline auto is_Sm() const { return (encoded & SUBMASK) == Sm; }
-    inline auto is_So() const { return (encoded & SUBMASK) == So; }
-    inline auto is_Zl() const { return (encoded & SUBMASK) == Zl; }
-    inline auto is_Zp() const { return (encoded & SUBMASK) == Zp; }
-    inline auto is_Zs() const { return (encoded & SUBMASK) == Zs; }
+    inline bool is_Cc() const { return (encoded & SUBMASK) == Cc; }
+    inline bool is_Cf() const { return (encoded & SUBMASK) == Cf; }
+    inline bool is_Co() const { return (encoded & SUBMASK) == Co; }
+    inline bool is_Cs() const { return (encoded & SUBMASK) == Cs; }
+    inline bool is_Ll() const { return (encoded & SUBMASK) == Ll; }
+    inline bool is_Lm() const { return (encoded & SUBMASK) == Lm; }
+    inline bool is_Lo() const { return (encoded & SUBMASK) == Lo; }
+    inline bool is_Lt() const { return (encoded & SUBMASK) == Lt; }
+    inline bool is_Lu() const { return (encoded & SUBMASK) == Lu; }
+    inline bool is_Mc() const { return (encoded & SUBMASK) == Mc; }
+    inline bool is_Me() const { return (encoded & SUBMASK) == Me; }
+    inline bool is_Mn() const { return (encoded & SUBMASK) == Mn; }
+    inline bool is_Nd() const { return (encoded & SUBMASK) == Nd; }
+    inline bool is_Nl() const { return (encoded & SUBMASK) == Nl; }
+    inline bool is_No() const { return (encoded & SUBMASK) == No; }
+    inline bool is_Pc() const { return (encoded & SUBMASK) == Pc; }
+    inline bool is_Pd() const { return (encoded & SUBMASK) == Pd; }
+    inline bool is_Pe() const { return (encoded & SUBMASK) == Pe; }
+    inline bool is_Pf() const { return (encoded & SUBMASK) == Pf; }
+    inline bool is_Pi() const { return (encoded & SUBMASK) == Pi; }
+    inline bool is_Po() const { return (encoded & SUBMASK) == Po; }
+    inline bool is_Ps() const { return (encoded & SUBMASK) == Ps; }
+    inline bool is_Sc() const { return (encoded & SUBMASK) == Sc; }
+    inline bool is_Sk() const { return (encoded & SUBMASK) == Sk; }
+    inline bool is_Sm() const { return (encoded & SUBMASK) == Sm; }
+    inline bool is_So() const { return (encoded & SUBMASK) == So; }
+    inline bool is_Zl() const { return (encoded & SUBMASK) == Zl; }
+    inline bool is_Zp() const { return (encoded & SUBMASK) == Zp; }
+    inline bool is_Zs() const { return (encoded & SUBMASK) == Zs; }
 
     inline bool operator == (const codepoint_categ other) const {
         return encoded == other.encoded;
