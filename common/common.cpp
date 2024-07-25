@@ -3248,6 +3248,6 @@ void script_execute(const std::string & script) {
     int result = std::system(script.c_str());
 
     if (result != 0) {
-        fprintf(stderr, "%s: error: unable to execute script '%s'. exit code: %d\n", __func__, script.c_str(), result);
+        fprintf(stderr, "%s: error: script '%s' failed with exit code %d\n", __func__, script.c_str(), result);
     }
 }
