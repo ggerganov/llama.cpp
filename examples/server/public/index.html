@@ -141,10 +141,8 @@
       gap: 0.5em;
     }
     .message-controls > div:nth-child(2) > div {
-      margin-left: auto;
-    }
-    .message-controls > div:nth-child(2) > div:nth-child(1) {
       display: flex;
+      margin-left: auto;
       gap: 0.5em;
     }
 
@@ -285,7 +283,7 @@
 
     import { llama } from './completion.js';
     import { SchemaConverter } from './json-schema-to-grammar.mjs';
-    
+
     let selected_image = false;
     var slot_id = -1;
 
@@ -620,12 +618,12 @@
         if (e) e.preventDefault();
 
         talkActive.value = false;
-        talkRecognition?.stop(); 
+        talkRecognition?.stop();
       }
       const talk = (e) => {
         e.preventDefault();
 
-        if (talkRecognition) 
+        if (talkRecognition)
           talkRecognition.start();
         else
           alert("Speech recognition is not supported by this browser.");
@@ -685,17 +683,29 @@
             <div>
               <div>
                 <button type="submit" disabled=${generating.value || talkActive.value}>Send</button>
-                <button disabled=${generating.value} onclick=${talkActive.value ? talkStop : talk}>${talkActive.value ? "Stop Talking" : "Talk"}</button>
                 <button disabled=${generating.value || talkActive.value} onclick=${uploadImage}>Upload Image</button>
                 <button onclick=${stop} disabled=${!generating.value}>Stop</button>
                 <button onclick=${reset}>Reset</button>
               </div>
               <div>
-                <input type="checkbox" id="send-on-talk" name="send-on-talk" checked="${sendOnTalk}" onchange=${(e) => sendOnTalk.value = e.target.checked} />
-                <label for="send-on-talk" style="line-height: initial;">Send after talking</label>
+                <a href="#" style="cursor: help;" title="Help" onclick=${e => {
+                  e.preventDefault();
+                  alert(`STT supported by your browser: ${SpeechRecognition ? 'Yes' : 'No'}\n` +
+                  `(TTS and speech recognition are not provided by llama.cpp)\n` +
+                  `Note: STT requires HTTPS to work.`);
+                }}>[?]</a>
+                <button disabled=${generating.value} onclick=${talkActive.value ? talkStop : talk}>${talkActive.value ? "Stop Talking" : "Talk"}</button>
+                <div>
+                  <input type="checkbox" id="send-on-talk" name="send-on-talk" checked="${sendOnTalk}" onchange=${(e) => sendOnTalk.value = e.target.checked} />
+                  <label for="send-on-talk" style="line-height: initial;">Send after talking</label>
+                </div>
               </div>
               <div>
-                <label for="tts-voices" style="margin-right: 4px;line-height: initial;">Voice:</label>
+                <a href="#" style="cursor: help;" title="Help" onclick=${e => {
+                  e.preventDefault();
+                  alert(`TTS supported by your browser: ${tts ? 'Yes' : 'No'}\n(TTS and speech recognition are not provided by llama.cpp)`);
+                }}>[?]</a>
+                <label for="tts-voices" style="line-height: initial;">Bot Voice:</label>
                 <select id="tts-voices" name="tts-voices" onchange=${(e) => ttsVoice.value = e.target.value} style="max-width: 100px;">
                   <option value="" selected="${!ttsVoice.value}">None</option>
                   ${[
