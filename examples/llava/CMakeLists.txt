@@ -43,8 +43,3 @@ set_target_properties(${TARGET} PROPERTIES OUTPUT_NAME llama-minicpmv-cli)
 install(TARGETS ${TARGET} RUNTIME)
 target_link_libraries(${TARGET} PRIVATE common llava ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(${TARGET} PRIVATE cxx_std_11)
-
-add_library(minicpmv-wrapper OBJECT
-        minicpmv-wrapper.cpp
-)
-target_link_libraries(minicpmv-wrapper PRIVATE llava ${CMAKE_THREAD_LIBS_INIT})
