@@ -1583,19 +1583,6 @@ static void normalize_image_u8_to_f32(const clip_image_u8* src, clip_image_f32* 
     }
 }
 
-void uhd_normalize_image_u8_to_f32(struct clip_ctx * ctx, const clip_image_u8* src, clip_image_f32* dst) {
-    dst->nx = src->nx;
-    dst->ny = src->ny;
-    dst->buf.resize(src->buf.size());
-    const auto & m3 = ctx->image_mean;
-    const auto & s3 = ctx->image_std;
-
-    for (size_t i = 0; i < src->buf.size(); ++i) {
-        int c = i % 3; // rgb
-        dst->buf[i] = (static_cast<float>(src->buf[i]) / 255.0f - m3[c]) / s3[c];
-    }
-}
-
 inline float clip(float x, float lower, float upper) {
     return std::max(lower, std::min(x, upper));
 }
@@ -1764,6 +1751,17 @@ static std::vector<clip_image_u8*> divide_to_patches_u8(const clip_image_u8 & im
 // returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
 // res_imgs memory is being allocated here, previous allocations will be freed if found
 bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch * res_imgs) {
+    
+    if(clip_is_minicpmv(ctx)){
+        clip_image_f32 * res = clip_image_f32_init();
+        normalize_image_u8_to_f32(img, res, ctx->image_mean, ctx->image_std);
+        res_imgs->size = 1;
+        res_imgs->data = new clip_image_f32[res_imgs->size];
+        res_imgs->data[0] = *res;
+        clip_image_f32_free(res);
+        return true;
+    }
+
     bool pad_to_square = true;
     if (!ctx->has_vision_encoder) {
         LOG_TEE("This gguf file seems to have no vision encoder\n");
@@ -2389,4 +2387,8 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
 
     std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];
     throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
+}
+
+bool clip_is_minicpmv(const struct clip_ctx * ctx) { 
+    return ctx->has_minicpmv_projector;
 }

@@ -45,7 +45,6 @@ LLAVA_API void llava_image_embed_free(struct llava_image_embed * embed);
 /** build an image embed from image file bytes */
 LLAVA_API struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img);
 /** build an image embed from a path to an image filename */
-LLAVA_API bool llava_image_embed_make_with_clip_img_uhd(struct clip_ctx * ctx_clip, int n_threads, const struct clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out);
 LLAVA_API struct uhd_image_embed *  llava_image_embed_make_with_filename_uhd(struct clip_ctx * ctx_clip, int n_threads, const char * image_path);
 LLAVA_API void llava_image_embed_free_uhd(struct uhd_image_embed *  embed);
 

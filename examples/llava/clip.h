@@ -77,14 +77,14 @@ CLIP_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t byt
 /** preprocess img and store the result in res_imgs, pad_to_square may be overridden to false depending on model configuration */
 CLIP_API bool clip_image_preprocess(struct clip_ctx * ctx, const struct clip_image_u8 * img, struct clip_image_f32_batch * res_imgs );
 
-CLIP_API void uhd_normalize_image_u8_to_f32(struct clip_ctx * ctx, const clip_image_u8* src, clip_image_f32* dst);
-
 CLIP_API struct ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx);
 
 CLIP_API bool clip_image_encode      (struct clip_ctx * ctx, int n_threads, struct clip_image_f32 * img, float * vec);
 CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec);
 
 CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out, int itype);
+
+CLIP_API bool clip_is_minicpmv(const struct clip_ctx * ctx);
 
 #ifdef __cplusplus
 }
