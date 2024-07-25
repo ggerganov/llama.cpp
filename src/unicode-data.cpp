@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
 
 const std::vector<uint16_t> unicode_rle_codepoints_categs = {  // run length encoding, 5 bits categ + 11 bits length
 0x03E1,
@@ -4527,7 +4526,7 @@ const std::vector<uint16_t> unicode_rle_codepoints_categs = {  // run length enc
 0x0020,
 };
 
-const std::unordered_set<uint32_t> unicode_set_whitespace = {
+const std::vector<uint32_t> unicode_vec_whitespace = {
 0x000009,
 0x00000A,
 0x00000B,

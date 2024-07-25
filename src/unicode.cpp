@@ -591,7 +591,7 @@ codepoint_categ unicode_cpt_category(const uint32_t cp) {
         }
         assert (cpt == MAX_CODEPOINTS);
 
-        for (auto cpt : unicode_set_whitespace) {
+        for (auto cpt : unicode_vec_whitespace) {
             cpt_categs[cpt].set_flag(codepoint_categ::WHITESPACE);
         }
 

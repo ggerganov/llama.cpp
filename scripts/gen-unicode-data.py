@@ -170,7 +170,7 @@ for rle in codepoint_categs_runs:
     out("0x%04X," % rle)
 out("};\n")
 
-out("const std::unordered_set<uint32_t> unicode_set_whitespace = {")
+out("const std::vector<uint32_t> unicode_vec_whitespace = {")
 for codepoint in table_whitespace:
     out("0x%06X," % codepoint)
 out("};\n")
