@@ -71,7 +71,7 @@ static struct ggml_backend_qnn_context g_qnn_mgr[GGML_QNN_MAX_DEVICES] = {
 class ggml_backend_qnn_buffer_context {
 public:
     ggml_backend_qnn_buffer_context(QNNBackend device, std::shared_ptr<qnn::qnn_instance> instance, size_t size) :
-        _device(device), _instance(instance), _name(QNN_BACKEND_NAME + std::to_string(device)) {
+        _instance(instance), _name(QNN_BACKEND_NAME + std::to_string(device)) {
 
         size_t size_page = sysconf(_SC_PAGESIZE);
 
@@ -97,7 +97,6 @@ public:
     size_t get_buffer_size() { return _buffer_size; }
 
 private:
-    QNNBackend _device;
     std::shared_ptr<qnn::qnn_instance> _instance;
     std::string _name;
     void *_buffer = nullptr;
