@@ -1,7 +1,6 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	libllava.a \
-	llama-batched-bench \
 	llama-bench \
 	llama-benchmark-matmult \
 	llama-cli \
@@ -39,7 +38,7 @@ BUILD_TARGETS = \
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
 LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
-	simple batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli \
+	simple save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli \
 	retrieval speculative infill tokenize benchmark-matmult parallel export-lora lookahead lookup passkey gritlm
 
 # Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
