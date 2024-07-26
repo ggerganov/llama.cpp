@@ -685,7 +685,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     if (arg == "--lora") {
         CHECK_ARG
         params.lora_adapter.emplace_back(argv[i], 1.0f);
-        params.use_mmap = false;
         return true;
     }
     if (arg == "--lora-scaled") {
@@ -693,12 +692,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         const char* lora_adapter = argv[i];
         CHECK_ARG
         params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
-        params.use_mmap = false;
-        return true;
-    }
-    if (arg == "--lora-base") {
-        CHECK_ARG
-        params.lora_base = argv[i];
         return true;
     }
     if (arg == "--control-vector") {
@@ -795,6 +788,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "-cb" || arg == "--cont-batching") {
         params.cont_batching = true;
+        return true;
+    }
+    if (arg == "-nocb" || arg == "--no-cont-batching") {
+        params.cont_batching = false;
         return true;
     }
     if (arg == "-fa" || arg == "--flash-attn") {
@@ -1272,6 +1269,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         CHECK_ARG
         params.out_file = argv[i];
         params.cvector_outfile = argv[i];
+        params.lora_outfile = argv[i];
         return true;
     }
     if (arg == "-ofreq" || arg == "--output-frequency") {
@@ -1538,6 +1536,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-np,   --parallel N",           "number of parallel sequences to decode (default: %d)", params.n_parallel });
     options.push_back({ "*",           "-ns,   --sequences N",          "number of sequences to decode (default: %d)", params.n_sequences });
     options.push_back({ "*",           "-cb,   --cont-batching",        "enable continuous batching (a.k.a dynamic batching) (default: %s)", params.cont_batching ? "enabled" : "disabled" });
+    options.push_back({ "*",           "-nocb, --no-cont-batching",     "disable continuous batching" });
 
     options.push_back({ "multi-modality" });
     options.push_back({ "*",           "       --mmproj FILE",          "path to a multimodal projector file for LLaVA. see examples/llava/README.md" });
@@ -1580,9 +1579,8 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       --override-kv KEY=TYPE:VALUE",
                                                                         "advanced option to override model metadata by key. may be specified multiple times.\n"
                                                                         "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false" });
-    options.push_back({ "*",           "       --lora FNAME",           "apply LoRA adapter (implies --no-mmap)" });
-    options.push_back({ "*",           "       --lora-scaled FNAME S",  "apply LoRA adapter with user defined scaling S (implies --no-mmap)" });
-    options.push_back({ "*",           "       --lora-base FNAME",      "optional model to use as a base for the layers modified by the LoRA adapter" });
+    options.push_back({ "*",           "       --lora FNAME",           "apply LoRA adapter (can be repeated to use multiple adapters)" });
+    options.push_back({ "*",           "       --lora-scaled FNAME S",  "apply LoRA adapter with user defined scaling S (can be repeated to use multiple adapters)" });
     options.push_back({ "*",           "       --control-vector FNAME", "add a control vector\n"
                                                                         "note: this argument can be repeated to add multiple control vectors" });
     options.push_back({ "*",           "       --control-vector-scaled FNAME SCALE",
@@ -1672,6 +1670,13 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "cvector",     "       --pca-batch N",          "batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch });
     options.push_back({ "cvector",     "       --pca-iter N",           "number of iterations used for PCA (default: %d)", params.n_pca_iterations });
     options.push_back({ "cvector",     "       --method {pca,mean}",    "dimensionality reduction method to be used (default: pca)" });
+
+    options.push_back({ "export-lora" });
+    options.push_back({ "export-lora", "-m,    --model",                "model path from which to load base model (default '%s')", params.model.c_str() });
+    options.push_back({ "export-lora", "       --lora FNAME",           "path to LoRA adapter  (can be repeated to use multiple adapters)" });
+    options.push_back({ "export-lora", "       --lora-scaled FNAME S",  "path to LoRA adapter with user defined scaling S  (can be repeated to use multiple adapters)" });
+    options.push_back({ "*",           "-t,    --threads N",            "number of threads to use during computation (default: %d)", params.n_threads });
+    options.push_back({ "export-lora", "-o,    --output FNAME",         "output file (default: '%s')", params.lora_outfile.c_str() });
 
     printf("usage: %s [options]\n", argv[0]);
 
@@ -2084,19 +2089,14 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
         const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
         float lora_scale = std::get<1>(params.lora_adapter[i]);
-        int err = llama_model_apply_lora_from_file(model,
-                                             lora_adapter.c_str(),
-                                             lora_scale,
-                                             ((i > 0) || params.lora_base.empty())
-                                                ? NULL
-                                                : params.lora_base.c_str(),
-                                             params.n_threads);
-        if (err != 0) {
+        auto adapter = llama_lora_adapter_init(model, lora_adapter.c_str());
+        if (adapter == nullptr) {
             fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
             llama_free(lctx);
             llama_free_model(model);
             return std::make_tuple(nullptr, nullptr);
         }
+        llama_lora_adapter_set(lctx, adapter, lora_scale);
     }
 
     if (params.ignore_eos) {
@@ -2723,7 +2723,7 @@ std::string llama_chat_format_single(const struct llama_model * model,
         const llama_chat_msg & new_msg,
         bool add_ass) {
     std::ostringstream ss;
-    auto fmt_past_msg = llama_chat_apply_template(model, tmpl, past_msg, false);
+    auto fmt_past_msg = past_msg.empty() ? "" : llama_chat_apply_template(model, tmpl, past_msg, false);
     std::vector<llama_chat_msg> chat_new(past_msg);
     // if the past_msg ends with a newline, we must preserve it in the formatted version
     if (add_ass && !fmt_past_msg.empty() && fmt_past_msg.back() == '\n') {
@@ -3168,7 +3168,6 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
         }
         fprintf(stream, "  - %s: %f\n", std::get<0>(la).c_str(), std::get<1>(la));
     }
-    fprintf(stream, "lora_base: %s\n", params.lora_base.c_str());
     fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
     fprintf(stream, "min_keep: %d # default: 0 (disabled)\n", sparams.min_keep);
     fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", sparams.mirostat);
