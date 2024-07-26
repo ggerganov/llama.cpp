@@ -276,7 +276,7 @@ GGML_CALL static enum ggml_status ggml_backend_blas_graph_compute(ggml_backend_t
 
             default:
                 fprintf(stderr, "%s: unsupported op %s\n", __func__, ggml_op_desc(node));
-                GGML_ASSERT(false);
+                GGML_ABORT("fatal error");
         }
     }
 

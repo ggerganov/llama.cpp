@@ -726,7 +726,7 @@ static size_t ggml_hash_insert(struct ggml_hash_set * hash_set, struct ggml_tens
     } while (i != h);
 
     // visited all hash table entries -> not found
-    GGML_ASSERT(false);
+    GGML_ABORT("fatal error");
 }
 
 static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct ggml_tensor * key) {
@@ -747,7 +747,7 @@ static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct g
     } while (i != h);
 
     // visited all hash table entries -> not found
-    GGML_ASSERT(false);
+    GGML_ABORT("fatal error");
 }
 
 #ifdef __cplusplus

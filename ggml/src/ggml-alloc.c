@@ -91,7 +91,7 @@ void ggml_tallocr_alloc(struct ggml_tallocr * talloc, struct ggml_tensor * tenso
     if (talloc->offset + size > ggml_backend_buffer_get_size(talloc->buffer)) {
         fprintf(stderr, "%s: not enough space in the buffer to allocate %s (needed %zu, available %zu)\n",
                 __func__, tensor->name, size, ggml_backend_buffer_get_size(talloc->buffer) - talloc->offset);
-        GGML_ASSERT(!"not enough space in the buffer");
+        GGML_ABORT("not enough space in the buffer");
     }
 
     void * addr = (char *)ggml_backend_buffer_get_base(talloc->buffer) + talloc->offset;
@@ -132,7 +132,7 @@ static void add_allocated_tensor(struct ggml_dyn_tallocr * alloc, size_t offset,
             return;
         }
     }
-    GGML_ASSERT(!"out of allocated_tensors");
+    GGML_ABORT("out of allocated_tensors");
 }
 static void remove_allocated_tensor(struct ggml_dyn_tallocr * alloc, size_t offset, const struct ggml_tensor * tensor) {
     for (int i = 0; i < 1024; i++) {
@@ -142,7 +142,7 @@ static void remove_allocated_tensor(struct ggml_dyn_tallocr * alloc, size_t offs
         }
     }
     fprintf(stderr, "tried to free tensor %s not found\n", tensor->name);
-    GGML_ASSERT(!"tensor not found");
+    GGML_ABORT("tensor not found");
 }
 #endif
 
@@ -175,8 +175,7 @@ static size_t ggml_dyn_tallocr_alloc(struct ggml_dyn_tallocr * alloc, size_t siz
             // this should never happen
             fprintf(stderr, "%s: not enough space in the buffer to allocate %zu bytes, largest block available %zu bytes\n",
                     __func__, size, max_avail);
-            GGML_ASSERT(!"not enough space in the buffer");
-            GGML_UNREACHABLE();
+            GGML_ABORT("not enough space in the buffer");
         }
     }
 
