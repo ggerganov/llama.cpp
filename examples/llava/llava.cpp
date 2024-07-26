@@ -31,9 +31,6 @@ struct clip_image_grid_shape {
     int second;
 };
 
-struct uhd_image_embed {
-    std::vector<std::vector<struct llava_image_embed *>> image_embeds;
-};
 /**
  * Selects the best resolution from a list of possible resolutions based on the original size.
  *
@@ -205,6 +202,33 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     return true;
 }
 
+static clip_image_f32 * only_v2_5_reshape_by_patch(clip_image_f32 * image, int patch_size) {
+    int width = image->nx;
+    int height = image->ny;
+    int num_patches = (height / patch_size) * (width / patch_size);
+    clip_image_f32 * patch = clip_image_f32_init();
+    patch->nx = patch_size * num_patches;
+    patch->ny = patch_size;
+    patch->buf.resize(3 * patch->nx * patch->ny);
+
+    int patch_index = 0;
+
+    for (int i = 0; i < height; i += patch_size) {
+        for (int j = 0; j < width; j += patch_size) {
+            for (int pi = 0; pi < patch_size; ++pi) {
+                for (int pj = 0; pj < patch_size; ++pj) {
+                    int input_index = ((i + pi) * width + (j + pj)) * 3;
+                    int output_index = (pi * patch_size * num_patches + patch_index * patch_size + pj) * 3;
+                    patch->buf[output_index] = image->buf[input_index];
+                    patch->buf[output_index+1] = image->buf[input_index+1];
+                    patch->buf[output_index+2] = image->buf[input_index+2];
+                }
+            }
+            patch_index++;
+        }
+    }
+    return patch;
+}
 
 static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float * image_embd, int * n_img_pos) {
     // std::vector<clip_image_f32*> img_res_v; // format VectN x H x W x RGB (N x 336 x 336 x 3), so interleaved RGB - different to the python implementation which is N x 3 x 336 x 336
@@ -221,7 +245,44 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
     const char * mm_patch_merge_type = clip_patch_merge_type(ctx_clip);
 
-    if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0) {
+    if (clip_is_minicpmv(ctx_clip)) {
+        std::vector<float *> image_embd_v;
+        image_embd_v.resize(img_res_v.size);
+        struct clip_image_size * load_image_size = clip_image_size_init();
+        for (size_t i = 0; i < img_res_v.size; i++) {
+            const int64_t t_img_enc_step_start_us = ggml_time_us();
+            image_embd_v[i] = (float *)malloc(clip_embd_nbytes(ctx_clip));
+            int patch_size=14;
+            load_image_size->width = img_res_v.data[i].nx;
+            load_image_size->height = img_res_v.data[i].ny; 
+            clip_add_load_image_size(ctx_clip, load_image_size);
+            const bool encoded = clip_image_encode(ctx_clip, n_threads, only_v2_5_reshape_by_patch(&img_res_v.data[i], patch_size), image_embd_v[i]); // image data is in 3x336x336 format and will be converted to 336x336x3 inside
+            if (!encoded) {
+                LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int) i+1, (int) img_res_v.size);
+                return false;
+            }
+            const int64_t t_img_enc_steop_batch_us = ggml_time_us();
+            LOG_TEE("%s: step %d of %d encoded in %8.2f ms\n", __func__, (int)i+1, (int)img_res_v.size, (t_img_enc_steop_batch_us - t_img_enc_step_start_us) / 1000.0);
+        }
+        const int64_t t_img_enc_batch_us = ggml_time_us();
+        LOG_TEE("%s: all %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size, (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
+
+        int n_img_pos_out = 0;
+        for (size_t i = 0; i < image_embd_v.size(); i++) {
+            std::memcpy(image_embd + n_img_pos_out * clip_n_mmproj_embd(ctx_clip), image_embd_v[i], clip_embd_nbytes(ctx_clip));
+            n_img_pos_out += clip_n_patches(ctx_clip);
+        }
+        *n_img_pos = n_img_pos_out;
+        for (size_t i = 0; i < image_embd_v.size(); i++) {
+            free(image_embd_v[i]);
+        }
+        image_embd_v.clear();
+        load_image_size->width = img->nx;
+        load_image_size->height = img->ny; 
+        clip_add_load_image_size(ctx_clip, load_image_size);
+        LOG_TEE("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
+    }
+    else if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0) {
         // flat / default llava-1.5 type embedding
         *n_img_pos = clip_n_patches(ctx_clip);
         bool encoded = clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd); // image_embd shape is 576 x 4096
@@ -231,7 +292,8 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
             return false;
         }
-    } else {
+    } 
+    else {
         // spatial_unpad llava-1.6 type embedding
         // TODO: CLIP needs batching support - in HF the llm projection is separate after encoding, which might be a solution to quickly get batching working
         std::vector<float *> image_embd_v;
@@ -300,7 +362,11 @@ bool llava_validate_embed_size(const llama_context * ctx_llama, const clip_ctx *
 }
 
 bool llava_image_embed_make_with_clip_img(clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img, float ** image_embd_out, int * n_img_pos_out) {
-    float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*6); // TODO: base on gridsize/llava model
+    int num_max_patches = 6; // 
+    if (clip_is_minicpmv(ctx_clip)) {
+        num_max_patches = 10;
+    }
+    float * image_embd = (float *)malloc(clip_embd_nbytes(ctx_clip)*num_max_patches); // TODO: base on gridsize/llava model
     if (!image_embd) {
         LOG_TEE("Unable to allocate memory for image embeddings\n");
         return false;
@@ -411,304 +477,4 @@ struct llava_image_embed * llava_image_embed_make_with_filename(struct clip_ctx 
 void llava_image_embed_free(struct llava_image_embed * embed) {
     free(embed->embed);
     free(embed);
-}
-
-static int ensure_divide(int length, int patch_size) {
-    return std::max(static_cast<int>(std::round(static_cast<float>(length) / patch_size) * patch_size), patch_size);
-}
-
-static std::pair<int, int> uhd_find_best_resize(std::pair<int, int> original_size, int scale_resolution, int patch_size, bool allow_upscale = false) {
-    int width = original_size.first;
-    int height = original_size.second;
-    if ((width * height > scale_resolution * scale_resolution) || allow_upscale) {
-        float r = static_cast<float>(width) / height;
-        height = static_cast<int>(scale_resolution / std::sqrt(r));
-        width = static_cast<int>(height * r);
-    }
-    int best_width = ensure_divide(width, patch_size);
-    int best_height = ensure_divide(height, patch_size);
-    return std::make_pair(best_width, best_height);
-}
-
-static std::pair<int, int> uhd_get_refine_size(std::pair<int, int> original_size, std::pair<int, int> grid, int scale_resolution, int patch_size, bool allow_upscale = false) {
-    int width, height;
-    std::tie(width, height) = original_size;
-    int grid_x, grid_y;
-    std::tie(grid_x, grid_y) = grid;
-
-    int refine_width = ensure_divide(width, grid_x);
-    int refine_height = ensure_divide(height, grid_y);
-
-    int grid_width = refine_width / grid_x;
-    int grid_height = refine_height / grid_y;
-
-   // auto best_grid_size = find_best_resize(std::make_tuple(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); (old line)
-    auto best_grid_size = uhd_find_best_resize(std::make_pair(grid_width, grid_height), scale_resolution, patch_size, allow_upscale); // (new line) => fixes conversion for make_tuple to make_pair
-    int best_grid_width, best_grid_height;
-    std::tie(best_grid_width, best_grid_height) = best_grid_size;
-
-  //  std::pair<int, int> refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y); (old line)
-    std::pair<int, int> refine_size = std::make_pair(best_grid_width * grid_x, best_grid_height * grid_y); // (new line)
-    return refine_size;
-}
-
-inline int clip(int x, int lower, int upper) {
-    return std::max(lower, std::min(x, upper));
-}
-
-static bool bicubic_resize(const clip_image_u8 &img, clip_image_u8 &dst, int target_width, int target_height) {
-    const int nx = img.nx;
-    const int ny = img.ny;
-
-    dst.nx = target_width;
-    dst.ny = target_height;
-    dst.buf.resize(3 * target_width * target_height);
-
-    float Cc;
-    float C[5];
-    float d0, d2, d3, a0, a1, a2, a3;
-    int i, j, k, jj;
-    int x, y;
-    float dx, dy;
-    float tx, ty;
-
-    tx = (float)nx / (float)target_width;
-    ty = (float)ny / (float)target_height;
-
-    // Bicubic interpolation; adapted from ViT.cpp, inspired from :
-    //    -> https://github.com/yglukhov/bicubic-interpolation-image-processing/blob/master/libimage.c#L36
-    //    -> https://en.wikipedia.org/wiki/Bicubic_interpolation
-
-    for (i = 0; i < target_height; i++) {
-        for (j = 0; j < target_width; j++) {
-            x = (int)(tx * j);
-            y = (int)(ty * i);
-
-            dx = tx * j - x;
-            dy = ty * i - y;
-
-            for (k = 0; k < 3; k++) {
-                for (jj = 0; jj <= 3; jj++) {
-                    d0 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x - 1, 0, nx - 1)) * 3 + k] - img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
-                    d2 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x + 1, 0, nx - 1)) * 3 + k] - img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
-                    d3 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x + 2, 0, nx - 1)) * 3 + k] - img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
-                    a0 = img.buf[(clip(y - 1 + jj, 0, ny - 1) * nx + clip(x, 0, nx - 1)) * 3 + k];
-
-                    a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
-                    a2 =  1.0 / 2 * d0 +      1.0 / 2 * d2;
-                    a3 = -1.0 / 6 * d0 -      1.0 / 2 * d2 + 1.0 / 6 * d3;
-
-                    C[jj] = a0 + a1 * dx + a2 * dx * dx + a3 * dx * dx * dx;
-
-                    d0 = C[0] - C[1];
-                    d2 = C[2] - C[1];
-                    d3 = C[3] - C[1];
-                    a0 = C[1];
-                    a1 = -1.0 / 3 * d0 + d2 - 1.0 / 6 * d3;
-                    a2 =  1.0 / 2 * d0 +      1.0 / 2 * d2;
-                    a3 = -1.0 / 6 * d0 -      1.0 / 2 * d2 + 1.0 / 6 * d3;
-                    Cc = a0 + a1 * dy + a2 * dy * dy + a3 * dy * dy * dy;
-
-                    const uint8_t Cc2 = std::min(std::max(std::round(Cc), 0.0f), 255.0f);
-                    dst.buf[(i * target_width + j) * 3 + k] = float(Cc2);
-                }
-            }
-        }
-    }
-
-    return true;
-}
-
-static clip_image_u8 * only_v2_5_reshape_by_patch(clip_image_u8 * image, int patch_size) {
-    int width = image->nx;
-    int height = image->ny;
-    int num_patches = (height / patch_size) * (width / patch_size);
-    clip_image_u8 * patch = clip_image_u8_init();
-    patch->nx = patch_size * num_patches;
-    patch->ny = patch_size;
-    patch->buf.resize(3 * patch->nx * patch->ny);
-
-    int patch_index = 0;
-
-    for (int i = 0; i < height; i += patch_size) {
-        for (int j = 0; j < width; j += patch_size) {
-            for (int pi = 0; pi < patch_size; ++pi) {
-                for (int pj = 0; pj < patch_size; ++pj) {
-                    int input_index = ((i + pi) * width + (j + pj)) * 3;
-                    int output_index = (pi * patch_size * num_patches + patch_index * patch_size + pj) * 3;
-                    patch->buf[output_index] = image->buf[input_index];
-                    patch->buf[output_index+1] = image->buf[input_index+1];
-                    patch->buf[output_index+2] = image->buf[input_index+2];
-                }
-            }
-            patch_index++;
-        }
-    }
-    return patch;
-}
-
-// inspired from LLaVA-UHD:
-//    -> https://arxiv.org/pdf/2403.11703
-//    -> https://github.com/thunlp/LLaVA-UHD
-//    -> https://github.com/thunlp/LLaVA-UHD/blob/302301bc2175f7e717fb8548516188e89f649753/llava_uhd/train/llava-uhd/slice_logic.py#L118
-static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_image_u8 * img, const int max_slice_nums=9, const int scale_resolution=448, const int patch_size=14) {
-    const std::pair<int, int> original_size={img->nx,img->ny};
-    const int original_width = img->nx;
-    const int original_height = img->ny;
-    const float log_ratio = log(1.0*original_width/original_height); //
-    const float ratio = 1.0 * original_width * original_height/ (scale_resolution * scale_resolution);
-    const int multiple = fmin(ceil(ratio), max_slice_nums);
-
-    std::vector<std::vector<clip_image_u8 *>> images;
-    LOG_TEE("%s: multiple %d\n", __func__, multiple);
-    images.push_back(std::vector<clip_image_u8 *>());
-
-    if(multiple <= 1){
-        auto best_size = uhd_find_best_resize(original_size, scale_resolution, patch_size, true);
-        clip_image_u8 *source_image = clip_image_u8_init();
-        bicubic_resize(*img, *source_image, best_size.first, best_size.second);
-        // source_image = image.resize(best_size, Image.Resampling.BICUBIC)
-        images[images.size()-1].push_back(source_image);
-    }
-    else if(multiple > 1){
-
-        std::vector<int> candidate_split_grids_nums;
-        for (int i : {multiple - 1, multiple, multiple + 1}) {
-            if (i == 1 || i > max_slice_nums) {
-                continue;
-            }
-            candidate_split_grids_nums.push_back(i);
-        }
-
-        auto best_size = uhd_find_best_resize(original_size, scale_resolution, patch_size);
-        clip_image_u8 *source_image = clip_image_u8_init();
-        bicubic_resize(*img, *source_image, best_size.first, best_size.second);
-        // source_image = image.copy().resize(best_resize, Image.Resampling.BICUBIC)
-        LOG_TEE("%s: image_size: %d %d; source_image size: %d %d\n", __func__, img->nx, img->ny, best_size.first, best_size.second);
-        images[images.size()-1].push_back(source_image);
-
-        std::vector<std::pair<int, int>> candidate_grids;
-
-        for (int split_grids_nums : candidate_split_grids_nums) {
-            int m = 1;
-            while (m <= split_grids_nums) {
-                if (split_grids_nums % m == 0) {
-                    candidate_grids.emplace_back(m, split_grids_nums / m);
-                }
-                ++m;
-            }
-        }
-
-        std::pair<int, int> best_grid{1, 1};
-        float min_error = std::numeric_limits<float>::infinity();
-
-        for (const auto& grid : candidate_grids) {
-            float error = std::abs(log_ratio - std::log(1.0 * grid.first / grid.second));
-            if (error < min_error) {
-                best_grid = grid;
-                min_error = error;
-            }
-        }
-        LOG_TEE("%s: image_size: %d %d; best_grid: %d %d\n", __func__, img->nx, img->ny, best_grid.first, best_grid.second);
-        
-        auto refine_size = uhd_get_refine_size(original_size, best_grid, scale_resolution, patch_size, true);
-        clip_image_u8 *refine_image = clip_image_u8_init();
-        bicubic_resize(*img, *refine_image, refine_size.first, refine_size.second);
-
-        LOG_TEE("%s: refine_image_size: %d %d; refine_size: %d %d\n", __func__, refine_image->nx, refine_image->ny, refine_size.first, refine_size.second);
-
-        // split_to_patches
-        int width = refine_image->nx;
-        int height = refine_image->ny;
-        int grid_x = int(width / best_grid.first);
-        int grid_y = int(height / best_grid.second);
-        for (int patches_i = 0, ic = 0; patches_i < height && ic < best_grid.second; patches_i += grid_y, ic += 1){
-            images.push_back(std::vector<clip_image_u8 *>());
-            for(int patches_j = 0, jc = 0; patches_j < width && jc < best_grid.first; patches_j += grid_x, jc += 1){
-                clip_image_u8 * patch = clip_image_u8_init();
-                patch->nx = grid_x;
-                patch->ny = grid_y;
-                patch->buf.resize(3 * patch->nx * patch->ny);
-                for (int y = patches_i; y < patches_i + grid_y; ++y) {
-                    for (int x = patches_j; x < patches_j + grid_x; ++x) {
-                        const int i = 3 * (y * refine_image->nx + x);
-                        const int j = 3 * ((y-patches_i) * patch->nx + (x-patches_j));
-                        patch->buf[j]   = refine_image->buf[i];
-                        patch->buf[j+1] = refine_image->buf[i+1];
-                        patch->buf[j+2] = refine_image->buf[i+2];
-                    }
-                }
-                images[images.size()-1].push_back(patch);
-            }
-        }
-    }
-    return images;
-}
-
-struct uhd_image_embed * llava_image_embed_make_with_bytes_uhd(struct clip_ctx * ctx_clip, int n_threads, const clip_image_u8 * img) {
-    std::vector<std::vector<clip_image_u8 *>> imgs = uhd_slice_image(img);
-    for (size_t i = 0; i < imgs.size(); ++i){
-        for (size_t j = 0; j < imgs[i].size(); ++j) {
-            LOG_TEE("%s: %d %d\n", __func__,imgs[i][j]->nx,imgs[i][j]->ny);
-        }
-    }
-    struct uhd_image_embed * results = new uhd_image_embed();
-
-    for (size_t i = 0; i < imgs.size(); ++i){
-        results->image_embeds.push_back(std::vector<llava_image_embed *>());
-        for (size_t j = 0; j < imgs[i].size(); ++j) {
-            float* image_embed = NULL;
-            int n_image_pos = 0;
-            int patch_size=14;
-            struct clip_image_size * load_image_size = clip_image_size_init();
-            load_image_size->width = imgs[i][j]->nx;
-            load_image_size->height = imgs[i][j]->ny; 
-            LOG_TEE("%s : %d %d\n", __func__, load_image_size->width, load_image_size->height);
-            clip_add_load_image_size(ctx_clip, load_image_size);
-            bool image_embed_result = llava_image_embed_make_with_clip_img(ctx_clip, n_threads, only_v2_5_reshape_by_patch(imgs[i][j], patch_size), &image_embed, &n_image_pos);
-            if (!image_embed_result) {
-                LOG_TEE("%s: coulnd't embed the image\n", __func__);
-                return NULL;
-            }
-
-            auto result = (llava_image_embed*)malloc(sizeof(llava_image_embed));
-            result->embed = image_embed;
-            result->n_image_pos = n_image_pos;
-            results->image_embeds[i].push_back(result);
-        }
-    }
-    return results;
-}
-
-struct uhd_image_embed * llava_image_embed_make_with_filename_uhd(struct clip_ctx * ctx_clip, int n_threads, const char * image_path) {
-    unsigned char* image_bytes;
-    long image_bytes_length;
-    auto loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
-    if (!loaded) {
-        LOG_TEE("%s: failed to load %s\n", __func__, image_path);
-        return NULL;
-    }
-    clip_image_u8 * img = clip_image_u8_init();
-    if (!clip_image_load_from_bytes(image_bytes, image_bytes_length, img)) {
-        clip_image_u8_free(img);
-        LOG_TEE("%s: can't load image from bytes, is it a valid image?", __func__);
-        return NULL;
-    }
-
-    struct uhd_image_embed * embeds = llava_image_embed_make_with_bytes_uhd(ctx_clip, n_threads, img);
-
-    clip_image_u8_free(img);
-    free(image_bytes);
-    return embeds;
-}
-
-void llava_image_embed_free_uhd(struct uhd_image_embed * embed) {
-    for (size_t i = 0; i < embed->image_embeds.size(); ++i){
-        for (size_t j = 0; j < embed->image_embeds[i].size(); ++j){
-            free(embed->image_embeds[i][j]->embed);
-            free(embed->image_embeds[i][j]);
-        }
-        embed->image_embeds[i] = std::vector<struct llava_image_embed *>();
-    }
-    embed->image_embeds = std::vector<std::vector<struct llava_image_embed *>>();
 }

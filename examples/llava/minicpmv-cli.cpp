@@ -9,10 +9,6 @@
 #include <cstdlib>
 #include <vector>
 
-struct uhd_image_embed {
-    std::vector<std::vector<struct llava_image_embed *>> image_embeds;
-};
-
 struct llava_context {
     struct clip_ctx * ctx_clip = NULL;
     struct llama_context * ctx_llama = NULL;
@@ -30,7 +26,7 @@ static void llama_log_callback_logTee(ggml_log_level level, const char * text, v
     LOG_TEE("%s", text);
 }
 
-struct llama_model * llava_init(gpt_params * params) {
+static struct llama_model * llava_init(gpt_params * params) {
     llama_backend_init();
     llama_numa_init(params->numa);
 
@@ -44,7 +40,7 @@ struct llama_model * llava_init(gpt_params * params) {
     return model;
 }
 
-struct llava_context * llava_init_context(gpt_params * params, llama_model * model) {
+static struct llava_context * llava_init_context(gpt_params * params, llama_model * model) {
     auto prompt = params->prompt;
     if (prompt.empty()) {
         prompt = "describe the image in detail.";
@@ -73,13 +69,18 @@ struct llava_context * llava_init_context(gpt_params * params, llama_model * mod
     return ctx_llava;
 }
 
-void llava_free(struct llava_context * ctx_llava) {
+static void llava_free(struct llava_context * ctx_llava) {
+    if (ctx_llava->ctx_clip) {
+        clip_free(ctx_llava->ctx_clip);
+        ctx_llava->ctx_clip = NULL;
+    }
+
     llama_free(ctx_llava->ctx_llama);
     llama_free_model(ctx_llava->model);
     llama_backend_free();
 }
 
-struct clip_ctx * clip_init_context(gpt_params * params) {
+static struct clip_ctx * clip_init_context(gpt_params * params) {
     const char * clip_path = params->mmproj.c_str();
 
     auto prompt = params->prompt;
@@ -90,18 +91,7 @@ struct clip_ctx * clip_init_context(gpt_params * params) {
     return ctx_clip;
 }
 
-struct uhd_image_embed * minicpmv_image_embed(gpt_params * params, const std::string & fname){
-    auto ctx_clip = clip_init_context(params);
-    auto image_embed_and_slices = llava_image_embed_make_with_filename_uhd(ctx_clip, params->n_threads, fname.c_str());
-    if (ctx_clip) {
-        clip_free(ctx_clip);
-        ctx_clip = NULL;
-    }
-    return image_embed_and_slices;
-}
-
-
-bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
+static bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> tokens, int n_batch, int * n_past) {
     int N = (int) tokens.size();
     for (int i = 0; i < N; i += n_batch) {
         int n_eval = (int) tokens.size() - i;
@@ -117,45 +107,57 @@ bool eval_tokens(struct llama_context * ctx_llama, std::vector<llama_token> toke
     return true;
 }
 
-bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
+static bool eval_id(struct llama_context * ctx_llama, int id, int * n_past) {
     std::vector<llama_token> tokens;
     tokens.push_back(id);
     return eval_tokens(ctx_llama, tokens, 1, n_past);
 }
 
-bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
+static bool eval_string(struct llama_context * ctx_llama, const char* str, int n_batch, int * n_past, bool add_bos){
     std::string              str2     = str;
     std::vector<llama_token> embd_inp = ::llama_tokenize(ctx_llama, str2, add_bos, true);
     return eval_tokens(ctx_llama, embd_inp, n_batch, n_past);
 }
 
-void process_image(struct llava_context * ctx_llava, struct uhd_image_embed * image_embed_slices, gpt_params * params, int &n_past) {
-    std::string system_prompt;
+static void process_eval_image_embed(struct llava_context * ctx_llava, const struct llava_image_embed * embeds, int n_batch, int * n_past, int idx) {
+    float * image_embed = (float *)malloc(clip_embd_nbytes(ctx_llava->ctx_clip));
+    std::memcpy(image_embed, embeds->embed + idx * clip_n_patches(ctx_llava->ctx_clip) * clip_n_mmproj_embd(ctx_llava->ctx_clip), clip_embd_nbytes(ctx_llava->ctx_clip));
+    
+    auto slice_embed = (llava_image_embed*)malloc(sizeof(llava_image_embed));
+    slice_embed->embed = image_embed;
+    slice_embed->n_image_pos = clip_n_patches(ctx_llava->ctx_clip);
+    llava_eval_image_embed(ctx_llava->ctx_llama, slice_embed, n_batch, n_past);
+    llava_image_embed_free(slice_embed);
+}
 
+static void process_image(struct llava_context * ctx_llava, struct llava_image_embed * embeds, gpt_params * params, int &n_past) {
+    std::string system_prompt;
+    int idx = 0;
+    int num_image_embeds = embeds->n_image_pos / clip_n_patches(ctx_llava->ctx_clip);
     system_prompt = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n";
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
     eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, false);
-    llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices->image_embeds[0][0], params->n_batch, &n_past);
+    process_eval_image_embed(ctx_llava, embeds, params->n_batch, &n_past, idx++);
     eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
-    if (image_embed_slices->image_embeds.size() > 1) {
+    if (num_image_embeds > 1) {
+        size_t num_image_embeds_col = clip_uhd_num_image_embeds_col(ctx_llava->ctx_clip);
         eval_string(ctx_llava->ctx_llama, std::string("<slice>").c_str(), params->n_batch, &n_past, false);
-        for (size_t i = 1; i < image_embed_slices->image_embeds.size(); ++i) {
-            for (size_t j = 0; j < image_embed_slices->image_embeds[i].size(); ++j) {
+        for (size_t i = 0; i < (num_image_embeds-1)/num_image_embeds_col; ++i) {
+            for (size_t j = 0; j < num_image_embeds_col; ++j) {
                 eval_string(ctx_llava->ctx_llama, std::string("<image>").c_str(), params->n_batch, &n_past, false);
-                llava_eval_image_embed(ctx_llava->ctx_llama, image_embed_slices->image_embeds[i][j], params->n_batch, &n_past);
+                process_eval_image_embed(ctx_llava, embeds, params->n_batch, &n_past, idx++);
                 eval_string(ctx_llava->ctx_llama, std::string("</image>").c_str(), params->n_batch, &n_past, false);
-                if (j == image_embed_slices->image_embeds[i].size() - 1) {
+                if (j == num_image_embeds_col - 1) {
                     eval_string(ctx_llava->ctx_llama, std::string("\n").c_str(), params->n_batch, &n_past, false);
                 }
             }
         }
         eval_string(ctx_llava->ctx_llama, std::string("</slice>").c_str(), params->n_batch, &n_past, false);
-
     }
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
 }
 
-const char * sample(struct llama_sampling_context * ctx_sampling,
+static const char * sample(struct llama_sampling_context * ctx_sampling,
                            struct llama_context * ctx_llama,
                            int * n_past) {
     const llama_token id = llama_sampling_sample(ctx_sampling, ctx_llama, NULL);
@@ -171,9 +173,9 @@ const char * sample(struct llama_sampling_context * ctx_sampling,
 }
 
 static struct llava_context * minicpmv_init(gpt_params * params, const std::string & fname, int &n_past){
-    auto embeds = minicpmv_image_embed(params, fname);
-    auto image_embed_slices = embeds->image_embeds;
-    if (!image_embed_slices[0][0]) {
+    auto ctx_clip = clip_init_context(params);
+    auto embeds = llava_image_embed_make_with_filename(ctx_clip, params->n_threads, fname.c_str());
+    if (!embeds) {
         std::cerr << "error: failed to load image " << fname << ". Terminating\n\n";
         return NULL;
     }
@@ -191,7 +193,7 @@ static struct llava_context * minicpmv_init(gpt_params * params, const std::stri
     }
     const int64_t t_llava_init_start_us = ggml_time_us();
     auto ctx_llava = llava_init_context(params, model);
-
+    ctx_llava->ctx_clip = ctx_clip;
     const int64_t t_llava_init_end_us = ggml_time_us();
     float t_llava_init_ms = (t_llava_init_end_us - t_llava_init_start_us) / 1000.0;
     LOG_TEE("\n%s: llava init in %8.2f ms.\n", __func__, t_llava_init_ms);
@@ -202,7 +204,7 @@ static struct llava_context * minicpmv_init(gpt_params * params, const std::stri
     float t_process_image_ms = (t_process_image_end_us - t_process_image_start_us) / 1000.0;
     LOG_TEE("\n%s: llama process image in %8.2f ms.\n", __func__, t_process_image_ms);
 
-    llava_image_embed_free_uhd(embeds);
+    llava_image_embed_free(embeds);
     return ctx_llava;
 }
 
@@ -220,7 +222,7 @@ static struct llama_sampling_context * llama_init(struct llava_context * ctx_lla
     return ctx_sampling;
 }
 
-static const char * llama_loop(struct minicpmv_context * ctx_llava,struct llama_sampling_context * ctx_sampling, int &n_past){
+static const char * llama_loop(struct llava_context * ctx_llava,struct llama_sampling_context * ctx_sampling, int &n_past){
     
     const char * tmp = sample(ctx_sampling, ctx_llava->ctx_llama, &n_past);
     return tmp;
