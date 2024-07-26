@@ -63,6 +63,7 @@ class Model:
     model_name: str | None
     metadata_override: Path | None
     dir_model_card: Path
+    z: bool
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
@@ -70,7 +71,7 @@ class Model:
     def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool = False,
                  use_temp_file: bool = False, eager: bool = False,
                  metadata_override: Path | None = None, model_name: str | None = None,
-                 split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
+                 split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False, z: bool = False):
         if type(self) is Model:
             raise TypeError(f"{type(self).__name__!r} should not be directly instantiated")
 
@@ -92,6 +93,7 @@ class Model:
         self.metadata_override = metadata_override
         self.model_name = model_name
         self.dir_model_card = dir_model  # overridden in convert_lora_to_gguf.py
+        self.z = z
 
         # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -319,7 +321,7 @@ class Model:
                         assert data.dtype == np.int16
                         data_qtype = gguf.GGMLQuantizationType.BF16
 
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0 and gguf.can_quantize_to_q8_0(data):
+                    elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0 and gguf.can_quantize_to_q8_0(data) and (self.z and new_name not in (self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD))):
                         data = gguf.quantize_q8_0(data)
                         assert data.dtype == np.uint8
                         data_qtype = gguf.GGMLQuantizationType.Q8_0
@@ -3598,6 +3600,10 @@ def parse_args() -> argparse.Namespace:
         "--metadata", type=Path,
         help="Specify the path for an authorship metadata override file"
     )
+    parser.add_argument(
+        "--z", action="store_true",
+        help="Keep output and ambed tensors at F16"
+    )
 
     return parser.parse_args()
 
@@ -3672,7 +3678,7 @@ def main() -> None:
                                      metadata_override=args.metadata, model_name=args.model_name,
                                      split_max_tensors=args.split_max_tensors,
                                      split_max_size=split_str_to_n_bytes(args.split_max_size), dry_run=args.dry_run,
-                                     small_first_shard=args.no_tensor_first_split)
+                                     small_first_shard=args.no_tensor_first_split,z=args.z)
 
         if args.vocab_only:
             logger.info("Exporting model vocab...")
