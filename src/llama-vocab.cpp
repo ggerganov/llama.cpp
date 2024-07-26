@@ -153,7 +153,7 @@ static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
         }
         case LLAMA_VOCAB_TYPE_BPE: {
             GGML_ASSERT(false);
-            return unicode_utf8_to_byte(token_data.text); // TODO: why is this here after GGML_ASSERT?
+            //return unicode_utf8_to_byte(token_data.text); // TODO: why is this here after GGML_ASSERT?
         }
         case LLAMA_VOCAB_TYPE_WPM: {
             GGML_ASSERT(false);

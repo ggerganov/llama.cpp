@@ -92,7 +92,6 @@ void ggml_tallocr_alloc(struct ggml_tallocr * talloc, struct ggml_tensor * tenso
         fprintf(stderr, "%s: not enough space in the buffer to allocate %s (needed %zu, available %zu)\n",
                 __func__, tensor->name, size, ggml_backend_buffer_get_size(talloc->buffer) - talloc->offset);
         GGML_ASSERT(!"not enough space in the buffer");
-        return;
     }
 
     void * addr = (char *)ggml_backend_buffer_get_base(talloc->buffer) + talloc->offset;

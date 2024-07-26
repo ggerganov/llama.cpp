@@ -3903,7 +3903,7 @@ struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value) {
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 
     return tensor;
@@ -3962,7 +3962,7 @@ struct ggml_tensor * ggml_set_f32(struct ggml_tensor * tensor, float value) {
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 
     return tensor;
@@ -4034,8 +4034,6 @@ int32_t ggml_get_i32_1d(const struct ggml_tensor * tensor, int i) {
                 GGML_ASSERT(false);
             }
     }
-
-    return 0.0f;
 }
 
 void ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value) {
@@ -4079,7 +4077,7 @@ void ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value) {
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -4101,8 +4099,6 @@ int32_t ggml_get_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i
         default:
             GGML_ASSERT(false);
     }
-
-    return 0.0f;
 }
 
 void ggml_set_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, int32_t value) {
@@ -4135,7 +4131,7 @@ void ggml_set_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, 
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -4175,8 +4171,6 @@ float ggml_get_f32_1d(const struct ggml_tensor * tensor, int i) {
                 GGML_ASSERT(false);
             }
     }
-
-    return 0.0f;
 }
 
 void ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value) {
@@ -4214,7 +4208,7 @@ void ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value) {
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -4236,8 +4230,6 @@ float ggml_get_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2,
         default:
             GGML_ASSERT(false);
     }
-
-    return 0.0f;
 }
 
 void ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, int i3, float value) {
@@ -4270,7 +4262,7 @@ void ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, 
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -9039,7 +9031,7 @@ static void ggml_compute_forward_dup(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -9519,7 +9511,7 @@ static void ggml_compute_forward_add(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -9897,7 +9889,7 @@ static void ggml_compute_forward_add1(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10022,7 +10014,7 @@ static void ggml_compute_forward_acc(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10103,7 +10095,7 @@ static void ggml_compute_forward_sub(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10197,7 +10189,7 @@ static void ggml_compute_forward_mul(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10288,7 +10280,7 @@ static void ggml_compute_forward_div(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10333,7 +10325,7 @@ static void ggml_compute_forward_sqr(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10378,7 +10370,7 @@ static void ggml_compute_forward_sqrt(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10423,7 +10415,7 @@ static void ggml_compute_forward_log(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10552,7 +10544,7 @@ static void ggml_compute_forward_sum(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10605,7 +10597,7 @@ static void ggml_compute_forward_sum_rows(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10662,7 +10654,7 @@ static void ggml_compute_forward_mean(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10710,7 +10702,7 @@ static void ggml_compute_forward_argmax(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10828,7 +10820,7 @@ static void ggml_compute_forward_repeat(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10906,7 +10898,7 @@ static void ggml_compute_forward_repeat_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -10975,7 +10967,7 @@ static void ggml_compute_forward_concat(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11019,7 +11011,7 @@ static void ggml_compute_forward_abs(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11063,7 +11055,7 @@ static void ggml_compute_forward_sgn(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11107,7 +11099,7 @@ static void ggml_compute_forward_neg(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11151,7 +11143,7 @@ static void ggml_compute_forward_step(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11195,7 +11187,7 @@ static void ggml_compute_forward_tanh(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11239,7 +11231,7 @@ static void ggml_compute_forward_elu(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11283,7 +11275,7 @@ static void ggml_compute_forward_relu(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11327,7 +11319,7 @@ static void ggml_compute_forward_sigmoid(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11386,7 +11378,7 @@ static void ggml_compute_forward_gelu(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11445,7 +11437,7 @@ static void ggml_compute_forward_gelu_quick(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11504,7 +11496,7 @@ static void ggml_compute_forward_silu(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 // ggml_compute_forward_leaky_relu
@@ -11553,7 +11545,7 @@ static void ggml_compute_forward_leaky_relu(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11616,7 +11608,7 @@ static void ggml_compute_forward_silu_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11658,7 +11650,7 @@ static void ggml_compute_forward_hardswish(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11700,7 +11692,7 @@ static void ggml_compute_forward_hardsigmoid(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11772,7 +11764,7 @@ static void ggml_compute_forward_norm(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -11840,7 +11832,7 @@ static void ggml_compute_forward_rms_norm(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -12013,7 +12005,7 @@ static void ggml_compute_forward_rms_norm_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -12107,7 +12099,7 @@ static void ggml_compute_forward_group_norm(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -12867,7 +12859,7 @@ static void ggml_compute_forward_out_prod(
             {
                 GGML_ASSERT(false); // todo
                 // ggml_compute_forward_out_prod_f16_f32(params, dst);
-            } break;
+            }
         case GGML_TYPE_F32:
             {
                 ggml_compute_forward_out_prod_f32(params, dst);
@@ -12875,7 +12867,7 @@ static void ggml_compute_forward_out_prod(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -12935,7 +12927,7 @@ static void ggml_compute_forward_scale(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -13051,7 +13043,7 @@ static void ggml_compute_forward_set(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -13329,7 +13321,7 @@ static void ggml_compute_forward_get_rows(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 
     //static bool first = true;
@@ -13437,7 +13429,7 @@ static void ggml_compute_forward_get_rows_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 
     //static bool first = true;
@@ -13515,7 +13507,7 @@ static void ggml_compute_forward_diag(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -13585,7 +13577,7 @@ static void ggml_compute_forward_diag_mask_inf(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -13603,7 +13595,7 @@ static void ggml_compute_forward_diag_mask_zero(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -13721,7 +13713,7 @@ static void ggml_compute_forward_soft_max(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -13817,7 +13809,7 @@ static void ggml_compute_forward_soft_max_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -13908,7 +13900,7 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_COUNT:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -14238,7 +14230,7 @@ static void ggml_compute_forward_rope(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -14262,7 +14254,7 @@ static void ggml_compute_forward_rope_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -14462,7 +14454,7 @@ static void ggml_compute_forward_conv_transpose_1d(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -14634,7 +14626,7 @@ static void ggml_compute_forward_im2col(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -14766,20 +14758,20 @@ static void ggml_compute_forward_pool_1d_sk_p0(
             switch (op) {
                 case GGML_OP_POOL_AVG:   drow[i] = 0;        break;
                 case GGML_OP_POOL_MAX:   drow[i] = -FLT_MAX; break;
-                case GGML_OP_POOL_COUNT: GGML_ASSERT(false); break;
+                case GGML_OP_POOL_COUNT: GGML_ASSERT(false);
             }
             for (int ki = 0; ki < k; ++ki) {
                 switch (op) {
                     case GGML_OP_POOL_AVG:                          drow[i] += srow[j]; break;
                     case GGML_OP_POOL_MAX:   if (srow[j] > drow[i]) drow[i]  = srow[j]; break;
-                    case GGML_OP_POOL_COUNT:                        GGML_ASSERT(false); break;
+                    case GGML_OP_POOL_COUNT:                        GGML_ASSERT(false);
                 }
                 ++j;
             }
             switch (op) {
                 case GGML_OP_POOL_AVG:         drow[i] /= k; break;
                 case GGML_OP_POOL_MAX:                       break;
-                case GGML_OP_POOL_COUNT: GGML_ASSERT(false); break;
+                case GGML_OP_POOL_COUNT: GGML_ASSERT(false);
             }
         }
 
@@ -14848,7 +14840,7 @@ static void ggml_compute_forward_pool_2d(
                 switch (op) {
                     case GGML_OP_POOL_AVG:     *out = 0;        break;
                     case GGML_OP_POOL_MAX:     *out = -FLT_MAX; break;
-                    case GGML_OP_POOL_COUNT: GGML_ASSERT(false); break;
+                    case GGML_OP_POOL_COUNT: GGML_ASSERT(false);
                 }
 
                 const int ix = offset0 + ox * s0;
@@ -14863,14 +14855,14 @@ static void ggml_compute_forward_pool_2d(
                         switch (op) {
                             case GGML_OP_POOL_AVG:                     *out += srow[j]; break;
                             case GGML_OP_POOL_MAX: if (srow[j] > *out) *out  = srow[j]; break;
-                            case GGML_OP_POOL_COUNT:                GGML_ASSERT(false); break;
+                            case GGML_OP_POOL_COUNT:                GGML_ASSERT(false);
                         }
                     }
                 }
                 switch (op) {
                     case GGML_OP_POOL_AVG:           *out /= ka; break;
                     case GGML_OP_POOL_MAX:                       break;
-                    case GGML_OP_POOL_COUNT: GGML_ASSERT(false); break;
+                    case GGML_OP_POOL_COUNT: GGML_ASSERT(false);
                 }
             }
         }
@@ -14935,7 +14927,7 @@ static void ggml_compute_forward_upscale(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -14993,7 +14985,7 @@ static void ggml_compute_forward_pad(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -15034,7 +15026,7 @@ static void ggml_compute_forward_arange(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -15085,7 +15077,7 @@ static void ggml_compute_forward_timestep_embedding(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -15144,7 +15136,7 @@ static void ggml_compute_forward_argsort(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -15367,7 +15359,7 @@ static void ggml_compute_forward_flash_attn_ext(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -15703,7 +15695,7 @@ static void ggml_compute_forward_flash_attn_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -15825,7 +15817,7 @@ static void ggml_compute_forward_ssm_conv(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -15946,7 +15938,7 @@ static void ggml_compute_forward_ssm_scan(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16009,7 +16001,7 @@ static void ggml_compute_forward_win_part(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16070,7 +16062,7 @@ static void ggml_compute_forward_win_unpart(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16138,7 +16130,7 @@ static void ggml_compute_forward_unary(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16185,7 +16177,7 @@ static void ggml_compute_forward_get_rel_pos(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16266,7 +16258,7 @@ static void ggml_compute_forward_add_rel_pos(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16312,7 +16304,7 @@ static void ggml_compute_forward_map_unary(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16361,7 +16353,7 @@ static void ggml_compute_forward_map_binary(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16560,7 +16552,7 @@ static void ggml_compute_forward_cross_entropy_loss(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16647,7 +16639,7 @@ static void ggml_compute_forward_cross_entropy_loss_back(
         default:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -16983,7 +16975,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         case GGML_OP_COUNT:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 }
 
@@ -17373,7 +17365,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_ARGMAX:
             {
                 GGML_ASSERT(false); // TODO: implement
-            } break;
+            }
         case GGML_OP_REPEAT:
             {
                 // necessary for llama
@@ -17397,15 +17389,15 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_CONCAT:
             {
                 GGML_ASSERT(false); // TODO: implement
-            } break;
+            }
         case GGML_OP_SILU_BACK:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_NORM:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_RMS_NORM:
             {
                 // necessary for llama
@@ -17422,11 +17414,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_RMS_NORM_BACK:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_GROUP_NORM:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_MUL_MAT:
             {
                 // https://cs231n.github.io/optimization-2/#staged
@@ -17488,11 +17480,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_MUL_MAT_ID:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_OUT_PROD:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_SCALE:
             {
                 // necessary for llama
@@ -17669,11 +17661,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_GET_ROWS_BACK:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_DIAG:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_DIAG_MASK_INF:
             {
                 // necessary for llama
@@ -17712,7 +17704,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_SOFT_MAX_BACK:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_ROPE:
             {
                 // necessary for llama
@@ -17788,51 +17780,51 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_CLAMP:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_IM2COL:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_CONV_TRANSPOSE_2D:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_POOL_1D:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_POOL_2D:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_UPSCALE:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_PAD:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_ARANGE:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_TIMESTEP_EMBEDDING:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_ARGSORT:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_LEAKY_RELU:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_FLASH_ATTN_EXT:
             {
                 struct ggml_tensor * flash_grad = NULL;
@@ -17889,12 +17881,12 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_FLASH_ATTN_BACK:
             {
                 GGML_ASSERT(false); // not supported
-            } break;
+            }
         case GGML_OP_SSM_CONV:
         case GGML_OP_SSM_SCAN:
             {
                 GGML_ASSERT(false); // TODO: not implemented
-            } break;
+            }
         case GGML_OP_WIN_PART:
         case GGML_OP_WIN_UNPART:
         case GGML_OP_UNARY:
@@ -17933,11 +17925,11 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     case GGML_UNARY_OP_TANH:
                         {
                             GGML_ASSERT(false); // TODO: not implemented
-                        } break;
+                        }
                     case GGML_UNARY_OP_ELU:
                         {
                             GGML_ASSERT(false); // TODO: not implemented
-                        } break;
+                        }
                     case GGML_UNARY_OP_RELU:
                         {
                             if (src0->grad) {
@@ -17952,15 +17944,15 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                     case GGML_UNARY_OP_SIGMOID:
                         {
                             GGML_ASSERT(false); // TODO: not implemented
-                        } break;
+                        }
                     case GGML_UNARY_OP_GELU:
                         {
                             GGML_ASSERT(false); // TODO: not implemented
-                        } break;
+                        }
                     case GGML_UNARY_OP_GELU_QUICK:
                         {
                             GGML_ASSERT(false); // TODO: not implemented
-                        } break;
+                        }
                     case GGML_UNARY_OP_SILU:
                         {
                             // necessary for llama
@@ -17987,7 +17979,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_MAP_CUSTOM3:
             {
                 GGML_ASSERT(false); // not supported
-            } break;
+            }
         case GGML_OP_CROSS_ENTROPY_LOSS:
             {
                 if (src0->grad) {
@@ -18003,7 +17995,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_CROSS_ENTROPY_LOSS_BACK:
             {
                 GGML_ASSERT(false); // not supported
-            } break;
+            }
         case GGML_OP_NONE:
             {
                 // nop
@@ -18011,7 +18003,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_COUNT:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 
     for (int i = 0; i < GGML_MAX_SRC; ++i) {
@@ -18596,7 +18588,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
         case GGML_OP_COUNT:
             {
                 GGML_ASSERT(false);
-            } break;
+            }
         default:
             {
                 fprintf(stderr, "%s: op not implemented: ", __func__);
@@ -18606,7 +18598,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
                     fprintf(stderr, "%d\n", node->op);
                 }
                 GGML_ASSERT(false);
-            } break;
+            }
     }
 
     assert(n_tasks > 0);
@@ -18763,7 +18755,7 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
             case GGML_OP_COUNT:
                 {
                     GGML_ASSERT(false);
-                } break;
+                }
             default:
                 break;
         }
@@ -19999,7 +19991,7 @@ static enum ggml_opt_result linesearch_backtracking(
 
     GGML_ASSERT(false && "line search failed");
 
-    return GGML_LINESEARCH_FAIL;
+    //return GGML_LINESEARCH_FAIL;
 }
 
 static enum ggml_opt_result ggml_opt_lbfgs(
@@ -20269,7 +20261,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
 
     GGML_ASSERT(false && "lbfgs failed");
 
-    return GGML_OPT_RESULT_DID_NOT_CONVERGE;
+    //return GGML_OPT_RESULT_DID_NOT_CONVERGE;
 }
 
 struct ggml_opt_params ggml_opt_default_params(enum ggml_opt_type type) {
@@ -20964,7 +20956,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     }
                                 } break;
                             case GGUF_TYPE_ARRAY:
-                            default: GGML_ASSERT(false && "invalid type"); break;
+                            default: GGML_ASSERT(false && "invalid type");
                         }
                     } break;
                 default: GGML_ASSERT(false && "invalid type");
@@ -21553,7 +21545,7 @@ void gguf_set_kv(struct gguf_context * ctx, struct gguf_context * src) {
                         gguf_set_arr_data(ctx, src->kv[i].key.data, src->kv[i].value.arr.type, src->kv[i].value.arr.data, src->kv[i].value.arr.n);
                     }
                 } break;
-            default: GGML_ASSERT(false && "invalid type"); break;
+            default: GGML_ASSERT(false && "invalid type");
         }
     }
 }
@@ -21733,7 +21725,7 @@ static void gguf_write_to_buf(const struct gguf_context * ctx, struct gguf_buf *
                                 }
                             } break;
                         case GGUF_TYPE_ARRAY:
-                        default: GGML_ASSERT(false && "invalid type"); break;
+                        default: GGML_ASSERT(false && "invalid type");
                     }
                 } break;
             default: GGML_ASSERT(false && "invalid type");

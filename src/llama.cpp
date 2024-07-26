@@ -2260,7 +2260,6 @@ struct llama_hparams {
         }
 
         GGML_ASSERT(false);
-        return 0;
     }
 
     uint32_t n_head_kv(uint32_t il = 0) const {
@@ -2269,7 +2268,6 @@ struct llama_hparams {
         }
 
         GGML_ASSERT(false);
-        return 0;
     }
 
     uint32_t n_ff(uint32_t il = 0) const {
@@ -2278,7 +2276,6 @@ struct llama_hparams {
         }
 
         GGML_ASSERT(false);
-        return 0;
     }
 
     uint32_t n_gqa(uint32_t il = 0) const {
@@ -8636,7 +8633,7 @@ struct llm_build_context {
             default:
                 {
                     GGML_ASSERT(false && "unknown pooling type");
-                } break;
+                }
         }
 
         cb(cur, "result_embd_pooled", -1);
@@ -14688,7 +14685,7 @@ static int llama_decode_internal(
                 case LLAMA_POOLING_TYPE_UNSPECIFIED:
                     {
                         GGML_ASSERT(false && "unknown pooling type");
-                    } break;
+                    }
             }
         }
         n_outputs_prev += lctx.n_outputs;
@@ -16905,7 +16902,6 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         // all model arches should be listed explicitly here
         case LLM_ARCH_UNKNOWN:
             GGML_ASSERT(false && "unknown architecture");
-            break;
     }
 
     return LLAMA_ROPE_TYPE_NONE;
