@@ -183,11 +183,6 @@ if [ "$1" -eq "1" ]; then
 
     make -j && ./bin/llama-perplexity -m ../models/tinyllama-1b/ggml-model-f16.gguf -f ./wikitext-2-raw/wiki.test.raw -ngl 100 --chunks 32
 
-    # batched-bench
-    cd /workspace/llama.cpp
-
-    GGML_CUDA=1 make -j && ./llama-batched-bench ./models/tinyllama-1b/ggml-model-f16.gguf 4608 1 99 0 512 128 1,2,3,4,5,6,7,8,16,32
-
     # parallel
     cd /workspace/llama.cpp
 
@@ -202,6 +197,3 @@ fi
 #    GGML_CUDA=1 make -j && ./llama-speculative -m ./models/codellama-34b-instruct/ggml-model-f16.gguf -md ./models/codellama-7b-instruct/ggml-model-q4_0.gguf -p "# Dijkstra's shortest path algorithm in Python (4 spaces indentation) + complexity analysis:\n\n" -e -ngl 999 -ngld 999 -t 4 -n 512 -c 4096 -s 21 --draft 16 -np 1 --temp 0.0
 #fi
 
-# more benches
-#GGML_CUDA=1 make -j && ./llama-batched-bench ./models/codellama-7b/ggml-model-q4_k.gguf  4096 1 99 1 512,3200 128,128,800 1
-#GGML_CUDA=1 make -j && ./llama-batched-bench ./models/codellama-13b/ggml-model-q4_k.gguf 4096 1 99 1 512,3200 128,128,800 1
