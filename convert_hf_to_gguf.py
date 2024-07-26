@@ -1583,6 +1583,7 @@ class LlamaModel(Model):
 
                 low_freq_wavelen = old_context_len / low_freq_factor
                 high_freq_wavelen = old_context_len / high_freq_factor
+                assert low_freq_wavelen != high_freq_wavelen
 
                 rope_factors = []
                 for freq in freqs:
@@ -1592,11 +1593,10 @@ class LlamaModel(Model):
                     elif wavelen > low_freq_wavelen:
                         rope_factors.append(factor)
                     else:
-                        assert low_freq_wavelen != high_freq_wavelen
                         smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
                         rope_factors.append(1 / ((1 - smooth) / factor + smooth))
 
-                self.gguf_writer.add_tensor(gguf.TENSOR_NAMES[gguf.MODEL_TENSOR.ROPE_FREQS] + ".weight", np.array(rope_factors, dtype=np.float32))
+                self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
 
         super().prepare_tensors()
 
