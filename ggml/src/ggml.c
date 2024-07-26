@@ -21015,7 +21015,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             gguf_tensor_info_sanitize(info);
 
             // make sure there is no duplicated tensor names
-            for (uint64_t j = 0; j < i; ++j) {
+            for (uint64_t j = 0; j < i && ok; ++j) {
                 if (strcmp(info->name.data, ctx->infos[j].name.data) == 0) {
                     fprintf(stderr, "%s: duplicated tensor name %s\n", __func__, info->name.data);
                     ok = false;
@@ -21096,6 +21096,12 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         };
 
         *params.ctx = ggml_init(pdata);
+        if (*params.ctx == NULL) {
+            fprintf(stderr, "%s: failed to initialize context\n", __func__);
+            fclose(file);
+            gguf_free(ctx);
+            return NULL;
+        }
 
         struct ggml_context * ctx_data = *params.ctx;
 
@@ -21999,6 +22005,14 @@ int ggml_cpu_has_rpc(void) {
 
 int ggml_cpu_has_cann(void) {
 #if defined(GGML_USE_CANN)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_llamafile(void) {
+#if defined(GGML_USE_LLAMAFILE)
     return 1;
 #else
     return 0;
