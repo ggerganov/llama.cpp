@@ -1,8 +1,6 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
 	libllava.a \
-	llama-bench \
-	llama-benchmark-matmult \
 	llama-cli \
 	llama-convert-llama2c-to-ggml \
 	llama-embedding \
@@ -38,8 +36,8 @@ BUILD_TARGETS = \
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
 LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
-	simple save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli \
-	retrieval speculative infill tokenize benchmark-matmult parallel export-lora lookahead lookup passkey gritlm
+	simple save-load-state server gguf gguf-split eval-callback libllava.a llava-cli \
+	retrieval speculative infill tokenize parallel export-lora lookahead lookup passkey gritlm
 
 # Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
 #  We don't want to clutter things too much, so we only build replacements for the most commonly used binaries.
@@ -1229,11 +1227,6 @@ llama-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-bench: examples/llama-bench/llama-bench.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
 llama-export-lora: examples/export-lora/export-lora.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
@@ -1359,16 +1352,6 @@ common/build-info.cpp: $(wildcard .git/index) scripts/build-info.sh
 
 common/build-info.o: common/build-info.cpp
 	$(CXX) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@
-
-llama-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp \
-	$(OBJ_GGML) common/build-info.o
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-run-benchmark-matmult: llama-benchmark-matmult
-	./$@
-
-.PHONY: run-benchmark-matmult swift
 
 #
 # PoCs
