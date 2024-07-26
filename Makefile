@@ -36,29 +36,7 @@ BUILD_TARGETS = \
 	llama-speculative \
 	llama-tokenize \
 	llama-vdot \
-	llama-cvector-generator \
-	tests/test-c.o
-
-# Binaries only useful for tests
-TEST_TARGETS = \
-	tests/test-autorelease \
-	tests/test-backend-ops \
-	tests/test-chat-template \
-	tests/test-double-float \
-	tests/test-grad0 \
-	tests/test-grammar-integration \
-	tests/test-grammar-parser \
-	tests/test-json-schema-to-grammar \
-	tests/test-llama-grammar \
-	tests/test-model-load-cancel \
-	tests/test-opt \
-	tests/test-quantize-fns \
-	tests/test-quantize-perf \
-	tests/test-rope \
-	tests/test-sampling \
-	tests/test-tokenizer-0 \
-	tests/test-tokenizer-1-bpe \
-	tests/test-tokenizer-1-spm
+	llama-cvector-generator
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
 LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
@@ -200,40 +178,7 @@ endif
 
 default: $(BUILD_TARGETS) $(LEGACY_TARGETS_BUILD)
 
-test: $(TEST_TARGETS)
-	@failures=0; \
-	for test_target in $(TEST_TARGETS); do \
-		if [ "$$test_target" = "tests/test-tokenizer-0" ]; then \
-			./$$test_target $(CURDIR)/models/ggml-vocab-llama-spm.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-llama-bpe.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-phi-3.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-falcon.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-bert-bge.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-starcoder.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-gpt-2.gguf; \
-			./$$test_target $(CURDIR)/models/ggml-vocab-refact.gguf; \
-		elif [ "$$test_target" = "tests/test-tokenizer-1-spm" ]; then \
-			continue; \
-		elif [ "$$test_target" = "tests/test-tokenizer-1-bpe" ]; then \
-			continue; \
-		else \
-			echo "Running test $$test_target..."; \
-			./$$test_target; \
-		fi; \
-		if [ $$? -ne 0 ]; then \
-			printf 'Test %s FAILED!\n\n' $$test_target; \
-			failures=$$(( failures + 1 )); \
-		else \
-			printf 'Test %s passed.\n\n' $$test_target; \
-		fi; \
-	done; \
-	if [ $$failures -gt 0 ]; then \
-		printf '\n%s tests failed.\n' $$failures; \
-		exit 1; \
-	fi
-	@echo 'All tests passed.'
-
-all: $(BUILD_TARGETS) $(TEST_TARGETS) $(LEGACY_TARGETS_BUILD)
+all: $(BUILD_TARGETS) $(LEGACY_TARGETS_BUILD)
 
 ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
@@ -1154,9 +1099,8 @@ $(LIB_COMMON_S): \
 	ar rcs $(LIB_COMMON_S) $^
 
 clean:
-	rm -vrf *.dot $(BUILD_TARGETS) $(TEST_TARGETS)
+	rm -vrf *.dot $(BUILD_TARGETS)
 	rm -rvf src/*.o
-	rm -rvf tests/*.o
 	rm -rvf examples/*.o
 	rm -rvf common/*.o
 	rm -rvf *.a
@@ -1172,7 +1116,6 @@ clean:
 	rm -vrf ggml/src/ggml-cuda/*.o
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -rvf $(BUILD_TARGETS)
-	rm -rvf $(TEST_TARGETS)
 	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
 	rm -rvf $(LEGACY_TARGETS_CLEAN)
 	find examples pocs -type f -name "*.o" -delete
@@ -1434,12 +1377,6 @@ common/build-info.cpp: $(wildcard .git/index) scripts/build-info.sh
 common/build-info.o: common/build-info.cpp
 	$(CXX) $(CXXFLAGS) -c $(filter-out %.h,$^) -o $@
 
-#
-# Tests
-#
-
-tests: $(TEST_TARGETS)
-
 llama-benchmark-matmult: examples/benchmark/benchmark-matmult.cpp \
 	$(OBJ_GGML) common/build-info.o
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
@@ -1449,98 +1386,6 @@ run-benchmark-matmult: llama-benchmark-matmult
 	./$@
 
 .PHONY: run-benchmark-matmult swift
-
-tests/test-llama-grammar: tests/test-llama-grammar.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grammar-parser: tests/test-grammar-parser.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grammar-integration: tests/test-grammar-integration.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-double-float: tests/test-double-float.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-json-schema-to-grammar: tests/test-json-schema-to-grammar.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -Iexamples/server -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-grad0: tests/test-grad0.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-opt: tests/test-opt.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-quantize-fns: tests/test-quantize-fns.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-quantize-perf: tests/test-quantize-perf.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-sampling: tests/test-sampling.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-tokenizer-0: tests/test-tokenizer-0.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-tokenizer-1-bpe: tests/test-tokenizer-1-bpe.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-tokenizer-1-spm: tests/test-tokenizer-1-spm.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-rope: tests/test-rope.cpp ggml/src/ggml.o \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-c.o: tests/test-c.c include/llama.h
-	$(CC) $(CFLAGS) -c $(filter-out %.h,$^) -o $@
-
-tests/test-backend-ops: tests/test-backend-ops.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-model-load-cancel: tests/test-model-load-cancel.cpp tests/get-model.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-autorelease: tests/test-autorelease.cpp tests/get-model.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-tests/test-chat-template: tests/test-chat-template.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 #
 # PoCs
