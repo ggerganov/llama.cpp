@@ -17357,7 +17357,7 @@ struct llama_data_context {
     }
 
     void write_logits(const struct llama_context * ctx) {
-        const uint64_t logits_size = std::min(ctx->logits_size, (uint64_t) ctx->n_outputs * ctx->model.hparams.n_vocab);
+        const uint64_t logits_size = std::min((uint64_t) ctx->logits_size, (uint64_t) ctx->n_outputs * ctx->model.hparams.n_vocab);
 
         write(&logits_size, sizeof(logits_size));
 
@@ -17367,7 +17367,7 @@ struct llama_data_context {
     }
 
     void write_embeddings(const struct llama_context * ctx) {
-        const uint64_t embeddings_size = std::min(ctx->embd_size, (uint64_t) ctx->n_outputs * ctx->model.hparams.n_embd);
+        const uint64_t embeddings_size = std::min((uint64_t) ctx->embd_size, (uint64_t) ctx->n_outputs * ctx->model.hparams.n_embd);
 
         write(&embeddings_size, sizeof(embeddings_size));
 
@@ -17461,7 +17461,7 @@ struct llama_data_context {
                 write(&v_type_i, sizeof(v_type_i));
 
                 // Write element size
-                const uint64_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
+                const uint32_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
                 write(&v_size_el, sizeof(v_size_el));
 
                 // Write GQA embedding size
@@ -17710,7 +17710,7 @@ struct llama_data_read_context {
             const size_t k_size_row = ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa);
             if (k_size_row != k_size_row_ref) {
                 // llama_kv_cache_seq_rm(kv_self, dest_seq_id, -1, -1);
-                LLAMA_LOG_ERROR("%s: mismatched key row size (%zu != %zu, layer %d)\n", __func__, k_size_row, k_size_row_ref, il);
+                LLAMA_LOG_ERROR("%s: mismatched key row size (%zu != %zu, layer %d)\n", __func__, k_size_row, (size_t) k_size_row_ref, il);
                 return false;
             }
 
@@ -17739,7 +17739,7 @@ struct llama_data_read_context {
                 read_to(&v_size_row_ref, sizeof(v_size_row_ref));
                 const size_t v_size_row = ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa);
                 if (v_size_row != v_size_row_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched value row size (%zu != %zu, layer %d)\n", __func__, v_size_row, v_size_row_ref, il);
+                    LLAMA_LOG_ERROR("%s: mismatched value row size (%zu != %zu, layer %d)\n", __func__, v_size_row, (size_t) v_size_row_ref, il);
                     return false;
                 }
 
@@ -17763,11 +17763,11 @@ struct llama_data_read_context {
                 }
 
                 // Read element size of value
-                uint64_t v_size_el_ref;
+                uint32_t v_size_el_ref;
                 read_to(&v_size_el_ref, sizeof(v_size_el_ref));
                 const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
                 if (v_size_el != v_size_el_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched value element size (%zu != %llu, layer %d)\n", __func__, v_size_el, v_size_el_ref, il);
+                    LLAMA_LOG_ERROR("%s: mismatched value element size (%zu != %zu, layer %d)\n", __func__, v_size_el, (size_t) v_size_el_ref, il);
                     return false;
                 }
 
