@@ -3818,7 +3818,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     float sumf = 0;
 
 #if defined(__ARM_FEATURE_SVE)
-    if ((PR_SVE_VL_LEN_MASK & prctl(PR_SVE_GET_VL)) == QK8_0) {
+    if (sve_cnt_b == QK8_0) {
         const svbool_t ptrueh = svptrue_pat_b8(SV_VL16);
         const svbool_t ptruel = svnot_b_z(svptrue_b8(), ptrueh);
 
@@ -5291,7 +5291,7 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     float sumf = 0;
 
 #if defined(__ARM_FEATURE_SVE)
-    if ((PR_SVE_VL_LEN_MASK & prctl(PR_SVE_GET_VL)) == QK8_0) {
+    if (sve_cnt_b == QK8_0) {
         svfloat32_t sumv0 = svdup_n_f32(0.0f);
         svfloat32_t sumv1 = svdup_n_f32(0.0f);
 
