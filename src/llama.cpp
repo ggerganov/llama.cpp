@@ -17767,7 +17767,7 @@ struct llama_data_read_context {
                 read_to(&v_size_el_ref, sizeof(v_size_el_ref));
                 const size_t v_size_el = ggml_type_size(kv_self.v_l[il]->type);
                 if (v_size_el != v_size_el_ref) {
-                    LLAMA_LOG_ERROR("%s: mismatched value element size (%zu != %lu, layer %d)\n", __func__, v_size_el, v_size_el_ref, il);
+                    LLAMA_LOG_ERROR("%s: mismatched value element size (%zu != %llu, layer %d)\n", __func__, v_size_el, v_size_el_ref, il);
                     return false;
                 }
 
