@@ -638,56 +638,6 @@ public:
         return mem_fd;
     }
 
-    int register_rpcmem(void *p_data, Qnn_Tensor_t *p_tensor) {
-        if (nullptr == p_data || (nullptr == p_tensor)) {
-            QNN_LOG_WARN("invalid param\n");
-            return 1;
-        }
-
-        if (!is_rpcmem_initialized()) {
-            QNN_LOG_WARN("rpc memory not initialized\n");
-            return 2;
-        }
-
-        if (is_rpcmem_allocated(p_data)) {
-            QNN_LOG_WARN("rpc memory already allocated\n");
-            return 3;
-        }
-
-        if (is_rpcmem_registered(QNN_TENSOR_GET_MEM_HANDLE(*p_tensor))) {
-            QNN_LOG_WARN("tensor %s has been registered shared memory\n", QNN_TENSOR_GET_NAME(*p_tensor));
-            return 4;
-        }
-
-        int32_t mem_fd = rpcmem_to_fd(p_data);
-        if (mem_fd == -1) {
-            QNN_LOG_WARN("failed to get file descriptor\n");
-            return 5;
-        }
-        QNN_LOG_INFO("mem_fd %d\n", mem_fd);
-        Qnn_MemDescriptor_t descriptor = { { QNN_TENSOR_GET_RANK(*p_tensor), QNN_TENSOR_GET_DIMENSIONS(*p_tensor),
-                                             nullptr },
-                                           QNN_TENSOR_GET_DATA_TYPE(*p_tensor),
-                                           QNN_MEM_TYPE_ION,
-                                           { { mem_fd } } };
-        Qnn_MemHandle_t handle = nullptr;
-        int error = QNN_SUCCESS;
-        error = _qnn_interface->qnn_mem_register(_qnn_context_handle, &descriptor,
-                                                 /*numDescriptors=*/1, &handle);
-        if (error != QNN_SUCCESS) {
-            QNN_LOG_WARN("failed to register shared memory, error %d, %s\n", QNN_GET_ERROR_CODE(error),
-                         strerror(error));
-            return 6;
-        }
-
-        QNN_TENSOR_SET_MEM_HANDLE(*p_tensor, handle);
-        _qnn_mem_set.insert((std::pair<void *, Qnn_MemHandle_t>(p_data, handle)));
-
-        QNN_LOG_INFO("tensor %s successfully register shared memory handler: %p\n", QNN_TENSOR_GET_NAME(*p_tensor),
-                     handle);
-        return 0;
-    }
-
     void *get_rpcmem_from_memhandle(Qnn_MemHandle_t mem_handle) {
         for (std::unordered_map<void *, Qnn_MemHandle_t>::iterator it = _qnn_mem_set.begin(); it != _qnn_mem_set.end();
              it++) {
@@ -700,22 +650,56 @@ public:
         return nullptr;
     }
 
-    void unregister_rpcmem() {
-        Qnn_ErrorHandle_t error = QNN_SUCCESS;
-
-        if (_qnn_mem_set.empty()) {
-            QNN_LOG_WARN("no rpcmem registered\n");
+    Qnn_MemHandle_t register_rpcmem(void *p_data, uint32_t rank, uint32_t *dimensions, Qnn_DataType_t data_type) {
+        if (!p_data) {
+            QNN_LOG_WARN("invalid param\n");
+            return nullptr;
         }
 
-        for (std::unordered_map<void *, Qnn_MemHandle_t>::iterator it = _qnn_mem_set.begin(); it != _qnn_mem_set.end();
-             it++) {
-            Qnn_MemHandle_t mem_handle = it->second;
-            error = _qnn_interface->qnn_mem_de_register(&mem_handle, 1);
-            if (error != QNN_SUCCESS) {
-                QNN_LOG_WARN("failed to unregister shared memory, error %d\n", QNN_GET_ERROR_CODE(error));
-            }
+        if (!is_rpcmem_initialized()) {
+            QNN_LOG_WARN("rpc memory not initialized\n");
+            return nullptr;
         }
-        _qnn_mem_set.clear();
+
+        if (is_rpcmem_allocated(p_data)) {
+            QNN_LOG_WARN("rpc memory already allocated\n");
+            return nullptr;
+        }
+
+        auto mem_fd = rpcmem_to_fd(p_data);
+        if (mem_fd == -1) {
+            QNN_LOG_WARN("failed to get file descriptor\n");
+            return nullptr;
+        }
+
+        QNN_LOG_INFO("mem_fd %d\n", mem_fd);
+        Qnn_MemDescriptor_t descriptor = { { rank, dimensions, nullptr }, data_type, QNN_MEM_TYPE_ION, { { mem_fd } } };
+        Qnn_MemHandle_t handle = nullptr;
+        auto error = _qnn_interface->qnn_mem_register(_qnn_context_handle, &descriptor,
+                                                      /*numDescriptors=*/1, &handle);
+        if (error != QNN_SUCCESS) {
+            QNN_LOG_WARN("failed to register shared memory, error %d, %s\n", QNN_GET_ERROR_CODE(error),
+                         strerror(error));
+            return nullptr;
+        }
+
+        _qnn_mem_set.insert((std::pair<void *, Qnn_MemHandle_t>(p_data, handle)));
+
+        QNN_LOG_INFO("successfully register shared memory handler: %p\n", handle);
+        return handle;
+    }
+
+    void unregister_rpcmem(Qnn_MemHandle_t mem_handle) {
+        Qnn_ErrorHandle_t error = _qnn_interface->qnn_mem_de_register(&mem_handle, 1);
+        if (error != QNN_SUCCESS) {
+            QNN_LOG_WARN("failed to unregister shared memory, error %d\n", QNN_GET_ERROR_CODE(error));
+        }
+
+        auto it = std::find_if(_qnn_mem_set.begin(), _qnn_mem_set.end(),
+                               [mem_handle](const auto &kv) { return kv.second == mem_handle; });
+        if (it != _qnn_mem_set.end()) {
+            _qnn_mem_set.erase(it);
+        }
     }
 
     bool is_rpcmem_allocated(void *buf) { return _qnn_mem_set.count(buf) != 0U; }

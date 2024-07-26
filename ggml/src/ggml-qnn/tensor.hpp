@@ -10,6 +10,7 @@
 
 #include "QnnTensor.h"
 #include "System/QnnSystemInterface.h"
+#include "buffer.hpp"
 #include "logger.hpp"
 #include "qnn-lib.hpp"
 #include "utils.hpp"
@@ -28,11 +29,7 @@ public:
         QNN_LOG_DEBUG("create tensor %s, device: %d", _tensor_name.c_str(), device);
     }
 
-    ~ggml_qnn_tensor() {
-        if (_qnn_instance && _qnn_rpc_buffer) {
-            _qnn_instance->free_rpcmem(_qnn_rpc_buffer);
-        }
-    }
+    ~ggml_qnn_tensor() { _qnn_rpc_buffer.reset(); }
 
     bool bind_ggml_tensor(ggml_tensor *tensor, bool is_input) {
         if (_tensor) {
@@ -65,13 +62,19 @@ public:
 
         if (should_use_mem_handle()) {
             if (!_qnn_rpc_buffer) {
-                _qnn_rpc_buffer = alloc_rpc_mem(ggml_nbytes(tensor));
-                if (!_qnn_rpc_buffer) {
+                auto qnn_rpc_buffer = std::make_unique<ggml_qnn_rpc_buffer>(
+                    _qnn_instance, ggml_nbytes(tensor), QNN_TENSOR_GET_RANK(_qnn_tensor),
+                    QNN_TENSOR_GET_DIMENSIONS(_qnn_tensor), QNN_TENSOR_GET_DATA_TYPE(_qnn_tensor));
+                if (!qnn_rpc_buffer->is_valid()) {
                     QNN_LOG_WARN("alloc rpc mem failed, tensor %s", _tensor_name.c_str());
                     return false;
                 }
+
+                _qnn_rpc_buffer = std::move(qnn_rpc_buffer);
             }
 
+            QNN_TENSOR_SET_MEM_TYPE(_qnn_tensor, QNN_TENSORMEMTYPE_MEMHANDLE);
+            QNN_TENSOR_SET_MEM_HANDLE(_qnn_tensor, _qnn_rpc_buffer->get_mem_handle());
             QNN_LOG_DEBUG("tensor %s, use mem handle %p", _tensor_name.c_str(), QNN_TENSOR_GET_MEM_HANDLE(_qnn_tensor));
         } else {
             QNN_TENSOR_SET_MEM_TYPE(_qnn_tensor, QNN_TENSORMEMTYPE_RAW);
@@ -132,7 +135,7 @@ private:
 
         if (should_use_mem_handle()) {
             if (_qnn_rpc_buffer) {
-                memcpy(_qnn_rpc_buffer, _tensor->data, ggml_nbytes(_tensor));
+                memcpy(_qnn_rpc_buffer->get_buffer(), _tensor->data, ggml_nbytes(_tensor));
             } else {
                 QNN_LOG_WARN("tensor %s: can't find rpcmem from qnn mem handle\n", _tensor_name.c_str());
                 return false;
@@ -153,7 +156,7 @@ private:
 
         if (should_use_mem_handle()) {
             if (_qnn_rpc_buffer) {
-                memcpy(_tensor->data, _qnn_rpc_buffer, ggml_nbytes(_tensor));
+                memcpy(_tensor->data, _qnn_rpc_buffer->get_buffer(), ggml_nbytes(_tensor));
             } else {
                 QNN_LOG_WARN("can't find rpcmem from qnn mem handle\n");
                 return false;
@@ -163,29 +166,6 @@ private:
         // For CPU and GPU, the data is already in the tensor.
         QNN_LOG_DEBUG("read tensor %s from qnn", _tensor_name.c_str());
         return true;
-    }
-
-    uint8_t *alloc_rpc_mem(size_t bytes) {
-        uint8_t *qnn_rpc_buffer = static_cast<uint8_t *>(_qnn_instance->alloc_rpcmem(bytes, alignof(void *)));
-        if (!qnn_rpc_buffer) {
-            QNN_LOG_WARN("alloc rpc mem failure, %s\n", strerror(errno));
-            QNN_LOG_DEBUG("tensor name %s", _tensor_name.c_str());
-            return nullptr;
-        }
-
-        QNN_LOG_INFO("tensor %s: alloc rpcmem(%p) successfully\n", _tensor_name.c_str(), qnn_rpc_buffer);
-        auto error = _qnn_instance->register_rpcmem(qnn_rpc_buffer, &_qnn_tensor);
-        if (error != QNN_SUCCESS) {
-            QNN_LOG_WARN("register rpc mem failure, %d\n", (int)error);
-            QNN_LOG_DEBUG("tensor name %s", _tensor_name.c_str());
-            _qnn_instance->free_rpcmem(qnn_rpc_buffer);
-            return nullptr;
-        }
-
-        // The mem handle will be set at qnn_instance::register_rpcmem
-        QNN_TENSOR_SET_MEM_TYPE(_qnn_tensor, QNN_TENSORMEMTYPE_MEMHANDLE);
-        QNN_LOG_INFO("tensor %s: register rpcmem(%p) successfully\n", _tensor_name.c_str(), qnn_rpc_buffer);
-        return qnn_rpc_buffer;
     }
 
     void update_params_from_ggml_tensor(ggml_tensor *tensor) {
@@ -211,7 +191,7 @@ private:
     Qnn_Tensor_t _qnn_tensor = qnn_tensor_init(kDefaultQnnTensorVersion);
     std::array<uint32_t, GGML_MAX_DIMS> _dimensions = {};
     Qnn_GraphHandle_t _graph_handle = nullptr;
-    uint8_t *_qnn_rpc_buffer = nullptr;
+    std::unique_ptr<ggml_qnn_rpc_buffer> _qnn_rpc_buffer;
 
     ggml_qnn_tensor(const ggml_qnn_tensor &) = delete;
     void operator=(const ggml_qnn_tensor &) = delete;
