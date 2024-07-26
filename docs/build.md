@@ -16,7 +16,7 @@ In order to build llama.cpp you have four different options.
       make
       ```
 
-  - On Windows:
+  - On Windows (x86/x64 only, arm64 requires cmake):
 
     1. Download the latest fortran version of [w64devkit](https://github.com/skeeto/w64devkit/releases).
     2. Extract `w64devkit` on your pc.
@@ -28,6 +28,7 @@ In order to build llama.cpp you have four different options.
         ```
 
   - Notes:
+    - For `Q4_0_4_4` quantization type build, add the `GGML_NO_LLAMAFILE=1` flag. For example, use `make GGML_NO_LLAMAFILE=1`.
     - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `make -j 8` will run 8 jobs in parallel.
     - For faster repeated compilation, install [ccache](https://ccache.dev/).
     - For debug builds, run `make LLAMA_DEBUG=1`
@@ -41,6 +42,7 @@ In order to build llama.cpp you have four different options.
 
   **Notes**:
 
+    - For `Q4_0_4_4` quantization type build, add the `-DGGML_LLAMAFILE=OFF` cmake option. For example, use `cmake -B build -DGGML_LLAMAFILE=OFF`.
     - For faster compilation, add the `-j` argument to run multiple jobs in parallel. For example, `cmake --build build --config Release -j 8` will run 8 jobs in parallel.
     - For faster repeated compilation, install [ccache](https://ccache.dev/).
     - For debug builds, there are two cases:
@@ -58,6 +60,17 @@ In order to build llama.cpp you have four different options.
       cmake -B build -G "Xcode"
       cmake --build build --config Debug
       ```
+    - Building for Windows (x86, x64 and arm64) with MSVC or clang as compilers:
+      - Install Visual Studio 2022, e.g. via the [Community Edition](https://visualstudio.microsoft.com/de/vs/community/). In the installer, select at least the following options (this also automatically installs the required additional tools like CMake,...):
+        - Tab Workload: Desktop-development with C++
+        - Tab Components (select quickly via search): C++-_CMake_ Tools for Windows, _Git_ for Windows, C++-_Clang_ Compiler for Windows, MS-Build Support for LLVM-Toolset (clang)
+      - Please remember to always use a Developer Command Prompt / PowerShell for VS2022 for git, build, test
+      - For Windows on ARM (arm64, WoA) build with:
+        ```bash
+        cmake --preset arm64-windows-llvm-release -D GGML_OPENMP=OFF
+        cmake --build build-arm64-windows-llvm-release
+        ```
+        Note: Building for arm64 could also be done just with MSVC (with the build-arm64-windows-MSVC preset, or the standard CMake build instructions). But MSVC does not support inline ARM assembly-code, used e.g. for the accelerated Q4_0_4_8 CPU kernels.
 
 -   Using `gmake` (FreeBSD):
 
@@ -239,6 +252,45 @@ The following compilation options are also available to tweak performance (yes, 
 | GGML_CUDA_KQUANTS_ITER | 1 or 2                 | 2       | Number of values processed per iteration and per HIP thread for Q2_K and Q6_K quantization formats. Setting this value to 1 can improve performance for slow GPUs.                                                                             |
 
 ### Vulkan
+
+**Windows**
+
+#### w64devkit
+
+Download and extract [w64devkit](https://github.com/skeeto/w64devkit/releases).
+
+Download and install the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows). When selecting components, only the Vulkan SDK Core is required.
+
+Launch `w64devkit.exe` and run the following commands to copy Vulkan dependencies:
+```sh
+SDK_VERSION=1.3.283.0
+cp /VulkanSDK/$SDK_VERSION/Bin/glslc.exe $W64DEVKIT_HOME/bin/
+cp /VulkanSDK/$SDK_VERSION/Lib/vulkan-1.lib $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/
+cp -r /VulkanSDK/$SDK_VERSION/Include/* $W64DEVKIT_HOME/x86_64-w64-mingw32/include/
+cat > $W64DEVKIT_HOME/x86_64-w64-mingw32/lib/pkgconfig/vulkan.pc <<EOF
+Name: Vulkan-Loader
+Description: Vulkan Loader
+Version: $SDK_VERSION
+Libs: -lvulkan-1
+EOF
+
+```
+Switch into the `llama.cpp` directory and run `make GGML_VULKAN=1`.
+
+#### MSYS2
+Install [MSYS2](https://www.msys2.org/) and then run the following commands in a UCRT terminal to install dependencies.
+  ```sh
+  pacman -S git \
+      mingw-w64-ucrt-x86_64-gcc \
+      mingw-w64-ucrt-x86_64-cmake \
+      mingw-w64-ucrt-x86_64-vulkan-devel \
+      mingw-w64-ucrt-x86_64-shaderc
+  ```
+Switch into `llama.cpp` directory and build using CMake.
+```sh
+cmake -B build -DGGML_VULKAN=ON
+cmake --build build --config Release
+```
 
 **With docker**:
 

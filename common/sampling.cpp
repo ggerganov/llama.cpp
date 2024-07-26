@@ -330,7 +330,7 @@ static llama_token llama_sampling_sample_impl(
         llama_token_data_array single_token_data_array = { &single_token_data, 1, false };
 
         // Apply grammar constraints to the single token
-        llama_sample_grammar(ctx_main, &single_token_data_array, ctx_sampling->grammar);
+        llama_grammar_sample(ctx_sampling->grammar, ctx_main, &single_token_data_array);
 
         // Check if the token is valid according to the grammar by seeing if its logit has been set to -INFINITY
         bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
@@ -378,7 +378,7 @@ static llama_token_data_array llama_sampling_prepare_impl(
     if (ctx_sampling->grammar != NULL && !apply_grammar) {
         GGML_ASSERT(original_logits != NULL);
         // Only make a copy of the original logits if we are not applying grammar checks, not sure if I actually have to do this.
-        *original_logits = {logits, logits + llama_n_vocab(llama_get_model(ctx_main))};
+        *original_logits = {logits, logits + n_vocab};
     }
 
     // apply params.logit_bias map
@@ -391,10 +391,10 @@ static llama_token_data_array llama_sampling_prepare_impl(
         llama_sample_apply_guidance(ctx_main, logits, logits_guidance, params.cfg_scale);
     }
 
-    cur.clear();
+    cur.resize(n_vocab);
 
     for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-        cur.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
+        cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
@@ -421,7 +421,7 @@ static llama_token_data_array llama_sampling_prepare_impl(
 
     // apply grammar checks before sampling logic
     if (apply_grammar && ctx_sampling->grammar != NULL) {
-        llama_sample_grammar(ctx_main, &cur_p, ctx_sampling->grammar);
+        llama_grammar_sample(ctx_sampling->grammar, ctx_main, &cur_p);
     }
 
     return cur_p;
@@ -455,6 +455,6 @@ void llama_sampling_accept(
     ctx_sampling->prev.push_back(id);
 
     if (ctx_sampling->grammar != NULL && apply_grammar) {
-        llama_grammar_accept_token(ctx_main, ctx_sampling->grammar, id);
+        llama_grammar_accept_token(ctx_sampling->grammar, ctx_main, id);
     }
 }

@@ -134,6 +134,10 @@ void ggml_backend_buffer_set_usage(ggml_backend_buffer_t buffer, enum ggml_backe
     }
 }
 
+enum ggml_backend_buffer_usage ggml_backend_buffer_get_usage(ggml_backend_buffer_t buffer) {
+    return buffer->usage;
+}
+
 ggml_backend_buffer_type_t ggml_backend_buffer_get_type(ggml_backend_buffer_t buffer) {
     return buffer->buft;
 }
@@ -394,7 +398,7 @@ void ggml_backend_event_wait(ggml_backend_t backend, ggml_backend_event_t event)
 
 // backend registry
 
-#define GGML_REG_MAX_BACKENDS 16
+#define GGML_REG_MAX_BACKENDS 64
 
 struct ggml_backend_reg {
     char name[128];
@@ -444,6 +448,11 @@ GGML_CALL static void ggml_backend_registry_init(void) {
 #ifdef GGML_USE_KOMPUTE
     extern GGML_CALL void ggml_backend_kompute_reg_devices(void);
     ggml_backend_kompute_reg_devices();
+#endif
+
+#ifdef GGML_USE_CANN
+    extern GGML_CALL int ggml_backend_cann_reg_devices(void);
+    ggml_backend_cann_reg_devices();
 #endif
 }
 

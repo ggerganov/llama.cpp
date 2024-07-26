@@ -238,12 +238,12 @@ if (GGML_BLAS)
 endif()
 
 if (GGML_LLAMAFILE)
-    message(STATUS "Using ggml SGEMM")
+    message(STATUS "Using llamafile")
 
     add_compile_definitions(GGML_USE_LLAMAFILE)
 
-    set(GGML_HEADERS_LLAMAFILE sgemm.h)
-    set(GGML_SOURCES_LLAMAFILE sgemm.cpp)
+    set(GGML_HEADERS_LLAMAFILE llamafile/sgemm.h)
+    set(GGML_SOURCES_LLAMAFILE llamafile/sgemm.cpp)
 endif()
 
 if (GGML_CUDA)
@@ -440,6 +440,10 @@ if (GGML_HIPBLAS)
         add_compile_definitions(GGML_CUDA_FORCE_MMQ)
     endif()
 
+    if (GGML_CUDA_FORCE_CUBLAS)
+        add_compile_definitions(GGML_CUDA_FORCE_CUBLAS)
+    endif()
+
     if (GGML_CUDA_NO_PEER_COPY)
         add_compile_definitions(GGML_CUDA_NO_PEER_COPY)
     endif()
@@ -463,15 +467,18 @@ if (GGML_SYCL)
         message(FATAL_ERROR "Invalid backend chosen, supported options are INTEL or NVIDIA")
     endif()
 
-    if ( NOT DEFINED ENV{ONEAPI_ROOT})
-        message(FATAL_ERROR "Not detect ENV {ONEAPI_ROOT}, please install oneAPI & source it, like: source /opt/intel/oneapi/setvars.sh")
+    check_cxx_compiler_flag("-fsycl" SUPPORTS_SYCL)
+    if ( DEFINED ENV{ONEAPI_ROOT})
+        message(STATUS "Using oneAPI Release SYCL compiler (icpx).")
+    elseif(SUPPORTS_SYCL)
+        message(WARNING "Using open-source SYCL compiler (clang++). Didn't detect ENV {ONEAPI_ROOT}.
+         If you expected the oneAPI Release compiler, please install oneAPI & source it, like:
+         source /opt/intel/oneapi/setvars.sh")
+    else()
+        message(FATAL_ERROR, "C++ compiler lacks SYCL support.")
     endif()
-    #todo: AOT
-
-    find_package(IntelSYCL REQUIRED)
-    find_package(MKL REQUIRED)
-
     message(STATUS "SYCL found")
+    #todo: AOT
 
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_SYCL)
 
@@ -483,11 +490,9 @@ if (GGML_SYCL)
         add_compile_definitions(GGML_SYCL_FORCE_MMQ)
     endif()
 
-    add_compile_options(-I./) #include DPCT
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -fsycl")
 
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
         add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
     else()
         add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
@@ -500,14 +505,14 @@ if (GGML_SYCL)
     list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
 
     if (WIN32)
+        find_package(IntelSYCL REQUIRED)
+        find_package(MKL REQUIRED)
         set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
     else()
-        add_compile_options(-I/${SYCL_INCLUDE_DIR})
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -L${MKLROOT}/lib")
-
         if (GGML_SYCL_TARGET STREQUAL "INTEL")
             set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} -fsycl OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
         elseif (GGML_SYCL_TARGET STREQUAL "NVIDIA")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
             set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} -fsycl pthread m dl onemkl)
         endif()
     endif()
@@ -527,13 +532,10 @@ if (GGML_RPC)
 endif()
 
 if (GGML_VULKAN)
-    find_package(Vulkan)
+    find_package(Vulkan COMPONENTS glslc REQUIRED)
 
     if (Vulkan_FOUND)
         message(STATUS "Vulkan found")
-
-        set(GGML_HEADERS_VULKAN ../include/ggml-vulkan.h)
-        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp)
 
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_VULKAN)
 
@@ -563,7 +565,37 @@ if (GGML_VULKAN)
             add_compile_definitions(GGML_VULKAN_RUN_TESTS)
         endif()
 
-        set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} Vulkan::Vulkan)
+        add_subdirectory(vulkan-shaders)
+
+        set (_ggml_vk_genshaders_cmd vulkan-shaders-gen)
+        set (_ggml_vk_header     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.hpp)
+        set (_ggml_vk_source     ${CMAKE_CURRENT_BINARY_DIR}/ggml-vulkan-shaders.cpp)
+        set (_ggml_vk_input_dir  ${CMAKE_CURRENT_SOURCE_DIR}/vulkan-shaders)
+        set (_ggml_vk_output_dir ${CMAKE_CURRENT_BINARY_DIR}/vulkan-shaders.spv)
+
+        file(GLOB _ggml_vk_shader_deps "${_ggml_vk_input_dir}/*.comp")
+
+        add_custom_command(
+            OUTPUT ${_ggml_vk_header}
+                   ${_ggml_vk_source}
+
+            COMMAND ${_ggml_vk_genshaders_cmd}
+                --glslc      ${Vulkan_GLSLC_EXECUTABLE}
+                --input-dir  ${_ggml_vk_input_dir}
+                --output-dir ${_ggml_vk_output_dir}
+                --target-hpp ${_ggml_vk_header}
+                --target-cpp ${_ggml_vk_source}
+                --no-clean
+
+            DEPENDS ${_ggml_vk_shader_deps}
+            COMMENT "Generate vulkan shaders"
+        )
+
+        set(GGML_HEADERS_VULKAN ${CMAKE_CURRENT_SOURCE_DIR}/../include/ggml-vulkan.h ${_ggml_vk_header})
+        set(GGML_SOURCES_VULKAN ggml-vulkan.cpp ${_ggml_vk_source})
+
+        set(GGML_EXTRA_LIBS     ${GGML_EXTRA_LIBS} Vulkan::Vulkan)
+        set(GGML_EXTRA_INCLUDES ${GGML_EXTRA_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR})
     else()
         message(WARNING "Vulkan not found")
     endif()
@@ -737,6 +769,74 @@ if (GGML_CPU_HBM)
     add_compile_definitions(GGML_USE_CPU_HBM)
 
     target_link_libraries(ggml PUBLIC memkind)
+endif()
+
+if (GGML_CANN)
+    if ("cann${CANN_INSTALL_DIR}" STREQUAL "cann" AND DEFINED ENV{ASCEND_TOOLKIT_HOME})
+        set(CANN_INSTALL_DIR $ENV{ASCEND_TOOLKIT_HOME})
+        message(STATUS "CANN: updated CANN_INSTALL_DIR from ASCEND_TOOLKIT_HOME=$ENV{ASCEND_TOOLKIT_HOME}")
+    endif()
+
+    if (CANN_INSTALL_DIR)
+        # Only Support Linux.
+        if (GGML_CANN)
+            if (NOT UNIX)
+                set(GGML_CANN OFF)
+                message(WARNING "CANN: CANN toolkit supports unix but not ${CMAKE_SYSTEM_NAME}. Turning off GGML_CANN")
+            endif()
+        endif()
+
+        # Supported platforms: x86-64, arm64
+        if (GGML_CANN)
+            if (CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+            elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "amd64")
+            else()
+                set(GGML_CANN OFF)
+                message(WARNING "CANN: CANN toolkit supports x86-64 and arm64 but not ${CMAKE_SYSTEM_PROCESSOR}. Turning off GGML_CANN")
+            endif()
+        endif()
+
+        # Set header and libs
+        if(GGML_CANN)
+            set(CANN_INCLUDE_DIRS
+                ${CANN_INSTALL_DIR}/include
+                ${CANN_INSTALL_DIR}/include/aclnn
+                ${CANN_INSTALL_DIR}/acllib/include
+            )
+
+            # TODO: find libs
+            link_directories(
+                ${CANN_INSTALL_DIR}/lib64
+            )
+
+            add_subdirectory(ggml-cann/kernels)
+            list(APPEND CANN_LIBRARIES
+                ascendcl
+                nnopbase
+                opapi
+                acl_op_compiler
+                ascendc_kernels
+            )
+
+            set(GGML_HEADERS_CANN "../include/ggml-cann.h")
+            file(GLOB GGML_SOURCES_CANN "ggml-cann/*.cpp")
+            list(APPEND GGML_SOURCES_CANN "ggml-cann.cpp")
+
+            message(STATUS "CANN: CANN_INCLUDE_DIRS =  ${CANN_INCLUDE_DIRS}")
+            message(STATUS "CANN: CANN_LIBRARIES =  ${CANN_LIBRARIES}")
+
+            set(GGML_EXTRA_LIBS     ${GGML_EXTRA_LIBS}     ${CANN_LIBRARIES} )
+            set(GGML_EXTRA_INCLUDES ${GGML_EXTRA_INCLUDES} ${CANN_INCLUDE_DIRS})
+            list(APPEND GGML_CDEF_PUBLIC GGML_USE_CANN)
+        endif()
+    else()
+        set(GGML_CANN OFF)
+        message(WARNING "CANN: Can't find CANN_INSTALL_DIR, do you forget to source set_var.sh. Turning off GGML_CANN")
+    endif()
+
+    if(NOT GGML_CANN)
+        message(WARNING "CANN: GGML_CANN is turned OFF, see above for details.")
+    endif()
 endif()
 
 function(get_flags CCID CCVER)
@@ -1153,6 +1253,8 @@ add_library(ggml
             ${GGML_SOURCES_ROCM}      ${GGML_HEADERS_ROCM}
             ${GGML_SOURCES_BLAS}      ${GGML_HEADERS_BLAS}
             ${GGML_SOURCES_LLAMAFILE} ${GGML_HEADERS_LLAMAFILE}
+            ${GGML_SOURCES_CANN}      ${GGML_HEADERS_CANN}
+            ggml-aarch64.c            ggml-aarch64.h
             )
 
 if (EMSCRIPTEN)

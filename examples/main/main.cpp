@@ -124,6 +124,7 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     auto formatted = llama_chat_format_single(
         model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
+    LOG("formatted: %s\n", formatted.c_str());
     return formatted;
 }
 
@@ -289,8 +290,13 @@ int main(int argc, char ** argv) {
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
-        embd_inp.push_back(llama_token_bos(model));
-        LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+        if (add_bos) {
+            embd_inp.push_back(llama_token_bos(model));
+            LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+        } else {
+            LOG_TEE("error: input is empty\n");
+            return -1;
+        }
     }
 
     // Tokenize negative prompt
