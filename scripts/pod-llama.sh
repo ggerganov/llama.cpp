@@ -183,11 +183,6 @@ if [ "$1" -eq "1" ]; then
 
     make -j && ./bin/llama-perplexity -m ../models/tinyllama-1b/ggml-model-f16.gguf -f ./wikitext-2-raw/wiki.test.raw -ngl 100 --chunks 32
 
-    # batched
-    cd /workspace/llama.cpp
-
-    GGML_CUDA=1 make -j && ./llama-batched ./models/tinyllama-1b/ggml-model-f16.gguf "Hello, my name is" 8 128 999
-
     # batched-bench
     cd /workspace/llama.cpp
 
