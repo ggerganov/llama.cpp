@@ -183,7 +183,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
         DESTINATION lib/pkgconfig)
 
 #
-# programs, examples and tests
+# programs, examples
 #
 
 add_subdirectory(common)
