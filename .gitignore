@@ -87,19 +87,19 @@ ppl-*.txt
 qnt-*.txt
 perf-*.txt
 
-# Examples
+# core
 
-examples/jeopardy/results.txt
-examples/server/*.css.hpp
-examples/server/*.html.hpp
-examples/server/*.js.hpp
-examples/server/*.mjs.hpp
+core/jeopardy/results.txt
+core/server/*.css.hpp
+core/server/*.html.hpp
+core/server/*.js.hpp
+core/server/*.mjs.hpp
 !build_64.sh
-!examples/*.bat
-!examples/*/*.kts
-!examples/*/*/*.kts
-!examples/sycl/*.bat
-!examples/sycl/*.sh
+!core/*.bat
+!core/*/*.kts
+!core/*/*/*.kts
+!core/sycl/*.bat
+!core/sycl/*.sh
 
 # Python
 

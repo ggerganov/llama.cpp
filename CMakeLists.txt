@@ -183,12 +183,12 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/llama.pc"
         DESTINATION lib/pkgconfig)
 
 #
-# programs, examples
+# programs, core
 #
 
 add_subdirectory(common)
 
 if (LLAMA_BUILD_EXAMPLES)
-    add_subdirectory(examples)
+    add_subdirectory(core)
     add_subdirectory(pocs)
 endif()

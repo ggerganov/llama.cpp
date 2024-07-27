@@ -1065,7 +1065,7 @@ $(LIB_COMMON_S): \
 clean:
 	rm -vrf *.dot $(BUILD_TARGETS)
 	rm -rvf src/*.o
-	rm -rvf examples/*.o
+	rm -rvf core/*.o
 	rm -rvf common/*.o
 	rm -rvf *.a
 	rm -rvf *.dll
@@ -1082,10 +1082,10 @@ clean:
 	rm -rvf $(BUILD_TARGETS)
 	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
 	rm -rvf $(LEGACY_TARGETS_CLEAN)
-	find examples pocs -type f -name "*.o" -delete
+	find core pocs -type f -name "*.o" -delete
 
 #
-# Examples
+# core
 #
 
 # $< is the first prerequisite, i.e. the source file.
@@ -1095,7 +1095,7 @@ clean:
 # Helper function that replaces .c, .cpp, and .cu file endings with .o:
 GET_OBJ_FILE = $(patsubst %.c,%.o,$(patsubst %.cpp,%.o,$(patsubst %.cu,%.o,$(1))))
 
-llama-cli: examples/main/main.cpp \
+llama-cli: core/main/main.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1104,7 +1104,7 @@ llama-cli: examples/main/main.cpp \
 	@echo
 
 ifdef GGML_RPC
-rpc-server: examples/rpc/rpc-server.cpp \
+rpc-server: core/rpc/rpc-server.cpp \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 endif # GGML_RPC
@@ -1142,7 +1142,7 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 
 # NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
 #  Eventually we will want to remove these target from building all the time.
-main: examples/deprecation-warning/deprecation-warning.cpp
+main: core/deprecation-warning/deprecation-warning.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
