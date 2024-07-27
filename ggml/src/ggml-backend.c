@@ -1279,8 +1279,7 @@ static void ggml_backend_sched_split_graph(ggml_backend_sched_t sched, struct gg
 
     sched->ctx = ggml_init(params);
     if (sched->ctx == NULL) {
-        fprintf(stderr, "%s: failed to initialize context\n", __func__);
-        GGML_ABORT("fatal error");
+        GGML_ABORT("%s: failed to initialize context\n", __func__);
     }
 
     // pass 1: assign backends to ops with pre-allocated inputs

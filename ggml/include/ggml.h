@@ -272,8 +272,8 @@
 #define GGML_NORETURN _Noreturn
 #endif
 
-#define GGML_ABORT(x) ggml_abort(__FILE__, __LINE__, x)
-#define GGML_ASSERT(x) if (!(x)) GGML_ABORT(#x)
+#define GGML_ABORT(...) ggml_abort(__FILE__, __LINE__, __VA_ARGS__)
+#define GGML_ASSERT(x) if (!(x)) GGML_ABORT("GGML_ASSERT(%s) failed", #x)
 
 // used to copy the number of elements and stride in bytes of tensors into local variables.
 // main purpose is to reduce code duplication and improve readability.
@@ -323,7 +323,8 @@
 extern "C" {
 #endif
 
-    GGML_NORETURN GGML_API void ggml_abort(const char * file, int line, const char * expr);
+    GGML_NORETURN GGML_ATTRIBUTE_FORMAT(3, 4)
+    GGML_API void ggml_abort(const char * file, int line, const char * fmt, ...);
 
     enum ggml_status {
         GGML_STATUS_ALLOC_FAILED = -2,

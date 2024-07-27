@@ -191,9 +191,18 @@ static void ggml_print_backtrace(void) {
 }
 #endif
 
-void ggml_abort(const char * file, int line, const char * expr) {
+void ggml_abort(const char * file, int line, const char * fmt, ...) {
     fflush(stdout);
-    fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", file, line, expr);
+
+    fprintf(stderr, "%s:%d: ", file, line);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+
+    fprintf(stderr, "\n");
+
     ggml_print_backtrace();
     abort();
 }

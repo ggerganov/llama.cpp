@@ -141,8 +141,7 @@ static void remove_allocated_tensor(struct ggml_dyn_tallocr * alloc, size_t offs
             return;
         }
     }
-    fprintf(stderr, "tried to free tensor %s not found\n", tensor->name);
-    GGML_ABORT("tensor not found");
+    GGML_ABORT("tried to free tensor %s not found\n", tensor->name);
 }
 #endif
 
