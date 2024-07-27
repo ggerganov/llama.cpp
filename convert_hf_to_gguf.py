@@ -64,6 +64,7 @@ class Model:
     gguf_writer: gguf.GGUFWriter
     model_name: str | None
     metadata_override: Path | None
+    generated_source_uuid: str | None
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
@@ -257,23 +258,18 @@ class Model:
 
         return False
 
-    def generate_source_tensors_uuid(self) -> str:
+    def prepare_tensors(self):
+
         uuidv5_sha1 = hashlib.sha1()
         uuidv5_sha1.update(uuid.UUID('ef001206-dadc-5f6d-a15f-3359e577d4e5').bytes)
 
-        for name, data_torch in self.get_tensors():
-            # we don't need these
-            if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
-                continue
-            data: np.ndarray = data_torch.to(torch.float64).squeeze().numpy()
-            uuidv5_sha1.update(data.tobytes('C'))
-
-        return str(uuid.UUID(bytes=uuidv5_sha1.digest()[:16], version=5))
-
-    def prepare_tensors(self):
         max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
 
         for name, data_torch in self.get_tensors():
+
+            uuidv5_data_buffer: np.ndarray = data_torch.to(torch.float64).numpy()
+            uuidv5_sha1.update(uuidv5_data_buffer.tobytes('C'))
+
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
                 continue
@@ -353,6 +349,9 @@ class Model:
 
                 self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
 
+        # Upon missing source model uuid, generate uuid based on source tensor content
+        self.generated_source_uuid = str(uuid.UUID(bytes=uuidv5_sha1.digest()[:16], version=5))
+
     def set_type(self):
         self.gguf_writer.add_type(gguf.GGUFType.MODEL)
 
@@ -396,15 +395,12 @@ class Model:
                 # output in the same directory as the model by default
                 self.fname_out = self.dir_model / f"{fname_default}.gguf"
 
-        # Upon missing source model uuid, generate uuid based on source tensor content
-        if not vocab_only and self.metadata.source_uuid is None:
-            self.metadata.source_uuid = self.generate_source_tensors_uuid()
-            logger.info(f"generating general.source_uuid: {self.metadata.source_uuid}")
-
-        # Upon missing model uuid, generate uuid based on tensor content
-        if not vocab_only and self.metadata.uuid is None:
-            self.metadata.uuid = self.gguf_writer.generate_tensors_uuid()
-            logger.info(f"generating general.uuid: {self.metadata.uuid}")
+        if not vocab_only:
+            if self.metadata.source_uuid is not None:
+                logger.info(f"Source UUID present: {self.metadata.source_uuid}")
+            elif self.generated_source_uuid is not None:
+                logger.info(f"Source UUID missing. Using generated source uuid: {self.generated_source_uuid}")
+                self.metadata.source_uuid = self.generated_source_uuid
 
         self.set_type()
 
