@@ -1573,7 +1573,7 @@ class LlamaModel(Model):
         if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
             if rope_scaling.get("rope_type", '').lower() == "llama3":
                 base = self.hparams.get("rope_theta", 10000.0)
-                dim = int((self.hparams["hidden_size"] // self.hparams["num_attention_heads"]) * self.hparams.get("partial_rotary_embeddings", 1.0))
+                dim = self.hparams["hidden_size"] // self.hparams["num_attention_heads"]
                 freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
 
                 factor = rope_scaling.get("factor", 8.0)
