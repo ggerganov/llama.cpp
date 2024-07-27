@@ -17674,7 +17674,7 @@ struct llama_data_read {
                     llama_seq_id seq_id;
                     read_to(&seq_id, sizeof(seq_id));
 
-                    if (seq_id < 0 || seq_id >= llama_n_seq_max(ctx)) {
+                    if (seq_id < 0 || (uint32_t) seq_id >= llama_n_seq_max(ctx)) {
                         LLAMA_LOG_ERROR("%s: invalid seq_id, %d is out of range [0, %u)\n", __func__, seq_id, llama_n_seq_max(ctx));
                         return false;
                     }
