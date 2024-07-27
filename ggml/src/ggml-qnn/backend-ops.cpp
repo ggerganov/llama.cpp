@@ -82,14 +82,10 @@ template <size_t _InputSize, size_t _OutputSize>
 std::string get_graph_key(const std::string &op_name, const std::array<ggml_tensor *, _InputSize> &inputs,
                           const std::array<ggml_tensor *, _OutputSize> &outputs) {
     constexpr static const auto append_dimensions = [](std::string &key, const ggml_tensor *tensor) {
-        key += "_";
-        key += std::to_string(tensor->ne[0]);
-        key += "x";
-        key += std::to_string(tensor->ne[1]);
-        key += "x";
-        key += std::to_string(tensor->ne[2]);
-        key += "x";
-        key += std::to_string(tensor->ne[3]);
+        char buffer[256] = {};
+        snprintf(buffer, sizeof(buffer), "_%ldx%ldx%ldx%ld", (long)tensor->ne[0], (long)tensor->ne[1],
+                 (long)tensor->ne[2], (long)tensor->ne[3]);
+        key += buffer;
     };
 
     std::string graph_key(op_name);
@@ -99,7 +95,7 @@ std::string get_graph_key(const std::string &op_name, const std::array<ggml_tens
     for (auto &output : outputs) {
         append_dimensions(graph_key, output);
     }
-    
+
     return graph_key;
 }
 
