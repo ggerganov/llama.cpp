@@ -60,6 +60,12 @@ GGML_CALL ggml_backend_buffer_t ggml_backend_buffer_init(
                size_t                          size) {
     ggml_backend_buffer_t buffer = malloc(sizeof(struct ggml_backend_buffer));
 
+    if (buffer == NULL) {
+        // Log the error and handle appropriately
+        fprintf(stderr, "Memory allocation failed in ggml_backend_buffer_init\n");
+        return NULL; // or handle the error as appropriate
+    }
+
     (*buffer) = (struct ggml_backend_buffer) {
         /* .interface = */ iface,
         /* .buft      = */ buft,

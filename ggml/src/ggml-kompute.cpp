@@ -238,6 +238,11 @@ static std::vector<ggml_vk_device> ggml_vk_available_devices_internal(size_t mem
         d.type = dev_props.deviceType;
         d.heapSize = heapSize;
         d.vendor = strdup(ggml_vk_getVendorName(dev_props.vendorID));
+        if (d.vendor == NULL) {
+            // Handle strdup failure
+            std::cerr << __func__ << ": strdup failed for vendor name\n";
+            continue; // or handle the error as appropriate
+        }
         d.subgroupSize = subgroup_props.subgroupSize;
         d.bufferAlignment = dev_props.limits.minStorageBufferOffsetAlignment;
 
@@ -253,6 +258,12 @@ static std::vector<ggml_vk_device> ggml_vk_available_devices_internal(size_t mem
             name += " (" + std::to_string(n_idx) + ")";
         }
         d.name = strdup(name.c_str());
+        if (d.name == NULL) {
+            // Handle strdup failure
+            std::cerr << __func__ << ": strdup failed for device name\n";
+            free(d.vendor); // Clean up the previously allocated vendor name
+            continue; // or handle the error as appropriate
+        }
 
         results.push_back(d);
     }
