@@ -1758,8 +1758,8 @@ static bool ggml_backend_buft_is_cann(ggml_backend_buffer_type_t buft) {
  *
  * This function determines whether the CANN backend supports the given backend
  * buffer type by comparing the device context of the backend and buffer type.
- * It returns true if the device associated with the buffer type matches the
- * device associated with the backend.
+ * It returns true if the devices are same between the backend context and
+ * buffer type context.
  *
  * @param backend Pointer to the CANN backend.
  * @param buft Pointer to the backend buffer type to check.
