@@ -12,15 +12,14 @@ public:
                         Qnn_DataType_t data_type) :
         _qnn_instance(qnn_instance), _size(size) {
 
-        auto *qnn_rpc_buffer = static_cast<uint8_t *>(qnn_instance->alloc_rpcmem(size, alignof(void *)));
-        _qnn_rpc_mem_handle = qnn_instance->register_rpcmem(qnn_rpc_buffer, rank, dimensions, data_type);
-        if (!_qnn_rpc_mem_handle) {
-            qnn_instance->free_rpcmem(qnn_rpc_buffer);
+        _qnn_rpc_buffer = static_cast<uint8_t *>(qnn_instance->alloc_rpcmem(size, alignof(void *)));
+        _qnn_rpc_mem_handle = qnn_instance->register_rpcmem(_qnn_rpc_buffer, rank, dimensions, data_type);
+        if (!_qnn_rpc_buffer || !_qnn_rpc_mem_handle) {
             QNN_LOG_WARN("register rpc mem failure\n");
+            // let the destructor free the buffer
             return;
         }
 
-        _qnn_rpc_buffer = qnn_rpc_buffer;
         QNN_LOG_DEBUG("alloc rpcmem(%p) successfully, size %d\n", _qnn_rpc_buffer, (int)size);
     }
     ~ggml_qnn_rpc_buffer() {
