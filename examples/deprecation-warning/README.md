@@ -23,9 +23,6 @@ Please update all scripts and workflows to use the new binary names.
 | convert-llama2c-to-ggml | llama-convert-llama2c-to-ggml |
 | eval-callback | llama-eval-callback |
 | gbnf-validator | llama-gbnf-validator |
-| gguf | llama-gguf |
-| gguf-split | llama-gguf-split |
-| gritlm | llama-gritlm |
 | imatrix | llama-imatrix |
 | infill | llama-infill |
 | llava-cli | llama-llava-cli |
@@ -35,10 +32,7 @@ Please update all scripts and workflows to use the new binary names.
 | lookup-merge | llama-lookup-merge |
 | lookup-stats | llama-lookup-stats |
 | parallel | llama-parallel |
-| passkey | llama-passkey |
-| perplexity | llama-perplexity |
-| q8dot | llama-q8dot |
-| quantize-stats | llama-quantize-stats |
+| q8dot | llama-q8dot ||
 | retrieval | llama-retrieval |
 | save-load-state | llama-save-load-state |
 | simple | llama-simple |
