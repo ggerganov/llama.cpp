@@ -18008,12 +18008,6 @@ static bool llama_state_load_file_internal(struct llama_context * ctx, const cha
     // restore the context state
     {
         const size_t n_state_size_cur = file.size - file.tell();
-        const size_t n_state_size_max = llama_state_get_size(ctx);
-
-        if (n_state_size_cur > n_state_size_max) {
-            LLAMA_LOG_ERROR("%s : the state size in session file is too big! max %zu, got %zu\n", __func__, n_state_size_max, n_state_size_cur);
-            return false;
-        }
 
         llama_data_read_file data_ctx(&file);
         const size_t n_read = llama_state_set_data_internal(ctx, data_ctx);
