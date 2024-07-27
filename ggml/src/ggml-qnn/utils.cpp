@@ -158,12 +158,14 @@ const char *get_qnn_error_string(Qnn_ErrorHandle_t error) {
     switch (error) {
         case QNN_SUCCESS:
             return "QNN_SUCCESS";
+        case QNN_COMMON_ERROR_GENERAL:
+            return "QNN_COMMON_ERROR_GENERAL";
+
+        // QnnGraph_Error_t
         case QNN_GRAPH_ERROR_UNSUPPORTED_FEATURE:
             return "QNN_GRAPH_ERROR_UNSUPPORTED_FEATURE";
         case QNN_GRAPH_ERROR_MEM_ALLOC:
             return "QNN_GRAPH_ERROR_MEM_ALLOC";
-        case QNN_GRAPH_ERROR_GENERAL:
-            return "QNN_GRAPH_ERROR_GENERAL";
         case QNN_GRAPH_ERROR_INVALID_ARGUMENT:
             return "QNN_GRAPH_ERROR_INVALID_ARGUMENT";
         case QNN_GRAPH_ERROR_INVALID_HANDLE:
@@ -182,6 +184,22 @@ const char *get_qnn_error_string(Qnn_ErrorHandle_t error) {
             return "QNN_GRAPH_ERROR_UNCONNECTED_NODE";
         case QNN_GRAPH_ERROR_CREATE_FAILED:
             return "QNN_GRAPH_ERROR_CREATE_FAILED";
+
+        // QnnOpPackage_Error_t
+        case QNN_OP_PACKAGE_ERROR_LIBRARY_ALREADY_INITIALIZED:
+            return "QNN_OP_PACKAGE_ERROR_LIBRARY_ALREADY_INITIALIZED";
+        case QNN_OP_PACKAGE_ERROR_LIBRARY_NOT_INITIALIZED:
+            return "QNN_OP_PACKAGE_ERROR_LIBRARY_NOT_INITIALIZED";
+        case QNN_OP_PACKAGE_ERROR_INVALID_HANDLE:
+            return "QNN_OP_PACKAGE_ERROR_INVALID_HANDLE";
+        case QNN_OP_PACKAGE_ERROR_INVALID_INFRASTRUCTURE:
+            return "QNN_OP_PACKAGE_ERROR_INVALID_INFRASTRUCTURE";
+        case QNN_OP_PACKAGE_ERROR_INVALID_INFO:
+            return "QNN_OP_PACKAGE_ERROR_INVALID_INFO";
+        case QNN_OP_PACKAGE_ERROR_VALIDATION_FAILURE:
+            return "QNN_OP_PACKAGE_ERROR_VALIDATION_FAILURE";
+        case QNN_OP_PACKAGE_ERROR_INVALID_ARGUMENT:
+            return "QNN_OP_PACKAGE_ERROR_INVALID_ARGUMENT";
         default:
             return nullptr;
     }
