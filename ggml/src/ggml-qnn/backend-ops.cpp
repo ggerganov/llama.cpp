@@ -304,203 +304,197 @@ bool qnn_unary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src, ggml_ten
 
     return succeed;
 }
+constexpr const ggml_qnn_unary_op_t kQnnUnaryOpsTable[] = {
 
-ggml_qnn_unary_op_array_t ggml_qnn_unary_op_array() {
-    static constexpr const ggml_qnn_unary_op_t kQnnOpsTable[] = {
-        nullptr,                         // GGML_OP_NONE
-        nullptr,                         // GGML_OP_DUP
-        nullptr,                         // GGML_OP_ADD
-        nullptr,                         // GGML_OP_ADD1
-        nullptr,                         // GGML_OP_ACC
-        nullptr,                         // GGML_OP_SUB
-        nullptr,                         // GGML_OP_MUL
-        nullptr,                         // GGML_OP_DIV
-        nullptr,                         // GGML_OP_SQR
-        qnn_unary_op_impl<GGML_OP_SQRT>, // GGML_OP_SQRT
-        qnn_unary_op_impl<GGML_OP_LOG>,  // GGML_OP_LOG
-        nullptr,                         // GGML_OP_SUM
-        nullptr,                         // GGML_OP_SUM_ROWS
-        nullptr,                         // GGML_OP_MEAN
-        nullptr,                         // GGML_OP_ARGMAX
-        nullptr,                         // GGML_OP_REPEAT
-        nullptr,                         // GGML_OP_REPEAT_BACK
-        nullptr,                         // GGML_OP_CONCAT
-        nullptr,                         // GGML_OP_SILU_BACK
-        nullptr,                         // GGML_OP_NORM
-        nullptr,                         // GGML_OP_RMS_NORM
-        nullptr,                         // GGML_OP_RMS_NORM_BACK
-        nullptr,                         // GGML_OP_GROUP_NORM
+    nullptr,                         // GGML_OP_NONE
+    nullptr,                         // GGML_OP_DUP
+    nullptr,                         // GGML_OP_ADD
+    nullptr,                         // GGML_OP_ADD1
+    nullptr,                         // GGML_OP_ACC
+    nullptr,                         // GGML_OP_SUB
+    nullptr,                         // GGML_OP_MUL
+    nullptr,                         // GGML_OP_DIV
+    nullptr,                         // GGML_OP_SQR
+    qnn_unary_op_impl<GGML_OP_SQRT>, // GGML_OP_SQRT
+    qnn_unary_op_impl<GGML_OP_LOG>,  // GGML_OP_LOG
+    nullptr,                         // GGML_OP_SUM
+    nullptr,                         // GGML_OP_SUM_ROWS
+    nullptr,                         // GGML_OP_MEAN
+    nullptr,                         // GGML_OP_ARGMAX
+    nullptr,                         // GGML_OP_REPEAT
+    nullptr,                         // GGML_OP_REPEAT_BACK
+    nullptr,                         // GGML_OP_CONCAT
+    nullptr,                         // GGML_OP_SILU_BACK
+    nullptr,                         // GGML_OP_NORM
+    nullptr,                         // GGML_OP_RMS_NORM
+    nullptr,                         // GGML_OP_RMS_NORM_BACK
+    nullptr,                         // GGML_OP_GROUP_NORM
 
-        nullptr, // GGML_OP_MUL_MAT
-        nullptr, // GGML_OP_MUL_MAT_ID
-        nullptr, // GGML_OP_OUT_PROD
+    nullptr, // GGML_OP_MUL_MAT
+    nullptr, // GGML_OP_MUL_MAT_ID
+    nullptr, // GGML_OP_OUT_PROD
 
-        nullptr, // GGML_OP_SCALE
-        nullptr, // GGML_OP_SET
-        nullptr, // GGML_OP_CPY
-        nullptr, // GGML_OP_CONT
-        nullptr, // GGML_OP_RESHAPE
-        nullptr, // GGML_OP_VIEW
-        nullptr, // GGML_OP_PERMUTE
-        nullptr, // GGML_OP_TRANSPOSE
-        nullptr, // GGML_OP_GET_ROWS
-        nullptr, // GGML_OP_GET_ROWS_BACK
-        nullptr, // GGML_OP_DIAG
-        nullptr, // GGML_OP_DIAG_MASK_INF
-        nullptr, // GGML_OP_DIAG_MASK_ZERO
-        nullptr, // GGML_OP_SOFT_MAX
-        nullptr, // GGML_OP_SOFT_MAX_BACK
-        nullptr, // GGML_OP_ROPE
-        nullptr, // GGML_OP_ROPE_BACK
-        nullptr, // GGML_OP_CLAMP
-        nullptr, // GGML_OP_CONV_TRANSPOSE_1D
-        nullptr, // GGML_OP_IM2COL
-        nullptr, // GGML_OP_CONV_TRANSPOSE_2D
-        nullptr, // GGML_OP_POOL_1D
-        nullptr, // GGML_OP_POOL_2D
-        nullptr, // GGML_OP_UPSCALE
-        nullptr, // GGML_OP_PAD
-        nullptr, // GGML_OP_ARANGE
-        nullptr, // GGML_OP_TIMESTEP_EMBEDDING
-        nullptr, // GGML_OP_ARGSORT
-        nullptr, // GGML_OP_LEAKY_RELU
+    nullptr, // GGML_OP_SCALE
+    nullptr, // GGML_OP_SET
+    nullptr, // GGML_OP_CPY
+    nullptr, // GGML_OP_CONT
+    nullptr, // GGML_OP_RESHAPE
+    nullptr, // GGML_OP_VIEW
+    nullptr, // GGML_OP_PERMUTE
+    nullptr, // GGML_OP_TRANSPOSE
+    nullptr, // GGML_OP_GET_ROWS
+    nullptr, // GGML_OP_GET_ROWS_BACK
+    nullptr, // GGML_OP_DIAG
+    nullptr, // GGML_OP_DIAG_MASK_INF
+    nullptr, // GGML_OP_DIAG_MASK_ZERO
+    nullptr, // GGML_OP_SOFT_MAX
+    nullptr, // GGML_OP_SOFT_MAX_BACK
+    nullptr, // GGML_OP_ROPE
+    nullptr, // GGML_OP_ROPE_BACK
+    nullptr, // GGML_OP_CLAMP
+    nullptr, // GGML_OP_CONV_TRANSPOSE_1D
+    nullptr, // GGML_OP_IM2COL
+    nullptr, // GGML_OP_CONV_TRANSPOSE_2D
+    nullptr, // GGML_OP_POOL_1D
+    nullptr, // GGML_OP_POOL_2D
+    nullptr, // GGML_OP_UPSCALE
+    nullptr, // GGML_OP_PAD
+    nullptr, // GGML_OP_ARANGE
+    nullptr, // GGML_OP_TIMESTEP_EMBEDDING
+    nullptr, // GGML_OP_ARGSORT
+    nullptr, // GGML_OP_LEAKY_RELU
 
-        nullptr, // GGML_OP_FLASH_ATTN_EXT
-        nullptr, // GGML_OP_FLASH_ATTN_BACK
-        nullptr, // GGML_OP_SSM_CONV
-        nullptr, // GGML_OP_SSM_SCAN
-        nullptr, // GGML_OP_WIN_PART
-        nullptr, // GGML_OP_WIN_UNPART
-        nullptr, // GGML_OP_GET_REL_POS
-        nullptr, // GGML_OP_ADD_REL_POS
+    nullptr, // GGML_OP_FLASH_ATTN_EXT
+    nullptr, // GGML_OP_FLASH_ATTN_BACK
+    nullptr, // GGML_OP_SSM_CONV
+    nullptr, // GGML_OP_SSM_SCAN
+    nullptr, // GGML_OP_WIN_PART
+    nullptr, // GGML_OP_WIN_UNPART
+    nullptr, // GGML_OP_GET_REL_POS
+    nullptr, // GGML_OP_ADD_REL_POS
 
-        nullptr, // GGML_OP_UNARY
+    nullptr, // GGML_OP_UNARY
 
-        nullptr, // GGML_OP_MAP_UNARY
-        nullptr, // GGML_OP_MAP_BINARY
+    nullptr, // GGML_OP_MAP_UNARY
+    nullptr, // GGML_OP_MAP_BINARY
 
-        nullptr, // GGML_OP_MAP_CUSTOM1_F32
-        nullptr, // GGML_OP_MAP_CUSTOM2_F32
-        nullptr, // GGML_OP_MAP_CUSTOM3_F32
+    nullptr, // GGML_OP_MAP_CUSTOM1_F32
+    nullptr, // GGML_OP_MAP_CUSTOM2_F32
+    nullptr, // GGML_OP_MAP_CUSTOM3_F32
 
-        nullptr, // GGML_OP_MAP_CUSTOM1
-        nullptr, // GGML_OP_MAP_CUSTOM2
-        nullptr, // GGML_OP_MAP_CUSTOM3
+    nullptr, // GGML_OP_MAP_CUSTOM1
+    nullptr, // GGML_OP_MAP_CUSTOM2
+    nullptr, // GGML_OP_MAP_CUSTOM3
 
-        nullptr, // GGML_OP_CROSS_ENTROPY_LOSS
-        nullptr, // GGML_OP_CROSS_ENTROPY_LOSS_BACK
+    nullptr, // GGML_OP_CROSS_ENTROPY_LOSS
+    nullptr, // GGML_OP_CROSS_ENTROPY_LOSS_BACK
 
-        // ggml_unary_op
-        nullptr,                                                   // GGML_UNARY_OP_ABS
-        nullptr,                                                   // GGML_UNARY_OP_SGN
-        nullptr,                                                   // GGML_UNARY_OP_NEG
-        nullptr,                                                   // GGML_UNARY_OP_STEP
-        nullptr,                                                   // GGML_UNARY_OP_TANH
-        nullptr,                                                   // GGML_UNARY_OP_ELU
-        nullptr,                                                   // GGML_UNARY_OP_RELU
-        nullptr,                                                   // GGML_UNARY_OP_SIGMOID
-        qnn_unary_op_impl<GGML_UNARY_OP_GELU + kGgmlUnaryOpStart>, // GGML_UNARY_OP_GELU
-        nullptr,                                                   // GGML_UNARY_OP_GELU_QUICK
-        nullptr,                                                   // GGML_UNARY_OP_SILU
-        nullptr,                                                   // GGML_UNARY_OP_HARDSWISH
-        nullptr,                                                   // GGML_UNARY_OP_HARDSIGMOID
-    };
+    // ggml_unary_op
+    nullptr,                                                   // GGML_UNARY_OP_ABS
+    nullptr,                                                   // GGML_UNARY_OP_SGN
+    nullptr,                                                   // GGML_UNARY_OP_NEG
+    nullptr,                                                   // GGML_UNARY_OP_STEP
+    nullptr,                                                   // GGML_UNARY_OP_TANH
+    nullptr,                                                   // GGML_UNARY_OP_ELU
+    nullptr,                                                   // GGML_UNARY_OP_RELU
+    nullptr,                                                   // GGML_UNARY_OP_SIGMOID
+    qnn_unary_op_impl<GGML_UNARY_OP_GELU + kGgmlUnaryOpStart>, // GGML_UNARY_OP_GELU
+    nullptr,                                                   // GGML_UNARY_OP_GELU_QUICK
+    nullptr,                                                   // GGML_UNARY_OP_SILU
+    nullptr,                                                   // GGML_UNARY_OP_HARDSWISH
+    nullptr,                                                   // GGML_UNARY_OP_HARDSIGMOID
+};
 
-    static_assert(sizeof(kQnnOpsTable) / sizeof(kQnnOpsTable[0]) == (GGML_OP_COUNT + GGML_UNARY_OP_COUNT),
-                  "GGML_OP_COUNT does not match the size of the kQnnOpsTable table");
-    return kQnnOpsTable;
-}
+static_assert(sizeof(kQnnUnaryOpsTable) / sizeof(kQnnUnaryOpsTable[0]) == (GGML_OP_COUNT + GGML_UNARY_OP_COUNT),
+              "GGML_OP_COUNT does not match the size of the kQnnUnaryOpsTable table");
 
-ggml_qnn_binary_op_array_t ggml_qnn_binary_op_array() {
-    static constexpr const ggml_qnn_binary_op_t kQnnOpsTable[] = {
-        nullptr,                         // GGML_OP_NONE
-        nullptr,                         // GGML_OP_DUP
-        qnn_binary_op_impl<GGML_OP_ADD>, // GGML_OP_ADD
-        nullptr,                         // GGML_OP_ADD1
-        nullptr,                         // GGML_OP_ACC
-        qnn_binary_op_impl<GGML_OP_SUB>, // GGML_OP_SUB
-        qnn_binary_op_impl<GGML_OP_MUL>, // GGML_OP_MUL
-        qnn_binary_op_impl<GGML_OP_DIV>, // GGML_OP_DIV
-        nullptr,                         // GGML_OP_SQR
-        nullptr,                         // GGML_OP_SQRT
-        nullptr,                         // GGML_OP_LOG
-        nullptr,                         // GGML_OP_SUM
-        nullptr,                         // GGML_OP_SUM_ROWS
-        nullptr,                         // GGML_OP_MEAN
-        nullptr,                         // GGML_OP_ARGMAX
-        nullptr,                         // GGML_OP_REPEAT
-        nullptr,                         // GGML_OP_REPEAT_BACK
-        nullptr,                         // GGML_OP_CONCAT
-        nullptr,                         // GGML_OP_SILU_BACK
-        nullptr,                         // GGML_OP_NORM
-        nullptr,                         // GGML_OP_RMS_NORM
-        nullptr,                         // GGML_OP_RMS_NORM_BACK
-        nullptr,                         // GGML_OP_GROUP_NORM
+static constexpr const ggml_qnn_binary_op_t kQnnBinaryOpsTable[] = {
+    nullptr,                         // GGML_OP_NONE
+    nullptr,                         // GGML_OP_DUP
+    qnn_binary_op_impl<GGML_OP_ADD>, // GGML_OP_ADD
+    nullptr,                         // GGML_OP_ADD1
+    nullptr,                         // GGML_OP_ACC
+    qnn_binary_op_impl<GGML_OP_SUB>, // GGML_OP_SUB
+    qnn_binary_op_impl<GGML_OP_MUL>, // GGML_OP_MUL
+    qnn_binary_op_impl<GGML_OP_DIV>, // GGML_OP_DIV
+    nullptr,                         // GGML_OP_SQR
+    nullptr,                         // GGML_OP_SQRT
+    nullptr,                         // GGML_OP_LOG
+    nullptr,                         // GGML_OP_SUM
+    nullptr,                         // GGML_OP_SUM_ROWS
+    nullptr,                         // GGML_OP_MEAN
+    nullptr,                         // GGML_OP_ARGMAX
+    nullptr,                         // GGML_OP_REPEAT
+    nullptr,                         // GGML_OP_REPEAT_BACK
+    nullptr,                         // GGML_OP_CONCAT
+    nullptr,                         // GGML_OP_SILU_BACK
+    nullptr,                         // GGML_OP_NORM
+    nullptr,                         // GGML_OP_RMS_NORM
+    nullptr,                         // GGML_OP_RMS_NORM_BACK
+    nullptr,                         // GGML_OP_GROUP_NORM
 
-        qnn_binary_op_impl<GGML_OP_MUL_MAT>, // GGML_OP_MUL_MAT
-        nullptr,                             // GGML_OP_MUL_MAT_ID
-        nullptr,                             // GGML_OP_OUT_PROD
+    qnn_binary_op_impl<GGML_OP_MUL_MAT>, // GGML_OP_MUL_MAT
+    nullptr,                             // GGML_OP_MUL_MAT_ID
+    nullptr,                             // GGML_OP_OUT_PROD
 
-        nullptr, // GGML_OP_SCALE
-        nullptr, // GGML_OP_SET
-        nullptr, // GGML_OP_CPY
-        nullptr, // GGML_OP_CONT
-        nullptr, // GGML_OP_RESHAPE
-        nullptr, // GGML_OP_VIEW
-        nullptr, // GGML_OP_PERMUTE
-        nullptr, // GGML_OP_TRANSPOSE
-        nullptr, // GGML_OP_GET_ROWS
-        nullptr, // GGML_OP_GET_ROWS_BACK
-        nullptr, // GGML_OP_DIAG
-        nullptr, // GGML_OP_DIAG_MASK_INF
-        nullptr, // GGML_OP_DIAG_MASK_ZERO
-        nullptr, // GGML_OP_SOFT_MAX
-        nullptr, // GGML_OP_SOFT_MAX_BACK
-        nullptr, // GGML_OP_ROPE
-        nullptr, // GGML_OP_ROPE_BACK
-        nullptr, // GGML_OP_CLAMP
-        nullptr, // GGML_OP_CONV_TRANSPOSE_1D
-        nullptr, // GGML_OP_IM2COL
-        nullptr, // GGML_OP_CONV_TRANSPOSE_2D
-        nullptr, // GGML_OP_POOL_1D
-        nullptr, // GGML_OP_POOL_2D
-        nullptr, // GGML_OP_UPSCALE
-        nullptr, // GGML_OP_PAD
-        nullptr, // GGML_OP_ARANGE
-        nullptr, // GGML_OP_TIMESTEP_EMBEDDING
-        nullptr, // GGML_OP_ARGSORT
-        nullptr, // GGML_OP_LEAKY_RELU
+    nullptr, // GGML_OP_SCALE
+    nullptr, // GGML_OP_SET
+    nullptr, // GGML_OP_CPY
+    nullptr, // GGML_OP_CONT
+    nullptr, // GGML_OP_RESHAPE
+    nullptr, // GGML_OP_VIEW
+    nullptr, // GGML_OP_PERMUTE
+    nullptr, // GGML_OP_TRANSPOSE
+    nullptr, // GGML_OP_GET_ROWS
+    nullptr, // GGML_OP_GET_ROWS_BACK
+    nullptr, // GGML_OP_DIAG
+    nullptr, // GGML_OP_DIAG_MASK_INF
+    nullptr, // GGML_OP_DIAG_MASK_ZERO
+    nullptr, // GGML_OP_SOFT_MAX
+    nullptr, // GGML_OP_SOFT_MAX_BACK
+    nullptr, // GGML_OP_ROPE
+    nullptr, // GGML_OP_ROPE_BACK
+    nullptr, // GGML_OP_CLAMP
+    nullptr, // GGML_OP_CONV_TRANSPOSE_1D
+    nullptr, // GGML_OP_IM2COL
+    nullptr, // GGML_OP_CONV_TRANSPOSE_2D
+    nullptr, // GGML_OP_POOL_1D
+    nullptr, // GGML_OP_POOL_2D
+    nullptr, // GGML_OP_UPSCALE
+    nullptr, // GGML_OP_PAD
+    nullptr, // GGML_OP_ARANGE
+    nullptr, // GGML_OP_TIMESTEP_EMBEDDING
+    nullptr, // GGML_OP_ARGSORT
+    nullptr, // GGML_OP_LEAKY_RELU
 
-        nullptr, // GGML_OP_FLASH_ATTN_EXT
-        nullptr, // GGML_OP_FLASH_ATTN_BACK
-        nullptr, // GGML_OP_SSM_CONV
-        nullptr, // GGML_OP_SSM_SCAN
-        nullptr, // GGML_OP_WIN_PART
-        nullptr, // GGML_OP_WIN_UNPART
-        nullptr, // GGML_OP_GET_REL_POS
-        nullptr, // GGML_OP_ADD_REL_POS
+    nullptr, // GGML_OP_FLASH_ATTN_EXT
+    nullptr, // GGML_OP_FLASH_ATTN_BACK
+    nullptr, // GGML_OP_SSM_CONV
+    nullptr, // GGML_OP_SSM_SCAN
+    nullptr, // GGML_OP_WIN_PART
+    nullptr, // GGML_OP_WIN_UNPART
+    nullptr, // GGML_OP_GET_REL_POS
+    nullptr, // GGML_OP_ADD_REL_POS
 
-        nullptr, // GGML_OP_UNARY
+    nullptr, // GGML_OP_UNARY
 
-        nullptr, // GGML_OP_MAP_UNARY
-        nullptr, // GGML_OP_MAP_BINARY
+    nullptr, // GGML_OP_MAP_UNARY
+    nullptr, // GGML_OP_MAP_BINARY
 
-        nullptr, // GGML_OP_MAP_CUSTOM1_F32
-        nullptr, // GGML_OP_MAP_CUSTOM2_F32
-        nullptr, // GGML_OP_MAP_CUSTOM3_F32
+    nullptr, // GGML_OP_MAP_CUSTOM1_F32
+    nullptr, // GGML_OP_MAP_CUSTOM2_F32
+    nullptr, // GGML_OP_MAP_CUSTOM3_F32
 
-        nullptr, // GGML_OP_MAP_CUSTOM1
-        nullptr, // GGML_OP_MAP_CUSTOM2
-        nullptr, // GGML_OP_MAP_CUSTOM3
+    nullptr, // GGML_OP_MAP_CUSTOM1
+    nullptr, // GGML_OP_MAP_CUSTOM2
+    nullptr, // GGML_OP_MAP_CUSTOM3
 
-        nullptr, // GGML_OP_CROSS_ENTROPY_LOSS
-        nullptr, // GGML_OP_CROSS_ENTROPY_LOSS_BACK
-    };
+    nullptr, // GGML_OP_CROSS_ENTROPY_LOSS
+    nullptr, // GGML_OP_CROSS_ENTROPY_LOSS_BACK
+};
 
-    static_assert(sizeof(kQnnOpsTable) / sizeof(kQnnOpsTable[0]) == GGML_OP_COUNT,
-                  "GGML_OP_COUNT does not match the size of the ops table");
-    return kQnnOpsTable;
-}
+static_assert(sizeof(kQnnBinaryOpsTable) / sizeof(kQnnBinaryOpsTable[0]) == GGML_OP_COUNT,
+              "GGML_OP_COUNT does not match the size of the kQnnBinaryOpsTable table");
 
 } // namespace
 
@@ -508,7 +502,7 @@ namespace qnn {
 
 bool ggml_qnn_supports_op(const ggml_tensor *op) {
     if (op->op == GGML_OP_UNARY) {
-        if (!ggml_qnn_unary_op_array()[kGgmlUnaryOpStart + ggml_get_unary_op(op)]) {
+        if (!kQnnUnaryOpsTable[kGgmlUnaryOpStart + ggml_get_unary_op(op)]) {
             QNN_LOG_DEBUG("unsupported unary op %d", ggml_get_unary_op(op));
             return false;
         }
@@ -518,7 +512,7 @@ bool ggml_qnn_supports_op(const ggml_tensor *op) {
             return false;
         }
     } else if (op->op != GGML_OP_NONE) {
-        if (!ggml_qnn_unary_op_array()[op->op] && !ggml_qnn_binary_op_array()[op->op]) {
+        if (!kQnnUnaryOpsTable[op->op] && !kQnnBinaryOpsTable[op->op]) {
             QNN_LOG_DEBUG("unsupported op %d", op->op);
             return false;
         }
@@ -555,12 +549,12 @@ bool ggml_qnn_forward(ggml_backend_qnn_context *ctx, struct ggml_tensor *tensor)
         unary_op_idx = kGgmlUnaryOpStart + ggml_get_unary_op(tensor);
     }
 
-    auto unary_op = ggml_qnn_unary_op_array()[unary_op_idx];
+    auto unary_op = kQnnUnaryOpsTable[unary_op_idx];
     if (unary_op) {
         return unary_op(ctx, tensor->src[0], tensor);
     }
 
-    auto binary_op = ggml_qnn_binary_op_array()[tensor->op];
+    auto binary_op = kQnnBinaryOpsTable[tensor->op];
     if (binary_op) {
         return binary_op(ctx, tensor->src[0], tensor->src[1], tensor);
     }
