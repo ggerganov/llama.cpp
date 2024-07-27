@@ -3602,7 +3602,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--z", action="store_true",
-        help="Keep output and ambed tensors at F16"
+        help="Keep output and embed tensors at F16"
     )
 
     return parser.parse_args()
