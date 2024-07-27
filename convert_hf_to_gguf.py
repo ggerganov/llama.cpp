@@ -273,8 +273,8 @@ class Model:
 
         for name, data_torch in self.get_tensors():
 
-            uuidv5_data_buffer: np.ndarray = data_torch.to(torch.float64).numpy()
-            uuidv5_sha1.update(uuidv5_data_buffer.tobytes('C'))
+            uuidv5_data_buffer: np.ndarray = data_torch.numpy()
+            uuidv5_sha1.update(uuidv5_data_buffer.data.tobytes('C'))
 
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
@@ -3506,6 +3506,9 @@ class LazyTorchTensor(gguf.LazyBase):
         torch.float16: np.float16,
         torch.float32: np.float32,
         torch.float64: np.float64,
+
+        # No direct mapping avaliable. Cast upwards to avoid loss of precision
+        torch.bfloat16: np.float32,
     }
 
     # used for safetensors slices
