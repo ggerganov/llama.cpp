@@ -559,7 +559,7 @@ bool ggml_qnn_forward(ggml_backend_qnn_context *ctx, struct ggml_tensor *tensor)
         return binary_op(ctx, tensor->src[0], tensor->src[1], tensor);
     }
 
-    QNN_LOG_WARN("unsupported op %d", tensor->op);
+    QNN_LOG_WARN("unsupported op %s", ggml_op_desc(tensor));
     return false;
 }
 
