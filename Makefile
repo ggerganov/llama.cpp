@@ -1,47 +1,15 @@
 # Define the default target now so that it is always the first target
 BUILD_TARGETS = \
-	libllava.a \
 	llama-cli \
-	llama-convert-llama2c-to-ggml \
-	llama-embedding \
-	llama-eval-callback \
-	llama-export-lora \
-	llama-gbnf-validator \
-	llama-gguf \
-	llama-gguf-hash \
-	llama-gguf-split \
-	llama-gritlm \
-	llama-imatrix \
-	llama-infill \
-	llama-llava-cli \
-	llama-lookahead \
-	llama-lookup \
-	llama-lookup-create \
-	llama-lookup-merge \
-	llama-lookup-stats \
-	llama-parallel \
-	llama-passkey \
-	llama-perplexity \
 	llama-q8dot \
-	llama-quantize \
-	llama-quantize-stats \
-	llama-retrieval \
-	llama-save-load-state \
-	llama-server \
-	llama-simple \
-	llama-speculative \
-	llama-tokenize \
-	llama-vdot \
-	llama-cvector-generator
+	llama-vdot
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
-LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
-	simple save-load-state server gguf gguf-split eval-callback libllava.a llava-cli \
-	retrieval speculative infill tokenize parallel export-lora lookahead lookup passkey gritlm
+LEGACY_TARGETS_CLEAN = main vdot q8dot
 
 # Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
 #  We don't want to clutter things too much, so we only build replacements for the most commonly used binaries.
-LEGACY_TARGETS_BUILD = main quantize perplexity embedding server
+LEGACY_TARGETS_BUILD = main
 
 # Deprecation aliases
 ifdef LLAMA_CUBLAS
@@ -1135,212 +1103,11 @@ llama-cli: examples/main/main.cpp \
 	@echo '====  Run ./llama-cli -h for help.  ===='
 	@echo
 
-llama-infill: examples/infill/infill.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-simple: examples/simple/simple.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-tokenize: examples/tokenize/tokenize.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-quantize: examples/quantize/quantize.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-quantize-stats: examples/quantize-stats/quantize-stats.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-perplexity: examples/perplexity/perplexity.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-imatrix: examples/imatrix/imatrix.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-embedding: examples/embedding/embedding.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-gritlm: examples/gritlm/gritlm.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-save-load-state: examples/save-load-state/save-load-state.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-gguf: examples/gguf/gguf.cpp \
-	$(OBJ_GGML)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-examples/gguf-hash/deps/sha1/sha1.o: \
-	examples/gguf-hash/deps/sha1/sha1.c
-	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
-
-examples/gguf-hash/deps/xxhash/xxhash.o: \
-	examples/gguf-hash/deps/xxhash/xxhash.c
-	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
-
-examples/gguf-hash/deps/sha256/sha256.o: \
-	examples/gguf-hash/deps/sha256/sha256.c
-	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
-
-llama-gguf-hash: examples/gguf-hash/gguf-hash.cpp examples/gguf-hash/deps/sha1/sha1.o examples/gguf-hash/deps/xxhash/xxhash.o examples/gguf-hash/deps/sha256/sha256.o\
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -Iexamples/gguf-hash/deps -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-gguf-split: examples/gguf-split/gguf-split.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-eval-callback: examples/eval-callback/eval-callback.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp \
-	$(OBJ_GGML) $(OBJ_LLAMA)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-export-lora: examples/export-lora/export-lora.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-retrieval: examples/retrieval/retrieval.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-speculative: examples/speculative/speculative.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-parallel: examples/parallel/parallel.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-lookahead: examples/lookahead/lookahead.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-lookup: examples/lookup/lookup.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-lookup-create: examples/lookup/lookup-create.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-lookup-merge: examples/lookup/lookup-merge.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-lookup-stats: examples/lookup/lookup-stats.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-passkey: examples/passkey/passkey.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-gbnf-validator: examples/gbnf-validator/gbnf-validator.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
 ifdef GGML_RPC
 rpc-server: examples/rpc/rpc-server.cpp \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 endif # GGML_RPC
-
-llama-server: \
-	examples/server/server.cpp \
-	examples/server/utils.hpp \
-	examples/server/httplib.h \
-	examples/server/colorthemes.css.hpp \
-	examples/server/style.css.hpp \
-	examples/server/theme-beeninorder.css.hpp \
-	examples/server/theme-ketivah.css.hpp \
-	examples/server/theme-mangotango.css.hpp \
-	examples/server/theme-playground.css.hpp \
-	examples/server/theme-polarnight.css.hpp \
-	examples/server/theme-snowstorm.css.hpp \
-	examples/server/index.html.hpp \
-	examples/server/index-new.html.hpp \
-	examples/server/index.js.hpp \
-	examples/server/completion.js.hpp \
-	examples/server/system-prompts.js.hpp \
-	examples/server/prompt-formats.js.hpp \
-	examples/server/json-schema-to-grammar.mjs.hpp \
-	common/json.hpp \
-	common/stb_image.h \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h %.hpp $<,$^) -Iexamples/server $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS) $(LWINSOCK2)
-
-# Portable equivalent of `cd examples/server/public && xxd -i $(notdir $<) ../$(notdir $<).hpp`:
-examples/server/%.hpp: examples/server/public/% Makefile
-	@( export NAME=$(subst .,_,$(subst -,_,$(notdir $<))) && \
-		echo "unsigned char $${NAME}[] = {" && \
-		cat $< | od -v -t x1 -An | sed -E 's/([0-9a-fA-F]+)/0x\1, /g' && \
-		echo "};" && \
-		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
-	) > $@
-
-libllava.a: examples/llava/llava.cpp \
-	examples/llava/llava.h \
-	examples/llava/clip.cpp \
-	examples/llava/clip.h \
-	common/stb_image.h \
-	common/base64.hpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -static -fPIC -c $< -o $@ -Wno-cast-qual
-
-llama-llava-cli: examples/llava/llava-cli.cpp \
-	examples/llava/clip.h \
-	examples/llava/clip.cpp \
-	examples/llava/llava.h \
-	examples/llava/llava.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) -c examples/llava/clip.cpp  -o $(call GET_OBJ_FILE, examples/llava/clip.cpp) -Wno-cast-qual
-	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) -o $@ $(LDFLAGS)
 
 common/build-info.cpp: $(wildcard .git/index) scripts/build-info.sh
 	@sh scripts/build-info.sh "$(CC)" > $@.tmp
@@ -1371,7 +1138,7 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 # Deprecated binaries that we want to keep around long enough for people to migrate to the new filenames, then these can be removed.
 #
 # Mark legacy binary targets as .PHONY so that they are always checked.
-.PHONY: main quantize perplexity embedding server
+.PHONY: main
 
 # NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
 #  Eventually we will want to remove these target from building all the time.
@@ -1380,37 +1147,6 @@ main: examples/deprecation-warning/deprecation-warning.cpp
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
 
-server: examples/deprecation-warning/deprecation-warning.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "NOTICE: The 'server' binary is deprecated. Please use 'llama-server' instead."
 
-quantize: examples/deprecation-warning/deprecation-warning.cpp
-ifneq (,$(wildcard quantize))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "#########"
-	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
-	@echo "  Remove the 'quantize' binary to remove this warning."
-	@echo "#########"
-endif
 
-perplexity: examples/deprecation-warning/deprecation-warning.cpp
-ifneq (,$(wildcard perplexity))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "#########"
-	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
-	@echo "  Remove the 'perplexity' binary to remove this warning."
-	@echo "#########"
-endif
 
-embedding: examples/deprecation-warning/deprecation-warning.cpp
-ifneq (,$(wildcard embedding))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "#########"
-	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
-	@echo "  Remove the 'embedding' binary to remove this warning."
-	@echo "#########"
-endif
