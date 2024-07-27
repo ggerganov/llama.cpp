@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# gguf-addfile.py srcfile dstfile addfiles ...
+# gguf_add_file.py srcfile dstfile addfiles ...
 
 from __future__ import annotations
 
