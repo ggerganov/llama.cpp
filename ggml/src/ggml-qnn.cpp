@@ -114,23 +114,7 @@ struct ggml_backend_qnn_buffer_type_context {
 //
 // =================================================================================================
 static bool ggml_qnn_compute_forward(ggml_backend_qnn_context *ctx, struct ggml_tensor *tensor) {
-    size_t unary_op_idx = tensor->op;
-    if (tensor->op == GGML_OP_UNARY) {
-        unary_op_idx = qnn::kGgmlUnaryOpStart + ggml_get_unary_op(tensor);
-    }
-
-    auto unary_op = qnn::ggml_qnn_unary_op_array()[unary_op_idx];
-    if (unary_op) {
-        return unary_op(ctx, tensor->src[0], tensor);
-    }
-
-    auto binary_op = qnn::ggml_qnn_binary_op_array()[tensor->op];
-    if (binary_op) {
-        return binary_op(ctx, tensor->src[0], tensor->src[1], tensor);
-    }
-
-    QNN_LOG_WARN("unsupported op %d", tensor->op);
-    return false;
+    return qnn::ggml_qnn_forward(ctx, tensor);
 }
 
 static const char *ggml_backend_qnn_buffer_get_name(ggml_backend_buffer_t buffer) {
@@ -288,42 +272,7 @@ GGML_CALL static ggml_status ggml_backend_qnn_graph_compute(ggml_backend_t backe
 
 GGML_CALL static bool ggml_backend_qnn_supports_op(ggml_backend_t backend, const ggml_tensor *op) {
     GGML_UNUSED(backend);
-
-    if (op->op == GGML_OP_UNARY) {
-        if (!qnn::ggml_qnn_unary_op_array()[qnn::kGgmlUnaryOpStart + ggml_get_unary_op(op)]) {
-            QNN_LOG_DEBUG("unsupported unary op %d", ggml_get_unary_op(op));
-            return false;
-        }
-
-        if (!op->src[0]) {
-            QNN_LOG_DEBUG("src0 is nullptr");
-            return false;
-        }
-    } else if (op->op != GGML_OP_NONE) {
-        if (!qnn::ggml_qnn_unary_op_array()[op->op] && !qnn::ggml_qnn_binary_op_array()[op->op]) {
-            QNN_LOG_DEBUG("unsupported op %d", op->op);
-            return false;
-        }
-
-        if (!op->src[0] || !op->src[1]) {
-            QNN_LOG_DEBUG("src0 or src1 is nullptr");
-            return false;
-        }
-    }
-
-    switch (op->type) {
-        case GGML_TYPE_F32:
-        case GGML_TYPE_F16:
-        case GGML_TYPE_I8:
-        case GGML_TYPE_Q8_0:
-        case GGML_TYPE_Q4_0:
-            break;
-        default:
-            QNN_LOG_DEBUG("unsupported src0 type %d", op->src[0]->type);
-            return false;
-    }
-
-    return true;
+    return qnn::ggml_qnn_supports_op(op);
 }
 
 GGML_CALL static bool ggml_backend_qnn_offload_op(ggml_backend_t backend, const ggml_tensor *op) {
