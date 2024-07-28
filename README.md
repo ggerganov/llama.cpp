@@ -138,6 +138,7 @@ Typically finetunes of the base models below are supported as well.
 
 Unless otherwise noted these projects are open-source with permissive licensing:
 
+- [MindWorkAI/AI-Studio](https://github.com/MindWorkAI/AI-Studio) (FSL-1.1-MIT)
 - [iohub/collama](https://github.com/iohub/coLLaMA)
 - [janhq/jan](https://github.com/janhq/jan) (AGPL)
 - [nat/openplayground](https://github.com/nat/openplayground)
@@ -180,6 +181,9 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 **Infrastructure:**
 
 - [Paddler](https://github.com/distantmagic/paddler) - Stateful load balancer custom-tailored for llama.cpp
+
+**Games:**
+- [Lucy's Labyrinth](https://github.com/MorganRO8/Lucys_Labyrinth) - A simple maze game where agents controlled by an AI model will try to trick you.
 
 ## Demo
 
@@ -405,6 +409,7 @@ Please refer to [Build llama.cpp locally](./docs/build.md)
 | [BLAS](./docs/build.md#blas-build) | All |
 | [BLIS](./docs/backend/BLIS.md) | All |
 | [SYCL](./docs/backend/SYCL.md) | Intel and Nvidia GPU |
+| [MUSA](./docs/build.md#musa) | Moore Threads GPU |
 | [CUDA](./docs/build.md#cuda) | Nvidia GPU |
 | [hipBLAS](./docs/build.md#hipblas) | AMD GPU |
 | [Vulkan](./docs/build.md#vulkan) | GPU |
