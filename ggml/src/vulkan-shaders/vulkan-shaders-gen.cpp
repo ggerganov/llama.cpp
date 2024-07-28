@@ -496,7 +496,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (argc <= 1 || std::string(argv[1]) == "--help") {
+    if (argc <= 1 || args.find("--help") != args.end()) {
         std::cout << "Usage:\n"
                      "\tvulkan-shaders-gen [options]\n\n"
                      "Options:\n"
