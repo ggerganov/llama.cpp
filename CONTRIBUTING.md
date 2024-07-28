@@ -1,13 +1,17 @@
-# Pull requests
+# Pull requests (for contributors)
 
-- Always squash-merge the PR before merging
-- Use the following format for your final commit: `<module> : <commit title> (#<issue_number>)`. For example: `utils : fix typo in utils.py (#1234)`
 - Test your changes:
   - Using the commands in the [`tests`](tests) folder. For instance, running the `./tests/test-backend-ops` command tests different backend implementations of the GGML library
   - Execute [the full CI locally on your machine](ci/README.md) before publishing
-- If the pull request contains only documentation changes (e.g., updating READMEs, adding new wiki pages), please add `[no ci]` to the commit title. This will skip unnecessary CI checks and help reduce build times
 - Please rate the complexity of your PR (i.e. `Review Complexity : Low`, `Review Complexity : Medium`, `Review Complexity : High`). This makes it easier for maintainers to triage the PRs.
-  - The PR template has a series of review complexity checkboxes `[ ]` that [you can mark as](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/about-task-lists) `[X]` for your conveience
+  - The PR template has a series of review complexity checkboxes `[ ]` that [you can mark as](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/about-task-lists) `[X]` for your convenience
+- If your PR becomes stale, don't hesitate to ping the maintainers in the comments
+
+# Pull requests (for collaborators)
+
+- Squash-merge PRs
+- Use the following format for the squashed commit title: `<module> : <commit title> (#<issue_number>)`. For example: `utils : fix typo in utils.py (#1234)`
+- Optionally, pick a `<module>` from here: https://github.com/ggerganov/llama.cpp/wiki/Modules
 
 # Coding guidelines
 

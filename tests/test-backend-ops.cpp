@@ -79,8 +79,16 @@ static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float m
                 im = nullptr;
             }
         }
+
         ggml_quantize_chunk(tensor->type, data.data(), dataq.data(), 0, size/tensor->ne[0], tensor->ne[0], im);
         GGML_ASSERT(ggml_validate_row_data(tensor->type, dataq.data(), dataq.size()));
+        // TODO: other cases
+        //#pragma omp parallel for
+        //for (int i = 0; i < tensor->ne[1]; i++) {
+        //    ggml_quantize_chunk(tensor->type, data.data(), dataq.data(),
+        //        i * tensor->ne[0], 1, tensor->ne[0], im);
+        //}
+
         ggml_backend_tensor_set(tensor, dataq.data(), 0, dataq.size());
     } else if (tensor->type == GGML_TYPE_I8 || tensor->type == GGML_TYPE_I16 || tensor->type == GGML_TYPE_I32) {
         // This is going to create some weird integers though.
@@ -759,7 +767,7 @@ struct test_dup : public test_case {
     }
 
     test_dup(ggml_type type = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 1},
+            std::array<int64_t, 4> ne = {10, 10, 20, 1},
             std::array<int64_t, 4> permute = {0, 0, 0, 0})
         : type(type), ne(ne), permute(permute),
             _use_permute(permute[0] + permute[1] + permute[2] + permute[3] > 0) {}
@@ -779,9 +787,11 @@ struct test_cpy : public test_case {
     const ggml_type type_src;
     const ggml_type type_dst;
     const std::array<int64_t, 4> ne;
+    const std::array<int64_t, 4> permute;
+    bool _src_use_permute;
 
     std::string vars() override {
-        return VARS_TO_STR3(type_src, type_dst, ne);
+        return VARS_TO_STR4(type_src, type_dst, ne, permute);
     }
 
     double max_nmse_err() override {
@@ -793,12 +803,18 @@ struct test_cpy : public test_case {
     }
 
     test_cpy(ggml_type type_src = GGML_TYPE_F32, ggml_type type_dst = GGML_TYPE_F32,
-            std::array<int64_t, 4> ne = {10, 10, 10, 1})
-        : type_src(type_src), type_dst(type_dst), ne(ne) {}
+            std::array<int64_t, 4> ne = {10, 10, 10, 1},
+            std::array<int64_t, 4> permute = {0, 0, 0, 0},
+            bool _dst_use_permute = false)
+        : type_src(type_src), type_dst(type_dst), ne(ne), permute(permute),
+          _src_use_permute(permute[0] + permute[1] + permute[2] + permute[3] > 0) {}
 
     ggml_tensor * build_graph(ggml_context * ctx) override {
         ggml_tensor * src = ggml_new_tensor(ctx, type_src, 4, ne.data());
-        ggml_tensor * dst = ggml_new_tensor(ctx, type_dst, 4, ne.data());
+        if (_src_use_permute) {
+            src = ggml_permute(ctx, src, permute[0], permute[1], permute[2], permute[3]);
+        }
+        ggml_tensor* dst = ggml_new_tensor(ctx, type_dst, 4, src->ne);
         ggml_tensor * out = ggml_cpy(ctx, src, dst);
         return out;
     }
@@ -1173,6 +1189,7 @@ struct test_soft_max : public test_case {
         return out;
     }
 };
+
 
 // GGML_OP_ROPE
 struct test_rope : public test_case {
@@ -2146,12 +2163,22 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
     test_cases.emplace_back(new test_dup(GGML_TYPE_F16));
     test_cases.emplace_back(new test_dup(GGML_TYPE_I32));
     test_cases.emplace_back(new test_dup(GGML_TYPE_I16));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_F32, {10, 10, 5, 1}, {0, 2, 1, 3}));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_F16, {10, 10, 5, 1}, {0, 2, 1, 3})); // dup by rows
+    test_cases.emplace_back(new test_dup(GGML_TYPE_F32, {10, 10, 5, 1}, {1, 0, 2, 3}));
+    test_cases.emplace_back(new test_dup(GGML_TYPE_F16, {10, 10, 5, 1}, {1, 0, 2, 3})); // dup dst not-contiguous
     test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {0, 2, 1, 3}));
     test_cases.emplace_back(new test_dup(GGML_TYPE_I16, {10, 8, 3, 1}, {1, 2, 0, 3}));
 
     for (ggml_type type_src : {GGML_TYPE_F16, GGML_TYPE_F32}) {
         for (ggml_type type_dst : all_types) {
            test_cases.emplace_back(new test_cpy(type_src, type_dst, {256, 4, 4, 4}));
+           test_cases.emplace_back(new test_cpy(type_src, type_dst, {256, 2, 3, 4}, {0, 2, 1, 3})); // cpy by rows
+        }
+    }
+    for (ggml_type type_src : {GGML_TYPE_F16, GGML_TYPE_F32}) {
+        for (ggml_type type_dst : {GGML_TYPE_F16, GGML_TYPE_F32}) {
+            test_cases.emplace_back(new test_cpy(type_src, type_dst, {256, 2, 3, 4}, {1, 0, 2, 3})); // cpy not-contiguous
         }
     }
 
@@ -2201,6 +2228,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         test_cases.emplace_back(new test_rms_norm(GGML_TYPE_F32, {64, 10, 10, 10}, eps));
     }
 
+#if 1
     for (ggml_type type_a : base_types) {
         for (ggml_type type_b : {GGML_TYPE_F32, GGML_TYPE_F16}) {
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 1, 256, { 1,  1}, {1, 1}));
@@ -2220,6 +2248,24 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
             test_cases.emplace_back(new test_mul_mat(type_a, type_b, 16, 16, 256, {10, 10}, {2, 2}));
         }
     }
+#else
+    // m = a rows
+    // n = b rows
+    // k = cols
+    std::uniform_int_distribution<> dist_m(1, 128);
+    std::uniform_int_distribution<> dist_n(16, 128);
+    std::uniform_int_distribution<> dist_k(1, 16);
+    for (int i = 0; i < 1000; i++) {
+        for (ggml_type type_a : all_types) {
+            for (ggml_type type_b : {GGML_TYPE_F32}) {
+                int m = dist_m(rng);
+                int n = dist_n(rng);
+                int k = dist_k(rng) * ggml_blck_size(type_a);
+                test_cases.emplace_back(new test_mul_mat(type_a, type_b, m, n, k, { 1,  1}, {1, 1}));
+            }
+        }
+    }
+#endif
 
     for (ggml_type type_a : other_types) {
         for (ggml_type type_b : {GGML_TYPE_F32}) {
@@ -2283,7 +2329,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
         for (int n = 0; n < 10; ++n) {
             int64_t ne0 = dist_ne0(rng);
             int64_t ne1 = dist_ne1(rng);
-            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {ne0, ne1, 1, 1}, n/2 == 0, 0.1f, ne0 < 1000 ? 4.0f : 0.0f));
+            test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, GGML_TYPE_F32, {ne0, ne1, 1, 1}, n/2 == 0, 0.1f, ne0 < 1000 ? 4.0f : 0.0f));
         }
 
         exponent <<= 1;
@@ -2302,7 +2348,7 @@ static bool test_backend(ggml_backend_t backend, test_mode mode, const char * op
             }
         }
     }
-
+    test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 2, 32, 1}, true, 0.1f, 0.0f));
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {16, 2, 32, 1}, false, 0.1f, 0.0f));
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {32, 2, 32, 1}, true,  0.1f, 0.0f));
     test_cases.emplace_back(new test_soft_max(GGML_TYPE_F32, {32, 2, 32, 1}, true,  0.1f, 8.0f));
