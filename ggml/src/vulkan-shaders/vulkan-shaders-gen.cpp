@@ -440,7 +440,7 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
     }));
 }
 
-void write_output_files(void) {
+void write_output_files() {
     FILE* hdr = fopen(target_hpp.c_str(), "w");
     FILE* src = fopen(target_cpp.c_str(), "w");
 
