@@ -59,9 +59,9 @@ bool is_tensor_dimensions_equal(const ggml_tensor *l, const ggml_tensor *r) {
 }
 
 void print_ggml_tensor(const ggml_tensor *tensor) {
-    QNN_LOG_DEBUG("%15s: type = %i (%5s) ne = %5" PRIi64 " x %5" PRIi64 " x %5" PRIi64 ", nb = (%5zi, %5zi, %5zi)\n",
-                  tensor->name, tensor->type, ggml_type_name(tensor->type), tensor->ne[0], tensor->ne[1], tensor->ne[2],
-                  tensor->nb[0], tensor->nb[1], tensor->nb[2]);
+    QNN_LOG_DEBUG("%s: type:%s ne: %ldx%ldx%ldx%ld, nb: %ldx%ldx%ldx%ld\n", tensor->name, ggml_type_name(tensor->type),
+                  (long)tensor->ne[0], (long)tensor->ne[1], (long)tensor->ne[2], (long)tensor->ne[3],
+                  (long)tensor->nb[0], (long)tensor->nb[1], (long)tensor->nb[2], (long)tensor->nb[3]);
 }
 
 } // namespace
