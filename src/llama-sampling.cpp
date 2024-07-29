@@ -305,7 +305,7 @@ void llama_sample_dry_impl(llama_token_data_array * candidates, const llama_toke
         auto match_length = pair.second;
 
         // if the match length is greater than or equal to our allowed length in config, we apply penalities
-        if (match_length >= dry_allowed_length) {
+        if (match_length >= (size_t)dry_allowed_length) {
 
             // find our next token in the candidates->data
             for (size_t i = 0; i < candidates->size; ++i) {
