@@ -23,6 +23,10 @@
 #include "ggml-cuda.h"
 #include "ggml-sycl.h"
 
+#ifdef GGML_USE_CANN
+#include "ggml-cann.h"
+#endif
+
 // utils
 static uint64_t get_time_ns() {
     using clock = std::chrono::high_resolution_clock;
@@ -121,6 +125,17 @@ static std::string get_gpu_info() {
         }
     }
 #endif
+#ifdef GGML_USE_CANN
+    uint32_t count = ggml_backend_cann_get_device_count();
+    for (uint32_t i = 0; i < count; i++) {
+        char buf[128];
+        ggml_backend_cann_get_device_description(i, buf, sizeof(buf));
+        id += buf;
+        if (i < count - 1) {
+            id += "/";
+        }
+    }
+#endif
     // TODO: other backends
     return id;
 }
@@ -135,7 +150,7 @@ static const char * output_format_str(output_formats format) {
         case JSON:     return "json";
         case MARKDOWN: return "md";
         case SQL:      return "sql";
-        default: GGML_ASSERT(!"invalid output format");
+        default: GGML_ABORT("invalid output format");
     }
 }
 
@@ -161,7 +176,7 @@ static const char * split_mode_str(llama_split_mode mode) {
         case LLAMA_SPLIT_MODE_NONE:  return "none";
         case LLAMA_SPLIT_MODE_LAYER: return "layer";
         case LLAMA_SPLIT_MODE_ROW:   return "row";
-        default: GGML_ASSERT(!"invalid split mode");
+        default: GGML_ABORT("invalid split mode");
     }
 }
 
@@ -1311,7 +1326,7 @@ static std::unique_ptr<printer> create_printer(output_formats format) {
         case SQL:
             return std::unique_ptr<printer>(new sql_printer());
     }
-    GGML_ASSERT(false);
+    GGML_ABORT("fatal error");
 }
 
 int main(int argc, char ** argv) {

@@ -11,7 +11,6 @@ BUILD_TARGETS = \
 	llama-embedding \
 	llama-eval-callback \
 	llama-export-lora \
-	llama-finetune \
 	llama-gbnf-validator \
 	llama-gguf \
 	llama-gguf-hash \
@@ -37,7 +36,6 @@ BUILD_TARGETS = \
 	llama-simple \
 	llama-speculative \
 	llama-tokenize \
-	llama-train-text-from-scratch \
 	llama-vdot \
 	llama-cvector-generator \
 	tests/test-c.o
@@ -64,13 +62,13 @@ TEST_TARGETS = \
 	tests/test-tokenizer-1-spm
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
-LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot train-text-from-scratch convert-llama2c-to-ggml \
+LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
 	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
-	retrieval speculative infill tokenize benchmark-matmult parallel finetune export-lora lookahead lookup passkey gritlm
+	retrieval speculative infill tokenize benchmark-matmult parallel export-lora lookahead lookup passkey gritlm
 
 # Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
 #  We don't want to clutter things too much, so we only build replacements for the most commonly used binaries.
-LEGACY_TARGETS_BUILD = main quantize perplexity embedding server finetune
+LEGACY_TARGETS_BUILD = main quantize perplexity embedding server
 
 # Deprecation aliases
 ifdef LLAMA_CUBLAS
@@ -327,9 +325,9 @@ ifdef LLAMA_DEBUG
 	endif
 else
 	MK_CPPFLAGS   += -DNDEBUG
-	MK_CFLAGS     += -O3
-	MK_CXXFLAGS   += -O3
-	MK_NVCCFLAGS  += -O3
+	MK_CFLAGS     += -O3 -g
+	MK_CXXFLAGS   += -O3 -g
+	MK_NVCCFLAGS  += -O3 -g
 endif
 
 ifdef LLAMA_SANITIZE_THREAD
@@ -530,10 +528,21 @@ ifndef GGML_NO_ACCELERATE
 	endif
 endif # GGML_NO_ACCELERATE
 
+ifdef GGML_MUSA
+	CC := clang
+	CXX := clang++
+	GGML_CUDA := 1
+	MK_CPPFLAGS += -DGGML_USE_MUSA
+endif
+
 ifndef GGML_NO_OPENMP
 	MK_CPPFLAGS += -DGGML_USE_OPENMP
 	MK_CFLAGS   += -fopenmp
 	MK_CXXFLAGS += -fopenmp
+	ifdef GGML_MUSA
+		MK_CPPFLAGS += -I/usr/lib/llvm-10/include/openmp
+		MK_LDFLAGS  += -L/usr/lib/llvm-10/lib
+	endif # GGML_MUSA
 endif # GGML_NO_OPENMP
 
 ifdef GGML_OPENBLAS
@@ -584,15 +593,27 @@ else
 endif # GGML_CUDA_FA_ALL_QUANTS
 
 ifdef GGML_CUDA
-	ifneq ('', '$(wildcard /opt/cuda)')
-		CUDA_PATH ?= /opt/cuda
-	else
-		CUDA_PATH ?= /usr/local/cuda
-	endif
+	ifdef GGML_MUSA
+		ifneq ('', '$(wildcard /opt/musa)')
+			CUDA_PATH ?= /opt/musa
+		else
+			CUDA_PATH ?= /usr/local/musa
+		endif
 
-	MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include -DGGML_CUDA_USE_GRAPHS
-	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L$(CUDA_PATH)/lib64/stubs -L/usr/lib/wsl/lib
-	MK_NVCCFLAGS += -use_fast_math
+		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include
+		MK_LDFLAGS   += -lmusa -lmublas -lmusart -lpthread -ldl -lrt -L$(CUDA_PATH)/lib -L/usr/lib64
+		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_22
+	else
+		ifneq ('', '$(wildcard /opt/cuda)')
+			CUDA_PATH ?= /opt/cuda
+		else
+			CUDA_PATH ?= /usr/local/cuda
+		endif
+
+		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include -DGGML_CUDA_USE_GRAPHS
+		MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L$(CUDA_PATH)/lib64/stubs -L/usr/lib/wsl/lib
+		MK_NVCCFLAGS += -use_fast_math
+	endif # GGML_MUSA
 
 	OBJ_GGML += ggml/src/ggml-cuda.o
 	OBJ_GGML += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/*.cu))
@@ -602,9 +623,11 @@ ifdef LLAMA_FATAL_WARNINGS
 	MK_NVCCFLAGS += -Werror all-warnings
 endif # LLAMA_FATAL_WARNINGS
 
+ifndef GGML_MUSA
 ifndef JETSON_EOL_MODULE_DETECT
 	MK_NVCCFLAGS += --forward-unknown-to-host-compiler
 endif # JETSON_EOL_MODULE_DETECT
+endif # GGML_MUSA
 
 ifdef LLAMA_DEBUG
 	MK_NVCCFLAGS += -lineinfo
@@ -617,8 +640,12 @@ endif # GGML_CUDA_DEBUG
 ifdef GGML_CUDA_NVCC
 	NVCC = $(CCACHE) $(GGML_CUDA_NVCC)
 else
-	NVCC = $(CCACHE) nvcc
-endif #GGML_CUDA_NVCC
+	ifdef GGML_MUSA
+		NVCC = $(CCACHE) mcc
+	else
+		NVCC = $(CCACHE) nvcc
+	endif # GGML_MUSA
+endif # GGML_CUDA_NVCC
 
 ifdef CUDA_DOCKER_ARCH
 	MK_NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
@@ -689,9 +716,15 @@ define NVCC_COMPILE
 	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUDA -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endef # NVCC_COMPILE
 else
+	ifdef GGML_MUSA
+define NVCC_COMPILE
+	$(NVCC) $(NVCCFLAGS) $(CPPFLAGS) -c $< -o $@
+endef # NVCC_COMPILE
+	else
 define NVCC_COMPILE
 	$(NVCC) $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endef # NVCC_COMPILE
+	endif # GGML_MUSA
 endif # JETSON_EOL_MODULE_DETECT
 
 ggml/src/ggml-cuda/%.o: \
@@ -876,6 +909,9 @@ OBJ_GGML += \
 
 OBJ_LLAMA = \
 	src/llama.o \
+	src/llama-vocab.o \
+	src/llama-grammar.o \
+	src/llama-sampling.o \
 	src/unicode.o \
 	src/unicode-data.o
 
@@ -943,6 +979,7 @@ $(info I CXX:       $(shell $(CXX)  --version | head -n 1))
 ifdef GGML_CUDA
 $(info I NVCC:      $(shell $(NVCC) --version | tail -n 1))
 CUDA_VERSION := $(shell $(NVCC) --version | grep -oP 'release (\K[0-9]+\.[0-9])')
+ifndef GGML_MUSA
 ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
 
 ifndef CUDA_DOCKER_ARCH
@@ -952,6 +989,7 @@ endif # CUDA_POWER_ARCH
 endif # CUDA_DOCKER_ARCH
 
 endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
+endif # GGML_MUSA
 endif # GGML_CUDA
 $(info )
 
@@ -1055,6 +1093,10 @@ src/unicode-data.o: \
 
 src/llama.o: \
 	src/llama.cpp \
+	src/llama-impl.h \
+	src/llama-vocab.h \
+	src/llama-grammar.h \
+	src/llama-sampling.h \
 	src/unicode.h \
 	include/llama.h \
 	ggml/include/ggml-cuda.h \
@@ -1062,6 +1104,29 @@ src/llama.o: \
 	ggml/include/ggml.h \
 	ggml/include/ggml-alloc.h \
 	ggml/include/ggml-backend.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/llama-vocab.o: \
+	src/llama-vocab.cpp \
+	src/llama-vocab.h \
+	src/llama-impl.h \
+	include/llama.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/llama-grammar.o: \
+	src/llama-grammar.cpp \
+	src/llama-grammar.h \
+	src/llama-impl.h \
+	src/llama-vocab.h \
+	src/llama-sampling.h \
+	include/llama.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/llama-sampling.o: \
+	src/llama-sampling.cpp \
+	src/llama-sampling.h \
+	src/llama-impl.h \
+	include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(LIB_LLAMA): \
@@ -1266,11 +1331,6 @@ llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
 llama-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp \
 	$(OBJ_GGML) $(OBJ_LLAMA)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
@@ -1286,13 +1346,8 @@ llama-baby-llama: examples/baby-llama/baby-llama.cpp \
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-finetune: examples/finetune/finetune.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
 llama-export-lora: examples/export-lora/export-lora.cpp \
-	$(OBJ_GGML) common/log.h
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -1439,7 +1494,7 @@ run-benchmark-matmult: llama-benchmark-matmult
 .PHONY: run-benchmark-matmult swift
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
-	$(OBJ_GGML) $(OBJ_COMMON) src/unicode.o src/unicode-data.o
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -1548,7 +1603,7 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 # Deprecated binaries that we want to keep around long enough for people to migrate to the new filenames, then these can be removed.
 #
 # Mark legacy binary targets as .PHONY so that they are always checked.
-.PHONY: main quantize perplexity embedding server finetune
+.PHONY: main quantize perplexity embedding server
 
 # NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
 #  Eventually we will want to remove these target from building all the time.
@@ -1589,15 +1644,5 @@ ifneq (,$(wildcard embedding))
 	@echo "#########"
 	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
 	@echo "  Remove the 'embedding' binary to remove this warning."
-	@echo "#########"
-endif
-
-finetune: examples/deprecation-warning/deprecation-warning.cpp
-ifneq (,$(wildcard finetune))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	@echo "#########"
-	@echo "WARNING: The 'finetune' binary is deprecated. Please use 'llama-finetune' instead."
-	@echo "  Remove the 'finetune' binary to remove this warning."
 	@echo "#########"
 endif

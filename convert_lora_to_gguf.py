@@ -252,6 +252,10 @@ def parse_args() -> argparse.Namespace:
         help="increase output verbosity",
     )
     parser.add_argument(
+        "--dry-run", action="store_true",
+        help="only print out what will be done, without writing any new files",
+    )
+    parser.add_argument(
         "--base", type=Path, required=True,
         help="directory containing base model file",
     )
@@ -286,7 +290,7 @@ if __name__ == '__main__':
         fname_out = args.outfile
     else:
         # output in the same directory as the model by default
-        fname_out = dir_lora / 'ggml-lora-{ftype}.gguf'
+        fname_out = dir_lora
 
     if os.path.exists(input_model):
         # lazy import load_file only if lora is in safetensors format.
@@ -309,6 +313,23 @@ if __name__ == '__main__':
 
         class LoraModel(model_class):
             model_arch = model_class.model_arch
+
+            lora_alpha: float
+
+            def __init__(self, *args, dir_lora_model: Path, lora_alpha: float, **kwargs):
+
+                super().__init__(*args, **kwargs)
+
+                self.dir_model_card = dir_lora_model
+                self.lora_alpha = float(lora_alpha)
+
+            def set_type(self):
+                self.gguf_writer.add_type(gguf.GGUFType.ADAPTER)
+                self.gguf_writer.add_string(gguf.Keys.Adapter.TYPE, "lora")
+
+            def set_gguf_parameters(self):
+                self.gguf_writer.add_float32(gguf.Keys.Adapter.LORA_ALPHA, self.lora_alpha)
+                super().set_gguf_parameters()
 
             def get_tensors(self) -> Iterator[tuple[str, Tensor]]:
                 tensor_map: dict[str, PartialLoraTensor] = {}
@@ -350,6 +371,11 @@ if __name__ == '__main__':
                     yield (dest_name + ".lora_a", lora_a)
                     yield (dest_name + ".lora_b", lora_b)
 
+        with open(lora_config, "r") as f:
+            lparams: dict[str, Any] = json.load(f)
+
+        alpha: float = lparams["lora_alpha"]
+
         model_instance = LoraModel(
             dir_base_model,
             ftype,
@@ -357,18 +383,11 @@ if __name__ == '__main__':
             is_big_endian=args.bigendian,
             use_temp_file=False,
             eager=args.no_lazy,
-            model_name=None,
+            dry_run=args.dry_run,
+            dir_lora_model=dir_lora,
+            lora_alpha=alpha,
         )
 
-        with open(lora_config, "r") as f:
-            lparams: dict[str, Any] = json.load(f)
-
-        alpha = lparams["lora_alpha"]
-
-        model_instance.gguf_writer.add_string(gguf.Keys.General.TYPE, gguf.GGUFType.ADAPTER)
-        model_instance.gguf_writer.add_string(gguf.Keys.Adapter.TYPE, "lora")
-        model_instance.gguf_writer.add_float32(gguf.Keys.Adapter.LORA_ALPHA, float(alpha))
-        model_instance.gguf_writer.add_quantization_version(gguf.GGML_QUANT_VERSION)
         logger.info("Exporting model...")
         model_instance.write()
         logger.info(f"Model successfully exported to {model_instance.fname_out}")
