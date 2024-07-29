@@ -20,13 +20,11 @@ enum QNNBackend {
 
 /**
  *
- * @param device            0: QNN_BACKEND_CPU 1: QNN_BACKEND_GPU 2:
- * QNN_BACKEND_NPU
- * @param qnn_lib_path      qnn library path, such as "/data/local/tmp/" on
- * Android or specified in JNI layer
+ * @param device                      0: QNN_BACKEND_CPU 1: QNN_BACKEND_GPU 2:QNN_BACKEND_NPU
+ * @param extend_lib_search_path      extened lib search path for searching QNN backend dynamic libs
  * @return
  */
-GGML_API ggml_backend_t ggml_backend_qnn_init(size_t dev_num, const char *qnn_lib_path);
+GGML_API ggml_backend_t ggml_backend_qnn_init(size_t dev_num, const char *extend_lib_search_path);
 
 GGML_API bool ggml_backend_is_qnn(ggml_backend_t backend);
 

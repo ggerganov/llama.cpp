@@ -319,15 +319,8 @@ static ggml_guid_t ggml_backend_qnn_guid() {
     return &guid;
 }
 
-static ggml_backend_t ggml_backend_qnn_reg_init(const char *params, void *user_data) {
-    if (nullptr == params) {
-        // QNN library path
-        // can be hardcoded to "/data/local/tmp/" for Android command line application
-        // or specified in JNI layer for Android APK
-        params = "/data/local/tmp/";
-    }
-    ggml_backend_t qnn_backend = ggml_backend_qnn_init((int)(intptr_t)user_data, params);
-
+static ggml_backend_t ggml_backend_qnn_reg_init(const char *extend_lib_search_path, void *user_data) {
+    ggml_backend_t qnn_backend = ggml_backend_qnn_init((int)(intptr_t)user_data, extend_lib_search_path);
     return qnn_backend;
 }
 
@@ -390,28 +383,25 @@ ggml_backend_buffer_type_t ggml_backend_qnn_buffer_type(size_t device) {
     return &ggml_backend_qnn_buffer_types[device];
 }
 
-/**
- *
- * @param device            0: QNN_BACKEND_CPU 1: QNN_BACKEND_GPU 2: QNN_BACKEND_NPU
- * @param qnn_lib_path      qnn library path, such as "/data/local/tmp/" on Android or specified in JNI layer
- * @return
- */
-ggml_backend_t ggml_backend_qnn_init(size_t device, const char *qnn_lib_path) {
+ggml_backend_t ggml_backend_qnn_init(size_t device, const char *extend_lib_search_path) {
     int result = 0;
 
-    if (nullptr == qnn_lib_path) {
-        QNN_LOG_ERROR("invalid qnn lib path\n");
-        return nullptr;
+    if (!extend_lib_search_path) {
+        extend_lib_search_path = GGML_QNN_DEFAULT_LIB_SEARCH_PATH;
+        QNN_LOG_WARN("extend_lib_search_path is nullptr, will use " GGML_QNN_DEFAULT_LIB_SEARCH_PATH " as default");
     }
 
     QNN_LOG_DEBUG("device %d", device);
-    QNN_LOG_DEBUG("qnn_lib_path %s", qnn_lib_path);
+    QNN_LOG_DEBUG("extend_lib_search_path %s", extend_lib_search_path);
     if (device >= GGML_QNN_MAX_DEVICES) {
         QNN_LOG_ERROR("invalid device %d", device);
         return nullptr;
     }
 
-    std::string path = qnn_lib_path;
+    std::string path = extend_lib_search_path;
+
+// TODO: Fix this for other platforms
+#if defined(__ANDROID__) || defined(ANDROID)
     if (QNN_BACKEND_NPU == device) {
         if (0 == setenv("LD_LIBRARY_PATH",
                         (path + ":/vendor/dsp/cdsp:/vendor/lib64:/vendor/dsp/"
@@ -438,8 +428,9 @@ ggml_backend_t ggml_backend_qnn_init(size_t device, const char *qnn_lib_path) {
             QNN_LOG_ERROR("%s backend setenv failure\n", qnn::get_backend_name(device));
         }
     }
+#endif
 
-    auto instance = std::make_shared<qnn::qnn_instance>(qnn_lib_path, g_qnn_mgr[device].lib, "");
+    auto instance = std::make_shared<qnn::qnn_instance>(extend_lib_search_path, g_qnn_mgr[device].lib, "");
     result = instance->qnn_init(nullptr);
     if (result != 0) {
         QNN_LOG_WARN("init qnn subsystem failed with qnn backend %s, pls check why\n", qnn::get_backend_name(device));

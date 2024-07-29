@@ -5,7 +5,7 @@
 
 #include <mutex>
 
-#if (defined __ANDROID__) || (defined ANDROID)
+#if defined(__ANDROID__) || defined(ANDROID)
 #include <android/log.h>
 #endif
 
@@ -22,7 +22,7 @@ void qnn::internal_log(ggml_log_level level, const char * /*file*/, const char *
         int len_prefix = snprintf(s_qnn_internal_log_buf, QNN_LOGBUF_LEN, "[%s, %d]: ", func, line);
         int len = vsnprintf(s_qnn_internal_log_buf + len_prefix, QNN_LOGBUF_LEN - len_prefix, format, args);
         if (len < (QNN_LOGBUF_LEN - len_prefix)) {
-#if (defined __ANDROID__) || (defined ANDROID)
+#if defined(__ANDROID__) || defined(ANDROID)
             // for Android APK
             __android_log_print(level, "ggml-qnn", "%s\n", s_qnn_internal_log_buf);
 #endif
