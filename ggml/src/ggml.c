@@ -152,7 +152,7 @@ struct backtrace_state {
 };
 
 static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context* context, void* arg) {
-    struct BacktraceState* state = (struct BacktraceState*)arg;
+    struct backtrace_state * state = (struct backtrace_state *)arg;
     uintptr_t pc = _Unwind_GetIP(context);
     if (pc) {
         if (state->current == state->end) {
