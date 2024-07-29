@@ -11419,10 +11419,12 @@ void ggml_vec_dot_q1_3_q8_0(int n, float * restrict s, size_t bs, const void * r
                                                      3, 9, 27, 81,
                                                      3, 9, 27, 81);
             // extract ternary values
+            // first by shifting the numbers to make each one the next significant digit
             x0l = _mm256_mullo_epi16(x0l, shift0);
             x0h = _mm256_mullo_epi16(x0h, shift0);
             x1l = _mm256_mullo_epi16(x1l, shift1l);
             x1h = _mm256_mullo_epi16(x1h, shift1h);
+            // then by extracting each of these most significant digits
             x0l = _mm256_mulhi_epu16(x0l, _mm256_set1_epi16(3));
             x0h = _mm256_mulhi_epu16(x0h, _mm256_set1_epi16(3));
             x1l = _mm256_mulhi_epu16(x1l, _mm256_set1_epi16(3));
