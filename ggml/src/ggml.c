@@ -146,7 +146,7 @@ typedef pthread_t ggml_thread_t;
 #include <dlfcn.h>
 #include <stdio.h>
 
-struct BacktraceState {
+struct backtrace_state {
     void** current;
     void** end;
 };
