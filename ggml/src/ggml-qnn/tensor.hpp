@@ -8,8 +8,6 @@
 
 #include "ggml-qnn.h"
 
-#include "QnnTensor.h"
-#include "System/QnnSystemInterface.h"
 #include "buffer.hpp"
 #include "logger.hpp"
 #include "qnn-lib.hpp"

@@ -2,18 +2,22 @@
 #pragma once
 
 #include <cstdio>
+#include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "ggml-qnn.h"
 
 #include "logger.hpp"
+#include "op-config.hpp"
 #include "qnn-lib.hpp"
 #include "tensor.hpp"
 
 namespace qnn {
 
 using ggml_tensor_array_t = std::vector<ggml_tensor *>;
+using ggml_op_constructor_t = std::function<std::unique_ptr<qnn::ggml_qnn_op_config>(const std::string &)>;
 
 class ggml_qnn_graph {
 public:
@@ -79,15 +83,15 @@ public:
 
     ~ggml_qnn_graph() { QNN_LOG_DEBUG("graph name %s, destroy", _graph_name.c_str()); }
 
-    bool build_graph(const std::string &op_name, const ggml_tensor_array_t &tensor_inputs,
+    bool build_graph(ggml_op_constructor_t op_constructor, const ggml_tensor_array_t &tensor_inputs,
                      const ggml_tensor_array_t &tensor_outputs) {
+        GGML_ASSERT(op_constructor);
         if (!is_valid()) {
             QNN_LOG_ERROR("Invalid graph\n");
             return false;
         }
 
         QNN_LOG_DEBUG("graph name %s, build_graph start", _graph_name.c_str());
-        _qnn_tensor_inputs.resize(tensor_inputs.size());
         _tensor_inputs.resize(tensor_inputs.size());
         for (size_t i = 0; i < tensor_inputs.size(); i++) {
             char buffer[GGML_MAX_NAME] = {};
@@ -100,11 +104,9 @@ public:
                 return false;
             }
 
-            _qnn_tensor_inputs[i] = qnn_tensor->get_qnn_tensor();
             _tensor_inputs[i] = qnn_tensor;
         }
 
-        _qnn_tensor_outputs.resize(tensor_outputs.size());
         _tensor_outputs.resize(tensor_outputs.size());
         for (size_t i = 0; i < tensor_outputs.size(); i++) {
             char buffer[GGML_MAX_NAME] = {};
@@ -117,23 +119,13 @@ public:
                 return false;
             }
 
-            _qnn_tensor_outputs[i] = qnn_tensor->get_qnn_tensor();
             _tensor_outputs[i] = qnn_tensor;
         }
 
-        Qnn_OpConfig_t config = QNN_OPCONFIG_INIT;
-        config.version = QNN_OPCONFIG_VERSION_1;
-        auto &op_config = config.v1;
-        op_config.name = _graph_name.c_str();
-        op_config.packageName = QNN_OP_PACKAGE_NAME_QTI_AISW;
-        op_config.typeName = op_name.c_str();
-        op_config.numOfParams = (uint32_t)_param_types.size();
-        op_config.params = _param_types.data();
-        op_config.numOfInputs = (uint32_t)_qnn_tensor_inputs.size();
-        op_config.inputTensors = _qnn_tensor_inputs.data();
-        op_config.numOfOutputs = (uint32_t)_qnn_tensor_outputs.size();
-        op_config.outputTensors = _qnn_tensor_outputs.data();
-        auto error = _qnn_interface->qnn_graph_add_node(_graph_handle, config);
+        _op_config = op_constructor(_graph_name);
+        _op_config->set_input_tensors(_tensor_inputs);
+        _op_config->set_output_tensors(_tensor_outputs);
+        auto error = _qnn_interface->qnn_graph_add_node(_graph_handle, _op_config->get_op_config());
         if (error != QNN_SUCCESS) {
             auto *error_str = get_qnn_error_string(error);
             if (error_str) {
@@ -168,8 +160,6 @@ public:
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
             }
-
-            _qnn_tensor_inputs[i] = _tensor_inputs[i]->get_qnn_tensor();
         }
 
         for (size_t i = 0; i < tensor_outputs.size(); i++) {
@@ -178,13 +168,16 @@ public:
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
             }
-
-            _qnn_tensor_outputs[i] = _tensor_outputs[i]->get_qnn_tensor();
         }
 
+        _op_config->set_input_tensors(_tensor_inputs);
+        _op_config->set_output_tensors(_tensor_outputs);
+        auto &qnn_tensor_inputs = _op_config->get_qnn_input_tensors();
+        auto &qnn_tensor_outputs = _op_config->get_qnn_output_tensors();
+
         auto error =
-            _qnn_interface->qnn_graph_execute(_graph_handle, _qnn_tensor_inputs.data(), _qnn_tensor_inputs.size(),
-                                              _qnn_tensor_outputs.data(), _qnn_tensor_outputs.size(), nullptr, nullptr);
+            _qnn_interface->qnn_graph_execute(_graph_handle, qnn_tensor_inputs.data(), qnn_tensor_inputs.size(),
+                                              qnn_tensor_outputs.data(), qnn_tensor_outputs.size(), nullptr, nullptr);
         if (_device == QNN_BACKEND_NPU) {
             if (error == QNN_COMMON_ERROR_SYSTEM_COMMUNICATION) {
                 QNN_LOG_WARN("NPU crashed. SSR detected. Caused QNN graph execute error\n");
@@ -219,10 +212,9 @@ private:
     Qnn_GraphHandle_t _graph_handle = nullptr;
     std::shared_ptr<qnn_instance> _qnn_instance;
     std::shared_ptr<qnn_interface> _qnn_interface;
-    std::vector<std::shared_ptr<qnn::ggml_qnn_tensor>> _tensor_inputs;
-    std::vector<std::shared_ptr<qnn::ggml_qnn_tensor>> _tensor_outputs;
-    std::vector<Qnn_Tensor_t> _qnn_tensor_inputs;
-    std::vector<Qnn_Tensor_t> _qnn_tensor_outputs;
+    std::vector<std::shared_ptr<ggml_qnn_tensor>> _tensor_inputs;
+    std::vector<std::shared_ptr<ggml_qnn_tensor>> _tensor_outputs;
+    std::unique_ptr<ggml_qnn_op_config> _op_config;
     std::vector<Qnn_Param_t> _param_types;
 
     DISABLE_COPY(ggml_qnn_graph);

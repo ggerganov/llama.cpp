@@ -5,6 +5,7 @@
 
 #include "graph.hpp"
 #include "logger.hpp"
+#include "op-config.hpp"
 #include "tensor.hpp"
 #include "utils.hpp"
 
@@ -123,40 +124,22 @@ std::string get_graph_key(const std::string &op_name, const std::array<ggml_tens
     return graph_key;
 }
 
-template <size_t _InputSize, size_t _OutputSize>
-qnn::ggml_qnn_graph *get_qnn_graph_from_cache(ggml_backend_qnn_context *ctx, size_t op, const std::string &qnn_op,
-                                              const std::array<ggml_tensor *, _InputSize> &inputs,
-                                              const std::array<ggml_tensor *, _OutputSize> &outputs) {
-    GGML_ASSERT(op < (GGML_OP_COUNT + GGML_UNARY_OP_COUNT));
-
-    auto &graph_cache = ctx->qnn_graph_cache;
-    const auto *op_name =
-        op < kGgmlUnaryOpStart ? ggml_op_name(ggml_op(op)) : ggml_unary_op_name(ggml_unary_op(op - kGgmlUnaryOpStart));
-    auto graph_key = get_graph_key<_InputSize, _OutputSize>(op_name, inputs, outputs);
-    auto it = graph_cache.find(graph_key);
-    qnn::ggml_qnn_graph *graph_ptr = nullptr;
-    if (it != graph_cache.end()) {
-        QNN_LOG_DEBUG("found graph %s in cache\n", graph_key.c_str());
-        graph_ptr = it->second.get();
-    } else {
-        auto graph = std::make_unique<qnn::ggml_qnn_graph>(graph_key, (QNNBackend)(ctx->device), ctx->instance,
-                                                           ctx->socinfo.vtcm_size_in_mb);
-
-        if (!graph->is_valid()) {
-            return nullptr;
-        }
-
-        if (!graph->build_graph(qnn_op, to_ggml_tensor_array<_InputSize>(inputs),
-                                to_ggml_tensor_array<_OutputSize>(outputs))) {
-            QNN_LOG_ERROR("build_graph failed\n");
-            return nullptr;
-        }
-
-        graph_ptr = graph.get();
-        graph_cache[graph_key] = std::move(graph);
+qnn::ggml_op_constructor_t generate_common_op_constructor(const std::string &op_name) {
+    if (op_name == QNN_OP_MAT_MUL) {
+        // For QNN_OP_MAT_MUL, we need to transpose the input tensor
+        return [](const std::string &name) {
+            auto config = std::make_unique<qnn::ggml_qnn_op_config>(name, QNN_OP_PACKAGE_NAME_QTI_AISW, QNN_OP_MAT_MUL);
+            Qnn_Scalar_t scalar = QNN_SCALAR_INIT;
+            scalar.dataType = QNN_DATATYPE_BOOL_8;
+            scalar.bool8Value = true;
+            config->add_scalar_param(QNN_OP_MAT_MUL_PARAM_TRANSPOSE_IN0, scalar);
+            return config;
+        };
     }
 
-    return graph_ptr;
+    return [op_name](const std::string &name) {
+        return std::make_unique<qnn::ggml_qnn_op_config>(name, QNN_OP_PACKAGE_NAME_QTI_AISW, op_name);
+    };
 }
 
 constexpr const char *kGgmlOpToQnnOp[] = {
@@ -264,6 +247,42 @@ static_assert(sizeof(kGgmlOpToQnnOp) / sizeof(kGgmlOpToQnnOp[0]) == (GGML_OP_COU
 static_assert(kGgmlOpToQnnOp[GGML_UNARY_OP_GELU + kGgmlUnaryOpStart] != nullptr,
               "GGML_UNARY_OP_GELU does not correspond to QNN_OP_GELU");
 
+template <size_t _InputSize, size_t _OutputSize>
+qnn::ggml_qnn_graph *get_qnn_graph_from_cache(ggml_backend_qnn_context *ctx, size_t op,
+                                              const std::array<ggml_tensor *, _InputSize> &inputs,
+                                              const std::array<ggml_tensor *, _OutputSize> &outputs) {
+    GGML_ASSERT(op < (GGML_OP_COUNT + GGML_UNARY_OP_COUNT));
+
+    auto &graph_cache = ctx->qnn_graph_cache;
+    const auto *op_name =
+        op < kGgmlUnaryOpStart ? ggml_op_name(ggml_op(op)) : ggml_unary_op_name(ggml_unary_op(op - kGgmlUnaryOpStart));
+    auto graph_key = get_graph_key<_InputSize, _OutputSize>(op_name, inputs, outputs);
+    auto it = graph_cache.find(graph_key);
+    qnn::ggml_qnn_graph *graph_ptr = nullptr;
+    if (it != graph_cache.end()) {
+        QNN_LOG_DEBUG("found graph %s in cache\n", graph_key.c_str());
+        graph_ptr = it->second.get();
+    } else {
+        auto graph = std::make_unique<qnn::ggml_qnn_graph>(graph_key, (QNNBackend)(ctx->device), ctx->instance,
+                                                           ctx->socinfo.vtcm_size_in_mb);
+        if (!graph->is_valid()) {
+            return nullptr;
+        }
+
+        auto op_constructor = generate_common_op_constructor(kGgmlOpToQnnOp[op]);
+        if (!graph->build_graph(op_constructor, to_ggml_tensor_array<_InputSize>(inputs),
+                                to_ggml_tensor_array<_OutputSize>(outputs))) {
+            QNN_LOG_ERROR("build_graph failed\n");
+            return nullptr;
+        }
+
+        graph_ptr = graph.get();
+        graph_cache[graph_key] = std::move(graph);
+    }
+
+    return graph_ptr;
+}
+
 template <ggml_op _GgmlOp>
 bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src0, ggml_tensor *src1, ggml_tensor *dst) {
     static_assert(kGgmlOpToQnnOp[_GgmlOp] != nullptr, "GGML_OP does not have a corresponding QNN_OP");
@@ -271,7 +290,7 @@ bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src0, ggml_t
     CHECK_PARAMS(ctx, src0, src1, dst);
 
     bool succeed = false;
-    auto *graph_ptr = get_qnn_graph_from_cache<2, 1>(ctx, _GgmlOp, kGgmlOpToQnnOp[_GgmlOp], { src0, src1 }, { dst });
+    auto *graph_ptr = get_qnn_graph_from_cache<2, 1>(ctx, _GgmlOp, { src0, src1 }, { dst });
     if (graph_ptr) {
         succeed = execute_graph<2, 1>(graph_ptr, { src0, src1 }, { dst });
     }
@@ -292,7 +311,7 @@ bool qnn_unary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src, ggml_ten
     CHECK_PARAMS(ctx, src, dst);
 
     bool succeed = false;
-    auto *graph_ptr = get_qnn_graph_from_cache<1, 1>(ctx, _GgmlOp, kGgmlOpToQnnOp[_GgmlOp], { src }, { dst });
+    auto *graph_ptr = get_qnn_graph_from_cache<1, 1>(ctx, _GgmlOp, { src }, { dst });
     if (graph_ptr) {
         succeed = execute_graph<1, 1>(graph_ptr, { src }, { dst });
     }
@@ -305,7 +324,6 @@ bool qnn_unary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src, ggml_ten
     return succeed;
 }
 constexpr const ggml_qnn_unary_op_t kQnnUnaryOpsTable[] = {
-
     nullptr,                         // GGML_OP_NONE
     nullptr,                         // GGML_OP_DUP
     nullptr,                         // GGML_OP_ADD
