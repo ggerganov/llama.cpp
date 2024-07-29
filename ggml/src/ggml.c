@@ -147,8 +147,8 @@ typedef pthread_t ggml_thread_t;
 #include <stdio.h>
 
 struct backtrace_state {
-    void** current;
-    void** end;
+    void ** current;
+    void ** end;
 };
 
 static _Unwind_Reason_Code unwind_callback(struct _Unwind_Context* context, void* arg) {
