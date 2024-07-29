@@ -44,7 +44,7 @@ typedef struct llama_sampling_params {
     float       dry_multiplier        = 0.0f;               // 0.0f = disabled, recommended value: 0.8f
     float       dry_base              = 1.75f;
     uint32_t    dry_allowed_length    = 2;
-    uint32_t    dry_penalty_last_n    = -1;                 // DRY last n tokens to penalize (0 = disable penalty, -1 = context size)
+    int32_t     dry_penalty_last_n    = -1;                 // DRY last n tokens to penalize (0 = disable penalty, -1 = context size)
 
     std::vector<llama_sampler_type> samplers_sequence = {
         llama_sampler_type::TOP_K,
