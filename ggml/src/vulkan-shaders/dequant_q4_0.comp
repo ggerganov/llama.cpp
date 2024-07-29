@@ -18,15 +18,13 @@ void main() {
         return;
     }
 
-    const uint b_idx = 1024*i + 32*ir + 8*il;
+    const uint q_idx = 8*il;
+    const uint b_idx = 1024*i + 32*ir + q_idx;
 
     const float d = float(data_a[ib].d);
-    const float dm = -8.0f * d;
-
-    const uint q_idx = 8*il;
 
     [[unroll]] for (uint l = 0; l < 8; ++l) {
-        data_b[b_idx + l +  0] = D_TYPE(d * (data_a[ib].qs[q_idx + l] & 0xF) + dm);
-        data_b[b_idx + l + 16] = D_TYPE(d * (data_a[ib].qs[q_idx + l] >>  4) + dm);
+        data_b[b_idx + l +  0] = D_TYPE(d * ((data_a[ib].qs[q_idx + l] & 0xF) - 8.0f));
+        data_b[b_idx + l + 16] = D_TYPE(d * ((data_a[ib].qs[q_idx + l] >>  4) - 8.0f));
     }
 }

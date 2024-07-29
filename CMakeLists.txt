@@ -42,12 +42,13 @@ endif()
 
 option(BUILD_SHARED_LIBS "build shared libraries" ${BUILD_SHARED_LIBS_DEFAULT})
 
+if (WIN32)
+    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
+endif()
+
 #
 # option list
 #
-
-# general
-option(LLAMA_CCACHE "llama: use ccache if available" ON)
 
 # debug
 option(LLAMA_ALL_WARNINGS           "llama: enable all compiler warnings"                   ON)
@@ -73,20 +74,26 @@ option(LLAMA_CURL "llama: use libcurl to download model from an URL" OFF)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/build-info.cmake)
 
 # override ggml options
-set(GGML_CCACHE             ${LLAMA_CCACHE})
 set(GGML_SANITIZE_THREAD    ${LLAMA_SANITIZE_THREAD})
 set(GGML_SANITIZE_ADDRESS   ${LLAMA_SANITIZE_ADDRESS})
 set(GGML_SANITIZE_UNDEFINED ${LLAMA_SANITIZE_UNDEFINED})
 set(GGML_ALL_WARNINGS       ${LLAMA_ALL_WARNINGS})
 set(GGML_FATAL_WARNINGS     ${LLAMA_FATAL_WARNINGS})
-set(GGML_LLAMAFILE          ON)
-set(GGML_CUDA_USE_GRAPHS    ON)
+
+# change the default for these ggml options
+if (NOT DEFINED GGML_LLAMAFILE)
+    set(GGML_LLAMAFILE ON)
+endif()
+
+if (NOT DEFINED GGML_CUDA_USE_GRAPHS)
+    set(GGML_CUDA_USE_GRAPHS ON)
+endif()
 
 # transition helpers
 function (llama_option_depr TYPE OLD NEW)
     if (${OLD})
         message(${TYPE} "${OLD} is deprecated and will be removed in the future.\nUse ${NEW} instead\n")
-        set(${NEW} ON)
+        set(${NEW} ON PARENT_SCOPE)
     endif()
 endfunction()
 
@@ -96,16 +103,19 @@ llama_option_depr(WARNING     LLAMA_KOMPUTE             GGML_KOMPUTE)
 llama_option_depr(WARNING     LLAMA_METAL               GGML_METAL)
 llama_option_depr(WARNING     LLAMA_METAL_EMBED_LIBRARY GGML_METAL_EMBED_LIBRARY)
 llama_option_depr(WARNING     LLAMA_NATIVE              GGML_NATIVE)
-llama_option_depr(WARNING     LLAMA_OPENMP              GGML_OPENMP)
 llama_option_depr(WARNING     LLAMA_RPC                 GGML_RPC)
 llama_option_depr(WARNING     LLAMA_SYCL                GGML_SYCL)
 llama_option_depr(WARNING     LLAMA_SYCL_F16            GGML_SYCL_F16)
+llama_option_depr(WARNING     LLAMA_CANN                GGML_CANN)
 
 #
 # build the library
 #
 
-add_subdirectory(ggml)
+if (NOT TARGET ggml)
+    add_subdirectory(ggml)
+    # ... otherwise assume ggml is added by a parent CMakeLists.txt
+endif()
 add_subdirectory(src)
 
 #
@@ -123,7 +133,16 @@ set(LLAMA_INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE PATH "Location o
 set(LLAMA_LIB_INSTALL_DIR     ${CMAKE_INSTALL_LIBDIR}     CACHE PATH "Location of library files")
 set(LLAMA_BIN_INSTALL_DIR     ${CMAKE_INSTALL_BINDIR}     CACHE PATH "Location of binary  files")
 
-get_directory_property(LLAMA_TRANSIENT_DEFINES COMPILE_DEFINITIONS)
+
+# At the moment some compile definitions are placed within the ggml/src
+# directory but not exported on the `ggml` target. This could be improved by
+# determining _precisely_ which defines are necessary for the llama-config
+# package.
+#
+get_directory_property(GGML_DIR_DEFINES DIRECTORY ggml/src COMPILE_DEFINITIONS)
+get_target_property(GGML_TARGET_DEFINES ggml COMPILE_DEFINITIONS)
+set(GGML_TRANSIENT_DEFINES ${GGML_TARGET_DEFINES} ${GGML_DIR_DEFINES})
+get_target_property(GGML_LINK_LIBRARIES ggml LINK_LIBRARIES)
 
 set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/llama.h)
 install(TARGETS llama LIBRARY PUBLIC_HEADER)
@@ -146,7 +165,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/llama-config.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/llama)
 
 install(
-    FILES convert-hf-to-gguf.py
+    FILES convert_hf_to_gguf.py
     PERMISSIONS
         OWNER_READ
         OWNER_WRITE

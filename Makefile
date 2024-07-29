@@ -11,9 +11,9 @@ BUILD_TARGETS = \
 	llama-embedding \
 	llama-eval-callback \
 	llama-export-lora \
-	llama-finetune \
 	llama-gbnf-validator \
 	llama-gguf \
+	llama-gguf-hash \
 	llama-gguf-split \
 	llama-gritlm \
 	llama-imatrix \
@@ -36,7 +36,6 @@ BUILD_TARGETS = \
 	llama-simple \
 	llama-speculative \
 	llama-tokenize \
-	llama-train-text-from-scratch \
 	llama-vdot \
 	llama-cvector-generator \
 	tests/test-c.o
@@ -45,6 +44,7 @@ BUILD_TARGETS = \
 TEST_TARGETS = \
 	tests/test-autorelease \
 	tests/test-backend-ops \
+	tests/test-chat-template \
 	tests/test-double-float \
 	tests/test-grad0 \
 	tests/test-grammar-integration \
@@ -60,6 +60,15 @@ TEST_TARGETS = \
 	tests/test-tokenizer-0 \
 	tests/test-tokenizer-1-bpe \
 	tests/test-tokenizer-1-spm
+
+# Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
+LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
+	simple batched batched-bench save-load-state server gguf gguf-split eval-callback llama-bench libllava.a llava-cli baby-llama \
+	retrieval speculative infill tokenize benchmark-matmult parallel export-lora lookahead lookup passkey gritlm
+
+# Legacy build targets that were renamed in #7809, but we want to build binaries that for them that output a deprecation warning if people try to use them.
+#  We don't want to clutter things too much, so we only build replacements for the most commonly used binaries.
+LEGACY_TARGETS_BUILD = main quantize perplexity embedding server
 
 # Deprecation aliases
 ifdef LLAMA_CUBLAS
@@ -186,7 +195,11 @@ ifdef GGML_RPC
 	BUILD_TARGETS += rpc-server
 endif
 
-default: $(BUILD_TARGETS)
+ifdef GGML_VULKAN
+	BUILD_TARGETS += vulkan-shaders-gen
+endif
+
+default: $(BUILD_TARGETS) $(LEGACY_TARGETS_BUILD)
 
 test: $(TEST_TARGETS)
 	@failures=0; \
@@ -221,7 +234,7 @@ test: $(TEST_TARGETS)
 	fi
 	@echo 'All tests passed.'
 
-all: $(BUILD_TARGETS) $(TEST_TARGETS)
+all: $(BUILD_TARGETS) $(TEST_TARGETS) $(LEGACY_TARGETS_BUILD)
 
 ifdef RISCV_CROSS_COMPILE
 CC	:= riscv64-unknown-linux-gnu-gcc
@@ -238,17 +251,22 @@ MK_CFLAGS    = -std=c11   -fPIC
 MK_CXXFLAGS  = -std=c++11 -fPIC
 MK_NVCCFLAGS = -std=c++11
 
-ifndef LLAMA_NO_CCACHE
+ifdef LLAMA_NO_CCACHE
+GGML_NO_CCACHE := 1
+DEPRECATE_WARNING := 1
+endif
+
+ifndef GGML_NO_CCACHE
 CCACHE := $(shell which ccache)
 ifdef CCACHE
 export CCACHE_SLOPPINESS = time_macros
-$(info I ccache found, compilation results will be cached. Disable with LLAMA_NO_CCACHE.)
+$(info I ccache found, compilation results will be cached. Disable with GGML_NO_CCACHE.)
 CC    := $(CCACHE) $(CC)
 CXX   := $(CCACHE) $(CXX)
 else
 $(info I ccache not found. Consider installing it for faster compilation.)
 endif # CCACHE
-endif # LLAMA_NO_CCACHE
+endif # GGML_NO_CCACHE
 
 # clock_gettime came in POSIX.1b (1993)
 # CLOCK_MONOTONIC came in POSIX.1-2001 / SUSv3 as optional
@@ -307,9 +325,9 @@ ifdef LLAMA_DEBUG
 	endif
 else
 	MK_CPPFLAGS   += -DNDEBUG
-	MK_CFLAGS     += -O3
-	MK_CXXFLAGS   += -O3
-	MK_NVCCFLAGS  += -O3
+	MK_CFLAGS     += -O3 -g
+	MK_CXXFLAGS   += -O3 -g
+	MK_NVCCFLAGS  += -O3 -g
 endif
 
 ifdef LLAMA_SANITIZE_THREAD
@@ -510,10 +528,21 @@ ifndef GGML_NO_ACCELERATE
 	endif
 endif # GGML_NO_ACCELERATE
 
+ifdef GGML_MUSA
+	CC := clang
+	CXX := clang++
+	GGML_CUDA := 1
+	MK_CPPFLAGS += -DGGML_USE_MUSA
+endif
+
 ifndef GGML_NO_OPENMP
 	MK_CPPFLAGS += -DGGML_USE_OPENMP
 	MK_CFLAGS   += -fopenmp
 	MK_CXXFLAGS += -fopenmp
+	ifdef GGML_MUSA
+		MK_CPPFLAGS += -I/usr/lib/llvm-10/include/openmp
+		MK_LDFLAGS  += -L/usr/lib/llvm-10/lib
+	endif # GGML_MUSA
 endif # GGML_NO_OPENMP
 
 ifdef GGML_OPENBLAS
@@ -531,14 +560,20 @@ ifdef GGML_OPENBLAS64
 endif # GGML_OPENBLAS64
 
 ifdef GGML_BLIS
-	MK_CPPFLAGS += -DGGML_USE_BLAS -I/usr/local/include/blis -I/usr/include/blis
+	MK_CPPFLAGS += -DGGML_USE_BLAS -DGGML_BLAS_USE_BLIS -I/usr/local/include/blis -I/usr/include/blis
 	MK_LDFLAGS  += -lblis -L/usr/local/lib
 	OBJ_GGML    += ggml/src/ggml-blas.o
 endif # GGML_BLIS
 
+ifdef GGML_NVPL
+	MK_CPPFLAGS += -DGGML_USE_BLAS -DGGML_BLAS_USE_NVPL -DNVPL_ILP64 -I/usr/local/include/nvpl_blas -I/usr/include/nvpl_blas
+	MK_LDFLAGS  += -L/usr/local/lib -lnvpl_blas_core -lnvpl_blas_ilp64_gomp
+	OBJ_GGML    += ggml/src/ggml-blas.o
+endif # GGML_NVPL
+
 ifndef GGML_NO_LLAMAFILE
 	MK_CPPFLAGS += -DGGML_USE_LLAMAFILE
-	OBJ_GGML    += ggml/src/sgemm.o
+	OBJ_GGML    += ggml/src/llamafile/sgemm.o
 endif
 
 ifdef GGML_RPC
@@ -558,15 +593,27 @@ else
 endif # GGML_CUDA_FA_ALL_QUANTS
 
 ifdef GGML_CUDA
-	ifneq ('', '$(wildcard /opt/cuda)')
-		CUDA_PATH ?= /opt/cuda
-	else
-		CUDA_PATH ?= /usr/local/cuda
-	endif
+	ifdef GGML_MUSA
+		ifneq ('', '$(wildcard /opt/musa)')
+			CUDA_PATH ?= /opt/musa
+		else
+			CUDA_PATH ?= /usr/local/musa
+		endif
 
-	MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include -DGGML_CUDA_USE_GRAPHS
-	MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L$(CUDA_PATH)/lib64/stubs -L/usr/lib/wsl/lib
-	MK_NVCCFLAGS += -use_fast_math
+		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include
+		MK_LDFLAGS   += -lmusa -lmublas -lmusart -lpthread -ldl -lrt -L$(CUDA_PATH)/lib -L/usr/lib64
+		MK_NVCCFLAGS += -x musa -mtgpu --cuda-gpu-arch=mp_22
+	else
+		ifneq ('', '$(wildcard /opt/cuda)')
+			CUDA_PATH ?= /opt/cuda
+		else
+			CUDA_PATH ?= /usr/local/cuda
+		endif
+
+		MK_CPPFLAGS  += -DGGML_USE_CUDA -I$(CUDA_PATH)/include -I$(CUDA_PATH)/targets/$(UNAME_M)-linux/include -DGGML_CUDA_USE_GRAPHS
+		MK_LDFLAGS   += -lcuda -lcublas -lculibos -lcudart -lcublasLt -lpthread -ldl -lrt -L$(CUDA_PATH)/lib64 -L/usr/lib64 -L$(CUDA_PATH)/targets/$(UNAME_M)-linux/lib -L$(CUDA_PATH)/lib64/stubs -L/usr/lib/wsl/lib
+		MK_NVCCFLAGS += -use_fast_math
+	endif # GGML_MUSA
 
 	OBJ_GGML += ggml/src/ggml-cuda.o
 	OBJ_GGML += $(patsubst %.cu,%.o,$(wildcard ggml/src/ggml-cuda/*.cu))
@@ -576,9 +623,11 @@ ifdef LLAMA_FATAL_WARNINGS
 	MK_NVCCFLAGS += -Werror all-warnings
 endif # LLAMA_FATAL_WARNINGS
 
+ifndef GGML_MUSA
 ifndef JETSON_EOL_MODULE_DETECT
 	MK_NVCCFLAGS += --forward-unknown-to-host-compiler
 endif # JETSON_EOL_MODULE_DETECT
+endif # GGML_MUSA
 
 ifdef LLAMA_DEBUG
 	MK_NVCCFLAGS += -lineinfo
@@ -591,8 +640,12 @@ endif # GGML_CUDA_DEBUG
 ifdef GGML_CUDA_NVCC
 	NVCC = $(CCACHE) $(GGML_CUDA_NVCC)
 else
-	NVCC = $(CCACHE) nvcc
-endif #GGML_CUDA_NVCC
+	ifdef GGML_MUSA
+		NVCC = $(CCACHE) mcc
+	else
+		NVCC = $(CCACHE) nvcc
+	endif # GGML_MUSA
+endif # GGML_CUDA_NVCC
 
 ifdef CUDA_DOCKER_ARCH
 	MK_NVCCFLAGS += -Wno-deprecated-gpu-targets -arch=$(CUDA_DOCKER_ARCH)
@@ -663,9 +716,15 @@ define NVCC_COMPILE
 	$(NVCC) -I. -Icommon -D_XOPEN_SOURCE=600 -D_GNU_SOURCE -DNDEBUG -DGGML_USE_CUDA -I/usr/local/cuda/include -I/opt/cuda/include -I/usr/local/cuda/targets/aarch64-linux/include -std=c++11 -O3 $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endef # NVCC_COMPILE
 else
+	ifdef GGML_MUSA
+define NVCC_COMPILE
+	$(NVCC) $(NVCCFLAGS) $(CPPFLAGS) -c $< -o $@
+endef # NVCC_COMPILE
+	else
 define NVCC_COMPILE
 	$(NVCC) $(NVCCFLAGS) $(CPPFLAGS) -Xcompiler "$(CUDA_CXXFLAGS)" -c $< -o $@
 endef # NVCC_COMPILE
+	endif # GGML_MUSA
 endif # JETSON_EOL_MODULE_DETECT
 
 ggml/src/ggml-cuda/%.o: \
@@ -688,8 +747,8 @@ endif # GGML_CUDA
 
 ifdef GGML_VULKAN
 	MK_CPPFLAGS += -DGGML_USE_VULKAN
-	MK_LDFLAGS  += -lvulkan
-	OBJ_GGML    += ggml/src/ggml-vulkan.o
+	MK_LDFLAGS  += $(shell pkg-config --libs vulkan)
+	OBJ_GGML    += ggml/src/ggml-vulkan.o ggml/src/ggml-vulkan-shaders.o
 
 ifdef GGML_VULKAN_CHECK_RESULTS
 	MK_CPPFLAGS  += -DGGML_VULKAN_CHECK_RESULTS
@@ -711,10 +770,28 @@ ifdef GGML_VULKAN_RUN_TESTS
 	MK_CPPFLAGS  += -DGGML_VULKAN_RUN_TESTS
 endif
 
-ggml/src/ggml-vulkan.o: \
-	ggml/src/ggml-vulkan.cpp \
-	ggml/include/ggml-vulkan.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+GLSLC_CMD  = glslc
+_ggml_vk_genshaders_cmd = $(shell pwd)/vulkan-shaders-gen
+_ggml_vk_header = ggml/src/ggml-vulkan-shaders.hpp
+_ggml_vk_source = ggml/src/ggml-vulkan-shaders.cpp
+_ggml_vk_input_dir = ggml/src/vulkan-shaders
+_ggml_vk_shader_deps = $(echo $(_ggml_vk_input_dir)/*.comp)
+
+ggml/src/ggml-vulkan.o: ggml/src/ggml-vulkan.cpp ggml/include/ggml-vulkan.h $(_ggml_vk_header) $(_ggml_vk_source)
+	$(CXX) $(CXXFLAGS) $(shell pkg-config --cflags vulkan) -c $< -o $@
+
+$(_ggml_vk_header): $(_ggml_vk_source)
+
+$(_ggml_vk_source): $(_ggml_vk_shader_deps) vulkan-shaders-gen
+	$(_ggml_vk_genshaders_cmd) \
+		--glslc      $(GLSLC_CMD) \
+		--input-dir  $(_ggml_vk_input_dir) \
+		--target-hpp $(_ggml_vk_header) \
+		--target-cpp $(_ggml_vk_source)
+
+vulkan-shaders-gen: ggml/src/vulkan-shaders/vulkan-shaders-gen.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $(LDFLAGS) ggml/src/vulkan-shaders/vulkan-shaders-gen.cpp
+
 endif # GGML_VULKAN
 
 ifdef GGML_HIPBLAS
@@ -750,6 +827,14 @@ endif # GGML_HIP_UMA
 ifdef GGML_CUDA_FORCE_DMMV
 	HIPFLAGS += -DGGML_CUDA_FORCE_DMMV
 endif # GGML_CUDA_FORCE_DMMV
+
+ifdef GGML_CUDA_FORCE_MMQ
+	HIPFLAGS += -DGGML_CUDA_FORCE_MMQ
+endif # GGML_CUDA_FORCE_MMQ
+
+ifdef GGML_CUDA_FORCE_CUBLAS
+	HIPFLAGS += -DGGML_CUDA_FORCE_CUBLAS
+endif # GGML_CUDA_FORCE_CUBLAS
 
 ifdef GGML_CUDA_NO_PEER_COPY
 	HIPFLAGS += -DGGML_CUDA_NO_PEER_COPY
@@ -819,10 +904,14 @@ OBJ_GGML += \
 	ggml/src/ggml.o \
 	ggml/src/ggml-alloc.o \
 	ggml/src/ggml-backend.o \
-	ggml/src/ggml-quants.o
+	ggml/src/ggml-quants.o \
+	ggml/src/ggml-aarch64.o
 
 OBJ_LLAMA = \
 	src/llama.o \
+	src/llama-vocab.o \
+	src/llama-grammar.o \
+	src/llama-sampling.o \
 	src/unicode.o \
 	src/unicode-data.o
 
@@ -890,6 +979,7 @@ $(info I CXX:       $(shell $(CXX)  --version | head -n 1))
 ifdef GGML_CUDA
 $(info I NVCC:      $(shell $(NVCC) --version | tail -n 1))
 CUDA_VERSION := $(shell $(NVCC) --version | grep -oP 'release (\K[0-9]+\.[0-9])')
+ifndef GGML_MUSA
 ifeq ($(shell awk -v "v=$(CUDA_VERSION)" 'BEGIN { print (v < 11.7) }'),1)
 
 ifndef CUDA_DOCKER_ARCH
@@ -899,6 +989,7 @@ endif # CUDA_POWER_ARCH
 endif # CUDA_DOCKER_ARCH
 
 endif # eq ($(shell echo "$(CUDA_VERSION) < 11.7" | bc),1)
+endif # GGML_MUSA
 endif # GGML_CUDA
 $(info )
 
@@ -919,6 +1010,7 @@ $(info   - LLAMA_NO_LLAMAFILE)
 $(info   - LLAMA_NO_ACCELERATE)
 $(info   - LLAMA_NO_OPENMP)
 $(info   - LLAMA_NO_METAL)
+$(info   - LLAMA_NO_CCACHE)
 $(info )
 endif
 
@@ -952,15 +1044,22 @@ ggml/src/ggml-quants.o: \
 	ggml/src/ggml-common.h
 	$(CC) $(CFLAGS)    -c $< -o $@
 
+ggml/src/ggml-aarch64.o: \
+	ggml/src/ggml-aarch64.c \
+	ggml/include/ggml.h \
+	ggml/src/ggml-aarch64.h \
+	ggml/src/ggml-common.h
+	$(CC) $(CFLAGS)    -c $< -o $@
+
 ggml/src/ggml-blas.o: \
 	ggml/src/ggml-blas.cpp \
 	ggml/include/ggml-blas.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 ifndef GGML_NO_LLAMAFILE
-ggml/src/sgemm.o: \
-	ggml/src/sgemm.cpp \
-	ggml/src/sgemm.h \
+ggml/src/llamafile/sgemm.o: \
+	ggml/src/llamafile/sgemm.cpp \
+	ggml/src/llamafile/sgemm.h \
 	ggml/include/ggml.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 endif # GGML_NO_LLAMAFILE
@@ -994,6 +1093,10 @@ src/unicode-data.o: \
 
 src/llama.o: \
 	src/llama.cpp \
+	src/llama-impl.h \
+	src/llama-vocab.h \
+	src/llama-grammar.h \
+	src/llama-sampling.h \
 	src/unicode.h \
 	include/llama.h \
 	ggml/include/ggml-cuda.h \
@@ -1001,6 +1104,29 @@ src/llama.o: \
 	ggml/include/ggml.h \
 	ggml/include/ggml-alloc.h \
 	ggml/include/ggml-backend.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/llama-vocab.o: \
+	src/llama-vocab.cpp \
+	src/llama-vocab.h \
+	src/llama-impl.h \
+	include/llama.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/llama-grammar.o: \
+	src/llama-grammar.cpp \
+	src/llama-grammar.h \
+	src/llama-impl.h \
+	src/llama-vocab.h \
+	src/llama-sampling.h \
+	include/llama.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+src/llama-sampling.o: \
+	src/llama-sampling.cpp \
+	src/llama-sampling.h \
+	src/llama-impl.h \
+	include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(LIB_LLAMA): \
@@ -1070,6 +1196,7 @@ clean:
 	rm -rvf src/*.o
 	rm -rvf tests/*.o
 	rm -rvf examples/*.o
+	rm -rvf common/*.o
 	rm -rvf *.a
 	rm -rvf *.dll
 	rm -rvf *.so
@@ -1084,6 +1211,8 @@ clean:
 	rm -vrf ggml/src/ggml-cuda/template-instances/*.o
 	rm -rvf $(BUILD_TARGETS)
 	rm -rvf $(TEST_TARGETS)
+	rm -f vulkan-shaders-gen ggml/src/ggml-vulkan-shaders.hpp ggml/src/ggml-vulkan-shaders.cpp
+	rm -rvf $(LEGACY_TARGETS_CLEAN)
 	find examples pocs -type f -name "*.o" -delete
 
 #
@@ -1170,6 +1299,23 @@ llama-gguf: examples/gguf/gguf.cpp \
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
+examples/gguf-hash/deps/sha1/sha1.o: \
+	examples/gguf-hash/deps/sha1/sha1.c
+	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
+
+examples/gguf-hash/deps/xxhash/xxhash.o: \
+	examples/gguf-hash/deps/xxhash/xxhash.c
+	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
+
+examples/gguf-hash/deps/sha256/sha256.o: \
+	examples/gguf-hash/deps/sha256/sha256.c
+	$(CC) $(CFLAGS) -Iexamples/gguf-hash/deps -c $< -o $@
+
+llama-gguf-hash: examples/gguf-hash/gguf-hash.cpp examples/gguf-hash/deps/sha1/sha1.o examples/gguf-hash/deps/xxhash/xxhash.o examples/gguf-hash/deps/sha256/sha256.o\
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -Iexamples/gguf-hash/deps -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
 llama-gguf-split: examples/gguf-split/gguf-split.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
@@ -1181,11 +1327,6 @@ llama-eval-callback: examples/eval-callback/eval-callback.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
-llama-train-text-from-scratch: examples/train-text-from-scratch/train-text-from-scratch.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
@@ -1205,13 +1346,8 @@ llama-baby-llama: examples/baby-llama/baby-llama.cpp \
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
-llama-finetune: examples/finetune/finetune.cpp \
-	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-
 llama-export-lora: examples/export-lora/export-lora.cpp \
-	$(OBJ_GGML) common/log.h
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -1358,7 +1494,7 @@ run-benchmark-matmult: llama-benchmark-matmult
 .PHONY: run-benchmark-matmult swift
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
-	$(OBJ_GGML) $(OBJ_COMMON) src/unicode.o src/unicode-data.o
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -1462,3 +1598,51 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 	$(OBJ_GGML)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+#
+# Deprecated binaries that we want to keep around long enough for people to migrate to the new filenames, then these can be removed.
+#
+# Mark legacy binary targets as .PHONY so that they are always checked.
+.PHONY: main quantize perplexity embedding server
+
+# NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
+#  Eventually we will want to remove these target from building all the time.
+main: examples/deprecation-warning/deprecation-warning.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
+
+server: examples/deprecation-warning/deprecation-warning.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "NOTICE: The 'server' binary is deprecated. Please use 'llama-server' instead."
+
+quantize: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard quantize))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
+	@echo "  Remove the 'quantize' binary to remove this warning."
+	@echo "#########"
+endif
+
+perplexity: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard perplexity))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
+	@echo "  Remove the 'perplexity' binary to remove this warning."
+	@echo "#########"
+endif
+
+embedding: examples/deprecation-warning/deprecation-warning.cpp
+ifneq (,$(wildcard embedding))
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	@echo "#########"
+	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
+	@echo "  Remove the 'embedding' binary to remove this warning."
+	@echo "#########"
+endif
