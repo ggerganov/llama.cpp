@@ -51,3 +51,11 @@ using pfn_qnnsysteminterface_getproviders = decltype(QnnSystemInterface_getProvi
 
 #define RPCMEM_DEFAULT_FLAGS 1
 #define RPCMEM_HEAP_ID_SYSTEM 25
+
+#define DISABLE_COPY(class_name)             \
+    class_name(const class_name &) = delete; \
+    void operator=(const class_name &) = delete
+
+#define DISABLE_MOVE(class_name)        \
+    class_name(class_name &&) = delete; \
+    void operator=(class_name &&) = delete

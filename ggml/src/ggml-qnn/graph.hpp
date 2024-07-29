@@ -225,10 +225,8 @@ private:
     std::vector<Qnn_Tensor_t> _qnn_tensor_outputs;
     std::vector<Qnn_Param_t> _param_types;
 
-    ggml_qnn_graph(const ggml_qnn_graph &) = delete;
-    void operator=(const ggml_qnn_graph &) = delete;
-    ggml_qnn_graph(ggml_qnn_graph &&) = delete;
-    void operator=(ggml_qnn_graph &&) = delete;
+    DISABLE_COPY(ggml_qnn_graph);
+    DISABLE_MOVE(ggml_qnn_graph);
 };
 
 } // namespace qnn

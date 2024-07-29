@@ -193,10 +193,8 @@ private:
     Qnn_GraphHandle_t _graph_handle = nullptr;
     std::unique_ptr<ggml_qnn_rpc_buffer> _qnn_rpc_buffer;
 
-    ggml_qnn_tensor(const ggml_qnn_tensor &) = delete;
-    void operator=(const ggml_qnn_tensor &) = delete;
-    ggml_qnn_tensor(ggml_qnn_tensor &&) = delete;
-    void operator=(ggml_qnn_tensor &&) = delete;
+    DISABLE_COPY(ggml_qnn_tensor);
+    DISABLE_MOVE(ggml_qnn_tensor);
 };
 
 } // namespace qnn
