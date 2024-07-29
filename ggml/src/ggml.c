@@ -168,7 +168,7 @@ static void ggml_print_backtrace_symbols(void) {
     const int max = 100;
     void* buffer[max];
 
-    struct BacktraceState state = {buffer, buffer + max};
+    struct backtrace_state state = {buffer, buffer + max};
     _Unwind_Backtrace(unwind_callback, &state);
 
     int count = state.current - buffer;
