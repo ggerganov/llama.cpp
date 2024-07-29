@@ -1,4 +1,4 @@
-# llama.cpp/example/llama-bench
+# llama.cpp/examples/llama-bench
 
 Performance testing tool for llama.cpp.
 
@@ -26,16 +26,21 @@ options:
   -m, --model <filename>              (default: models/7B/ggml-model-q4_0.gguf)
   -p, --n-prompt <n>                  (default: 512)
   -n, --n-gen <n>                     (default: 128)
-  -b, --batch-size <n>                (default: 512)
-  -ctk <t>, --cache-type-k <t>        (default: f16)
-  -ctv <t>, --cache-type-v <t>        (default: f16)
-  -t, --threads <n>                   (default: 112)
+  -pg <pp,tg>                         (default: 512,128)
+  -b, --batch-size <n>                (default: 2048)
+  -ub, --ubatch-size <n>              (default: 512)
+  -ctk, --cache-type-k <t>            (default: f16)
+  -ctv, --cache-type-v <t>            (default: f16)
+  -t, --threads <n>                   (default: 16)
   -ngl, --n-gpu-layers <n>            (default: 99)
   -sm, --split-mode <none|layer|row>  (default: layer)
   -mg, --main-gpu <i>                 (default: 0)
   -nkvo, --no-kv-offload <0|1>        (default: 0)
+  -fa, --flash-attn <0|1>             (default: 0)
   -mmp, --mmap <0|1>                  (default: 1)
-  -ts, --tensor_split <ts0/ts1/..>    (default: 0)
+  --numa <distribute|isolate|numactl> (default: disabled)
+  -embd, --embeddings <0|1>           (default: 0)
+  -ts, --tensor-split <ts0/ts1/..>    (default: 0)
   -r, --repetitions <n>               (default: 5)
   -o, --output <csv|json|md|sql>      (default: md)
   -v, --verbose                       (default: 0)
@@ -43,10 +48,11 @@ options:
 Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.
 ```
 
-llama-bench can perform two types of tests:
+llama-bench can perform three types of tests:
 
 - Prompt processing (pp): processing a prompt in batches (`-p`)
 - Text generation (tg): generating a sequence of tokens (`-n`)
+- Prompt processing + text generation (pg): processing a prompt followed by generating a sequence of tokens (`-pg`)
 
 With the exception of `-r`, `-o` and `-v`, all options can be specified multiple times to run multiple tests. Each pp and tg test is run with all combinations of the specified options. To specify multiple values for an option, the values can be separated by commas (e.g. `-n 16,32`), or the option can be specified multiple times (e.g. `-n 16 -n 32`).
 
@@ -156,7 +162,7 @@ $ ./llama-bench -o csv
 ```
 
 ```csv
-build_commit,build_number,cuda,opencl,metal,gpu_blas,blas,cpu_info,gpu_info,model_filename,model_type,model_size,model_n_params,n_batch,n_threads,f16_kv,n_gpu_layers,main_gpu,mul_mat_q,tensor_split,n_prompt,n_gen,test_time,avg_ns,stddev_ns,avg_ts,stddev_ts
+build_commit,build_number,cuda,metal,gpu_blas,blas,cpu_info,gpu_info,model_filename,model_type,model_size,model_n_params,n_batch,n_threads,f16_kv,n_gpu_layers,main_gpu,mul_mat_q,tensor_split,n_prompt,n_gen,test_time,avg_ns,stddev_ns,avg_ts,stddev_ts
 "3469684","1275","1","0","0","1","1","13th Gen Intel(R) Core(TM) i9-13900K","NVIDIA GeForce RTX 3090 Ti","models/7B/ggml-model-q4_0.gguf","llama 7B mostly Q4_0","3825065984","6738415616","512","16","1","99","0","1","0.00","512","0","2023-09-23T12:09:01Z","212155977","732372","2413.341687","8.305961"
 "3469684","1275","1","0","0","1","1","13th Gen Intel(R) Core(TM) i9-13900K","NVIDIA GeForce RTX 3090 Ti","models/7B/ggml-model-q4_0.gguf","llama 7B mostly Q4_0","3825065984","6738415616","512","16","1","99","0","1","0.00","0","128","2023-09-23T12:09:02Z","969320879","2728399","132.052051","0.371342"
 ```
@@ -173,7 +179,6 @@ $ ./llama-bench -o json
     "build_commit": "3469684",
     "build_number": 1275,
     "cuda": true,
-    "opencl": false,
     "metal": false,
     "gpu_blas": true,
     "blas": true,
@@ -204,7 +209,6 @@ $ ./llama-bench -o json
     "build_commit": "3469684",
     "build_number": 1275,
     "cuda": true,
-    "opencl": false,
     "metal": false,
     "gpu_blas": true,
     "blas": true,
@@ -247,7 +251,6 @@ CREATE TABLE IF NOT EXISTS test (
   build_commit TEXT,
   build_number INTEGER,
   cuda INTEGER,
-  opencl INTEGER,
   metal INTEGER,
   gpu_blas INTEGER,
   blas INTEGER,
@@ -273,6 +276,6 @@ CREATE TABLE IF NOT EXISTS test (
   stddev_ts REAL
 );
 
-INSERT INTO test (build_commit, build_number, cuda, opencl, metal, gpu_blas, blas, cpu_info, gpu_info, model_filename, model_type, model_size, model_n_params, n_batch, n_threads, f16_kv, n_gpu_layers, main_gpu, mul_mat_q, tensor_split, n_prompt, n_gen, test_time, avg_ns, stddev_ns, avg_ts, stddev_ts) VALUES ('3469684', '1275', '1', '0', '0', '1', '1', '13th Gen Intel(R) Core(TM) i9-13900K', 'NVIDIA GeForce RTX 3090 Ti', 'models/7B/ggml-model-q4_0.gguf', 'llama 7B mostly Q4_0', '3825065984', '6738415616', '512', '16', '1', '99', '0', '1', '0.00', '512', '0', '2023-09-23T12:10:30Z', '212693772', '743623', '2407.240204', '8.409634');
-INSERT INTO test (build_commit, build_number, cuda, opencl, metal, gpu_blas, blas, cpu_info, gpu_info, model_filename, model_type, model_size, model_n_params, n_batch, n_threads, f16_kv, n_gpu_layers, main_gpu, mul_mat_q, tensor_split, n_prompt, n_gen, test_time, avg_ns, stddev_ns, avg_ts, stddev_ts) VALUES ('3469684', '1275', '1', '0', '0', '1', '1', '13th Gen Intel(R) Core(TM) i9-13900K', 'NVIDIA GeForce RTX 3090 Ti', 'models/7B/ggml-model-q4_0.gguf', 'llama 7B mostly Q4_0', '3825065984', '6738415616', '512', '16', '1', '99', '0', '1', '0.00', '0', '128', '2023-09-23T12:10:31Z', '977925003', '4037361', '130.891159', '0.537692');
+INSERT INTO test (build_commit, build_number, cuda, metal, gpu_blas, blas, cpu_info, gpu_info, model_filename, model_type, model_size, model_n_params, n_batch, n_threads, f16_kv, n_gpu_layers, main_gpu, mul_mat_q, tensor_split, n_prompt, n_gen, test_time, avg_ns, stddev_ns, avg_ts, stddev_ts) VALUES ('3469684', '1275', '1', '0', '0', '1', '1', '13th Gen Intel(R) Core(TM) i9-13900K', 'NVIDIA GeForce RTX 3090 Ti', 'models/7B/ggml-model-q4_0.gguf', 'llama 7B mostly Q4_0', '3825065984', '6738415616', '512', '16', '1', '99', '0', '1', '0.00', '512', '0', '2023-09-23T12:10:30Z', '212693772', '743623', '2407.240204', '8.409634');
+INSERT INTO test (build_commit, build_number, cuda, metal, gpu_blas, blas, cpu_info, gpu_info, model_filename, model_type, model_size, model_n_params, n_batch, n_threads, f16_kv, n_gpu_layers, main_gpu, mul_mat_q, tensor_split, n_prompt, n_gen, test_time, avg_ns, stddev_ns, avg_ts, stddev_ts) VALUES ('3469684', '1275', '1', '0', '0', '1', '1', '13th Gen Intel(R) Core(TM) i9-13900K', 'NVIDIA GeForce RTX 3090 Ti', 'models/7B/ggml-model-q4_0.gguf', 'llama 7B mostly Q4_0', '3825065984', '6738415616', '512', '16', '1', '99', '0', '1', '0.00', '0', '128', '2023-09-23T12:10:31Z', '977925003', '4037361', '130.891159', '0.537692');
 ```

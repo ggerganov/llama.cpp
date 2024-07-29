@@ -99,7 +99,7 @@ The `bench.py` script does several steps:
 It aims to be used in the CI, but you can run it manually:
 
 ```shell
-LLAMA_SERVER_BIN_PATH=../../../cmake-build-release/bin/server python bench.py \
+LLAMA_SERVER_BIN_PATH=../../../cmake-build-release/bin/llama-server python bench.py \
               --runner-label local \
               --name local \
               --branch `git rev-parse --abbrev-ref HEAD` \

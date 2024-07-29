@@ -8,7 +8,6 @@
 #include <unordered_map>
 #include <fstream>
 #include <cmath>
-#include <algorithm>
 
 struct quant_option {
     std::string name;
@@ -17,42 +16,50 @@ struct quant_option {
 };
 
 static const std::vector<struct quant_option> QUANT_OPTIONS = {
-    { "Q4_0",   LLAMA_FTYPE_MOSTLY_Q4_0,   " 3.56G, +0.2166 ppl @ LLaMA-v1-7B", },
-    { "Q4_1",   LLAMA_FTYPE_MOSTLY_Q4_1,   " 3.90G, +0.1585 ppl @ LLaMA-v1-7B", },
-    { "Q5_0",   LLAMA_FTYPE_MOSTLY_Q5_0,   " 4.33G, +0.0683 ppl @ LLaMA-v1-7B", },
-    { "Q5_1",   LLAMA_FTYPE_MOSTLY_Q5_1,   " 4.70G, +0.0349 ppl @ LLaMA-v1-7B", },
-    { "IQ2_XXS",LLAMA_FTYPE_MOSTLY_IQ2_XXS," 2.06 bpw quantization",            },
-    { "IQ2_XS", LLAMA_FTYPE_MOSTLY_IQ2_XS, " 2.31 bpw quantization",            },
-    { "IQ2_S",  LLAMA_FTYPE_MOSTLY_IQ2_S,  " 2.5  bpw quantization",            },
-    { "IQ2_M",  LLAMA_FTYPE_MOSTLY_IQ2_M,  " 2.7  bpw quantization",            },
-    { "IQ1_S",  LLAMA_FTYPE_MOSTLY_IQ1_S,  " 1.56 bpw quantization",            },
-    { "IQ1_M",  LLAMA_FTYPE_MOSTLY_IQ1_M,  " 1.75 bpw quantization",            },
-    { "Q2_K",   LLAMA_FTYPE_MOSTLY_Q2_K,   " 2.63G, +0.6717 ppl @ LLaMA-v1-7B", },
-    { "Q2_K_S", LLAMA_FTYPE_MOSTLY_Q2_K_S, " 2.16G, +9.0634 ppl @ LLaMA-v1-7B", },
-    { "IQ3_XXS",LLAMA_FTYPE_MOSTLY_IQ3_XXS," 3.06 bpw quantization",            },
-    { "IQ3_S",  LLAMA_FTYPE_MOSTLY_IQ3_S,  " 3.44 bpw quantization",            },
-    { "IQ3_M",  LLAMA_FTYPE_MOSTLY_IQ3_M,  " 3.66 bpw quantization mix",        },
-    { "Q3_K",   LLAMA_FTYPE_MOSTLY_Q3_K_M, "alias for Q3_K_M" },
-    { "IQ3_XS", LLAMA_FTYPE_MOSTLY_IQ3_XS, " 3.3 bpw quantization"   ,          },
-    { "Q3_K_S", LLAMA_FTYPE_MOSTLY_Q3_K_S, " 2.75G, +0.5551 ppl @ LLaMA-v1-7B", },
-    { "Q3_K_M", LLAMA_FTYPE_MOSTLY_Q3_K_M, " 3.07G, +0.2496 ppl @ LLaMA-v1-7B", },
-    { "Q3_K_L", LLAMA_FTYPE_MOSTLY_Q3_K_L, " 3.35G, +0.1764 ppl @ LLaMA-v1-7B", },
-    { "IQ4_NL", LLAMA_FTYPE_MOSTLY_IQ4_NL, " 4.50 bpw non-linear quantization", },
-    { "IQ4_XS", LLAMA_FTYPE_MOSTLY_IQ4_XS, " 4.25 bpw non-linear quantization", },
-    { "Q4_K",   LLAMA_FTYPE_MOSTLY_Q4_K_M, "alias for Q4_K_M", },
-    { "Q4_K_S", LLAMA_FTYPE_MOSTLY_Q4_K_S, " 3.59G, +0.0992 ppl @ LLaMA-v1-7B", },
-    { "Q4_K_M", LLAMA_FTYPE_MOSTLY_Q4_K_M, " 3.80G, +0.0532 ppl @ LLaMA-v1-7B", },
-    { "Q5_K",   LLAMA_FTYPE_MOSTLY_Q5_K_M, "alias for Q5_K_M", },
-    { "Q5_K_S", LLAMA_FTYPE_MOSTLY_Q5_K_S, " 4.33G, +0.0400 ppl @ LLaMA-v1-7B", },
-    { "Q5_K_M", LLAMA_FTYPE_MOSTLY_Q5_K_M, " 4.45G, +0.0122 ppl @ LLaMA-v1-7B", },
-    { "Q6_K",   LLAMA_FTYPE_MOSTLY_Q6_K,   " 5.15G, +0.0008 ppl @ LLaMA-v1-7B", },
-    { "Q8_0",   LLAMA_FTYPE_MOSTLY_Q8_0,   " 6.70G, +0.0004 ppl @ LLaMA-v1-7B", },
-    { "F16",    LLAMA_FTYPE_MOSTLY_F16,    "13.00G              @ 7B", },
-    { "F32",    LLAMA_FTYPE_ALL_F32,       "26.00G              @ 7B", },
+    { "Q4_0",     LLAMA_FTYPE_MOSTLY_Q4_0,     " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
+    { "Q4_1",     LLAMA_FTYPE_MOSTLY_Q4_1,     " 4.78G, +0.4511 ppl @ Llama-3-8B",  },
+    { "Q5_0",     LLAMA_FTYPE_MOSTLY_Q5_0,     " 5.21G, +0.1316 ppl @ Llama-3-8B",  },
+    { "Q5_1",     LLAMA_FTYPE_MOSTLY_Q5_1,     " 5.65G, +0.1062 ppl @ Llama-3-8B",  },
+    { "IQ2_XXS",  LLAMA_FTYPE_MOSTLY_IQ2_XXS,  " 2.06 bpw quantization",            },
+    { "IQ2_XS",   LLAMA_FTYPE_MOSTLY_IQ2_XS,   " 2.31 bpw quantization",            },
+    { "IQ2_S",    LLAMA_FTYPE_MOSTLY_IQ2_S,    " 2.5  bpw quantization",            },
+    { "IQ2_M",    LLAMA_FTYPE_MOSTLY_IQ2_M,    " 2.7  bpw quantization",            },
+    { "IQ1_S",    LLAMA_FTYPE_MOSTLY_IQ1_S,    " 1.56 bpw quantization",            },
+    { "IQ1_M",    LLAMA_FTYPE_MOSTLY_IQ1_M,    " 1.75 bpw quantization",            },
+    { "Q2_K",     LLAMA_FTYPE_MOSTLY_Q2_K,     " 2.96G, +3.5199 ppl @ Llama-3-8B",  },
+    { "Q2_K_S",   LLAMA_FTYPE_MOSTLY_Q2_K_S,   " 2.96G, +3.1836 ppl @ Llama-3-8B",  },
+    { "IQ3_XXS",  LLAMA_FTYPE_MOSTLY_IQ3_XXS,  " 3.06 bpw quantization",            },
+    { "IQ3_S",    LLAMA_FTYPE_MOSTLY_IQ3_S,    " 3.44 bpw quantization",            },
+    { "IQ3_M",    LLAMA_FTYPE_MOSTLY_IQ3_M,    " 3.66 bpw quantization mix",        },
+    { "Q3_K",     LLAMA_FTYPE_MOSTLY_Q3_K_M,   "alias for Q3_K_M"                   },
+    { "IQ3_XS",   LLAMA_FTYPE_MOSTLY_IQ3_XS,   " 3.3 bpw quantization",             },
+    { "Q3_K_S",   LLAMA_FTYPE_MOSTLY_Q3_K_S,   " 3.41G, +1.6321 ppl @ Llama-3-8B",  },
+    { "Q3_K_M",   LLAMA_FTYPE_MOSTLY_Q3_K_M,   " 3.74G, +0.6569 ppl @ Llama-3-8B",  },
+    { "Q3_K_L",   LLAMA_FTYPE_MOSTLY_Q3_K_L,   " 4.03G, +0.5562 ppl @ Llama-3-8B",  },
+    { "IQ4_NL",   LLAMA_FTYPE_MOSTLY_IQ4_NL,   " 4.50 bpw non-linear quantization", },
+    { "IQ4_XS",   LLAMA_FTYPE_MOSTLY_IQ4_XS,   " 4.25 bpw non-linear quantization", },
+    { "Q4_K",     LLAMA_FTYPE_MOSTLY_Q4_K_M,   "alias for Q4_K_M",                  },
+    { "Q4_K_S",   LLAMA_FTYPE_MOSTLY_Q4_K_S,   " 4.37G, +0.2689 ppl @ Llama-3-8B",  },
+    { "Q4_K_M",   LLAMA_FTYPE_MOSTLY_Q4_K_M,   " 4.58G, +0.1754 ppl @ Llama-3-8B",  },
+    { "Q5_K",     LLAMA_FTYPE_MOSTLY_Q5_K_M,   "alias for Q5_K_M",                  },
+    { "Q5_K_S",   LLAMA_FTYPE_MOSTLY_Q5_K_S,   " 5.21G, +0.1049 ppl @ Llama-3-8B",  },
+    { "Q5_K_M",   LLAMA_FTYPE_MOSTLY_Q5_K_M,   " 5.33G, +0.0569 ppl @ Llama-3-8B",  },
+    { "Q6_K",     LLAMA_FTYPE_MOSTLY_Q6_K,     " 6.14G, +0.0217 ppl @ Llama-3-8B",  },
+    { "Q8_0",     LLAMA_FTYPE_MOSTLY_Q8_0,     " 7.96G, +0.0026 ppl @ Llama-3-8B",  },
+    { "Q4_0_4_4", LLAMA_FTYPE_MOSTLY_Q4_0_4_4, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
+    { "Q4_0_4_8", LLAMA_FTYPE_MOSTLY_Q4_0_4_8, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
+    { "Q4_0_8_8", LLAMA_FTYPE_MOSTLY_Q4_0_8_8, " 4.34G, +0.4685 ppl @ Llama-3-8B",  },
+    { "F16",      LLAMA_FTYPE_MOSTLY_F16,      "14.00G, +0.0020 ppl @ Mistral-7B",  },
+    { "BF16",     LLAMA_FTYPE_MOSTLY_BF16,     "14.00G, -0.0050 ppl @ Mistral-7B",  },
+    { "F32",      LLAMA_FTYPE_ALL_F32,         "26.00G              @ 7B",          },
     // Note: Ensure COPY comes after F32 to avoid ftype 0 from matching.
-    { "COPY",   LLAMA_FTYPE_ALL_F32,       "only copy tensors, no quantizing", },
+    { "COPY",     LLAMA_FTYPE_ALL_F32,         "only copy tensors, no quantizing",  },
 };
 
+static const char * const LLM_KV_QUANTIZE_IMATRIX_FILE       = "quantize.imatrix.file";
+static const char * const LLM_KV_QUANTIZE_IMATRIX_DATASET    = "quantize.imatrix.dataset";
+static const char * const LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES  = "quantize.imatrix.entries_count";
+static const char * const LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS   = "quantize.imatrix.chunks_count";
 
 static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
@@ -97,6 +104,7 @@ static void usage(const char * executable) {
     printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
     printf("  --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor\n");
     printf("  --token-embedding-type ggml_type: use this ggml_type for the token embeddings tensor\n");
+    printf("  --keep-split: will generate quatized model in the same shards as input");
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
@@ -112,7 +120,7 @@ static void usage(const char * executable) {
     exit(1);
 }
 
-static void load_imatrix(const std::string & imatrix_file, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
+static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_dataset, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
     std::ifstream in(imatrix_file.c_str(), std::ios::binary);
     if (!in) {
         printf("%s: failed to open %s\n",__func__, imatrix_file.c_str());
@@ -159,18 +167,33 @@ static void load_imatrix(const std::string & imatrix_file, std::unordered_map<st
             printf("%s: loaded data (size = %6d, ncall = %6d) for '%s'\n", __func__, int(e.size()), ncall, name.c_str());
         }
     }
-    printf("%s: loaded %d importance matrix entries from %s\n", __func__, int(imatrix_data.size()), imatrix_file.c_str());
+
+    // latest imatrix version contains the dataset filename at the end of the file
+    int m_last_call = 0;
+    if (in.peek() != EOF) {
+        in.read((char *)&m_last_call, sizeof(m_last_call));
+        int dataset_len;
+        in.read((char *)&dataset_len, sizeof(dataset_len));
+        std::vector<char> dataset_as_vec(dataset_len);
+        in.read(dataset_as_vec.data(), dataset_len);
+        imatrix_dataset.assign(dataset_as_vec.begin(), dataset_as_vec.end());
+        printf("%s: imatrix dataset='%s'\n", __func__, imatrix_dataset.c_str());
+    }
+    printf("%s: loaded %d importance matrix entries from %s computed on %d chunks\n", __func__, int(imatrix_data.size()), imatrix_file.c_str(), m_last_call);
+    return m_last_call;
 }
 
-static void prepare_imatrix(const std::string & imatrix_file,
+static int prepare_imatrix(const std::string & imatrix_file,
+        std::string & imatrix_dataset,
         const std::vector<std::string> & included_weights,
         const std::vector<std::string> & excluded_weights,
         std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
+    int m_last_call = -1;
     if (!imatrix_file.empty()) {
-        load_imatrix(imatrix_file, imatrix_data);
+        m_last_call = load_imatrix(imatrix_file, imatrix_dataset, imatrix_data);
     }
     if (imatrix_data.empty()) {
-        return;
+        return m_last_call;
     }
     if (!excluded_weights.empty()) {
         for (auto& name : excluded_weights) {
@@ -196,6 +219,7 @@ static void prepare_imatrix(const std::string & imatrix_file,
     if (!imatrix_data.empty()) {
         printf("%s: have %d importance matrix entries\n", __func__, int(imatrix_data.size()));
     }
+    return m_last_call;
 }
 
 static ggml_type parse_ggml_type(const char * arg) {
@@ -208,43 +232,6 @@ static ggml_type parse_ggml_type(const char * arg) {
         }
     }
     return result;
-}
-
-static bool parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides) {
-    const char* sep = strchr(data, '=');
-    if (sep == nullptr || sep - data >= 128) {
-        fprintf(stderr, "%s: malformed KV override '%s'\n", __func__, data);
-        return false;
-    }
-    llama_model_kv_override kvo;
-    std::strncpy(kvo.key, data, sep - data);
-    kvo.key[sep - data] = 0;
-    sep++;
-    if (strncmp(sep, "int:", 4) == 0) {
-        sep += 4;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
-        kvo.int_value = std::atol(sep);
-    } else if (strncmp(sep, "float:", 6) == 0) {
-        sep += 6;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_FLOAT;
-        kvo.float_value = std::atof(sep);
-    } else if (strncmp(sep, "bool:", 5) == 0) {
-        sep += 5;
-        kvo.tag = LLAMA_KV_OVERRIDE_TYPE_BOOL;
-        if (std::strcmp(sep, "true") == 0) {
-            kvo.bool_value = true;
-        } else if (std::strcmp(sep, "false") == 0) {
-            kvo.bool_value = false;
-        } else {
-            fprintf(stderr, "%s: invalid boolean value for KV override '%s'\n", __func__, data);
-            return false;
-        }
-    } else {
-        fprintf(stderr, "%s: invalid type for KV override '%s'\n", __func__, data);
-        return false;
-    }
-    overrides.emplace_back(std::move(kvo));
-    return true;
 }
 
 int main(int argc, char ** argv) {
@@ -275,7 +262,7 @@ int main(int argc, char ** argv) {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--override-kv") == 0) {
-            if (arg_idx == argc-1 || !parse_kv_override(argv[++arg_idx], kv_overrides)) {
+            if (arg_idx == argc-1 || !string_parse_kv_override(argv[++arg_idx], kv_overrides)) {
                 usage(argv[0]);
             }
         } else if (strcmp(argv[arg_idx], "--allow-requantize") == 0) {
@@ -300,6 +287,8 @@ int main(int argc, char ** argv) {
             } else {
                 usage(argv[0]);
             }
+        } else if (strcmp(argv[arg_idx], "--keep-split") == 0) {
+            params.keep_split = true;
         } else {
             usage(argv[0]);
         }
@@ -313,10 +302,43 @@ int main(int argc, char ** argv) {
         usage(argv[0]);
     }
 
+    std::string imatrix_dataset;
     std::unordered_map<std::string, std::vector<float>> imatrix_data;
-    prepare_imatrix(imatrix_file, included_weights, excluded_weights, imatrix_data);
+    int m_last_call = prepare_imatrix(imatrix_file, imatrix_dataset, included_weights, excluded_weights, imatrix_data);
     if (!imatrix_data.empty()) {
         params.imatrix = &imatrix_data;
+        {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_FILE);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+            strncpy(kvo.val_str, imatrix_file.c_str(), 127);
+            kvo.val_str[127] = '\0';
+            kv_overrides.emplace_back(std::move(kvo));
+        }
+        if (!imatrix_dataset.empty()) {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_DATASET);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_STR;
+            strncpy(kvo.val_str, imatrix_dataset.c_str(), 127);
+            kvo.val_str[127] = '\0';
+            kv_overrides.emplace_back(std::move(kvo));
+        }
+
+        {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+            kvo.val_i64 = imatrix_data.size();
+            kv_overrides.emplace_back(std::move(kvo));
+        }
+
+        if (m_last_call > 0) {
+            llama_model_kv_override kvo;
+            std::strcpy(kvo.key, LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS);
+            kvo.tag = LLAMA_KV_OVERRIDE_TYPE_INT;
+            kvo.val_i64 = m_last_call;
+            kv_overrides.emplace_back(std::move(kvo));
+        }
     }
     if (!kv_overrides.empty()) {
         kv_overrides.emplace_back();
@@ -332,20 +354,28 @@ int main(int argc, char ** argv) {
     std::string fname_out;
 
     std::string ftype_str;
+    std::string suffix = ".gguf";
     if (try_parse_ftype(argv[arg_idx], params.ftype, ftype_str)) {
         std::string fpath;
         const size_t pos = fname_inp.find_last_of("/\\");
         if (pos != std::string::npos) {
             fpath = fname_inp.substr(0, pos + 1);
         }
-        // export as [inp path]/ggml-model-[ftype].gguf
-        fname_out = fpath + "ggml-model-" + ftype_str + ".gguf";
+
+        // export as [inp path]/ggml-model-[ftype]. Only add extension if there is no splitting
+        fname_out = fpath + "ggml-model-" + ftype_str;
+        if (!params.keep_split) {
+            fname_out += suffix;
+        }
         arg_idx++;
         if (ftype_str == "COPY") {
             params.only_copy = true;
         }
     } else {
         fname_out = argv[arg_idx];
+        if (params.keep_split && fname_out.find(suffix) != std::string::npos) {
+            fname_out = fname_out.substr(0, fname_out.length() - suffix.length());
+        }
         arg_idx++;
 
         if (argc <= arg_idx) {

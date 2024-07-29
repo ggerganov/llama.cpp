@@ -23,7 +23,7 @@
 #endif
 
 struct quantize_stats_params {
-    std::string model = "models/7B/ggml-model-f16.gguf";
+    std::string model = DEFAULT_MODEL_PATH;
     bool verbose = false;
     bool per_layer_stats = false;
     bool print_histogram = false;
@@ -154,7 +154,7 @@ static void test_roundtrip_on_chunk(
     }
 
     if (use_reference) {
-        qfns.from_float_reference(input_scratch, quantized_scratch, chunk_size);
+        qfns.from_float_ref(input_scratch, quantized_scratch, chunk_size);
     } else {
         qfns.from_float(input_scratch, quantized_scratch, chunk_size);
     }

@@ -90,7 +90,8 @@ export default function () {
         "model": model,
         "stream": true,
         "seed": 42,
-        "max_tokens": max_tokens
+        "max_tokens": max_tokens,
+        "stop": ["<|im_end|>"] // This is temporary for phi-2 base (i.e. not instructed) since the server expects that the model always to emit BOS
     }
 
     const params = {method: 'POST', body: JSON.stringify(payload)};
