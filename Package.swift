@@ -82,6 +82,7 @@ let package = Package(
             resources: resources,
             publicHeadersPath: "spm-headers",
             cSettings: cSettings,
+            cxxSettings: cxxSettings,
             linkerSettings: linkerSettings
         )
     ],
