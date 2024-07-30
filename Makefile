@@ -1612,19 +1612,16 @@ examples/deprecation-warning/deprecation-warning.o: examples/deprecation-warning
 # NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
 #  Eventually we will want to remove these target from building all the time.
 main: examples/deprecation-warning/deprecation-warning.o
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(LDFLAGS) $< -o $@
 	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
 
 server: examples/deprecation-warning/deprecation-warning.o
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(LDFLAGS) $< -o $@
 	@echo "NOTICE: The 'server' binary is deprecated. Please use 'llama-server' instead."
 
 quantize: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard quantize))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(LDFLAGS) $< -o $@
 	@echo "#########"
 	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
 	@echo "  Remove the 'quantize' binary to remove this warning."
@@ -1633,8 +1630,7 @@ endif
 
 perplexity: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard perplexity))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(LDFLAGS) $< -o $@
 	@echo "#########"
 	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
 	@echo "  Remove the 'perplexity' binary to remove this warning."
@@ -1643,8 +1639,7 @@ endif
 
 embedding: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard embedding))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(LDFLAGS) $< -o $@
 	@echo "#########"
 	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
 	@echo "  Remove the 'embedding' binary to remove this warning."
