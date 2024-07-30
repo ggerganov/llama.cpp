@@ -312,7 +312,7 @@ class GGUFWriter:
         self.add_key_value(key, val, GGUFValueType.STRING)
 
     def add_array(self, key: str, val: Sequence[Any]) -> None:
-        if not val:
+        if len(val) == 0:
             return
         self.add_key_value(key, val, GGUFValueType.ARRAY)
 
@@ -852,7 +852,7 @@ class GGUFWriter:
             if not isinstance(val, Sequence):
                 raise ValueError("Invalid GGUF metadata array, expecting sequence")
 
-            if not val:
+            if len(val) == 0:
                 raise ValueError("Invalid GGUF metadata array. Empty array")
 
             if isinstance(val, bytes):
