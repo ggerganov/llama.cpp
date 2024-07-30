@@ -1779,7 +1779,7 @@ static void ggml_mul_mat_q4_0_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -1894,7 +1894,7 @@ static void ggml_mul_mat_q4_1_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2009,7 +2009,7 @@ static void ggml_mul_mat_q5_0_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2124,7 +2124,7 @@ static void ggml_mul_mat_q5_1_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2239,7 +2239,7 @@ static void ggml_mul_mat_q8_0_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2354,7 +2354,7 @@ static void ggml_mul_mat_q2_K_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2477,7 +2477,7 @@ static void ggml_mul_mat_q3_K_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2605,7 +2605,7 @@ static void ggml_mul_mat_q4_K_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2726,7 +2726,7 @@ static void ggml_mul_mat_q5_K_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {
@@ -2847,7 +2847,7 @@ static void ggml_mul_mat_q6_K_q8_1_sycl(const void *vx, const void *vy,
     int id;
     SYCL_CHECK(
         CHECK_TRY_ERROR(id = get_current_device_id()));
-    const int compute_capability = ggml_sycl_info().devices[id].cc;
+    const int compute_capability = ggml_sycl_info().device_infos[id].cc;
 
     int mmq_x, mmq_y, nwarps;
     if (compute_capability >= VER_GEN13) {

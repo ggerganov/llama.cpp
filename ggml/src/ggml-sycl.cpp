@@ -48,7 +48,7 @@ void   ggml_sycl_get_device_description(int device, char * description, size_t d
 bool   ggml_backend_is_sycl(ggml_backend_t backend);
 int    ggml_backend_sycl_get_device(ggml_backend_t backend);
 static bool ggml_backend_buffer_is_sycl_split(ggml_backend_buffer_t buffer);
-
+static bool ggml_backend_buffer_is_sycl(ggml_backend_buffer_t buffer);
 
 void dev2dev_memcpy(sycl::queue &q_dst, sycl::queue &q_src, void *ptr_dst,
                     const void *ptr_src, size_t size) {
@@ -2279,11 +2279,11 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_SYC
     for (int i = 0; i < ggml_sycl_info().device_count; ++i) {
         int id = ggml_backend_sycl_get_device_id(i);
         if (tensor_split[i] < (i + 1 < ggml_sycl_info().device_count ? tensor_split[i + 1] : 1.0f)) {
-            if (min_compute_capability > ggml_sycl_info().devices[id].cc) {
-                min_compute_capability = ggml_sycl_info().devices[id].cc;
+            if (min_compute_capability > ggml_sycl_info().device_infos[id].cc) {
+                min_compute_capability = ggml_sycl_info().device_infos[id].cc;
             }
-            if (max_compute_capability < ggml_sycl_info().devices[id].cc) {
-                max_compute_capability = ggml_sycl_info().devices[id].cc;
+            if (max_compute_capability < ggml_sycl_info().device_infos[id].cc) {
+                max_compute_capability = ggml_sycl_info().device_infos[id].cc;
             }
         }
     }
@@ -2680,17 +2680,14 @@ static void ggml_sycl_set_peer_access(const int n_tokens, int main_device) {
     }
 
 #ifdef NDEBUG
-    for (int i = 0; i < ggml_sycl_info().device_count; ++i) {
-        int id = ggml_backend_sycl_get_device_id(i);
+    for (auto &id: ggml_sycl_info().ids) {
         SYCL_CHECK(ggml_sycl_set_device(id));
     }
 
-    for (int i = 0; i < ggml_sycl_info().device_count; ++i) {
-        int id = ggml_backend_sycl_get_device_id(i);
+    for (auto &id: ggml_sycl_info().ids) {
         SYCL_CHECK(ggml_sycl_set_device(id));
 
-        for (int i_other = 0; i_other < ggml_sycl_info().device_count; ++i_other) {
-            int id_other = ggml_backend_sycl_get_device_id(i_other);
+        for (auto &id_other: ggml_sycl_info().ids) {
             if (id == id_other) {
                 continue;
             }
@@ -2843,7 +2840,6 @@ static void ggml_sycl_op_mul_mat(ggml_backend_sycl_context & ctx, const ggml_ten
         } else {
             dev[id].src1_ddf = dev[id].src1_ddf_alloc.alloc(ctx.pool(id), ggml_nelements(src1));
         }
-
         if (convert_src1_to_q8_1) {
             dev[id].src1_ddq = dev[id].src1_ddq_alloc.alloc(ctx.pool(id), nrows1*src1_padded_col_size*q8_1_ts/q8_1_bs);
 
@@ -3165,8 +3161,13 @@ static void ggml_sycl_pad(ggml_backend_sycl_context & ctx, const ggml_tensor * s
 
 static void ggml_sycl_rms_norm(ggml_backend_sycl_context & ctx, const ggml_tensor * src0, const ggml_tensor * src1, ggml_tensor * dst) {
     GGML_SYCL_DEBUG("call %s\n", __func__);
+    // log_tensor_with_cnt(ctx, "log/src0", src0, -1);
+    // log_tensor_with_cnt(ctx, "log/src1", src1, -1);
+    // log_tensor_with_cnt(ctx, "log/dst0", dst, -1);
     ggml_sycl_op_flatten(ctx, src0, src1, dst, ggml_sycl_op_rms_norm);
+    // log_tensor_with_cnt(ctx, "log/dst1", dst, -1);
     GGML_SYCL_DEBUG("call %s done\n", __func__);
+    // exit(1);
 }
 
 static void ggml_sycl_mul_mat_vec_p021(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
@@ -3417,12 +3418,12 @@ static void ggml_sycl_mul_mat(ggml_backend_sycl_context & ctx, const ggml_tensor
                 continue;
             }
 
-            if (min_compute_capability > ggml_sycl_info().devices[id].cc) {
-                min_compute_capability = ggml_sycl_info().devices[id].cc;
+            if (min_compute_capability > ggml_sycl_info().device_infos[id].cc) {
+                min_compute_capability = ggml_sycl_info().device_infos[id].cc;
             }
         }
     } else {
-        min_compute_capability    = ggml_sycl_info().devices[ctx.device].cc;
+        min_compute_capability    = ggml_sycl_info().device_infos[ctx.device].cc;
     }
 
     // check data types and tensor shapes for custom matrix multiplication kernels:
@@ -4332,7 +4333,6 @@ static ggml_backend_buffer_type_i ggml_backend_sycl_buffer_type_interface = {
 ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device_id) {
     static std::mutex mutex;
     std::lock_guard<std::mutex> lock(mutex);
-
     GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_buffer_type\n");
 
     check_allow_device_id(device_id);
@@ -4345,7 +4345,9 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device_id) {
         for (int i = 0; i < ggml_sycl_info().device_count; i++) {
             int id = ggml_backend_sycl_get_device_id(i);
             auto & device = dpct::dev_mgr::instance().get_device(id);
-            queue_ptr stream = &(device.default_queue());
+            // queue_ptr stream = &(device.default_queue());
+            queue_ptr stream = ggml_sycl_info().device_infos[id].qptrs[0];
+
             ggml_backend_sycl_buffer_types[id] = {
                 /* .iface    = */ ggml_backend_sycl_buffer_type_interface,
                 /* .context  = */ new ggml_backend_sycl_buffer_type_context{id, GGML_SYCL_NAME + std::to_string(id), stream},
