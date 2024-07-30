@@ -1607,21 +1607,21 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 
 # Define the object file target
 examples/deprecation-warning/deprecation-warning.o: examples/deprecation-warning/deprecation-warning.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LDFLAGS)
 
 # NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
 #  Eventually we will want to remove these target from building all the time.
 main: examples/deprecation-warning/deprecation-warning.o
-	$(CXX) $(LDFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
 
 server: examples/deprecation-warning/deprecation-warning.o
-	$(CXX) $(LDFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "NOTICE: The 'server' binary is deprecated. Please use 'llama-server' instead."
 
 quantize: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard quantize))
-	$(CXX) $(LDFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
 	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
 	@echo "  Remove the 'quantize' binary to remove this warning."
@@ -1630,7 +1630,7 @@ endif
 
 perplexity: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard perplexity))
-	$(CXX) $(LDFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
 	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
 	@echo "  Remove the 'perplexity' binary to remove this warning."
@@ -1639,7 +1639,7 @@ endif
 
 embedding: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard embedding))
-	$(CXX) $(LDFLAGS) $< -o $@
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
 	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
 	@echo "  Remove the 'embedding' binary to remove this warning."
