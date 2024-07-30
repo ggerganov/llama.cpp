@@ -40,7 +40,8 @@ static void timestep_embedding_f32(
 static void timestep_embedding_f32_sycl(
         const float * x, float * dst, const int ne00, const int nb1,
         const int dim, const int max_period, const queue_ptr& stream) {
-    int half_ceil = (dim + 1) / 2;
+    // As the kernel returns when thread.idx is larger than dim/2, the half_ceil does not need to pad
+    int half_ceil = dim / 2;
     int num_blocks = (half_ceil + SYCL_TIMESTEP_EMBEDDING_BLOCK_SIZE - 1) / SYCL_TIMESTEP_EMBEDDING_BLOCK_SIZE;
     sycl::range<3> block_dims(1, 1, SYCL_TIMESTEP_EMBEDDING_BLOCK_SIZE);
     sycl::range<3> gridDim(1, ne00, num_blocks);
