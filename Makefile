@@ -1607,7 +1607,7 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 
 # Define the object file target
 examples/deprecation-warning/deprecation-warning.o: examples/deprecation-warning/deprecation-warning.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
 #  Eventually we will want to remove these target from building all the time.
