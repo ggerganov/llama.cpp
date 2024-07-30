@@ -80,6 +80,34 @@ using json = nlohmann::ordered_json;
 //
 // CPU utils
 //
+#ifdef _WIN32
+int32_t cpu_get_num_cores_win(bool print_physical_core_num) {
+    DWORD buffer_size = 0;
+    GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &buffer_size);
+    std::vector<char> buffer(buffer_size);
+    if (!GetLogicalProcessorInformationEx(RelationProcessorCore, reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data()), &buffer_size)) {
+        return 0;
+    }
+
+    int num_cores_win = 0;
+    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data());
+    while (buffer_size > 0) {
+        if (info->Relationship == RelationProcessorCore) {
+            if (print_physical_core_num) {
+                num_cores_win += info->Processor.GroupCount;
+            } else {
+                for (WORD i = 0; i < info->Processor.GroupCount; ++i) {
+                    num_cores_win += __popcnt64(info->Processor.GroupMask[i].Mask);
+                }
+            }
+        }
+        buffer_size -= info->Size;
+        info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(reinterpret_cast<char*>(info) + info->Size);
+    }
+
+    return num_cores_win;
+}
+#endif
 
 int32_t cpu_get_num_physical_cores() {
 #ifdef __linux__
@@ -111,7 +139,7 @@ int32_t cpu_get_num_physical_cores() {
         return num_physical_cores;
     }
 #elif defined(_WIN32)
-    //TODO: Implement
+    return cpu_get_num_cores_win(true);
 #endif
     unsigned int n_threads = std::thread::hardware_concurrency();
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
@@ -1716,7 +1744,11 @@ std::string gpt_params_get_system_info(const gpt_params & params) {
     if (params.n_threads_batch != -1) {
         os << " (n_threads_batch = " << params.n_threads_batch << ")";
     }
+#ifdef _WIN32
+    os << " / " << cpu_get_num_cores_win(false) << " | " << llama_print_system_info();
+#else
     os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
+#endif
 
     return os.str();
 }
