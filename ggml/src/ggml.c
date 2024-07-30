@@ -1033,7 +1033,31 @@ static const ggml_type_traits_t type_traits[GGML_TYPE_COUNT] = {
         .ncols                    = 8,
         .gemv                     = ggml_gemv_q4_0_8x8_q8_0,
         .gemm                     = ggml_gemm_q4_0_8x8_q8_0,
-    }
+    },
+    [GGML_TYPE_Q4_0_B16] = {
+        .type_name                = "q4_0_b16",
+        .blck_size                = QK4_0,
+        .type_size                = sizeof(block_q4_0),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_q4_0_b16,
+        .from_float               = quantize_row_q4_0_b16,
+        .from_float_reference     = (ggml_from_float_t) quantize_row_q4_0_b16_ref,
+        .vec_dot                  = ggml_vec_dot_q4_0_b16_q8_0_b16,
+        .vec_dot_type             = GGML_TYPE_Q8_0_B16,
+        .nrows                    = 1,
+    },
+    [GGML_TYPE_Q8_0_B16] = {
+        .type_name                = "q8_0_b16",
+        .blck_size                = QK8_0,
+        .type_size                = sizeof(block_q8_0),
+        .is_quantized             = true,
+        .to_float                 = (ggml_to_float_t) dequantize_row_q8_0_b16,
+        .from_float               = quantize_row_q8_0_b16,
+        .from_float_reference     = (ggml_from_float_t) quantize_row_q8_0_b16_ref,
+        .vec_dot                  = ggml_vec_dot_q8_0_b16_q8_0_b16,
+        .vec_dot_type             = GGML_TYPE_Q8_0_B16,
+        .nrows                    = 1,
+    },
 };
 
 // For internal test use

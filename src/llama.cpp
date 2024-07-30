@@ -3791,6 +3791,8 @@ struct llama_model_loader {
                 case GGML_TYPE_Q4_0_4_4: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_4; break;
                 case GGML_TYPE_Q4_0_4_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_4_8; break;
                 case GGML_TYPE_Q4_0_8_8: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_8_8; break;
+                case GGML_TYPE_Q4_0_B16: ftype = LLAMA_FTYPE_MOSTLY_Q4_0_B16; break;
+                case GGML_TYPE_Q8_0_B16: ftype = LLAMA_FTYPE_MOSTLY_Q8_0_B16; break;
                 default:
                     {
                         LLAMA_LOG_WARN("%s: unknown type %s\n", __func__, ggml_type_name(type_max));

@@ -392,6 +392,8 @@ extern "C" {
         GGML_TYPE_Q4_0_4_4 = 31,
         GGML_TYPE_Q4_0_4_8 = 32,
         GGML_TYPE_Q4_0_8_8 = 33,
+        GGML_TYPE_Q4_0_B16 = 34,
+        GGML_TYPE_Q8_0_B16 = 35,
         GGML_TYPE_COUNT,
     };
 
@@ -433,14 +435,11 @@ extern "C" {
         GGML_FTYPE_MOSTLY_IQ4_XS  = 22, // except 1d tensors
         GGML_FTYPE_MOSTLY_IQ1_M   = 23, // except 1d tensors
         GGML_FTYPE_MOSTLY_BF16    = 24, // except 1d tensors
-<<<<<<< HEAD
         GGML_FTYPE_MOSTLY_Q4_0_4_4 = 25, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_4_8 = 26, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_8_8 = 27, // except 1d tensors
-=======
-        GGML_FTYPE_MOSTLY_Q4_0_B16 = 25, // except 1d tensors
-        GGML_FTYPE_MOSTLY_Q8_0_B16 = 26, // except 1d tensors
->>>>>>> ed837022 (Introduce Q4_0 and Q8_0 quantizations with BF16 delta values)
+        GGML_FTYPE_MOSTLY_Q4_0_B16 = 28, // except 1d tensors
+        GGML_FTYPE_MOSTLY_Q8_0_B16 = 29, // except 1d tensors
     };
 
     // available tensor operations:
