@@ -428,6 +428,18 @@ extern "C" {
     //optional:
     LLAMA_API void llama_numa_init(enum ggml_numa_strategy numa);
 
+    // Optional: an auto threadpool gets created in ggml if not passed explicitly
+    LLAMA_API void llama_attach_threadpool(
+               struct   llama_context * ctx,
+            ggml_compute_threadpool_t   threadpool);
+    LLAMA_API void llama_attach_batch_threadpool(
+               struct   llama_context * ctx,
+            ggml_compute_threadpool_t   threadpool);
+    LLAMA_API void llama_detach_threadpool(struct llama_context * ctx);
+    LLAMA_API void llama_detach_batch_threadpool(struct llama_context * ctx);
+    LLAMA_API void llama_detach_threadpools(struct llama_context * ctx);
+
+
     // Call once at the end of the program - currently only used for MPI
     LLAMA_API void llama_backend_free(void);
 

@@ -235,6 +235,7 @@ struct cmd_params {
     std::vector<bool> use_mmap;
     std::vector<bool> embeddings;
     ggml_numa_strategy numa;
+    cpu_params cpuparams;
     int reps;
     bool verbose;
     output_formats output_format;
@@ -261,6 +262,7 @@ static const cmd_params cmd_params_defaults = {
     /* use_mmap             */ {true},
     /* embeddings           */ {false},
     /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
+    /* cpuparams            */ {},
     /* reps                 */ 5,
     /* verbose              */ false,
     /* output_format        */ MARKDOWN,
@@ -289,6 +291,11 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -fa, --flash-attn <0|1>             (default: %s)\n", join(cmd_params_defaults.flash_attn, ",").c_str());
     printf("  -mmp, --mmap <0|1>                  (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
     printf("  --numa <distribute|isolate|numactl> (default: disabled)\n");
+    printf("  -mt, --max-threads <n>              (default: %d)\n", cmd_params_defaults.cpuparams.n_threads);
+    printf("  -C, --cpu-mask <hex>                (default: 0x0)\n");
+    printf("  --cpu-strict <0|1>                  (default: %d)\n", cmd_params_defaults.cpuparams.strict_cpu);
+    printf("  --priority <0|1|2|3>                (default: %d)\n", cmd_params_defaults.cpuparams.priority);
+    printf("  --poll <0|1>                        (default: %d)\n", cmd_params_defaults.cpuparams.poll);
     printf("  -embd, --embeddings <0|1>           (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
     printf("  -ts, --tensor-split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
@@ -492,6 +499,30 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 else if (value == "numactl")                    { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
                 else { invalid_param = true; break; }
             }
+        } else if (arg == "-mt" || arg == "--max-threads") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cpuparams.n_threads = std::stoi(argv[i]);
+        } else if (arg == "-C" || arg == "--cpu-mask") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            std::string mask = argv[i];
+            params.cpuparams.mask_valid = true;
+            invalid_param = !parse_cpu_mask(mask, params.cpuparams.cpumask);
+        } else if (arg == "--prio") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cpuparams.priority = std::stoul(argv[i]);
+        } else if (arg == "--cpu-strict") {
+            params.cpuparams.strict_cpu = true;
+        } else if (arg == "--poll") {
+            params.cpuparams.poll = true;
         } else if (arg == "-fa" || arg == "--flash-attn") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1402,6 +1433,23 @@ int main(int argc, char ** argv) {
     llama_model * lmodel = nullptr;
     const cmd_params_instance * prev_inst = nullptr;
 
+    postprocess_cpu_params(params.cpuparams);
+
+    struct ggml_threadpool_params tpp;
+    tpp.n_threads      = params.cpuparams.n_threads;
+    tpp.mask_specified = params.cpuparams.mask_valid;
+    tpp.strict_cpu     = params.cpuparams.strict_cpu;
+    tpp.prio           = params.cpuparams.priority;
+    tpp.poll           = params.cpuparams.poll;
+
+    std::memcpy(&tpp.cpumask[0], &params.cpuparams.cpumask[0], GGML_MAX_N_THREADS);
+
+    struct ggml_compute_threadpool* threadpool = ggml_create_threadpool(&tpp);
+    if (!threadpool) {
+        LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
+        exit(1);
+    }
+
     for (const auto & inst : params_instances) {
         // keep the same model between tests when possible
         if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
@@ -1427,6 +1475,7 @@ int main(int argc, char ** argv) {
         test t(inst, lmodel, ctx);
 
         llama_kv_cache_clear(ctx);
+        llama_attach_threadpool(ctx, threadpool);
 
         // warmup run
         if (t.n_prompt > 0) {
@@ -1467,6 +1516,8 @@ int main(int argc, char ** argv) {
 
         llama_free(ctx);
     }
+
+    ggml_release_threadpool(threadpool);
 
     llama_free_model(lmodel);
 

@@ -231,6 +231,8 @@
 #define GGML_MAX_SRC            10
 #ifndef GGML_MAX_NAME
 #define GGML_MAX_NAME           64
+#define GGML_MAX_N_THREADS      512
+
 #endif
 #define GGML_MAX_OP_PARAMS      64
 #define GGML_DEFAULT_N_THREADS  4
@@ -624,6 +626,17 @@ extern "C" {
     // If it returns true, the computation is aborted
     typedef bool (*ggml_abort_callback)(void * data);
 
+    struct ggml_threadpool_params {
+        bool    cpumask[GGML_MAX_N_THREADS];
+        bool    mask_specified;
+        int32_t n_threads;
+        int32_t prio;
+        bool    poll;
+        bool    strict_cpu;
+    };
+
+    struct ggml_compute_threadpool;     // forward declaration, see ggml.c
+
     // the compute plan that needs to be prepared for ggml_graph_compute()
     // since https://github.com/ggerganov/ggml/issues/287
     struct ggml_cplan {
@@ -631,6 +644,7 @@ extern "C" {
         uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
 
         int n_threads;
+        struct ggml_compute_threadpool * threadpool;
 
         // abort ggml_graph_compute when true
         ggml_abort_callback abort_callback;
@@ -2010,10 +2024,20 @@ extern "C" {
     GGML_API size_t ggml_graph_overhead(void);
     GGML_API size_t ggml_graph_overhead_custom(size_t size, bool grads);
 
+    GGML_API struct ggml_compute_threadpool* ggml_create_threadpool       (struct ggml_threadpool_params  * params);
+    GGML_API void                            ggml_release_threadpool      (struct ggml_compute_threadpool * threadpool);
+    GGML_API int32_t                         ggml_threadpool_get_n_threads(struct ggml_compute_threadpool * threadpool);
+    GGML_API void                            ggml_pause_threadpool        (struct ggml_compute_threadpool * threadpool);
+    GGML_API void                            ggml_resume_threadpool       (struct ggml_compute_threadpool * threadpool);
+
     // ggml_graph_plan() has to be called before ggml_graph_compute()
     // when plan.work_size > 0, caller must allocate memory for plan.work_data
-    GGML_API struct ggml_cplan ggml_graph_plan   (const struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
-    GGML_API enum ggml_status  ggml_graph_compute(      struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
+    GGML_API struct ggml_cplan ggml_graph_plan(
+                  const struct ggml_cgraph * cgraph,
+                                       int   n_threads, /* = GGML_DEFAULT_N_THREADS */
+            struct ggml_compute_threadpool * threadpool /* = NULL */ );
+    GGML_API enum ggml_status  ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
+
     // same as ggml_graph_compute() but the work data is allocated as a part of the context
     // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
     GGML_API enum ggml_status  ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads);
