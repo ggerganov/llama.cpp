@@ -175,6 +175,11 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_package(Threads REQUIRED)
 
+check_include_file_cxx(execinfo HAVE_EXECINFO)
+if (HAVE_EXECINFO)
+    add_compile_definitions(GLIBC_BACKTRACE_SUPPORTED)
+endif()
+
 #
 # build the library
 #
@@ -207,7 +212,6 @@ set(GGML_PUBLIC_HEADERS
     include/ggml-alloc.h
     include/ggml-backend.h
     include/ggml-blas.h
-    include/ggml-cann.h
     include/ggml-cuda.h
     include/ggml.h
     include/ggml-kompute.h
