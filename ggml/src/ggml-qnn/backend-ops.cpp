@@ -133,6 +133,7 @@ qnn::ggml_op_constructor_t generate_common_op_constructor(const std::string &op_
             scalar.dataType = QNN_DATATYPE_BOOL_8;
             scalar.bool8Value = true;
             config->add_scalar_param(QNN_OP_MAT_MUL_PARAM_TRANSPOSE_IN0, scalar);
+            QNN_LOG_DEBUG("add scalar param %s\n", QNN_OP_MAT_MUL_PARAM_TRANSPOSE_IN0);
             return config;
         };
     }

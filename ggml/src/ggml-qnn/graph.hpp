@@ -91,6 +91,14 @@ public:
             return false;
         }
 
+        // get the max tensor rank
+        for (auto tensor : tensor_inputs) {
+            _tensor_rank = std::max(_tensor_rank, ggml_n_dims(tensor));
+        }
+        for (auto tensor : tensor_outputs) {
+            _tensor_rank = std::max(_tensor_rank, ggml_n_dims(tensor));
+        }
+
         QNN_LOG_DEBUG("graph name %s, build_graph start", _graph_name.c_str());
         _tensor_inputs.resize(tensor_inputs.size());
         for (size_t i = 0; i < tensor_inputs.size(); i++) {
@@ -99,7 +107,7 @@ public:
             auto qnn_tensor =
                 std::make_shared<ggml_qnn_tensor>(std::string(buffer), _device, _graph_handle, _qnn_instance);
             auto *ggml_tensor = tensor_inputs[i];
-            if (!qnn_tensor->bind_ggml_tensor(ggml_tensor, true)) {
+            if (!qnn_tensor->bind_ggml_tensor(ggml_tensor, true, _tensor_rank)) {
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
             }
@@ -114,7 +122,7 @@ public:
             auto qnn_tensor =
                 std::make_shared<ggml_qnn_tensor>(std::string(buffer), _device, _graph_handle, _qnn_instance);
             auto *ggml_tensor = tensor_outputs[i];
-            if (!qnn_tensor->bind_ggml_tensor(ggml_tensor, false)) {
+            if (!qnn_tensor->bind_ggml_tensor(ggml_tensor, false, _tensor_rank)) {
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
             }
@@ -156,7 +164,7 @@ public:
         GGML_ASSERT(tensor_outputs.size() == _tensor_outputs.size());
         for (size_t i = 0; i < tensor_inputs.size(); i++) {
             auto *ggml_tensor = tensor_inputs[i];
-            if (!_tensor_inputs[i]->bind_ggml_tensor(ggml_tensor, true)) {
+            if (!_tensor_inputs[i]->bind_ggml_tensor(ggml_tensor, true, _tensor_rank)) {
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
             }
@@ -164,7 +172,7 @@ public:
 
         for (size_t i = 0; i < tensor_outputs.size(); i++) {
             auto *ggml_tensor = tensor_outputs[i];
-            if (!_tensor_outputs[i]->bind_ggml_tensor(ggml_tensor, false)) {
+            if (!_tensor_outputs[i]->bind_ggml_tensor(ggml_tensor, false, _tensor_rank)) {
                 QNN_LOG_ERROR("bind tensor %s failed\n", ggml_get_name(ggml_tensor));
                 return false;
             }
@@ -216,6 +224,7 @@ private:
     std::vector<std::shared_ptr<ggml_qnn_tensor>> _tensor_outputs;
     std::unique_ptr<ggml_qnn_op_config> _op_config;
     std::vector<Qnn_Param_t> _param_types;
+    int _tensor_rank = 0;
 
     DISABLE_COPY(ggml_qnn_graph);
     DISABLE_MOVE(ggml_qnn_graph);

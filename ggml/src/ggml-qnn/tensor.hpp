@@ -29,7 +29,7 @@ public:
 
     ~ggml_qnn_tensor() { _qnn_rpc_buffer.reset(); }
 
-    bool bind_ggml_tensor(ggml_tensor *tensor, bool is_input) {
+    bool bind_ggml_tensor(ggml_tensor *tensor, bool is_input, int prev_max_rank) {
         if (_tensor) {
             if (_tensor != tensor) {
                 QNN_LOG_WARN("tensor %s has been bound to another ggml tensor %s", _tensor_name.c_str(),
@@ -41,7 +41,7 @@ public:
             return true;
         }
 
-        update_params_from_ggml_tensor(tensor);
+        update_params_from_ggml_tensor(tensor, prev_max_rank);
         Qnn_TensorType_t new_tensor_type = is_input ? QNN_TENSOR_TYPE_APP_WRITE : QNN_TENSOR_TYPE_APP_READ;
         QNN_TENSOR_SET_TYPE(_qnn_tensor, new_tensor_type);
         QNN_LOG_INFO("tensor %s changed to type %d", _tensor_name.c_str(), new_tensor_type);
@@ -54,8 +54,10 @@ public:
                 QNN_LOG_WARN("create graph tensor failed, tensor %s, error: %d\n", _tensor_name.c_str(), error);
                 return false;
             }
+
             QNN_TENSOR_SET_ID(_qnn_tensor, QNN_TENSOR_GET_ID(qnn_tensor));
-            QNN_LOG_DEBUG("create graph tensor %s, id: %d", _tensor_name.c_str(), QNN_TENSOR_GET_ID(qnn_tensor));
+            QNN_LOG_DEBUG("create graph tensor %s, id: %d, rank: %d", _tensor_name.c_str(),
+                          QNN_TENSOR_GET_ID(qnn_tensor), QNN_TENSOR_GET_RANK(qnn_tensor));
         }
 
         if (should_use_mem_handle()) {
@@ -166,14 +168,15 @@ private:
         return true;
     }
 
-    void update_params_from_ggml_tensor(ggml_tensor *tensor) {
+    void update_params_from_ggml_tensor(ggml_tensor *tensor, int prev_max_rank) {
         _dimensions[0] = (uint32_t)tensor->ne[0];
         _dimensions[1] = (uint32_t)tensor->ne[1];
         _dimensions[2] = (uint32_t)tensor->ne[2];
         _dimensions[3] = (uint32_t)tensor->ne[3];
         QNN_TENSOR_SET_DATA_TYPE(_qnn_tensor, device_datatype_from_ggml_datatype(tensor->type));
         // TODO: set the quantizeParams base on the tensor type
-        QNN_TENSOR_SET_RANK(_qnn_tensor, (uint32_t)ggml_n_dims(tensor));
+
+        QNN_TENSOR_SET_RANK(_qnn_tensor, (uint32_t)std::max(prev_max_rank, ggml_n_dims(tensor)));
 
         QNN_TENSOR_SET_MEM_TYPE(_qnn_tensor, QNN_TENSORMEMTYPE_RAW);
         Qnn_ClientBuffer_t client_buf = {};

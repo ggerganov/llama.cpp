@@ -36,7 +36,7 @@ public:
         param.paramType = QNN_PARAMTYPE_SCALAR;
         param.name = _param_names.back().c_str();
         param.scalarParam = scalar;
-        _param_types.push_back(param);
+        _parameters.push_back(param);
     }
 
     std::vector<Qnn_Tensor_t> &get_qnn_input_tensors() { return _qnn_tensor_inputs; }
@@ -49,8 +49,8 @@ public:
         op_config.name = _name.c_str();
         op_config.packageName = _package_name.c_str();
         op_config.typeName = _op_type.c_str();
-        op_config.numOfParams = (uint32_t)_param_types.size();
-        op_config.params = _param_types.data();
+        op_config.numOfParams = (uint32_t)_parameters.size();
+        op_config.params = _parameters.data();
         op_config.numOfInputs = (uint32_t)_qnn_tensor_inputs.size();
         op_config.inputTensors = _qnn_tensor_inputs.data();
         op_config.numOfOutputs = (uint32_t)_qnn_tensor_outputs.size();
@@ -64,7 +64,7 @@ private:
     std::string _op_type;
     std::vector<Qnn_Tensor_t> _qnn_tensor_inputs;
     std::vector<Qnn_Tensor_t> _qnn_tensor_outputs;
-    std::vector<Qnn_Param_t> _param_types;
+    std::vector<Qnn_Param_t> _parameters;
     std::vector<std::string> _param_names;
 
     DISABLE_COPY(ggml_qnn_op_config);
