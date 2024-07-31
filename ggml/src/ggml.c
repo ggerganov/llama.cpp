@@ -19300,18 +19300,16 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         };
 
         threadpool = ggml_create_threadpool_impl(&ttp, true, cgraph, cplan);
-    } else if (n_threads > threadpool->n_threads_max) {
-        GGML_PRINT("WARNING: cplan is requesting more threads than the threadpool contains. Expect a bad time!\n");
-    }
-
-    // Set up work
-    threadpool->cgraph        = cgraph;
-    threadpool->cplan         = cplan;
-    threadpool->n_threads_cur = n_threads;
-
-    if (!disposable_threadpool) {
+    } else {
+        if (n_threads > threadpool->n_threads_max) {
+            GGML_PRINT("WARNING: cplan is requesting more threads than the threadpool contains. Expect a bad time!\n");
+        }
+        // Not a disposable threadpool:
         // Reset some of the paramters that need resetting
         // No worker threads should be accessing the parameters below at this stage
+        threadpool->cgraph        = cgraph;
+        threadpool->cplan         = cplan;
+        threadpool->n_threads_cur = n_threads;
         threadpool->n_barrier        = 0;
         threadpool->n_barrier_passed = 0;
         threadpool->current_chunk    = 0;
