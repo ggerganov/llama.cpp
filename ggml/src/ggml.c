@@ -18877,7 +18877,10 @@ void ggml_pause_threadpool(struct ggml_compute_threadpool * threadpool) {
 #ifndef GGML_USE_OPENMP
     GGML_ASSERT(!threadpool->disposable);
     GGML_PRINT_DEBUG("Pausing threadpool\n");
+    ggml_mutex_lock(&threadpool->mutex);
     threadpool->pause = true;
+    ggml_cond_broadcast(&threadpool->cond);
+    ggml_mutex_unlock(&threadpool->mutex);
 #else
     UNUSED(threadpool);
 #endif
@@ -19348,9 +19351,9 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
             __thread_affinity(threadpool->workers[0].cpumask);
         }
 
-        threadpool->new_work = true;
         if (!threadpool->poll) {
             ggml_mutex_lock(&threadpool->mutex);
+            threadpool->new_work = true;
             ggml_cond_broadcast(&threadpool->cond);
             ggml_mutex_unlock(&threadpool->mutex);
         }
