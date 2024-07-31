@@ -2716,6 +2716,79 @@ class StarCoder2Model(Model):
     model_arch = gguf.MODEL_ARCH.STARCODER2
 
 
+@Model.register("Rwkv6ForCausalLM")
+class RwkvModel(Model):
+    model_arch = gguf.MODEL_ARCH.RWKV
+
+    def set_vocab(self):
+        assert (self.dir_model / "rwkv_vocab_v20230424.txt").is_file()
+        vocab_size = self.hparams.get("vocab_size", 65536)
+
+        tokens: list[bytes] = ['<s>'.encode("utf-8")]
+        toktypes: list[int] = [gguf.TokenType.CONTROL]
+
+        with open(self.dir_model / "rwkv_vocab_v20230424.txt", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            for line in lines:
+                x = eval(line[line.index(' '):line.rindex(' ')])
+                x = x.encode("utf-8") if isinstance(x, str) else x
+                assert isinstance(x, bytes)
+                assert len(x) == int(line[line.rindex(' '):])
+                token_text: str = ""
+                for b in x:
+                    token_text += f"\\x{b:02x}"
+                tokens.append(token_text.encode("utf-8"))
+                toktypes.append(gguf.TokenType.NORMAL)
+        remainder = vocab_size - len(tokens)
+        assert remainder >= 0
+        for i in range(remainder):
+            tokens.append(f"<unused {i}>".encode("utf-8"))
+            toktypes.append(gguf.TokenType.UNUSED)
+
+        self.gguf_writer.add_tokenizer_model("rwkv")
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+
+    def set_gguf_parameters(self):
+        block_count = self.hparams["num_hidden_layers"]
+        head_size = self.hparams["head_size"]
+        hidden_size = self.hparams["hidden_size"]
+        layer_norm_eps = self.hparams["layer_norm_epsilon"]
+
+        # RWKV isn't context limited
+        self.gguf_writer.add_context_length(1048576)
+        self.gguf_writer.add_embedding_length(hidden_size)
+        self.gguf_writer.add_block_count(block_count)
+        self.gguf_writer.add_head_count(0)
+        self.gguf_writer.add_layer_norm_eps(layer_norm_eps)
+        self.gguf_writer.add_feed_forward_length(0) # required by llama.cpp
+        # temporarlily reuse mamba hparams
+        self.gguf_writer.add_ssm_inner_size(hidden_size)
+        self.gguf_writer.add_ssm_conv_kernel(3)
+        self.gguf_writer.add_ssm_state_size(head_size)
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        new_name = self.map_tensor_name(name)
+
+        if not (new_name.endswith(".weight") or new_name.endswith(".bias")):
+            new_name += ".weight"
+
+        if new_name.endswith("time_mix_w1.weight") or new_name.endswith("time_mix_decay_w1.weight") or new_name.endswith("time_mix_decay_w2.weight"):
+            data_torch = data_torch.transpose(0, 1)
+
+        if new_name.endswith("time_mix_w2.weight"):
+            data_torch = data_torch.permute(0, 2, 1)
+
+        rescale_every_n_layers = self.hparams["rescale_every"]
+        if rescale_every_n_layers > 0:
+            if new_name.endswith("time_mix_output.weight") or new_name.endswith("channel_mix_value.weight"):
+                data_torch = data_torch.div_(2 ** int(bid // rescale_every_n_layers))
+
+        yield (new_name, data_torch)
+
+
 @Model.register("MambaForCausalLM", "MambaLMHeadModel", "FalconMambaForCausalLM")
 class MambaModel(Model):
     model_arch = gguf.MODEL_ARCH.MAMBA
