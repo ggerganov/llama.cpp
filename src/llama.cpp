@@ -17526,6 +17526,15 @@ void llama_detach_threadpools(struct llama_context * ctx) {
     llama_detach_batch_threadpool(ctx);
 }
 
+void llama_pause_threadpools(struct llama_context * ctx) {
+    if (ctx->threadpool) {
+        ggml_pause_threadpool(ctx->threadpool);
+    }
+    if (ctx->threadpool_batch) {
+        ggml_pause_threadpool(ctx->threadpool_batch);
+    }
+}
+
 void llama_backend_free(void) {
     ggml_quantize_free();
 }

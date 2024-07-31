@@ -439,6 +439,8 @@ extern "C" {
     LLAMA_API void llama_detach_batch_threadpool(struct llama_context * ctx);
     LLAMA_API void llama_detach_threadpools(struct llama_context * ctx);
 
+    // Pauses all attached threadpools
+    LLAMA_API void llama_pause_threadpools(struct llama_context * ctx);
 
     // Call once at the end of the program - currently only used for MPI
     LLAMA_API void llama_backend_free(void);
