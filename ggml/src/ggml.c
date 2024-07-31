@@ -19363,11 +19363,13 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     // don't leave affinity set on the main thread
     clear_numa_thread_affinity();
 
+    enum ggml_status ret = threadpool->ec;
+
     if (disposable_threadpool) {
         ggml_release_threadpool(threadpool);
     }
 
-    return threadpool->ec;
+    return ret;
 }
 
 enum ggml_status ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads) {
