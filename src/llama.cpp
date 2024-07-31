@@ -5927,7 +5927,7 @@ static void llm_load_vocab(
                 }
 #endif
             }
-        } else if (tokenizer_name == "rwkv") {
+        } else if (tokenizer_model == "rwkv") {
             vocab.type = LLAMA_VOCAB_TYPE_RWKV;
 
             // default special tokens
@@ -5936,7 +5936,6 @@ static void llm_load_vocab(
             vocab.special_unk_id = -1;
             vocab.special_sep_id = -1;
             vocab.special_pad_id = -1;
-            vocab.add_space_prefix = false;
         } else {
             throw std::runtime_error(format("unknown tokenizer: '%s'", tokenizer_model.c_str()));
         }
@@ -6068,6 +6067,12 @@ static void llm_load_vocab(
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_bos = false;
             vocab.tokenizer_add_eos = true;
+        } else if (vocab.type == LLAMA_VOCAB_TYPE_RWKV) {
+            vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
+            vocab.tokenizer_add_space_prefix = false;
+            vocab.tokenizer_clean_spaces = false;
+            vocab.tokenizer_add_bos = true;
+            vocab.tokenizer_add_eos = false;
         } else {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
         }
