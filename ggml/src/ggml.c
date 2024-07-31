@@ -19114,7 +19114,14 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
         }
     }
 
+    if (cgraph->n_nodes == 1) {
+        // We need a barrier before disabling new_work in case we have a trivial graph
+        ggml_barrier(state->threadpool);
+    }
+
     if (!state->threadpool->disposable && state->ith == 0) {
+        // Don't need a lock, because there is a barrier after this, and only after that
+        // do the secondary threads go into standby
         state->threadpool->new_work = false;
     }
 
@@ -19356,6 +19363,8 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
             threadpool->new_work = true;
             ggml_cond_broadcast(&threadpool->cond);
             ggml_mutex_unlock(&threadpool->mutex);
+        } else {
+            threadpool->new_work = true;
         }
     }
     // this is a work thread too
