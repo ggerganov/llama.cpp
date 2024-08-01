@@ -14734,6 +14734,36 @@ static int llama_decode_internal(
 
         ggml_backend_sched_alloc_graph(lctx.sched, gf);
 
+#ifdef GGML_USE_CUDA
+        // Copy K and V cache pointers to backend
+
+        // Stage pointers for each layer in host vectors
+        std::vector<const char *> k_cache_ptrs;
+        std::vector<const char *> v_cache_ptrs;
+        const int64_t n_layer = model.hparams.n_layer;
+        const int64_t kv_head = kv_self.head;
+        for (int il = 0; il < n_layer; ++il) {
+            // K cache pointer for this layer
+            const int64_t n_embd_k_gqa = hparams.n_embd_k_gqa();
+            ggml_tensor * tmp_tensor =  kv_self.k_l[il];
+            size_t tmp_offset = (ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa))*kv_head;
+            k_cache_ptrs.push_back(static_cast<char*>(tmp_tensor->data) + tmp_offset);
+            // V cache pointer for this layer
+            const int64_t n_embd_v_gqa = hparams.n_embd_v_gqa(il);
+            tmp_tensor = kv_self.v_l[il];
+            if (cparams.flash_attn) {
+                tmp_offset = (kv_head)*ggml_row_size(kv_self.v_l[il]->type, n_embd_v_gqa);
+            } else {
+                tmp_offset = (kv_head)*ggml_element_size(kv_self.v_l[il]);
+            }
+            v_cache_ptrs.push_back(static_cast<char*>(tmp_tensor->data) + tmp_offset);
+        }
+
+        // copy host vector data to backend
+        ggml_backend_copy_k_cache_ptrs(k_cache_ptrs.data(), k_cache_ptrs.size());
+        ggml_backend_copy_v_cache_ptrs(v_cache_ptrs.data(), v_cache_ptrs.size());
+#endif
+
         llama_set_inputs(lctx, u_batch);
 
         llama_graph_compute(lctx, gf, n_threads);
