@@ -175,11 +175,6 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_package(Threads REQUIRED)
 
-check_include_file_cxx(execinfo HAVE_EXECINFO)
-if (HAVE_EXECINFO)
-    add_compile_definitions(GLIBC_BACKTRACE_SUPPORTED)
-endif()
-
 #
 # build the library
 #
