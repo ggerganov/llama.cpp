@@ -7,22 +7,54 @@ void ggml_sycl_device_info::init(
     switch (device_filter) {
     case SYCL_DEVICES_TOP_LEVEL_ZERO:
         detect_sycl_gpu_list_with_max_cu();
-        create_context_for_devices();
         break;
     case SYCL_ALL_DEVICES:
         detect_all_sycl_device_list();
-        create_context_for_devices();
         break;
     case SYCL_VISIBLE_DEVICES:
         detect_sycl_visible_device_list();
-        create_context_for_devices();
         break;
     default:
         std::cerr << "ggml_sycl_device_info: Invalid device_filter " << device_filter
                   << std::endl;
     }
-    init_allow_devices();
+    init_devices_dynamic_info();
+    m_device_filter = device_filter;
+}
+
+void ggml_sycl_device_info::clear_device_infos() {
+  ids.clear();
+  devices.clear();
+
+  for (int id=0;id<GGML_SYCL_MAX_DEVICES;id++) {
+    device_infos[id].id = -1;
+    device_infos[id].max_work_group_sizes = 0;
+    device_infos[id].max_compute_units = 0;
+    device_infos[id].hw_family = -1;
+    // for (int i=0; i<GGML_SYCL_MAX_STREAMS;i++) {
+    //     free(device_infos[id].qptrs[i]);
+    // }
+  }
+
+  device_count = 0;
+  device_list = "";
+}
+
+void ggml_sycl_device_info::init_single_mode(int main_gpu_id) {
+    GGML_ASSERT(main_gpu_id<dpct::dev_mgr::instance().device_count());
+
+    clear_device_infos();
+    add_device_info(main_gpu_id);
+    init_devices_dynamic_info();
+    device_mode = SYCL_SINGLE_GPU_MODE;
+}
+
+void ggml_sycl_device_info::init_devices_dynamic_info() {
+    create_context_for_devices();
+    set_allow_devices();
     device_count = ids.size();
+    create_queues_for_devices();
+    update_mem();
 }
 
 /*
@@ -60,7 +92,7 @@ int ggml_sycl_device_info::get_device_index(int id) {
     return -1;
 }
 
-void ggml_sycl_device_info::init_allow_devices() {
+void ggml_sycl_device_info::set_allow_devices() {
     device_list = "";
     for (auto & id: ids) {
         device_list += std::to_string(id);
@@ -190,8 +222,19 @@ void ggml_sycl_device_info::add_device_info(int id) {
     device_infos[id].max_work_group_sizes = prop.get_max_work_group_size();
     device_infos[id].max_compute_units = prop.get_max_compute_units();
     device_infos[id].hw_family = get_device_family(&device);
+}
+
+void ggml_sycl_device_info::create_queues(int id) {
     for (int i=0; i<GGML_SYCL_MAX_STREAMS;i++) {
         device_infos[id].qptrs[i] = create_queue_for_device_id(id);
+    }
+}
+
+void ggml_sycl_device_info::create_queues_for_devices() {
+    for (auto &id: ids) {
+        for (int i=0; i<GGML_SYCL_MAX_STREAMS;i++) {
+            device_infos[id].qptrs[i] = create_queue_for_device_id(id);
+        }
     }
 }
 
@@ -225,16 +268,12 @@ int ggml_sycl_device_info::work_group_size(int id) {
     return device_infos[id].max_work_group_sizes;
 }
 
-ggml_sycl_device_info::ggml_sycl_device_info() {
-    oneapi_device_selector_existed = env_existed("ONEAPI_DEVICE_SELECTOR");
-    sycl_visible_devices_existed = env_existed("GGML_SYCL_VISIBLE_DEVICES");
+void ggml_sycl_device_info::update_mem() {
 
-    if (sycl_visible_devices_existed) {
-        init(SYCL_VISIBLE_DEVICES);
-    } else if (oneapi_device_selector_existed) {
-        init(SYCL_ALL_DEVICES);
-    } else {
-        init(SYCL_DEVICES_TOP_LEVEL_ZERO);
+    for (int i = 0; i < GGML_SYCL_MAX_DEVICES; ++i) {
+        device_infos[i].vmm = 0;
+        default_tensor_split[i] = 0;
+        device_infos[i].cc =0;
     }
 
     int64_t total_vram = 0;
@@ -258,6 +297,23 @@ ggml_sycl_device_info::ggml_sycl_device_info() {
     for (int i = 0; i < device_count; ++i) {
         default_tensor_split[i] /= total_vram;
     }
+}
+
+ggml_sycl_device_info::ggml_sycl_device_info(int main_gpu_id) {
+    oneapi_device_selector_existed = env_existed("ONEAPI_DEVICE_SELECTOR");
+    sycl_visible_devices_existed = env_existed("GGML_SYCL_VISIBLE_DEVICES");
+
+    if (main_gpu_id == -1) {
+        if (sycl_visible_devices_existed) {
+            init(SYCL_VISIBLE_DEVICES);
+        } else if (oneapi_device_selector_existed) {
+            init(SYCL_ALL_DEVICES);
+        } else {
+            init(SYCL_DEVICES_TOP_LEVEL_ZERO);
+        }
+    } else {
+        init_single_mode(main_gpu_id);
+    }
 
     print_gpu_device_list();
 }
@@ -272,6 +328,8 @@ int ggml_sycl_device_info::get_device_id(int device_index) {
     } else {
         std::cerr << __func__ << ":SYCL device:" << device_index
                   << " is out of range:[" << devices_list() << "]" << std::endl;
+        int* ptr = NULL;
+        *ptr = 0;
         std::exit(1);
     }
 }

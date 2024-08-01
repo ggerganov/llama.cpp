@@ -81,12 +81,6 @@ static int g_ggml_sycl_debug = 0;
 
 typedef sycl::queue *queue_ptr;
 
-enum ggml_sycl_backend_gpu_mode {
-  SYCL_UNSET_GPU_MODE = -1,
-  SYCL_SINGLE_GPU_MODE = 0,
-  SYCL_MUL_GPU_MODE
-};
-
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 static void crash() {
@@ -288,8 +282,8 @@ void* ggml_sycl_host_malloc(size_t size);
 void ggml_sycl_host_free(void* ptr);
 
 void ggml_backend_sycl_print_sycl_devices();
-static ggml_sycl_device_info ggml_sycl_init();
-ggml_sycl_device_info &ggml_sycl_info();
+static ggml_sycl_device_info ggml_sycl_init(int main_gpu_id);
+ggml_sycl_device_info &ggml_sycl_info(int main_gpu_id = -1);
 
 // common device functions
 

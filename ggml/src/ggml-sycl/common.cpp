@@ -137,7 +137,7 @@ void ggml_backend_sycl_print_sycl_devices() {
     }
 }
 
-static ggml_sycl_device_info ggml_sycl_init() try {
+static ggml_sycl_device_info ggml_sycl_init(int main_gpu_id) try {
     static bool initialized = false;
 
     if (!initialized) {
@@ -176,7 +176,7 @@ static ggml_sycl_device_info ggml_sycl_init() try {
         initialized = true;
     }
 
-    static ggml_sycl_device_info info;
+    static ggml_sycl_device_info info(main_gpu_id);
 
     if (info.device_count == 0) {
         fprintf(stderr, "%s: failed to initialize " GGML_SYCL_NAME ": no available device found\n",
@@ -192,8 +192,8 @@ static ggml_sycl_device_info ggml_sycl_init() try {
     std::exit(1);
 }
 
-ggml_sycl_device_info &ggml_sycl_info() {
-    static ggml_sycl_device_info info = ggml_sycl_init();
+ggml_sycl_device_info &ggml_sycl_info(int main_gpu_id) {
+    static ggml_sycl_device_info info = ggml_sycl_init(main_gpu_id);
     return info;
 }
 

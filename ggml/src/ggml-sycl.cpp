@@ -38,6 +38,7 @@
 
 #include "ggml-sycl/backend.hpp"
 #include "ggml-sycl/presets.hpp"
+#include "ggml-sycl/sycl_device.hpp"
 
 
 void   ggml_sycl_free_data(struct ggml_tensor * tensor);
@@ -5148,6 +5149,13 @@ bool ggml_backend_is_sycl(ggml_backend_t backend) {
 GGML_CALL int ggml_backend_sycl_get_device_count() {
     GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_get_device_count\n");
     return ggml_sycl_info().device_count;
+}
+
+GGML_API GGML_CALL void ggml_backend_sycl_set_single_device_mode(int main_gpu_id) {
+
+    GGML_SYCL_DEBUG("[SYCL] call ggml_backend_sycl_set_single_device_mode\n");
+    fprintf(stderr, "ggml_backend_sycl_set_single_device: use single device: [%d]\n", main_gpu_id);
+    ggml_sycl_info(main_gpu_id);
 }
 
 GGML_CALL static ggml_backend_t ggml_backend_reg_sycl_init(const char * params, void * user_data) {

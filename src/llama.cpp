@@ -2831,8 +2831,7 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_
 #elif defined(GGML_USE_VULKAN)
     buft = ggml_backend_vk_buffer_type(gpu);
 #elif defined(GGML_USE_SYCL)
-    int gpu_id = ggml_backend_sycl_get_device_id(gpu);
-    buft = ggml_backend_sycl_buffer_type(gpu_id);
+    buft = ggml_backend_sycl_buffer_type(gpu);
 #elif defined(GGML_USE_KOMPUTE)
     buft = ggml_backend_kompute_buffer_type(gpu);
     if (buft == nullptr) {
@@ -5931,6 +5930,10 @@ static bool llm_load_tensors(
             model.buft_output = llama_default_buffer_type_cpu(true);
         }
     } else {
+
+#if defined(GGML_USE_SYCL)
+        ggml_backend_sycl_set_single_device_mode(main_gpu);
+#endif
         ggml_backend_buffer_type_t split_buft;
         if (split_mode == LLAMA_SPLIT_MODE_ROW) {
             split_buft = llama_default_buffer_type_split(model, main_gpu, tensor_split);
