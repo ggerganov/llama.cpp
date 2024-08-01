@@ -520,18 +520,29 @@ enum llm_tensor {
     LLM_TENSOR_SSM_A,
     LLM_TENSOR_SSM_D,
     LLM_TENSOR_SSM_OUT,
+    LLM_TENSOR_TIME_MIX_W1,
+    LLM_TENSOR_TIME_MIX_W2,
+    LLM_TENSOR_TIME_MIX_LERP_X,
+    LLM_TENSOR_TIME_MIX_LERP_W,
     LLM_TENSOR_TIME_MIX_LERP_K,
     LLM_TENSOR_TIME_MIX_LERP_V,
     LLM_TENSOR_TIME_MIX_LERP_R,
     LLM_TENSOR_TIME_MIX_LERP_G,
     LLM_TENSOR_TIME_MIX_FIRST,
     LLM_TENSOR_TIME_MIX_DECAY,
+    LLM_TENSOR_TIME_MIX_DECAY_W1,
+    LLM_TENSOR_TIME_MIX_DECAY_W2,
     LLM_TENSOR_TIME_MIX_KEY,
     LLM_TENSOR_TIME_MIX_VALUE,
     LLM_TENSOR_TIME_MIX_RECEPTANCE,
     LLM_TENSOR_TIME_MIX_GATE,
     LLM_TENSOR_TIME_MIX_LN,
     LLM_TENSOR_TIME_MIX_OUTPUT,
+    LLM_TENSOR_CHANNEL_MIX_LERP_K,
+    LLM_TENSOR_CHANNEL_MIX_LERP_R,
+    LLM_TENSOR_CHANNEL_MIX_KEY,
+    LLM_TENSOR_CHANNEL_MIX_RECEPTANCE,
+    LLM_TENSOR_CHANNEL_MIX_VALUE,
     LLM_TENSOR_ATTN_Q_A,
     LLM_TENSOR_ATTN_Q_B,
     LLM_TENSOR_ATTN_KV_A_MQA,
@@ -1356,24 +1367,35 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
     {
         LLM_ARCH_RWKV,
         {
-            { LLM_TENSOR_TOKEN_EMBD,          "token_embd" },
-            { LLM_TENSOR_TOKEN_EMBD_NORM,     "token_embd_norm" },
-            { LLM_TENSOR_OUTPUT_NORM,         "output_norm" },
-            { LLM_TENSOR_OUTPUT,              "output" },
-            { LLM_TENSOR_ATTN_NORM,           "blk.%d.attn_norm" },
-            { LLM_TENSOR_ATTN_NORM_2,         "blk.%d.attn_norm_2" },
-            { LLM_TENSOR_TIME_MIX_LERP_K,     "blk.%d.time_mix.lerp_k" },
-            { LLM_TENSOR_TIME_MIX_LERP_V,     "blk.%d.time_mix.lerp_v" },
-            { LLM_TENSOR_TIME_MIX_LERP_R,     "blk.%d.time_mix.lerp_r" },
-            { LLM_TENSOR_TIME_MIX_LERP_G,     "blk.%d.time_mix.lerp_g" },
-            { LLM_TENSOR_TIME_MIX_FIRST,      "blk.%d.time_mix.first" },
-            { LLM_TENSOR_TIME_MIX_DECAY,      "blk.%d.time_mix.decay" },
-            { LLM_TENSOR_TIME_MIX_KEY,        "blk.%d.time_mix.key" },
-            { LLM_TENSOR_TIME_MIX_VALUE,      "blk.%d.time_mix.value" },
-            { LLM_TENSOR_TIME_MIX_RECEPTANCE, "blk.%d.time_mix.receptance" },
-            { LLM_TENSOR_TIME_MIX_GATE,       "blk.%d.time_mix.gate" },
-            { LLM_TENSOR_TIME_MIX_LN,         "blk.%d.time_mix.ln" },
-            { LLM_TENSOR_TIME_MIX_OUTPUT,     "blk.%d.time_mix.output" },
+            { LLM_TENSOR_TOKEN_EMBD,                "token_embd" },
+            { LLM_TENSOR_TOKEN_EMBD_NORM,           "token_embd_norm" },
+            { LLM_TENSOR_OUTPUT_NORM,               "output_norm" },
+            { LLM_TENSOR_OUTPUT,                    "output" },
+            { LLM_TENSOR_ATTN_NORM,                 "blk.%d.attn_norm" },
+            { LLM_TENSOR_ATTN_NORM_2,               "blk.%d.attn_norm_2" },
+            { LLM_TENSOR_TIME_MIX_W1,               "blk.%d.time_mix_w1" },
+            { LLM_TENSOR_TIME_MIX_W2,               "blk.%d.time_mix_w2" },
+            { LLM_TENSOR_TIME_MIX_LERP_X,           "blk.%d.time_mix_lerp_x" },
+            { LLM_TENSOR_TIME_MIX_LERP_W,           "blk.%d.time_mix_lerp_w" },
+            { LLM_TENSOR_TIME_MIX_LERP_K,           "blk.%d.time_mix_lerp_k" },
+            { LLM_TENSOR_TIME_MIX_LERP_V,           "blk.%d.time_mix_lerp_v" },
+            { LLM_TENSOR_TIME_MIX_LERP_R,           "blk.%d.time_mix_lerp_r" },
+            { LLM_TENSOR_TIME_MIX_LERP_G,           "blk.%d.time_mix_lerp_g" },
+            { LLM_TENSOR_TIME_MIX_FIRST,            "blk.%d.time_mix_first" },
+            { LLM_TENSOR_TIME_MIX_DECAY,            "blk.%d.time_mix_decay" },
+            { LLM_TENSOR_TIME_MIX_DECAY_W1,         "blk.%d.time_mix_decay_w1" },
+            { LLM_TENSOR_TIME_MIX_DECAY_W2,         "blk.%d.time_mix_decay_w2" },
+            { LLM_TENSOR_TIME_MIX_KEY,              "blk.%d.time_mix_key" },
+            { LLM_TENSOR_TIME_MIX_VALUE,            "blk.%d.time_mix_value" },
+            { LLM_TENSOR_TIME_MIX_RECEPTANCE,       "blk.%d.time_mix_receptance" },
+            { LLM_TENSOR_TIME_MIX_GATE,             "blk.%d.time_mix_gate" },
+            { LLM_TENSOR_TIME_MIX_LN,               "blk.%d.time_mix_ln" },
+            { LLM_TENSOR_TIME_MIX_OUTPUT,           "blk.%d.time_mix_output" },
+            { LLM_TENSOR_CHANNEL_MIX_LERP_K,        "blk.%d.channel_mix_lerp_k" },
+            { LLM_TENSOR_CHANNEL_MIX_LERP_R,        "blk.%d.channel_mix_lerp_r" },
+            { LLM_TENSOR_CHANNEL_MIX_KEY,           "blk.%d.channel_mix_key" },
+            { LLM_TENSOR_CHANNEL_MIX_VALUE,         "blk.%d.channel_mix_value" },
+            { LLM_TENSOR_CHANNEL_MIX_RECEPTANCE,    "blk.%d.channel_mix_receptance" },
         },
     },
     {
@@ -2539,6 +2561,10 @@ struct llama_layer {
     struct ggml_tensor * ssm_dt_b;
 
     // rwkv
+    struct ggml_tensor * time_mix_w1;
+    struct ggml_tensor * time_mix_w2;
+    struct ggml_tensor * time_mix_lerp_x;
+    struct ggml_tensor * time_mix_lerp_w;
     struct ggml_tensor * time_mix_lerp_k;
     struct ggml_tensor * time_mix_lerp_v;
     struct ggml_tensor * time_mix_lerp_r;
@@ -2546,6 +2572,8 @@ struct llama_layer {
 
     struct ggml_tensor * time_mix_first;
     struct ggml_tensor * time_mix_decay;
+    struct ggml_tensor * time_mix_decay_w1;
+    struct ggml_tensor * time_mix_decay_w2;
     struct ggml_tensor * time_mix_key;
     struct ggml_tensor * time_mix_value;
     struct ggml_tensor * time_mix_receptance;
@@ -2554,6 +2582,13 @@ struct llama_layer {
     struct ggml_tensor * time_mix_ln;
     struct ggml_tensor * time_mix_ln_b;
     struct ggml_tensor * time_mix_output;
+
+    struct ggml_tensor * channel_mix_lerp_k;
+    struct ggml_tensor * channel_mix_lerp_r;
+
+    struct ggml_tensor * channel_mix_key;
+    struct ggml_tensor * channel_mix_receptance;
+    struct ggml_tensor * channel_mix_value;
 
     // long rope factors
     struct ggml_tensor * rope_long  = nullptr;
@@ -5148,6 +5183,7 @@ static const char * llama_model_vocab_type_name(enum llama_vocab_type type){
         case LLAMA_VOCAB_TYPE_BPE:  return "BPE";
         case LLAMA_VOCAB_TYPE_WPM:  return "WPM";
         case LLAMA_VOCAB_TYPE_UGM:  return "UGM";
+        case LLAMA_VOCAB_TYPE_RWKV: return "RWKV";
         default:                    return "unknown";
     }
 }
@@ -6125,7 +6161,7 @@ static void llm_load_vocab(
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
             vocab.tokenizer_add_space_prefix = false;
             vocab.tokenizer_clean_spaces = false;
-            vocab.tokenizer_add_bos = true;
+            vocab.tokenizer_add_bos = false;
             vocab.tokenizer_add_eos = false;
         } else {
             vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
@@ -6231,6 +6267,10 @@ static void llm_load_vocab(
         }
     } else if (vocab.type == LLAMA_VOCAB_TYPE_WPM) {
         vocab.linefeed_id = vocab.special_pad_id;
+    } else if (vocab.type == LLAMA_VOCAB_TYPE_RWKV) {
+        const std::vector<int> ids = llama_tokenize_internal(vocab, "\n", false);
+        GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
+        vocab.linefeed_id = ids[0];
     } else {
         const std::vector<int> ids = llama_tokenize_internal(vocab, "\xC4\x8A", false); // U+010A
         GGML_ASSERT(!ids.empty() && "model vocab missing newline token");
@@ -8288,7 +8328,14 @@ static bool llm_load_tensors(
                     // output
                     model.output_norm = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "weight"), {n_embd});
                     model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"), {n_embd});
-                    model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
+                    model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab});
+
+                    // TODO: Parameterize this
+                    const int time_mix_extra_dim = 32;
+                    const int time_decay_extra_dim = 64;
+                    const int head_size = 64;
+                    const int attn_hidden_size = n_embd;
+                    const int ffn_size = (int)(n_embd * 3.5 / 32) * 32;
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -8301,25 +8348,39 @@ static bool llm_load_tensors(
                         layer.attn_norm_2   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "weight", i), {n_embd});
                         layer.attn_norm_2_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_ATTN_NORM_2, "bias", i),   {n_embd});
 
+                        layer.time_mix_w1 = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_W1, "weight", i), {time_mix_extra_dim * 5, n_embd});
+                        layer.time_mix_w2 = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_W2, "weight", i), {n_embd, time_mix_extra_dim, 5});
+
+                        layer.time_mix_lerp_x = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_X, "weight", i), {n_embd, 1, 1});
+                        layer.time_mix_lerp_w = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_W, "weight", i), {n_embd, 1, 1});
                         layer.time_mix_lerp_k = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_K, "weight", i), {n_embd, 1, 1});
                         layer.time_mix_lerp_v = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_V, "weight", i), {n_embd, 1, 1});
                         layer.time_mix_lerp_r = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_R, "weight", i), {n_embd, 1, 1});
                         layer.time_mix_lerp_g = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_G, "weight", i), {n_embd, 1, 1});
 
                         // TODO: Parametrize hardcoded dimensions for first & decay
-                        layer.time_mix_first = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_FIRST, "weight", i), {64, 32});
-                        layer.time_mix_decay = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_DECAY, "weight", i), {64, 32});
-                        layer.time_mix_key = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_KEY, "weight", i), {n_embd, n_embd});
-                        layer.time_mix_value = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_VALUE, "weight", i), {n_embd, n_embd});
-                        layer.time_mix_receptance = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_RECEPTANCE, "weight", i), {n_embd, n_embd});
-                        layer.time_mix_gate = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_GATE, "weight", i), {n_embd, n_embd});
+                        layer.time_mix_first = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_FIRST, "weight", i), {head_size, n_embd / head_size});
+                        layer.time_mix_decay = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_DECAY, "weight", i), {n_embd});
+                        layer.time_mix_decay_w1 = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_DECAY_W1, "weight", i), {time_decay_extra_dim, n_embd});
+                        layer.time_mix_decay_w2 = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_DECAY_W2, "weight", i), {attn_hidden_size, time_decay_extra_dim});
+                        layer.time_mix_key = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_KEY, "weight", i), {attn_hidden_size, n_embd});
+                        layer.time_mix_value = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_VALUE, "weight", i), {attn_hidden_size, n_embd});
+                        layer.time_mix_receptance = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_RECEPTANCE, "weight", i), {attn_hidden_size, n_embd});
+                        layer.time_mix_gate = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_GATE, "weight", i), {attn_hidden_size, n_embd});
 
                         layer.time_mix_ln = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LN, "weight", i), {n_embd});
                         layer.time_mix_ln_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LN, "bias", i), {n_embd});
-                        layer.time_mix_output = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_OUTPUT, "weight", i), {n_embd, n_embd});
+                        layer.time_mix_output = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_OUTPUT, "weight", i), {n_embd, attn_hidden_size});
+
+                        layer.channel_mix_lerp_k = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_CHANNEL_MIX_LERP_K, "weight", i), {n_embd, 1, 1});
+                        layer.channel_mix_lerp_r = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_CHANNEL_MIX_LERP_R, "weight", i), {n_embd, 1, 1});
+
+                        layer.channel_mix_key = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_CHANNEL_MIX_KEY, "weight", i), {n_embd, ffn_size});
+                        layer.channel_mix_value = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_CHANNEL_MIX_VALUE, "weight", i), {ffn_size, n_embd});
+                        layer.channel_mix_receptance = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_CHANNEL_MIX_RECEPTANCE, "weight", i), {n_embd, n_embd});
                     }
 
-                }
+                } break;
             default:
                 throw std::runtime_error("unknown architecture");
         }
