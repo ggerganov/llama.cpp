@@ -19,18 +19,60 @@ GGML_QUANT_VERSION     = 2  # GGML_QNT_VERSION from ggml.h
 
 class Keys:
     class General:
-        ARCHITECTURE         = "general.architecture"
-        QUANTIZATION_VERSION = "general.quantization_version"
-        ALIGNMENT            = "general.alignment"
-        NAME                 = "general.name"
-        AUTHOR               = "general.author"
-        VERSION              = "general.version"
-        URL                  = "general.url"
-        DESCRIPTION          = "general.description"
-        LICENSE              = "general.license"
-        SOURCE_URL           = "general.source.url"
-        SOURCE_HF_REPO       = "general.source.huggingface.repository"
-        FILE_TYPE            = "general.file_type"
+        TYPE                       = "general.type"
+        ARCHITECTURE               = "general.architecture"
+        QUANTIZATION_VERSION       = "general.quantization_version"
+        ALIGNMENT                  = "general.alignment"
+        FILE_TYPE                  = "general.file_type"
+
+        # Authorship Metadata
+        NAME                       = "general.name"
+        AUTHOR                     = "general.author"
+        VERSION                    = "general.version"
+        ORGANIZATION               = "general.organization"
+
+        FINETUNE                   = "general.finetune"
+        BASENAME                   = "general.basename"
+
+        DESCRIPTION                = "general.description"
+        QUANTIZED_BY               = "general.quantized_by"
+
+        SIZE_LABEL                 = "general.size_label"
+
+        # Licensing details
+        LICENSE                    = "general.license"
+        LICENSE_NAME               = "general.license.name"
+        LICENSE_LINK               = "general.license.link"
+
+        # Typically represents the converted GGUF repo (Unless native)
+        URL                        = "general.url" # Model Website/Paper
+        DOI                        = "general.doi"
+        UUID                       = "general.uuid"
+        REPO_URL                   = "general.repo_url" # Model Source Repository (git/svn/etc...)
+
+        # Model Source during conversion
+        SOURCE_URL                 = "general.source.url" # Model Website/Paper
+        SOURCE_DOI                 = "general.source.doi"
+        SOURCE_UUID                = "general.source.uuid"
+        SOURCE_REPO_URL            = "general.source.repo_url" # Model Source Repository (git/svn/etc...)
+
+        # Base Model Source. There can be more than one source if it's a merged
+        # model like with 'Mistral-7B-Merge-14-v0.1'. This will assist in
+        # tracing linage of models as it is finetuned or merged over time.
+        BASE_MODEL_COUNT           = "general.base_model.count"
+        BASE_MODEL_NAME            = "general.base_model.{id}.name"
+        BASE_MODEL_AUTHOR          = "general.base_model.{id}.author"
+        BASE_MODEL_VERSION         = "general.base_model.{id}.version"
+        BASE_MODEL_ORGANIZATION    = "general.base_model.{id}.organization"
+        BASE_MODEL_URL             = "general.base_model.{id}.url" # Model Website/Paper
+        BASE_MODEL_DOI             = "general.base_model.{id}.doi"
+        BASE_MODEL_UUID            = "general.base_model.{id}.uuid"
+        BASE_MODEL_REPO_URL        = "general.base_model.{id}.repo_url" # Model Source Repository (git/svn/etc...)
+
+        # Array based KV stores
+        TAGS                       = "general.tags"
+        LANGUAGES                  = "general.languages"
+        DATASETS                   = "general.datasets"
 
     class LLM:
         VOCAB_SIZE                        = "{arch}.vocab_size"
@@ -50,6 +92,8 @@ class Keys:
         POOLING_TYPE                      = "{arch}.pooling_type"
         LOGIT_SCALE                       = "{arch}.logit_scale"
         DECODER_START_TOKEN_ID            = "{arch}.decoder_start_token_id"
+        ATTN_LOGIT_SOFTCAPPING            = "{arch}.attn_logit_softcapping"
+        FINAL_LOGIT_SOFTCAPPING           = "{arch}.final_logit_softcapping"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -64,6 +108,7 @@ class Keys:
         Q_LORA_RANK       = "{arch}.attention.q_lora_rank"
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
         REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
+        SLIDING_WINDOW    = "{arch}.attention.sliding_window"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
@@ -117,10 +162,18 @@ class Keys:
         MIDDLE_ID            = "tokenizer.ggml.middle_token_id"
         EOT_ID               = "tokenizer.ggml.eot_token_id"
 
+    class Adapter:
+        TYPE       = "adapter.type"
+        LORA_ALPHA = "adapter.lora.alpha"
 
 #
 # recommended mapping of model tensor names for storage in gguf
 #
+
+
+class GGUFType:
+    MODEL   = "model"
+    ADAPTER = "adapter"
 
 
 class MODEL_ARCH(IntEnum):
@@ -157,10 +210,13 @@ class MODEL_ARCH(IntEnum):
     COMMAND_R    = auto()
     DBRX         = auto()
     OLMO         = auto()
+    OPENELM      = auto()
     ARCTIC       = auto()
     DEEPSEEK2    = auto()
+    CHATGLM      = auto()
     BITNET       = auto()
     T5           = auto()
+    JAIS         = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -281,10 +337,13 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.COMMAND_R:      "command-r",
     MODEL_ARCH.DBRX:           "dbrx",
     MODEL_ARCH.OLMO:           "olmo",
+    MODEL_ARCH.OPENELM:        "openelm",
     MODEL_ARCH.ARCTIC:         "arctic",
     MODEL_ARCH.DEEPSEEK2:      "deepseek2",
+    MODEL_ARCH.CHATGLM:        "chatglm",
     MODEL_ARCH.BITNET:         "bitnet",
     MODEL_ARCH.T5:             "t5",
+    MODEL_ARCH.JAIS:           "jais",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -856,6 +915,19 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
+    MODEL_ARCH.OPENELM: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_Q_NORM,
+        MODEL_TENSOR.ATTN_K_NORM,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.ARCTIC: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -904,6 +976,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN_SHEXP,
         MODEL_TENSOR.FFN_UP_SHEXP,
     ],
+    MODEL_ARCH.CHATGLM : [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
     MODEL_ARCH.BITNET: [
         MODEL_TENSOR.ATTN_Q,
         MODEL_TENSOR.ATTN_K,
@@ -951,6 +1035,18 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ENC_FFN_UP,
         MODEL_TENSOR.ENC_OUTPUT_NORM,
     ],
+    MODEL_ARCH.JAIS: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_QKV,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_UP,
+    ],
     # TODO
 }
 
@@ -987,6 +1083,9 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     MODEL_ARCH.DEEPSEEK2: [
         MODEL_TENSOR.ROPE_FREQS,
         MODEL_TENSOR.ATTN_ROT_EMBD,
+    ],
+    MODEL_ARCH.CHATGLM: [
+        MODEL_TENSOR.ROPE_FREQS,
     ],
 }
 
@@ -1175,7 +1274,6 @@ KEY_GENERAL_URL                  = Keys.General.URL
 KEY_GENERAL_DESCRIPTION          = Keys.General.DESCRIPTION
 KEY_GENERAL_LICENSE              = Keys.General.LICENSE
 KEY_GENERAL_SOURCE_URL           = Keys.General.SOURCE_URL
-KEY_GENERAL_SOURCE_HF_REPO       = Keys.General.SOURCE_HF_REPO
 KEY_GENERAL_FILE_TYPE            = Keys.General.FILE_TYPE
 
 # LLM
