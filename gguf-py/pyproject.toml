@@ -26,6 +26,7 @@ pyyaml = ">=5.1"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
+jinja2 = ">=3.1.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -36,3 +37,4 @@ gguf-convert-endian = "scripts:gguf_convert_endian_entrypoint"
 gguf-dump = "scripts:gguf_dump_entrypoint"
 gguf-set-metadata = "scripts:gguf_set_metadata_entrypoint"
 gguf-new-metadata = "scripts:gguf_new_metadata_entrypoint"
+gguf-template = "scripts:gguf_template_entrypoint"
