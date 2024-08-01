@@ -22,18 +22,15 @@ void ggml_sycl_device_info::init(
     m_device_filter = device_filter;
 }
 
-void ggml_sycl_device_info::clear_device_infos() {
+void ggml_sycl_device_info::clear_infos() {
   ids.clear();
   devices.clear();
 
   for (int id=0;id<GGML_SYCL_MAX_DEVICES;id++) {
-    device_infos[id].id = -1;
-    device_infos[id].max_work_group_sizes = 0;
-    device_infos[id].max_compute_units = 0;
-    device_infos[id].hw_family = -1;
-    // for (int i=0; i<GGML_SYCL_MAX_STREAMS;i++) {
-    //     free(device_infos[id].qptrs[i]);
-    // }
+    infos[id].id = -1;
+    infos[id].max_work_group_sizes = 0;
+    infos[id].max_compute_units = 0;
+    infos[id].hw_family = -1;
   }
 
   device_count = 0;
@@ -43,7 +40,7 @@ void ggml_sycl_device_info::clear_device_infos() {
 void ggml_sycl_device_info::init_single_mode(int main_gpu_id) {
     GGML_ASSERT(main_gpu_id<dpct::dev_mgr::instance().device_count());
 
-    clear_device_infos();
+    clear_infos();
     add_device_info(main_gpu_id);
     init_devices_dynamic_info();
     device_mode = SYCL_SINGLE_GPU_MODE;
@@ -217,23 +214,23 @@ void ggml_sycl_device_info::add_device_info(int id) {
     ids.push_back(id);
     devices.push_back(device);
 
-    device_infos[id].id = id;
-    device_infos[id].device = device;
-    device_infos[id].max_work_group_sizes = prop.get_max_work_group_size();
-    device_infos[id].max_compute_units = prop.get_max_compute_units();
-    device_infos[id].hw_family = get_device_family(&device);
+    infos[id].id = id;
+    infos[id].device = device;
+    infos[id].max_work_group_sizes = prop.get_max_work_group_size();
+    infos[id].max_compute_units = prop.get_max_compute_units();
+    infos[id].hw_family = get_device_family(&device);
 }
 
 void ggml_sycl_device_info::create_queues(int id) {
     for (int i=0; i<GGML_SYCL_MAX_STREAMS;i++) {
-        device_infos[id].qptrs[i] = create_queue_for_device_id(id);
+        infos[id].qptrs[i] = create_queue_for_device_id(id);
     }
 }
 
 void ggml_sycl_device_info::create_queues_for_devices() {
     for (auto &id: ids) {
         for (int i=0; i<GGML_SYCL_MAX_STREAMS;i++) {
-            device_infos[id].qptrs[i] = create_queue_for_device_id(id);
+            infos[id].qptrs[i] = create_queue_for_device_id(id);
         }
     }
 }
@@ -259,28 +256,28 @@ void ggml_sycl_device_info::print_gpu_device_list() {
                "units:%d, to use any SYCL devices, set/export "
                "GGML_SYCL_VISIBLE_DEVICES or ONEAPI_DEVICE_SELECTOR\n";
         fprintf(stderr, hint, get_device_count(), devices_list(),
-                device_infos[0].max_compute_units);
+                infos[0].max_compute_units);
     }
 }
 
 int ggml_sycl_device_info::work_group_size(int id) {
     GGML_ASSERT(is_allowed_device(id));
-    return device_infos[id].max_work_group_sizes;
+    return infos[id].max_work_group_sizes;
 }
 
 void ggml_sycl_device_info::update_mem() {
 
     for (int i = 0; i < GGML_SYCL_MAX_DEVICES; ++i) {
-        device_infos[i].vmm = 0;
+        infos[i].vmm = 0;
         default_tensor_split[i] = 0;
-        device_infos[i].cc =0;
+        infos[i].cc =0;
     }
 
     int64_t total_vram = 0;
 
     for (int i = 0; i < device_count; ++i) {
         int id = get_device_id(i);
-        device_infos[id].vmm = 0;
+        infos[id].vmm = 0;
         dpct::device_info prop;
         dpct::get_device_info(
             prop, dpct::dev_mgr::instance().get_device(id));
@@ -289,7 +286,7 @@ void ggml_sycl_device_info::update_mem() {
         default_tensor_split[i] = total_vram;
         total_vram += prop.get_global_mem_size();
 
-        device_infos[id].cc =
+        infos[id].cc =
             100 * prop.get_major_version() + 10 * prop.get_minor_version();
     }
 
@@ -335,7 +332,7 @@ int ggml_sycl_device_info::get_device_id(int device_index) {
 }
 
 int ggml_sycl_device_info::hw_family(int id) {
-    return device_infos[id].hw_family;
+    return infos[id].hw_family;
 }
 
 static inline bool env_existed(const char *env_name) {

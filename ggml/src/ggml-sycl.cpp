@@ -2280,11 +2280,11 @@ static int64_t get_row_rounding(ggml_type type, const std::array<float, GGML_SYC
     for (int i = 0; i < ggml_sycl_info().device_count; ++i) {
         int id = ggml_backend_sycl_get_device_id(i);
         if (tensor_split[i] < (i + 1 < ggml_sycl_info().device_count ? tensor_split[i + 1] : 1.0f)) {
-            if (min_compute_capability > ggml_sycl_info().device_infos[id].cc) {
-                min_compute_capability = ggml_sycl_info().device_infos[id].cc;
+            if (min_compute_capability > ggml_sycl_info().infos[id].cc) {
+                min_compute_capability = ggml_sycl_info().infos[id].cc;
             }
-            if (max_compute_capability < ggml_sycl_info().device_infos[id].cc) {
-                max_compute_capability = ggml_sycl_info().device_infos[id].cc;
+            if (max_compute_capability < ggml_sycl_info().infos[id].cc) {
+                max_compute_capability = ggml_sycl_info().infos[id].cc;
             }
         }
     }
@@ -3416,12 +3416,12 @@ static void ggml_sycl_mul_mat(ggml_backend_sycl_context & ctx, const ggml_tensor
                 continue;
             }
 
-            if (min_compute_capability > ggml_sycl_info().device_infos[id].cc) {
-                min_compute_capability = ggml_sycl_info().device_infos[id].cc;
+            if (min_compute_capability > ggml_sycl_info().infos[id].cc) {
+                min_compute_capability = ggml_sycl_info().infos[id].cc;
             }
         }
     } else {
-        min_compute_capability    = ggml_sycl_info().device_infos[ctx.device].cc;
+        min_compute_capability    = ggml_sycl_info().infos[ctx.device].cc;
     }
 
     // check data types and tensor shapes for custom matrix multiplication kernels:
@@ -4342,7 +4342,7 @@ ggml_backend_buffer_type_t ggml_backend_sycl_buffer_type(int device_id) {
     if (!ggml_backend_sycl_buffer_type_initialized) {
         for (auto & id: ggml_sycl_info().ids) {
             auto & device = dpct::dev_mgr::instance().get_device(id);
-            queue_ptr stream = ggml_sycl_info().device_infos[id].qptrs[0];
+            queue_ptr stream = ggml_sycl_info().infos[id].qptrs[0];
             ggml_backend_sycl_buffer_types[id] = {
                 /* .iface    = */ ggml_backend_sycl_buffer_type_interface,
                 /* .context  = */ new ggml_backend_sycl_buffer_type_context{id, GGML_SYCL_NAME + std::to_string(id), stream},

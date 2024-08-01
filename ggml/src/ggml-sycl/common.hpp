@@ -241,7 +241,7 @@ struct ggml_backend_sycl_context {
         device(id),
         name(GGML_SYCL_NAME + std::to_string(device)) {
             for (int i=0;i<GGML_SYCL_MAX_STREAMS; i++){
-                qptrs[id][i] = sycl_device_info.device_infos[id].qptrs[i];
+                qptrs[id][i] = sycl_device_info.infos[id].qptrs[i];
             }
     }
 

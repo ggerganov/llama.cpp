@@ -54,7 +54,7 @@ struct ggml_sycl_device_info {
     sycl::context co_ctx;
     int m_device_filter;
 
-    sycl_device_info device_infos[GGML_SYCL_MAX_DEVICES];
+    sycl_device_info infos[GGML_SYCL_MAX_DEVICES];
     std::array<float, GGML_SYCL_MAX_DEVICES> default_tensor_split = {};
 
     ggml_sycl_device_info(int main_gpu_id);//single device mode
@@ -62,7 +62,7 @@ struct ggml_sycl_device_info {
     void init(ggml_sycl_backend_device_filter device_filter);
     void init_single_mode(int main_gpu_id);
 
-    void clear_device_infos();
+    void clear_infos();
     void print_gpu_device_list();
     int work_group_size(int device_id);
     bool is_allowed_device(int device_id);
