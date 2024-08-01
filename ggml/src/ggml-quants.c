@@ -3508,7 +3508,7 @@ void dequantize_row_tq1_0(const block_tq1_0 * restrict x, float * restrict y, in
             for (size_t n = 0; n < 5; ++n) {
                 for (size_t m = 0; m < 32; ++m) {
                     uint8_t q = x[i].q[j + m] * pow3[n];
-                    uint16_t xi = ((uint16_t) q * 3) >> 8;
+                    int16_t xi = ((uint16_t) q * 3) >> 8;
                     *y++ = (float) (xi - 1) * d;
                 }
             }
@@ -3517,7 +3517,7 @@ void dequantize_row_tq1_0(const block_tq1_0 * restrict x, float * restrict y, in
             for (size_t n = 0; n < 5; ++n) {
                 for (size_t m = 0; m < 16; ++m) {
                     uint8_t q = x[i].q[j + m] * pow3[n];
-                    uint16_t xi = ((uint16_t) q * 3) >> 8;
+                    int16_t xi = ((uint16_t) q * 3) >> 8;
                     *y++ = (float) (xi - 1) * d;
                 }
             }
@@ -3526,7 +3526,7 @@ void dequantize_row_tq1_0(const block_tq1_0 * restrict x, float * restrict y, in
         for (size_t n = 0; n < 4; ++n) {
             for (size_t j = 0; j < sizeof(x->qs); ++j) {
                 uint8_t q = x[i].qs[j] * pow3[n];
-                uint16_t xi = ((uint16_t) q * 3) >> 8;
+                int16_t xi = ((uint16_t) q * 3) >> 8;
                 *y++ = (float) (xi - 1) * d;
             }
         }
@@ -3544,7 +3544,8 @@ void dequantize_row_tq2_0(const block_tq2_0 * restrict x, float * restrict y, in
         for (size_t j = 0; j < sizeof(x->q); j += 32) {
             for (size_t l = 0; l < 4; ++l) {
                 for (size_t m = 0; m < 32; ++m) {
-                    *y++ = (float) (((x[i].q[j + m] >> (l*2)) & 3) - 1) * d;
+                    int8_t q = (x[i].q[j + m] >> (l*2)) & 3;
+                    *y++ = (float) (q - 1) * d;
                 }
             }
         }
@@ -3621,7 +3622,8 @@ void dequantize_row_q1_3(const block_q1_3 * restrict x, float * restrict y, int6
 
         for (size_t j = 0; j < sizeof(x->q); ++j) {
             uint16_t q = x[i].q[j];
-            *y++ = (float) ((int16_t)((q * 3) >> 8) - 1);
+            int16_t qi = (q * 3) >> 8;
+            *y++ = (float) (qi - 1);
         }
 
         for (size_t j = 0; j < sizeof(x->qs); ++j) {
@@ -5983,7 +5985,9 @@ void ggml_vec_dot_tq1_0_q8_K(int n, float * restrict s, size_t bs, const void * 
         // last 16 bytes of 5-element, along with the 4 bytes of 4 elements
         {
             __m128i qx0 = _mm_loadu_si128((const __m128i *) (x[i].q + 32));
-            __m256i qx5_l = _mm256_cvtepu8_epi16(_mm_broadcastd_epi32(_mm_loadu_si32((const void *) x[i].qs)));
+            uint32_t qs;
+            memcpy(&qs, x[i].qs, sizeof(qs)); // potentially unaligned
+            __m256i qx5_l = _mm256_cvtepu8_epi16(_mm_set1_epi32(qs));
             __m128i qx1 = _mm_add_epi8(qx0, _mm_add_epi8(qx0, qx0)); // 1 * 3
             __m128i qx2 = _mm_add_epi8(_mm_and_si128(_mm_slli_epi16(qx0, 3), _mm_set1_epi8(-8)), qx0); // 1 * 9
             __m128i qx3 = _mm_add_epi8(_mm_and_si128(_mm_slli_epi16(qx1, 3), _mm_set1_epi8(-8)), qx1); // 3 * 9
