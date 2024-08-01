@@ -225,7 +225,7 @@ static void ggml_print_backtrace(void) {
             if (WEXITSTATUS(wstatus) == EXIT_FAILURE) {
                 // gdb failed, fallback to backtrace_symbols
                 ggml_print_backtrace_symbols();
-    }
+            }
         }
     }
 }
@@ -3963,7 +3963,7 @@ struct ggml_tensor * ggml_set_i32 (struct ggml_tensor * tensor, int32_t value) {
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 
     return tensor;
@@ -4022,7 +4022,7 @@ struct ggml_tensor * ggml_set_f32(struct ggml_tensor * tensor, float value) {
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 
     return tensor;
@@ -4137,7 +4137,7 @@ void ggml_set_i32_1d(const struct ggml_tensor * tensor, int i, int32_t value) {
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -4191,7 +4191,7 @@ void ggml_set_i32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, 
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -4268,7 +4268,7 @@ void ggml_set_f32_1d(const struct ggml_tensor * tensor, int i, float value) {
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -4322,7 +4322,7 @@ void ggml_set_f32_nd(const struct ggml_tensor * tensor, int i0, int i1, int i2, 
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -9091,7 +9091,7 @@ static void ggml_compute_forward_dup(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -9571,7 +9571,7 @@ static void ggml_compute_forward_add(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -9949,7 +9949,7 @@ static void ggml_compute_forward_add1(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10074,7 +10074,7 @@ static void ggml_compute_forward_acc(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10155,7 +10155,7 @@ static void ggml_compute_forward_sub(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10249,7 +10249,7 @@ static void ggml_compute_forward_mul(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10340,7 +10340,7 @@ static void ggml_compute_forward_div(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10385,7 +10385,7 @@ static void ggml_compute_forward_sqr(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10430,7 +10430,7 @@ static void ggml_compute_forward_sqrt(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10475,7 +10475,7 @@ static void ggml_compute_forward_log(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10604,7 +10604,7 @@ static void ggml_compute_forward_sum(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10657,7 +10657,7 @@ static void ggml_compute_forward_sum_rows(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10714,7 +10714,7 @@ static void ggml_compute_forward_mean(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10762,7 +10762,7 @@ static void ggml_compute_forward_argmax(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10880,7 +10880,7 @@ static void ggml_compute_forward_repeat(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -10958,7 +10958,7 @@ static void ggml_compute_forward_repeat_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11027,7 +11027,7 @@ static void ggml_compute_forward_concat(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11071,7 +11071,7 @@ static void ggml_compute_forward_abs(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11115,7 +11115,7 @@ static void ggml_compute_forward_sgn(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11159,7 +11159,7 @@ static void ggml_compute_forward_neg(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11203,7 +11203,7 @@ static void ggml_compute_forward_step(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11247,7 +11247,7 @@ static void ggml_compute_forward_tanh(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11291,7 +11291,7 @@ static void ggml_compute_forward_elu(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11335,7 +11335,7 @@ static void ggml_compute_forward_relu(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11379,7 +11379,7 @@ static void ggml_compute_forward_sigmoid(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11438,7 +11438,7 @@ static void ggml_compute_forward_gelu(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11497,7 +11497,7 @@ static void ggml_compute_forward_gelu_quick(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11556,7 +11556,7 @@ static void ggml_compute_forward_silu(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 // ggml_compute_forward_leaky_relu
@@ -11605,7 +11605,7 @@ static void ggml_compute_forward_leaky_relu(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11668,7 +11668,7 @@ static void ggml_compute_forward_silu_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11710,7 +11710,7 @@ static void ggml_compute_forward_hardswish(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11752,7 +11752,7 @@ static void ggml_compute_forward_hardsigmoid(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11824,7 +11824,7 @@ static void ggml_compute_forward_norm(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -11892,7 +11892,7 @@ static void ggml_compute_forward_rms_norm(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -12065,7 +12065,7 @@ static void ggml_compute_forward_rms_norm_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -12159,7 +12159,7 @@ static void ggml_compute_forward_group_norm(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -12270,10 +12270,10 @@ static void ggml_compute_forward_mul_mat(
 
     const enum ggml_type type = src0->type;
 
-    enum ggml_type    const vec_dot_type          = type_traits[type].vec_dot_type;
+    enum ggml_type           const vec_dot_type         = type_traits[type].vec_dot_type;
     ggml_from_float_t        const from_float           = type_traits[vec_dot_type].from_float;
     ggml_from_float_to_mat_t const from_float_to_mat    = type_traits[vec_dot_type].from_float_to_mat;
-    int64_t           const vec_dot_num_rows      = type_traits[type].nrows;
+    int64_t                  const vec_dot_num_rows     = type_traits[type].nrows;
     int64_t                  const matmul_num_cols      = type_traits[type].ncols;
     int64_t                  const blck_size_interleave = type_traits[type].blck_size_interleave;
     ggml_gemv_t              const gemv                 = type_traits[type].gemv;
@@ -12348,7 +12348,7 @@ UseGgmlGemm1:;
                 for (int64_t i11 = i11_processed + ith; i11 < ne11; i11 += nth) {
                     from_float((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11),
                            (void *)               (wdata + i13*nbw3 + i12*nbw2 + i11*nbw1),
-                                           ne10);
+                           ne10);
                 }
             }
         }
@@ -12490,8 +12490,8 @@ static void ggml_compute_forward_mul_mat_id(
 
     const bool src1_cont = ggml_is_contiguous(src1);
 
-    ggml_vec_dot_t    const vec_dot               = type_traits[type].vec_dot;
-    enum ggml_type    const vec_dot_type          = type_traits[type].vec_dot_type;
+    ggml_vec_dot_t    const vec_dot         = type_traits[type].vec_dot;
+    enum ggml_type    const vec_dot_type    = type_traits[type].vec_dot_type;
     ggml_from_float_t const from_float      = type_traits[vec_dot_type].from_float;
     int64_t           const matmul_num_cols = type_traits[type].ncols;
     ggml_gemv_t       const gemv            = type_traits[type].gemv;
@@ -12536,8 +12536,8 @@ static void ggml_compute_forward_mul_mat_id(
             for (int64_t i12 = 0; i12 < ne12; ++i12) {
                 for (int64_t i11 = ith; i11 < ne11; i11 += nth) {
                     from_float((float *)((char *) src1->data + i13*nb13 + i12*nb12 + i11*nb11),
-                                          (void *)               (wdata + i13*nbw3 + i12*nbw2 + i11*nbw1),
-                                           ne10);
+                               (void *)               (wdata + i13*nbw3 + i12*nbw2 + i11*nbw1),
+                               ne10);
                 }
             }
         }
@@ -12927,7 +12927,7 @@ static void ggml_compute_forward_out_prod(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -12987,7 +12987,7 @@ static void ggml_compute_forward_scale(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -13103,7 +13103,7 @@ static void ggml_compute_forward_set(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -13381,7 +13381,7 @@ static void ggml_compute_forward_get_rows(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 
     //static bool first = true;
@@ -13489,7 +13489,7 @@ static void ggml_compute_forward_get_rows_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 
     //static bool first = true;
@@ -13567,7 +13567,7 @@ static void ggml_compute_forward_diag(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -13637,7 +13637,7 @@ static void ggml_compute_forward_diag_mask_inf(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -13655,7 +13655,7 @@ static void ggml_compute_forward_diag_mask_zero(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -13773,7 +13773,7 @@ static void ggml_compute_forward_soft_max(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -13869,7 +13869,7 @@ static void ggml_compute_forward_soft_max_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -13960,7 +13960,7 @@ static void ggml_compute_forward_clamp(
         case GGML_TYPE_COUNT:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -14290,7 +14290,7 @@ static void ggml_compute_forward_rope(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -14314,7 +14314,7 @@ static void ggml_compute_forward_rope_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -14514,7 +14514,7 @@ static void ggml_compute_forward_conv_transpose_1d(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -14686,7 +14686,7 @@ static void ggml_compute_forward_im2col(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -14987,7 +14987,7 @@ static void ggml_compute_forward_upscale(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15045,7 +15045,7 @@ static void ggml_compute_forward_pad(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15086,7 +15086,7 @@ static void ggml_compute_forward_arange(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15137,7 +15137,7 @@ static void ggml_compute_forward_timestep_embedding(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15196,7 +15196,7 @@ static void ggml_compute_forward_argsort(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15419,7 +15419,7 @@ static void ggml_compute_forward_flash_attn_ext(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15755,7 +15755,7 @@ static void ggml_compute_forward_flash_attn_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15877,7 +15877,7 @@ static void ggml_compute_forward_ssm_conv(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -15998,7 +15998,7 @@ static void ggml_compute_forward_ssm_scan(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16061,7 +16061,7 @@ static void ggml_compute_forward_win_part(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16122,7 +16122,7 @@ static void ggml_compute_forward_win_unpart(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16190,7 +16190,7 @@ static void ggml_compute_forward_unary(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16237,7 +16237,7 @@ static void ggml_compute_forward_get_rel_pos(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16318,7 +16318,7 @@ static void ggml_compute_forward_add_rel_pos(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16364,7 +16364,7 @@ static void ggml_compute_forward_map_unary(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16413,7 +16413,7 @@ static void ggml_compute_forward_map_binary(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16612,7 +16612,7 @@ static void ggml_compute_forward_cross_entropy_loss(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -16699,7 +16699,7 @@ static void ggml_compute_forward_cross_entropy_loss_back(
         default:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -17035,7 +17035,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
         case GGML_OP_COUNT:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 }
 
@@ -18063,7 +18063,7 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
         case GGML_OP_COUNT:
             {
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 
     for (int i = 0; i < GGML_MAX_SRC; ++i) {
@@ -18657,7 +18657,7 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
                     fprintf(stderr, "%d\n", node->op);
                 }
                 GGML_ABORT("fatal error");
-    }
+            }
     }
 
     assert(n_tasks > 0);
