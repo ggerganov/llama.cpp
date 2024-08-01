@@ -14811,7 +14811,7 @@ struct llm_build_context {
     }
 
     ggml_cgraph * build_rwkv() {
-        ggml_cgraph *gf = ggml_new_graph_custom(ctx0, LLAMA_MAX_NODES, false);
+        ggml_cgraph *gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
 
         // Input embeddings, start of the model after tokenizing ({n_embd, n_tokens})
         ggml_tensor * input_embeddings = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
