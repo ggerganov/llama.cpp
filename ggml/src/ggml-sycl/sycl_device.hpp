@@ -7,7 +7,7 @@
 
 
 #include <sycl/sycl.hpp>
-#include "dpct/helper.hpp"
+#include "dpct.hpp"
 
 #include "ggml-sycl.h"
 #include "presets.hpp"

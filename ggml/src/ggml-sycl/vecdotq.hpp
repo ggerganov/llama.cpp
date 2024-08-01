@@ -13,7 +13,7 @@
 #ifndef GGML_SYCL_VECDOTQ_HPP
 #define GGML_SYCL_VECDOTQ_HPP
 
-#include "dpct/helper.hpp"
+#include "dpct.hpp"
 
 typedef float (*vec_dot_q_sycl_t)(const void * __restrict__ vbq, const block_q8_1 * __restrict__ bq8_1, const int & iqs);
 

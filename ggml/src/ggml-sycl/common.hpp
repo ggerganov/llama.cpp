@@ -17,7 +17,7 @@
 #include <iostream>
 #include <regex>
 
-#include "dpct/helper.hpp"
+#include "dpct.hpp"
 #include "ggml-sycl.h"
 #include "presets.hpp"
 #include "sycl_hw.hpp"
