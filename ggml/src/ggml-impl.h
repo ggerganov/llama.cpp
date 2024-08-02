@@ -102,6 +102,15 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
     return h;
 }
 
+static inline ggml_bf16_t ggml_make_bf16(uint16_t h) {
+    union {
+        ggml_bf16_t f;
+        uint16_t i;
+    } u;
+    u.i = h;
+    return u.f;
+}
+
 #define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
 #define GGML_BF16_TO_FP32(x) ggml_compute_bf16_to_fp32(x)
 

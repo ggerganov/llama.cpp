@@ -428,12 +428,6 @@ float ggml_bf16_to_fp32(ggml_bf16_t x) {
     return GGML_BF16_TO_FP32(x);  // it just left shifts
 }
 
-ggml_bf16_t ggml_make_bf16(uint16_t x) {
-    ggml_bf16_t bf16_value;
-    bf16_value.bits = x;
-    return bf16_value;
-}
-
 ggml_bf16_t ggml_fp32_to_bf16(float x) {
 #define ggml_fp32_to_bf16 do_not_use__ggml_fp32_to_bf16__in_ggml
     return GGML_FP32_TO_BF16(x);
