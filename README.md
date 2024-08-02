@@ -170,6 +170,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
 - [AIKit](https://github.com/sozercan/aikit) (MIT)
 - [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LARS) (AGPL)
+- [GPUStack - An open-source GPU cluster manager for running LLMs](https://github.com/gpustack/gpustack) (Apache-2.0)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
