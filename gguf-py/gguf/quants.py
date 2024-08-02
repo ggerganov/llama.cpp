@@ -69,12 +69,12 @@ class __Quant(ABC):
     @classmethod
     @abstractmethod
     def quantize_blocks(cls, blocks: np.ndarray) -> np.ndarray:
-        raise NotImplemented
+        raise NotImplementedError
 
     @classmethod
     @abstractmethod
     def dequantize_blocks(cls, blocks: np.ndarray) -> np.ndarray:
-        raise NotImplemented
+        raise NotImplementedError
 
     @classmethod
     def quantize_rows(cls, rows: np.ndarray) -> np.ndarray:

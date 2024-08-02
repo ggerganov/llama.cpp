@@ -1236,6 +1236,7 @@ LlamaFileTypeMap: dict[LlamaFileType, GGMLQuantizationType] = {
     LlamaFileType.MOSTLY_Q4_0_8_8: GGMLQuantizationType.Q4_0_8_8,
 }
 
+
 class GGUFEndian(IntEnum):
     LITTLE = 0
     BIG = 1
