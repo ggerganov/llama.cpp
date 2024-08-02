@@ -1150,8 +1150,6 @@ class GGMLQuantizationType(IntEnum):
     Q4_0_8_8 = 33
     TQ1_0   = 34
     TQ2_0   = 35
-    Q1_3    = 36
-    Q2_2    = 37
 
 
 # TODO: add GGMLFileType from ggml_ftype in ggml.h
@@ -1193,8 +1191,11 @@ class LlamaFileType(IntEnum):
     MOSTLY_IQ4_XS        = 30  # except 1d tensors
     MOSTLY_IQ1_M         = 31  # except 1d tensors
     MOSTLY_BF16          = 32  # except 1d tensors
-    MOSTLY_Q2_2          = 33  # except 1d tensors
-    MOSTLY_Q1_3          = 34  # except 1d tensors
+    MOSTLY_Q4_0_4_4      = 33  # except 1d tensors
+    MOSTLY_Q4_0_4_8      = 34  # except 1d tensors
+    MOSTLY_Q4_0_8_8      = 35  # except 1d tensors
+    MOSTLY_TQ1_0         = 36  # except 1d tensors
+    MOSTLY_TQ2_0         = 37  # except 1d tensors
 
     GUESSED              = 1024  # not specified in the model file
 
@@ -1268,8 +1269,11 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F64:     (1, 8),
     GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
     GGMLQuantizationType.BF16:    (1, 2),
-    GGMLQuantizationType.Q2_2:    (32, 8),
-    GGMLQuantizationType.Q1_3:    (64, 12 + 1),
+    GGMLQuantizationType.Q4_0_4_4:(32, 2 + 16),
+    GGMLQuantizationType.Q4_0_4_8:(32, 2 + 16),
+    GGMLQuantizationType.Q4_0_8_8:(32, 2 + 16),
+    GGMLQuantizationType.TQ1_0:   (256, 2 + 4 * 13),
+    GGMLQuantizationType.TQ2_0:   (256, 2 + 64),
 }
 
 

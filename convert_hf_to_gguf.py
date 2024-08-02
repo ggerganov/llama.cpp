@@ -284,9 +284,6 @@ class Model:
 
             for new_name, data in ((n, d.squeeze().numpy()) for n, d in self.modify_tensors(data_torch, name, bid)):
                 data: np.ndarray  # type hint
-                if len(data.shape) == 0:
-                    # otherwise single-value tensors get squeezed
-                    data = data.reshape((1,))
                 n_dims = len(data.shape)
                 data_dtype = data.dtype
                 data_qtype: gguf.GGMLQuantizationType | None = None
@@ -317,33 +314,12 @@ class Model:
                 ))
 
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
-                    # TODO: cleaner model-specific per-tensor types
-                    # NOTE: Q1_3 is only relevant for BitNet b1.58
-                    if (
-                        self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3
-                        and gguf.can_quantize_to_q1_3(data)
-                        and not any(
-                            self.match_model_tensor_name(new_name, key, None)
-                            for key in [
-                                gguf.MODEL_TENSOR.TOKEN_EMBD,
-                                gguf.MODEL_TENSOR.OUTPUT,
-                            ]
-                        )
-                    ):
-                        data = gguf.quantize_q1_3(data)
-                        assert data.dtype == np.uint8
-                        data_qtype = gguf.GGMLQuantizationType.Q1_3
-
-                    elif self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
+                    if self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
                         data = gguf.quantize_bf16(data)
                         assert data.dtype == np.int16
                         data_qtype = gguf.GGMLQuantizationType.BF16
 
-                    elif (
-                        self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0
-                        or self.ftype == gguf.LlamaFileType.MOSTLY_Q1_3
-                        and gguf.can_quantize_to_q8_0(data)
-                    ):
+                    elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0 and gguf.can_quantize_to_q8_0(data):
                         data = gguf.quantize_q8_0(data)
                         assert data.dtype == np.uint8
                         data_qtype = gguf.GGMLQuantizationType.Q8_0
@@ -1635,12 +1611,6 @@ class LlamaModel(Model):
 class BitnetModel(Model):
     model_arch = gguf.MODEL_ARCH.BITNET
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, *args, **kwargs):
-        if ftype == gguf.LlamaFileType.GUESSED:
-            ftype = gguf.LlamaFileType.MOSTLY_Q1_3
-
-        super().__init__(dir_model, ftype, *args, **kwargs)
-
     def set_vocab(self):
         self._set_vocab_sentencepiece()
 
@@ -1649,16 +1619,16 @@ class BitnetModel(Model):
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
         self.gguf_writer.add_rope_scaling_factor(1.0)
 
-    def weight_quant(self, weight):
+    def weight_quant(self, weight: Tensor) -> Tensor:
         dtype = weight.dtype
         weight = weight.float()
         scale = weight.abs().mean().clamp(min=1e-5)
         iscale = 1 / scale
-        weight = (weight * iscale).round().clamp(-1, 1)
-        # TODO: use the scale directly instead of inverting it twice
+        # TODO: multiply by the scale directly instead of inverting it twice
         # (this is also unnecessarily doubly inverted upstream)
         # ref: https://huggingface.co/1bitLLM/bitnet_b1_58-3B/blob/af89e318d78a70802061246bf037199d2fb97020/utils_quant.py#L10
-        return weight.type(dtype), (1 / iscale).type(torch.float32)
+        result = (weight * iscale).round().clamp(-1, 1) / iscale
+        return result.type(dtype)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         new_name = self.map_tensor_name(name)
@@ -1673,11 +1643,9 @@ class BitnetModel(Model):
             gguf.MODEL_TENSOR.FFN_GATE,
         ]):
             # transform weight into 1/0/-1 (in fp32)
-            weight_torch, scale_torch = self.weight_quant(data_torch)
-            yield (new_name, weight_torch)
-            yield (new_name.removesuffix(".weight") + ".scale", scale_torch)
-        else:
-            yield (new_name, data_torch)
+            data_torch = self.weight_quant(data_torch)
+
+        yield (new_name, data_torch)
 
 
 @Model.register("GrokForCausalLM")
