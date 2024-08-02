@@ -41,7 +41,6 @@ config.auto_map = {
 model.llm.save_pretrained(f"{args.model}/model")
 tok = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
 tok.save_pretrained(f"{args.model}/model")
-# os.system(f"cp {args.model}/modeling_minicpm.py {args.model}/MiniCPM_l3/modeling_minicpm.py")
 
 print("Done!")
 print(f"Now you can convert {args.model} to a regular LLaMA GGUF file.")

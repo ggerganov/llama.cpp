@@ -166,6 +166,7 @@ elif args.minicpmv_projector is not None:
     fname_middle = "mmproj-"
     has_text_encoder = False
     has_minicpmv_projector = True
+    minicpmv_version = 3
 elif args.vision_only:
     fname_middle = "vision-"
     has_text_encoder = False
@@ -190,6 +191,7 @@ elif has_minicpmv_projector:
     fout.add_description("image encoder for MiniCPM-V")
     # add projector type
     fout.add_string("clip.projector_type", "resampler")
+    fout.add_int32("clip.minicpmv_version", minicpmv_version)
 else:
     fout.add_description("two-tower CLIP model")
 
