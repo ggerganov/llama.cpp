@@ -1171,7 +1171,7 @@ struct llm_tokenizer_rwkv {
             // Iterate through possible tokens backwards, starting with the largest
             for (int32_t i = (int32_t)tokens.size() - 1; i >= 0; i--) {
                 // Skip tokens that aren't normal type, we can't match on those
-                if (vocab.id_to_token[i].attr != LLAMA_TOKEN_TYPE_NORMAL) {
+                if (!(vocab.id_to_token[i].attr & LLAMA_TOKEN_ATTR_NORMAL)) {
                     continue;
                 }
 
