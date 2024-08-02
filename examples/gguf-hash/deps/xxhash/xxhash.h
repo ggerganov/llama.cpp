@@ -3739,8 +3739,6 @@ XXH_PUBLIC_API XXH64_hash_t XXH64_hashFromCanonical(XXH_NOESCAPE const XXH64_can
 #if defined(__GNUC__) || defined(__clang__)
 #  if defined(__ARM_FEATURE_SVE)
 #    include <arm_sve.h>
-#    include <sys/prctl.h>
-int ggml_sve_cnt_b = 0;
 #  endif
 #  if defined(__ARM_NEON__) || defined(__ARM_NEON) \
    || (defined(_M_ARM) && _M_ARM >= 7) \
@@ -5497,9 +5495,7 @@ XXH3_accumulate_512_sve( void* XXH_RESTRICT acc,
     const uint64_t *xinput = (const uint64_t *)(const void *)input;
     const uint64_t *xsecret = (const uint64_t *)(const void *)secret;
     svuint64_t kSwap = sveor_n_u64_z(svptrue_b64(), svindex_u64(0, 1), 1);
-    if (!ggml_sve_cnt_b)
-        ggml_sve_cnt_b = PR_SVE_VL_LEN_MASK & prctl(PR_SVE_GET_VL);
-    uint64_t element_count = ggml_sve_cnt_b / 8;
+    uint64_t element_count = svcntd();
     if (element_count >= 8) {
         svbool_t mask = svptrue_pat_b64(SV_VL8);
         svuint64_t vacc = svld1_u64(mask, xacc);
@@ -5541,9 +5537,7 @@ XXH3_accumulate_sve(xxh_u64* XXH_RESTRICT acc,
         const uint64_t *xinput = (const uint64_t *)(const void *)input;
         const uint64_t *xsecret = (const uint64_t *)(const void *)secret;
         svuint64_t kSwap = sveor_n_u64_z(svptrue_b64(), svindex_u64(0, 1), 1);
-        if (!ggml_sve_cnt_b)
-            ggml_sve_cnt_b = PR_SVE_VL_LEN_MASK & prctl(PR_SVE_GET_VL);
-        uint64_t element_count = ggml_sve_cnt_b / 8;
+        uint64_t element_count = svcntd();
         if (element_count >= 8) {
             svbool_t mask = svptrue_pat_b64(SV_VL8);
             svuint64_t vacc = svld1_u64(mask, xacc + 0);
