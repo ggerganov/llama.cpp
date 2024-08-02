@@ -15370,7 +15370,19 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             }
         }
     } else if (name.find("attn_v.weight") != std::string::npos) {
-        if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) {
+        if (qs.model.hparams.n_expert >= 8) {
+            // for the 8-expert model, bumping this to Q8_0 trades just ~128MB
+            // TODO: explore better strategies
+            new_type = GGML_TYPE_Q8_0;
+        }
+        else if (qs.model.hparams.n_gqa() >= 7) {
+            // The Llama 70B models have 8 heads sharing the same attn_v weights (-> GQA 8). As a result, the attn_v.weight tensor is
+            // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
+            // nearly negligible increase in model size by quantizing this tensor with more bits.
+            // That logic applies also to models like Yi 34B (-> GQA 7) and Mistral Large 123B (-> GQA 12).
+            if (new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K) new_type = GGML_TYPE_Q5_K;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K) {
             new_type = (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2) ? GGML_TYPE_Q4_K : GGML_TYPE_Q3_K;
         }
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S && (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2)) {
@@ -15389,26 +15401,15 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             new_type = qs.i_attention_wv < 2 ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
         }
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q5_K;
-        else if ((ftype == LLAMA_FTYPE_MOSTLY_IQ4_NL || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XS) && qs.model.hparams.n_gqa() >= 4) {
+        else if ((ftype == LLAMA_FTYPE_MOSTLY_IQ4_NL || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XS) && (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2)) {
             new_type = GGML_TYPE_Q5_K;
         }
         else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) &&
                 use_more_bits(qs.i_attention_wv, qs.n_attention_wv)) new_type = GGML_TYPE_Q6_K;
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && qs.i_attention_wv < 4) new_type = GGML_TYPE_Q5_K;
-        if (qs.model.type == MODEL_70B) {
-            // In the 70B model we have 8 heads sharing the same attn_v weights. As a result, the attn_v.weight tensor is
-            // 8x smaller compared to attn_q.weight. Hence, we can get a nice boost in quantization accuracy with
-            // nearly negligible increase in model size by quantizing this tensor with more bits:
-            if (new_type == GGML_TYPE_Q3_K || new_type == GGML_TYPE_Q4_K) new_type = GGML_TYPE_Q5_K;
-        }
-        if (qs.model.hparams.n_expert == 8) {
-            // for the 8-expert model, bumping this to Q8_0 trades just ~128MB
-            // TODO: explore better strategies
-            new_type = GGML_TYPE_Q8_0;
-        }
         ++qs.i_attention_wv;
     } else if (name.find("attn_k.weight") != std::string::npos) {
-        if (qs.model.hparams.n_expert == 8) {
+        if (qs.model.hparams.n_expert >= 8) {
             // for the 8-expert model, bumping this to Q8_0 trades just ~128MB
             // TODO: explore better strategies
             new_type = GGML_TYPE_Q8_0;
