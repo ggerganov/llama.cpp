@@ -285,7 +285,7 @@ void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model)
         if (role_model != nullptr) {
             cpuparams = *role_model;
         } else {
-            cpuparams.n_threads = std::thread::hardware_concurrency();
+            cpuparams.n_threads = cpu_get_num_math();
         }
     }
 
