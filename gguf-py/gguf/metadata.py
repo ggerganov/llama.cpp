@@ -284,64 +284,67 @@ class Metadata:
         ########################
         if model_card is not None:
 
-            def use_model_card_metadata(metadata: Any | None, key_name: str):
-                if key_name in model_card and metadata is None:
-                    metadata = model_card.get(key_name)
+            def use_model_card_metadata(metadata_key: str, model_card_key: str):
+                if model_card_key in model_card and getattr(metadata, metadata_key, None) is None:
+                    setattr(metadata, metadata_key, model_card.get(model_card_key))
 
-            def use_array_model_card_metadata(metadata: Any | None, key_name: str):
+            def use_array_model_card_metadata(metadata_key: str, model_card_key: str):
                 # Note: Will append rather than replace if already exist
-                tags_value = model_card.get(key_name, None)
+                tags_value = model_card.get(model_card_key, None)
                 if tags_value is None:
                     return
 
-                if metadata is None:
-                    metadata = []
+                current_value = getattr(metadata, metadata_key, None)
+                if current_value is None:
+                    current_value = []
 
                 if isinstance(tags_value, str):
-                    metadata.append(tags_value)
+                    current_value.append(tags_value)
                 elif isinstance(tags_value, list):
-                    metadata.extend(tags_value)
+                    current_value.extend(tags_value)
+
+                setattr(metadata, metadata_key, current_value)
 
             # LLAMA.cpp's direct internal convention
             # (Definitely not part of hugging face formal/informal standard)
             #########################################
-            use_model_card_metadata(metadata.name, "name")
-            use_model_card_metadata(metadata.author, "author")
-            use_model_card_metadata(metadata.version, "version")
-            use_model_card_metadata(metadata.organization, "organization")
-            use_model_card_metadata(metadata.description, "description")
-            use_model_card_metadata(metadata.finetune, "finetune")
-            use_model_card_metadata(metadata.basename, "basename")
-            use_model_card_metadata(metadata.size_label, "size_label")
-            use_model_card_metadata(metadata.source_url, "url")
-            use_model_card_metadata(metadata.source_doi, "doi")
-            use_model_card_metadata(metadata.source_uuid, "uuid")
-            use_model_card_metadata(metadata.source_repo_url, "repo_url")
+            use_model_card_metadata("name", "name")
+            use_model_card_metadata("author", "author")
+            use_model_card_metadata("version", "version")
+            use_model_card_metadata("organization", "organization")
+            use_model_card_metadata("description", "description")
+            use_model_card_metadata("finetune", "finetune")
+            use_model_card_metadata("basename", "basename")
+            use_model_card_metadata("size_label", "size_label")
+            use_model_card_metadata("source_url", "url")
+            use_model_card_metadata("source_doi", "doi")
+            use_model_card_metadata("source_uuid", "uuid")
+            use_model_card_metadata("source_repo_url", "repo_url")
 
             # LLAMA.cpp's huggingface style convention
             # (Definitely not part of hugging face formal/informal standard... but with model_ appended to match their style)
             ###########################################
-            use_model_card_metadata(metadata.name, "model_name")
-            use_model_card_metadata(metadata.author, "model_author")
-            use_model_card_metadata(metadata.version, "model_version")
-            use_model_card_metadata(metadata.organization, "model_organization")
-            use_model_card_metadata(metadata.description, "model_description")
-            use_model_card_metadata(metadata.finetune, "model_finetune")
-            use_model_card_metadata(metadata.basename, "model_basename")
-            use_model_card_metadata(metadata.size_label, "model_size_label")
-            use_model_card_metadata(metadata.source_url, "model_url")
-            use_model_card_metadata(metadata.source_doi, "model_doi")
-            use_model_card_metadata(metadata.source_uuid, "model_uuid")
-            use_model_card_metadata(metadata.source_repo_url, "model_repo_url")
+            use_model_card_metadata("name", "model_name")
+            use_model_card_metadata("author", "model_author")
+            use_model_card_metadata("version", "model_version")
+            use_model_card_metadata("organization", "model_organization")
+            use_model_card_metadata("description", "model_description")
+            use_model_card_metadata("finetune", "model_finetune")
+            use_model_card_metadata("basename", "model_basename")
+            use_model_card_metadata("size_label", "model_size_label")
+            use_model_card_metadata("source_url", "model_url")
+            use_model_card_metadata("source_doi", "model_doi")
+            use_model_card_metadata("source_uuid", "model_uuid")
+            use_model_card_metadata("source_repo_url", "model_repo_url")
 
             # Hugging Face Direct Convention
             #################################
 
             # Not part of huggingface model card standard but notice some model creator using it
             # such as TheBloke in 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF'
-            use_model_card_metadata(metadata.name, "model_name")
-            use_model_card_metadata(metadata.author, "model_creator")
-            use_model_card_metadata(metadata.basename, "model_type")
+            use_model_card_metadata("name", "model_name")
+            use_model_card_metadata("author", "model_creator")
+            use_model_card_metadata("basename", "model_type")
 
             if "base_model" in model_card:
                 # This represents the parent models that this is based on
@@ -373,18 +376,18 @@ class Metadata:
                         base_model["repo_url"] = f"https://huggingface.co/{org_component}/{model_full_name_component}"
                     metadata.base_models.append(base_model)
 
-            use_model_card_metadata(metadata.license, "license")
-            use_model_card_metadata(metadata.license_name, "license_name")
-            use_model_card_metadata(metadata.license_link, "license_link")
+            use_model_card_metadata("license", "license")
+            use_model_card_metadata("license_name", "license_name")
+            use_model_card_metadata("license_link", "license_link")
 
-            use_array_model_card_metadata(metadata.tags, "tags")
-            use_array_model_card_metadata(metadata.tags, "pipeline_tag")
+            use_array_model_card_metadata("tags", "tags")
+            use_array_model_card_metadata("tags", "pipeline_tag")
 
-            use_array_model_card_metadata(metadata.languages, "languages")
-            use_array_model_card_metadata(metadata.languages, "language")
+            use_array_model_card_metadata("languages", "languages")
+            use_array_model_card_metadata("languages", "language")
 
-            use_array_model_card_metadata(metadata.datasets, "datasets")
-            use_array_model_card_metadata(metadata.datasets, "dataset")
+            use_array_model_card_metadata("datasets", "datasets")
+            use_array_model_card_metadata("datasets", "dataset")
 
         # Hugging Face Parameter Heuristics
         ####################################
