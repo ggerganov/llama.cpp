@@ -233,15 +233,15 @@ static_assert(sizeof(block_q8_0x8) == 8 * sizeof(ggml_half) + QK8_0 * 8, "wrong 
 
 // 1.6875 bpw
 typedef struct {
-    uint8_t q[(QK_K - 4 * QK_K / 64) / 5]; // 5 elements per byte (3^5 = 243 < 256)
-    uint8_t qs[QK_K/64]; // 4 elements per byte
+    uint8_t qs[(QK_K - 4 * QK_K / 64) / 5]; // 5 elements per byte (3^5 = 243 < 256)
+    uint8_t qh[QK_K/64]; // 4 elements per byte
     ggml_half d;
 } block_tq1_0;
 static_assert(sizeof(block_tq1_0) == sizeof(ggml_half) + QK_K / 64 + (QK_K - 4 * QK_K / 64) / 5, "wrong tq1_0 block size/padding");
 
 // 2.0625 bpw
 typedef struct {
-    uint8_t q[QK_K/4]; // 2 bits per element
+    uint8_t qs[QK_K/4]; // 2 bits per element
     ggml_half d;
 } block_tq2_0;
 static_assert(sizeof(block_tq2_0) == sizeof(ggml_half) + QK_K / 4, "wrong tq2_0 block size/padding");

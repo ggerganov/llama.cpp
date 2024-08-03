@@ -3326,7 +3326,7 @@ void quantize_row_tq1_0_ref(const float * restrict x, block_tq1_0 * restrict y, 
         y[i].d = GGML_FP32_TO_FP16(d);
 
         // 5 elements per byte, along 32 bytes
-        for (size_t j = 0; j < sizeof(y->q) - sizeof(y->q) % 32; j += 32) {
+        for (size_t j = 0; j < sizeof(y->qs) - sizeof(y->qs) % 32; j += 32) {
             for (size_t m = 0; m < 32; ++m) {
                 uint8_t q = 0;
                 for (size_t n = 0; n < 5; ++n) {
@@ -3336,12 +3336,12 @@ void quantize_row_tq1_0_ref(const float * restrict x, block_tq1_0 * restrict y, 
                 }
                 // ceiling division (243 == pow(3, 5))
                 q = ((uint16_t)q * 256 + (243 - 1)) / 243;
-                y[i].q[j + m] = q;
+                y[i].qs[j + m] = q;
             }
             x += 5*32;
         }
         // along 16 bytes
-        for (size_t j = sizeof(y->q) - sizeof(y->q) % 32; j < sizeof(y->q); j += 16) {
+        for (size_t j = sizeof(y->qs) - sizeof(y->qs) % 32; j < sizeof(y->qs); j += 16) {
             for (size_t m = 0; m < 16; ++m) {
                 uint8_t q = 0;
                 for (size_t n = 0; n < 5; ++n) {
@@ -3351,16 +3351,16 @@ void quantize_row_tq1_0_ref(const float * restrict x, block_tq1_0 * restrict y, 
                 }
                 // ceiling division (243 == pow(3, 5))
                 q = ((uint16_t)q * 256 + (243 - 1)) / 243;
-                y[i].q[j + m] = q;
+                y[i].qs[j + m] = q;
             }
             x += 5*16;
         }
         // 4 elements per byte
-        for (size_t j = 0; j < sizeof(y->qs); ++j) {
+        for (size_t j = 0; j < sizeof(y->qh); ++j) {
             uint8_t q = 0;
             for (size_t m = 0; m < 4; ++m) {
                 // -1, 0, 1 -> 0, 1, 2
-                int xi = nearest_int(x[j + m*sizeof(y->qs)] * id) + 1;
+                int xi = nearest_int(x[j + m*sizeof(y->qh)] * id) + 1;
                 q *= 3;
                 q += xi;
             }
@@ -3368,9 +3368,9 @@ void quantize_row_tq1_0_ref(const float * restrict x, block_tq1_0 * restrict y, 
             q *= 3;
             // ceiling division (243 == pow(3, 5))
             q = ((uint16_t)q * 256 + (243 - 1)) / 243;
-            y[i].qs[j] = q;
+            y[i].qh[j] = q;
         }
-        x += 4*sizeof(y->qs);
+        x += 4*sizeof(y->qh);
     }
 }
 
@@ -3392,7 +3392,7 @@ void quantize_row_tq2_0_ref(const float * restrict x, block_tq2_0 * restrict y, 
         y[i].d = GGML_FP32_TO_FP16(d);
 
         // TODO: should it be along 64 bytes instead for AVX512?
-        for (size_t j = 0; j < sizeof(y->q); j += 32) {
+        for (size_t j = 0; j < sizeof(y->qs); j += 32) {
             for (size_t m = 0; m < 32; ++m) {
                 uint8_t q = 0;
                 for (size_t n = 0; n < 4; ++n) {
@@ -3400,7 +3400,7 @@ void quantize_row_tq2_0_ref(const float * restrict x, block_tq2_0 * restrict y, 
                     int xi = nearest_int(x[m + n*32] * id) + 1;
                     q += (xi & 3) << (2*n);
                 }
-                y[i].q[j + m] = q;
+                y[i].qs[j + m] = q;
             }
             x += 4*32;
         }
@@ -3444,19 +3444,19 @@ void dequantize_row_tq1_0(const block_tq1_0 * restrict x, float * restrict y, in
 
         const float d = GGML_FP16_TO_FP32(x[i].d);
 
-        for (size_t j = 0; j < sizeof(x->q) - sizeof(x->q) % 32; j += 32) {
+        for (size_t j = 0; j < sizeof(x->qs) - sizeof(x->qs) % 32; j += 32) {
             for (size_t n = 0; n < 5; ++n) {
                 for (size_t m = 0; m < 32; ++m) {
-                    uint8_t q = x[i].q[j + m] * pow3[n];
+                    uint8_t q = x[i].qs[j + m] * pow3[n];
                     int16_t xi = ((uint16_t) q * 3) >> 8;
                     *y++ = (float) (xi - 1) * d;
                 }
             }
         }
-        for (size_t j = sizeof(x->q) - sizeof(x->q) % 32; j < sizeof(x->q); j += 16) {
+        for (size_t j = sizeof(x->qs) - sizeof(x->qs) % 32; j < sizeof(x->qs); j += 16) {
             for (size_t n = 0; n < 5; ++n) {
                 for (size_t m = 0; m < 16; ++m) {
-                    uint8_t q = x[i].q[j + m] * pow3[n];
+                    uint8_t q = x[i].qs[j + m] * pow3[n];
                     int16_t xi = ((uint16_t) q * 3) >> 8;
                     *y++ = (float) (xi - 1) * d;
                 }
@@ -3464,8 +3464,8 @@ void dequantize_row_tq1_0(const block_tq1_0 * restrict x, float * restrict y, in
         }
 
         for (size_t n = 0; n < 4; ++n) {
-            for (size_t j = 0; j < sizeof(x->qs); ++j) {
-                uint8_t q = x[i].qs[j] * pow3[n];
+            for (size_t j = 0; j < sizeof(x->qh); ++j) {
+                uint8_t q = x[i].qh[j] * pow3[n];
                 int16_t xi = ((uint16_t) q * 3) >> 8;
                 *y++ = (float) (xi - 1) * d;
             }
@@ -3481,10 +3481,10 @@ void dequantize_row_tq2_0(const block_tq2_0 * restrict x, float * restrict y, in
 
         const float d = GGML_FP16_TO_FP32(x[i].d);
 
-        for (size_t j = 0; j < sizeof(x->q); j += 32) {
+        for (size_t j = 0; j < sizeof(x->qs); j += 32) {
             for (size_t l = 0; l < 4; ++l) {
                 for (size_t m = 0; m < 32; ++m) {
-                    int8_t q = (x[i].q[j + m] >> (l*2)) & 3;
+                    int8_t q = (x[i].qs[j + m] >> (l*2)) & 3;
                     *y++ = (float) (q - 1) * d;
                 }
             }
@@ -5681,8 +5681,8 @@ void ggml_vec_dot_tq1_0_q8_K(int n, float * restrict s, size_t bs, const void * 
 
         // first 32 bytes of 5 elements
         {
-            uint8x16_t qx0 = vld1q_u8(x[i].q + 0);
-            uint8x16_t qx1 = vld1q_u8(x[i].q + 16);
+            uint8x16_t qx0 = vld1q_u8(x[i].qs + 0);
+            uint8x16_t qx1 = vld1q_u8(x[i].qs + 16);
             uint8x16_t qx2 = vmulq_u8(qx0, vdupq_n_u8(3));
             uint8x16_t qx3 = vmulq_u8(qx1, vdupq_n_u8(3));
             uint8x16_t qx4 = vmulq_u8(qx0, vdupq_n_u8(9));
@@ -5739,14 +5739,14 @@ void ggml_vec_dot_tq1_0_q8_K(int n, float * restrict s, size_t bs, const void * 
 
         // last 16 bytes of 5-element, along with the 4 bytes of 4 elements
         {
-            uint8x16_t qx0 = vld1q_u8(x[i].q + 32);
+            uint8x16_t qx0 = vld1q_u8(x[i].qs + 32);
             uint8x16_t qx1 = vmulq_u8(qx0, vdupq_n_u8(3));
             uint8x16_t qx2 = vmulq_u8(qx0, vdupq_n_u8(9));
             uint8x16_t qx3 = vmulq_u8(qx0, vdupq_n_u8(27));
             uint8x16_t qx4 = vmulq_u8(qx0, vdupq_n_u8(81));
-            uint32_t qs;
-            memcpy(&qs, x[i].qs, sizeof(qs)); // potentially unaligned
-            uint8x16_t qx5 = vreinterpretq_u8_u32(vdupq_n_u32(qs));
+            uint32_t qh;
+            memcpy(&qh, x[i].qh, sizeof(qh)); // potentially unaligned
+            uint8x16_t qx5 = vreinterpretq_u8_u32(vdupq_n_u32(qh));
             qx5 = vmulq_u8(qx5, shift);
 
             // multiply by 3 and keep the 2 bits above 8 bits
@@ -5802,7 +5802,7 @@ void ggml_vec_dot_tq1_0_q8_K(int n, float * restrict s, size_t bs, const void * 
 
         // first 32 bytes of 5 elements
         {
-            __m256i qx0 = _mm256_loadu_si256((const __m256i *) (x[i].q));
+            __m256i qx0 = _mm256_loadu_si256((const __m256i *) (x[i].qs));
             // 8-bit multiplies with shifts, masks and adds
             __m256i qx1 = _mm256_add_epi8(qx0, _mm256_add_epi8(qx0, qx0)); // 1 * 3
             __m256i qx2 = _mm256_add_epi8(_mm256_and_si256(_mm256_slli_epi16(qx0, 3), _mm256_set1_epi8(-8)), qx0); // 1 * 9
@@ -5848,10 +5848,10 @@ void ggml_vec_dot_tq1_0_q8_K(int n, float * restrict s, size_t bs, const void * 
 
         // last 16 bytes of 5-element, along with the 4 bytes of 4 elements
         {
-            __m128i qx0 = _mm_loadu_si128((const __m128i *) (x[i].q + 32));
-            uint32_t qs;
-            memcpy(&qs, x[i].qs, sizeof(qs)); // potentially unaligned
-            __m256i qx5_l = _mm256_cvtepu8_epi16(_mm_set1_epi32(qs));
+            __m128i qx0 = _mm_loadu_si128((const __m128i *) (x[i].qs + 32));
+            uint32_t qh;
+            memcpy(&qh, x[i].qh, sizeof(qh)); // potentially unaligned
+            __m256i qx5_l = _mm256_cvtepu8_epi16(_mm_set1_epi32(qh));
             __m128i qx1 = _mm_add_epi8(qx0, _mm_add_epi8(qx0, qx0)); // 1 * 3
             __m128i qx2 = _mm_add_epi8(_mm_and_si128(_mm_slli_epi16(qx0, 3), _mm_set1_epi8(-8)), qx0); // 1 * 9
             __m128i qx3 = _mm_add_epi8(_mm_and_si128(_mm_slli_epi16(qx1, 3), _mm_set1_epi8(-8)), qx1); // 3 * 9
@@ -5911,19 +5911,19 @@ void ggml_vec_dot_tq1_0_q8_K(int n, float * restrict s, size_t bs, const void * 
     for (int i = 0; i < nb; ++i) {
         int sum = 0;
 
-        for (size_t j = 0; j < sizeof(x->q) - sizeof(x->q) % 32; j += 32) {
+        for (size_t j = 0; j < sizeof(x->qs) - sizeof(x->qs) % 32; j += 32) {
             for (size_t l = 0; l < 5; ++l) {
                 for (size_t m = 0; m < 32; ++m) {
-                    uint8_t q = x[i].q[j + m] * pow3[l];
+                    uint8_t q = x[i].qs[j + m] * pow3[l];
                     uint16_t xi = ((uint16_t) q * 3) >> 8;
                     sum += (xi - 1) * y[i].qs[j*5 + l*32 + m];
                 }
             }
         }
-        for (size_t j = sizeof(x->q) - sizeof(x->q) % 32; j < sizeof(x->q); j += 16) {
+        for (size_t j = sizeof(x->qs) - sizeof(x->qs) % 32; j < sizeof(x->qs); j += 16) {
             for (size_t l = 0; l < 5; ++l) {
                 for (size_t m = 0; m < 16; ++m) {
-                    uint8_t q = x[i].q[j + m] * pow3[l];
+                    uint8_t q = x[i].qs[j + m] * pow3[l];
                     uint16_t xi = ((uint16_t) q * 3) >> 8;
                     sum += (xi - 1) * y[i].qs[j*5 + l*16 + m];
                 }
@@ -5931,10 +5931,10 @@ void ggml_vec_dot_tq1_0_q8_K(int n, float * restrict s, size_t bs, const void * 
         }
 
         for (size_t l = 0; l < 4; ++l) {
-            for (size_t j = 0; j < sizeof(x->qs); ++j) {
-                uint8_t q = x[i].qs[j] * pow3[l];
+            for (size_t j = 0; j < sizeof(x->qh); ++j) {
+                uint8_t q = x[i].qh[j] * pow3[l];
                 uint16_t xi = ((uint16_t) q * 3) >> 8;
-                sum += (xi - 1) * y[i].qs[sizeof(x->q)*5 + l*sizeof(x->qs) + j];
+                sum += (xi - 1) * y[i].qs[sizeof(x->qs)*5 + l*sizeof(x->qh) + j];
             }
         }
 
@@ -5966,9 +5966,9 @@ void ggml_vec_dot_tq2_0_q8_K(int n, float * restrict s, size_t bs, const void * 
         int16x8_t sumi0 = vdupq_n_s16(0);
         int16x8_t sumi1 = vdupq_n_s16(0);
 
-        for (size_t j = 0; j < sizeof(x->q); j += 32) {
-            uint8x16_t qx0 = vld1q_u8(x[i].q + j);
-            uint8x16_t qx1 = vld1q_u8(x[i].q + j + 16);
+        for (size_t j = 0; j < sizeof(x->qs); j += 32) {
+            uint8x16_t qx0 = vld1q_u8(x[i].qs + j);
+            uint8x16_t qx1 = vld1q_u8(x[i].qs + j + 16);
             uint8x16_t qx2 = vshrq_n_u8(qx0, 2);
             uint8x16_t qx3 = vshrq_n_u8(qx1, 2);
             uint8x16_t qx4 = vshrq_n_u8(qx0, 4);
@@ -6033,8 +6033,8 @@ void ggml_vec_dot_tq2_0_q8_K(int n, float * restrict s, size_t bs, const void * 
         __m256i sumi0 = _mm256_setzero_si256();
         __m256i sumi1 = _mm256_setzero_si256();
 
-        for (size_t j = 0; j < sizeof(x->q); j += 32) {
-            __m256i qx0 = _mm256_loadu_si256((const __m256i *) (x[i].q + j));
+        for (size_t j = 0; j < sizeof(x->qs); j += 32) {
+            __m256i qx0 = _mm256_loadu_si256((const __m256i *) (x[i].qs + j));
             __m256i qx1 = _mm256_srli_epi16(qx0, 2);
             __m256i qx2 = _mm256_srli_epi16(qx0, 4);
             __m256i qx3 = _mm256_srli_epi16(qx0, 6);
@@ -6077,10 +6077,10 @@ void ggml_vec_dot_tq2_0_q8_K(int n, float * restrict s, size_t bs, const void * 
     for (int i = 0; i < nb; ++i) {
         int32_t sumi = 0;
 
-        for (size_t j = 0; j < sizeof(x->q); j += 32) {
+        for (size_t j = 0; j < sizeof(x->qs); j += 32) {
             for (size_t l = 0; l < 4; ++l) {
                 for (size_t k = 0; k < 32; ++k) {
-                    sumi += y[i].qs[j*4 + l*32 + k] * (((x[i].q[j + k] >> (l*2)) & 3) - 1);
+                    sumi += y[i].qs[j*4 + l*32 + k] * (((x[i].qs[j + k] >> (l*2)) & 3) - 1);
                 }
             }
         }
