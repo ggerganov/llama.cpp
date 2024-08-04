@@ -301,20 +301,25 @@ class Model:
                 ):
                     data_qtype = gguf.GGMLQuantizationType.F32
 
+                # No override (data_qtype is False), or wants to be quantized (data_qtype is True)
                 if isinstance(data_qtype, bool):
-                    data_qtype = gguf.LlamaFileTypeMap.get(self.ftype, gguf.GGMLQuantizationType.F32)
-
-                if data_qtype == gguf.GGMLQuantizationType.Q8_0:
-                    if gguf.quants.Q8_0.can_quantize(data):
-                        data = gguf.quants.Q8_0.quantize(data)
-                    else:  # fallback to f16
+                    if self.ftype == gguf.LlamaFileType.ALL_F32:
+                        data_qtype = gguf.GGMLQuantizationType.F32
+                    elif self.ftype == gguf.LlamaFileType.MOSTLY_F16:
                         data_qtype = gguf.GGMLQuantizationType.F16
-                if data_qtype == gguf.GGMLQuantizationType.BF16:
-                    data = gguf.quants.BF16.quantize(data)
-                if data_qtype == gguf.GGMLQuantizationType.F16:
-                    data = data.astype(np.float16, copy=False)
-                if data_qtype == gguf.GGMLQuantizationType.F32:
-                    data = data.astype(np.float32, copy=False)
+                    elif self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
+                        data_qtype = gguf.GGMLQuantizationType.BF16
+                    elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0:
+                        data_qtype = gguf.GGMLQuantizationType.Q8_0
+                    else:
+                        raise ValueError(f"Unknown file type: {self.ftype.name}")
+
+                try:
+                    data = gguf.quants.quantize(data, data_qtype)
+                except gguf.QuantError as e:
+                    logger.warning("%s, %s", e, "falling back to F16")
+                    data_qtype = gguf.GGMLQuantizationType.F16
+                    data = gguf.quants.quantize(data, data_qtype)
 
                 shape = gguf.quant_shape_from_byte_shape(data.shape, data_qtype) if data.dtype == np.uint8 else data.shape
 

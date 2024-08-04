@@ -1196,47 +1196,6 @@ class LlamaFileType(IntEnum):
     GUESSED              = 1024  # not specified in the model file
 
 
-# Default quantization type for each file type
-# Keep this the same as in llama_model_quantize_internal from llama.cpp
-LlamaFileTypeMap: dict[LlamaFileType, GGMLQuantizationType] = {
-    LlamaFileType.MOSTLY_Q4_0: GGMLQuantizationType.Q4_0,
-    LlamaFileType.MOSTLY_Q4_1: GGMLQuantizationType.Q4_1,
-    LlamaFileType.MOSTLY_Q5_0: GGMLQuantizationType.Q5_0,
-    LlamaFileType.MOSTLY_Q5_1: GGMLQuantizationType.Q5_1,
-    LlamaFileType.MOSTLY_Q8_0: GGMLQuantizationType.Q8_0,
-    LlamaFileType.MOSTLY_F16:  GGMLQuantizationType.F16,
-    LlamaFileType.MOSTLY_BF16: GGMLQuantizationType.BF16,
-    LlamaFileType.ALL_F32:     GGMLQuantizationType.F32,
-
-    # K-quants
-    LlamaFileType.MOSTLY_Q2_K_S:  GGMLQuantizationType.Q2_K,
-    LlamaFileType.MOSTLY_Q2_K:    GGMLQuantizationType.Q2_K,
-    LlamaFileType.MOSTLY_IQ3_XS:  GGMLQuantizationType.IQ3_S,
-    LlamaFileType.MOSTLY_Q3_K_S:  GGMLQuantizationType.Q3_K,
-    LlamaFileType.MOSTLY_Q3_K_M:  GGMLQuantizationType.Q3_K,
-    LlamaFileType.MOSTLY_Q3_K_L:  GGMLQuantizationType.Q3_K,
-    LlamaFileType.MOSTLY_Q4_K_S:  GGMLQuantizationType.Q4_K,
-    LlamaFileType.MOSTLY_Q4_K_M:  GGMLQuantizationType.Q4_K,
-    LlamaFileType.MOSTLY_Q5_K_S:  GGMLQuantizationType.Q5_K,
-    LlamaFileType.MOSTLY_Q5_K_M:  GGMLQuantizationType.Q5_K,
-    LlamaFileType.MOSTLY_Q6_K:    GGMLQuantizationType.Q6_K,
-    LlamaFileType.MOSTLY_IQ2_XXS: GGMLQuantizationType.IQ2_XXS,
-    LlamaFileType.MOSTLY_IQ2_XS:  GGMLQuantizationType.IQ2_XS,
-    LlamaFileType.MOSTLY_IQ2_S:   GGMLQuantizationType.IQ2_XS,
-    LlamaFileType.MOSTLY_IQ2_M:   GGMLQuantizationType.IQ2_S,
-    LlamaFileType.MOSTLY_IQ3_XXS: GGMLQuantizationType.IQ3_XXS,
-    LlamaFileType.MOSTLY_IQ1_S:   GGMLQuantizationType.IQ1_S,
-    LlamaFileType.MOSTLY_IQ1_M:   GGMLQuantizationType.IQ1_M,
-    LlamaFileType.MOSTLY_IQ4_NL:  GGMLQuantizationType.IQ4_NL,
-    LlamaFileType.MOSTLY_IQ4_XS:  GGMLQuantizationType.IQ4_XS,
-    LlamaFileType.MOSTLY_IQ3_S:   GGMLQuantizationType.IQ3_S,
-    LlamaFileType.MOSTLY_IQ3_M:   GGMLQuantizationType.IQ3_S,
-    LlamaFileType.MOSTLY_Q4_0_4_4: GGMLQuantizationType.Q4_0_4_4,
-    LlamaFileType.MOSTLY_Q4_0_4_8: GGMLQuantizationType.Q4_0_4_8,
-    LlamaFileType.MOSTLY_Q4_0_8_8: GGMLQuantizationType.Q4_0_8_8,
-}
-
-
 class GGUFEndian(IntEnum):
     LITTLE = 0
     BIG = 1

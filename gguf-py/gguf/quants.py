@@ -46,6 +46,32 @@ def np_roundf(n: np.ndarray) -> np.ndarray:
     return np.sign(n) * b
 
 
+class QuantError(Exception): ...
+
+
+_type_traits: dict[GGMLQuantizationType, type[__Quant]] = {}
+
+
+def quantize(data: np.ndarray, qtype: GGMLQuantizationType) -> np.ndarray:
+    if qtype == GGMLQuantizationType.F32:
+        return data.astype(np.float32, copy=False)
+    elif qtype == GGMLQuantizationType.F16:
+        return data.astype(np.float16, copy=False)
+    elif (q := _type_traits.get(qtype)) is not None:
+        return q.quantize(data)
+    else:
+        raise NotImplementedError(f"Quantization for {qtype.name} is not yet implemented")
+
+
+def dequantize(data: np.ndarray, qtype: GGMLQuantizationType) -> np.ndarray:
+    if qtype == GGMLQuantizationType.F32 or qtype == GGMLQuantizationType.F16:
+        return data.astype(np.float32, copy=False)
+    elif (q := _type_traits.get(qtype)) is not None:
+        return q.dequantize(data)
+    else:
+        raise NotImplementedError(f"Dequantization for {qtype.name} is not yet implemented")
+
+
 class __Quant(ABC):
     qtype: GGMLQuantizationType
     block_size: int
@@ -65,6 +91,8 @@ class __Quant(ABC):
             cls.__dequantize_array,
             meta_noop=(np.float32, cls.__shape_from_bytes)
         )
+        assert qtype not in _type_traits
+        _type_traits[qtype] = cls
 
     @classmethod
     @abstractmethod
@@ -115,26 +143,28 @@ class __Quant(ABC):
         return _apply_over_grouped_rows(cls.dequantize_rows, arr=array, otype=np.float32, oshape=cls.__shape_from_bytes(array.shape))
 
     @classmethod
-    def __quantize_lazy(cls, lazy_tensor: Any, /) -> Any:
+    def __quantize_lazy(cls, lazy_tensor: LazyNumpyTensor, /) -> Any:
         pass
 
     @classmethod
-    def __dequantize_lazy(cls, lazy_tensor: Any, /) -> Any:
+    def __dequantize_lazy(cls, lazy_tensor: LazyNumpyTensor, /) -> Any:
         pass
 
     @classmethod
-    def can_quantize(cls, tensor: np.ndarray) -> bool:
+    def can_quantize(cls, tensor: np.ndarray | LazyNumpyTensor) -> bool:
         return tensor.shape[-1] % cls.block_size == 0
 
     @classmethod
-    def quantize(cls, tensor: np.ndarray | LazyNumpyTensor):
+    def quantize(cls, tensor: np.ndarray | LazyNumpyTensor) -> np.ndarray:
+        if not cls.can_quantize(tensor):
+            raise QuantError(f"Can't quantize tensor with shape {tensor.shape} to {cls.qtype.name}")
         if isinstance(tensor, LazyNumpyTensor):
             return cls.__quantize_lazy(tensor)
         else:
             return cls.__quantize_array(tensor)
 
     @classmethod
-    def dequantize(cls, tensor: np.ndarray | LazyNumpyTensor):
+    def dequantize(cls, tensor: np.ndarray | LazyNumpyTensor) -> np.ndarray:
         if isinstance(tensor, LazyNumpyTensor):
             return cls.__dequantize_lazy(tensor)
         else:
