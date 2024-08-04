@@ -3351,7 +3351,7 @@ int main(int argc, char ** argv) {
 
     const auto handle_lora_adapters_apply = [&](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-    
+
         const std::vector<json> body = json::parse(req.body);
         int max_idx = ctx_server.params.lora_adapters.size();
 
