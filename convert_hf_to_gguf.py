@@ -48,7 +48,7 @@ class Model:
 
     dir_model: Path
     ftype: gguf.LlamaFileType
-    fname_out: Path | None
+    fname_out: Path
     is_big_endian: bool
     endianess: gguf.GGUFEndian
     use_temp_file: bool
@@ -62,11 +62,12 @@ class Model:
     gguf_writer: gguf.GGUFWriter
     model_name: str | None
     metadata_override: Path | None
+    dir_model_card: Path
 
     # subclasses should define this!
     model_arch: gguf.MODEL_ARCH
 
-    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path | None, is_big_endian: bool = False,
+    def __init__(self, dir_model: Path, ftype: gguf.LlamaFileType, fname_out: Path, is_big_endian: bool = False,
                  use_temp_file: bool = False, eager: bool = False,
                  metadata_override: Path | None = None, model_name: str | None = None,
                  split_max_tensors: int = 0, split_max_size: int = 0, dry_run: bool = False, small_first_shard: bool = False):
@@ -90,6 +91,7 @@ class Model:
         self.tensor_names = None
         self.metadata_override = metadata_override
         self.model_name = model_name
+        self.dir_model_card = dir_model  # overridden in convert_lora_to_gguf.py
 
         # Apply heuristics to figure out typical tensor encoding based on first layer tensor encoding type
         if self.ftype == gguf.LlamaFileType.GUESSED:
@@ -237,6 +239,10 @@ class Model:
             self.gguf_writer.add_expert_used_count(n_experts_used)
             logger.info(f"gguf: experts used count = {n_experts_used}")
 
+        if (head_dim := self.hparams.get("head_dim")) is not None:
+            self.gguf_writer.add_key_length(head_dim)
+            self.gguf_writer.add_value_length(head_dim)
+
         self.gguf_writer.add_file_type(self.ftype)
         logger.info(f"gguf: file type = {self.ftype}")
 
@@ -310,7 +316,7 @@ class Model:
                 if self.ftype != gguf.LlamaFileType.ALL_F32 and extra_f16 and not extra_f32:
                     if self.ftype == gguf.LlamaFileType.MOSTLY_BF16:
                         data = gguf.quantize_bf16(data)
-                        assert data.dtype == np.int16
+                        assert data.dtype == np.uint16
                         data_qtype = gguf.GGMLQuantizationType.BF16
 
                     elif self.ftype == gguf.LlamaFileType.MOSTLY_Q8_0 and gguf.can_quantize_to_q8_0(data):
@@ -345,7 +351,7 @@ class Model:
 
         total_params, shared_params, expert_params, expert_count = self.gguf_writer.get_total_parameter_count()
 
-        self.metadata = gguf.Metadata.load(self.metadata_override, self.dir_model, self.model_name, total_params)
+        self.metadata = gguf.Metadata.load(self.metadata_override, self.dir_model_card, self.model_name, total_params)
 
         # Fallback to model directory name if metadata name is still missing
         if self.metadata.name is None:
@@ -359,27 +365,22 @@ class Model:
         output_type: str = self.ftype.name.partition("_")[2]
 
         # Filename Output
-        # Note: `not is_dir()` is used because `.is_file()` will not detect
-        #       file template strings as it doesn't actually exist as a file
-        if self.fname_out is not None and not self.fname_out.is_dir():
-            # Output path is a custom defined templated filename
-
-            # Process templated file name with the output ftype, useful with the "auto" ftype
-            self.fname_out = self.fname_out.parent / gguf.fill_templated_filename(self.fname_out.name, output_type)
-        else:
+        if self.fname_out.is_dir():
             # Generate default filename based on model specification and available metadata
             if not vocab_only:
                 fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, self.metadata.size_label, output_type, model_type="LoRA" if total_params < 0 else None)
             else:
                 fname_default: str = gguf.naming_convention(self.metadata.name, self.metadata.basename, self.metadata.finetune, self.metadata.version, size_label=None, output_type=None, model_type="vocab")
 
-            # Check if preferred output directory path was provided
-            if self.fname_out is not None and self.fname_out.is_dir():
-                # output path is a directory
-                self.fname_out = self.fname_out / f"{fname_default}.gguf"
-            else:
-                # output in the same directory as the model by default
-                self.fname_out = self.dir_model / f"{fname_default}.gguf"
+            # Use the default filename
+            self.fname_out = self.fname_out / f"{fname_default}.gguf"
+        else:
+            # Output path is a custom defined templated filename
+            # Note: `not is_dir()` is used because `.is_file()` will not detect
+            #       file template strings as it doesn't actually exist as a file
+
+            # Process templated file name with the output ftype, useful with the "auto" ftype
+            self.fname_out = self.fname_out.parent / gguf.fill_templated_filename(self.fname_out.name, output_type)
 
         self.set_type()
 
@@ -593,6 +594,15 @@ class Model:
         if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
             # ref: https://huggingface.co/core42/jais-13b
             res = "jais"
+        if chkhsh == "7b3e7548e4308f52a76e8229e4e6cc831195d0d1df43aed21ac6c93da05fec5f":
+            # ref: https://huggingface.co/WisdomShell/CodeShell-7B
+            res = "codeshell"
+        if chkhsh == "63b97e4253352e6f357cc59ea5b583e3a680eaeaf2632188c2b952de2588485e":
+            # ref: https://huggingface.co/mistralai/Mistral-Nemo-Base-2407
+            res = "tekken"
+        if chkhsh == "855059429035d75a914d1eda9f10a876752e281a054a7a3d421ef0533e5b6249":
+            # ref: https://huggingface.co/HuggingFaceTB/SmolLM-135M
+            res = "smollm"
 
         if res is None:
             logger.warning("\n")
@@ -733,7 +743,7 @@ class Model:
                 added_tokens_json = json.load(f)
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
-                    if (token_id >= vocab_size):
+                    if token_id >= vocab_size:
                         logger.warning(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                         continue
 
@@ -750,7 +760,8 @@ class Model:
                     token_id = int(token_id)
                     token: str = token_data["content"]
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert tokens[token_id] == token.encode("utf-8")
+                        if tokens[token_id] != token.encode("utf-8"):
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token!r}')
                     if token_data.get("special") or self.does_token_look_special(token):
                         toktypes[token_id] = SentencePieceTokenTypes.CONTROL
                     else:
@@ -1309,6 +1320,7 @@ class RefactModel(Model):
         special_vocab._set_special_token("prefix", 1)
         special_vocab._set_special_token("suffix", 3)
         special_vocab._set_special_token("middle", 2)
+        special_vocab.chat_template = None  # do not add it twice
         special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
@@ -1479,7 +1491,12 @@ class LlamaModel(Model):
         super().set_gguf_parameters()
         hparams = self.hparams
         self.gguf_writer.add_vocab_size(hparams["vocab_size"])
-        self.gguf_writer.add_rope_dimension_count(hparams["hidden_size"] // hparams["num_attention_heads"])
+
+        if "head_dim" in hparams:
+            rope_dim = hparams["head_dim"]
+        else:
+            rope_dim = hparams["hidden_size"] // hparams["num_attention_heads"]
+        self.gguf_writer.add_rope_dimension_count(rope_dim)
 
         if self.hparams.get("rope_scaling") is not None and "factor" in self.hparams["rope_scaling"]:
             if self.hparams["rope_scaling"].get("type") == "linear":
@@ -1553,6 +1570,34 @@ class LlamaModel(Model):
         return [(self.map_tensor_name(name), data_torch)]
 
     def prepare_tensors(self):
+        if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
+            if rope_scaling.get("rope_type", '').lower() == "llama3":
+                base = self.hparams.get("rope_theta", 10000.0)
+                dim = self.hparams["hidden_size"] // self.hparams["num_attention_heads"]
+                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+
+                factor = rope_scaling.get("factor", 8.0)
+                low_freq_factor = rope_scaling.get("low_freq_factor", 1.0)
+                high_freq_factor = rope_scaling.get("high_freq_factor", 4.0)
+                old_context_len = self.hparams.get("original_max_position_embeddings", 8192)
+
+                low_freq_wavelen = old_context_len / low_freq_factor
+                high_freq_wavelen = old_context_len / high_freq_factor
+                assert low_freq_wavelen != high_freq_wavelen
+
+                rope_factors = []
+                for freq in freqs:
+                    wavelen = 2 * math.pi / freq
+                    if wavelen < high_freq_wavelen:
+                        rope_factors.append(1)
+                    elif wavelen > low_freq_wavelen:
+                        rope_factors.append(factor)
+                    else:
+                        smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
+                        rope_factors.append(1 / ((1 - smooth) / factor + smooth))
+
+                self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
+
         super().prepare_tensors()
 
         if self._experts is not None:
@@ -1994,7 +2039,7 @@ class Phi3MiniModel(Model):
 
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
-                    if (token_id >= vocab_size):
+                    if token_id >= vocab_size:
                         logger.debug(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                         continue
 
@@ -2011,7 +2056,8 @@ class Phi3MiniModel(Model):
                     token_id = int(token_id)
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert tokens[token_id] == token
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2027,7 +2073,8 @@ class Phi3MiniModel(Model):
                     token_id = int(foken_data["id"])
                     token = foken_data["content"].encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert tokens[token_id] == token
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2065,10 +2112,11 @@ class Phi3MiniModel(Model):
         self.gguf_writer.add_rope_dimension_count(rope_dims)
         self.gguf_writer.add_rope_freq_base(self.find_hparam(["rope_theta"]))
         self.gguf_writer.add_file_type(self.ftype)
+        self.gguf_writer.add_sliding_window(self.find_hparam(["sliding_window"]))
 
         # write rope scaling for long context (128k) model
         rope_scaling = self.find_hparam(['rope_scaling'], True)
-        if (rope_scaling is None):
+        if rope_scaling is None:
             return
 
         scale = max_pos_embds / orig_max_pos_embds
@@ -2266,7 +2314,8 @@ class InternLM2Model(Model):
                         chat_eos_token_id = token_id
                     token = token.encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert(tokens[token_id] == token)
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2285,7 +2334,8 @@ class InternLM2Model(Model):
                         chat_eos_token_id = token_id
                     token = token.encode("utf-8")
                     if toktypes[token_id] != SentencePieceTokenTypes.UNUSED:
-                        assert(tokens[token_id] == token)
+                        if tokens[token_id] != token:
+                            logger.warning(f'replacing token {token_id}: {tokens[token_id].decode("utf-8")!r} -> {token.decode("utf-8")!r}')
                     tokens[token_id] = token
                     scores[token_id] = -1000.0
                     toktypes[token_id] = SentencePieceTokenTypes.USER_DEFINED
@@ -2471,6 +2521,7 @@ class GemmaModel(Model):
         special_vocab._set_special_token("middle", 68)
         special_vocab._set_special_token("fsep",   70)
         special_vocab._set_special_token("eot",    107)
+        special_vocab.chat_template = None  # do not add it twice
         special_vocab.add_to_gguf(self.gguf_writer)
 
         self.gguf_writer.add_add_space_prefix(False)
@@ -2712,7 +2763,7 @@ class JinaBertV2Model(BertModel):
 
             yield name, data
 
-    def set_vocab(self, *args, **kwargs):
+    def set_vocab(self):
         tokenizer_class = 'BertTokenizer'
         with open(self.dir_model / "tokenizer_config.json", "r", encoding="utf-8") as f:
             tokenizer_class = json.load(f)['tokenizer_class']
@@ -2860,7 +2911,7 @@ class ArcticModel(Model):
                     added_tokens_decoder = tokenizer_config_json["added_tokens_decoder"]
                     for token_id, token_json in added_tokens_decoder.items():
                         token_id = int(token_id)
-                        if (token_id >= vocab_size):
+                        if token_id >= vocab_size:
                             logger.debug(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                             continue
 
@@ -3109,7 +3160,7 @@ class T5Model(Model):
                 added_tokens_json = json.load(f)
                 for key in added_tokens_json:
                     token_id = added_tokens_json[key]
-                    if (token_id >= vocab_size):
+                    if token_id >= vocab_size:
                         logger.warning(f'ignore token {token_id}: id is out of range, max={vocab_size - 1}')
                         continue
 
@@ -3624,10 +3675,10 @@ def main() -> None:
         logger.error("Error: Cannot use temp file when splitting")
         sys.exit(1)
 
-    fname_out = None
-
     if args.outfile is not None:
         fname_out = args.outfile
+    else:
+        fname_out = dir_model
 
     logger.info(f"Loading model: {dir_model.name}")
 
@@ -3658,7 +3709,6 @@ def main() -> None:
         else:
             logger.info("Exporting model...")
             model_instance.write()
-            assert model_instance.fname_out is not None
             out_path = f"{model_instance.fname_out.parent}{os.sep}" if is_split else model_instance.fname_out
             logger.info(f"Model successfully exported to {out_path}")
 
