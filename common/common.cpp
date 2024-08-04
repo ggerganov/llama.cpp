@@ -702,6 +702,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         });
         return true;
     }
+    if (arg == "--lora-no-apply") {
+        params.lora_no_apply = true;
+        return true;
+    }
     if (arg == "--control-vector") {
         CHECK_ARG
         params.control_vectors.push_back({ 1.0f, argv[i], });
