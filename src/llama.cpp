@@ -14814,7 +14814,6 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
 
         int32_t * data = (int32_t *) lctx.inp_pos_bucket->data;
 
-
         if (!lctx.is_encoding) {
             const int64_t n_kv = kv_self.n;
             for (int h = 0; h < 1; ++h) {
@@ -15280,7 +15279,7 @@ static int llama_encode_internal(
 
     const int64_t n_embd = hparams.n_embd;
 
-    lctx.sbatch.from_batch(batch, n_embd, true, true);
+    lctx.sbatch.from_batch(batch, n_embd, /* simple_split */ true, /* logits_all */ true);
 
     const llama_ubatch ubatch = lctx.sbatch.split_simple(n_tokens);
 
