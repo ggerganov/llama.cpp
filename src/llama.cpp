@@ -5652,7 +5652,6 @@ static void llm_load_vocab(
                 vocab.special_eom_id = t->second;
             }
         }
-
     }
 
     // build special tokens cache
