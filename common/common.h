@@ -33,6 +33,12 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
+struct llama_lora_adapter_container {
+    std::string path;
+    float scale;
+    struct llama_lora_adapter * adapter;
+};
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
 extern char const * LLAMA_COMMIT;
@@ -126,8 +132,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
 
-    // TODO: avoid tuple, use struct
-    std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
+    bool lora_no_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_lora_adapter_apply)
+    std::vector<llama_lora_adapter_container> lora_adapters; // lora adapter path with user defined scale
 
     std::vector<llama_control_vector_load_info> control_vectors; // control vector with user defined scale
 
@@ -316,6 +322,9 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
 struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+
+// clear LoRA adapters from context, then apply new list of adapters
+void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lora_adapter_container> & lora_adapters);
 
 // Batch utils
 
