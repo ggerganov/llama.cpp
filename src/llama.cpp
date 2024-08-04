@@ -5647,11 +5647,9 @@ static void llm_load_vocab(
         // TODO: convert scripts should provide this token through the KV metadata LLAMA_KV_TOKENIZER_EOM_ID
         //       for now, we apply this workaround to find the EOM token based on its text
         if (vocab.special_eom_id == -1) {
-            for (const auto & t : vocab.token_to_id) {
-                if (t.first == "<|eom_id|>") {
-                    vocab.special_eom_id = t.second;
-                    break;
-                }
+            const auto & t = vocab.token_to_id.find("<|eom_id|>");
+            if (t != vocab.token_to_id.end()) {
+                vocab.special_eom_id = t->second;
             }
         }
 
