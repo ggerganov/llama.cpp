@@ -38,6 +38,7 @@ class Metadata:
     license: Optional[str] = None
     license_name: Optional[str] = None
     license_link: Optional[str] = None
+    license_content: Optional[str] = None
     base_models: Optional[list[dict]] = None
     tags: Optional[list[str]] = None
     languages: Optional[list[str]] = None
@@ -379,6 +380,7 @@ class Metadata:
             use_model_card_metadata("license", "license")
             use_model_card_metadata("license_name", "license_name")
             use_model_card_metadata("license_link", "license_link")
+            use_model_card_metadata("license_content", "license_content")
 
             use_array_model_card_metadata("tags", "tags")
             use_array_model_card_metadata("tags", "pipeline_tag")
@@ -431,6 +433,14 @@ class Metadata:
             if metadata.size_label is None and size_label is not None:
                 metadata.size_label = size_label
 
+        # Detect LICENSE file and include a copy
+        #########################################
+        if metadata.license_content is None:
+            standard_license_file_path = Path("LICENSE")
+            if standard_license_file_path.is_file():
+                with open(standard_license_file_path, 'r') as file:
+                    metadata.license_content = file.read()
+
         return metadata
 
     def set_gguf_meta_model(self, gguf_writer: gguf.GGUFWriter):
@@ -463,6 +473,8 @@ class Metadata:
             gguf_writer.add_license_name(self.license_name)
         if self.license_link is not None:
             gguf_writer.add_license_link(self.license_link)
+        if self.license_content is not None:
+            gguf_writer.add_license_content(self.license_content)
 
         if self.url is not None:
             gguf_writer.add_url(self.url)
