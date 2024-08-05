@@ -69,11 +69,21 @@ int ggml_sve_cnt_b = 0;
 #endif
 #include <windows.h>
 
+#if !defined(__clang__)
 typedef volatile LONG atomic_int;
 typedef atomic_int atomic_bool;
 typedef atomic_int atomic_flag;
 
 #define ATOMIC_FLAG_INIT 0
+
+typedef enum {
+    memory_order_relaxed,
+    memory_order_consume,
+    memory_order_acquire,
+    memory_order_release,
+    memory_order_acq_rel,
+    memory_order_seq_cst
+} memory_order;
 
 static void atomic_store(atomic_int * ptr, LONG val) {
     InterlockedExchange(ptr, val);
@@ -81,11 +91,16 @@ static void atomic_store(atomic_int * ptr, LONG val) {
 static LONG atomic_load(atomic_int * ptr) {
     return InterlockedCompareExchange(ptr, 0, 0);
 }
+static LONG atomic_load_explicit(atomic_int * ptr, memory_order mo) {
+    // TODO: add support for explicit memory order
+    return InterlockedCompareExchange(ptr, 0, 0);
+}
 static LONG atomic_fetch_add(atomic_int * ptr, LONG inc) {
     return InterlockedExchangeAdd(ptr, inc);
 }
-static LONG atomic_fetch_sub(atomic_int * ptr, LONG dec) {
-    return atomic_fetch_add(ptr, -(dec));
+static LONG atomic_fetch_add_explicit(atomic_int * ptr, LONG inc, memory_order mo) {
+    // TODO: add support for explicit memory order
+    return InterlockedExchangeAdd(ptr, inc);
 }
 static atomic_bool atomic_flag_test_and_set(atomic_flag * ptr) {
     return InterlockedExchange(ptr, 1);
@@ -93,6 +108,9 @@ static atomic_bool atomic_flag_test_and_set(atomic_flag * ptr) {
 static void atomic_flag_clear(atomic_flag * ptr) {
     InterlockedExchange(ptr, 0);
 }
+#else // clang
+#include <stdatomic.h>
+#endif
 
 typedef HANDLE pthread_t;
 
@@ -3030,6 +3048,19 @@ static_assert(GGML_UNARY_OP_COUNT == 13, "GGML_UNARY_OP_COUNT != 13");
 static_assert(sizeof(struct ggml_object)%GGML_MEM_ALIGN == 0, "ggml_object size must be a multiple of GGML_MEM_ALIGN");
 static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size must be a multiple of GGML_MEM_ALIGN");
 
+// Helpers for polling loops
+#if defined(__aarch64__) && ( defined(__clang__) || defined(__GNUC__) )
+static inline void __cpu_relax(void) {
+    __asm__ volatile("yield" ::: "memory");
+}
+#elif defined(__x86_64__)
+static inline void __cpu_relax(void) {
+    _mm_pause();
+}
+#else
+static inline void __cpu_relax(void) {;}
+#endif
+
 //
 // NUMA support
 //
@@ -3094,25 +3125,19 @@ static void ggml_barrier(struct ggml_compute_threadpool * threadpool) {
     atomic_int * n_barrier_passed = &threadpool->n_barrier_passed;
 
     int n_threads = threadpool->n_threads_cur;
-    int passed_old = atomic_load(n_barrier_passed);
+    int passed_old = atomic_load_explicit(n_barrier_passed, memory_order_relaxed);
 
     if (atomic_fetch_add(n_barrier, 1) == n_threads - 1) {
         // last thread
         atomic_store(n_barrier, 0);
-        atomic_fetch_add(n_barrier_passed, 1);
+        atomic_fetch_add_explicit(n_barrier_passed, 1, memory_order_relaxed);
     } else {
         // wait for other threads
-        const int n_spin_before_sleep = 100000;
         while (true) {
-            for (int i = 0; i < n_spin_before_sleep; i++) {
-                if (atomic_load(n_barrier_passed) != passed_old) {
-                    return;
-                }
-            #if defined(__SSE3__)
-                _mm_pause();
-            #endif
+            if (atomic_load_explicit(n_barrier_passed, memory_order_relaxed) != passed_old) {
+                return;
             }
-            sched_yield();
+            __cpu_relax();
         }
     }
 }
@@ -18798,18 +18823,6 @@ static bool __thread_priority(int32_t prio) {
     return true;
 }
 
-#endif
-
-#if defined(__aarch64__) && ( defined(__clang__) || defined(__GNUC__) )
-static inline void __cpu_relax(void) {
-    __asm__ volatile("yield" ::: "memory");
-}
-#elif defined(__x86_64__)
-static inline void __cpu_relax(void) {
-    _mm_pause();
-}
-#else
-static inline void __cpu_relax(void) {;}
 #endif
 
 static void __cpumask_next(const bool * global_mask, bool * local_mask, bool strict, int32_t* iter) {
