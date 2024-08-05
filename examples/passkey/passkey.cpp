@@ -26,8 +26,6 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    srand(params.seed == LLAMA_DEFAULT_SEED ? time(NULL) : params.seed);
-
     int n_junk = params.n_junk;
     int n_keep = params.n_keep;
     int n_grp  = params.grp_attn_n;
@@ -80,11 +78,12 @@ int main(int argc, char ** argv) {
     GGML_ASSERT(ctx_params.n_batch % n_grp == 0 && "n_batch must be divisible by n_grp");
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
-
     if (ctx == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
         return 1;
     }
+
+    llama_sampling * smpl = llama_sampling_init(model, llama_sampling_default_params());
 
     // tokenize the prompt
     std::vector<llama_token> tokens_list;
@@ -217,20 +216,12 @@ int main(int argc, char ** argv) {
     while (n_cur <= n_len) {
         // sample the next token
         {
-            auto   n_vocab = llama_n_vocab(model);
-            auto * logits  = llama_get_logits_ith(ctx, batch.n_tokens - 1);
+            const auto * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
 
-            std::vector<llama_token_data> candidates;
-            candidates.reserve(n_vocab);
-
-            for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-                candidates.emplace_back(llama_token_data{ token_id, logits[token_id], 0.0f });
-            }
-
-            llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+            llama_sampling_set_logits(smpl, logits);
 
             // sample the most likely token
-            const llama_token new_token_id = llama_sample_token_greedy(ctx, &candidates_p);
+            const llama_token new_token_id = llama_sampling_sample_greedy(smpl, nullptr);
 
             // is it an end of generation?
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
@@ -267,12 +258,13 @@ int main(int argc, char ** argv) {
     LOG_TEE("%s: decoded %d tokens in %.2f s, speed: %.2f t/s\n",
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, nullptr);
 
     fprintf(stderr, "\n");
 
     llama_batch_free(batch);
 
+    llama_sampling_free(smpl);
     llama_free(ctx);
     llama_free_model(model);
 
