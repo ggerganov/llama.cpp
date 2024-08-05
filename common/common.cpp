@@ -2039,16 +2039,8 @@ std::string fs_get_cache_file(const std::string & filename) {
 //
 // Model utils
 //
-struct llama_init_result llama_init_default_params() {
-    struct llama_init_result result = {
-        /*.llama_model                =*/ nullptr,
-        /*.llama_context              =*/ nullptr,
-    };
-    return result;
-}
-
 struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
-    auto iparams = llama_init_default_params();
+    llama_init_result iparams;
     auto mparams = llama_model_params_from_gpt_params(params);
 
     llama_model * model = nullptr;

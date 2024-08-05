@@ -309,11 +309,10 @@ std::string fs_get_cache_file(const std::string & filename);
 //
 
 struct llama_init_result {
-    struct llama_model * model;
-    struct llama_context * context;
+    struct llama_model * model = nullptr;
+    struct llama_context * context = nullptr;
 };
 
-struct llama_init_result    llama_init_default_params();
 struct llama_init_result    llama_init_from_gpt_params(gpt_params & params);
 
 struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
