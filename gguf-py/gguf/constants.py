@@ -70,11 +70,6 @@ class Keys:
         BASE_MODEL_UUID            = "general.base_model.{id}.uuid"
         BASE_MODEL_REPO_URL        = "general.base_model.{id}.repo_url" # Model Source Repository (git/svn/etc...)
 
-        # Array based KV stores
-        TAGS                       = "general.tags"
-        LANGUAGES                  = "general.languages"
-        DATASETS                   = "general.datasets"
-
         # Dataset Source
         DATASET_COUNT           = "general.dataset.count"
         DATASET_NAME            = "general.dataset.{id}.name"
@@ -86,6 +81,10 @@ class Keys:
         DATASET_DOI             = "general.dataset.{id}.doi"
         DATASET_UUID            = "general.dataset.{id}.uuid"
         DATASET_REPO_URL        = "general.dataset.{id}.repo_url" # Model Source Repository (git/svn/etc...)
+
+        # Array based KV stores
+        TAGS                       = "general.tags"
+        LANGUAGES                  = "general.languages"
 
     class LLM:
         VOCAB_SIZE                        = "{arch}.vocab_size"
