@@ -2007,13 +2007,7 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-    }
-
-    fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
-
-    std::mt19937 rng(params.seed);
+    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -2054,7 +2048,7 @@ int main(int argc, char ** argv) {
         results = perplexity(ctx, params, n_ctx);
     }
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, nullptr);
     write_logfile(ctx, params, model, results);
 
     llama_free(ctx);
