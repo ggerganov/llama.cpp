@@ -703,9 +703,9 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
         // \p{Ll} --> \p{Ll} to \p{Ll}  // has subcategory ? yes
         // \p{Lu} --> \p{Lu} to \p{Lu}  // has subcategory ? yes
         // \p{L}  --> \p{Ll} to \p{Lu}  // has subcategory ? no
-        GGML_ASSERT((COLLAPSE_CPT_RANGE_FIRST & 0b111) == 0);
+        GGML_ASSERT((COLLAPSE_CPT_RANGE_FIRST & 0x7) == 0);
         const uint32_t collapsed = category_to_collapsed_cpt(categ);
-        const uint32_t range = (collapsed & 0b111) ? 0 : 0b111;  // has subcategory ?
+        const uint32_t range = (collapsed & 0x7) ? 0 : 0x7;  // has subcategory ?
         return std::pair<uint32_t, uint32_t>(collapsed, collapsed + range);
     };
 
