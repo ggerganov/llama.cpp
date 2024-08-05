@@ -945,21 +945,20 @@ GGML_CALL static void ggml_backend_cann_buffer_set_tensor(
 GGML_CALL static void ggml_backend_cann_buffer_get_tensor(
     ggml_backend_buffer_t buffer, const ggml_tensor* tensor, void* data,
     size_t offset, size_t size) {
-    GGML_ASSERT(size == ggml_nbytes(tensor));
     ggml_backend_cann_buffer_context* ctx =
         (ggml_backend_cann_buffer_context*)buffer->context;
 
     ggml_cann_set_device(ctx->device);
 
     if (!need_transform(tensor->type)) {
-        ACL_CHECK(aclrtMemcpy((char*)data + offset, size, tensor->data, size,
+        ACL_CHECK(aclrtMemcpy(data, size, (char*)tensor->data + offset, size,
                               ACL_MEMCPY_DEVICE_TO_HOST));
     } else {
         void* transform_buffer = malloc(size);
-        ACL_CHECK(aclrtMemcpy(transform_buffer, size, tensor->data, size,
+        ACL_CHECK(aclrtMemcpy(transform_buffer, size,
+                              (char*)tensor->data + offset, size,
                               ACL_MEMCPY_DEVICE_TO_HOST));
-        ggml_backend_cann_transform_back(tensor, transform_buffer,
-                                         (char*)data + offset);
+        ggml_backend_cann_transform_back(tensor, transform_buffer, data);
         free(transform_buffer);
     }
 }
