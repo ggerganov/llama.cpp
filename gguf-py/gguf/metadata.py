@@ -381,7 +381,6 @@ class Metadata:
             use_model_card_metadata("license", "license")
             use_model_card_metadata("license_name", "license_name")
             use_model_card_metadata("license_link", "license_link")
-            use_model_card_metadata("license_content", "license_content")
 
             use_array_model_card_metadata("tags", "tags")
             use_array_model_card_metadata("tags", "pipeline_tag")
@@ -436,11 +435,12 @@ class Metadata:
 
         # Detect LICENSE file and include a copy
         #########################################
-        if metadata.license_content is None:
-            standard_license_file_path = Path("LICENSE")
-            if standard_license_file_path.is_file():
-                with open(standard_license_file_path, 'r') as file:
-                    metadata.license_content = file.read()
+        if isinstance(metadata.license_link, str) and not (metadata.license_link.startswith("http://") or metadata.license_link.startswith("https://")):
+            if metadata.license_content is None:
+                standard_license_file_path = Path("LICENSE")
+                if standard_license_file_path.is_file():
+                    with open(standard_license_file_path, 'r') as file:
+                        metadata.license_content = file.read()
 
         return metadata
 
