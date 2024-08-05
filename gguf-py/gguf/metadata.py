@@ -78,6 +78,7 @@ class Metadata:
         metadata.size_label      = metadata_override.get(Keys.General.SIZE_LABEL,      metadata.size_label)
         metadata.license_name    = metadata_override.get(Keys.General.LICENSE_NAME,    metadata.license_name)
         metadata.license_link    = metadata_override.get(Keys.General.LICENSE_LINK,    metadata.license_link)
+        metadata.license_content = metadata_override.get(Keys.General.LICENSE_CONTENT, metadata.license_content)
 
         metadata.url             = metadata_override.get(Keys.General.URL,             metadata.url)
         metadata.doi             = metadata_override.get(Keys.General.DOI,             metadata.doi)
