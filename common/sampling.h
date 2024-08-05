@@ -2,8 +2,6 @@
 
 #include "llama.h"
 
-#include "grammar-parser.h"
-
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -73,23 +71,22 @@ struct llama_sampling_context {
     // mirostat sampler state
     float mirostat_mu;
 
-    llama_grammar * grammar;
+    bool owned;
 
-    // internal
-    grammar_parser::parse_state parsed_grammar;
+    llama_sampling * smpl;
 
     // TODO: replace with ring-buffer
     std::vector<llama_token>      prev;
     std::vector<llama_token_data> cur;
-    size_t n_valid; // Number of correct top tokens with correct probabilities.
 
-    std::mt19937 rng;
+    size_t n_valid; // Number of correct top tokens with correct probabilities.
 };
 
 #include "common.h"
 
 // Create a new sampling context instance.
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params);
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, const struct llama_model * model);
+struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_sampling * smpl);
 
 void llama_sampling_free(struct llama_sampling_context * ctx);
 
@@ -97,9 +94,6 @@ void llama_sampling_free(struct llama_sampling_context * ctx);
 // - clear prev tokens
 // - reset grammar
 void llama_sampling_reset(llama_sampling_context * ctx);
-
-// Set the sampler seed
-void llama_sampling_set_rng_seed(struct llama_sampling_context * ctx, uint32_t seed);
 
 // Copy the sampler context
 void llama_sampling_cp(llama_sampling_context * src, llama_sampling_context * dst);
@@ -155,6 +149,5 @@ llama_token_data_array llama_sampling_prepare(
 
 void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,
-        struct llama_context * ctx_main,
         llama_token id,
         bool apply_grammar);

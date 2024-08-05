@@ -161,7 +161,7 @@ int main(int argc, char ** argv) {
     for (size_t i = 0; i < clients.size(); ++i) {
         auto & client = clients[i];
         client.id = i;
-        client.ctx_sampling = llama_sampling_init(params.sparams);
+        client.ctx_sampling = llama_sampling_init(params.sparams, model);
     }
 
     std::vector<llama_token> tokens_system;
@@ -343,7 +343,7 @@ int main(int argc, char ** argv) {
 
                 const llama_token id = llama_sampling_sample(client.ctx_sampling, ctx, NULL, client.i_batch - i);
 
-                llama_sampling_accept(client.ctx_sampling, ctx, id, true);
+                llama_sampling_accept(client.ctx_sampling, id, true);
 
                 if (client.n_decoded == 1) {
                     // start measuring generation time after the first token to make sure all concurrent clients
@@ -371,7 +371,7 @@ int main(int argc, char ** argv) {
                     }
 
                     // delete only the generated part of the sequence, i.e. keep the system prompt in the cache
-                    llama_kv_cache_seq_rm(ctx, client.id + 1, -1, -1);
+                    llama_kv_cache_seq_rm(ctx,    client.id + 1, -1, -1);
                     llama_kv_cache_seq_cp(ctx, 0, client.id + 1, -1, -1);
 
                     const auto t_main_end = ggml_time_us();
@@ -413,7 +413,8 @@ int main(int argc, char ** argv) {
 
     LOG_TEE("\n");
 
-    llama_print_timings(ctx);
+    // TODO: print sampling/grammar timings for all clients
+    llama_print_timings(ctx, nullptr);
 
     llama_batch_free(batch);
 

@@ -2054,7 +2054,7 @@ int main(int argc, char ** argv) {
         results = perplexity(ctx, params, n_ctx);
     }
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, nullptr);
     write_logfile(ctx, params, model, results);
 
     llama_free(ctx);

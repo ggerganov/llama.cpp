@@ -1,7 +1,10 @@
 #pragma once
 
-#define LLAMA_API_INTERNAL
 #include "llama.h"
+
+#include <random>
+#include <string>
+#include <vector>
 
 #ifdef __GNUC__
 #ifdef __MINGW32__
@@ -39,3 +42,7 @@ static void replace_all(std::string & s, const std::string & search, const std::
         pos += replace.length();
     }
 }
+
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
+    struct llama_context * ctx
+);

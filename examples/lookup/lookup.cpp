@@ -106,7 +106,7 @@ int main(int argc, char ** argv){
 
     bool has_eos = false;
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams);
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, llama_get_sampling(ctx));
 
     std::vector<llama_token> draft;
 
@@ -132,7 +132,7 @@ int main(int argc, char ** argv){
             // sample from the target model
             llama_token id = llama_sampling_sample(ctx_sampling, ctx, NULL, i_dft);
 
-            llama_sampling_accept(ctx_sampling, ctx, id, true);
+            llama_sampling_accept(ctx_sampling, id, true);
 
             const std::string token_str = llama_token_to_piece(ctx, id);
 
@@ -241,7 +241,7 @@ int main(int argc, char ** argv){
     LOG_TEE("accept       = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
     LOG_TEE("\ntarget:\n");
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, ctx_sampling->smpl);
 
     llama_sampling_free(ctx_sampling);
     llama_batch_free(batch_tgt);

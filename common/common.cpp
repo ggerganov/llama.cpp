@@ -2161,7 +2161,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         }
         llama_kv_cache_clear(lctx);
         llama_synchronize(lctx);
-        llama_reset_timings(lctx);
+        llama_reset_timings(lctx, nullptr);
     }
 
     iparams.model   = model;
