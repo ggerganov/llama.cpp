@@ -694,7 +694,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
             case codepoint_categ::P:     return COLLAPSE_CPT_RANGE_FIRST + ((5 << 3) | subindex);
             case codepoint_categ::S:     return COLLAPSE_CPT_RANGE_FIRST + ((6 << 3) | subindex);
             case codepoint_categ::Z:     return COLLAPSE_CPT_RANGE_FIRST + ((7 << 3) | subindex);
-            default: GGML_ASSERT(false); return COLLAPSE_CPT_RANGE_FIRST;
+            default:                     GGML_ABORT("invalid category");
         }
     };
 
@@ -708,6 +708,8 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
         const uint32_t range = (collapsed & 0x7) ? 0 : 0x7;  // has subcategory ?
         return std::pair<uint32_t, uint32_t>(collapsed, collapsed + range);
     };
+
+    GGML_ASSERT(sizeof(wchar_t) == sizeof(u_int32_t));
 
     const auto cpts = unicode_cpts_from_utf8(text);
 
@@ -756,7 +758,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
         wregex_whitespaces += L"\\s";
         for (uint32_t cpt : unicode_vec_whitespace) {
             if (cpt >= 0x80) {  // non-ASCII whitespaces
-                if (wregex_whitespaces.back() + 1 == cpt) {
+                if (wregex_whitespaces.back() + 1 == (wchar_t) cpt) {
                     if (*(wregex_whitespaces.end() - 2) == '-') {
                         wregex_whitespaces.back() = cpt;
                     } else {
@@ -764,7 +766,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                         wregex_whitespaces += cpt;
                     }
                 } else {
-                    wregex_whitespaces += cpt;
+                    wregex_whitespaces += (wchar_t) cpt;
                 }
             }
         }
@@ -847,7 +849,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                 }
                 // (2) Build a list of codepoint ranges. (2.2) [Optimization] Only build lists of ranges present in the regex.
                 categ.set_flag(codepoint_categ::WHITESPACE, inside_square);  //NOTE: reusing flag 'WHITESPACE' to store 'inside square brackets'
-                regex_expr_categs.emplace_back(i, categ);
+                regex_expr_categs.emplace_back((uint32_t)i, categ);
                 i += cpts_regex[i + 4] == '}' ? 4 : 5;
                 continue;
             }
@@ -855,7 +857,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
             if (cpt == '\\') {
                 if (cpts_regex[i + 1] == 's' || cpts_regex[i + 1] == 'S') {  // \s \S
                     // (2) Build a list of codepoint ranges. (2.2) [Optimization] Only build lists of ranges present in the regex.
-                    regex_expr_categs.emplace_back(i, categ_whitespace);
+                    regex_expr_categs.emplace_back((uint32_t)i, categ_whitespace);
                     //NOTE: reusing flag 'WHITESPACE' to store 'inside square brackets'
                     regex_expr_categs.back().second.set_flag(codepoint_categ::WHITESPACE, inside_square);
                     i += 1;
@@ -875,9 +877,9 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                     case 't':  ++i;  cpt = '\t';  break;
                     case 'r':  ++i;  cpt = '\r';  break;
                     case 'n':  ++i;  cpt = '\n';  break;
-                    case 'x':  GGML_ABORT("TODO");  break;  //TODO: hex values
-                    case 'u':  GGML_ABORT("TODO");  break;  //TODO: unicode values
-                    case 'U':  GGML_ABORT("TODO");  break;  //TODO: unicode values
+                    case 'x':  GGML_ABORT("TODO");  //TODO: hex values
+                    case 'u':  GGML_ABORT("TODO");  //TODO: unicode values
+                    case 'U':  GGML_ABORT("TODO");  //TODO: unicode values
                     default:  // escaped character
                         GGML_ASSERT(!is_cpt_range);
                         cpt = cpts_regex[++i];

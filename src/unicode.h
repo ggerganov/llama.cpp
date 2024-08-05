@@ -149,7 +149,7 @@ struct codepoint_categ {
                 return 0;
             }
             const char * p = strchr(subcategs, subcateg);
-            return p ? (p - subcategs + 1) : 0;
+            return (uint16_t) (p ? (p - subcategs + 1) : 0);
         };
         switch(categ) {
             case 'C':  if(subcateg == 'n') return 0;  // undefined
