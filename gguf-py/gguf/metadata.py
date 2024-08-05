@@ -400,6 +400,8 @@ class Metadata:
                             if org_component is not None and model_full_name_component is not None:
                                 base_model["repo_url"] = f"https://huggingface.co/{org_component}/{model_full_name_component}"
 
+                    elif isinstance(model_id, dict):
+                        base_model = model_id
                     else:
                         logger.error(f"base model entry '{str(model_id)}' not in a known format")
                     metadata.base_models.append(base_model)
@@ -454,6 +456,8 @@ class Metadata:
                             if org_component is not None and dataset_name_component is not None:
                                 dataset["repo_url"] = f"https://huggingface.co/{org_component}/{dataset_name_component}"
 
+                    elif isinstance(dataset_id, dict):
+                        dataset = dataset_id
                     else:
                         logger.error(f"dataset entry '{str(dataset_id)}' not in a known format")
                     metadata.datasets.append(dataset)
