@@ -120,7 +120,7 @@ static void ggml_cann_log(enum ggml_log_level level, const char* format, ...) {
             file, line);
     GGML_CANN_LOG_ERROR("  %s\n", stmt);
     // abort with GGML_ASSERT to get a stack trace
-    GGML_ASSERT(!"CANN error");
+    GGML_ABORT("CANN error");
 }
 
 /**
@@ -342,7 +342,7 @@ struct ggml_cann_pool_leg : public ggml_cann_pool {
         // memory should always buffered. these memory may still needed by
         // tasks in stream.
         // TODO, fix me.
-        GGML_ASSERT(!"Cann buffer pool full, increase MAX_CANN_BUFFERS\n");
+        GGML_ABORT("Cann buffer pool full, increase MAX_CANN_BUFFERS\n");
     }
 };
 
@@ -627,7 +627,6 @@ GGML_CALL static void* ggml_backend_cann_buffer_get_base(
 GGML_CALL static void ggml_backend_cann_transform_q4_0(ggml_tensor* tensor,
                                                        const void* src,
                                                        void* dst) {
-    GGML_ASSERT(tensor->op == GGML_OP_NONE);
 
     int64_t n_elems = ggml_nelements(tensor);
     int64_t groups = n_elems / QK4_0;
@@ -679,7 +678,6 @@ GGML_CALL static void ggml_backend_cann_transform_q4_0(ggml_tensor* tensor,
  */
 GGML_CALL static void ggml_backend_cann_transform_back_q4_0(
     const ggml_tensor* tensor, void* src, void* dst) {
-    GGML_ASSERT(tensor->op == GGML_OP_NONE);
 
     int64_t n_elems = ggml_nelements(tensor);
     int64_t groups = n_elems / QK4_0;
@@ -1559,23 +1557,18 @@ GGML_CALL static bool ggml_backend_cann_cpy_tensor_async(
             return false;
         }
 
+        // need open both directions for memcpyasync between devices.
+        ggml_cann_set_device(cann_ctx_dst->device);
+        ACL_CHECK(aclrtDeviceEnablePeerAccess(cann_ctx_src->device, 0));
         ggml_cann_set_device(cann_ctx_src->device);
         ACL_CHECK(aclrtDeviceEnablePeerAccess(cann_ctx_dst->device, 0));
+
         ACL_CHECK(aclrtMemcpyAsync(dst->data, copy_size, src->data, copy_size,
                                    ACL_MEMCPY_DEVICE_TO_DEVICE,
-                                   cann_ctx_dst->stream()));
+                                   cann_ctx_src->stream()));
 
-        // record event on src stream
-        if (!cann_ctx_src->copy_event) {
-            ACL_CHECK(aclrtCreateEvent(&cann_ctx_src->copy_event));
-        }
-
-        ACL_CHECK(
-            aclrtRecordEvent(cann_ctx_src->copy_event, cann_ctx_src->stream()));
-
-        // wait on dst stream for the copy to complete
-        ACL_CHECK(aclrtStreamWaitEvent(cann_ctx_dst->stream(),
-                                       cann_ctx_src->copy_event));
+        //TODO: workaround for Event didn`t work here.
+        aclrtSynchronizeStream(cann_ctx_src->stream());
     } else {
         // src and dst are on the same backend
         ACL_CHECK(aclrtMemcpyAsync(dst->data, copy_size, src->data, copy_size,
@@ -1671,10 +1664,17 @@ GGML_CALL static bool ggml_backend_cann_supports_op(ggml_backend_t backend,
             }
         case GGML_OP_MUL_MAT: {
             switch (op->src[0]->type) {
-                // case GGML_TYPE_Q4_0:
                 case GGML_TYPE_F16:
                 case GGML_TYPE_F32:
                 case GGML_TYPE_Q8_0:
+                    // TODO: fix me
+                    // Current groupsize should not be greater than k-1 in
+                    // aclnnWeightQuantBatchMatmulV2GetWorkspaceSize().
+                    if (op->src[0]->ne[0]-1 > QK8_0) {
+                        return true;
+                    }
+                    return false;
+                case GGML_TYPE_Q4_0:
                     return true;
                 default:
                     return false;
@@ -1699,6 +1699,7 @@ GGML_CALL static bool ggml_backend_cann_supports_op(ggml_backend_t backend,
                 case GGML_TYPE_F32:
                 case GGML_TYPE_F16:
                 case GGML_TYPE_Q8_0:
+                case GGML_TYPE_Q4_0:
                     return true;
                 default:
                     return false;
@@ -1763,8 +1764,8 @@ static bool ggml_backend_buft_is_cann(ggml_backend_buffer_type_t buft) {
  *
  * This function determines whether the CANN backend supports the given backend
  * buffer type by comparing the device context of the backend and buffer type.
- * It returns true if the device associated with the buffer type matches the
- * device associated with the backend.
+ * It returns true if the devices are same between the backend context and
+ * buffer type context.
  *
  * @param backend Pointer to the CANN backend.
  * @param buft Pointer to the backend buffer type to check.
@@ -1773,9 +1774,14 @@ static bool ggml_backend_buft_is_cann(ggml_backend_buffer_type_t buft) {
  */
 GGML_CALL static bool ggml_backend_cann_supports_buft(
     ggml_backend_t backend, ggml_backend_buffer_type_t buft) {
-    return buft->iface.get_name == ggml_backend_cann_buffer_type_name;
-
-    GGML_UNUSED(backend);
+    if (ggml_backend_buft_is_cann(buft)) {
+        ggml_backend_cann_context * cann_ctx =
+                        (ggml_backend_cann_context *)backend->context;
+        ggml_backend_cann_buffer_type_context * buft_ctx =
+                        (ggml_backend_cann_buffer_type_context *)buft->context;
+        return buft_ctx->device == cann_ctx->device;
+    }
+    return false;
 }
 
 /**
@@ -1874,7 +1880,7 @@ static void ggml_backend_cann_event_wait(ggml_backend_t backend,
         ACL_CHECK(aclrtStreamWaitEvent(cann_ctx->stream(),
                                        (aclrtEvent)event->context));
     } else {
-        GGML_ASSERT(false);
+        GGML_ABORT("fatal error");
     }
 }
 

@@ -254,18 +254,8 @@
 
 #define GGML_PAD(x, n) (((x) + (n) - 1) & ~((n) - 1))
 
-#define GGML_ASSERT(x) \
-    do { \
-        if (!(x)) { \
-            fflush(stdout); \
-            fprintf(stderr, "GGML_ASSERT: %s:%d: %s\n", __FILE__, __LINE__, #x); \
-            ggml_print_backtrace(); \
-            abort(); \
-        } \
-    } while (0)
-
 #ifndef NDEBUG
-#define GGML_UNREACHABLE() GGML_ASSERT(!"statement should not be reached")
+#define GGML_UNREACHABLE() do { fprintf(stderr, "statement should be unreachable\n"); abort(); } while(0)
 #elif defined(__GNUC__)
 #define GGML_UNREACHABLE() __builtin_unreachable()
 #elif defined(_MSC_VER)
@@ -273,6 +263,17 @@
 #else
 #define GGML_UNREACHABLE() ((void) 0)
 #endif
+
+#ifdef __cplusplus
+#define GGML_NORETURN [[noreturn]]
+#elif defined(_MSC_VER)
+#define GGML_NORETURN __declspec(noreturn)
+#else
+#define GGML_NORETURN _Noreturn
+#endif
+
+#define GGML_ABORT(...) ggml_abort(__FILE__, __LINE__, __VA_ARGS__)
+#define GGML_ASSERT(x) if (!(x)) GGML_ABORT("GGML_ASSERT(%s) failed", #x)
 
 // used to copy the number of elements and stride in bytes of tensors into local variables.
 // main purpose is to reduce code duplication and improve readability.
@@ -322,6 +323,9 @@
 extern "C" {
 #endif
 
+    GGML_NORETURN GGML_ATTRIBUTE_FORMAT(3, 4)
+    GGML_API void ggml_abort(const char * file, int line, const char * fmt, ...);
+
     enum ggml_status {
         GGML_STATUS_ALLOC_FAILED = -2,
         GGML_STATUS_FAILED = -1,
@@ -345,6 +349,7 @@ extern "C" {
     GGML_API ggml_bf16_t ggml_fp32_to_bf16(float);
     GGML_API float       ggml_bf16_to_fp32(ggml_bf16_t);  // consider just doing << 16
     GGML_API void        ggml_bf16_to_fp32_row(const ggml_bf16_t *, float *, int64_t);
+    GGML_API void        ggml_fp32_to_bf16_row_ref(const float *, ggml_bf16_t *, int64_t);
     GGML_API void        ggml_fp32_to_bf16_row(const float *, ggml_bf16_t *, int64_t);
 
     struct ggml_object;
@@ -636,8 +641,11 @@ extern "C" {
         GGML_CGRAPH_EVAL_ORDER_COUNT
     };
 
+    typedef uint32_t ggml_bitset_t;
+
     struct ggml_hash_set {
         size_t size;
+        ggml_bitset_t * used;
         struct ggml_tensor ** keys;
     };
 
@@ -651,7 +659,7 @@ extern "C" {
         struct ggml_tensor ** grads;
         struct ggml_tensor ** leafs;
 
-        struct ggml_hash_set visited_hash_table;
+        struct ggml_hash_set visited_hash_set;
 
         enum ggml_cgraph_eval_order order;
     };
@@ -697,8 +705,6 @@ extern "C" {
     GGML_API int64_t ggml_time_us(void);
     GGML_API int64_t ggml_cycles(void);
     GGML_API int64_t ggml_cycles_per_ms(void);
-
-    GGML_API void    ggml_print_backtrace(void);
 
     // accepts a UTF-8 path, even on Windows
     GGML_API FILE *  ggml_fopen(const char * fname, const char * mode);
@@ -1450,7 +1456,6 @@ extern "C" {
     // if mode & 2 == 1, GPT-NeoX style
     //
     // b is an int32 vector with size a->ne[2], it contains the positions
-    // c is freq factors (e.g. phi3-128k), (optional)
     GGML_API struct ggml_tensor * ggml_rope(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -1467,6 +1472,7 @@ extern "C" {
             int                   mode);
 
     // custom RoPE
+    // c is freq factors (e.g. phi3-128k), (optional)
     GGML_API struct ggml_tensor * ggml_rope_ext(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -2005,8 +2011,8 @@ extern "C" {
 
     // ggml_graph_plan() has to be called before ggml_graph_compute()
     // when plan.work_size > 0, caller must allocate memory for plan.work_data
-    GGML_API struct ggml_cplan ggml_graph_plan            (const struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
-    GGML_API enum ggml_status  ggml_graph_compute         (      struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
+    GGML_API struct ggml_cplan ggml_graph_plan   (const struct ggml_cgraph * cgraph, int n_threads /*= GGML_DEFAULT_N_THREADS*/);
+    GGML_API enum ggml_status  ggml_graph_compute(      struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
     // same as ggml_graph_compute() but the work data is allocated as a part of the context
     // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
     GGML_API enum ggml_status  ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads);
@@ -2400,6 +2406,7 @@ extern "C" {
     GGML_API int ggml_cpu_has_vsx        (void);
     GGML_API int ggml_cpu_has_matmul_int8(void);
     GGML_API int ggml_cpu_has_cann       (void);
+    GGML_API int ggml_cpu_has_llamafile  (void);
 
     //
     // Internal types and functions exposed for tests and benchmarks

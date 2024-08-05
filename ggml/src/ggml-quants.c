@@ -3818,7 +3818,7 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     float sumf = 0;
 
 #if defined(__ARM_FEATURE_SVE)
-    if (svcntb() == QK8_0) {
+    if (ggml_sve_cnt_b == QK8_0) {
         const svbool_t ptrueh = svptrue_pat_b8(SV_VL16);
         const svbool_t ptruel = svnot_b_z(svptrue_b8(), ptrueh);
 
@@ -4190,15 +4190,18 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     sumf = hsum_float_4x4(acc_0, acc_1, acc_2, acc_3);
 #endif
     for (; ib < nb; ++ib) {
-        int sumi = 0;
+        int sumi0 = 0;
+        int sumi1 = 0;
 
         for (int j = 0; j < qk/2; ++j) {
             const int v0 = (x[ib].qs[j] & 0x0F) - 8;
             const int v1 = (x[ib].qs[j] >>   4) - 8;
 
-            sumi += (v0 * y[ib].qs[j]) + (v1 * y[ib].qs[j + qk/2]);
+            sumi0 += (v0 * y[ib].qs[j]);
+            sumi1 += (v1 * y[ib].qs[j + qk/2]);
         }
 
+        int sumi = sumi0 + sumi1;
         sumf += sumi*GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d);
     }
 
@@ -4474,15 +4477,18 @@ void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * r
     sumf = hsum_float_8(acc) + summs;
 #endif
     for (; ib < nb; ++ib) {
-        int sumi = 0;
+        int sumi0 = 0;
+        int sumi1 = 0;
 
         for (int j = 0; j < qk/2; ++j) {
             const int v0 = (x[ib].qs[j] & 0x0F);
             const int v1 = (x[ib].qs[j] >>   4);
 
-            sumi += (v0 * y[ib].qs[j]) + (v1 * y[ib].qs[j + qk/2]);
+            sumi0 += (v0 * y[ib].qs[j]);
+            sumi1 += (v1 * y[ib].qs[j + qk/2]);
         }
 
+        int sumi = sumi0 + sumi1;
         sumf += (GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d))*sumi + GGML_FP16_TO_FP32(x[ib].m)*GGML_FP16_TO_FP32(y[ib].s);
     }
 
@@ -4823,18 +4829,21 @@ void ggml_vec_dot_q5_0_q8_0(int n, float * restrict s, size_t bs, const void * r
         uint32_t qh;
         memcpy(&qh, x[ib].qh, sizeof(qh));
 
-        int sumi = 0;
+        int sumi0 = 0;
+        int sumi1 = 0;
 
         for (int j = 0; j < qk/2; ++j) {
             const uint8_t xh_0 = ((qh & (1u << (j + 0 ))) >> (j + 0 )) << 4;
             const uint8_t xh_1 = ((qh & (1u << (j + 16))) >> (j + 12));
 
-            const int32_t x0 = ((x[ib].qs[j] & 0x0F) | xh_0) - 16;
-            const int32_t x1 = ((x[ib].qs[j] >>   4) | xh_1) - 16;
+            const int32_t x0 = (int8_t)(((x[ib].qs[j] & 0x0F) | xh_0) - 16);
+            const int32_t x1 = (int8_t)(((x[ib].qs[j] >>   4) | xh_1) - 16);
 
-            sumi += (x0 * y[ib].qs[j]) + (x1 * y[ib].qs[j + qk/2]);
+            sumi0 += (x0 * y[ib].qs[j]);
+            sumi1 += (x1 * y[ib].qs[j + qk/2]);
         }
 
+        int sumi = sumi0 + sumi1;
         sumf += (GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d)) * sumi;
     }
 
@@ -5194,7 +5203,8 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
         uint32_t qh;
         memcpy(&qh, x[ib].qh, sizeof(qh));
 
-        int sumi = 0;
+        int sumi0 = 0;
+        int sumi1 = 0;
 
         for (int j = 0; j < qk/2; ++j) {
             const uint8_t xh_0 = ((qh >> (j +  0)) << 4) & 0x10;
@@ -5203,9 +5213,11 @@ void ggml_vec_dot_q5_1_q8_1(int n, float * restrict s, size_t bs, const void * r
             const int32_t x0 = (x[ib].qs[j] & 0xF) | xh_0;
             const int32_t x1 = (x[ib].qs[j] >>  4) | xh_1;
 
-            sumi += (x0 * y[ib].qs[j]) + (x1 * y[ib].qs[j + qk/2]);
+            sumi0 += (x0 * y[ib].qs[j]);
+            sumi1 += (x1 * y[ib].qs[j + qk/2]);
         }
 
+        int sumi = sumi0 + sumi1;
         sumf += (GGML_FP16_TO_FP32(x[ib].d)*GGML_FP16_TO_FP32(y[ib].d))*sumi + GGML_FP16_TO_FP32(x[ib].m)*GGML_FP16_TO_FP32(y[ib].s);
     }
 
@@ -5291,7 +5303,7 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     float sumf = 0;
 
 #if defined(__ARM_FEATURE_SVE)
-    if (svcntb() == QK8_0) {
+    if (ggml_sve_cnt_b == QK8_0) {
         svfloat32_t sumv0 = svdup_n_f32(0.0f);
         svfloat32_t sumv1 = svdup_n_f32(0.0f);
 
@@ -6437,22 +6449,22 @@ void ggml_vec_dot_q3_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             // compute mask for subtraction
             vuint8m1_t qh_m0 = __riscv_vand_vx_u8m1(vqh, m, vl);
             vbool8_t vmask_0 = __riscv_vmseq_vx_u8m1_b8(qh_m0, 0, vl);
-            vint8m1_t q3_m0 = __riscv_vsub_vx_i8m1_m(vmask_0, q3_0, 0x4, vl);
+            vint8m1_t q3_m0 = __riscv_vsub_vx_i8m1_mu(vmask_0, q3_0, q3_0, 0x4, vl);
             m <<= 1;
 
             vuint8m1_t qh_m1 = __riscv_vand_vx_u8m1(vqh, m, vl);
             vbool8_t vmask_1 = __riscv_vmseq_vx_u8m1_b8(qh_m1, 0, vl);
-            vint8m1_t q3_m1 = __riscv_vsub_vx_i8m1_m(vmask_1, q3_1, 0x4, vl);
+            vint8m1_t q3_m1 = __riscv_vsub_vx_i8m1_mu(vmask_1, q3_1, q3_1, 0x4, vl);
             m <<= 1;
 
             vuint8m1_t qh_m2 = __riscv_vand_vx_u8m1(vqh, m, vl);
             vbool8_t vmask_2 = __riscv_vmseq_vx_u8m1_b8(qh_m2, 0, vl);
-            vint8m1_t q3_m2 = __riscv_vsub_vx_i8m1_m(vmask_2, q3_2, 0x4, vl);
+            vint8m1_t q3_m2 = __riscv_vsub_vx_i8m1_mu(vmask_2, q3_2, q3_2, 0x4, vl);
             m <<= 1;
 
             vuint8m1_t qh_m3 = __riscv_vand_vx_u8m1(vqh, m, vl);
             vbool8_t vmask_3 = __riscv_vmseq_vx_u8m1_b8(qh_m3, 0, vl);
-            vint8m1_t q3_m3 = __riscv_vsub_vx_i8m1_m(vmask_3, q3_3, 0x4, vl);
+            vint8m1_t q3_m3 = __riscv_vsub_vx_i8m1_mu(vmask_3, q3_3, q3_3, 0x4, vl);
             m <<= 1;
 
             // load Q8 and take product with Q3
@@ -7708,13 +7720,13 @@ void ggml_vec_dot_q5_K_q8_K(int n, float * restrict s, size_t bs, const void * r
             vint8m1_t q5_a = __riscv_vreinterpret_v_u8m1_i8m1(__riscv_vand_vx_u8m1(q5_x, 0x0F, vl));
             vuint8m1_t qh_m1 = __riscv_vand_vx_u8m1(vqh, m, vl);
             vbool8_t vmask_1 = __riscv_vmsne_vx_u8m1_b8(qh_m1, 0, vl);
-            vint8m1_t q5_m1 = __riscv_vadd_vx_i8m1_m(vmask_1, q5_a, 16, vl);
+            vint8m1_t q5_m1 = __riscv_vadd_vx_i8m1_mu(vmask_1, q5_a, q5_a, 16, vl);
             m <<= 1;
 
             vint8m1_t q5_l = __riscv_vreinterpret_v_u8m1_i8m1(__riscv_vsrl_vx_u8m1(q5_x, 0x04, vl));
             vuint8m1_t qh_m2 = __riscv_vand_vx_u8m1(vqh, m, vl);
             vbool8_t vmask_2 = __riscv_vmsne_vx_u8m1_b8(qh_m2, 0, vl);
-            vint8m1_t q5_m2 = __riscv_vadd_vx_i8m1_m(vmask_2, q5_l, 16, vl);
+            vint8m1_t q5_m2 = __riscv_vadd_vx_i8m1_mu(vmask_2, q5_l, q5_l, 16, vl);
             m <<= 1;
 
             vint16m2_t v0 = __riscv_vwmul_vv_i16m2(q5_m1, q8_y1, vl);
@@ -12692,7 +12704,7 @@ static void quantize_row_iq2_xxs_impl(const float * restrict x, void * restrict 
                     printf("Oops: found point %u not on grid:", u);
                     for (int i = 0; i < 8; ++i) printf(" %d", L[8*k+i]);
                     printf("\n");
-                    GGML_ASSERT(false);
+                    GGML_ABORT("fatal error");
                 }
                 q2[2*ib+0] |= ((uint32_t) grid_index << 8*k);
                 q2[2*ib+1] |= (block_signs[k] << 7*k);
@@ -12871,7 +12883,7 @@ static void quantize_row_iq2_xs_impl(const float * restrict x, void * restrict v
                     printf("Oops: found point %u not on grid:", u);
                     for (int i = 0; i < 8; ++i) printf(" %d", L[8*k+i]);
                     printf("\n");
-                    GGML_ASSERT(false);
+                    GGML_ABORT("fatal error");
                 }
                 q2[2*ib+k] = grid_index | (block_signs[k] << 9);
             }
@@ -13314,7 +13326,7 @@ static void quantize_row_iq3_xxs_impl(int grid_size, const float * restrict x, v
                     printf("Oops: found point %u not on grid:", u);
                     for (int i = 0; i < 4; ++i) printf(" %d", L[4*k+i]);
                     printf("\n");
-                    GGML_ASSERT(false);
+                    GGML_ABORT("fatal error");
                 }
                 if (grid_size == 256) {
                     q3[8*ib+k] = grid_index;
@@ -13527,7 +13539,7 @@ static void quantize_row_iq3_s_impl(int block_size, const float * restrict x, vo
                     printf("Oops: found point %u not on grid:", u);
                     for (int i = 0; i < 4; ++i) printf(" %d", L[4*k+i]);
                     printf("\n");
-                    GGML_ASSERT(false);
+                    GGML_ABORT("fatal error");
                 }
                 qs[k] = grid_index & 255;
                 qh[(ib*bs4+k)/8] |= ((grid_index >> 8) << ((ib*bs4+k)%8));
@@ -14503,7 +14515,7 @@ static void quantize_row_iq2_s_impl(const float * restrict x, void * restrict vy
                     printf("Oops: found point %u not on grid:", u);
                     for (int i = 0; i < 8; ++i) printf(" %d", L[8*k+i]);
                     printf("\n");
-                    GGML_ASSERT(false);
+                    GGML_ABORT("fatal error");
                 }
                 const int i8 = 2*ib + k;
                 y[ibl].qs[i8] = grid_index & 255;
@@ -14623,7 +14635,7 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
     }
 
     if (nbytes % ggml_type_size(type) != 0) {
-        fprintf(stderr, "%s: invalid size %zu for type %d\n", __func__, nbytes, type);
+        fprintf(stderr, "%s: invalid size %zu for type %s (type size = %zu)\n", __func__, nbytes, ggml_type_name(type), ggml_type_size(type));
         return false;
     }
 

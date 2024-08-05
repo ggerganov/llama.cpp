@@ -5,7 +5,7 @@ Fast, lightweight, pure C/C++ HTTP server based on [httplib](https://github.com/
 Set of LLM REST APIs and a simple web front end to interact with llama.cpp.
 
 **Features:**
- * LLM inference of F16 and quantum models on GPU and CPU
+ * LLM inference of F16 and quantized models on GPU and CPU
  * [OpenAI API](https://github.com/openai/openai-openapi) compatible chat completions and embeddings routes
  * Parallel decoding with multi-user support
  * Continuous batching
@@ -247,7 +247,7 @@ server:
          --host HOST              ip address to listen (default: 127.0.0.1)
          --port PORT              port to listen (default: 8080)
          --path PATH              path to serve static files from (default: )
-         --embedding(s)           enable embedding endpoint (default: disabled)
+         --embedding(s)           restrict to only support embedding use case; use only with dedicated embedding models (default: disabled)
          --api-key KEY            API key to use for authentication (default: none)
          --api-key-file FNAME     path to file containing API keys (default: none)
          --ssl-key-file FNAME     path to file a PEM-encoded SSL private key

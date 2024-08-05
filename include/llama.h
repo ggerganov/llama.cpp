@@ -33,17 +33,15 @@
 
 #define LLAMA_DEFAULT_SEED 0xFFFFFFFF
 
-#define LLAMA_MAX_RNG_STATE (64*1024)
-
 #define LLAMA_FILE_MAGIC_GGLA 0x67676c61u // 'ggla'
 #define LLAMA_FILE_MAGIC_GGSN 0x6767736eu // 'ggsn'
 #define LLAMA_FILE_MAGIC_GGSQ 0x67677371u // 'ggsq'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 7
+#define LLAMA_SESSION_VERSION 8
 
 #define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
-#define LLAMA_STATE_SEQ_VERSION 1
+#define LLAMA_STATE_SEQ_VERSION 2
 
 #ifdef __cplusplus
 extern "C" {
@@ -529,11 +527,15 @@ extern "C" {
             struct llama_lora_adapter * adapter,
             float scale);
 
-    // Remove a LoRA adapter from given context
+    // Remove a specific LoRA adapter from given context
     // Return -1 if the adapter is not present in the context
     LLAMA_API int32_t llama_lora_adapter_remove(
             struct llama_context * ctx,
             struct llama_lora_adapter * adapter);
+
+    // Remove all LoRA adapters from given context
+    LLAMA_API void llama_lora_adapter_clear(
+            struct llama_context * ctx);
 
     // Manually free a LoRA adapter
     // Note: loaded adapters will be free when the associated model is deleted
@@ -687,10 +689,11 @@ extern "C" {
     // State / sessions
     //
 
-    // Returns the maximum size in bytes of the state (rng, logits, embedding
-    // and kv_cache) - will often be smaller after compacting tokens
-    LLAMA_API size_t llama_state_get_size(const struct llama_context * ctx);
-    LLAMA_API DEPRECATED(size_t llama_get_state_size(const struct llama_context * ctx),
+    // Returns the *actual* size in bytes of the state
+    // (rng, logits, embedding and kv_cache)
+    // Only use when saving the state, not when restoring it, otherwise the size may be too small.
+    LLAMA_API size_t llama_state_get_size(struct llama_context * ctx);
+    LLAMA_API DEPRECATED(size_t llama_get_state_size(struct llama_context * ctx),
         "use llama_state_get_size instead");
 
     // Copies the state to the specified destination address.
@@ -698,7 +701,8 @@ extern "C" {
     // Returns the number of bytes copied
     LLAMA_API size_t llama_state_get_data(
             struct llama_context * ctx,
-                         uint8_t * dst);
+                         uint8_t * dst,
+                          size_t   size);
     LLAMA_API DEPRECATED(size_t llama_copy_state_data(
             struct llama_context * ctx,
                          uint8_t * dst),
@@ -708,7 +712,8 @@ extern "C" {
     // Returns the number of bytes read
     LLAMA_API size_t llama_state_set_data(
             struct llama_context * ctx,
-                   const uint8_t * src);
+                   const uint8_t * src,
+                          size_t   size);
     LLAMA_API DEPRECATED(size_t llama_set_state_data(
             struct llama_context * ctx,
                    const uint8_t * src),
@@ -750,6 +755,7 @@ extern "C" {
     LLAMA_API size_t llama_state_seq_get_data(
             struct llama_context * ctx,
                          uint8_t * dst,
+                          size_t   size,
                     llama_seq_id   seq_id);
 
     // Copy the sequence data (originally copied with `llama_state_seq_get_data`) into the specified sequence
@@ -759,6 +765,7 @@ extern "C" {
     LLAMA_API size_t llama_state_seq_set_data(
             struct llama_context * ctx,
                    const uint8_t * src,
+                          size_t   size,
                     llama_seq_id   dest_seq_id);
 
     LLAMA_API size_t llama_state_seq_save_file(
@@ -906,10 +913,10 @@ extern "C" {
     LLAMA_API llama_token llama_token_pad(const struct llama_model * model); // padding
 
     // Returns -1 if unknown, 1 for true or 0 for false.
-    LLAMA_API int32_t         llama_add_bos_token(const struct llama_model * model);
+    LLAMA_API int32_t llama_add_bos_token(const struct llama_model * model);
 
     // Returns -1 if unknown, 1 for true or 0 for false.
-    LLAMA_API int32_t         llama_add_eos_token(const struct llama_model * model);
+    LLAMA_API int32_t llama_add_eos_token(const struct llama_model * model);
 
     // Codellama infill tokens
     LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix
@@ -965,6 +972,10 @@ extern "C" {
                             bool   remove_special,
                             bool   unparse_special);
 
+    //
+    // Chat templates
+    //
+
     /// Apply chat template. Inspired by hf apply_chat_template() on python.
     /// Both "model" and "custom_template" are optional, but at least one is required. "custom_template" has higher precedence than "model"
     /// NOTE: This function does not use a jinja parser. It only support a pre-defined list of template. See more: https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
@@ -1002,6 +1013,23 @@ extern "C" {
     LLAMA_API void llama_grammar_free(struct llama_grammar * grammar);
 
     LLAMA_API struct llama_grammar * llama_grammar_copy(const struct llama_grammar * grammar);
+
+    /// @details Apply constraints from grammar
+    LLAMA_API void llama_grammar_sample(
+            const struct llama_grammar * grammar,
+            const struct llama_context * ctx,
+                llama_token_data_array * candidates);
+    LLAMA_API DEPRECATED(void llama_sample_grammar(
+            struct llama_context * ctx,
+          llama_token_data_array * candidates,
+      const struct llama_grammar * grammar),
+        "use llama_grammar_sample instead");
+
+    /// @details Accepts the sampled token into the grammar
+    LLAMA_API void llama_grammar_accept_token(
+            struct llama_grammar * grammar,
+            struct llama_context * ctx,
+                     llama_token   token);
 
     //
     // Sampling functions
@@ -1084,12 +1112,6 @@ extern "C" {
           llama_token_data_array * candidates,
                            float   temp);
 
-    /// @details Apply constraints from grammar
-    LLAMA_API void llama_sample_grammar(
-            struct llama_context * ctx,
-          llama_token_data_array * candidates,
-      const struct llama_grammar * grammar);
-
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
     /// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
@@ -1126,12 +1148,6 @@ extern "C" {
     LLAMA_API llama_token llama_sample_token(
             struct llama_context * ctx,
           llama_token_data_array * candidates);
-
-    /// @details Accepts the sampled token into the grammar
-    LLAMA_API void llama_grammar_accept_token(
-            struct llama_context * ctx,
-            struct llama_grammar * grammar,
-                     llama_token   token);
 
     //
     // Model split
@@ -1175,17 +1191,13 @@ extern "C" {
 
 struct ggml_tensor;
 
+const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
+    struct llama_context * ctx
+);
+
 struct llama_partial_utf8 {
     uint32_t value;    // bit value so far (unshifted)
     int      n_remain; // num bytes remaining; -1 indicates invalid sequence
-};
-
-struct llama_grammar {
-    const std::vector<std::vector<llama_grammar_element>>   rules;
-    std::vector<std::vector<const llama_grammar_element *>> stacks;
-
-    // buffer for partially generated UTF-8 sequence from accepted tokens
-    llama_partial_utf8                                      partial_utf8;
 };
 
 struct llama_grammar_candidate {
@@ -1194,19 +1206,30 @@ struct llama_grammar_candidate {
     llama_partial_utf8   partial_utf8;
 };
 
-const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal_get_tensor_map(
-    struct llama_context * ctx
-);
+using llama_grammar_rule  = std::vector<      llama_grammar_element>;
+using llama_grammar_stack = std::vector<const llama_grammar_element *>;
+
+using llama_grammar_rules      = std::vector<llama_grammar_rule>;
+using llama_grammar_stacks     = std::vector<llama_grammar_stack>;
+using llama_grammar_candidates = std::vector<llama_grammar_candidate>;
+
+const llama_grammar_rules  & llama_grammar_get_rules (const struct llama_grammar * grammar);
+      llama_grammar_stacks & llama_grammar_get_stacks(      struct llama_grammar * grammar);
 
 void llama_grammar_accept(
-        const std::vector<std::vector<llama_grammar_element>>         & rules,
-        const std::vector<std::vector<const llama_grammar_element *>> & stacks,
-        const uint32_t                                                  chr,
-        std::vector<std::vector<const llama_grammar_element *>>       & new_stacks);
+        const llama_grammar_rules  & rules,
+        const llama_grammar_stacks & stacks,
+        const uint32_t chr,
+              llama_grammar_stacks & new_stacks);
+
+std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_stack(
+        const llama_grammar_rules & rules,
+        const llama_grammar_stack & stack,
+        const llama_grammar_candidates & candidates);
 
 std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
         const std::string & src,
-        llama_partial_utf8   partial_start);
+        llama_partial_utf8 partial_start);
 
 // Randomly selects a token from the candidates based on their probabilities using given std::mt19937.
 // This is a temporary workaround in order to fix race conditions when sampling with multiple sequences.
