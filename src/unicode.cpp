@@ -602,11 +602,11 @@ codepoint_categ unicode_cpt_category(const uint32_t cp) {
         }
 
         for (auto p : unicode_map_lowercase) {
-            cpt_categs[cpt].set_flag(codepoint_categ::LOWERCASE);
+            cpt_categs[p.second].set_flag(codepoint_categ::LOWERCASE);
         }
 
         for (auto p : unicode_map_uppercase) {
-            cpt_categs[cpt].set_flag(codepoint_categ::UPPERCASE);
+            cpt_categs[p.second].set_flag(codepoint_categ::UPPERCASE);
         }
 
         //for (auto &range : unicode_ranges_nfd) {  // start, last, nfd
