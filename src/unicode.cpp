@@ -864,7 +864,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
             }
 
             // parse more metcharacters and espaped characters
-            if (cpt == '\\') {  
+            if (cpt == '\\') {
                 switch (cpts_regex[i + 1]) {
                     case 's':  ++i;  continue;  // \s whitespaces
                     case 'w':  ++i;  continue;  // \w words
@@ -933,7 +933,7 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
                     if (range.first < range.second) {
                         it->second += (wchar_t) '-';
                         it->second += (wchar_t) range.second;
-                    } 
+                    }
                 }
             }
             prev_range = range;

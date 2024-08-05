@@ -162,7 +162,7 @@ struct codepoint_categ {
             case 'Z':  return Z | (_subindex(subcateg, "lps"    ) << 7);
             default:   assert (false);  return 0;
         }
-    };
+    }
 
     uint16_t encoded;
 };
