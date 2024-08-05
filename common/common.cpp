@@ -97,7 +97,11 @@ int32_t cpu_get_num_cores_win(bool print_physical_core_num) {
                 num_cores_win += info->Processor.GroupCount;
             } else {
                 for (WORD i = 0; i < info->Processor.GroupCount; ++i) {
+#ifdef _MSC_VER
                     num_cores_win += __popcnt64(info->Processor.GroupMask[i].Mask);
+#else
+                    num_cores_win += _popcnt64(info->Processor.GroupMask[i].Mask);
+#endif
                 }
             }
         }

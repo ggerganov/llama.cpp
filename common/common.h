@@ -44,7 +44,9 @@ struct llama_control_vector_load_info;
 //
 // CPU utils
 //
-
+#ifdef _WIN32
+int32_t cpu_get_num_cores_win(bool print_physical_core_num);
+#endif
 int32_t cpu_get_num_physical_cores();
 int32_t cpu_get_num_math();
 
