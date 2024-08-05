@@ -623,6 +623,7 @@ struct server_response {
 struct server_context {
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
+    std::vector<llama_lora_adapter_container> lora_adapters;
 
     gpt_params params;
 
@@ -682,6 +683,7 @@ struct server_context {
 
         model = llama_init.model;
         ctx = llama_init.context;
+        lora_adapters = llama_init.lora_adapters;
         params.n_parallel -= 1; // but be sneaky about it
         if (model == nullptr) {
             LOG_ERROR("unable to load model", {{"model", params.model}});
@@ -1853,7 +1855,7 @@ struct server_context {
                 } break;
             case SERVER_TASK_TYPE_SET_LORA:
                 {
-                    llama_lora_adapters_apply(ctx, params.lora_adapters);
+                    llama_lora_adapters_apply(ctx, lora_adapters);
                     server_task_result result;
                     result.id = task.id;
                     result.data = json{{ "success", true }};
@@ -3340,8 +3342,8 @@ int main(int argc, char ** argv) {
     const auto handle_lora_adapters_list = [&](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json result = json::array();
-        for (size_t i = 0; i < ctx_server.params.lora_adapters.size(); ++i) {
-            auto & la = ctx_server.params.lora_adapters[i];
+        for (size_t i = 0; i < ctx_server.lora_adapters.size(); ++i) {
+            auto & la = ctx_server.lora_adapters[i];
             result.push_back({
                 {"id", i},
                 {"path", la.path},
@@ -3356,10 +3358,10 @@ int main(int argc, char ** argv) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
 
         const std::vector<json> body = json::parse(req.body);
-        int max_idx = ctx_server.params.lora_adapters.size();
+        int max_idx = ctx_server.lora_adapters.size();
 
         // clear existing value
-        for (auto & la : ctx_server.params.lora_adapters) {
+        for (auto & la : ctx_server.lora_adapters) {
             la.scale = 0.0f;
         }
 
@@ -3368,7 +3370,7 @@ int main(int argc, char ** argv) {
             int id      = entry.at("id");
             float scale = entry.at("scale");
             if (0 <= id && id < max_idx) {
-                ctx_server.params.lora_adapters[id].scale = scale;
+                ctx_server.lora_adapters[id].scale = scale;
             } else {
                 throw std::runtime_error("invalid adapter id");
             }

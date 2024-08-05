@@ -687,7 +687,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.lora_adapters.push_back({
             std::string(argv[i]),
             1.0,
-            nullptr,
         });
         return true;
     }
@@ -698,7 +697,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.lora_adapters.push_back({
             lora_adapter,
             std::stof(argv[i]),
-            nullptr,
         });
         return true;
     }
@@ -2106,16 +2104,20 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
 
     // load and optionally apply lora adapters
     for (auto & la : params.lora_adapters) {
-        la.adapter = llama_lora_adapter_init(model, la.path.c_str());
-        if (la.adapter == nullptr) {
+        llama_lora_adapter_container loaded_la;
+        loaded_la.path = la.path;
+        loaded_la.scale = la.scale;
+        loaded_la.adapter = llama_lora_adapter_init(model, la.path.c_str());
+        if (loaded_la.adapter == nullptr) {
             fprintf(stderr, "%s: error: failed to apply lora adapter '%s'\n", __func__, la.path.c_str());
             llama_free(lctx);
             llama_free_model(model);
             return iparams;
         }
+        iparams.lora_adapters.push_back(loaded_la); // copy to list of loaded adapters
     }
     if (!params.lora_init_without_apply) {
-        llama_lora_adapters_apply(lctx, params.lora_adapters);
+        llama_lora_adapters_apply(lctx, iparams.lora_adapters);
     }
 
     if (params.ignore_eos) {
