@@ -493,6 +493,8 @@ class Metadata:
                     gguf_writer.add_base_model_version(key, base_model_entry["version"])
                 if "organization" in base_model_entry:
                     gguf_writer.add_base_model_organization(key, base_model_entry["organization"])
+                if "description" in base_model_entry:
+                    gguf_writer.add_base_model_description(key, base_model_entry["description"])
                 if "url" in base_model_entry:
                     gguf_writer.add_base_model_url(key, base_model_entry["url"])
                 if "doi" in base_model_entry:

@@ -568,6 +568,9 @@ class GGUFWriter:
     def add_base_model_organization(self, source_id: int, organization: str) -> None:
         self.add_string(Keys.General.BASE_MODEL_ORGANIZATION.format(id=source_id), organization)
 
+    def add_base_model_description(self, source_id: int, description: str) -> None:
+        self.add_string(Keys.General.BASE_MODEL_DESCRIPTION.format(id=source_id), description)
+
     def add_base_model_url(self, source_id: int, url: str) -> None:
         self.add_string(Keys.General.BASE_MODEL_URL.format(id=source_id), url)
 
