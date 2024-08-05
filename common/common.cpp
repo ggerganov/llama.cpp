@@ -702,8 +702,8 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         });
         return true;
     }
-    if (arg == "--lora-no-apply") {
-        params.lora_no_apply = true;
+    if (arg == "--lora-init-without-apply") {
+        params.lora_init_without_apply = true;
         return true;
     }
     if (arg == "--control-vector") {
@@ -1666,7 +1666,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
     options.push_back({ "server",      "-sps,  --slot-prompt-similarity SIMILARITY",
                                                                         "how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity });
-    options.push_back({ "server",      "--lora-no-apply",               "only load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_no_apply ? "enabled" : "disabled"});
+    options.push_back({ "server",      "       --lora-init-without-apply",     "load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_init_without_apply ? "enabled" : "disabled"});
 
 #ifndef LOG_DISABLE_LOGS
     options.push_back({ "logging" });
@@ -2114,7 +2114,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
             return std::make_tuple(nullptr, nullptr);
         }
     }
-    if (!params.lora_no_apply) {
+    if (!params.lora_init_without_apply) {
         llama_lora_adapters_apply(lctx, params.lora_adapters);
     }
 
@@ -3194,6 +3194,7 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
             fprintf(stream, "  - %s: %f\n", la.path.c_str(), la.scale);
         }
     }
+    fprintf(stream, "lora_init_without_apply: %s # default: false\n", params.lora_init_without_apply ? "true" : "false");
     fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
     fprintf(stream, "min_keep: %d # default: 0 (disabled)\n", sparams.min_keep);
     fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", sparams.mirostat);
