@@ -180,7 +180,7 @@ int main(int argc, char ** argv) {
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
     llama_init_result llama_init = llama_init_from_gpt_params(params);
-    
+
     model = llama_init.model;
     ctx = llama_init.context;
 
