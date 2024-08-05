@@ -197,6 +197,12 @@ class TestMetadataMethod(unittest.TestCase):
         got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card, None, None)
         self.assertEqual(got, expect)
 
+        # Base Model spec is given directly
+        model_card = {'base_models': [{'name': 'OpenHermes 2.5', 'organization': 'Teknium', 'version': '2.5', 'repo_url': 'https://huggingface.co/teknium/OpenHermes-2.5'}]}
+        expect = gguf.Metadata(base_models=[{'name': 'OpenHermes 2.5', 'organization': 'Teknium', 'version': '2.5', 'repo_url': 'https://huggingface.co/teknium/OpenHermes-2.5'}])
+        got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card, None, None)
+        self.assertEqual(got, expect)
+
         # Dataset spec is inferred from model id
         model_card = {'datasets': 'teknium/OpenHermes-2.5'}
         expect = gguf.Metadata(datasets=[{'name': 'OpenHermes 2.5', 'organization': 'Teknium', 'version': '2.5', 'repo_url': 'https://huggingface.co/teknium/OpenHermes-2.5'}])
@@ -205,6 +211,12 @@ class TestMetadataMethod(unittest.TestCase):
 
         # Dataset spec is only url
         model_card = {'datasets': ['https://huggingface.co/teknium/OpenHermes-2.5']}
+        expect = gguf.Metadata(datasets=[{'name': 'OpenHermes 2.5', 'organization': 'Teknium', 'version': '2.5', 'repo_url': 'https://huggingface.co/teknium/OpenHermes-2.5'}])
+        got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card, None, None)
+        self.assertEqual(got, expect)
+
+        # Dataset spec is given directly
+        model_card = {'datasets': [{'name': 'OpenHermes 2.5', 'organization': 'Teknium', 'version': '2.5', 'repo_url': 'https://huggingface.co/teknium/OpenHermes-2.5'}]}
         expect = gguf.Metadata(datasets=[{'name': 'OpenHermes 2.5', 'organization': 'Teknium', 'version': '2.5', 'repo_url': 'https://huggingface.co/teknium/OpenHermes-2.5'}])
         got = gguf.Metadata.apply_metadata_heuristic(gguf.Metadata(), model_card, None, None)
         self.assertEqual(got, expect)
