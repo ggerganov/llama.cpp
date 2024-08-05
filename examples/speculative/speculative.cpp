@@ -43,10 +43,7 @@ int main(int argc, char ** argv) {
     // probability threshold for splitting a draft branch (only for n_seq_dft > 1)
     const float p_split  = params.p_split;
 
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-    }
-    std::default_random_engine rng(params.seed);
+    std::default_random_engine rng(params.sparams.seed);
     std::uniform_real_distribution<> u_dist;
 
 #ifndef LOG_DISABLE_LOGS
@@ -179,7 +176,7 @@ int main(int argc, char ** argv) {
     bool has_eos = false;
 
     // target model sampling context (reuse the llama_context's sampling instance)
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, llama_get_sampling(ctx_tgt));
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, model_tgt);
 
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);

@@ -151,8 +151,6 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    std::mt19937 rng(params.seed);
-
     llama_backend_init();
     llama_numa_init(params.numa);
 

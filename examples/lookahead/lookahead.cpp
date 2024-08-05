@@ -1,7 +1,6 @@
 #include "common.h"
 #include "llama.h"
 
-#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -118,7 +117,7 @@ int main(int argc, char ** argv) {
     llama_batch batch = llama_batch_init(params.n_ctx, 0, W + G + 1);
 
     // target model sampling context
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, llama_get_sampling(ctx));
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, model);
 
     // verification n-grams
     std::vector<ngram_data> ngrams_cur(G);

@@ -55,7 +55,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_sampling * smpl = llama_get_sampling(ctx);
+    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
 
     // tokenize the prompt
 
@@ -168,6 +168,7 @@ int main(int argc, char ** argv) {
 
     llama_batch_free(batch);
 
+    llama_sampling_free(smpl);
     llama_free(ctx);
     llama_free_model(model);
 

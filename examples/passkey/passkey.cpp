@@ -26,8 +26,6 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    srand(params.seed == LLAMA_DEFAULT_SEED ? time(NULL) : params.seed);
-
     int n_junk = params.n_junk;
     int n_keep = params.n_keep;
     int n_grp  = params.grp_attn_n;
@@ -85,7 +83,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_sampling * smpl = llama_get_sampling(ctx);
+    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
 
     // tokenize the prompt
     std::vector<llama_token> tokens_list;
@@ -274,6 +272,7 @@ int main(int argc, char ** argv) {
 
     llama_batch_free(batch);
 
+    llama_sampling_free(smpl);
     llama_free(ctx);
     llama_free_model(model);
 

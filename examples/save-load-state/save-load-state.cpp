@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <cstdio>
-#include <chrono>
 
 int main(int argc, char ** argv) {
     gpt_params params;
@@ -38,7 +37,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_sampling * smpl = llama_get_sampling(ctx);
+    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
 
     // tokenize prompt
     auto tokens = llama_tokenize(ctx, params.prompt, true);
@@ -98,7 +97,7 @@ int main(int argc, char ** argv) {
     // make new context
     auto * ctx2 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
 
-    llama_sampling * smpl2 = llama_get_sampling(ctx2);
+    llama_sampling * smpl2 = llama_sampling_init(model, nullptr, nullptr);
 
     printf("\nsecond run: %s", params.prompt.c_str());
 
@@ -163,7 +162,7 @@ int main(int argc, char ** argv) {
     // make new context
     auto * ctx3 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
 
-    llama_sampling * smpl3 = llama_get_sampling(ctx3);
+    llama_sampling * smpl3 = llama_sampling_init(model, nullptr, nullptr);
 
     printf("\nsingle seq run: %s", params.prompt.c_str());
 
@@ -245,6 +244,10 @@ int main(int argc, char ** argv) {
     }
 
     printf("\n");
+
+    llama_sampling_free(smpl);
+    llama_sampling_free(smpl2);
+    llama_sampling_free(smpl3);
 
     llama_free(ctx3);
     llama_free_model(model);

@@ -300,7 +300,6 @@ extern "C" {
     // NOTE: changing the default values of parameters marked as [EXPERIMENTAL] may cause crashes or incorrect results in certain configurations
     //       https://github.com/ggerganov/llama.cpp/pull/7544
     struct llama_context_params {
-        uint32_t seed;              // RNG seed, -1 for random
         uint32_t n_ctx;             // text context, 0 = from model
         uint32_t n_batch;           // logical maximum batch size that can be submitted to llama_decode
         uint32_t n_ubatch;          // physical maximum batch size
@@ -407,6 +406,7 @@ extern "C" {
 
     LLAMA_API void llama_free_model(struct llama_model * model);
 
+    // TODO: rename to llama_init_from_model
     LLAMA_API struct llama_context * llama_new_context_with_model(
                      struct llama_model * model,
             struct llama_context_params   params);
@@ -432,8 +432,7 @@ extern "C" {
     LLAMA_API int32_t llama_n_embd     (const struct llama_model * model);
     LLAMA_API int32_t llama_n_layer    (const struct llama_model * model);
 
-    LLAMA_API const struct llama_model    * llama_get_model   (const struct llama_context * ctx);
-    LLAMA_API       struct llama_sampling * llama_get_sampling(      struct llama_context * ctx);
+    LLAMA_API const struct llama_model * llama_get_model(const struct llama_context * ctx);
 
     LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
     LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
@@ -663,7 +662,7 @@ extern "C" {
     //
 
     // Returns the *actual* size in bytes of the state
-    // (rng, logits, embedding and kv_cache)
+    // (logits, embedding and kv_cache)
     // Only use when saving the state, not when restoring it, otherwise the size may be too small.
     LLAMA_API size_t llama_state_get_size(struct llama_context * ctx);
     LLAMA_API DEPRECATED(size_t llama_get_state_size(struct llama_context * ctx),

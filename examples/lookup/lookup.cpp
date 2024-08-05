@@ -3,13 +3,11 @@
 #include "common.h"
 #include "ngram-cache.h"
 
-#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <string>
 #include <vector>
-#include <unordered_map>
 
 int main(int argc, char ** argv){
     gpt_params params;
@@ -106,7 +104,7 @@ int main(int argc, char ** argv){
 
     bool has_eos = false;
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, llama_get_sampling(ctx));
+    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams, model);
 
     std::vector<llama_token> draft;
 

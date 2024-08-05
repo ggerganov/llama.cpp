@@ -92,11 +92,10 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
     return result;
 }
 
-static std::string generate(llama_context * ctx, const std::string & prompt, bool stream) {
+static std::string generate(llama_context * ctx, llama_sampling * smpl, const std::string & prompt, bool stream) {
     std::string result;
 
     const llama_model * model = llama_get_model(ctx);
-    llama_sampling * smpl = llama_get_sampling(ctx);
     llama_token eos_token = llama_token_eos(model);
 
     llama_kv_cache_clear(ctx);
@@ -117,7 +116,7 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
         inputs.clear();
 
         llama_decode(ctx, bat);
-        auto logits = llama_get_logits_ith(ctx, bat.n_tokens - 1);
+        auto * logits = llama_get_logits_ith(ctx, bat.n_tokens - 1);
 
         auto candidates = std::vector<llama_token_data>(llama_n_vocab(model));
         auto n_candidates = (int32_t)candidates.size();
@@ -173,6 +172,8 @@ int main(int argc, char * argv[]) {
     // create generation context
     llama_context * ctx = llama_new_context_with_model(model, cparams);
 
+    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
+
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic
     {
@@ -209,9 +210,10 @@ int main(int argc, char * argv[]) {
     // GritLM models are not finetuned with system prompts, as you can just include system-like instructions together with your user instruction
     {
         const std::string prompt = "<|user|>\nPlease write me a poem about my recent hike of Mt. Fuji at midnight in the style of Shakespeare.\n<|assistant|>\n";
-        std::string response = generate(ctx, prompt, true);
+        std::string response = generate(ctx, smpl, prompt, true);
     }
 
+    llama_sampling_free(smpl);
     llama_free(ctx);
     llama_free_model(model);
     llama_backend_free();

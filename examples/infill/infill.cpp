@@ -156,16 +156,9 @@ int main(int argc, char ** argv) {
         LOG_TEE("%s: warning: scaling RoPE frequency by %g.\n", __func__, params.rope_freq_scale);
     }
 
-    LOG_TEE("%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
-    LOG_TEE("%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);
+    print_build_info();
 
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-    }
-
-    LOG_TEE("%s: seed  = %u\n", __func__, params.seed);
-
-    std::mt19937 rng(params.seed);
+    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init();
@@ -351,7 +344,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    ctx_sampling = llama_sampling_init(sparams, llama_get_sampling(ctx));
+    ctx_sampling = llama_sampling_init(sparams, model);
 
     while (n_remain != 0 || params.interactive) {
         // predict

@@ -71,8 +71,6 @@ struct llama_sampling_context {
     // mirostat sampler state
     float mirostat_mu;
 
-    bool owned;
-
     llama_sampling * smpl;
 
     // TODO: replace with ring-buffer
@@ -86,7 +84,6 @@ struct llama_sampling_context {
 
 // Create a new sampling context instance.
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, const struct llama_model * model);
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_sampling * smpl);
 
 void llama_sampling_free(struct llama_sampling_context * ctx);
 

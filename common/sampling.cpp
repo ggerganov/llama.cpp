@@ -3,19 +3,10 @@
 #include <random>
 
 struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, const struct llama_model * model) {
-    auto result = llama_sampling_init(params, llama_sampling_init(model, params.grammar.c_str(), "root"));
-
-    result->owned = true;
-
-    return result;
-}
-
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, struct llama_sampling * smpl) {
     struct llama_sampling_context * result = new llama_sampling_context();
 
     result->params = params;
-    result->owned  = false;
-    result->smpl   = smpl;
+    result->smpl   = llama_sampling_init(model, params.grammar.c_str(), "root");
 
     result->prev.resize(params.n_prev);
 
@@ -27,9 +18,7 @@ struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_
 }
 
 void llama_sampling_free(struct llama_sampling_context * ctx) {
-    if (ctx->owned) {
-        llama_sampling_free(ctx->smpl);
-    }
+    llama_sampling_free(ctx->smpl);
 
     delete ctx;
 }
