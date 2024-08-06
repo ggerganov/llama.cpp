@@ -412,14 +412,15 @@ static json oaicompat_completion_params_parse(
 }
 
 static json format_final_response_oaicompat(const json & request, json result, const std::string & completion_id, bool streaming = false) {
-    bool stopped_word        = result.count("stopped_word") != 0;
+    bool unfinished          = result.count("stopped_word") == 0;
+    bool stopped_word        = json_value(result, "stopped_word", false);
     bool stopped_eos         = json_value(result, "stopped_eos", false);
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
     int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
     std::string content      = json_value(result, "content", std::string(""));
 
     std::string finish_reason = "length";
-    if (stopped_word || stopped_eos) {
+    if (stopped_word || stopped_eos || unfinished) {
         finish_reason = "stop";
     }
 
