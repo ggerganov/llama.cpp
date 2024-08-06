@@ -16524,7 +16524,7 @@ struct llama_context * llama_new_context_with_model(
         cparams.n_batch = GGML_KQ_MASK_PAD;
     }
 
-    cparams.n_ubatch         = std::min(cparams.n_batch, params.n_ubatch == 0 ? params.n_batch : params.n_ubatch);
+    cparams.n_ubatch         = hparams.causal_attn ? std::min(cparams.n_batch, params.n_ubatch == 0 ? params.n_batch : params.n_ubatch) : cparams.n_batch;
 
     cparams.n_ctx_orig_yarn  = params.yarn_orig_ctx    != 0 ? params.yarn_orig_ctx    :
                                hparams.n_ctx_orig_yarn != 0 ? hparams.n_ctx_orig_yarn :
