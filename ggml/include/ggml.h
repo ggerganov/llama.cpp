@@ -349,6 +349,7 @@ extern "C" {
     GGML_API ggml_bf16_t ggml_fp32_to_bf16(float);
     GGML_API float       ggml_bf16_to_fp32(ggml_bf16_t);  // consider just doing << 16
     GGML_API void        ggml_bf16_to_fp32_row(const ggml_bf16_t *, float *, int64_t);
+    GGML_API void        ggml_fp32_to_bf16_row_ref(const float *, ggml_bf16_t *, int64_t);
     GGML_API void        ggml_fp32_to_bf16_row(const float *, ggml_bf16_t *, int64_t);
 
     struct ggml_object;
@@ -1455,7 +1456,6 @@ extern "C" {
     // if mode & 2 == 1, GPT-NeoX style
     //
     // b is an int32 vector with size a->ne[2], it contains the positions
-    // c is freq factors (e.g. phi3-128k), (optional)
     GGML_API struct ggml_tensor * ggml_rope(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -1472,6 +1472,7 @@ extern "C" {
             int                   mode);
 
     // custom RoPE
+    // c is freq factors (e.g. phi3-128k), (optional)
     GGML_API struct ggml_tensor * ggml_rope_ext(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
