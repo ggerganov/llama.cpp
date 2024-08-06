@@ -116,26 +116,15 @@ static std::string get_cpu_info() {
     }
     char cpu_brand[256];
     DWORD cpu_brand_size = sizeof(cpu_brand);
-    if (RegQueryValueEx(hKey,
+    if (RegQueryValueExA(hKey,
                         TEXT("ProcessorNameString"),
                         NULL,
                         NULL,
                         (LPBYTE)cpu_brand,
-                        &cpu_brand_size) != ERROR_SUCCESS) {
-        RegCloseKey(hKey);
-        // fail to read processor information
-        return "";
+                        &cpu_brand_size) == ERROR_SUCCESS) {
+        id.assign(cpu_brand, cpu_brand_size);
     }
     RegCloseKey(hKey);
-
-    // ensure the string is null-terminated
-    if (cpu_brand_size >= sizeof(cpu_brand)) {
-        cpu_brand[sizeof(cpu_brand) - 1] = '\0';
-    } else {
-        cpu_brand[cpu_brand_size] = '\0';
-    }
-
-    id = std::string(cpu_brand);
 #endif
     // TODO: other platforms
     return id;
