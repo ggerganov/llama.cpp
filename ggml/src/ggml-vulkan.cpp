@@ -1,6 +1,6 @@
 #include "ggml-vulkan.h"
 #include <vulkan/vulkan_core.h>
-#ifdef GGML_VULKAN_RUN_TESTS
+#if defined(GGML_VULKAN_RUN_TESTS) || defined(GGML_VULKAN_PERF)
 #include <chrono>
 #endif
 
@@ -133,6 +133,9 @@ static ggml_backend_buffer_type_i ggml_backend_vk_buffer_type_interface = {
 #ifdef GGML_VULKAN_MEMORY_DEBUG
 class vk_memory_logger;
 #endif
+#ifdef GGML_VULKAN_PERF
+class vk_perf_logger;
+#endif
 static void ggml_vk_destroy_buffer(vk_buffer& buf);
 
 struct vk_device_struct {
@@ -217,6 +220,9 @@ struct vk_device_struct {
 
 #ifdef GGML_VULKAN_MEMORY_DEBUG
     std::unique_ptr<vk_memory_logger> memory_logger;
+#endif
+#ifdef GGML_VULKAN_PERF
+    std::unique_ptr<vk_perf_logger> perf_logger;
 #endif
 
     ~vk_device_struct() {
@@ -475,6 +481,48 @@ private:
 #else
 #define VK_LOG_MEMORY(msg) ((void) 0)
 #endif // GGML_VULKAN_MEMORY_DEBUG
+
+#if defined(GGML_VULKAN_PERF)
+
+class vk_perf_logger {
+public:
+    void print_timings() {
+        std::cerr << "----------------\nVulkan Timings:" << std::endl;
+        for (const auto& t : timings) {
+            uint64_t total = 0;
+            for (const auto& time : t.second) {
+                total += time;
+            }
+            std::cerr << t.first << ": " << t.second.size() << " x " << (total / t.second.size() / 1000.0) << " ms" << std::endl;
+        }
+
+        timings.clear();
+    }
+
+    void log_timing(const ggml_tensor * node, uint64_t time) {
+        if (node->op == GGML_OP_UNARY) {
+            timings[ggml_unary_op_name(ggml_get_unary_op(node))].push_back(time);
+            return;
+        }
+        if (node->op == GGML_OP_MUL_MAT || node->op == GGML_OP_MUL_MAT_ID) {
+            const uint64_t m = node->src[0]->ne[1];
+            const uint64_t n = node->src[1]->ne[1];
+            const uint64_t k = node->src[1]->ne[0];
+            std::string name = ggml_op_name(node->op);
+            if (n == 1) {
+                name += "_VEC m=" + std::to_string(m) + " k=" + std::to_string(k);
+            } else {
+                name += " m=" + std::to_string(m) + " n=" + std::to_string(n) + " k=" + std::to_string(k);
+            }
+            timings[name].push_back(time);
+            return;
+        }
+        timings[ggml_op_name(node->op)].push_back(time);
+    }
+private:
+    std::map<std::string, std::vector<uint64_t>> timings;
+};
+#endif // GGML_VULKAN_PERF
 
 struct ggml_backend_vk_context {
     std::string name;
@@ -1700,6 +1748,9 @@ static vk_device ggml_vk_get_device(size_t idx) {
 
 #ifdef GGML_VULKAN_MEMORY_DEBUG
         device->memory_logger = std::unique_ptr<vk_memory_logger>(new vk_memory_logger());
+#endif
+#ifdef GGML_VULKAN_PERF
+        device->perf_logger = std::unique_ptr<vk_perf_logger>(new vk_perf_logger());
 #endif
 
         size_t dev_num = vk_instance.device_indices[idx];
@@ -5851,7 +5902,7 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
 
     ctx->tensor_ctxs[node_idx] = compute_ctx;
 
-#ifdef GGML_VULKAN_CHECK_RESULTS
+#if defined(GGML_VULKAN_CHECK_RESULTS) || defined(GGML_VULKAN_PERF)
     // Force context reset on each node so that each tensor ends up in its own context
     // and can be run and compared to its CPU equivalent separately
     last_node = true;
@@ -5935,6 +5986,10 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
 
     vk_context subctx = ctx->tensor_ctxs[tensor_idx].lock();
 
+#ifdef GGML_VULKAN_PERF
+    std::chrono::steady_clock::time_point start;
+#endif // GGML_VULKAN_PERF
+
     // Only run if ctx hasn't been submitted yet
     if (!subctx->seqs.empty()) {
         // Do staging buffer copies
@@ -5942,11 +5997,21 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
             memcpy(cpy.dst, cpy.src, cpy.n);
         }
 
+#ifdef GGML_VULKAN_PERF
+        start = std::chrono::steady_clock::now();
+#endif // GGML_VULKAN_PERF
+
         ggml_vk_submit(subctx, ctx->fence);
     }
 
     if (tensor_idx == subctx->exit_tensor_idx) {
         VK_CHECK(ctx->device->device.waitForFences({ ctx->fence }, true, UINT64_MAX), "ggml_vk_compute_forward waitForFences");
+
+#ifdef GGML_VULKAN_PERF
+        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start);
+        ctx->device->perf_logger->log_timing(tensor, duration.count());
+#endif // GGML_VULKAN_PERF
+
         ctx->device->device.resetFences({ ctx->fence });
 
         // Do staging buffer copies
@@ -6478,6 +6543,10 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
 #endif
         GGML_ASSERT(ok);
     }
+
+#ifdef GGML_VULKAN_PERF
+    ctx->device->perf_logger->print_timings();
+#endif
 
     ggml_vk_graph_cleanup(ctx);
 
