@@ -563,18 +563,18 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     const auto & model = ctx->vision_model;
     const auto & hparams = model.hparams;
 
-    const int image_size     = hparams.image_size;
-    int image_size_width     = image_size;
-    int image_size_height    = image_size;
+    const int image_size = hparams.image_size;
+    int image_size_width  = image_size;
+    int image_size_height = image_size;
     if (ctx->has_minicpmv_projector) {
-        if(load_image_size==nullptr){
-            load_image_size= clip_image_size_init();
+        if (load_image_size == nullptr) {
+            load_image_size = clip_image_size_init();
         }
         LOG_TEE("%s: %d %d\n", __func__, load_image_size->width, load_image_size->height);
-        image_size_width     = load_image_size->width;
-        image_size_height    = load_image_size->height;
-        if (is_inf){
-            image_size_width = imgs->data->nx;
+        image_size_width  = load_image_size->width;
+        image_size_height = load_image_size->height;
+        if (is_inf) {
+            image_size_width  = imgs->data->nx;
             image_size_height = imgs->data->ny;
         }
     }
@@ -618,7 +618,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     struct ggml_tensor * embeddings = inp;
     struct ggml_tensor * pos_embed;
 
-    if(ctx->has_llava_projector){
+    if (ctx->has_llava_projector) {
         // concat class_embeddings and patch_embeddings
         if (ctx->has_class_embedding) {
             embeddings = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size);
@@ -638,7 +638,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     embeddings =
         ggml_add(ctx0, embeddings, ggml_get_rows(ctx0, model.position_embeddings, positions));
 
-    if(ctx->has_minicpmv_projector){
+    if (ctx->has_minicpmv_projector) {
         int pos_w = image_size_width/patch_size;
         int pos_h = image_size_height/patch_size;
         pos_embed = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, 4096, pos_w * pos_h, 1);
@@ -655,7 +655,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // loop over layers
-    if (ctx->has_minicpmv_projector){
+    if (ctx->has_minicpmv_projector) {
         n_layer += 1;
     }
     for (int il = 0; il < n_layer - 1; il++) {
@@ -747,8 +747,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
 
     // llava projector
-    if(ctx->has_llava_projector)
-    {
+    if (ctx->has_llava_projector) {
         embeddings = ggml_reshape_2d(ctx0, embeddings, embeddings->ne[0], embeddings->ne[1]);
 
         struct ggml_tensor * patches = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_patches);
@@ -770,8 +769,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             embeddings = ggml_mul_mat(ctx0, model.mm_2_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_2_b);
 
-        } 
-        else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
+        } else if (ctx->proj_type == PROJECTOR_TYPE_MLP_NORM) {
             embeddings = ggml_mul_mat(ctx0, model.mm_0_w, embeddings);
             embeddings = ggml_add(ctx0, embeddings, model.mm_0_b);
             // ggml_tensor_printf(embeddings, "mm_0_w",0,true,false);
@@ -931,7 +929,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         }
     }
     // minicpmv projector
-    else if(ctx->has_minicpmv_projector)
+    else if (ctx->has_minicpmv_projector)
     {
         if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
             struct ggml_tensor * q = model.mm_model_query;
@@ -939,11 +937,12 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                 q = ggml_norm(ctx0, q, eps);
                 q = ggml_add(ctx0, ggml_mul(ctx0, q, model.mm_model_ln_q_w), model.mm_model_ln_q_b);
             }
-            struct ggml_tensor *k, *v = ggml_mul_mat(ctx0, model.mm_model_kv_proj, embeddings);
+            struct ggml_tensor * v = ggml_mul_mat(ctx0, model.mm_model_kv_proj, embeddings);
             { // layernorm
                 v = ggml_norm(ctx0, v, eps);
                 v = ggml_add(ctx0, ggml_mul(ctx0, v, model.mm_model_ln_kv_w), model.mm_model_ln_kv_b);
             }
+            struct ggml_tensor * k;
             { // position
                 // q = ggml_add(ctx0, q, model.mm_model_pos_embed);
                 k = ggml_add(ctx0, v, pos_embed);
@@ -1467,7 +1466,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     return new_clip;
 }
 
-void clip_add_load_image_size(struct clip_ctx * ctx_clip, struct clip_image_size * load_image_size){
+void clip_add_load_image_size(struct clip_ctx * ctx_clip, struct clip_image_size * load_image_size) {
     ctx_clip->load_image_size = load_image_size;
 }
 
@@ -1839,16 +1838,16 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
     LOG_TEE("%s: multiple %d\n", __func__, multiple);
     images.push_back(std::vector<clip_image_u8 *>());
 
-    if(multiple <= 1){
+    if (multiple <= 1) {
         auto best_size = uhd_find_best_resize(original_size, scale_resolution, patch_size, true);
-        clip_image_u8 *source_image = clip_image_u8_init();
+        clip_image_u8 * source_image = clip_image_u8_init();
         bicubic_resize(*img, *source_image, best_size.first, best_size.second);
         // source_image = image.resize(best_size, Image.Resampling.BICUBIC)
         images[images.size()-1].push_back(source_image);
     }
-    else if(multiple > 1){
+    else if (multiple > 1) {
         auto best_size = uhd_find_best_resize(original_size, scale_resolution, patch_size);
-        clip_image_u8 *source_image = clip_image_u8_init();
+        clip_image_u8 * source_image = clip_image_u8_init();
         bicubic_resize(*img, *source_image, best_size.first, best_size.second);
         // source_image = image.copy().resize(best_resize, Image.Resampling.BICUBIC)
         LOG_TEE("%s: image_size: %d %d; source_image size: %d %d\n", __func__, img->nx, img->ny, best_size.first, best_size.second);
@@ -1858,7 +1857,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
         LOG_TEE("%s: image_size: %d %d; best_grid: %d %d\n", __func__, img->nx, img->ny, best_grid.first, best_grid.second);
         
         auto refine_size = uhd_get_refine_size(original_size, best_grid, scale_resolution, patch_size, true);
-        clip_image_u8 *refine_image = clip_image_u8_init();
+        clip_image_u8 * refine_image = clip_image_u8_init();
         bicubic_resize(*img, *refine_image, refine_size.first, refine_size.second);
 
         LOG_TEE("%s: refine_image_size: %d %d; refine_size: %d %d\n", __func__, refine_image->nx, refine_image->ny, refine_size.first, refine_size.second);
@@ -1891,7 +1890,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
     return images;
 }
 
-int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip){
+int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip) {
     const int max_slice_nums=9;
     const int scale_resolution=448;
     const int original_width = ctx_clip->load_image_size->width;
@@ -1906,16 +1905,15 @@ int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip){
 // returns the normalized float tensor for llava-1.5, for spatial_unpad with anyres processing for llava-1.6 it returns the normalized image patch tensors as a vector
 // res_imgs memory is being allocated here, previous allocations will be freed if found
 bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch * res_imgs) {
-
-    if(clip_is_minicpmv(ctx)){
+    if (clip_is_minicpmv(ctx)) {
         std::vector<std::vector<clip_image_u8 *>> imgs = uhd_slice_image(img);
         res_imgs->size = 0;
-        for (size_t i = 0; i < imgs.size(); ++i){
+        for (size_t i = 0; i < imgs.size(); ++i) {
             res_imgs->size += imgs[i].size();
         }
         res_imgs->data = new clip_image_f32[res_imgs->size];
         int idx = 0;
-        for (size_t i = 0; i < imgs.size(); ++i){
+        for (size_t i = 0; i < imgs.size(); ++i) {
             for (size_t j = 0; j < imgs[i].size(); ++j) {
                 LOG_TEE("%s: %d %d\n", __func__,imgs[i][j]->nx,imgs[i][j]->ny);
                 clip_image_f32 * res = clip_image_f32_init();
@@ -2149,7 +2147,7 @@ int clip_n_patches(const struct clip_ctx * ctx) {
     return n_patches;
 }
 
-static std::vector<std::vector<std::vector<float>>> get_1d_sincos_pos_embed_from_grid_new(int embed_dim, const std::vector<std::vector<float>>& pos) {
+static std::vector<std::vector<std::vector<float>>> get_1d_sincos_pos_embed_from_grid_new(int embed_dim, const std::vector<std::vector<float>> & pos) {
     assert(embed_dim % 2 == 0);
     int H = pos.size();
     int W = pos[0].size();
@@ -2173,7 +2171,7 @@ static std::vector<std::vector<std::vector<float>>> get_1d_sincos_pos_embed_from
     return emb;
 }
 
-static std::vector<std::vector<std::vector<float>>> get_2d_sincos_pos_embed_from_grid(int embed_dim, const std::vector<std::vector<std::vector<float>>>& grid) {
+static std::vector<std::vector<std::vector<float>>> get_2d_sincos_pos_embed_from_grid(int embed_dim, const std::vector<std::vector<std::vector<float>>> & grid) {
     assert(embed_dim % 2 == 0);
     std::vector<std::vector<std::vector<float>>> emb_h = get_1d_sincos_pos_embed_from_grid_new(embed_dim / 2, grid[0]); // (H, W, D/2)
     std::vector<std::vector<std::vector<float>>> emb_w = get_1d_sincos_pos_embed_from_grid_new(embed_dim / 2, grid[1]); // (H, W, D/2)
@@ -2269,12 +2267,12 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     const auto & model = ctx->vision_model;
     const auto & hparams = model.hparams;
 
-    const int image_size     = hparams.image_size;
-    int image_size_width     = image_size;
-    int image_size_height    = image_size;
+    const int image_size = hparams.image_size;
+    int image_size_width  = image_size;
+    int image_size_height = image_size;
     if (ctx->has_minicpmv_projector) {
-        image_size_width     = imgs->data[0].nx;;
-        image_size_height    = imgs->data[0].ny;
+        image_size_width  = imgs->data[0].nx;
+        image_size_height = imgs->data[0].ny;
     }
     const int patch_size    = hparams.patch_size;
     const int num_patches   = ((image_size_width / patch_size) * (image_size_height / patch_size));
@@ -2343,8 +2341,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             ggml_backend_tensor_set(pos_embed, pos_embed_data, 0, ggml_nbytes(pos_embed));
             free(pos_embed_data);
         }
-    }
-    else{
+    } else {
         {
             if (ctx->has_class_embedding) {
                 struct ggml_tensor * embeddings = ggml_graph_get_tensor(gf, "embeddings");
