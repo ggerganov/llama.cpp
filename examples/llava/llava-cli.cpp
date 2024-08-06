@@ -323,10 +323,27 @@ int main(int argc, char ** argv) {
                 std::cerr << "error: failed to load image " << image << ". Terminating\n\n";
                 return 1;
             }
-
+            size_t pos = 0;
+            std::string str = params.templ;
+            // format output according to template
+            if (!params.templ.empty()){
+                while((pos = str.find("[image]")) != std::string::npos)
+                    str = str.replace(pos, 7, image);
+                pos = str.find("[description]");
+                if (pos != std::string::npos)
+                    std::cout << str.substr(0, pos);
+                else
+                    std::cout << params.templ;
+                fflush(stdout);
+            }
             // process the prompt
             process_prompt(ctx_llava, image_embed, &params, params.prompt);
-
+            // terminate output according to template
+            if (!params.templ.empty()){
+                if (pos != std::string::npos)
+                    std::cout << str.substr(pos + 13);
+                fflush(stdout);
+            }
             llama_print_timings(ctx_llava->ctx_llama);
             llava_image_embed_free(image_embed);
             ctx_llava->model = NULL;
