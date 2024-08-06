@@ -433,10 +433,10 @@ static llama_token_data_array llama_sampling_prepare_impl(
     {
         const int penalty_tokens_used_size = std::min(penalty_tokens.size(), (size_t)dry_penalty_last_n);
         if (penalty_tokens_used_size) {
-            llama_sample_dry(&cur_p,
+            llama_sample_dry(ctx_main, &cur_p,
                         penalty_tokens.data() + penalty_tokens.size() - penalty_tokens_used_size,
                         penalty_tokens_used_size, dry_base, dry_multiplier, dry_allowed_length,
-                        params.dry_seq_breakers.data(), params.dry_seq_breakers.size());
+                        params.dry_seq_breakers);
         }
     }
 

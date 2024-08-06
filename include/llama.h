@@ -1085,16 +1085,17 @@ extern "C" {
                            float   p,
                           size_t   min_keep);
 
-    ///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677
-    LLAMA_API void llama_sample_dry(
-          llama_token_data_array * candidates,
-               const llama_token * last_tokens,
-                          size_t   last_tokens_size,
-                           float   dry_base,
-                           float   dry_multiplier,
-                             int   dry_allowed_length,
-               const llama_token * dry_seq_breakers,
-                          size_t   dry_seq_breakers_size);
+    // ///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677
+    // LLAMA_API void llama_sample_dry(
+    //         struct llama_context * ctx,
+    //       llama_token_data_array * candidates,
+    //            const llama_token * last_tokens,
+    //                       size_t   last_tokens_size,
+    //                        float   dry_base,
+    //                        float   dry_multiplier,
+    //                          int   dry_allowed_length,
+    //             const std::vector<std::string>
+    //                              & dry_seq_breakers);
 
     /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
     LLAMA_API void llama_sample_tail_free(
@@ -1245,6 +1246,18 @@ std::pair<std::vector<uint32_t>, llama_partial_utf8> decode_utf8(
 // Randomly selects a token from the candidates based on their probabilities using given std::mt19937.
 // This is a temporary workaround in order to fix race conditions when sampling with multiple sequences.
 llama_token llama_sample_token_with_rng(struct llama_context * ctx, llama_token_data_array * candidates, std::mt19937 & rng);
+
+///  @details DRY sampler as described in: https://github.com/oobabooga/text-generation-webui/pull/5677
+LLAMA_API void llama_sample_dry(
+        struct llama_context * ctx,
+        llama_token_data_array * candidates,
+            const llama_token * last_tokens,
+                        size_t   last_tokens_size,
+                        float   dry_base,
+                        float   dry_multiplier,
+                            int   dry_allowed_length,
+            const std::vector<std::string>
+                                & dry_seq_breakers);
 
 #endif // LLAMA_API_INTERNAL
 
