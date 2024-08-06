@@ -71,6 +71,9 @@ GGML_API size_t ggml_gallocr_get_buffer_size(ggml_gallocr_t galloc, int buffer_i
 GGML_API struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_context * ctx, ggml_backend_buffer_type_t buft);
 GGML_API struct ggml_backend_buffer * ggml_backend_alloc_ctx_tensors(struct ggml_context * ctx, ggml_backend_t backend);
 
+// Export tensor allocations in a graph to a file that can be plotted
+GGML_API void ggml_gallocr_export_allocs(const char * filename, struct ggml_cgraph * graph);
+
 #ifdef  __cplusplus
 }
 #endif

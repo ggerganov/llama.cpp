@@ -14642,6 +14642,13 @@ static int llama_decode_internal(
 
         ggml_backend_sched_alloc_graph(lctx.sched, gf);
 
+        #if 1
+        static int id = 0;
+        printf("saving allocs %d (%d tokens)\n", id, n_tokens);
+        ggml_gallocr_export_allocs(format("allocs%d.csv", id).c_str(), ggml_backend_sched_get_graph_copy(lctx.sched));
+        id++;
+        #endif
+
         llama_set_inputs(lctx, u_batch);
 
         llama_graph_compute(lctx, gf, n_threads);

@@ -2028,6 +2028,10 @@ ggml_backend_t ggml_backend_sched_get_tensor_backend(ggml_backend_sched_t sched,
     return sched->backends[backend_index];
 }
 
+GGML_API struct ggml_cgraph * ggml_backend_sched_get_graph_copy(ggml_backend_sched_t sched) {
+    return &sched->graph;
+}
+
 // utils
 
 void ggml_backend_view_init(struct ggml_tensor * tensor) {

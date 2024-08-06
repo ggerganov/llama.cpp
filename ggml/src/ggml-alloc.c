@@ -1034,3 +1034,30 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
 ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors(struct ggml_context * ctx, ggml_backend_t backend) {
     return ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_get_default_buffer_type(backend));
 }
+
+
+static void export_tensor(FILE * f, struct ggml_tensor * t) {
+    size_t offset = (uintptr_t)t->data - (uintptr_t)ggml_backend_buffer_get_base(t->buffer);
+    // [tensor_id] [tensor_view_src_id] [tensor_view_offs] [tensor_name] [buffer_id] [buffer_name] [offset] [size]
+    fprintf(f, "%p,%p,%zu,\"%s\",%p,\"%s\",%zu,%zu\n",
+        (void *)t, (void *)t->view_src, t->view_offs, t->name,
+        (void *)t->buffer, ggml_backend_buffer_name(t->buffer),
+        offset, ggml_backend_buft_get_alloc_size(t->buffer->buft, t));
+
+}
+
+void ggml_gallocr_export_allocs(const char * filename, struct ggml_cgraph * graph) {
+    FILE * f = fopen(filename, "wb");
+
+    fprintf(f, "tensor_id,tensor_view_src_id,tensor_view_offs,tensor_name,buffer_id,buffer_name,offset,size\n");
+
+    for (int i = 0; i < graph->n_leafs; i++) {
+        export_tensor(f, graph->leafs[i]);
+    }
+
+    for (int i = 0; i < graph->n_nodes; i++) {
+        export_tensor(f, graph->nodes[i]);
+    }
+
+    fclose(f);
+}
