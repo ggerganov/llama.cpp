@@ -279,7 +279,13 @@ private:
             // output any symbols that did not form tokens as bytes.
             output.reserve(output.size() + symbol.n);
             for (int j = 0; j < (int)symbol.n; ++j) {
-                llama_vocab::id token_id = llama_byte_to_token_impl(vocab, symbol.text[j]);
+                llama_vocab::id token_id;
+                try {
+                    token_id = llama_byte_to_token_impl(vocab, symbol.text[j]);
+                } catch(const std::exception & e) {
+                    // not found, use UNK token instead.
+                    token_id = vocab.special_unk_id;
+                }
                 output.push_back(token_id);
             }
             return;
