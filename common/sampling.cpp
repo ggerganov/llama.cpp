@@ -40,7 +40,7 @@ struct llama_sampling_context * llama_sampling_init(const struct gpt_sampling_pa
         llama_sampling_set_logit_bias(result->smpl, params.logit_bias.size(), params.logit_bias.data());
     }
 
-    result->prev.resize(params.n_prev);
+    result->prev = ring_buffer<llama_token>(params.n_prev);
 
     result->n_valid = 0;
 
@@ -56,7 +56,7 @@ void llama_sampling_free(struct llama_sampling_context * ctx) {
 void llama_sampling_reset(llama_sampling_context * ctx) {
     llama_sampling_reset(ctx->smpl);
 
-    std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
+    ctx->prev.clear();
     ctx->cur.clear();
     ctx->n_valid = 0;
 }
@@ -384,7 +384,7 @@ static llama_token_data_array llama_sampling_prepare_impl(
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
 
     // apply penalties
-    const auto & penalty_tokens = prev;
+    const auto & penalty_tokens = prev.to_vector();
     const int penalty_tokens_used_size = std::min((int)penalty_tokens.size(), penalty_last_n);
     if (penalty_tokens_used_size) {
         const float nl_logit = logits[llama_token_nl(llama_get_model(ctx_main))];
@@ -434,7 +434,9 @@ void llama_sampling_accept(
         struct llama_sampling_context * ctx_sampling,
         llama_token id,
         bool apply_grammar) {
-    ctx_sampling->prev.erase(ctx_sampling->prev.begin());
+    if (!ctx_sampling->prev.empty()) {
+        ctx_sampling->prev.pop_front();
+    }
     ctx_sampling->prev.push_back(id);
 
     if (apply_grammar) {

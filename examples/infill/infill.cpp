@@ -421,7 +421,7 @@ int main(int argc, char ** argv) {
 
             llama_sampling_accept(ctx_sampling, id, true);
 
-            LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, ctx_sampling->prev).c_str());
+            // LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, ctx_sampling->prev.to_vector()).c_str());
 
             embd.push_back(id);
 
