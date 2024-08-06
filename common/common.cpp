@@ -555,6 +555,26 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         sparams.penalty_present = std::stof(argv[i]);
         return true;
     }
+    if (arg == "--dry-multiplier") {
+        CHECK_ARG
+        sparams.dry_multiplier = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--dry-base") {
+        CHECK_ARG
+        sparams.dry_base = std::stof(argv[i]);
+        return true;
+    }
+    if (arg == "--dry-allowed-length") {
+        CHECK_ARG
+        sparams.dry_allowed_length = std::stoi(argv[i]);
+        return true;
+    }
+    if (arg == "--dry-penalty-last-n") {
+        CHECK_ARG
+        sparams.dry_penalty_last_n = std::stoi(argv[i]);
+        return true;
+    }
     if (arg == "--dynatemp-range") {
         CHECK_ARG
         sparams.dynatemp_range = std::stof(argv[i]);
@@ -1471,6 +1491,11 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       --repeat-penalty N",     "penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)", (double)sparams.penalty_repeat });
     options.push_back({ "*",           "       --presence-penalty N",   "repeat alpha presence penalty (default: %.1f, 0.0 = disabled)", (double)sparams.penalty_present });
     options.push_back({ "*",           "       --frequency-penalty N",  "repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)", (double)sparams.penalty_freq });
+    options.push_back({ "*",           "       --dry-multiplier N",     "DRY sampling multiplier (default: %.1f, 0.0 = disabled)", (double)sparams.dry_multiplier });
+    options.push_back({ "*",           "       --dry-base N",           "DRY sampling base (default: %.1f)", (double)sparams.dry_base });
+    options.push_back({ "*",           "       --dry-allowed-length N", "DRY sampling allowed length (default: %d)", sparams.dry_allowed_length });
+    options.push_back({ "*",           "       --dry-penalty-last-n N", "DRY sampling penalty last n tokens (-1 = context size, default: %d)", sparams.dry_penalty_last_n });
+
     options.push_back({ "*",           "       --dynatemp-range N",     "dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)sparams.dynatemp_range });
     options.push_back({ "*",           "       --dynatemp-exp N",       "dynamic temperature exponent (default: %.1f)", (double)sparams.dynatemp_exponent });
     options.push_back({ "*",           "       --mirostat N",           "use Mirostat sampling.\n"
