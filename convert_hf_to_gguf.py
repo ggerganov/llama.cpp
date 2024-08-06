@@ -10,6 +10,8 @@ import json
 import os
 import re
 import sys
+import uuid
+import hashlib
 from enum import IntEnum
 from pathlib import Path
 from hashlib import sha256
@@ -62,6 +64,7 @@ class Model:
     gguf_writer: gguf.GGUFWriter
     model_name: str | None
     metadata_override: Path | None
+    generated_source_uuid: str | None
     dir_model_card: Path
 
     # subclasses should define this!
@@ -262,9 +265,17 @@ class Model:
         return False
 
     def prepare_tensors(self):
+
+        uuidv5_sha1 = hashlib.sha1()
+        uuidv5_sha1.update(uuid.UUID('ef001206-dadc-5f6d-a15f-3359e577d4e5').bytes)
+
         max_name_len = max(len(s) for _, s in self.tensor_map.mapping.values()) + len(".weight,")
 
         for name, data_torch in self.get_tensors():
+
+            uuidv5_data_buffer: np.ndarray = data_torch.numpy()
+            uuidv5_sha1.update(uuidv5_data_buffer.data.tobytes('C'))
+
             # we don't need these
             if name.endswith((".attention.masked_bias", ".attention.bias", ".rotary_emb.inv_freq")):
                 continue
@@ -344,6 +355,9 @@ class Model:
 
                 self.gguf_writer.add_tensor(new_name, data, raw_dtype=data_qtype)
 
+        # Upon missing source model uuid, generate uuid based on source tensor content
+        self.generated_source_uuid = str(uuid.UUID(bytes=uuidv5_sha1.digest()[:16], version=5))
+
     def set_type(self):
         self.gguf_writer.add_type(gguf.GGUFType.MODEL)
 
@@ -381,6 +395,13 @@ class Model:
 
             # Process templated file name with the output ftype, useful with the "auto" ftype
             self.fname_out = self.fname_out.parent / gguf.fill_templated_filename(self.fname_out.name, output_type)
+
+        if not vocab_only:
+            if self.metadata.source_uuid is not None:
+                logger.info(f"Source UUID present: {self.metadata.source_uuid}")
+            elif self.generated_source_uuid is not None:
+                logger.info(f"Source UUID missing. Using generated source uuid: {self.generated_source_uuid}")
+                self.metadata.source_uuid = self.generated_source_uuid
 
         self.set_type()
 
@@ -3618,6 +3639,10 @@ class LazyTorchTensor(gguf.LazyBase):
     _dtype_map: dict[torch.dtype, type] = {
         torch.float16: np.float16,
         torch.float32: np.float32,
+        torch.float64: np.float64,
+
+        # No direct mapping avaliable. Cast upwards to avoid loss of precision
+        torch.bfloat16: np.float32,
     }
 
     # used for safetensors slices
