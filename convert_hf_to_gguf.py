@@ -2754,6 +2754,7 @@ class RwkvModel(Model):
         head_size = self.hparams["head_size"]
         hidden_size = self.hparams["hidden_size"]
         layer_norm_eps = self.hparams["layer_norm_epsilon"]
+        rescale_every_n_layers = self.hparams["rescale_every"]
 
         # RWKV isn't context limited
         self.gguf_writer.add_context_length(1048576)
@@ -2762,14 +2763,13 @@ class RwkvModel(Model):
         self.gguf_writer.add_head_count(0)
         self.gguf_writer.add_layer_norm_eps(layer_norm_eps)
         self.gguf_writer.add_feed_forward_length(0) # required by llama.cpp
+        self.gguf_writer.add_rescale_every_n_layers(rescale_every_n_layers)
         # temporarlily reuse mamba hparams
         self.gguf_writer.add_ssm_inner_size(hidden_size)
         self.gguf_writer.add_ssm_conv_kernel(3)
         self.gguf_writer.add_ssm_state_size(head_size)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
-        del bid  # unused
-
         new_name = self.map_tensor_name(name)
 
         if not (new_name.endswith(".weight") or new_name.endswith(".bias")):

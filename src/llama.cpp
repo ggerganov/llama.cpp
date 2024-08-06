@@ -297,6 +297,7 @@ enum llm_kv {
     LLM_KV_DECODER_START_TOKEN_ID,
     LLM_KV_ATTN_LOGIT_SOFTCAPPING,
     LLM_KV_FINAL_LOGIT_SOFTCAPPING,
+    LLM_KV_RESCALE_EVERY_N_LAYERS,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -391,11 +392,12 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_EXPERT_USED_COUNT,                 "%s.expert_used_count"                 },
     { LLM_KV_EXPERT_SHARED_COUNT,               "%s.expert_shared_count"               },
     { LLM_KV_EXPERT_WEIGHTS_SCALE,              "%s.expert_weights_scale"              },
-    { LLM_KV_POOLING_TYPE ,                     "%s.pooling_type"                      },
+    { LLM_KV_POOLING_TYPE,                      "%s.pooling_type"                      },
     { LLM_KV_LOGIT_SCALE,                       "%s.logit_scale"                       },
     { LLM_KV_DECODER_START_TOKEN_ID,            "%s.decoder_start_token_id"            },
     { LLM_KV_ATTN_LOGIT_SOFTCAPPING,            "%s.attn_logit_softcapping"            },
     { LLM_KV_FINAL_LOGIT_SOFTCAPPING,           "%s.final_logit_softcapping"           },
+    { LLM_KV_RESCALE_EVERY_N_LAYERS,            "%s.rescale_every_n_layers"            },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,             "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,          "%s.attention.head_count_kv"          },
@@ -2286,6 +2288,9 @@ struct llama_hparams {
 
     float f_attn_logit_softcapping = 50.0f;
     float f_final_logit_softcapping = 30.0f;
+
+    // for RWKV
+    uint32_t rescale_every_n_layers = 0;
 
     float    rope_attn_factor = 1.0f;
     float    rope_freq_base_train;
@@ -5883,6 +5888,7 @@ static void llm_load_hparams(
         case LLM_ARCH_RWKV: 
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
+                ml.get_key(LLM_KV_RESCALE_EVERY_N_LAYERS, hparams.rescale_every_n_layers, false);
 
                 // TODO: Re-using mamba keys right now, but RWKV isn't state-space
                 ml.get_key(LLM_KV_SSM_CONV_KERNEL,  hparams.ssm_d_conv);
@@ -15130,6 +15136,9 @@ struct llm_build_context {
                     ffn_shift
                 )
             );
+            if ((layer_i + 1) % hparams.rescale_every_n_layers == 0) {
+                x = ggml_scale_inplace(ctx0, x, 0.5F);
+            }
         }
 
         // Something related to skipping tokens, specifics unclear
