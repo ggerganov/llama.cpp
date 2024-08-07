@@ -113,7 +113,7 @@ static void usage(const char * executable) {
     printf("      --ffn-gate-type ggml_type: use this ggml_type for the ffn_gate tensor.\n");
     printf("      --ffn-down-type ggml_type: use this ggml_type for the ffn_down tensor.\n");
     printf("      --ffn-up-type ggml_type: use this ggml_type for the ffn_up tensor.\n\n");
-    printf("  --keep-split: will generate quatized model in the same shards as input\n");
+    printf("  --keep-split: will generate quantized model in the same shards as input\n");
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
