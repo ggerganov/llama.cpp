@@ -896,7 +896,8 @@ ggml/src/ggml-metal-embed.o: \
 	@echo ".globl _ggml_metallib_end"                   >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
 	@echo "_ggml_metallib_end:"                         >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
 	$(CC) $(CFLAGS) -c $(TEMP_ASSEMBLY)/ggml-metal-embed.s -o $@
-	@rm -fr ${TEMP_ASSEMBLY}
+	@rm -f ${TEMP_ASSEMBLY}/ggml-metal-embed.s
+	@rmdir ${TEMP_ASSEMBLY}
 endif
 endif # GGML_METAL
 
