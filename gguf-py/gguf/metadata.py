@@ -367,19 +367,24 @@ class Metadata:
                 for model_id in metadata_base_models:
                     # NOTE: model size of base model is assumed to be similar to the size of the current model
                     base_model = {}
-                    if isinstance(model_id, str) and (model_id.startswith("http://") or model_id.startswith("https://")):
-                        base_model["repo_url"] = model_id
+                    if isinstance(model_id, str):
+                        if model_id.startswith("http://") or model_id.startswith("https://") or model_id.startswith("ssh://"):
+                            base_model["repo_url"] = model_id
+                        else:
+                            # Likely a Hugging Face ID
+                            model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id, total_params)
+                            if model_full_name_component is not None:
+                                base_model["name"] = Metadata.id_to_title(model_full_name_component)
+                            if org_component is not None:
+                                base_model["organization"] = Metadata.id_to_title(org_component)
+                            if version is not None:
+                                base_model["version"] = version
+                            if org_component is not None and model_full_name_component is not None:
+                                base_model["repo_url"] = f"https://huggingface.co/{org_component}/{model_full_name_component}"
+                    elif isinstance(model_id, dict):
+                        base_model = model_id
                     else:
-                        # Likely a Hugging Face ID
-                        model_full_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(model_id, total_params)
-                        if model_full_name_component is not None:
-                            base_model["name"] = Metadata.id_to_title(model_full_name_component)
-                        if org_component is not None:
-                            base_model["organization"] = Metadata.id_to_title(org_component)
-                        if version is not None:
-                            base_model["version"] = version
-                        if org_component is not None and model_full_name_component is not None:
-                            base_model["repo_url"] = f"https://huggingface.co/{org_component}/{model_full_name_component}"
+                        logger.error(f"base model entry '{str(model_id)}' not in a known format")
                     metadata.base_models.append(base_model)
 
             if "datasets" in model_card or "dataset" in model_card:
@@ -399,19 +404,24 @@ class Metadata:
                 for dataset_id in metadata_datasets:
                     # NOTE: model size of base model is assumed to be similar to the size of the current model
                     dataset = {}
-                    if isinstance(dataset_id, str) and (dataset_id.startswith("http://") or dataset_id.startswith("https://")):
-                        dataset["repo_url"] = dataset_id
+                    if isinstance(dataset_id, str):
+                        if dataset_id.startswith("http://") or dataset_id.startswith("https://") or dataset_id.startswith("ssh://"):
+                            dataset["repo_url"] = dataset_id
+                        else:
+                            # Likely a Hugging Face ID
+                            dataset_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(dataset_id, total_params)
+                            if dataset_name_component is not None:
+                                dataset["name"] = Metadata.id_to_title(dataset_name_component)
+                            if org_component is not None:
+                                dataset["organization"] = Metadata.id_to_title(org_component)
+                            if version is not None:
+                                dataset["version"] = version
+                            if org_component is not None and dataset_name_component is not None:
+                                dataset["repo_url"] = f"https://huggingface.co/{org_component}/{dataset_name_component}"
+                    elif isinstance(dataset_id, dict):
+                        dataset = dataset_id
                     else:
-                        # Likely a Hugging Face ID
-                        dataset_name_component, org_component, basename, finetune, version, size_label = Metadata.get_model_id_components(dataset_id, total_params)
-                        if dataset_name_component is not None:
-                            dataset["name"] = Metadata.id_to_title(dataset_name_component)
-                        if org_component is not None:
-                            dataset["organization"] = Metadata.id_to_title(org_component)
-                        if version is not None:
-                            dataset["version"] = version
-                        if org_component is not None and dataset_name_component is not None:
-                            dataset["repo_url"] = f"https://huggingface.co/{org_component}/{dataset_name_component}"
+                        logger.error(f"dataset entry '{str(dataset_id)}' not in a known format")
                     metadata.datasets.append(dataset)
 
             use_model_card_metadata("license", "license")
