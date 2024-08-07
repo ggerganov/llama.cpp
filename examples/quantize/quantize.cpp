@@ -118,11 +118,11 @@ static void usage(const char * executable) {
     printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
     printf("Note: The token embeddings tensor is loaded in system RAM, even in case of full GPU/VRAM offload.\n");
-	printf("Note: The recommanded type for the output tensor is q6_K for the ffn types > iq3_xxs and < q8_0.\n");
-	printf("Note: Usually, attn-q-type can be one type below the chosen ffn type, and attn-v-type should be one type above.\n");
+    printf("Note: The recommanded type for the output tensor is q6_K for the ffn types > iq3_xxs and < q8_0.\n");
+    printf("Note: Usually, attn-q-type can be one type below the chosen ffn type, and attn-v-type should be one type above.\n");
     printf("Note: --attn-qkv-type replaces the types attn-q, attn-k, and attn-v on some models.\n");
-	printf("Note: Write the specific tensor legacy quants as qN_N, the K-Quants as qN_K, the IQ-Quants as iqN_xx.\n");
-    //TODO: - eventually - harmonize the CAPS writing of the FTYPEs, and non CAPS writing of the GGML_TYPEs.	
+    printf("Note: Write the specific tensor legacy quants as qN_N, the K-Quants as qN_K, the IQ-Quants as iqN_xx.\n");
+    //TODO: - eventually - harmonize the CAPS writing of the FTYPEs, and non CAPS writing of the GGML_TYPEs.
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
         if (it.name != "COPY") {
