@@ -6,7 +6,6 @@ import re
 import torch
 import numpy as np
 from gguf import *
-import timm
 from transformers.models.idefics2.modeling_idefics2 import Idefics2VisionTransformer, Idefics2VisionConfig
 
 TEXT = "clip.text"
@@ -298,6 +297,7 @@ if has_minicpmv_projector:
         for nk, nv in kvs.items():
             new_state_dict[nk] = nv
     projector = new_state_dict
+    ftype_cur = 0
     for name, data in projector.items():
         name = get_tensor_name(name)
         data = data.squeeze().numpy()
