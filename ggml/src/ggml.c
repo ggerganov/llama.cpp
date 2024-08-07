@@ -7675,7 +7675,8 @@ struct ggml_tensor * ggml_rwkv_wkv(
         is_node = true;
     }
 
-    const int64_t ne[4] = { S * H, n_tokens, 1, 1 };
+    // concat output and new_state
+    const int64_t ne[4] = { S * H, n_tokens + S, 1, 1 };
     struct ggml_tensor * result = ggml_new_tensor(ctx, GGML_TYPE_F32, 4, ne);
 
     result->op   = GGML_OP_RWKV_WKV;
@@ -16853,11 +16854,12 @@ static void ggml_compute_forward_add_rel_pos(
 static void ggml_compute_forward_rwkv_wkv_f32(
         const struct ggml_compute_params * params,
         struct ggml_tensor * dst) {
-    const size_t T = dst->ne[1];
+    const size_t T = dst->src[1]->ne[3];
     const size_t C = dst->ne[0];
     const size_t H = dst->src[1]->ne[2];
 
     float * dst_data = (float *) dst->data;
+    float * state = ((float *) dst->data) + C * T;
 
     if (params->ith != 0) {
         return;
@@ -16870,7 +16872,7 @@ static void ggml_compute_forward_rwkv_wkv_f32(
     float * r =          (float *) dst->src[2]->data;
     float * time_faaaa = (float *) dst->src[3]->data;
     float * time_decay = (float *) dst->src[4]->data;
-    float * state =      (float *) dst->src[5]->data;
+    memcpy(state, dst->src[5]->data, (C / H) * C * sizeof(float));
 
     size_t t_stride = H * (C / H);
 
