@@ -85,7 +85,6 @@ UNICODE_CATEGORY_TO_INDEX = {
 
 
 codepoint_categs = array.array('B', [0]) * MAX_CODEPOINTS  # Undefined
-table_whitespace = []
 table_lowercase = []
 table_uppercase = []
 table_nfd = []
@@ -111,17 +110,18 @@ for (cpt, cpt_lower, cpt_upper, categ, bidir) in unicode_data_iter():
         table_nfd.append((cpt, norm))
 
 
-# whitespaces, see "<White_Space>" https://www.unicode.org/Public/UCD/latest/ucd/PropList.txt
-table_whitespace.extend(range(0x0009, 0x000D + 1))
-table_whitespace.extend(range(0x2000, 0x200A + 1))
-table_whitespace.extend([0x0020, 0x0085, 0x00A0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000])
-
-
 # sort by codepoint
-table_whitespace.sort()
 table_lowercase.sort()
 table_uppercase.sort()
 table_nfd.sort()
+
+
+# whitespaces, see "<White_Space>" https://www.unicode.org/Public/UCD/latest/ucd/PropList.txt
+whitespace_ranges: list[tuple[int, int]] = []  # start, last
+whitespace_ranges.append((0x0009, 0x000D))
+whitespace_ranges.append((0x2000, 0x200A))
+for whitespace in [0x0020, 0x0085, 0x00A0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000]:
+    whitespace_ranges.append((whitespace, whitespace))
 
 
 # run length encoding, see unicode_cpt_category() in unicode.cpp
@@ -162,7 +162,6 @@ out("""\
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
 """)
 
 out("const std::vector<uint16_t> unicode_rle_codepoints_categs = {  // run length encoding, 5 bits categ + 11 bits length")
@@ -170,9 +169,9 @@ for rle in codepoint_categs_runs:
     out("0x%04X," % rle)
 out("};\n")
 
-out("const std::vector<uint32_t> unicode_vec_whitespace = {")
-for codepoint in table_whitespace:
-    out("0x%06X," % codepoint)
+out("const std::vector<std::pair<uint32_t, uint32_t>> unicode_ranges_whitespace = {")
+for (start, last) in whitespace_ranges:
+    out("{0x%06X, 0x%06X}," % (start, last))
 out("};\n")
 
 out("const std::unordered_map<uint32_t, uint32_t> unicode_map_lowercase = {")

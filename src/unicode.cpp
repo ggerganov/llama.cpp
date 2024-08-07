@@ -597,8 +597,10 @@ codepoint_categ unicode_cpt_category(const uint32_t cp) {
         }
         GGML_ASSERT(cpt == MAX_CODEPOINTS);
 
-        for (auto cpt : unicode_vec_whitespace) {
-            cpt_categs[cpt].set_flag(codepoint_categ::WHITESPACE);
+        for (auto p : unicode_ranges_whitespace) {
+            for (uint32_t cpt = p.first; cpt <= p.second; ++cpt) {
+                cpt_categs[cpt].set_flag(codepoint_categ::WHITESPACE);
+            }
         }
 
         for (auto p : unicode_map_lowercase) {
