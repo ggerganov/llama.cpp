@@ -1863,7 +1863,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
 
         std::pair<int, int> best_grid = uhd_best_grid(max_slice_nums, multiple, log_ratio);
         LOG_TEE("%s: image_size: %d %d; best_grid: %d %d\n", __func__, img->nx, img->ny, best_grid.first, best_grid.second);
-        
+
         auto refine_size = uhd_get_refine_size(original_size, best_grid, scale_resolution, patch_size, true);
         clip_image_u8 * refine_image = clip_image_u8_init();
         bicubic_resize(*img, *refine_image, refine_size.first, refine_size.second);
@@ -2558,6 +2558,6 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
 }
 
-bool clip_is_minicpmv(const struct clip_ctx * ctx) { 
+bool clip_is_minicpmv(const struct clip_ctx * ctx) {
     return ctx->has_minicpmv_projector;
 }
