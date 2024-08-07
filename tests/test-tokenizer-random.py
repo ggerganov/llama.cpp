@@ -513,14 +513,16 @@ def compare_tokenizers(tokenizer1: TokenizerGroundtruth, tokenizer2: TokenizerLl
             a, b = 0, len(text)
             step = b
             while step > 1:
-                step = step // 2
-                if not _compare(text[a : b - step])[0]:
-                    b = b - step
+                step = (step + 1) // 2
+                t = max(a, b - step)
+                if not _compare(text[a : t])[0]:
+                    b = t
             step = b
             while step > 1:
-                step = step // 2
-                if not _compare(text[a + step : b])[0]:
-                    a = a + step
+                step = (step + 1) // 2
+                t = min(a + step, b)
+                if not _compare(text[t : b])[0]:
+                    a = t
             ok, ids1, ids2, text1, text2 = _compare(text[a : b])
             assert a <= b and not ok
             # show unique failing texts differences
