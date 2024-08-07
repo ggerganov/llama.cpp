@@ -17346,6 +17346,14 @@ struct llama_data_write {
     virtual size_t get_size_written() = 0;
     virtual ~llama_data_write() = default;
 
+    std::vector<uint8_t> temp_buffer;
+
+    virtual void * get_tensor_data(const struct ggml_tensor * tensor, size_t offset, size_t size) {
+        temp_buffer.resize(size);
+        ggml_backend_tensor_get(tensor, temp_buffer.data(), offset, size);
+        return temp_buffer.data();
+    }
+
     void write_string(const std::string & str) {
         uint32_t str_size = str.size();
 
@@ -17465,9 +17473,9 @@ struct llama_data_write {
             // Read each range of cells of k_size length each into tmp_buf and write out
             for (const auto & range : cell_ranges) {
                 const size_t range_size = range.second - range.first;
-                tmp_buf.resize(range_size * k_size_row);
-                ggml_backend_tensor_get(kv_self.k_l[il], tmp_buf.data(), range.first * k_size_row, range_size * k_size_row);
-                write(tmp_buf.data(), tmp_buf.size());
+                const size_t buf_size = range_size * k_size_row;
+                const void * data = get_tensor_data(kv_self.k_l[il], range.first * k_size_row, buf_size);
+                write(data, buf_size);
             }
         }
 
@@ -17486,9 +17494,9 @@ struct llama_data_write {
                 // Read each range of cells of v_size length each into tmp_buf and write out
                 for (const auto & range : cell_ranges) {
                     const size_t range_size = range.second - range.first;
-                    tmp_buf.resize(range_size * v_size_row);
-                    ggml_backend_tensor_get(kv_self.v_l[il], tmp_buf.data(), range.first * v_size_row, range_size * v_size_row);
-                    write(tmp_buf.data(), tmp_buf.size());
+                    const size_t buf_size = range_size * v_size_row;
+                    const void * data = get_tensor_data(kv_self.v_l[il], range.first * v_size_row, buf_size);
+                    write(data, buf_size);
                 }
             }
         } else {
@@ -17514,9 +17522,9 @@ struct llama_data_write {
                     for (const auto & range : cell_ranges) {
                         const size_t range_size = range.second - range.first;
                         const size_t src_offset = (range.first + j * kv_size) * v_size_el;
-                        tmp_buf.resize(range_size * v_size_el);
-                        ggml_backend_tensor_get(kv_self.v_l[il], tmp_buf.data(), src_offset, tmp_buf.size());
-                        write(tmp_buf.data(), tmp_buf.size());
+                        const size_t buf_size = range_size * v_size_el;
+                        const void * data = get_tensor_data(kv_self.v_l[il], src_offset, buf_size);
+                        write(data, buf_size);
                     }
                 }
             }
@@ -17879,6 +17887,10 @@ struct llama_data_write_dummy : llama_data_write {
 
     void write(const void * /* src */, size_t size) override {
         size_written += size;
+    }
+
+    void * get_tensor_data(const struct ggml_tensor * /* tensor */, size_t /* offset */, size_t /* size */) override {
+        return nullptr;
     }
 
     size_t get_size_written() override {
