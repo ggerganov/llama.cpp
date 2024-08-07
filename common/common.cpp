@@ -518,11 +518,13 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "--cpu-strict") {
-        params.cpuparams.strict_cpu = true;
+        CHECK_ARG
+        params.cpuparams.strict_cpu = std::stoul(argv[i]);
         return true;
     }
     if (arg == "--poll") {
-        params.cpuparams.poll = true;
+        CHECK_ARG
+        params.cpuparams.poll = std::stoul(argv[i]);
         return true;
     }
     if (arg == "-tb" || arg == "--threads-batch") {
@@ -557,7 +559,8 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "--poll-batch") {
-        params.cpuparams_batch.poll = true;
+        CHECK_ARG
+        params.cpuparams_batch.poll = std::stoul(argv[i]);
         return true;
     }
     if (arg == "-td" || arg == "--threads-draft") {
@@ -592,7 +595,8 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "--poll-draft") {
-        params.draft_cpuparams.poll = true;
+        CHECK_ARG
+        params.draft_cpuparams.poll = std::stoul(argv[i]);
         return true;
     }
     if (arg == "-tbd" || arg == "--threads-batch-draft") {
@@ -620,7 +624,8 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         return true;
     }
     if (arg == "--poll-batch-draft") {
-        params.draft_cpuparams_batch.poll = true;
+        CHECK_ARG
+        params.draft_cpuparams_batch.poll = std::stoul(argv[i]);
         return true;
     }
     if (arg == "-p" || arg == "--prompt") {
@@ -1710,34 +1715,37 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-t,    --threads N",            "number of threads to use during generation (default: %d)", params.cpuparams.n_threads });
     options.push_back({ "*",           "-C,    --cpu-mask M",           "CPU affinity mask: arbitrarily long hex. Complements cpu-range (default: \"\")"});
     options.push_back({ "*",           "-Cr,   --cpu-range lo-hi",      "range of CPUs for affinity. Complements --cpu-mask"});
-    options.push_back({ "*",           "       --cpu-strict",           "use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu});
+    options.push_back({ "*",           "       --cpu-strict <0|1>",     "use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu});
     options.push_back({ "*",           "       --priority N",           "set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority});
-    options.push_back({ "*",           "       --poll",                 "use polling to wait for work (default: %u)\n", (unsigned) params.cpuparams.poll});
+    options.push_back({ "*",           "       --poll <0|1>",           "use polling to wait for work (default: %u)\n", (unsigned) params.cpuparams.poll});
     options.push_back({ "*",           "-tb,   --threads-batch N",      "number of threads to use during batch and prompt processing (default: same as --threads)" });
     options.push_back({ "*",           "-Cb,   --cpu-mask-batch M",     "CPU affinity mask: arbitrarily long hex. Complements cpu-range-batch (default: same as --cpu-mask)"});
     options.push_back({ "*",           "-Crb,  --cpu-range-batch lo-hi",
                                                                         "ranges of CPUs for affinity. Complements --cpu-mask-batch"});
-    options.push_back({ "*",           "       --cpu-strict-batch",     "use strict CPU placement (default: same as --cpu-strict)"});
+    options.push_back({ "*",           "       --cpu-strict-batch <0|1>",
+                                                                        "use strict CPU placement (default: same as --cpu-strict)"});
     options.push_back({ "*",           "       --priority-batch N",     "set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: --priority)"});
-    options.push_back({ "*",           "       --poll-batch",           "use polling to wait for work (default: --poll)"});
+    options.push_back({ "*",           "       --poll-batch <0|1>",     "use polling to wait for work (default: same as --poll"});
     options.push_back({ "speculative", "-td,   --threads-draft N",      "number of threads to use during generation (default: same as --threads)" });
     options.push_back({ "speculative", "-Cd,   --cpu-mask-draft M",     "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)"});
     options.push_back({ "speculative", "-Crd,  --cpu-range-draft lo-hi",
                                                                         "Ranges of CPUs for affinity. Complements --cpu-mask-draft"});
-    options.push_back({ "speculative", "       --cpu-strict-draft",     "Use strict CPU placement for draft model (default: same as --cpu-strict)"});
+    options.push_back({ "speculative", "       --cpu-strict-draft <0|1>",
+                                                                        "Use strict CPU placement for draft model (default: same as --cpu-strict)"});
     options.push_back({ "speculative", "       --priority-draft N",     "Set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: same as --priority)"});
-    options.push_back({ "speculative", "       --poll-draft",           "Use polling to wait for draft model work (default: same as --poll])"});
+    options.push_back({ "speculative", "       --poll-draft <0|1>",     "Use polling to wait for draft model work (default: same as --poll])"});
     options.push_back({ "speculative", "-tbd,  --threads-batch-draft N",
                                                                         "number of threads to use during batch and prompt processing (default: same as --threads-draft)" });
     options.push_back({ "speculative", "-Cbd,  --cpu-mask-batch-draft M",
                                                                         "Draft model CPU affinity mask. Complements cpu-range-draft-batch (default: same as --cpu-mask-draft)"});
     options.push_back({ "speculative", "-Crbd, --cpu-range-batch-draft lo-hi",
                                                                         "Ranges of CPUs for affinity. Complements --cpu-mask-draft-batch)"});
-    options.push_back({ "speculative", "       --cpu-strict-batch-draft",
+    options.push_back({ "speculative", "       --cpu-strict-batch-draft <0|1>",
                                                                         "Use strict CPU placement for draft model (default: --cpu-strict-draft)"});
     options.push_back({ "speculative", "       --priority-batch-draft N",
                                                                         "Set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: --priority-draft)"});
-    options.push_back({ "speculative", "       --poll-batch-draft",     "Use polling to wait for draft model work (default: --poll-draft)"});
+    options.push_back({ "speculative", "       --poll-batch-draft <0|1>",
+                                                                        "Use polling to wait for draft model work (default: --poll-draft)"});
 
     options.push_back({ "speculative", "       --draft N",              "number of tokens to draft for speculative decoding (default: %d)", params.n_draft });
     options.push_back({ "speculative", "-ps,   --p-split N",            "speculative decoding split probability (default: %.1f)", (double)params.p_split });

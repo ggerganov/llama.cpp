@@ -73,7 +73,7 @@ struct cpu_params {
     bool     mask_valid                  = false;   // Default: any CPU
     int32_t  priority                    =  0;      // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
     bool     strict_cpu                  = false;   // Use strict CPU placement
-    bool     poll                        = false;   // Use polling (busywait) to wait for work
+    bool     poll                        = true;    // Use polling (busywait) to wait for work (default matches OpenMP)
 };
 
 struct gpt_params {

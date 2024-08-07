@@ -513,9 +513,17 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             params.cpuparams.priority = std::stoul(argv[i]);
         } else if (arg == "--cpu-strict") {
-            params.cpuparams.strict_cpu = true;
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cpuparams.strict_cpu = std::stoul(argv[i]);
         } else if (arg == "--poll") {
-            params.cpuparams.poll = true;
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.cpuparams.poll = std::stoul(argv[i]);
         } else if (arg == "-fa" || arg == "--flash-attn") {
             if (++i >= argc) {
                 invalid_param = true;
