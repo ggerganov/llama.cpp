@@ -349,7 +349,7 @@ extern "C" {
         enum ggml_type attn_q_type;          // attention query tensor type
         enum ggml_type attn_k_type;          // attention key tensor type
         enum ggml_type attn_v_type;          // attention value tensor type
-        enum ggml_type attn_qkv_type;        // attention query-key-value tensor type		
+        enum ggml_type attn_qkv_type;        // attention query-key-value tensor type
         enum ggml_type attn_output_type;     // attention output tensor type
         enum ggml_type ffn_gate_type;        // feedforward network gate type
         enum ggml_type ffn_down_type;        // feedforward network down type
