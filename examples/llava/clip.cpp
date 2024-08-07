@@ -619,7 +619,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         inp = ggml_add(ctx0, inp, model.patch_bias);
     }
     struct ggml_tensor * embeddings = inp;
-    struct ggml_tensor * pos_embed;
+    struct ggml_tensor * pos_embed = nullptr;
 
     if (ctx->has_llava_projector) {
         // concat class_embeddings and patch_embeddings
