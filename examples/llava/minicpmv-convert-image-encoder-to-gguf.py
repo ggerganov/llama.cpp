@@ -12,7 +12,7 @@ TEXT = "clip.text"
 VISION = "clip.vision"
 
 
-def k(raw_key: str, arch: str) -> str:
+def add_key_str(raw_key: str, arch: str) -> str:
     return raw_key.format(arch=arch)
 
 
@@ -196,13 +196,13 @@ if has_vision_encoder:
     # vision_model hparams
     fout.add_uint32("clip.vision.image_size", 448)
     fout.add_uint32("clip.vision.patch_size", 14)
-    fout.add_uint32(k(KEY_EMBEDDING_LENGTH, VISION), 1152)
-    fout.add_uint32(k(KEY_FEED_FORWARD_LENGTH, VISION), 4304)
+    fout.add_uint32(add_key_str(KEY_EMBEDDING_LENGTH, VISION), 1152)
+    fout.add_uint32(add_key_str(KEY_FEED_FORWARD_LENGTH, VISION), 4304)
     fout.add_uint32("clip.vision.projection_dim", 0)
-    fout.add_uint32(k(KEY_ATTENTION_HEAD_COUNT, VISION), 16)
-    fout.add_float32(k(KEY_ATTENTION_LAYERNORM_EPS, VISION), 1e-6)
+    fout.add_uint32(add_key_str(KEY_ATTENTION_HEAD_COUNT, VISION), 16)
+    fout.add_float32(add_key_str(KEY_ATTENTION_LAYERNORM_EPS, VISION), 1e-6)
     block_count = 26
-    fout.add_uint32(k(KEY_BLOCK_COUNT, VISION), block_count)
+    fout.add_uint32(add_key_str(KEY_BLOCK_COUNT, VISION), block_count)
 
     if processor is not None:
         image_mean = processor.image_processor.image_mean if args.image_mean is None or args.image_mean == default_image_mean else args.image_mean
