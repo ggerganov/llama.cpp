@@ -333,6 +333,8 @@ enum llm_kv {
     LLM_KV_SSM_TIME_STEP_RANK,
     LLM_KV_SSM_DT_B_C_RMS,
 
+    LLM_KV_WKV_HEAD_SIZE,
+
     LLM_KV_TOKENIZER_MODEL,
     LLM_KV_TOKENIZER_PRE,
     LLM_KV_TOKENIZER_LIST,
@@ -432,6 +434,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_SSM_STATE_SIZE,                "%s.ssm.state_size"     },
     { LLM_KV_SSM_TIME_STEP_RANK,            "%s.ssm.time_step_rank" },
     { LLM_KV_SSM_DT_B_C_RMS,                "%s.ssm.dt_b_c_rms" },
+
+    { LLM_KV_WKV_HEAD_SIZE,                 "%s.wkv.head_size" },
 
     { LLM_KV_TOKENIZER_MODEL,                "tokenizer.ggml.model"                    },
     { LLM_KV_TOKENIZER_PRE,                  "tokenizer.ggml.pre"                      },
@@ -2291,6 +2295,7 @@ struct llama_hparams {
 
     // for RWKV
     uint32_t rescale_every_n_layers = 0;
+    uint32_t wkv_head_size = 0;
 
     float    rope_attn_factor = 1.0f;
     float    rope_freq_base_train;
@@ -2355,6 +2360,9 @@ struct llama_hparams {
         if (this->ssm_dt_rank != other.ssm_dt_rank) return true;
         if (this->ssm_dt_b_c_rms != other.ssm_dt_b_c_rms) return true;
 
+        if (this->rescale_every_n_layers != other.rescale_every_n_layers) return true;
+        if (this->wkv_head_size          != other.wkv_head_size)          return true;
+
         if (this->dec_start_token_id != other.dec_start_token_id) return true;
 
         const float EPSILON = 1e-9f;
@@ -2418,15 +2426,25 @@ struct llama_hparams {
     }
 
     uint32_t n_embd_k_s() const { // dimension of the rolling state embeddings
-        // corresponds to Mamba's conv_states size
-        // TODO: maybe support other convolution strides than 1
-        // NOTE: since the first column of the conv_state is shifted out each time, it's not actually needed
-        return (ssm_d_conv > 0 ? ssm_d_conv - 1 : 0) * ssm_d_inner;
+        // corresponds to Mamba's conv_states size or RWKV's token_shift states size
+        if (wkv_head_size != 0) {
+            // for RWKV models
+            return 2 * n_embd;
+        } else {
+            // TODO: maybe support other convolution strides than 1
+            // NOTE: since the first column of the conv_state is shifted out each time, it's not actually needed
+            return (ssm_d_conv > 0 ? ssm_d_conv - 1 : 0) * ssm_d_inner;
+        }
     }
 
     uint32_t n_embd_v_s() const { // dimension of the recurrent state embeddings
-        // corresponds to Mamba's ssm_states size
-        return ssm_d_state * ssm_d_inner;
+        if (wkv_head_size != 0) {
+            // corresponds to RWKV's wkv_states size
+            return n_embd * wkv_head_size;
+        } else {
+            // corresponds to Mamba's ssm_states size
+            return ssm_d_state * ssm_d_inner;
+        }
     }
 };
 
@@ -5888,12 +5906,8 @@ static void llm_load_hparams(
         case LLM_ARCH_RWKV: 
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
+                ml.get_key(LLM_KV_WKV_HEAD_SIZE, hparams.wkv_head_size);
                 ml.get_key(LLM_KV_RESCALE_EVERY_N_LAYERS, hparams.rescale_every_n_layers, false);
-
-                // TODO: Re-using mamba keys right now, but RWKV isn't state-space
-                ml.get_key(LLM_KV_SSM_CONV_KERNEL,  hparams.ssm_d_conv);
-                ml.get_key(LLM_KV_SSM_INNER_SIZE,   hparams.ssm_d_inner);
-                ml.get_key(LLM_KV_SSM_STATE_SIZE,   hparams.ssm_d_state);
             } break;
         default: (void)0;
     }

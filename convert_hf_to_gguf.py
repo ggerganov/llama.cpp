@@ -2760,14 +2760,13 @@ class RwkvModel(Model):
         self.gguf_writer.add_context_length(1048576)
         self.gguf_writer.add_embedding_length(hidden_size)
         self.gguf_writer.add_block_count(block_count)
-        self.gguf_writer.add_head_count(0)
         self.gguf_writer.add_layer_norm_eps(layer_norm_eps)
-        self.gguf_writer.add_feed_forward_length(0) # required by llama.cpp
         self.gguf_writer.add_rescale_every_n_layers(rescale_every_n_layers)
-        # temporarlily reuse mamba hparams
-        self.gguf_writer.add_ssm_inner_size(hidden_size)
-        self.gguf_writer.add_ssm_conv_kernel(3)
-        self.gguf_writer.add_ssm_state_size(head_size)
+        self.gguf_writer.add_wkv_head_size(head_size)
+
+        # required by llama.cpp, unused
+        self.gguf_writer.add_head_count(0)
+        self.gguf_writer.add_feed_forward_length(0)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         new_name = self.map_tensor_name(name)

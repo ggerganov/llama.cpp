@@ -133,6 +133,9 @@ class Keys:
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
         DT_B_C_RMS     = "{arch}.ssm.dt_b_c_rms"
 
+    class WKV:
+        HEAD_SIZE = "{arch}.wkv.head_size"
+
     class Tokenizer:
         MODEL                = "tokenizer.ggml.model"
         PRE                  = "tokenizer.ggml.pre"

@@ -673,6 +673,9 @@ class GGUFWriter:
     def add_rescale_every_n_layers(self, count: int) -> None:
         self.add_uint32(Keys.LLM.RESCALE_EVERY_N_LAYERS.format(arch=self.arch), count)
 
+    def add_wkv_head_size(self, size: int) -> None:
+        self.add_uint32(Keys.WKV.HEAD_SIZE.format(arch=self.arch), size)
+
     def add_layer_norm_eps(self, value: float) -> None:
         self.add_float32(Keys.Attention.LAYERNORM_EPS.format(arch=self.arch), value)
 
