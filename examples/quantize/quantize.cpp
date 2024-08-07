@@ -95,19 +95,34 @@ static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftyp
 //
 [[noreturn]]
 static void usage(const char * executable) {
-    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] [--imatrix] [--include-weights] [--exclude-weights] [--output-tensor-type] [--token-embedding-type] [--override-kv] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
+    printf("usage: %s [--help] [--allow-requantize] [--leave-output-tensor] [--pure] [--imatrix] [--include-weights] [--exclude-weights] [--output-tensor-type] [--token-embedding-type] [--attn-q-type] [--attn-k-type] [--attn-v-type] [--attn-qkv-type] [--attn-output-type] [--ffn-gate-type] [--ffn-down-type] [--ffn-up-type] [--keep-split] [--override-kv] model-f32.gguf [model-quant.gguf] type [nthreads]\n\n", executable);
     printf("  --allow-requantize: Allows requantizing tensors that have already been quantized. Warning: This can severely reduce quality compared to quantizing from 16bit or 32bit\n");
     printf("  --leave-output-tensor: Will leave output.weight un(re)quantized. Increases model size but may also increase quality, especially when requantizing\n");
     printf("  --pure: Disable k-quant mixtures and quantize all tensors to the same type\n");
     printf("  --imatrix file_name: use data in file_name as importance matrix for quant optimizations\n");
     printf("  --include-weights tensor_name: use importance matrix for this/these tensor(s)\n");
-    printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
-    printf("  --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor\n");
-    printf("  --token-embedding-type ggml_type: use this ggml_type for the token embeddings tensor\n");
-    printf("  --keep-split: will generate quatized model in the same shards as input");
+    printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n\n");
+    printf("    Optional specific tensor quantization types to amend the selected quantization strategy type:\n");
+    printf("      --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor.\n");
+    printf("      --token-embedding-type ggml_type: use this ggml_type for the token_embd.weight tensor.\n");
+    printf("      --attn-q-type ggml_type: use this ggml_type for the attn_q.weight tensor.\n");
+    printf("      --attn-k-type ggml_type: use this ggml_type for the attn_k.weight tensor.\n");
+    printf("      --attn-v-type ggml_type: use this ggml_type for the attn_v.weight tensor.\n");
+    printf("      --attn-qkv-type ggml_type: use this ggml_type for the attn_qkv.weight tensor.\n");
+    printf("      --attn-output-type ggml_type: use this ggml_type for the attn_output.weight tensor.\n");
+    printf("      --ffn-gate-type ggml_type: use this ggml_type for the ffn_gate tensor.\n");
+    printf("      --ffn-down-type ggml_type: use this ggml_type for the ffn_down tensor.\n");
+    printf("      --ffn-up-type ggml_type: use this ggml_type for the ffn_up tensor.\n\n");
+    printf("  --keep-split: will generate quatized model in the same shards as input\n");
     printf("  --override-kv KEY=TYPE:VALUE\n");
-    printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n");
+    printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
+    printf("Note: The token embeddings tensor is loaded in system RAM, even in case of full GPU/VRAM offload.\n");
+	printf("Note: The recommanded type for the output tensor is q6_K for the ffn types > iq3_xxs and < q8_0.\n");
+	printf("Note: Usually, attn-q-type can be one type below the chosen ffn type, and attn-v-type should be one type above.\n");
+    printf("Note: --attn-qkv-type replaces the types attn-q, attn-k, and attn-v on some models.\n");
+	printf("Note: Write the specific tensor legacy quants as qN_N, the K-Quants as qN_K, the IQ-Quants as iqN_xx.\n");
+    //TODO: - eventually - harmonize the CAPS writing of the FTYPEs, and non CAPS writing of the GGML_TYPEs.	
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
         if (it.name != "COPY") {
@@ -258,6 +273,54 @@ int main(int argc, char ** argv) {
         } else if (strcmp(argv[arg_idx], "--token-embedding-type") == 0) {
             if (arg_idx < argc-1) {
                 params.token_embedding_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--attn-q-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.attn_q_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--attn-k-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.attn_k_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--attn-v-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.attn_v_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--attn-qkv-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.attn_qkv_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--attn-output-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.attn_output_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--ffn-gate-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.ffn_gate_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--ffn-down-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.ffn_down_type = parse_ggml_type(argv[++arg_idx]);
+            } else {
+                usage(argv[0]);
+            }
+        } else if (strcmp(argv[arg_idx], "--ffn-up-type") == 0) {
+            if (arg_idx < argc-1) {
+                params.ffn_up_type = parse_ggml_type(argv[++arg_idx]);
             } else {
                 usage(argv[0]);
             }
