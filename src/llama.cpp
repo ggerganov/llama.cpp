@@ -4901,14 +4901,16 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
 
-                if ((hparams.n_layer == 32 || hparams.n_layer == 40)) {
-                    if (hparams.n_ctx_train == 4096) {
-                        // default value for Phi-3-mini-4k-instruct and Phi-3-medium-4k-instruct
-                        hparams.n_swa = 2047;
-                    } else if (hparams.n_ctx_train == 131072) {
-                        // default value for Phi-3-mini-128k-instruct and Phi-3-medium-128k-instruct
-                        hparams.n_swa = 131072;
-                    }
+                // for backward compatibility ; see: https://github.com/ggerganov/llama.cpp/pull/8931
+                if ((hparams.n_layer == 32 || hparams.n_layer == 40) && hparams.n_ctx_train == 4096) {
+                    // default value for Phi-3-mini-4k-instruct and Phi-3-medium-4k-instruct
+                    hparams.n_swa = 2047;
+                } else if (hparams.n_layer == 32 && hparams.n_head_kv(0) == 32 && hparams.n_ctx_train == 131072) {
+                    // default value for Phi-3-mini-128k-instruct
+                    hparams.n_swa = 262144;
+                } else if (hparams.n_layer == 40 && hparams.n_ctx_train == 131072) {
+                    // default value for Phi-3-medium-128k-instruct
+                    hparams.n_swa = 131072;
                 }
                 ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
             } break;
