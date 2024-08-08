@@ -112,11 +112,19 @@ int32_t cpu_get_num_physical_cores() {
     }
 #elif defined(_WIN32) && (_WIN32_WINNT >= 0x0601) && !defined(__MINGW64__) // windows 7 and later
     // TODO: windows + arm64 + mingw64
+    unsigned int n_threads_win = std::thread::hardware_concurrency();
+    unsigned int default_threads = n_threads_win > 0 ? (n_threads_win <= 4 ? n_threads_win : n_threads_win / 2) : 4;
+
     DWORD buffer_size = 0;
-    GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &buffer_size);
+    if (!GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &buffer_size)) {
+        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+            return default_threads;
+        }
+    }
+
     std::vector<char> buffer(buffer_size);
     if (!GetLogicalProcessorInformationEx(RelationProcessorCore, reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data()), &buffer_size)) {
-        return 0;
+        return default_threads;
     }
 
     int32_t num_physical_cores = 0;
@@ -129,7 +137,7 @@ int32_t cpu_get_num_physical_cores() {
         info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(reinterpret_cast<char*>(info) + info->Size);
     }
 
-    return num_physical_cores;
+    return num_physical_cores > 0 ? num_physical_cores : default_threads;
 #endif
     unsigned int n_threads = std::thread::hardware_concurrency();
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
