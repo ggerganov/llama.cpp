@@ -15414,10 +15414,10 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             // TODO: explore better strategies
             new_type = GGML_TYPE_Q8_0;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS && (qs.model.hparams.n_gqa() < 2 || qs.model.hparams.n_expert < 2)) {
+        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS && qs.model.hparams.n_gqa() < 2 && qs.model.hparams.n_expert < 2) {
             new_type = GGML_TYPE_IQ3_XXS;
         }
-        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS && (qs.model.hparams.n_gqa() < 2 || qs.model.hparams.n_expert < 2)) {
+        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS && qs.model.hparams.n_gqa() < 2 && qs.model.hparams.n_expert < 2) {
             new_type = GGML_TYPE_IQ2_S;
         }
     } else if (name.find("attn_q.weight") != std::string::npos) {
