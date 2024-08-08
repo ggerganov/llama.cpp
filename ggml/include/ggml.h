@@ -2024,6 +2024,7 @@ extern "C" {
     GGML_API size_t ggml_graph_overhead(void);
     GGML_API size_t ggml_graph_overhead_custom(size_t size, bool grads);
 
+    GGML_API bool                            ggml_threadpool_params_match (const struct ggml_threadpool_params *p0, const struct ggml_threadpool_params *p1);
     GGML_API struct ggml_compute_threadpool* ggml_create_threadpool       (struct ggml_threadpool_params  * params);
     GGML_API void                            ggml_release_threadpool      (struct ggml_compute_threadpool * threadpool);
     GGML_API int32_t                         ggml_threadpool_get_n_threads(struct ggml_compute_threadpool * threadpool);

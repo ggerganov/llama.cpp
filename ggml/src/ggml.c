@@ -19222,6 +19222,19 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
 
 #endif // GGML_USE_OPENMP
 
+bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, const struct ggml_threadpool_params * p1) {
+    if (p0->n_threads      != p1->n_threads  )    return false;
+    if (p0->prio           != p1->prio       )    return false;
+    if (p0->poll           != p1->poll       )    return false;
+    if (p0->strict_cpu     != p1->strict_cpu )    return false;
+    if (p0->mask_specified != p1->mask_specified) return false;
+    if (p0->mask_specified) {
+        return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
+    }
+
+    return true;
+}
+
 static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
     struct ggml_threadpool_params * tpp,
                              bool   disposable,
