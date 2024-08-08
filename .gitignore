@@ -50,6 +50,7 @@ build*
 !docs/build.md
 /libllama.so
 /llama-*
+/vulkan-shaders-gen
 android-ndk-*
 arm_neon.h
 cmake-build-*
@@ -60,6 +61,11 @@ llama-batched-swift
 /rpc-server
 out/
 tmp/
+
+# Deprecated
+
+/main
+/server
 
 # CI
 

@@ -100,7 +100,7 @@ static void crash() {
     const char* msg) {
   fprintf(stderr, "SYCL error: %s: %s\n", stmt, msg);
   fprintf(stderr, "  in function %s at %s:%d\n", func, file, line);
-  GGML_ASSERT(!"SYCL error");
+  GGML_ABORT("SYCL error");
 }
 
 #define SYCL_CHECK(err)                     \
@@ -267,7 +267,7 @@ struct ggml_backend_sycl_context {
 
     queue_ptr stream(int device, int stream) {
         if (qptrs[device][stream] == nullptr) {
-            qptrs[device][stream] = &(dpct::get_current_device().default_queue());
+            qptrs[device][stream] = &(dpct::get_device(device).default_queue());
         }
         return qptrs[device][stream];
     }
@@ -344,6 +344,12 @@ static __dpct_inline__ float warp_reduce_max(float x,
 template <typename Tp, int n>
 inline sycl::vec<Tp, n> vec_aligned_load(const Tp* aligned_ptr) {
     return *reinterpret_cast<const sycl::vec<Tp, n>*>(aligned_ptr);
+}
+
+// Helper for accessing pointers with no warnings
+template <typename Tp, int dim>
+static __dpct_inline__ Tp* get_pointer(sycl::local_accessor<Tp, dim> acc) {
+    return acc.template get_multi_ptr<sycl::access::decorated::no>().get();
 }
 
 #endif // GGML_SYCL_COMMON_HPP

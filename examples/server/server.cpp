@@ -80,6 +80,7 @@ enum server_task_type {
     SERVER_TASK_TYPE_SLOT_SAVE,
     SERVER_TASK_TYPE_SLOT_RESTORE,
     SERVER_TASK_TYPE_SLOT_ERASE,
+    SERVER_TASK_TYPE_SET_LORA,
 };
 
 struct server_task {
@@ -624,6 +625,7 @@ struct server_response {
 struct server_context {
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
+    std::vector<llama_lora_adapter_container> lora_adapters;
 
     gpt_params params;
 
@@ -679,7 +681,11 @@ struct server_context {
         // dedicate one sequence to the system prompt
         params.n_parallel += 1;
 
-        std::tie(model, ctx) = llama_init_from_gpt_params(params);
+        llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+        model = llama_init.model;
+        ctx = llama_init.context;
+        lora_adapters = llama_init.lora_adapters;
         params.n_parallel -= 1; // but be sneaky about it
         if (model == nullptr) {
             LOG_ERROR("unable to load model", {{"model", params.model}});
@@ -738,6 +744,8 @@ struct server_context {
             slot.ga_i = 0;
             slot.ga_n = ga_n;
             slot.ga_w = ga_w;
+
+            slot.sparams = params.sparams;
 
             slot.reset();
 
@@ -886,7 +894,8 @@ struct server_context {
 
     bool launch_slot_with_task(server_slot & slot, const server_task & task) {
         slot_params default_params;
-        llama_sampling_params default_sparams;
+        // Sampling parameter defaults are loaded from the global server context (but individual requests can still override them)
+        llama_sampling_params default_sparams = params.sparams;
         auto & data = task.data;
 
         if (data.count("__oaicompat") != 0) {
@@ -899,7 +908,7 @@ struct server_context {
 
         slot.params.stream             = json_value(data, "stream",            false);
         slot.params.cache_prompt       = json_value(data, "cache_prompt",      false);
-        slot.params.n_predict          = json_value(data, "n_predict",         default_params.n_predict);
+        slot.params.n_predict          = json_value(data, "n_predict",         json_value(data, "max_tokens", default_params.n_predict));
         slot.sparams.top_k             = json_value(data, "top_k",             default_sparams.top_k);
         slot.sparams.top_p             = json_value(data, "top_p",             default_sparams.top_p);
         slot.sparams.min_p             = json_value(data, "min_p",             default_sparams.min_p);
@@ -1181,7 +1190,7 @@ struct server_context {
 
     bool process_token(completion_token_output & result, server_slot & slot) {
         // remember which tokens were sampled - used for repetition penalties during sampling
-        const std::string token_str = llama_token_to_piece(ctx, result.tok, false);
+        const std::string token_str = llama_token_to_piece(ctx, result.tok, params.special);
         slot.sampled = result.tok;
 
         // search stop word and delete it
@@ -1846,6 +1855,14 @@ struct server_context {
                     };
                     queue_results.send(result);
                 } break;
+            case SERVER_TASK_TYPE_SET_LORA:
+                {
+                    llama_lora_adapters_apply(ctx, lora_adapters);
+                    server_task_result result;
+                    result.id = task.id;
+                    result.data = json{{ "success", true }};
+                    queue_results.send(result);
+                } break;
         }
     }
 
@@ -2003,6 +2020,11 @@ struct server_context {
         // process in chunks of params.n_batch
         int32_t n_batch  = llama_n_batch(ctx);
         int32_t n_ubatch = llama_n_ubatch(ctx);
+
+        // track if this is an embedding or non-embedding batch
+        // if we've added sampled tokens above, we are in non-embedding mode
+        // -1: none, 0: non-embedding, 1: embedding
+        int32_t batch_type = batch.n_tokens > 0 ? 0 : -1;
 
         // next, batch any pending prompts without exceeding n_batch
         if (params.cont_batching || batch.n_tokens == 0) {
@@ -2174,6 +2196,14 @@ struct server_context {
                         }
                     }
 
+                    // check that we are in the right batch_type, if not defer the slot
+                    bool slot_type = slot.embedding ? 1 : 0;
+                    if (batch_type == -1) {
+                        batch_type = slot_type;
+                    } else if (batch_type != slot_type) {
+                        continue;
+                    }
+
                     // keep only the common part
                     int p0 = (int) system_tokens.size() + slot.n_past;
                     if (!llama_kv_cache_seq_rm(ctx, slot.id + 1, p0, -1)) {
@@ -2274,6 +2304,9 @@ struct server_context {
         LOG_VERBOSE("decoding batch", {
             {"n_tokens", batch.n_tokens},
         });
+
+        // make sure we're in the right embedding mode
+        llama_set_embeddings(ctx, batch_type == 1);
 
         // process the created batch of tokens
         for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
@@ -2989,6 +3022,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_completions = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
 
         json data = json::parse(req.body);
@@ -3084,6 +3122,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_chat_completions = [&ctx_server, &params, &res_error](const httplib::Request & req, httplib::Response & res) {
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support chat completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
 
@@ -3157,6 +3200,11 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_infill = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+        if (ctx_server.params.embedding) {
+            res_error(res, format_error_response("This server does not support infill. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
 
         json data = json::parse(req.body);
@@ -3243,13 +3291,8 @@ int main(int argc, char ** argv) {
         return res.set_content(data.dump(), "application/json; charset=utf-8");
     };
 
-    const auto handle_embeddings = [&params, &ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
         res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        if (!params.embedding) {
-            res.status = 501;
-            res.set_content("This server does not support embeddings. Start it with `--embeddings`", "text/plain; charset=utf-8");
-            return;
-        }
 
         const json body = json::parse(req.body);
         bool is_openai = false;
@@ -3299,6 +3342,55 @@ int main(int argc, char ** argv) {
         return res.set_content(root.dump(), "application/json; charset=utf-8");
     };
 
+    const auto handle_lora_adapters_list = [&](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        json result = json::array();
+        for (size_t i = 0; i < ctx_server.lora_adapters.size(); ++i) {
+            auto & la = ctx_server.lora_adapters[i];
+            result.push_back({
+                {"id", i},
+                {"path", la.path},
+                {"scale", la.scale},
+            });
+        }
+        res.set_content(result.dump(), "application/json");
+        res.status = 200; // HTTP OK
+    };
+
+    const auto handle_lora_adapters_apply = [&](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        const std::vector<json> body = json::parse(req.body);
+        int max_idx = ctx_server.lora_adapters.size();
+
+        // clear existing value
+        for (auto & la : ctx_server.lora_adapters) {
+            la.scale = 0.0f;
+        }
+
+        // set value
+        for (auto entry : body) {
+            int id      = entry.at("id");
+            float scale = entry.at("scale");
+            if (0 <= id && id < max_idx) {
+                ctx_server.lora_adapters[id].scale = scale;
+            } else {
+                throw std::runtime_error("invalid adapter id");
+            }
+        }
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SET_LORA;
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        res.set_content(result.data.dump(), "application/json");
+        res.status = 200; // HTTP OK
+    };
+
     auto handle_static_file = [](unsigned char * content, size_t len, const char * mime_type) {
         return [content, len, mime_type](const httplib::Request &, httplib::Response & res) {
             res.set_content(reinterpret_cast<const char*>(content), len, mime_type);
@@ -3339,7 +3431,6 @@ int main(int argc, char ** argv) {
 
     // register API routes
     svr->Get ("/health",              handle_health);
-    svr->Get ("/slots",               handle_slots);
     svr->Get ("/metrics",             handle_metrics);
     svr->Get ("/props",               handle_props);
     svr->Get ("/v1/models",           handle_models);
@@ -3354,6 +3445,11 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/embeddings",       handle_embeddings);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
+    // LoRA adapters hotswap
+    svr->Get ("/lora-adapters",       handle_lora_adapters_list);
+    svr->Post("/lora-adapters",       handle_lora_adapters_apply);
+    // Save & load slots
+    svr->Get ("/slots",               handle_slots);
     if (!params.slot_save_path.empty()) {
         // only enable slot endpoints if slot_save_path is set
         svr->Post("/slots/:id_slot",  handle_slots_action);

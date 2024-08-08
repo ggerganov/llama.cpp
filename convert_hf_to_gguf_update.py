@@ -50,7 +50,7 @@ class TOKENIZER_TYPE(IntEnum):
 
 # TODO: this string has to exercise as much pre-tokenizer functionality as possible
 #       will be updated with time - contributions welcome
-chktxt = '\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български \'\'\'\'\'\'```````\"\"\"\"......!!!!!!?????? I\'ve been \'told he\'s there, \'RE you sure? \'M not sure I\'ll make it, \'D you like some tea? We\'Ve a\'lL'
+CHK_TXT = '\n \n\n \n\n\n \t \t\t \t\n  \n   \n    \n     \n🚀 (normal) 😶‍🌫️ (multiple emojis concatenated) ✅ 🦙🦙 3 33 333 3333 33333 333333 3333333 33333333 3.3 3..3 3...3 កាន់តែពិសេសអាច😁 ?我想在apple工作1314151天～ ------======= нещо на Български \'\'\'\'\'\'```````\"\"\"\"......!!!!!!?????? I\'ve been \'told he\'s there, \'RE you sure? \'M not sure I\'ll make it, \'D you like some tea? We\'Ve a\'lL'
 
 if len(sys.argv) == 2:
     token = sys.argv[1]
@@ -91,6 +91,9 @@ models = [
     {"name": "gemma-2",        "tokt": TOKENIZER_TYPE.SPM, "repo": "https://huggingface.co/google/gemma-2-9b", },
     {"name": "jais",           "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/core42/jais-13b", },
     {"name": "t5",             "tokt": TOKENIZER_TYPE.UGM, "repo": "https://huggingface.co/google-t5/t5-small", },
+    {"name": "codeshell",      "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/WisdomShell/CodeShell-7B", },
+    {"name": "tekken",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/mistralai/Mistral-Nemo-Base-2407", },
+    {"name": "smollm",         "tokt": TOKENIZER_TYPE.BPE, "repo": "https://huggingface.co/HuggingFaceTB/SmolLM-135M", },
 ]
 
 
@@ -99,8 +102,8 @@ def download_file_with_auth(url, token, save_path):
     response = sess.get(url, headers=headers)
     response.raise_for_status()
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, 'wb') as f:
-        f.write(response.content)
+    with open(save_path, 'wb') as downloaded_file:
+        downloaded_file.write(response.content)
     logger.info(f"File {save_path} downloaded successfully")
 
 
@@ -159,7 +162,7 @@ for model in models:
         logger.error(f"Error loading tokenizer for model {name}. The model may not exist or is not accessible with the provided token. Error: {e}")
         continue  # Skip to the next model if the tokenizer can't be loaded
 
-    chktok = tokenizer.encode(chktxt)
+    chktok = tokenizer.encode(CHK_TXT)
     chkhsh = sha256(str(chktok).encode()).hexdigest()
 
     logger.info(f"model: {name}")
@@ -191,7 +194,7 @@ src_func = f"""
         # we will use this unique identifier to write a "tokenizer.ggml.pre" entry in the GGUF file which we can
         # use in llama.cpp to implement the same pre-tokenizer
 
-        chktxt = {repr(chktxt)}
+        chktxt = {repr(CHK_TXT)}
 
         chktok = tokenizer.encode(chktxt)
         chkhsh = sha256(str(chktok).encode()).hexdigest()
@@ -287,7 +290,7 @@ tests = [
     "333333333",
     "Cửa Việt", # llama-bpe fails on this
     " discards",
-    chktxt,
+    CHK_TXT,
 ]
 
 # write the tests to ./models/ggml-vocab-{name}.gguf.inp
