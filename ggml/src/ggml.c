@@ -18891,8 +18891,10 @@ void ggml_pause_threadpool(struct ggml_compute_threadpool * threadpool) {
     GGML_ASSERT(!threadpool->disposable);
     GGML_PRINT_DEBUG("Pausing threadpool\n");
     ggml_mutex_lock(&threadpool->mutex);
-    threadpool->pause = true;
-    ggml_cond_broadcast(&threadpool->cond);
+    if (!threadpool->pause) {
+        threadpool->pause = true;
+        ggml_cond_broadcast(&threadpool->cond);
+    }
     ggml_mutex_unlock(&threadpool->mutex);
 #else
     UNUSED(threadpool);
@@ -18905,8 +18907,10 @@ void ggml_resume_threadpool(struct ggml_compute_threadpool * threadpool) {
     GGML_PRINT_DEBUG("Resuming threadpool\n");
 
     ggml_mutex_lock(&threadpool->mutex);
-    threadpool->pause = false;
-    ggml_cond_broadcast(&threadpool->cond);
+    if (threadpool->pause) {
+        threadpool->pause = false;
+        ggml_cond_broadcast(&threadpool->cond);
+    }
     ggml_mutex_unlock(&threadpool->mutex);
 #else
     UNUSED(threadpool);
