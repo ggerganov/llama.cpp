@@ -39,9 +39,15 @@
 #include <unistd.h>
 #endif
 
-#if defined(__ARM_FEATURE_SVE)
-int ggml_sve_cnt_b = 0;
+#if defined(__aarch64__)
+struct ggml_aarch64_features_type {
+    int has_neon;
+    int has_i8mm;
+    int has_sve;
+    int sve_cnt;
+} ggml_aarch64_features = {-1, -1, -1, 0};
 #endif
+
 #if defined(__ARM_FEATURE_SVE) || defined(__ARM_FEATURE_MATMUL_INT8)
 #undef GGML_USE_LLAMAFILE
 #endif
@@ -3673,6 +3679,65 @@ static inline int ggml_up(int n, int m) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+#if defined(__aarch64__)
+
+#if defined(__linux__)
+#include <sys/auxv.h>
+#elif defined(__APPLE__)
+#include <sys/sysctl.h>
+#endif
+
+static void ggml_init_aarch64_features(void) {
+#if defined(__linux__)
+    uint32_t hwcap = getauxval(AT_HWCAP);
+    uint32_t hwcap2 = getauxval(AT_HWCAP2);
+
+    ggml_aarch64_features.has_neon = !!(hwcap & HWCAP_ASIMD);
+    ggml_aarch64_features.has_i8mm = !!(hwcap2 & HWCAP2_I8MM);
+    ggml_aarch64_features.has_sve  = !!(hwcap & HWCAP_SVE);
+#if defined(__ARM_FEATURE_SVE)
+    ggml_aarch64_features.sve_cnt = PR_SVE_VL_LEN_MASK & prctl(PR_SVE_GET_VL);
+#endif
+#elif defined(__APPLE__)
+    int oldp = 0;
+    size_t size = sizeof(oldp);
+    if (sysctlbyname("hw.optional.AdvSIMD", &oldp, &size, NULL, 0) != 0) {
+        oldp = 0;
+    }
+    ggml_aarch64_features.has_neon = oldp;
+
+    if (sysctlbyname("hw.optional.arm.FEAT_I8MM", &oldp, &size, NULL, 0) != 0) {
+        oldp = 0;
+    }
+    ggml_aarch64_features.has_i8mm = oldp;
+
+    ggml_aarch64_features.has_sve = 0;
+    ggml_aarch64_features.sve_cnt = 0;
+#else
+// Run-time CPU feature detection not implemented for this platform, fallback to compile time
+#if defined(__ARM_NEON)
+    ggml_aarch64_features.has_neon = 1;
+#else
+    ggml_aarch64_features.has_neon = 0;
+#endif
+
+#if defined(__ARM_FEATURE_MATMUL_INT8)
+    ggml_aarch64_features.has_i8mm = 1;
+#else
+    ggml_aarch64_features.has_i8mm = 0;
+#endif
+
+#if defined(__ARM_FEATURE_SVE)
+    ggml_aarch64_features.has_sve = 1;
+    ggml_aarch64_features.sve_cnt = 16;
+#else
+    ggml_aarch64_features.has_sve = 0;
+    ggml_aarch64_features.sve_cnt = 0;
+#endif
+#endif
+}
+#endif
+
 struct ggml_context * ggml_init(struct ggml_init_params params) {
     // make this function thread safe
     ggml_critical_section_start();
@@ -3723,6 +3788,10 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             GGML_PRINT_DEBUG("%s: g_state initialized in %f ms\n", __func__, (t_end - t_start)/1000.0f);
         }
 
+#if defined(__aarch64__)
+        ggml_init_aarch64_features();
+#endif
+
         is_first_call = false;
     }
 
@@ -3770,12 +3839,6 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
     GGML_ASSERT(ctx->mem_buffer != NULL);
 
     GGML_ASSERT_ALIGNED(ctx->mem_buffer);
-
-#if defined(__ARM_FEATURE_SVE)
-    if (!ggml_sve_cnt_b) {
-        ggml_sve_cnt_b = PR_SVE_VL_LEN_MASK & prctl(PR_SVE_GET_VL);
-    }
-#endif
 
     GGML_PRINT_DEBUG("%s: context initialized\n", __func__);
 
@@ -23578,16 +23641,16 @@ int ggml_cpu_has_fma(void) {
 }
 
 int ggml_cpu_has_neon(void) {
-#if defined(__ARM_NEON)
-    return 1;
+#if defined(__aarch64__)
+    return ggml_aarch64_features.has_neon;
 #else
     return 0;
 #endif
 }
 
 int ggml_cpu_has_sve(void) {
-#if defined(__ARM_FEATURE_SVE)
-    return 1;
+#if defined(__aarch64__)
+    return ggml_aarch64_features.has_sve;
 #else
     return 0;
 #endif
@@ -23734,11 +23797,18 @@ int ggml_cpu_has_vsx(void) {
 }
 
 int ggml_cpu_has_matmul_int8(void) {
-#if defined(__ARM_FEATURE_MATMUL_INT8)
-    return 1;
+#if defined(__aarch64__)
+    return ggml_aarch64_features.has_i8mm;
 #else
     return 0;
 #endif
 }
 
+int ggml_cpu_get_sve_cnt(void) {
+#if defined(__aarch64__)
+    return ggml_aarch64_features.sve_cnt;
+#else
+    return 0;
+#endif
+}
 ////////////////////////////////////////////////////////////////////////////////
