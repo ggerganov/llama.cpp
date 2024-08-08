@@ -4892,7 +4892,6 @@ static void llm_load_hparams(
             } break;
         case LLM_ARCH_PHI3:
             {
-                ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa);
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
                 switch (hparams.n_layer) {
@@ -4901,6 +4900,17 @@ static void llm_load_hparams(
                     case 40: model.type = e_model::MODEL_14B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
+
+                if ((hparams.n_layer == 32 || hparams.n_layer == 40)) {
+                    if (hparams.n_ctx_train == 4096) {
+                        // default value for Phi-3-mini-4k-instruct and Phi-3-medium-4k-instruct
+                        hparams.n_swa = 2047;
+                    } else if (hparams.n_ctx_train == 131072) {
+                        // default value for Phi-3-mini-128k-instruct and Phi-3-medium-128k-instruct
+                        hparams.n_swa = 131072;
+                    }
+                }
+                ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
             } break;
         case LLM_ARCH_PLAMO:
             {
