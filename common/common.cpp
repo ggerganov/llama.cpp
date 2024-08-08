@@ -110,7 +110,8 @@ int32_t cpu_get_num_physical_cores() {
     if (result == 0) {
         return num_physical_cores;
     }
-#elif defined(_WIN32)
+#elif defined(_WIN32) && (_WIN32_WINNT >= 0x0601) && !defined(__MINGW64__) // windows 7 and later
+    // TODO: windows + arm64 + mingw64
     DWORD buffer_size = 0;
     GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &buffer_size);
     std::vector<char> buffer(buffer_size);
@@ -1733,7 +1734,8 @@ std::string gpt_params_get_system_info(const gpt_params & params) {
     if (params.n_threads_batch != -1) {
         os << " (n_threads_batch = " << params.n_threads_batch << ")";
     }
-#ifdef _WIN32
+#if defined(_WIN32) && (_WIN32_WINNT >= 0x0601) && !defined(__MINGW64__) // windows 7 and later
+    // TODO: windows + arm64 + mingw64
     DWORD logicalProcessorCount = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
     os << " / " << logicalProcessorCount << " | " << llama_print_system_info();
 #else
