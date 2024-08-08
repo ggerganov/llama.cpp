@@ -1619,15 +1619,16 @@ class BitnetModel(Model):
         self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
         self.gguf_writer.add_rope_scaling_factor(1.0)
 
-    def weight_quant(self, weight):
+    def weight_quant(self, weight: Tensor) -> Tensor:
         dtype = weight.dtype
         weight = weight.float()
-        s = 1 / weight.abs().mean().clamp(min=1e-5)
-        weight = (weight * s).round().clamp(-1, 1) / s
-        scale = weight.abs().max().unsqueeze(0)
-        weight = torch.where(weight.abs().less(1e-6), 0, weight).type(dtype)
-        weight = torch.sign(weight).type(dtype)
-        return weight.type(dtype), scale.type(torch.float32)
+        scale = weight.abs().mean().clamp(min=1e-5)
+        iscale = 1 / scale
+        # TODO: multiply by the scale directly instead of inverting it twice
+        # (this is also unnecessarily doubly inverted upstream)
+        # ref: https://huggingface.co/1bitLLM/bitnet_b1_58-3B/blob/af89e318d78a70802061246bf037199d2fb97020/utils_quant.py#L10
+        result = (weight * iscale).round().clamp(-1, 1) / iscale
+        return result.type(dtype)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         new_name = self.map_tensor_name(name)
@@ -1642,11 +1643,9 @@ class BitnetModel(Model):
             gguf.MODEL_TENSOR.FFN_GATE,
         ]):
             # transform weight into 1/0/-1 (in fp32)
-            weight_torch, scale_torch = self.weight_quant(data_torch)
-            yield (new_name, weight_torch)
-            yield (new_name.removesuffix(".weight") + ".scale", scale_torch)
-        else:
-            yield (new_name, data_torch)
+            data_torch = self.weight_quant(data_torch)
+
+        yield (new_name, data_torch)
 
 
 @Model.register("GrokForCausalLM")
