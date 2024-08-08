@@ -1315,7 +1315,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
             { LLM_TENSOR_FFN_DOWN,        "blk.%d.ffn_down" },
             { LLM_TENSOR_FFN_UP,          "blk.%d.ffn_up" },
         },
-    },    
+    },
     {
         LLM_ARCH_UNKNOWN,
         {
@@ -5262,7 +5262,7 @@ static void llm_load_hparams(
                     case 32: model.type = e_model::MODEL_4B; break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
-            } break;   
+            } break;
         default: (void)0;
     }
 
@@ -7631,7 +7631,7 @@ static bool llm_load_tensors(
                         layer.ffn_down_b = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "bias", i), {n_embd}, llama_model_loader::TENSOR_NOT_REQUIRED);
                         layer.ffn_up_b   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "bias", i), {n_ff}, llama_model_loader::TENSOR_NOT_REQUIRED);
                     }
-                } break;                
+                } break;
             default:
                 throw std::runtime_error("unknown architecture");
         }
