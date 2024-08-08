@@ -3777,16 +3777,6 @@ class NemotronModel(Model):
 
         return [(self.map_tensor_name(name), data_torch)]
 
-    def write_tensors(self):
-        super().write_tensors()
-
-        if self._experts is not None:
-            # flatten `list[dict[str, Tensor]]` into `list[str]`
-            experts = [k for d in self._experts for k in d.keys()]
-            if len(experts) > 0:
-                raise ValueError(f"Unprocessed experts: {experts}")
-
-
 ###### CONVERSION LOGIC ######
 
 
