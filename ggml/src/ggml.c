@@ -18861,7 +18861,6 @@ void ggml_release_threadpool(struct ggml_compute_threadpool* threadpool) {
     if (!threadpool->disposable) {
         ggml_mutex_lock(&threadpool->mutex);
     }
-    threadpool->n_threads_cur = n_threads;
     threadpool->stop = true;
     threadpool->pause = false;
     if (!threadpool->disposable) {
@@ -19154,21 +19153,27 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 static bool ggml_graph_compute_check_for_work(struct ggml_compute_state * state) {
     struct ggml_compute_threadpool * threadpool = state->threadpool;
 
-    do {
-        if (threadpool->poll) {
-            while (!threadpool->new_work && !threadpool->stop && !threadpool->pause) {
-                // No new work. Yield and keep polling.
-                __cpu_relax();
-            }
-        } else {
-            ggml_mutex_lock_shared(&threadpool->mutex);
-            while (!threadpool->new_work && !threadpool->stop && !threadpool->pause) {
-                // No new work. Wait for the signal.
-                ggml_cond_wait(&threadpool->cond, &threadpool->mutex);
-            }
-            ggml_mutex_unlock_shared(&threadpool->mutex);
+    if (threadpool->poll) {
+        while (!((threadpool->new_work && state->ith < threadpool->n_threads_cur) ||
+                 threadpool->stop ||
+                 threadpool->pause
+                )
+        ) {
+            // No new work. Yield and keep polling.
+            __cpu_relax();
         }
-    } while (state->ith >= threadpool->n_threads_cur);
+    } else {
+        ggml_mutex_lock_shared(&threadpool->mutex);
+        while (!((threadpool->new_work && state->ith < threadpool->n_threads_cur) ||
+                 threadpool->stop ||
+                 threadpool->pause
+                )
+        ) {
+            // No new work. Wait for the signal.
+            ggml_cond_wait(&threadpool->cond, &threadpool->mutex);
+        }
+        ggml_mutex_unlock_shared(&threadpool->mutex);
+    }
     return threadpool->new_work;
 }
 
