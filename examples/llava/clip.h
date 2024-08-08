@@ -18,8 +18,6 @@
 #    define CLIP_API
 #endif
 
-struct clip_ctx;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
