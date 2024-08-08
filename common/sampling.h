@@ -46,6 +46,8 @@ typedef struct llama_sampling_params {
     uint32_t    dry_allowed_length    = 2;
     int32_t     dry_penalty_last_n    = -1;                 // DRY last n tokens to penalize (0 = disable penalty, -1 = context size)
 
+    std::vector<std::string> dry_seq_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
+
     std::vector<llama_sampler_type> samplers_sequence = {
         llama_sampler_type::TOP_K,
         llama_sampler_type::TFS_Z,
@@ -63,9 +65,8 @@ typedef struct llama_sampling_params {
     float       cfg_scale     = 1.f; // how strong is guidance
 
     std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
-
     std::vector<llama_token> penalty_prompt_tokens;
-    std::vector<llama_token> dry_seq_breakers; // sequence breakers for the DRY sampler
+
     bool                     use_penalty_prompt_tokens = false;
 } llama_sampling_params;
 

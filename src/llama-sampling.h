@@ -28,7 +28,11 @@ void llama_sample_softmax_impl  (struct llama_sampling * smpl, llama_token_data_
 void llama_sample_top_k_impl    (struct llama_sampling * smpl, llama_token_data_array * candidates, int32_t k, size_t min_keep);
 void llama_sample_top_p_impl    (struct llama_sampling * smpl, llama_token_data_array * candidates, float p, size_t min_keep);
 void llama_sample_min_p_impl    (struct llama_sampling * smpl, llama_token_data_array * candidates, float p, size_t min_keep);
-void llama_sample_dry_impl      (llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float dry_base, float dry_multiplier, int dry_allowed_length, const llama_token * dry_seq_breakers, size_t dry_seq_breakers_size);
+std::vector<llama_token> llama_tokenize(const struct llama_context * ctx, const std::string & text, bool   add_special, bool   parse_special);
+std::vector<llama_token> llama_tokenize(const struct llama_model * model, const std::string & text, bool   add_special, bool   parse_special);
+std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token> & tokens, bool special);
+std::string llama_detokenize_single(llama_context * ctx, llama_token token, bool special);
+void llama_sample_dry_impl      (struct llama_context  * ctx,  llama_token_data_array * candidates, const llama_token * last_tokens, size_t last_tokens_size, float dry_base, float dry_multiplier, int dry_allowed_length, const std::vector<std::string> & dry_seq_breakers);
 void llama_sample_tail_free_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float z, size_t min_keep);
 void llama_sample_typical_impl  (struct llama_sampling * smpl, llama_token_data_array * candidates, float p, size_t min_keep);
 void llama_sample_entropy_impl  (struct llama_sampling * smpl, llama_token_data_array * candidates, float min_temp, float max_temp, float exponent_val);
