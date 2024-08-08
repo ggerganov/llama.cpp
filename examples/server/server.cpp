@@ -2163,7 +2163,7 @@ struct server_context {
 
                                 // reuse any previously computed tokens that are common with the new prompt
                                 slot.n_past = common_part(slot.cache_tokens, prompt_tokens);
-
+                                
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
                                     llama_sampling_accept(slot.ctx_sampling, ctx, slot.cache_tokens[i], false);
