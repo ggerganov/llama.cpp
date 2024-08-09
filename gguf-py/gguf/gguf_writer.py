@@ -322,7 +322,7 @@ class GGUFWriter:
 
     def add_tensor_info(
         self, name: str, tensor_shape: Sequence[int], tensor_dtype: np.dtype,
-        tensor_nbytes: int, raw_dtype: GGMLQuantizationType | None = None,
+        tensor_nbytes: int, raw_dtype: int | None = None,
     ) -> None:
         if self.state is not WriterState.NO_FILE:
             raise ValueError(f'Expected output file to be not yet opened, got {self.state}')
@@ -348,7 +348,7 @@ class GGUFWriter:
             else:
                 raise ValueError("Only F16, F32, F64, I8, I16, I32, I64 tensors are supported for now")
         else:
-            dtype = raw_dtype
+            dtype = GGMLQuantizationType(raw_dtype)
             if tensor_dtype == np.uint8:
                 tensor_shape = quant_shape_from_byte_shape(tensor_shape, raw_dtype)
 
@@ -367,7 +367,7 @@ class GGUFWriter:
 
     def add_tensor(
         self, name: str, tensor: np.ndarray[Any, Any], raw_shape: Sequence[int] | None = None,
-        raw_dtype: GGMLQuantizationType | None = None,
+        raw_dtype: int | None = None,
     ) -> None:
         if self.endianess == GGUFEndian.BIG:
             tensor.byteswap(inplace=True)
