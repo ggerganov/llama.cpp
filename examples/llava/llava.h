@@ -17,12 +17,11 @@
 #    define LLAVA_API
 #endif
 
-struct clip_ctx;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+struct clip_ctx;
 struct llava_image_embed {
     float * embed;
     int n_image_pos;
