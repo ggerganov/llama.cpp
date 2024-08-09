@@ -95,15 +95,6 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_CODESHELL      = 22,
     };
 
-    // note: these values should be synchronized with ggml_rope
-    // TODO: maybe move this enum to ggml.h (ggml_rope_type)
-    enum llama_rope_type {
-        LLAMA_ROPE_TYPE_NONE = -1,
-        LLAMA_ROPE_TYPE_NORM =  0,
-        LLAMA_ROPE_TYPE_NEOX =  2,
-        LLAMA_ROPE_TYPE_GLM  =  4,
-    };
-
     enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
@@ -462,7 +453,7 @@ extern "C" {
     LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
 
     LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
-    LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
+    LLAMA_API enum ggml_rope_type     ggml_rope_type    (const struct llama_model * model);
 
     LLAMA_API int32_t llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int32_t llama_n_ctx_train(const struct llama_model * model);

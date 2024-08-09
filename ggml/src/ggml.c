@@ -6545,7 +6545,7 @@ struct ggml_tensor * ggml_rope_back(
     GGML_ASSERT(a->ne[2] == b->ne[0]);
     GGML_ASSERT(c == NULL && "freq factors not implemented yet");
 
-    GGML_ASSERT((mode & 4) == 0 && "ggml_rope_back() for ChatGLM not implemented yet");
+    GGML_ASSERT((mode & GGML_ROPE_TYPE_GLM) == 0 && "ggml_rope_back() for ChatGLM not implemented yet");
 
     bool is_node = false;
 
@@ -14093,7 +14093,7 @@ static void ggml_compute_forward_rope_f32(
     float corr_dims[2];
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
-    const bool is_neox = mode & 2;
+    const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
 
     const float * freq_factors = NULL;
     if (src2 != NULL) {
@@ -14218,7 +14218,7 @@ static void ggml_compute_forward_rope_f16(
     float corr_dims[2];
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast, beta_slow, corr_dims);
 
-    const bool is_neox = mode & 2;
+    const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
 
     const float * freq_factors = NULL;
     if (src2 != NULL) {

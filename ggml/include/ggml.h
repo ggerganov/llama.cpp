@@ -437,6 +437,14 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_0_8_8 = 27, // except 1d tensors
     };
 
+    // Rotary Positional Embedding (RoPE) types
+    enum ggml_rope_type {
+        GGML_ROPE_TYPE_NONE = -1,
+        GGML_ROPE_TYPE_NORM =  0,
+        GGML_ROPE_TYPE_NEOX =  2,
+        GGML_ROPE_TYPE_GLM  =  4,
+    };
+
     // available tensor operations:
     enum ggml_op {
         GGML_OP_NONE = 0,
