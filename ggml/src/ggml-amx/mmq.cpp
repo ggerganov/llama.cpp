@@ -2099,19 +2099,22 @@ void tinygemm_kernel_amx(int M, int N, int KB, const void * RESTRICT _A, const v
   int32_t * C_cur = TileC0;
   int32_t * C_pre = TileC1;
 
-  #define Tile4(base) base
-  #define Tile5(base) base + TILE_M * TILE_N
-  #define Tile6(base) base + 2 * TILE_M * TILE_N
-  #define Tile7(base) base + 3 * TILE_M * TILE_N
+  auto Tile4 = [&](int32_t * base) { return base; };
+  auto Tile5 = [&](int32_t * base) { return base + TILE_M * TILE_N; };
+  auto Tile6 = [&](int32_t * base) { return base + 2 * TILE_M * TILE_N; };
+  auto Tile7 = [&](int32_t * base) { return base + 3 * TILE_M * TILE_N; };
 
   if (M == 2 * TILE_M) {
     // i = 0
+    const char * B_blk0 = B + PACKED_INDEX(0, 0, KB, TILE_SIZE);
+    const char * B_blk1 = B + PACKED_INDEX(1, 0, KB, TILE_SIZE);
     if (need_unpack) {
-      unpack_B<TB>(Tile0, B + PACKED_INDEX(0, 0, KB, TILE_SIZE));
+      unpack_B<TB>(Tile0, B_blk0);
       _tile_loadd(TMM0, Tile0, TILE_N * VNNI_BLK);
     } else {
-      _tile_loadd(TMM0, B + PACKED_INDEX(0, 0, KB, TILE_SIZE), TILE_N * VNNI_BLK);
+      _tile_loadd(TMM0, B_blk0, TILE_N * VNNI_BLK);
     }
+
     _tile_zero(TMM4);
     _tile_loadd(TMM2, A[0].qs, lda);
     _tile_dpbssd(TMM4, TMM2, TMM0);
@@ -2123,11 +2126,12 @@ void tinygemm_kernel_amx(int M, int N, int KB, const void * RESTRICT _A, const v
     _tile_stored(TMM5, Tile5(C_pre), TILE_N * sizeof(int32_t));
 
     if (need_unpack) {
-      unpack_B<TB>(Tile1, B + PACKED_INDEX(1, 0, KB, TILE_SIZE));
+      unpack_B<TB>(Tile1, B_blk0);
       _tile_loadd(TMM1, Tile1, TILE_N * VNNI_BLK);
     } else {
-      _tile_loadd(TMM1, B + PACKED_INDEX(1, 0, KB, TILE_SIZE), TILE_N * VNNI_BLK);
+      _tile_loadd(TMM1, B_blk1, TILE_N * VNNI_BLK);
     }
+
     _tile_zero(TMM6);
     _tile_dpbssd(TMM6, TMM2, TMM1);
     _tile_stored(TMM6, Tile6(C_pre), TILE_N * sizeof(int32_t));
@@ -2139,12 +2143,14 @@ void tinygemm_kernel_amx(int M, int N, int KB, const void * RESTRICT _A, const v
     for (int i = 1; i < KB; ++i) {
       // index of previous iter
       const int ii = i - 1;
+      const char * B_blk0 = B + PACKED_INDEX(0, i, KB, TILE_SIZE);
+      const char * B_blk1 = B + PACKED_INDEX(1, i, KB, TILE_SIZE);
       GGML_DISPATCH_BOOL(ii > 0, is_acc, [&] {
         if (need_unpack) {
-          unpack_B<TB>(Tile0, B + PACKED_INDEX(0, i, KB, TILE_SIZE));
+          unpack_B<TB>(Tile0, B_blk0);
           _tile_loadd(TMM0, Tile0, TILE_N * VNNI_BLK);
         } else {
-          _tile_loadd(TMM0, B + PACKED_INDEX(0, i, KB, TILE_SIZE), TILE_N * VNNI_BLK);
+          _tile_loadd(TMM0, B_blk0, TILE_N * VNNI_BLK);
         }
         _tile_zero(TMM4);
         _tile_loadd(TMM2, A[i].qs, lda);
@@ -2161,10 +2167,10 @@ void tinygemm_kernel_amx(int M, int N, int KB, const void * RESTRICT _A, const v
         _tile_stored(TMM5, Tile5(C_cur), TILE_N * sizeof(int32_t));
 
         if (need_unpack) {
-          unpack_B<TB>(Tile1, B + PACKED_INDEX(1, i, KB, TILE_SIZE));
+          unpack_B<TB>(Tile1, B_blk1);
           _tile_loadd(TMM1, Tile1, TILE_N * VNNI_BLK);
         } else {
-          _tile_loadd(TMM1, B + PACKED_INDEX(1, i, KB, TILE_SIZE), TILE_N * VNNI_BLK);
+          _tile_loadd(TMM1, B_blk1, TILE_N * VNNI_BLK);
         }
         _tile_zero(TMM6);
         acc_C<TA, TB, is_acc>::apply(C + TILE_N, ldc, Tile6(C_pre), &A[ii], KB, B + PACKED_INDEX(1, ii, KB, TILE_SIZE), TILE_M);
@@ -2198,18 +2204,20 @@ void tinygemm_kernel_amx(int M, int N, int KB, const void * RESTRICT _A, const v
         _tile_zero(TMM7);
       }
 
+      const char * B_blk0 = B + PACKED_INDEX(0, i, KB, TILE_SIZE);
+      const char * B_blk1 = B + PACKED_INDEX(1, i, KB, TILE_SIZE);
       if (need_unpack) {
-        unpack_B<TB>(Tile0, B + PACKED_INDEX(0, i, KB, TILE_SIZE));
+        unpack_B<TB>(Tile0, B_blk0);
         _tile_loadd(TMM0, Tile0, TILE_N * VNNI_BLK);
       } else {
-        _tile_loadd(TMM0, B + PACKED_INDEX(0, i, KB, TILE_SIZE), TILE_N * VNNI_BLK);
+        _tile_loadd(TMM0, B_blk0, TILE_N * VNNI_BLK);
       }
 
       if (need_unpack) {
-        unpack_B<TB>(Tile1, B + PACKED_INDEX(1, i, KB, TILE_SIZE));
+        unpack_B<TB>(Tile1, B_blk1);
         _tile_loadd(TMM1, Tile1, TILE_N * VNNI_BLK);
       } else {
-        _tile_loadd(TMM1, B + PACKED_INDEX(1, i, KB, TILE_SIZE), TILE_N * VNNI_BLK);
+        _tile_loadd(TMM1, B_blk1, TILE_N * VNNI_BLK);
       }
 
       if (m0 == TILE_M) {
@@ -2364,6 +2372,8 @@ bool ggml_compute_forward_mul_mat_use_amx(struct ggml_tensor * dst) {
   const enum ggml_type type = src0->type;
   const int64_t ne0 = dst->ne[0];
 
+  bool is_training = src0->grad || src1->grad;
+
   // amx kernels enables for Q4_0, Q4_1, Q8_0, F16
   // Q4_K, Q5_K, Q6_K, IQ4_XS enabled for QK_K = 256
   bool has_amx_kernels = (type == GGML_TYPE_Q4_0) ||
@@ -2386,6 +2396,7 @@ bool ggml_compute_forward_mul_mat_use_amx(struct ggml_tensor * dst) {
   return dst->op != GGML_OP_MUL_MAT_ID &&
       is_contiguous_2d(src0) &&
       is_contiguous_2d(src1) &&
+      !is_training &&
       src1->type == GGML_TYPE_F32 &&
       has_amx_kernels &&
       // out features is 32x
