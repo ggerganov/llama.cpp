@@ -15391,11 +15391,14 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS) {
             new_type = (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2) ? GGML_TYPE_Q4_K : !qs.has_imatrix ? GGML_TYPE_IQ3_S : GGML_TYPE_IQ3_XXS;
         }
-        else if ((ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_S) && (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2)) {
+        else if ((ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS) && (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2)) {
+            new_type = GGML_TYPE_Q4_K;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_S) {
             new_type = GGML_TYPE_Q4_K;
         }
         else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_M) {
-            new_type = GGML_TYPE_Q4_K;
+            new_type = GGML_TYPE_Q5_K;
         }
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M) {
             new_type = qs.i_attention_wv < 2 ? GGML_TYPE_Q5_K : GGML_TYPE_Q4_K;
@@ -15413,6 +15416,9 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             // for the 8-expert model, bumping this to Q8_0 trades just ~128MB
             // TODO: explore better strategies
             new_type = GGML_TYPE_Q8_0;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_M && (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2)) {
+            new_type = GGML_TYPE_IQ4_XS;
         }
         else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS && qs.model.hparams.n_gqa() < 2 && qs.model.hparams.n_expert < 2) {
             new_type = GGML_TYPE_IQ3_XXS;
