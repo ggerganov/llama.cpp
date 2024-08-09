@@ -52,6 +52,7 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "F16",      LLAMA_FTYPE_MOSTLY_F16,      "14.00G, +0.0020 ppl @ Mistral-7B",  },
     { "BF16",     LLAMA_FTYPE_MOSTLY_BF16,     "14.00G, -0.0050 ppl @ Mistral-7B",  },
     { "F32",      LLAMA_FTYPE_ALL_F32,         "26.00G              @ 7B",          },
+    { "CQS",      LLAMA_FTYPE_CQS,             "Custom Quantization Scheme",        },
     // Note: Ensure COPY comes after F32 to avoid ftype 0 from matching.
     { "COPY",     LLAMA_FTYPE_ALL_F32,         "only copy tensors, no quantizing",  },
 };
@@ -101,10 +102,10 @@ static void usage(const char * executable) {
     printf("  --pure: Disable k-quant mixtures and quantize all tensors to the same type\n");
     printf("  --imatrix file_name: use data in file_name as importance matrix for quant optimizations\n");
     printf("  --include-weights tensor_name: use importance matrix for this/these tensor(s)\n");
-    printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n\n");
-    printf("    Optional specific tensor quantization types to amend the selected quantization strategy type:\n");
-    printf("      --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor.\n");
-    printf("      --token-embedding-type ggml_type: use this ggml_type for the token_embd.weight tensor.\n");
+    printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
+    printf("  --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor.\n");
+    printf("  --token-embedding-type ggml_type: use this ggml_type for the token_embd.weight tensor.\n\n");
+    printf("Additional specific tensor quantization types used in the custom quant scheme 'CQS (default is Q2_K):\n");
     printf("      --attn-q-type ggml_type: use this ggml_type for the attn_q.weight tensor.\n");
     printf("      --attn-k-type ggml_type: use this ggml_type for the attn_k.weight tensor.\n");
     printf("      --attn-v-type ggml_type: use this ggml_type for the attn_v.weight tensor.\n");
@@ -118,10 +119,11 @@ static void usage(const char * executable) {
     printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");
     printf("Note: The token embeddings tensor is loaded in system RAM, even in case of full GPU/VRAM offload.\n");
-    printf("Note: The recommanded type for the output tensor is q6_K for the ffn types > iq3_xxs and < q8_0.\n");
-    printf("Note: Usually, attn-q-type can be one type below the chosen ffn type, and attn-v-type should be one type above.\n");
-    printf("Note: --attn-qkv-type replaces the types attn-q, attn-k, and attn-v on some models.\n");
-    printf("Note: Write the specific tensor legacy quants as qN_N, the K-Quants as qN_K, the IQ-Quants as iqN_xx.\n");
+    printf("Note: The recommanded type for the output tensor is q6_K for the ffn types > iq3_xxs and < q8_0.\n\n");
+    printf("Note for the Custom Quant Scheme FTYPE:\n");
+    printf("    Write the specific tensor legacy quants as qN_N, the K-Quants as qN_K, the IQ-Quants as iqN_xx.\n");
+    printf("    Usually, attn-q-type can be one type below the chosen ffn type, and attn-v-type should be one type above.\n");
+    printf("    attn-qkv-type replaces the types attn-q, attn-k and attn-v on some models.\n");
     //TODO: - eventually - harmonize the CAPS writing of the FTYPEs, and non CAPS writing of the GGML_TYPEs.
     printf("\nAllowed quantization types:\n");
     for (auto & it : QUANT_OPTIONS) {
