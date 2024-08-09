@@ -2716,6 +2716,7 @@ int main(int argc, char ** argv) {
     //
 
     const auto handle_health = [&](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
         server_state current_state = state.load();
         switch (current_state) {
             case SERVER_STATE_READY:
