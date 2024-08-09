@@ -200,7 +200,7 @@ int main(int argc, char ** argv) {
         }
     }
 
-    llama_print_timings(ctx);
+    llama_print_timings(ctx, nullptr);
 
     llama_batch_free(batch);
 

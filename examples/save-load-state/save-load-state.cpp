@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <cstdio>
-#include <chrono>
 
 int main(int argc, char ** argv) {
     gpt_params params;
@@ -37,6 +36,8 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;
     }
+
+    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
 
     // tokenize prompt
     auto tokens = llama_tokenize(ctx, params.prompt, true);
@@ -73,7 +74,7 @@ int main(int argc, char ** argv) {
             candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
         }
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-        auto next_token = llama_sample_token(ctx, &candidates_p);
+        auto next_token = llama_sampling_sample(smpl, &candidates_p);
         auto next_token_str = llama_token_to_piece(ctx, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -95,6 +96,8 @@ int main(int argc, char ** argv) {
 
     // make new context
     auto * ctx2 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
+
+    llama_sampling * smpl2 = llama_sampling_init(model, nullptr, nullptr);
 
     printf("\nsecond run: %s", params.prompt.c_str());
 
@@ -132,7 +135,7 @@ int main(int argc, char ** argv) {
             candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
         }
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-        auto next_token = llama_sample_token(ctx2, &candidates_p);
+        auto next_token = llama_sampling_sample(smpl2, &candidates_p);
         auto next_token_str = llama_token_to_piece(ctx2, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -157,7 +160,9 @@ int main(int argc, char ** argv) {
     }
 
     // make new context
-    auto* ctx3 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
+    auto * ctx3 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
+
+    llama_sampling * smpl3 = llama_sampling_init(model, nullptr, nullptr);
 
     printf("\nsingle seq run: %s", params.prompt.c_str());
 
@@ -223,7 +228,7 @@ int main(int argc, char ** argv) {
             candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
         }
         llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-        auto next_token = llama_sample_token(ctx3, &candidates_p);
+        auto next_token = llama_sampling_sample(smpl3, &candidates_p);
         auto next_token_str = llama_token_to_piece(ctx3, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -239,6 +244,10 @@ int main(int argc, char ** argv) {
     }
 
     printf("\n");
+
+    llama_sampling_free(smpl);
+    llama_sampling_free(smpl2);
+    llama_sampling_free(smpl3);
 
     llama_free(ctx3);
     llama_free_model(model);

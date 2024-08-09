@@ -58,8 +58,6 @@ add_library(${TARGET} STATIC
     sampling.cpp
     console.h
     console.cpp
-    grammar-parser.h
-    grammar-parser.cpp
     json.hpp
     json-schema-to-grammar.cpp
     train.h

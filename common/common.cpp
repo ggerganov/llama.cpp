@@ -264,6 +264,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         params.kv_overrides.back().key[0] = 0;
     }
 
+    if (params.sparams.seed == LLAMA_DEFAULT_SEED) {
+        params.sparams.seed = time(NULL);
+    }
+
     return true;
 }
 
@@ -294,8 +298,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
 
     if (arg == "-s" || arg == "--seed") {
         CHECK_ARG
-        // TODO: this is temporary, in the future the sampling state will be moved fully to llama_sampling_context.
-        params.seed = std::stoul(argv[i]);
         sparams.seed = std::stoul(argv[i]);
         return true;
     }
@@ -1414,7 +1416,6 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       --verbose-prompt",       "print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false" });
     options.push_back({ "*",           "       --no-display-prompt",    "don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false" });
     options.push_back({ "*",           "-co,   --color",                "colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false" });
-    options.push_back({ "*",           "-s,    --seed SEED",            "RNG seed (default: %d, use random seed for < 0)", params.seed });
     options.push_back({ "*",           "-t,    --threads N",            "number of threads to use during generation (default: %d)", params.n_threads });
     options.push_back({ "*",           "-tb,   --threads-batch N",      "number of threads to use during batch and prompt processing (default: same as --threads)" });
     options.push_back({ "speculative", "-td,   --threads-draft N",      "number of threads to use during generation (default: same as --threads)" });
@@ -1465,6 +1466,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                        "       --spm-infill",           "use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: %s)", params.spm_infill ? "enabled" : "disabled" });
 
     options.push_back({ "sampling" });
+    options.push_back({ "*",           "-s,    --seed SEED",            "RNG seed (default: %d, use random seed for < 0)", sparams.seed });
     options.push_back({ "*",           "       --samplers SAMPLERS",    "samplers that will be used for generation in the order, separated by \';\'\n"
                                                                         "(default: %s)", sampler_type_names.c_str() });
     options.push_back({ "*",           "       --sampling-seq SEQUENCE",
@@ -2148,7 +2150,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
         llama_kv_cache_clear(lctx);
         llama_synchronize(lctx);
-        llama_reset_timings(lctx);
+        llama_reset_timings(lctx, nullptr);
     }
 
     iparams.model   = model;
@@ -2226,7 +2228,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_ubatch          = params.n_ubatch;
     cparams.n_threads         = params.n_threads;
     cparams.n_threads_batch   = params.n_threads_batch == -1 ? params.n_threads : params.n_threads_batch;
-    cparams.seed              = params.seed;
     cparams.logits_all        = params.logits_all;
     cparams.embeddings        = params.embedding;
     cparams.rope_scaling_type = params.rope_scaling_type;
@@ -3236,7 +3237,6 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
 
     fprintf(stream, "rope_freq_base: %f # default: 10000.0\n", params.rope_freq_base);
     fprintf(stream, "rope_freq_scale: %f # default: 1.0\n", params.rope_freq_scale);
-    fprintf(stream, "seed: %u # default: -1 (random seed)\n", params.seed);
     fprintf(stream, "simple_io: %s # default: false\n", params.simple_io ? "true" : "false");
     fprintf(stream, "cont_batching: %s # default: false\n", params.cont_batching ? "true" : "false");
     fprintf(stream, "flash_attn: %s # default: false\n", params.flash_attn ? "true" : "false");

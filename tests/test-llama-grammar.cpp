@@ -2,16 +2,16 @@
 #undef NDEBUG
 #endif
 
-#define LLAMA_API_INTERNAL
 #include "llama.h"
-#include "grammar-parser.h"
+#include "llama-vocab.h" // TMP
+#include "llama-grammar.h"
 
 #include <cassert>
 #include <stdexcept>
 
 int main()
 {
-    grammar_parser::parse_state parsed_grammar;
+    llama_grammar_parser parsed_grammar;
 
     std::vector<std::pair<std::string, uint32_t>> expected = {
         {"expr", 2},
@@ -117,7 +117,8 @@ int main()
     llama_grammar * grammar = NULL;
     std::vector<const llama_grammar_element *> grammar_rules(parsed_grammar.c_rules());
 
-    grammar = llama_grammar_init(grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
+    llama_vocab vocab; // TMP
+    grammar = llama_grammar_init_impl(vocab, grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
     if (grammar == nullptr)
     {
         throw std::runtime_error("Failed to initialize llama_grammar");
@@ -403,6 +404,8 @@ int main()
         delete[] candidate.code_points;
         candidate.code_points = nullptr;
     }
-    llama_grammar_free(grammar);
+
+    llama_grammar_free_impl(grammar);
+
     return 0;
 }

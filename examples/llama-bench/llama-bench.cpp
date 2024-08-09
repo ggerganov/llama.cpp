@@ -1463,7 +1463,7 @@ int main(int argc, char ** argv) {
             fflush(p_err->fout);
         }
 
-        llama_print_timings(ctx);
+        llama_print_timings(ctx, nullptr);
 
         llama_free(ctx);
     }

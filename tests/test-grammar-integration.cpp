@@ -2,33 +2,23 @@
 #undef NDEBUG
 #endif
 
-#define LLAMA_API_INTERNAL
-
 #include "ggml.h"
 #include "llama.h"
-#include "grammar-parser.h"
-#include "json-schema-to-grammar.h"
+#include "llama-vocab.h" // TMP
+#include "llama-grammar.h"
 #include "unicode.h"
+#include "json-schema-to-grammar.h"
+
 #include <cassert>
 #include <string>
 #include <vector>
 
 using json = nlohmann::ordered_json;
 
-static llama_grammar* build_grammar(const std::string & grammar_str) {
-    auto parsed_grammar = grammar_parser::parse(grammar_str.c_str());
+llama_vocab vocab; // TMP
 
-    // Ensure we parsed correctly
-    assert(!parsed_grammar.rules.empty());
-
-    // Ensure we have a root node
-    assert(!(parsed_grammar.symbol_ids.find("root") == parsed_grammar.symbol_ids.end()));
-
-    std::vector<const llama_grammar_element*> grammar_rules(parsed_grammar.c_rules());
-    llama_grammar* grammar = llama_grammar_init(
-        grammar_rules.data(), grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
-
-    return grammar;
+static llama_grammar * build_grammar(const std::string & grammar_str) {
+    return llama_grammar_init_impl(vocab, grammar_str.c_str(), "root");
 }
 
 static bool test_build_grammar_fails(const std::string & grammar_str) {
@@ -143,7 +133,7 @@ static void test(const std::string & test_desc, const std::string & grammar_str,
     }
 
     // Clean up allocated memory
-    llama_grammar_free(grammar);
+    llama_grammar_free_impl(grammar);
 }
 static void test_grammar(const std::string & test_desc, const std::string & grammar_str, const std::vector<std::string> & passing_strings, const std::vector<std::string> & failing_strings) {
     test(test_desc + ". Grammar: " + grammar_str, grammar_str, passing_strings, failing_strings);
@@ -683,7 +673,8 @@ static void test_failure_missing_root() {
         term ::= number
         number ::= [0-9]+)""";
 
-    grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
+    llama_grammar_parser parsed_grammar;
+    parsed_grammar.parse(grammar_str.c_str());
 
     // Ensure we parsed correctly
     assert(!parsed_grammar.rules.empty());
@@ -705,7 +696,8 @@ static void test_failure_missing_reference() {
 
     fprintf(stderr, "    Expected error:  ");
 
-    grammar_parser::parse_state parsed_grammar = grammar_parser::parse(grammar_str.c_str());
+    llama_grammar_parser parsed_grammar;
+    parsed_grammar.parse(grammar_str.c_str());
 
     // Ensure we did NOT parsed correctly
     assert(parsed_grammar.rules.empty());

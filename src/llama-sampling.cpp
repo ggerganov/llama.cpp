@@ -1,5 +1,8 @@
 #include "llama-sampling.h"
 
+#include "llama-vocab.h"
+#include "llama-grammar.h"
+
 #include <algorithm>
 #include <cstring>
 #include <ctime>
@@ -21,18 +24,65 @@ static void llama_log_softmax(float * array, size_t size) {
     }
 }
 
-void llama_set_rng_seed_impl(struct llama_sampling * smpl, uint32_t seed) {
+llama_sampling::llama_sampling(uint32_t n_vocab) : n_vocab(n_vocab) {
+}
+
+llama_sampling::llama_sampling(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) : n_vocab(vocab.n_vocab) {
+    if (grammar_str != nullptr && grammar_str[0] != '\0') {
+        grammar = llama_grammar_init_impl(vocab, grammar_str, grammar_root);
+    }
+}
+
+llama_sampling::~llama_sampling() {
+    if (grammar) {
+        llama_grammar_free_impl(grammar);
+    }
+}
+
+struct llama_sampling * llama_sampling_init_impl(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) {
+    return new llama_sampling(vocab, grammar_str, grammar_root);
+}
+
+void llama_sampling_free_impl(struct llama_sampling * sampling) {
+    delete sampling;
+}
+
+struct llama_sampling * llama_sampling_cp_impl(const struct llama_sampling & smpl) {
+    auto * result = new llama_sampling(smpl.n_vocab);
+
+    if (smpl.grammar) {
+        result->grammar = llama_grammar_copy_impl(*smpl.grammar);
+    }
+
+    return result;
+}
+
+void llama_sampling_reset_impl(struct llama_sampling & smpl, const char * grammar_str, const char * grammar_root) {
+    // TODO: this is dumb, need to fix
+    const struct llama_vocab * vocab = nullptr;
+
+    if (smpl.grammar) {
+        vocab = &smpl.grammar->vocab;
+
+        llama_grammar_free_impl(smpl.grammar);
+        smpl.grammar = nullptr;
+    }
+
+    if (grammar_str != nullptr && grammar_str[0] != '\0') {
+        smpl.grammar = llama_grammar_init_impl(*vocab, grammar_str, grammar_root);
+    }
+}
+
+void llama_sampling_set_rng_seed_impl(struct llama_sampling & smpl, uint32_t seed) {
     if (seed == LLAMA_DEFAULT_SEED) {
         seed = time(NULL);
     }
 
-    smpl->rng.seed(seed);
+    smpl.rng.seed(seed);
 }
 
-void llama_sample_softmax_impl(struct llama_sampling * smpl, llama_token_data_array * candidates) {
+void llama_sampling_softmax_impl(struct llama_sampling & /*smpl*/, llama_token_data_array * candidates) {
     GGML_ASSERT(candidates->size > 0);
-
-    const int64_t t_start_sample_us = ggml_time_us();
 
     // Sort the logits in descending order
     if (!candidates->sorted) {
@@ -44,27 +94,23 @@ void llama_sample_softmax_impl(struct llama_sampling * smpl, llama_token_data_ar
 
     float max_l = candidates->data[0].logit;
     float cum_sum = 0.0f;
+
     for (size_t i = 0; i < candidates->size; ++i) {
         float p = expf(candidates->data[i].logit - max_l);
         candidates->data[i].p = p;
         cum_sum += p;
     }
+
     for (size_t i = 0; i < candidates->size; ++i) {
         candidates->data[i].p /= cum_sum;
     }
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_top_k_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, int32_t k, size_t min_keep) {
+void llama_sampling_top_k_impl(struct llama_sampling & /*smpl*/, llama_token_data_array * candidates, int32_t k, size_t min_keep) {
     // TODO: move bucket sort to separate function so that top_p/tail_free/typical/softmax first is equally fast
     // if (k >= (int32_t)candidates->size) {
     //     return;
     // }
-
-    const int64_t t_start_sample_us = ggml_time_us();
 
     if (k <= 0) {
         k = candidates->size;
@@ -133,20 +179,14 @@ void llama_sample_top_k_impl(struct llama_sampling * smpl, llama_token_data_arra
         candidates->sorted = true;
     }
     candidates->size = k;
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_top_p_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float p, size_t min_keep) {
+void llama_sampling_top_p_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, float p, size_t min_keep) {
     if (p >= 1.0f) {
         return;
     }
 
-    llama_sample_softmax_impl(smpl, candidates);
-
-    const int64_t t_start_sample_us = ggml_time_us();
+    llama_sampling_softmax_impl(smpl, candidates);
 
     // Compute the cumulative probabilities
     float cum_sum = 0.0f;
@@ -165,18 +205,12 @@ void llama_sample_top_p_impl(struct llama_sampling * smpl, llama_token_data_arra
 
     // Resize the output vector to keep only the top-p tokens
     candidates->size = last_idx;
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_min_p_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float p, size_t min_keep) {
+void llama_sampling_min_p_impl(struct llama_sampling & /*smpl*/, llama_token_data_array * candidates, float p, size_t min_keep) {
     if (p <= 0.0f || !candidates->size) {
         return;
     }
-
-    const int64_t t_start_sample_us = ggml_time_us();
 
     bool min_p_applied = false;
 
@@ -226,19 +260,14 @@ void llama_sample_min_p_impl(struct llama_sampling * smpl, llama_token_data_arra
         // Resize the output vector to keep only the matching tokens
         candidates->size = i;
     }
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_tail_free_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float z, size_t min_keep) {
+void llama_sampling_tail_free_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, float z, size_t min_keep) {
     if (z >= 1.0f || candidates->size <= 2) {
         return;
     }
 
-    llama_sample_softmax_impl((struct llama_sampling *) nullptr, candidates);
-    const int64_t t_start_sample_us = ggml_time_us();
+    llama_sampling_softmax_impl(smpl, candidates);
 
     // Compute the first and second derivatives
     std::vector<float> first_derivatives(candidates->size - 1);
@@ -285,13 +314,9 @@ void llama_sample_tail_free_impl(struct llama_sampling * smpl, llama_token_data_
 
     // Resize the output vector to keep only the tokens above the tail location
     candidates->size = last_idx;
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_typical_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float p, size_t min_keep) {
+void llama_sampling_typical_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, float p, size_t min_keep) {
     // Reference implementation:
     // https://github.com/huggingface/transformers/compare/main...cimeister:typical-sampling:typical-pr
     if (p >= 1.0f) {
@@ -299,9 +324,7 @@ void llama_sample_typical_impl(struct llama_sampling * smpl, llama_token_data_ar
     }
 
     // Compute the softmax of logits and calculate entropy
-    llama_sample_softmax_impl((struct llama_sampling *) nullptr, candidates);
-
-    const int64_t t_start_sample_us = ggml_time_us();
+    llama_sampling_softmax_impl(smpl, candidates);
 
     float entropy = 0.0f;
     for (size_t i = 0; i < candidates->size; ++i) {
@@ -349,15 +372,9 @@ void llama_sample_typical_impl(struct llama_sampling * smpl, llama_token_data_ar
     std::copy(new_candidates.begin(), new_candidates.end(), candidates->data);
     candidates->size = new_candidates.size();
     candidates->sorted = false;
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_entropy_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float min_temp, float max_temp, float exponent_val) {
-    const int64_t t_start_sample_us = ggml_time_us();
-
+void llama_sampling_entropy_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, float min_temp, float max_temp, float exponent_val) {
     // no need to do anything if there is only one (or zero) candidates
     if(candidates->size <= 1) {
         return;
@@ -366,7 +383,7 @@ void llama_sample_entropy_impl(struct llama_sampling * smpl, llama_token_data_ar
     // Calculate maximum possible entropy
     float max_entropy = -logf(1.0f / candidates->size);
 
-    llama_sample_softmax_impl((struct llama_sampling *) nullptr, candidates);
+    llama_sampling_softmax_impl(smpl, candidates);
 
     // Calculate entropy of the softmax probabilities
     float entropy = 0.0f;
@@ -416,37 +433,31 @@ void llama_sample_entropy_impl(struct llama_sampling * smpl, llama_token_data_ar
         LLAMA_LOG_INFO("Token %zu: %f%%\n", i + 1, candidates->data[i].p * 100.0f);
     }
 #endif
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_temp_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float temp) {
-    const int64_t t_start_sample_us = ggml_time_us();
-
+void llama_sampling_temp_impl(struct llama_sampling & /*smpl*/, llama_token_data_array * candidates, float temp) {
     for (size_t i = 0; i < candidates->size; ++i) {
         candidates->data[i].logit /= temp;
     }
+}
 
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
+void llama_sampling_grammar_impl(struct llama_sampling & smpl, llama_token_data_array * candidates) {
+    if (smpl.grammar) {
+        llama_grammar_apply_impl(*smpl.grammar, candidates);
     }
 }
 
-void llama_sample_repetition_penalties_impl(
-        struct llama_sampling * smpl,
+void llama_sampling_repetition_penalties_impl(
+        struct llama_sampling & /*smpl*/,
        llama_token_data_array * candidates,
             const llama_token * last_tokens,
                        size_t   penalty_last_n,
-                       float   penalty_repeat,
-                       float   penalty_freq,
-                       float   penalty_present) {
+                        float   penalty_repeat,
+                        float   penalty_freq,
+                        float   penalty_present) {
     if (penalty_last_n == 0 || (penalty_repeat == 1.0f && penalty_freq == 0.0f && penalty_present == 0.0f)) {
         return;
     }
-
-    const int64_t t_start_sample_us = ggml_time_us();
 
     // Create a frequency map to count occurrences of each token in last_tokens
     std::unordered_map<llama_token, int> token_count;
@@ -475,43 +486,30 @@ void llama_sample_repetition_penalties_impl(
     }
 
     candidates->sorted = false;
-
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
 }
 
-void llama_sample_apply_guidance_impl(
-        struct llama_sampling * smpl,
+void llama_sampling_apply_guidance_impl(
+        struct llama_sampling & smpl,
                         float * logits,
                         float * logits_guidance,
                         float   scale) {
-    GGML_ASSERT(smpl);
-
-    const auto t_start_sample_us = ggml_time_us();
-    const auto n_vocab = smpl->n_vocab;
+    const auto n_vocab = smpl.n_vocab;
 
     llama_log_softmax(logits, n_vocab);
     llama_log_softmax(logits_guidance, n_vocab);
 
-    for (int i = 0; i < n_vocab; ++i) {
+    for (uint32_t i = 0; i < n_vocab; ++i) {
               auto & l = logits[i];
         const auto & g = logits_guidance[i];
 
         l = scale * (l - g) + g;
     }
-
-    smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
 }
 
-llama_token llama_sample_token_mirostat_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
-    GGML_ASSERT(smpl);
+llama_token llama_sampling_sample_mirostat_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
+    const int32_t n_vocab = float(smpl.n_vocab);
 
-    const int32_t n_vocab = float(smpl->n_vocab);
-
-    int64_t t_start_sample_us = ggml_time_us();
-
-    llama_sample_softmax_impl((struct llama_sampling *) nullptr, candidates);
+    llama_sampling_softmax_impl(smpl, candidates);
 
     // Estimate s_hat using the most probable m tokens
     float s_hat = 0.0;
@@ -530,10 +528,8 @@ llama_token llama_sample_token_mirostat_impl(struct llama_sampling * smpl, llama
     float k = powf((epsilon_hat * powf(2, *mu)) / (1 - powf(n_vocab, -epsilon_hat)), 1 / s_hat);
 
     // Sample the next word X using top-k sampling
-    llama_sample_top_k_impl((struct llama_sampling *) nullptr, candidates, int(k), 1);
-    smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    llama_token X = llama_sample_token_impl(smpl, candidates);
-    t_start_sample_us = ggml_time_us();
+    llama_sampling_top_k_impl(smpl, candidates, int(k), 1);
+    llama_token X = llama_sampling_sample_impl(smpl, candidates);
 
     // Compute error as the difference between observed surprise and target surprise value
     size_t X_idx = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
@@ -545,15 +541,11 @@ llama_token llama_sample_token_mirostat_impl(struct llama_sampling * smpl, llama
     // Update mu using the learning rate and error
     *mu = *mu - eta * e;
 
-    smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
     return X;
 }
 
-llama_token llama_sample_token_mirostat_v2_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, float tau, float eta, float * mu) {
-    int64_t t_start_sample_us;
-    t_start_sample_us = ggml_time_us();
-
-    llama_sample_softmax_impl(smpl, candidates);
+llama_token llama_sampling_sample_mirostat_v2_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, float tau, float eta, float * mu) {
+    llama_sampling_softmax_impl(smpl, candidates);
 
     // Truncate the words with surprise values greater than mu
     candidates->size = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
@@ -564,16 +556,11 @@ llama_token llama_sample_token_mirostat_v2_impl(struct llama_sampling * smpl, ll
         candidates->size = 1;
     }
 
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
-
     // Normalize the probabilities of the remaining words
-    llama_sample_softmax_impl(smpl, candidates);
+    llama_sampling_softmax_impl(smpl, candidates);
 
     // Sample the next word X from the remaining words
-    llama_token X = llama_sample_token_impl(smpl, candidates);
-    t_start_sample_us = ggml_time_us();
+    llama_token X = llama_sampling_sample_impl(smpl, candidates);
 
     // Compute error as the difference between observed surprise and target surprise value
     size_t X_idx = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
@@ -585,33 +572,22 @@ llama_token llama_sample_token_mirostat_v2_impl(struct llama_sampling * smpl, ll
     // Update mu using the learning rate and error
     *mu = *mu - eta * e;
 
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    }
     return X;
 }
 
-llama_token llama_sample_token_greedy_impl(struct llama_sampling * smpl, llama_token_data_array * candidates) {
-    const int64_t t_start_sample_us = ggml_time_us();
-
+llama_token llama_sampling_sample_greedy_impl(struct llama_sampling & /*smpl*/, llama_token_data_array * candidates) {
     // Find max element
     auto * max_iter = std::max_element(candidates->data, candidates->data + candidates->size, [](const llama_token_data & a, const llama_token_data & b) {
         return a.logit < b.logit;
     });
 
     llama_token result = max_iter->id;
-    if (smpl) {
-        smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-        smpl->n_sample++;
-    }
+
     return result;
 }
 
-llama_token llama_sample_token_with_rng_impl(struct llama_sampling * smpl, llama_token_data_array * candidates, std::mt19937 & rng) {
-    GGML_ASSERT(smpl);
-
-    const int64_t t_start_sample_us = ggml_time_us();
-    llama_sample_softmax_impl((struct llama_sampling *) nullptr, candidates);
+llama_token llama_sampling_sample_with_rng_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, std::mt19937 & rng) {
+    llama_sampling_softmax_impl(smpl, candidates);
 
     std::vector<float> probs;
     probs.reserve(candidates->size);
@@ -624,12 +600,17 @@ llama_token llama_sample_token_with_rng_impl(struct llama_sampling * smpl, llama
 
     llama_token result = candidates->data[idx].id;
 
-    smpl->t_sample_us += ggml_time_us() - t_start_sample_us;
-    smpl->n_sample++;
-
     return result;
 }
 
-llama_token llama_sample_token_impl(struct llama_sampling * smpl, llama_token_data_array * candidates) {
-    return llama_sample_token_with_rng_impl(smpl, candidates, smpl->rng);
+llama_token llama_sampling_sample_impl(struct llama_sampling & smpl, llama_token_data_array * candidates) {
+    return llama_sampling_sample_with_rng_impl(smpl, candidates, smpl.rng);
+}
+
+void llama_sampling_accept_impl(struct llama_sampling & smpl, llama_token token) {
+    // TODO: implement token storing in history
+
+    if (smpl.grammar) {
+        llama_grammar_accept_impl(*smpl.grammar, token);
+    }
 }
