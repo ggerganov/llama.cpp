@@ -816,3 +816,17 @@ std::vector<std::string> unicode_regex_split(const std::string & text, const std
 
     return unicode_byte_encoding_process(bpe_words);
 }
+
+
+
+std::string lowercase(const std::string & text) {
+    std::string lowercase("");
+    const std::vector<uint32_t> cpts = unicode_cpts_from_utf8(text);
+
+    for (const char32_t cpt : cpts) {
+        const std::string s = unicode_cpt_to_utf8(unicode_tolower(cpt));
+        lowercase += unicode_cpt_to_utf8(unicode_tolower(cpt));  // append char to word
+    }
+
+    return lowercase;
+}
