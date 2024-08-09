@@ -3765,8 +3765,6 @@ class NemotronModel(Model):
             self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
             self.gguf_writer.add_rope_scaling_factor(self.hparams["factor"])
 
-    _experts: list[dict[str, Tensor]] | None = None
-
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         # * Adding +1 to LayerNorm's weights here to implement layernorm1p w/o changing anything on the GGML engine side
         #   model.layers.{l}.input_layernorm.weight
