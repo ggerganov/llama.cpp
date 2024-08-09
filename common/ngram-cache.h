@@ -60,6 +60,7 @@ typedef std::unordered_map<llama_token, int32_t> llama_ngram_cache_part;
 // n-gram -> empirical distribution of following tokens
 typedef std::unordered_map<llama_ngram, llama_ngram_cache_part, llama_ngram_hash_function> llama_ngram_cache;
 
+typedef std::vector<llama_token> llama_draft_t;
 
 // Update an ngram cache with tokens.
 // ngram_cache:         the cache to modify.
@@ -82,7 +83,7 @@ void llama_ngram_cache_update(
 // nc_dynamic:         ngram cache based on previous user generations.
 // nc_static:          ngram cache generated from a large text corpus, used for validation.
 void llama_ngram_cache_draft(
-    std::vector<llama_token> & inp, std::vector<llama_token> & draft, int n_draft, int ngram_min, int ngram_max,
+    std::vector<llama_token> & inp, std::vector<llama_draft_t> & drafts, int n_draft, int ngram_min, int ngram_max,
     llama_ngram_cache & nc_context, llama_ngram_cache & nc_dynamic, llama_ngram_cache & nc_static);
 
 // Save an ngram cache to a file.
