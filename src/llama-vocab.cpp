@@ -16,17 +16,6 @@
 // helpers
 //
 
-static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
-    if (search.empty()) {
-        return; // Avoid infinite loop if 'search' is an empty string
-    }
-    size_t pos = 0;
-    while ((pos = s.find(search, pos)) != std::string::npos) {
-        s.replace(pos, search.length(), replace);
-        pos += replace.length();
-    }
-}
-
 LLAMA_ATTRIBUTE_FORMAT(1, 2)
 static std::string format(const char * fmt, ...) {
     va_list ap;
