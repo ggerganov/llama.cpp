@@ -3740,7 +3740,7 @@ class NemotronModel(Model):
     model_arch = gguf.MODEL_ARCH.NEMOTRON
 
     def set_vocab(self):
-        self. _set_vocab_sentencepiece()
+        self._set_vocab_sentencepiece()
         self.gguf_writer.add_pad_token_id(0)
         self.gguf_writer.add_unk_token_id(1)
 
