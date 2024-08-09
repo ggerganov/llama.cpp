@@ -179,6 +179,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 - [AI Sublime Text plugin](https://github.com/yaroslavyaroslav/OpenAI-sublime-text) (MIT)
 - [AIKit](https://github.com/sozercan/aikit) (MIT)
 - [LARS - The LLM & Advanced Referencing Solution](https://github.com/abgulati/LARS) (AGPL)
+- [llama.sh](https://github.com/m18coppola/llama.sh) (GPL)
 
 *(to have a project listed here, it should clearly state that it depends on `llama.cpp`)*
 
