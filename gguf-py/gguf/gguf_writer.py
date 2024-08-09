@@ -568,6 +568,9 @@ class GGUFWriter:
     def add_base_model_organization(self, source_id: int, organization: str) -> None:
         self.add_string(Keys.General.BASE_MODEL_ORGANIZATION.format(id=source_id), organization)
 
+    def add_base_model_description(self, source_id: int, description: str) -> None:
+        self.add_string(Keys.General.BASE_MODEL_DESCRIPTION.format(id=source_id), description)
+
     def add_base_model_url(self, source_id: int, url: str) -> None:
         self.add_string(Keys.General.BASE_MODEL_URL.format(id=source_id), url)
 
@@ -580,14 +583,41 @@ class GGUFWriter:
     def add_base_model_repo_url(self, source_id: int, repo_url: str) -> None:
         self.add_string(Keys.General.BASE_MODEL_REPO_URL.format(id=source_id), repo_url)
 
+    def add_dataset_count(self, source_count: int) -> None:
+        self.add_uint32(Keys.General.DATASET_COUNT, source_count)
+
+    def add_dataset_name(self, source_id: int, name: str) -> None:
+        self.add_string(Keys.General.DATASET_NAME.format(id=source_id), name)
+
+    def add_dataset_author(self, source_id: int, author: str) -> None:
+        self.add_string(Keys.General.DATASET_AUTHOR.format(id=source_id), author)
+
+    def add_dataset_version(self, source_id: int, version: str) -> None:
+        self.add_string(Keys.General.DATASET_VERSION.format(id=source_id), version)
+
+    def add_dataset_organization(self, source_id: int, organization: str) -> None:
+        self.add_string(Keys.General.DATASET_ORGANIZATION.format(id=source_id), organization)
+
+    def add_dataset_description(self, source_id: int, description: str) -> None:
+        self.add_string(Keys.General.DATASET_DESCRIPTION.format(id=source_id), description)
+
+    def add_dataset_url(self, source_id: int, url: str) -> None:
+        self.add_string(Keys.General.DATASET_URL.format(id=source_id), url)
+
+    def add_dataset_doi(self, source_id: int, doi: str) -> None:
+        self.add_string(Keys.General.DATASET_DOI.format(id=source_id), doi)
+
+    def add_dataset_uuid(self, source_id: int, uuid: str) -> None:
+        self.add_string(Keys.General.DATASET_UUID.format(id=source_id), uuid)
+
+    def add_dataset_repo_url(self, source_id: int, repo_url: str) -> None:
+        self.add_string(Keys.General.DATASET_REPO_URL.format(id=source_id), repo_url)
+
     def add_tags(self, tags: Sequence[str]) -> None:
         self.add_array(Keys.General.TAGS, tags)
 
     def add_languages(self, languages: Sequence[str]) -> None:
         self.add_array(Keys.General.LANGUAGES, languages)
-
-    def add_datasets(self, datasets: Sequence[str]) -> None:
-        self.add_array(Keys.General.DATASETS, datasets)
 
     def add_tensor_data_layout(self, layout: str) -> None:
         self.add_string(Keys.LLM.TENSOR_DATA_LAYOUT.format(arch=self.arch), layout)
