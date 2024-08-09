@@ -2720,16 +2720,16 @@ struct llama_sbatch {
         ubatch_seq_id.resize(n_ubatch);
         ubatch_output.resize(n_ubatch);
         llama_ubatch ubatch = {
-            true,
-            0,
-            0,
-            0,
-            !has_embd ? ubatch_token.data() : nullptr,
-            has_embd  ? ubatch_embd.data()  : nullptr,
-            ubatch_pos.data(),
-            ubatch_n_seq_id.data(),
-            ubatch_seq_id.data(),
-            ubatch_output.data(),
+            /*equal_seqs   =*/ true,
+            /*n_tokens     =*/ 0,
+            /*n_seq_tokens =*/ 0,
+            /*n_seqs       =*/ 0,
+            /*token        =*/ !has_embd ? ubatch_token.data() : nullptr,
+            /*embd         =*/ has_embd  ? ubatch_embd.data()  : nullptr,
+            /*pos          =*/ ubatch_pos.data(),
+            /*n_seq_id     =*/ ubatch_n_seq_id.data(),
+            /*seq_id       =*/ ubatch_seq_id.data(),
+            /*output       =*/ ubatch_output.data(),
         };
         return ubatch;
     }
@@ -18802,7 +18802,18 @@ struct llama_batch llama_batch_get_one(
 }
 
 struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_t n_seq_max) {
-    llama_batch batch = { 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0, 0, 0, };
+    llama_batch batch = {
+        /*n_tokens       =*/ 0,
+        /*tokens         =*/ nullptr,
+        /*embd           =*/ nullptr,
+        /*pos            =*/ nullptr,
+        /*n_seq_id       =*/ nullptr,
+        /*seq_id         =*/ nullptr,
+        /*logits         =*/ nullptr,
+        /*all_pos_0      =*/ 0,
+        /*all_pos_1      =*/ 0,
+        /*all_seq_id     =*/ 0,
+    };
 
     if (embd) {
         batch.embd = (float *) malloc(sizeof(float) * n_tokens_alloc * embd);
