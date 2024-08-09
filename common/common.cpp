@@ -111,7 +111,32 @@ int32_t cpu_get_num_physical_cores() {
         return num_physical_cores;
     }
 #elif defined(_WIN32)
-    //TODO: Implement
+    //returns number of physical processor on windows
+    unsigned int fallback_threads = std::thread::hardware_concurrency();
+    DWORD length = 0;
+    GetLogicalProcessorInformationEx(RelationAll, nullptr, &length);
+
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+        std::cerr << "GLIPEx INSUFFICIENT_BUFFER" << std::endl;
+        return fallback_threads > 0 ? (fallback_threads <= 4 ? fallback_threads : fallback_threads / 2) : 4;
+    }
+
+    std::vector<uint8_t> buffer(length);
+    if (!GetLogicalProcessorInformationEx(RelationAll, reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data()), &length)) {
+        std::cerr << "GLIPEx: Unable to get processor information" << std::endl;
+        return fallback_threads > 0 ? (fallback_threads <= 4 ? fallback_threads : fallback_threads / 2) : 4;
+    }
+
+    DWORD physicalCoreCount = 0;
+    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data());
+    while (reinterpret_cast<uint8_t*>(info) < buffer.data() + buffer.size()) {
+        if (info->Relationship == RelationProcessorCore) {
+            physicalCoreCount++;
+        }
+        info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(reinterpret_cast<uint8_t*>(info) + info->Size);
+    }
+    return physicalCoreCount;
+
 #endif
     unsigned int n_threads = std::thread::hardware_concurrency();
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
