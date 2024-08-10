@@ -4912,7 +4912,10 @@ static void llm_load_hparams(
                     // default value for Phi-3-medium-128k-instruct
                     hparams.n_swa = 131072;
                 }
-                ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
+                bool found_swa = ml.get_key(LLM_KV_ATTENTION_SLIDING_WINDOW, hparams.n_swa, false);
+                if (!found_swa && hparams.n_swa == 0) {
+                    throw std::runtime_error("invalid value for sliding_window");
+                }
             } break;
         case LLM_ARCH_PLAMO:
             {
