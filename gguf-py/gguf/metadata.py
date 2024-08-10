@@ -99,6 +99,10 @@ class Metadata:
         if model_name is not None:
             metadata.name = model_name
 
+        # If model is missing a version number then assume v1.0 (First Public Release)
+        if metadata.version is None:
+            metadata.version = "v1.0"
+
         return metadata
 
     @staticmethod
