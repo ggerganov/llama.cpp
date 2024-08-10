@@ -1140,16 +1140,17 @@ extern "C" {
 
     // group normalize along ne0*ne1*n_groups
     // used in stable-diffusion
-    // TODO: eps is hardcoded to 1e-6 for now
     GGML_API struct ggml_tensor * ggml_group_norm(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            int                   n_groups);
+            int                   n_groups,
+            float                 eps);
 
     GGML_API struct ggml_tensor * ggml_group_norm_inplace(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
-            int                   n_groups);
+            int                   n_groups,
+            float                 eps);
 
     // a - x
     // b - dy
@@ -1456,7 +1457,6 @@ extern "C" {
     // if mode & 2 == 1, GPT-NeoX style
     //
     // b is an int32 vector with size a->ne[2], it contains the positions
-    // c is freq factors (e.g. phi3-128k), (optional)
     GGML_API struct ggml_tensor * ggml_rope(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
@@ -1473,6 +1473,7 @@ extern "C" {
             int                   mode);
 
     // custom RoPE
+    // c is freq factors (e.g. phi3-128k), (optional)
     GGML_API struct ggml_tensor * ggml_rope_ext(
             struct ggml_context * ctx,
             struct ggml_tensor  * a,
