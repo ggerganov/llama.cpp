@@ -80,8 +80,9 @@ static inline float ggml_compute_bf16_to_fp32(ggml_bf16_t h) {
 /**
  * Converts float32 to brain16.
  *
- * This function is binary identical to AMD Zen4 VCVTNEPS2BF16.
- * Subnormals shall be flushed to zero, and NANs will be quiet.
+ * This is binary identical with Google Brain float conversion.
+ * Floats shall round to nearest even, and NANs shall be quiet.
+ * Subnormals aren't flushed to zero, except perhaps when used.
  * This code should vectorize nicely if using modern compilers.
  */
 static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
@@ -93,10 +94,6 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
     u.f = s;
     if ((u.i & 0x7fffffff) > 0x7f800000) { /* nan */
         h.bits = (u.i >> 16) | 64; /* force to quiet */
-        return h;
-    }
-    if (!(u.i & 0x7f800000)) { /* subnormal */
-        h.bits = (u.i & 0x80000000) >> 16; /* flush to zero */
         return h;
     }
     h.bits = (u.i + (0x7fff + ((u.i >> 16) & 1))) >> 16;
@@ -146,6 +143,7 @@ extern "C" {
 
 #if defined(__ARM_FEATURE_SVE)
 #include <arm_sve.h>
+#include <sys/prctl.h>
 #endif
 
 // 16-bit float
@@ -634,21 +632,121 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 #define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
 #endif
 
-#define GGML_HASHTABLE_FULL ((size_t)-1)
-#define GGML_HASHTABLE_ALREADY_EXISTS ((size_t)-2)
+// bitset
+
+static_assert(sizeof(ggml_bitset_t) == 4, "bitset_t constants must be updated");
+#define BITSET_SHR 5 // log2(sizeof(ggml_bitset_t)*8)
+#define BITSET_MASK (sizeof(ggml_bitset_t)*8 - 1)
+
+static size_t ggml_bitset_size(size_t n) {
+    return (n + BITSET_MASK) >> BITSET_SHR;
+}
+
+static inline bool ggml_bitset_get(const ggml_bitset_t * bitset, size_t i) {
+    return !!(bitset[i >> BITSET_SHR] & (1u << (i & BITSET_MASK)));
+}
+
+static inline void ggml_bitset_set(ggml_bitset_t * bitset, size_t i) {
+    bitset[i >> BITSET_SHR] |= (1u << (i & BITSET_MASK));
+}
+
+static inline void ggml_bitset_clear(ggml_bitset_t * bitset, size_t i) {
+    bitset[i >> BITSET_SHR] &= ~(1u << (i & BITSET_MASK));
+}
+
+// hash set
+
+#define GGML_HASHSET_FULL ((size_t)-1)
+#define GGML_HASHSET_ALREADY_EXISTS ((size_t)-2)
 
 struct ggml_hash_set ggml_hash_set_new(size_t size);
+void                 ggml_hash_set_free(struct ggml_hash_set * hash_set);
 
-bool   ggml_hash_contains      (const struct ggml_hash_set hash_set, struct ggml_tensor * key);
+// returns the minimum size for a hash set that can hold min_sz elements
+size_t ggml_hash_size(size_t min_sz);
 
-// returns GGML_HASHTABLE_FULL if table is full, otherwise the current index of the key or where it should be inserted
-size_t ggml_hash_find          (const struct ggml_hash_set hash_set, struct ggml_tensor * key);
+// remove all elements from the hash set
+void ggml_hash_set_reset(struct ggml_hash_set * hash_set);
 
-// returns GGML_HASHTABLE_ALREADY_EXISTS if key already exists, index otherwise, asserts if table is full
-size_t ggml_hash_insert        (      struct ggml_hash_set hash_set, struct ggml_tensor * key);
+// returns true if key is in the hash set
+static bool ggml_hash_contains(const struct ggml_hash_set * hash_set, struct ggml_tensor * key);
+
+// returns GGML_HASHSET_FULL if table is full, otherwise the current index of the key or where it should be inserted
+static size_t ggml_hash_find(const struct ggml_hash_set * hash_set, struct ggml_tensor * key);
+
+// returns GGML_HASHSET_ALREADY_EXISTS if key already exists, index otherwise, asserts if table is full
+static size_t ggml_hash_insert(struct ggml_hash_set * hash_set, struct ggml_tensor * key);
 
 // return index, asserts if table is full
-size_t ggml_hash_find_or_insert(      struct ggml_hash_set hash_set, struct ggml_tensor * key);
+static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct ggml_tensor * key);
+
+// hash function for ggml_tensor
+static inline size_t ggml_hash(const struct ggml_tensor * p) {
+    // the last 4 bits are always zero due to alignment
+    return (size_t)(uintptr_t)p >> 4;
+}
+
+static size_t ggml_hash_find(const struct ggml_hash_set * hash_set, struct ggml_tensor * key) {
+    size_t h = ggml_hash(key) % hash_set->size;
+
+    // linear probing
+    size_t i = h;
+    while (ggml_bitset_get(hash_set->used, i) && hash_set->keys[i] != key) {
+        i = (i + 1) % hash_set->size;
+        if (i == h) {
+            // visited all hash table entries -> not found
+            return GGML_HASHSET_FULL;
+        }
+    }
+    return i;
+}
+
+static bool ggml_hash_contains(const struct ggml_hash_set * hash_set, struct ggml_tensor * key) {
+    size_t i = ggml_hash_find(hash_set, key);
+    return i != GGML_HASHSET_FULL && ggml_bitset_get(hash_set->used, i);
+}
+
+static size_t ggml_hash_insert(struct ggml_hash_set * hash_set, struct ggml_tensor * key) {
+    size_t h = ggml_hash(key) % hash_set->size;
+
+    // linear probing
+    size_t i = h;
+    do {
+        if (!ggml_bitset_get(hash_set->used, i)) {
+            ggml_bitset_set(hash_set->used, i);
+            hash_set->keys[i] = key;
+            return i;
+        }
+        if (hash_set->keys[i] == key) {
+            return GGML_HASHSET_ALREADY_EXISTS;
+        }
+        i = (i + 1) % hash_set->size;
+    } while (i != h);
+
+    // visited all hash table entries -> not found
+    GGML_ABORT("fatal error");
+}
+
+static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct ggml_tensor * key) {
+    size_t h = ggml_hash(key) % hash_set->size;
+
+    // linear probing
+    size_t i = h;
+    do {
+        if (!ggml_bitset_get(hash_set->used, i)) {
+            ggml_bitset_set(hash_set->used, i);
+            hash_set->keys[i] = key;
+            return i;
+        }
+        if (hash_set->keys[i] == key) {
+            return i;
+        }
+        i = (i + 1) % hash_set->size;
+    } while (i != h);
+
+    // visited all hash table entries -> not found
+    GGML_ABORT("fatal error");
+}
 
 #ifdef __cplusplus
 }

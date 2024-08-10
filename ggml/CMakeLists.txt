@@ -50,9 +50,15 @@ else()
     set(GGML_BLAS_VENDOR_DEFAULT "Generic")
 endif()
 
+if (CMAKE_CROSSCOMPILING)
+    set(GGML_NATIVE_DEFAULT OFF)
+else()
+    set(GGML_NATIVE_DEFAULT ON)
+endif()
+
 # general
 option(GGML_STATIC "ggml: static link libraries"         OFF)
-option(GGML_NATIVE "ggml: enable -march=native flag"     ON)
+option(GGML_NATIVE "ggml: enable -march=native flag"     ${GGML_NATIVE_DEFAULT})
 option(GGML_LTO    "ggml: enable link time optimization" OFF)
 option(GGML_CCACHE "ggml: use ccache if available"       ON)
 
@@ -70,7 +76,7 @@ option(GGML_SANITIZE_ADDRESS   "ggml: enable address sanitizer"   OFF)
 option(GGML_SANITIZE_UNDEFINED "ggml: enable undefined sanitizer" OFF)
 
 # instruction set specific
-if (GGML_NATIVE)
+if (GGML_NATIVE OR NOT GGML_NATIVE_DEFAULT)
     set(INS_ENB OFF)
 else()
     set(INS_ENB ON)
@@ -107,6 +113,7 @@ set(GGML_BLAS_VENDOR ${GGML_BLAS_VENDOR_DEFAULT} CACHE STRING
 option(GGML_LLAMAFILE                       "ggml: use LLAMAFILE"                             OFF)
 
 option(GGML_CUDA                            "ggml: use CUDA"                                  OFF)
+option(GGML_MUSA                            "ggml: use MUSA"                                  OFF)
 option(GGML_CUDA_FORCE_DMMV                 "ggml: use dmmv instead of mmvq CUDA kernels"     OFF)
 option(GGML_CUDA_FORCE_MMQ                  "ggml: use mmq kernels instead of cuBLAS"         OFF)
 option(GGML_CUDA_FORCE_CUBLAS               "ggml: always use cuBLAS instead of mmq kernels"  OFF)
@@ -194,13 +201,20 @@ endif ()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+# all public headers
 set(GGML_PUBLIC_HEADERS
     include/ggml.h
     include/ggml-alloc.h
     include/ggml-backend.h
-    "${GGML_HEADERS_CUDA}"
-    "${GGML_HEADERS_METAL}"
-    "${GGML_HEADERS_EXTRA}")
+    include/ggml-blas.h
+    include/ggml-cann.h
+    include/ggml-cuda.h
+    include/ggml.h
+    include/ggml-kompute.h
+    include/ggml-metal.h
+    include/ggml-rpc.h
+    include/ggml-sycl.h
+    include/ggml-vulkan.h)
 
 set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 #if (GGML_METAL)
