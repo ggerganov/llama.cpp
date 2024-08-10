@@ -267,7 +267,6 @@ int main(int argc, char ** argv) {
         std::vector<float> query_emb(n_embd, 0);
         batch_decode(ctx, query_batch, query_emb.data(), 1, n_embd);
 
-        
         llama_batch_clear(query_batch);
 
         // compute cosine similarities
