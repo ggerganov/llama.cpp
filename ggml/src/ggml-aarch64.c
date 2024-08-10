@@ -16,6 +16,8 @@
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Woverlength-strings"
+#elif defined(_MSC_VER)
+#pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
 #define UNUSED GGML_UNUSED
@@ -384,8 +386,8 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE)
-    if (svcntw() == 8) {
-        GGML_ASSERT(!(ggml_cpu_has_sve() && (svcntw() == 8)) &&
+    if (ggml_sve_cnt_b == QK8_0) {
+        GGML_ASSERT(!(ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) &&
                     "__ARM_FEATURE_SVE defined, use the Q4_0_8_8 quantization format for optimal performance");
     }
 #endif
@@ -496,8 +498,8 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE)
-    if (svcntw() == 8) {
-        GGML_ASSERT(!(ggml_cpu_has_sve() && (svcntw() == 8)) &&
+    if (ggml_sve_cnt_b == QK8_0) {
+        GGML_ASSERT(!(ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) &&
                     "__ARM_FEATURE_SVE defined, use the Q4_0_8_8 quantization format for optimal performance");
     }
 #endif
@@ -614,7 +616,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE) && ! ((defined(_MSC_VER)) && ! defined(__clang__))
-    if (svcntw() == 8) {
+    if (ggml_sve_cnt_b == QK8_0) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
         float * res_ptr = s;
@@ -680,12 +682,12 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         return;
     }
     else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        GGML_ASSERT((ggml_cpu_has_sve() && (svcntw() == 8)) &&
+        GGML_ASSERT((ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) &&
                     "__ARM_FEATURE_SVE for vector size of 256-bits not defined, use the Q4_0_4_8 quantization format for optimal "
                     "performance");
     }
     else if (ggml_cpu_has_neon()) {
-        GGML_ASSERT(((ggml_cpu_has_sve() && (svcntw() == 8)) || ggml_cpu_has_matmul_int8()) &&
+        GGML_ASSERT(((ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) || ggml_cpu_has_matmul_int8()) &&
                     "__ARM_FEATURE_SVE for vector size of 256-bits and __ARM_FEATURE_MATMUL_INT8 not defined, use the Q4_0_4_4 "
                     "quantization format for optimal performance");
     }
@@ -745,8 +747,8 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
-    if (svcntw() == 8) {
-        GGML_ASSERT(!(ggml_cpu_has_sve() && (svcntw() == 8)) &&
+    if (ggml_sve_cnt_b == QK8_0) {
+        GGML_ASSERT(!(ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) &&
                     "__ARM_FEATURE_SVE defined, use the Q4_0_8_8 quantization format for optimal performance");
     }
 #endif
@@ -1266,8 +1268,8 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
-    if (svcntw() == 8) {
-        GGML_ASSERT(!(ggml_cpu_has_sve() && (svcntw() == 8)) &&
+    if (ggml_sve_cnt_b == QK8_0) {
+        GGML_ASSERT(!(ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) &&
                     "__ARM_FEATURE_SVE defined, use the Q4_0_8_8 quantization format for optimal performance");
     }
 #endif
@@ -1728,7 +1730,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(blocklen);
 
 #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8) && ! ((defined(_MSC_VER)) && ! defined(__clang__))
-    if (svcntw() == 8) {
+    if (ggml_sve_cnt_b == QK8_0) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
         float * res_ptr = s;
@@ -2139,12 +2141,12 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         return;
     }
     else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        GGML_ASSERT((ggml_cpu_has_sve() && (svcntw() == 8)) &&
+        GGML_ASSERT((ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) &&
                     "__ARM_FEATURE_SVE for vector size of 256-bits not defined, use the Q4_0_4_8 quantization format for optimal "
                     "performance");
     }
     else if (ggml_cpu_has_neon()) {
-        GGML_ASSERT(((ggml_cpu_has_sve() && (svcntw() == 8)) || ggml_cpu_has_matmul_int8()) &&
+        GGML_ASSERT(((ggml_cpu_has_sve() && (ggml_sve_cnt_b == QK8_0)) || ggml_cpu_has_matmul_int8()) &&
                     "__ARM_FEATURE_SVE for vector size of 256-bits and __ARM_FEATURE_MATMUL_INT8 not defined, use the Q4_0_4_4 "
                     "quantization format for optimal performance");
     }
