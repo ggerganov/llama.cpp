@@ -323,33 +323,21 @@ if (sysctlbyname("hw.optional.arm64", NULL, &size_arm, NULL, 0) == 0 && size_arm
   [logMessages appendString:@"This Mac is running on an Intel processor."];
 }
 
-
   GGML_METAL_LOG_INFO("%s'%s'\n", __func__, [logMessages UTF8String]);
-
-
   // Pick and show default Metal device
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
   NSString *defaultDeviceName = device.name;
   GGML_METAL_LOG_INFO("%s: picking default device: %s\n", __func__, [[device name] UTF8String]);
-
-
    GGML_METAL_LOG_INFO("%s: Passed GPU at index %d:\n", __func__, deviceIndex);
-
-
-    NSArray<id<MTLDevice>> *alldevices = MTLCopyAllDevices();
-
-
-
+  NSArray<id<MTLDevice>> *alldevices = MTLCopyAllDevices();
 // Check if passed device index is within range
   if (deviceIndex<=(alldevices.count -1)) {
     for (NSUInteger i = 0; i < alldevices.count; i++) {
         id<MTLDevice> selectgpu = alldevices[i];
         NSString *deviceName = selectgpu.name;
-        // NSLog(@"Device at index %lu: %@", (unsigned long)i, deviceName);
         if (i == deviceIndex) {
           if (![defaultDeviceName isEqualToString:deviceName]) {
             device = selectgpu;
-      // NSLog(@"Device at index %lu: %@", (unsigned long)i, deviceName);
       GGML_METAL_LOG_INFO("%s: Picking Index GPU Name: %s\n", __func__, [ deviceName UTF8String]);
   }else{
       [alldevices release];
@@ -359,7 +347,6 @@ if (sysctlbyname("hw.optional.arm64", NULL, &size_arm, NULL, 0) == 0 && size_arm
     }
 
 }
-
 
     // Configure context
     struct ggml_backend_metal_context * ctx = malloc(sizeof(struct ggml_backend_metal_context));
