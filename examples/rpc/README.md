@@ -1,5 +1,9 @@
 ## Overview
 
+> [!IMPORTANT]
+> This example and the RPC backend are currently in a proof-of-concept development stage. As such, the functionality is fragile and
+> insecure. **Never run the RPC server on an open network or in a sensitive environment!**
+
 The `rpc-server` allows  running `ggml` backend on a remote host.
 The RPC backend communicates with one or several instances of `rpc-server` and offloads computations to them.
 This can be used for distributed LLM inference with `llama.cpp` in the following way:
@@ -29,13 +33,13 @@ You can also run multiple `rpc-server` instances on the same host, each with a d
 
 ## Usage
 
-On each host, build the corresponding backend with `cmake` and add `-DLLAMA_RPC=ON` to the build options.
+On each host, build the corresponding backend with `cmake` and add `-DGGML_RPC=ON` to the build options.
 For example, to build the CUDA backend with RPC support:
 
 ```bash
 mkdir build-rpc-cuda
 cd build-rpc-cuda
-cmake .. -DLLAMA_CUDA=ON -DLLAMA_RPC=ON
+cmake .. -DGGML_CUDA=ON -DGGML_RPC=ON
 cmake --build . --config Release
 ```
 
@@ -58,12 +62,12 @@ $ CUDA_VISIBLE_DEVICES=0 bin/rpc-server -p 50052
 This way you can run multiple `rpc-server` instances on the same host, each with a different CUDA device.
 
 
-On the main host build `llama.cpp` only with `-DLLAMA_RPC=ON`:
+On the main host build `llama.cpp` only with `-DGGML_RPC=ON`:
 
 ```bash
 mkdir build-rpc
 cd build-rpc
-cmake .. -DLLAMA_RPC=ON
+cmake .. -DGGML_RPC=ON
 cmake --build . --config Release
 ```
 

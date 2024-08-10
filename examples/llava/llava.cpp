@@ -285,7 +285,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
         }
         image_embd_v.clear();
         load_image_size->width = img->nx;
-        load_image_size->height = img->ny; 
+        load_image_size->height = img->ny;
         clip_add_load_image_size(ctx_clip, load_image_size);
         LOG_TEE("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
     }
@@ -299,7 +299,7 @@ static bool encode_image_with_clip(clip_ctx * ctx_clip, int n_threads, const cli
 
             return false;
         }
-    } 
+    }
     else {
         // spatial_unpad llava-1.6 type embedding
         // TODO: CLIP needs batching support - in HF the llm projection is separate after encoding, which might be a solution to quickly get batching working

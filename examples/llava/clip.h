@@ -18,8 +18,6 @@
 #    define CLIP_API
 #endif
 
-struct clip_ctx;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,6 +28,7 @@ struct clip_image_size {
     int width;
     int height;
 };
+
 struct clip_image_u8_batch {
     struct clip_image_u8 * data;
     size_t size;

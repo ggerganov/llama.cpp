@@ -6,7 +6,7 @@ ARG BASE_CUDA_DEV_CONTAINER=nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VER
 # Target the CUDA runtime image
 ARG BASE_CUDA_RUN_CONTAINER=nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION}
 
-FROM ${BASE_CUDA_DEV_CONTAINER} as build
+FROM ${BASE_CUDA_DEV_CONTAINER} AS build
 
 # Unless otherwise specified, we make a fat build.
 ARG CUDA_DOCKER_ARCH=all
@@ -21,17 +21,19 @@ COPY . .
 # Set nvcc architecture
 ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 # Enable CUDA
-ENV LLAMA_CUDA=1
+ENV GGML_CUDA=1
 # Enable cURL
 ENV LLAMA_CURL=1
 
 RUN make -j$(nproc) llama-server
 
-FROM ${BASE_CUDA_RUN_CONTAINER} as runtime
+FROM ${BASE_CUDA_RUN_CONTAINER} AS runtime
 
 RUN apt-get update && \
-    apt-get install -y libcurl4-openssl-dev libgomp1
+    apt-get install -y libcurl4-openssl-dev libgomp1 curl
 
 COPY --from=build /app/llama-server /llama-server
+
+HEALTHCHECK CMD [ "curl", "-f", "http://localhost:8080/health" ]
 
 ENTRYPOINT [ "/llama-server" ]
