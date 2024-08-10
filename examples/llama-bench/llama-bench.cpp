@@ -23,6 +23,10 @@
 #include "ggml-cuda.h"
 #include "ggml-sycl.h"
 
+#ifdef GGML_USE_CANN
+#include "ggml-cann.h"
+#endif
+
 // utils
 static uint64_t get_time_ns() {
     using clock = std::chrono::high_resolution_clock;
@@ -121,6 +125,17 @@ static std::string get_gpu_info() {
         }
     }
 #endif
+#ifdef GGML_USE_CANN
+    uint32_t count = ggml_backend_cann_get_device_count();
+    for (uint32_t i = 0; i < count; i++) {
+        char buf[128];
+        ggml_backend_cann_get_device_description(i, buf, sizeof(buf));
+        id += buf;
+        if (i < count - 1) {
+            id += "/";
+        }
+    }
+#endif
     // TODO: other backends
     return id;
 }
@@ -135,7 +150,7 @@ static const char * output_format_str(output_formats format) {
         case JSON:     return "json";
         case MARKDOWN: return "md";
         case SQL:      return "sql";
-        default: GGML_ASSERT(!"invalid output format");
+        default: GGML_ABORT("invalid output format");
     }
 }
 
@@ -161,7 +176,7 @@ static const char * split_mode_str(llama_split_mode mode) {
         case LLAMA_SPLIT_MODE_NONE:  return "none";
         case LLAMA_SPLIT_MODE_LAYER: return "layer";
         case LLAMA_SPLIT_MODE_ROW:   return "row";
-        default: GGML_ASSERT(!"invalid split mode");
+        default: GGML_ABORT("invalid split mode");
     }
 }
 
@@ -293,6 +308,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     params.output_format = cmd_params_defaults.output_format;
     params.output_format_stderr = cmd_params_defaults.output_format_stderr;
     params.reps = cmd_params_defaults.reps;
+    params.numa = cmd_params_defaults.numa;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
@@ -713,7 +729,6 @@ struct test {
     static const bool kompute;
     static const bool metal;
     static const bool sycl;
-    static const bool rpc;
     static const bool gpu_blas;
     static const bool blas;
     static const std::string cpu_info;
@@ -725,6 +740,7 @@ struct test {
     int n_batch;
     int n_ubatch;
     int n_threads;
+    bool has_rpc;
     ggml_type type_k;
     ggml_type type_v;
     int n_gpu_layers;
@@ -750,6 +766,7 @@ struct test {
         n_batch = inst.n_batch;
         n_ubatch = inst.n_ubatch;
         n_threads = inst.n_threads;
+        has_rpc = !inst.rpc_servers.empty();
         type_k = inst.type_k;
         type_v = inst.type_v;
         n_gpu_layers = inst.n_gpu_layers;
@@ -808,9 +825,6 @@ struct test {
         }
         if (sycl) {
             return GGML_SYCL_NAME;
-        }
-        if (rpc) {
-            return "RPC";
         }
         if (gpu_blas) {
             return "GPU BLAS";
@@ -881,7 +895,7 @@ struct test {
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
             std::to_string(cuda), std::to_string(vulkan), std::to_string(vulkan),
-            std::to_string(metal), std::to_string(sycl), std::to_string(rpc), std::to_string(gpu_blas), std::to_string(blas),
+            std::to_string(metal), std::to_string(sycl), std::to_string(has_rpc), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_ubatch),
@@ -915,7 +929,6 @@ const bool        test::metal        = !!ggml_cpu_has_metal();
 const bool        test::gpu_blas     = !!ggml_cpu_has_gpublas();
 const bool        test::blas         = !!ggml_cpu_has_blas();
 const bool        test::sycl         = !!ggml_cpu_has_sycl();
-const bool        test::rpc          = !!ggml_cpu_has_rpc();
 const std::string test::cpu_info     = get_cpu_info();
 const std::string test::gpu_info     = get_gpu_info();
 
@@ -1181,6 +1194,9 @@ struct markdown_printer : public printer {
                 value = buf;
             } else if (field == "backend") {
                 value = test::get_backend();
+                if (t.has_rpc) {
+                    value += "+RPC";
+                }
             } else if (field == "test") {
                 if (t.n_prompt > 0 && t.n_gen == 0) {
                     snprintf(buf, sizeof(buf), "pp%d", t.n_prompt);
@@ -1310,7 +1326,7 @@ static std::unique_ptr<printer> create_printer(output_formats format) {
         case SQL:
             return std::unique_ptr<printer>(new sql_printer());
     }
-    GGML_ASSERT(false);
+    GGML_ABORT("fatal error");
 }
 
 int main(int argc, char ** argv) {

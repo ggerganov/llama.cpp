@@ -476,7 +476,7 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
     }
 
     // Download: https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
-    // Run `./perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
+    // Run `./llama-perplexity -m models/7B/ggml-model-q4_0.bin -f wiki.test.raw`
     // Output: `perplexity: 13.5106 [114/114]`
     // BOS tokens will be added for each chunk before eval
 
@@ -1991,6 +1991,12 @@ int main(int argc, char ** argv) {
         params.n_batch = std::min(params.n_batch, n_kv);
     } else {
         params.n_batch = std::min(params.n_batch, params.n_ctx);
+        if (params.kl_divergence) {
+            params.n_parallel = 1;
+        } else {
+            // ensure there's at least enough seq_ids for HellaSwag
+            params.n_parallel = std::max(4, params.n_parallel);
+        }
     }
 
     if (params.ppl_stride > 0) {
@@ -2014,9 +2020,6 @@ int main(int argc, char ** argv) {
 
     llama_model * model;
     llama_context * ctx;
-
-    // ensure there's at least enough seq_ids for HellaSwag
-    params.n_parallel = std::max(4, params.n_parallel);
 
     // load the model and apply lora adapter, if any
     std::tie(model, ctx) = llama_init_from_gpt_params(params);

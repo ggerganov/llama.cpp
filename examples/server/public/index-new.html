@@ -14,10 +14,10 @@
   <script type="module">
     import {
       html, h, signal, effect, computed, render, useSignal, useEffect, useRef, Component
-    } from '/index.js';
+    } from './index.js';
 
-    import { llama } from '/completion.js';
-    import { SchemaConverter } from '/json-schema-to-grammar.mjs';
+    import { llama } from './completion.js';
+    import { SchemaConverter } from './json-schema-to-grammar.mjs';
     import { promptFormats } from './prompt-formats.js';
     import { systemPrompts } from './system-prompts.js'; // multilingual is wip
     let selected_image = false;
@@ -225,7 +225,7 @@
         throw new Error("already running");
       }
       controller.value = new AbortController();
-      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value })) {
+      for await (const chunk of llama(prompt, llamaParams, { controller: controller.value, api_url: new URL('.', document.baseURI).href })) {
         const data = chunk.data;
         if (data.stop) {
           while (
@@ -634,12 +634,12 @@ return html`
       <div>
         <div class="grammar">
           <label for="template"></label>
-          <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON-Scheme + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
+          <textarea id="grammar" name="grammar" placeholder="Use GBNF or JSON Schema + Converter" value="${params.value.grammar}" rows=4 oninput=${updateParams}/>
         </div>
         <div class="grammar-columns">
           <div class="json-schema-controls">
             <input type="text" name="prop-order" placeholder="Order: prop1,prop2,prop3" oninput=${updateGrammarJsonSchemaPropOrder} />
-            <button type="button" class="button-grammar" onclick=${convertJSONSchemaGrammar}>Convert JSON-Scheme</button>
+            <button type="button" class="button-grammar" onclick=${convertJSONSchemaGrammar}>Convert JSON Schema</button>
           </div>
         </div>
       </div>
