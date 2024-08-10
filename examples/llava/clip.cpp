@@ -1006,72 +1006,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             GGML_ASSERT(false);
         }
     }
-    // minicpmv projector
-    else if (ctx->has_minicpmv_projector) {
-        if (ctx->proj_type == PROJECTOR_TYPE_RESAMPLER) {
-            struct ggml_tensor * q = model.mm_model_query;
-            { // layernorm
-                q = ggml_norm(ctx0, q, eps);
-                q = ggml_add(ctx0, ggml_mul(ctx0, q, model.mm_model_ln_q_w), model.mm_model_ln_q_b);
-            }
-            struct ggml_tensor *k, *v = ggml_mul_mat(ctx0, model.mm_model_kv_proj, embeddings);
-            { // layernorm
-                v = ggml_norm(ctx0, v, eps);
-                v = ggml_add(ctx0, ggml_mul(ctx0, v, model.mm_model_ln_kv_w), model.mm_model_ln_kv_b);
-            }
-            { // position
-                // q = ggml_add(ctx0, q, model.mm_model_pos_embed);
-                k = ggml_add(ctx0, v, pos_embed);
-            }
-
-            { // attention
-                int hidden_size = 4096;
-                const int d_head = 128;
-                int n_head = hidden_size/d_head;
-                int num_query = 96;
-                if (ctx->minicpmv_version == 2) {
-                    hidden_size = 4096;
-                    n_head = hidden_size/d_head;
-                    num_query = 96;
-                }
-                else if (ctx->minicpmv_version == 3) {
-                    hidden_size = 3584;
-                    n_head = hidden_size/d_head;
-                    num_query = 64;
-                }
-                struct ggml_tensor * Q = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_q_w, q), model.mm_model_attn_q_b);
-                Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
-                struct ggml_tensor * K = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_k_w, k), model.mm_model_attn_k_b);
-                struct ggml_tensor * V = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_v_w, v), model.mm_model_attn_v_b);
-                // permute
-                Q = ggml_reshape_4d(ctx0, Q, d_head, n_head, num_query, batch_size);
-                Q = ggml_cont(ctx0, ggml_permute(ctx0, Q, 0, 2, 1, 3));
-                Q = ggml_reshape_3d(ctx0, Q, d_head, num_query, n_head * batch_size);
-                K = ggml_reshape_4d(ctx0, K, d_head, n_head, num_positions, batch_size);
-                K = ggml_cont(ctx0, ggml_permute(ctx0, K, 0, 2, 1, 3));
-                K = ggml_reshape_3d(ctx0, K, d_head, num_positions, n_head * batch_size);
-                V = ggml_reshape_4d(ctx0, V, d_head, n_head, num_positions, batch_size);
-                V = ggml_cont(ctx0, ggml_permute(ctx0, V, 1, 2, 0, 3));
-                V = ggml_reshape_3d(ctx0, V, num_positions, d_head, n_head * batch_size);
-                struct ggml_tensor * KQ = ggml_mul_mat(ctx0, K, Q);
-                KQ = ggml_soft_max_inplace(ctx0, KQ);
-                struct ggml_tensor * KQV = ggml_mul_mat(ctx0, V, KQ);
-                KQV = ggml_reshape_4d(ctx0, KQV, d_head, num_query, n_head, batch_size);
-                KQV = ggml_permute(ctx0, KQV, 0, 2, 1, 3);
-                KQV = ggml_cont_3d(ctx0, KQV, hidden_size, num_query, batch_size);
-
-                embeddings = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_o_w, KQV), model.mm_model_attn_o_b);
-            }
-            { // layernorm
-                embeddings = ggml_norm(ctx0, embeddings, eps);
-                embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.mm_model_ln_post_w), model.mm_model_ln_post_b);
-            }
-            embeddings = ggml_mul_mat(ctx0, model.mm_model_proj, embeddings);
-        }
-        else {
-            GGML_ASSERT(false);
-        }
-    }
 
     // build the graph
     ggml_build_forward_expand(gf, embeddings);
@@ -1553,6 +1487,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         clip_image_f32_batch batch;
         batch.size = 1;
         ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch, nullptr, false);
+        LOG_TEE("%s: flag\n", __func__);
         ggml_gallocr_reserve(new_clip->compute_alloc, gf);
         size_t compute_memory_buffer_size = ggml_gallocr_get_buffer_size(new_clip->compute_alloc, 0);
         LOG_TEE("%s: compute allocated memory: %.2f MB\n", __func__, compute_memory_buffer_size /1024.0/1024.0);
