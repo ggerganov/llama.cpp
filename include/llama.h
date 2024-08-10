@@ -356,6 +356,11 @@ extern "C" {
         void * kv_overrides;                 // pointer to vector containing overrides
     } llama_model_quantize_params;
 
+    typedef struct llama_logit_bias {
+        llama_token token;
+        float bias;
+    } llama_logit_bias;
+
     // parameters for sampling the logits
     typedef struct llama_sampling_params {
         uint32_t seed;              // the seed used to initialize llama_sampling_context
@@ -378,6 +383,12 @@ extern "C" {
         float    mirostat_tau;      // target entropy
         float    mirostat_eta;      // learning rate
         bool     penalize_nl;       // consider newlines as a repeatable token
+        bool     ignore_eos;        // ignore the end-of-sequence token
+
+        const char * grammar;
+
+        int32_t n_logit_bias;
+        const llama_logit_bias * logit_bias;
     } llama_sampling_params;
 
     // performance timing information

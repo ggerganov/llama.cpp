@@ -16512,6 +16512,10 @@ struct llama_sampling_params llama_sampling_default_params() {
         /*.mirostat_tau      =*/ 5.00f,
         /*.mirostat_eta      =*/ 0.10f,
         /*.penalize_nl       =*/ false,
+        /*.ignore_eos        =*/ false,
+        /*.grammar           =*/ nullptr,
+        /*.n_logit_bias      =*/ 0,
+        /*.logit_bias        =*/ nullptr,
     };
 
     return result;

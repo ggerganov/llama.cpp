@@ -332,8 +332,12 @@ static llama_token_data_array llama_sampling_prepare_impl(
     }
 
     // apply params.logit_bias map
-    for (auto it = params.logit_bias.begin(); it != params.logit_bias.end(); it++) {
-        logits[it->first] += it->second;
+    for (const auto & logit_bias : params.logit_bias) {
+        logits[logit_bias.token] += logit_bias.bias;
+    }
+
+    if (params.ignore_eos) {
+        logits[llama_token_eos(llama_get_model(ctx_main))] = -INFINITY;
     }
 
     if (ctx_cfg) {

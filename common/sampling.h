@@ -3,7 +3,6 @@
 #include "llama.h"
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 // sampler types
@@ -37,6 +36,7 @@ typedef struct gpt_sampling_params {
     float       mirostat_tau          = 5.00f;              // target entropy
     float       mirostat_eta          = 0.10f;              // learning rate
     bool        penalize_nl           = false;              // consider newlines as a repeatable token
+    bool        ignore_eos            = false;
     uint32_t    seed                  = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampling_context
 
     std::vector<llama_sampler_type> samplers_sequence = {
@@ -55,7 +55,7 @@ typedef struct gpt_sampling_params {
     std::string cfg_negative_prompt; // string to help guidance
     float       cfg_scale     = 1.f; // how strong is guidance
 
-    std::unordered_map<llama_token, float> logit_bias; // logit bias for specific tokens
+    std::vector<llama_logit_bias> logit_bias; // logit biases to apply
 
     std::vector<llama_token> penalty_prompt_tokens;
     bool                     use_penalty_prompt_tokens = false;
