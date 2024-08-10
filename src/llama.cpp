@@ -15541,17 +15541,14 @@ static std::pair<int32_t, ggml_compute_threadpool_t> llama_swap_threadpools(
         // Switch between the 2 threadpools as needed
         if (n_tokens > 1) {
             ggml_pause_threadpool(lctx.threadpool);
-            ggml_resume_threadpool(lctx.threadpool_batch);
             threadpool = lctx.threadpool_batch;
             n_threads = cparams.n_threads_batch;
         } else {
             ggml_pause_threadpool(lctx.threadpool_batch);
-            ggml_resume_threadpool(lctx.threadpool);
             threadpool = lctx.threadpool;
             n_threads = cparams.n_threads;
         }
     } else if (lctx.threadpool) {
-        ggml_resume_threadpool(lctx.threadpool);
         threadpool = lctx.threadpool;
         n_threads = cparams.n_threads;
     }

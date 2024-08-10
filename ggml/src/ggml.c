@@ -18885,14 +18885,27 @@ void ggml_release_threadpool(struct ggml_compute_threadpool* threadpool) {
     GGML_ALIGNED_FREE(threadpool);
 }
 
+#ifndef GGML_USE_OPENMP
+// pause/resume must be called under mutex
+static void __ggml_pause_threadpool(struct ggml_compute_threadpool * threadpool) {
+    GGML_PRINT_DEBUG("Pausing threadpool\n");
+    threadpool->pause = true;
+    ggml_cond_broadcast(&threadpool->cond);
+}
+
+static void __ggml_resume_threadpool(struct ggml_compute_threadpool * threadpool) {
+    GGML_PRINT_DEBUG("Resuming threadpool\n");
+    threadpool->pause = false;
+    ggml_cond_broadcast(&threadpool->cond);
+}
+#endif
+
 void ggml_pause_threadpool(struct ggml_compute_threadpool * threadpool) {
 #ifndef GGML_USE_OPENMP
     GGML_ASSERT(!threadpool->disposable);
-    GGML_PRINT_DEBUG("Pausing threadpool\n");
     ggml_mutex_lock(&threadpool->mutex);
     if (!threadpool->pause) {
-        threadpool->pause = true;
-        ggml_cond_broadcast(&threadpool->cond);
+       __ggml_pause_threadpool(threadpool);
     }
     ggml_mutex_unlock(&threadpool->mutex);
 #else
@@ -18903,12 +18916,9 @@ void ggml_pause_threadpool(struct ggml_compute_threadpool * threadpool) {
 void ggml_resume_threadpool(struct ggml_compute_threadpool * threadpool) {
 #ifndef GGML_USE_OPENMP
     GGML_ASSERT(!threadpool->disposable);
-    GGML_PRINT_DEBUG("Resuming threadpool\n");
-
     ggml_mutex_lock(&threadpool->mutex);
     if (threadpool->pause) {
-        threadpool->pause = false;
-        ggml_cond_broadcast(&threadpool->cond);
+       __ggml_resume_threadpool(threadpool);
     }
     ggml_mutex_unlock(&threadpool->mutex);
 #else
@@ -19250,7 +19260,7 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
         threadpool->n_barrier_passed = 0;
         threadpool->current_chunk    = 0;
         threadpool->stop             = false;
-        threadpool->pause            = disposable ? false : true;
+        threadpool->pause            = disposable ? false : tpp->paused;
         threadpool->new_work         = false;
         threadpool->workers          = NULL;
         threadpool->n_threads_max    = tpp->n_threads;
@@ -19340,9 +19350,10 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         struct ggml_threadpool_params ttp = {
             .mask_specified = false,
             .n_threads      = n_threads,
-            .prio           = 1,
+            .prio           = 0,
             .poll           = false,
-            .strict_cpu     = false
+            .strict_cpu     = false,
+            .paused         = false
         };
 
         threadpool = ggml_create_threadpool_impl(&ttp, true, cgraph, cplan);
@@ -19396,10 +19407,19 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         if (!threadpool->poll) {
             ggml_mutex_lock(&threadpool->mutex);
             threadpool->new_work = true;
-            ggml_cond_broadcast(&threadpool->cond);
+            if (threadpool->pause) {
+               __ggml_resume_threadpool(threadpool);
+            } else {
+               ggml_cond_broadcast(&threadpool->cond);
+            }
             ggml_mutex_unlock(&threadpool->mutex);
         } else {
             threadpool->new_work = true;
+            if (threadpool->pause) {
+                ggml_mutex_lock(&threadpool->mutex);
+                __ggml_resume_threadpool(threadpool);
+                ggml_mutex_unlock(&threadpool->mutex);
+            }
         }
     }
     // this is a work thread too

@@ -633,6 +633,7 @@ extern "C" {
         int32_t prio;
         bool    poll;
         bool    strict_cpu;
+        bool    paused;
     };
 
     struct ggml_compute_threadpool;     // forward declaration, see ggml.c

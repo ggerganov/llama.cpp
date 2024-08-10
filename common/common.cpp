@@ -2615,6 +2615,7 @@ struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_p
     tpp.prio       = params.priority;
     tpp.poll       = params.poll;
     tpp.strict_cpu = params.strict_cpu;
+    tpp.paused     = false;
 
     return tpp;
 }
