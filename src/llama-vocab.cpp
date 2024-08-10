@@ -16,20 +16,6 @@
 // helpers
 //
 
-static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
-    std::string result;
-    for (size_t pos = 0; ; pos += search.length()) {
-        auto new_pos = s.find(search, pos);
-        if (new_pos == std::string::npos) {
-            result += s.substr(pos, s.size() - pos);
-            break;
-        }
-        result += s.substr(pos, new_pos - pos) + replace;
-        pos = new_pos;
-    }
-    s = std::move(result);
-}
-
 LLAMA_ATTRIBUTE_FORMAT(1, 2)
 static std::string format(const char * fmt, ...) {
     va_list ap;
@@ -816,6 +802,9 @@ struct llm_tokenizer_ugm {
      * the best tokenization.
     */
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+        // get current size of output (for reversal later)
+        size_t output_size = output.size();
+
         // normalize the input first
         std::string normalized;
         normalize(text, &normalized);
@@ -895,7 +884,7 @@ struct llm_tokenizer_ugm {
         }
 
         // reverse the output since we added tokens starting from the end of the input
-        std::reverse(output.begin(), output.end());
+        std::reverse(output.begin() + output_size, output.end());
     }
 
 private:
