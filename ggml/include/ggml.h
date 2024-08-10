@@ -439,10 +439,8 @@ extern "C" {
 
     // Rotary Positional Embedding (RoPE) types
     enum ggml_rope_type {
-        GGML_ROPE_TYPE_NONE = -1,
         GGML_ROPE_TYPE_NORM =  0,
         GGML_ROPE_TYPE_NEOX =  2,
-        GGML_ROPE_TYPE_GLM  =  4,
     };
 
     // available tensor operations:

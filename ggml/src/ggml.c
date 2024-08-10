@@ -6545,7 +6545,7 @@ struct ggml_tensor * ggml_rope_back(
     GGML_ASSERT(a->ne[2] == b->ne[0]);
     GGML_ASSERT(c == NULL && "freq factors not implemented yet");
 
-    GGML_ASSERT((mode & GGML_ROPE_TYPE_GLM) == 0 && "ggml_rope_back() for ChatGLM not implemented yet");
+    GGML_ASSERT((mode & 4) == 0 && "ggml_rope_back() for ChatGLM not implemented yet");
 
     bool is_node = false;
 

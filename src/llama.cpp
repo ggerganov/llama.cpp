@@ -2201,7 +2201,7 @@ struct llama_hparams {
     llama_token dec_start_token_id = -1;
 
     enum llama_pooling_type      pooling_type            = LLAMA_POOLING_TYPE_NONE;
-    enum ggml_rope_type          rope_type               = GGML_ROPE_TYPE_NONE;
+    enum llama_rope_type         rope_type               = LLAMA_ROPE_TYPE_NONE;
     enum llama_rope_scaling_type rope_scaling_type_train = LLAMA_ROPE_SCALING_TYPE_NONE;
 
     bool operator!=(const llama_hparams & other) const {
@@ -5219,7 +5219,7 @@ static void llm_load_hparams(
         hparams.use_alibi = true;
     }
 
-    hparams.rope_type = ggml_rope_type(&model);
+    hparams.rope_type = llama_rope_type(&model);
 }
 
 static void llm_load_vocab(
@@ -8331,7 +8331,7 @@ struct llm_build_context {
     const bool flash_attn;
 
     const enum llama_pooling_type pooling_type;
-    const enum ggml_rope_type     rope_type;
+    const enum llama_rope_type    rope_type;
 
     const llm_build_cb & cb;
 
@@ -15105,7 +15105,7 @@ static void llama_kv_cache_update_internal(struct llama_context & lctx) {
     bool need_reserve = false;
 
     // apply K-shift if needed
-    if (lctx.model.hparams.rope_type != GGML_ROPE_TYPE_NONE && lctx.kv_self.has_shift) {
+    if (lctx.model.hparams.rope_type != LLAMA_ROPE_TYPE_NONE && lctx.kv_self.has_shift) {
         if (lctx.model.arch == LLM_ARCH_DEEPSEEK2) { // not supported due to MLA
             GGML_ABORT("Deepseek2 does not support K-shift");
         }
@@ -16881,7 +16881,7 @@ enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
     return model->vocab.type;
 }
 
-enum ggml_rope_type ggml_rope_type(const struct llama_model * model) {
+enum llama_rope_type llama_rope_type(const struct llama_model * model) {
     switch (model->arch) {
         // these models do not use RoPE
         case LLM_ARCH_GPT2:
@@ -16893,7 +16893,7 @@ enum ggml_rope_type ggml_rope_type(const struct llama_model * model) {
         case LLM_ARCH_JINA_BERT_V2:
         case LLM_ARCH_T5:
         case LLM_ARCH_JAIS:
-            return GGML_ROPE_TYPE_NONE;
+            return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values
         case LLM_ARCH_LLAMA:
@@ -16909,7 +16909,7 @@ enum ggml_rope_type ggml_rope_type(const struct llama_model * model) {
         case LLM_ARCH_ARCTIC:
         case LLM_ARCH_DEEPSEEK2:
         case LLM_ARCH_CHATGLM:
-            return GGML_ROPE_TYPE_NORM;
+            return LLAMA_ROPE_TYPE_NORM;
 
         // the pairs of head values are offset by n_rot/2
         case LLM_ARCH_FALCON:
@@ -16930,14 +16930,14 @@ enum ggml_rope_type ggml_rope_type(const struct llama_model * model) {
         case LLM_ARCH_OPENELM:
         case LLM_ARCH_GPTNEOX:
         case LLM_ARCH_CODESHELL:
-            return GGML_ROPE_TYPE_NEOX;
+            return LLAMA_ROPE_TYPE_NEOX;
 
         // all model arches should be listed explicitly here
         case LLM_ARCH_UNKNOWN:
             GGML_ABORT("unknown architecture");
     }
 
-    return GGML_ROPE_TYPE_NONE;
+    return LLAMA_ROPE_TYPE_NONE;
 }
 
 enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
