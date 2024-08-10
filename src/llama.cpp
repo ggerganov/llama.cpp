@@ -16706,7 +16706,8 @@ struct llama_context * llama_new_context_with_model(
 
     ctx->sampling.rng = std::mt19937(params.seed);
     ctx->logits_all   = params.logits_all;
-    ctx->is_encoding  = true;
+    // build worst-case graph for encoder if a model contains encoder
+    ctx->is_encoding  = llama_model_has_encoder(model);
 
     uint32_t kv_size = cparams.n_ctx;
     ggml_type type_k = params.type_k;
