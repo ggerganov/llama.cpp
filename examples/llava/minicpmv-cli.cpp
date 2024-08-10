@@ -140,7 +140,7 @@ static void process_image(struct llava_context * ctx_llava, struct llava_image_e
     }
     else if (has_minicpmv_projector == 3) {
         system_prompt = "<|im_start|>user\n";
-    }     
+    }
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
     eval_string(ctx_llava->ctx_llama, (system_prompt+"<image>").c_str(), params->n_batch, &n_past, false);
     process_eval_image_embed(ctx_llava, embeds, params->n_batch, &n_past, idx++);
@@ -223,7 +223,7 @@ static struct llama_sampling_context * llama_init(struct llava_context * ctx_lla
         }
         else if (has_minicpmv_projector == 3) {
             user_prompt = "<|im_start|>user\n" + prompt;
-        }    
+        }
     }
 
     eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, false);
@@ -232,8 +232,8 @@ static struct llama_sampling_context * llama_init(struct llava_context * ctx_lla
     }
     else if (has_minicpmv_projector == 3) {
         eval_string(ctx_llava->ctx_llama, "<|im_end|><|im_start|>assistant\n", params->n_batch, &n_past, false);
-    } 
-    
+    }
+
     // generate the response
 
     LOG_TEE("\n");

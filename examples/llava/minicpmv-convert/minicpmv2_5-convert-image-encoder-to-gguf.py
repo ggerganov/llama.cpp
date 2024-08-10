@@ -6,7 +6,6 @@ import re
 import torch
 import numpy as np
 from gguf import *
-import timm
 from transformers.models.idefics2.modeling_idefics2 import Idefics2VisionTransformer, Idefics2VisionConfig
 
 TEXT = "clip.text"
@@ -159,6 +158,7 @@ fname_middle = None
 has_text_encoder = True
 has_vision_encoder = True
 has_minicpmv_projector = False
+minicpmv_version = 2
 if args.text_only:
     fname_middle = "text-"
     has_vision_encoder = False

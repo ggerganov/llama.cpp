@@ -133,7 +133,6 @@ class SiglipVisionConfig(PretrainedConfig):
             )
 
         return cls.from_dict(config_dict, **kwargs)
-        
 
 _CHECKPOINT_FOR_DOC = "google/siglip-base-patch16-224"
 
@@ -1096,6 +1095,7 @@ fname_middle = None
 has_text_encoder = True
 has_vision_encoder = True
 has_minicpmv_projector = False
+minicpmv_version = 3
 if args.text_only:
     fname_middle = "text-"
     has_vision_encoder = False
