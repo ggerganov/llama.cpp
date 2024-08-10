@@ -958,10 +958,20 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             }
 
             { // attention
-                const int hidden_size = 4096;
+                int hidden_size = 4096;
                 const int d_head = 128;
-                const int n_head = hidden_size/d_head;
-                const int num_query = 96;
+                int n_head = hidden_size/d_head;
+                int num_query = 96;
+                if (ctx->minicpmv_version == 2) {
+                    hidden_size = 4096;
+                    n_head = hidden_size/d_head;
+                    num_query = 96;
+                }
+                else if (ctx->minicpmv_version == 3) {
+                    hidden_size = 3584;
+                    n_head = hidden_size/d_head;
+                    num_query = 64;
+                }
 
                 struct ggml_tensor * Q = ggml_add(ctx0, ggml_mul_mat(ctx0, model.mm_model_attn_q_w, q), model.mm_model_attn_q_b);
                 Q = ggml_scale_inplace(ctx0, Q, 1.0f / sqrt((float)d_head));
@@ -1993,12 +2003,6 @@ bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, cli
 
     if(clip_is_minicpmv(ctx)){
         int max_slice_nums = 9;
-        if (ctx->minicpmv_version == 2) {
-            max_slice_nums = 9;
-        }
-        else if (ctx->minicpmv_version == 3) {
-            max_slice_nums = 9;
-        }
         std::vector<std::vector<clip_image_u8 *>> imgs = uhd_slice_image(img, max_slice_nums);
         res_imgs->size = 0;
         for (size_t i = 0; i < imgs.size(); ++i){
