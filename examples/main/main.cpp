@@ -137,7 +137,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_sampling_params & sparams = params.sparams;
+    auto & sparams = params.sparams;
 
 #ifndef LOG_DISABLE_LOGS
     log_set_target(log_filename_generator("main", "log"));

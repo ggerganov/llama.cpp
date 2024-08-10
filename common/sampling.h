@@ -2,7 +2,6 @@
 
 #include "llama.h"
 
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -18,7 +17,7 @@ enum class llama_sampler_type : char {
 };
 
 // sampling parameters
-typedef struct llama_sampling_params {
+typedef struct gpt_sampling_params {
     int32_t     n_prev                = 64;                 // number of previous tokens to remember
     int32_t     n_probs               = 0;                  // if greater than 0, output the probabilities of top n_probs tokens.
     int32_t     min_keep              = 0;                  // 0 = disabled, otherwise samplers should return at least min_keep tokens
@@ -60,13 +59,13 @@ typedef struct llama_sampling_params {
 
     std::vector<llama_token> penalty_prompt_tokens;
     bool                     use_penalty_prompt_tokens = false;
-} llama_sampling_params;
+} gpt_sampling_params;
 
 // general sampler context
 // TODO: move to llama.h
 struct llama_sampling_context {
     // parameters that will be used for sampling
-    llama_sampling_params params;
+    gpt_sampling_params params;
 
     // mirostat sampler state
     float mirostat_mu;
@@ -80,10 +79,8 @@ struct llama_sampling_context {
     size_t n_valid; // Number of correct top tokens with correct probabilities.
 };
 
-#include "common.h"
-
 // Create a new sampling context instance.
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, const struct llama_model * model);
+struct llama_sampling_context * llama_sampling_init(const struct gpt_sampling_params & params, const struct llama_model * model);
 
 void llama_sampling_free(struct llama_sampling_context * ctx);
 
@@ -102,10 +99,10 @@ llama_token llama_sampling_last(llama_sampling_context * ctx);
 std::string llama_sampling_prev_str(llama_sampling_context * ctx_sampling, llama_context * ctx_main, int n);
 
 // Print sampling parameters into a string
-std::string llama_sampling_print(const llama_sampling_params & params);
+std::string llama_sampling_print(const gpt_sampling_params & params);
 
 // Print sampling order into a string
-std::string llama_sampling_order_print(const llama_sampling_params & params);
+std::string llama_sampling_order_print(const gpt_sampling_params & params);
 
 std::string llama_sampling_type_to_str(llama_sampler_type sampler_type);
 

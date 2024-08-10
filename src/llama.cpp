@@ -16490,6 +16490,33 @@ struct llama_model_quantize_params llama_model_quantize_default_params() {
     return result;
 }
 
+struct llama_sampling_params llama_sampling_default_params() {
+    struct llama_sampling_params result = {
+        /*.seed              =*/ LLAMA_DEFAULT_SEED,
+        /*.n_prev            =*/ 64,
+        /*.n_probs           =*/ 0,
+        /*.min_keep          =*/ 0,
+        /*.top_k             =*/ 40,
+        /*.top_p             =*/ 0.95f,
+        /*.min_p             =*/ 0.05f,
+        /*.tfs_z             =*/ 1.00f,
+        /*.typical_p         =*/ 1.00f,
+        /*.temp              =*/ 0.80f,
+        /*.dynatemp_range    =*/ 0.00f,
+        /*.dynatemp_exponent =*/ 1.00f,
+        /*.penalty_last_n    =*/ 64,
+        /*.penalty_repeat    =*/ 1.00f,
+        /*.penalty_freq      =*/ 0.00f,
+        /*.penalty_present   =*/ 0.00f,
+        /*.mirostat          =*/ 0,
+        /*.mirostat_tau      =*/ 5.00f,
+        /*.mirostat_eta      =*/ 0.10f,
+        /*.penalize_nl       =*/ false,
+    };
+
+    return result;
+}
+
 size_t llama_max_devices(void) {
 #if defined(GGML_USE_RPC)
     return GGML_RPC_MAX_SERVERS;
@@ -16731,7 +16758,7 @@ struct llama_context * llama_new_context_with_model(
     ctx->logits_all = params.logits_all;
 
     // build worst-case graph for encoder if a model contains encoder
-    ctx->is_encoding  = llama_model_has_encoder(model);
+    ctx->is_encoding = llama_model_has_encoder(model);
 
     uint32_t kv_size = cparams.n_ctx;
     ggml_type type_k = params.type_k;

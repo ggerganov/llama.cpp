@@ -1,8 +1,8 @@
 #include "sampling.h"
 
-#include <random>
+#include "common.h"
 
-struct llama_sampling_context * llama_sampling_init(const struct llama_sampling_params & params, const struct llama_model * model) {
+struct llama_sampling_context * llama_sampling_init(const struct gpt_sampling_params & params, const struct llama_model * model) {
     struct llama_sampling_context * result = new llama_sampling_context();
 
     result->params = params;
@@ -58,7 +58,7 @@ std::string llama_sampling_prev_str(llama_sampling_context * ctx_sampling, llama
     return result;
 }
 
-std::string llama_sampling_print(const llama_sampling_params & params) {
+std::string llama_sampling_print(const gpt_sampling_params & params) {
     char result[1024];
 
     snprintf(result, sizeof(result),
@@ -72,7 +72,7 @@ std::string llama_sampling_print(const llama_sampling_params & params) {
     return std::string(result);
 }
 
-std::string llama_sampling_order_print(const llama_sampling_params & params) {
+std::string llama_sampling_order_print(const gpt_sampling_params & params) {
     std::string result = "CFG -> Penalties ";
     if (params.mirostat == 0) {
         for (auto sampler_type : params.samplers_sequence) {
@@ -176,7 +176,7 @@ static void sampler_queue(
                                  size_t   min_keep) {
     llama_sampling * smpl = ctx_sampling->smpl;
 
-    const llama_sampling_params & params = ctx_sampling->params;
+    const gpt_sampling_params & params = ctx_sampling->params;
 
     const float         temp              = params.temp;
     const float         dynatemp_range    = params.dynatemp_range;
@@ -217,7 +217,7 @@ static llama_token llama_sampling_sample_impl(
                   bool is_resampling) {
     llama_sampling * smpl = ctx_sampling->smpl;
 
-    const llama_sampling_params & params = ctx_sampling->params;
+    const gpt_sampling_params & params = ctx_sampling->params;
 
     const float temp         = params.temp;
     const int   mirostat     = params.mirostat;
@@ -308,7 +308,7 @@ static llama_token_data_array llama_sampling_prepare_impl(
                   std::vector<float> * original_logits) {
     llama_sampling * smpl = ctx_sampling->smpl;
 
-    const llama_sampling_params & params = ctx_sampling->params;
+    const gpt_sampling_params & params = ctx_sampling->params;
 
     const int n_vocab = llama_n_vocab(llama_get_model(ctx_main));
 
