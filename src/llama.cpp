@@ -16588,7 +16588,7 @@ struct llama_context * llama_new_context_with_model(
         // initialize backends
 #if defined(GGML_USE_METAL)
         if (model->n_gpu_layers > 0) {
-            ctx->backend_metal = ggml_backend_metal_init();
+            ctx->backend_metal = ggml_backend_metal_init(model->main_gpu);
             if (ctx->backend_metal == nullptr) {
                 LLAMA_LOG_ERROR("%s: failed to initialize Metal backend\n", __func__);
                 llama_free(ctx);

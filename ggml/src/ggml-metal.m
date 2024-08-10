@@ -6,6 +6,7 @@
 #import <Foundation/Foundation.h>
 
 #import <Metal/Metal.h>
+#import <sys/sysctl.h>
 
 #undef MIN
 #undef MAX
@@ -293,21 +294,72 @@ static void * ggml_metal_host_malloc(size_t n) {
     return data;
 }
 
-static struct ggml_backend_metal_context * ggml_metal_init(int n_cb) {
-    GGML_METAL_LOG_INFO("%s: allocating\n", __func__);
+static struct ggml_backend_metal_context * ggml_metal_init( int deviceIndex, int n_cb) {
+  GGML_METAL_LOG_INFO("%s: allocating\n", __func__);
 
 #if TARGET_OS_OSX && !GGML_METAL_NDEBUG
-    // Show all the Metal device instances in the system
-    NSArray * devices = MTLCopyAllDevices();
-    for (id<MTLDevice> device in devices) {
-        GGML_METAL_LOG_INFO("%s: found device: %s\n", __func__, [[device name] UTF8String]);
-    }
-    [devices release]; // since it was created by a *Copy* C method
+  // Show all the Metal device instances in the system
+  NSArray * devices = MTLCopyAllDevices();
+  for (id<MTLDevice> device in devices) {
+      GGML_METAL_LOG_INFO("%s: found device: %s\n", __func__, [[device name] UTF8String]);
+  }
+  [devices release]; // since it was created by a *Copy* C method
 #endif
 
-    // Pick and show default Metal device
-    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-    GGML_METAL_LOG_INFO("%s: picking default device: %s\n", __func__, [[device name] UTF8String]);
+
+size_t size_arm;
+NSMutableString *logMessages = [NSMutableString string];
+
+// Check for Apple Silicon (M1, M2, etc.)
+if (sysctlbyname("hw.optional.arm64", NULL, &size_arm, NULL, 0) == 0 && size_arm == 4) {
+  int isAppleSilicon = 0;
+  sysctlbyname("hw.optional.arm64", &isAppleSilicon, &size_arm, NULL, 0);
+  if (isAppleSilicon) {
+      [logMessages appendString:@"This Mac is running on an Apple Silicon (M) Series processor."];
+  } else {
+      [logMessages appendString:@"This Mac is running on an Intel processor."];
+  }
+} else {
+  [logMessages appendString:@"This Mac is running on an Intel processor."];
+}
+
+
+  GGML_METAL_LOG_INFO("%s'%s'\n", __func__, [logMessages UTF8String]);
+
+
+  // Pick and show default Metal device
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+  NSString *defaultDeviceName = device.name;
+  GGML_METAL_LOG_INFO("%s: picking default device: %s\n", __func__, [[device name] UTF8String]);
+
+
+   GGML_METAL_LOG_INFO("%s: Passed GPU at index %d:\n", __func__, deviceIndex);
+
+
+    NSArray<id<MTLDevice>> *alldevices = MTLCopyAllDevices();
+
+
+
+// Check if passed device index is within range
+  if (deviceIndex<=(alldevices.count -1)) {
+    for (NSUInteger i = 0; i < alldevices.count; i++) {
+        id<MTLDevice> selectgpu = alldevices[i];
+        NSString *deviceName = selectgpu.name;
+        // NSLog(@"Device at index %lu: %@", (unsigned long)i, deviceName);
+        if (i == deviceIndex) {
+          if (![defaultDeviceName isEqualToString:deviceName]) {
+            device = selectgpu;
+      // NSLog(@"Device at index %lu: %@", (unsigned long)i, deviceName);
+      GGML_METAL_LOG_INFO("%s: Picking Index GPU Name: %s\n", __func__, [ deviceName UTF8String]);
+  }else{
+      [alldevices release];
+  }
+            break;
+        }
+    }
+
+}
+
 
     // Configure context
     struct ggml_backend_metal_context * ctx = malloc(sizeof(struct ggml_backend_metal_context));
@@ -3238,8 +3290,8 @@ static ggml_guid_t ggml_backend_metal_guid(void) {
     return &guid;
 }
 
-ggml_backend_t ggml_backend_metal_init(void) {
-    struct ggml_backend_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
+ggml_backend_t ggml_backend_metal_init(int deviceIndex) {
+    struct ggml_backend_metal_context * ctx = ggml_metal_init(deviceIndex,GGML_DEFAULT_N_THREADS);
     if (ctx == NULL) {
         GGML_METAL_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
         return NULL;
@@ -3295,8 +3347,8 @@ void ggml_backend_metal_capture_next_compute(ggml_backend_t backend) {
 GGML_CALL ggml_backend_t ggml_backend_reg_metal_init(const char * params, void * user_data); // silence warning
 
 GGML_CALL ggml_backend_t ggml_backend_reg_metal_init(const char * params, void * user_data) {
-    return ggml_backend_metal_init();
+    return ggml_backend_metal_init((int) (intptr_t) user_data);
 
     GGML_UNUSED(params);
-    GGML_UNUSED(user_data);
+    // GGML_UNUSED(user_data);
 }
