@@ -1,5 +1,4 @@
 import argparse
-import glob
 import os
 import torch
 from transformers import AutoModel, AutoTokenizer
