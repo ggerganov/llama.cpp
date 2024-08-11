@@ -56,6 +56,9 @@ int ggml_sve_cnt_b = 0;
 // disable POSIX deprecation warnings
 // these functions are never going away, anyway
 #pragma warning(disable: 4996)
+
+// unreachable code because of multiple instances of code after GGML_ABORT
+#pragma warning(disable: 4702)
 #endif
 
 #if defined(_WIN32)
@@ -3721,7 +3724,8 @@ static struct ggml_tensor * ggml_new_tensor_impl(
         struct ggml_tensor  * view_src,
         size_t                view_offs) {
 
-    assert(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);
+    GGML_ASSERT(type >= 0 && type < GGML_TYPE_COUNT);
+    GGML_ASSERT(n_dims >= 1 && n_dims <= GGML_MAX_DIMS);
 
     // find the base tensor and absolute offset
     if (view_src != NULL && view_src->view_src != NULL) {

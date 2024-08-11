@@ -210,7 +210,7 @@ enum ggml_metal_kernel_type {
     GGML_METAL_KERNEL_TYPE_COUNT
 };
 
-struct ggml_metal_context {
+struct ggml_backend_metal_context {
     int n_cb;
 
     id<MTLDevice>       device;
@@ -224,6 +224,10 @@ struct ggml_metal_context {
     bool support_simdgroup_mm;
 
     bool should_capture_next_compute;
+
+    // abort ggml_metal_graph_compute if callback returns true
+    ggml_abort_callback abort_callback;
+    void *              abort_callback_data;
 };
 
 // MSL code
@@ -289,7 +293,7 @@ static void * ggml_metal_host_malloc(size_t n) {
     return data;
 }
 
-static struct ggml_metal_context * ggml_metal_init(int n_cb) {
+static struct ggml_backend_metal_context * ggml_metal_init(int n_cb) {
     GGML_METAL_LOG_INFO("%s: allocating\n", __func__);
 
 #if TARGET_OS_OSX && !GGML_METAL_NDEBUG
@@ -306,7 +310,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
     GGML_METAL_LOG_INFO("%s: picking default device: %s\n", __func__, [[device name] UTF8String]);
 
     // Configure context
-    struct ggml_metal_context * ctx = malloc(sizeof(struct ggml_metal_context));
+    struct ggml_backend_metal_context * ctx = calloc(1, sizeof(struct ggml_backend_metal_context));
     ctx->device = device;
     ctx->n_cb   = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
     ctx->queue  = [ctx->device newCommandQueue];
@@ -668,7 +672,7 @@ static struct ggml_metal_context * ggml_metal_init(int n_cb) {
     return ctx;
 }
 
-static void ggml_metal_free(struct ggml_metal_context * ctx) {
+static void ggml_metal_free(struct ggml_backend_metal_context * ctx) {
     GGML_METAL_LOG_INFO("%s: deallocating\n", __func__);
 
     for (int i = 0; i < GGML_METAL_KERNEL_TYPE_COUNT; ++i) {
@@ -734,7 +738,7 @@ static id<MTLBuffer> ggml_metal_get_buffer(struct ggml_tensor * t, size_t * offs
     return nil;
 }
 
-static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const struct ggml_tensor * op) {
+static bool ggml_metal_supports_op(const struct ggml_backend_metal_context * ctx, const struct ggml_tensor * op) {
     for (size_t i = 0, n = 3; i < n; ++i) {
         if (op->src[i] != NULL && op->src[i]->type == GGML_TYPE_BF16) {
             return false;
@@ -845,7 +849,7 @@ static bool ggml_metal_supports_op(const struct ggml_metal_context * ctx, const 
 }
 
 static enum ggml_status ggml_metal_graph_compute(
-        struct ggml_metal_context * ctx,
+        struct ggml_backend_metal_context * ctx,
                struct ggml_cgraph * gf) {
 
     @autoreleasepool {
@@ -878,8 +882,11 @@ static enum ggml_status ggml_metal_graph_compute(
         id<MTLCommandBuffer> command_buffer  = [ctx->queue commandBufferWithUnretainedReferences];
         command_buffer_builder[cb_idx] = command_buffer;
 
-        // enqueue the command buffers in order to specify their execution order
-        [command_buffer enqueue];
+        // always enqueue the first two command buffers
+        // enqueue all of the command buffers if we don't need to abort
+        if (cb_idx < 2 || ctx->abort_callback == NULL) {
+            [command_buffer enqueue];
+        }
     }
 
     const id<MTLCommandBuffer> *command_buffers = command_buffer_builder;
@@ -2827,7 +2834,9 @@ static enum ggml_status ggml_metal_graph_compute(
 
         [encoder endEncoding];
 
-        [command_buffer commit];
+        if (cb_idx < 2 || ctx->abort_callback == NULL) {
+            [command_buffer commit];
+        }
     });
 
     // Wait for completion and check status of each command buffer
@@ -2847,6 +2856,23 @@ static enum ggml_status ggml_metal_graph_compute(
 
             return GGML_STATUS_FAILED;
         }
+
+        id<MTLCommandBuffer> next_buffer = (i + 1 < n_cb ? command_buffers[i + 1] : nil);
+        if (!next_buffer) {
+            continue;
+        }
+
+        bool next_queued = ([next_buffer status] != MTLCommandBufferStatusNotEnqueued);
+        if (next_queued) {
+            continue;
+        }
+
+        if (ctx->abort_callback && ctx->abort_callback(ctx->abort_callback_data)) {
+            GGML_METAL_LOG_INFO("%s: command buffer %d aborted", __func__, i);
+            return GGML_STATUS_ABORTED;
+        }
+
+        [next_buffer commit];
     }
 
     if (should_capture) {
@@ -3150,7 +3176,7 @@ GGML_CALL static const char * ggml_backend_metal_name(ggml_backend_t backend) {
 }
 
 GGML_CALL static void ggml_backend_metal_free(ggml_backend_t backend) {
-    struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
+    struct ggml_backend_metal_context * ctx = (struct ggml_backend_metal_context *)backend->context;
     ggml_metal_free(ctx);
     free(backend);
 }
@@ -3162,13 +3188,13 @@ GGML_CALL static ggml_backend_buffer_type_t ggml_backend_metal_get_default_buffe
 }
 
 GGML_CALL static enum ggml_status ggml_backend_metal_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
+    struct ggml_backend_metal_context * metal_ctx = (struct ggml_backend_metal_context *)backend->context;
 
     return ggml_metal_graph_compute(metal_ctx, cgraph);
 }
 
 GGML_CALL static bool ggml_backend_metal_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {
-    struct ggml_metal_context * metal_ctx = (struct ggml_metal_context *)backend->context;
+    struct ggml_backend_metal_context * metal_ctx = (struct ggml_backend_metal_context *)backend->context;
 
     return ggml_metal_supports_op(metal_ctx, op);
 }
@@ -3213,9 +3239,9 @@ static ggml_guid_t ggml_backend_metal_guid(void) {
 }
 
 ggml_backend_t ggml_backend_metal_init(void) {
-    struct ggml_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
-
+    struct ggml_backend_metal_context * ctx = ggml_metal_init(GGML_DEFAULT_N_THREADS);
     if (ctx == NULL) {
+        GGML_METAL_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
         return NULL;
     }
 
@@ -3237,15 +3263,24 @@ bool ggml_backend_is_metal(ggml_backend_t backend) {
 void ggml_backend_metal_set_n_cb(ggml_backend_t backend, int n_cb) {
     GGML_ASSERT(ggml_backend_is_metal(backend));
 
-    struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
+    struct ggml_backend_metal_context * ctx = (struct ggml_backend_metal_context *)backend->context;
 
     ctx->n_cb = MIN(n_cb, GGML_METAL_MAX_BUFFERS);
+}
+
+void ggml_backend_metal_set_abort_callback(ggml_backend_t backend, ggml_abort_callback abort_callback, void * user_data) {
+    GGML_ASSERT(ggml_backend_is_metal(backend));
+
+    struct ggml_backend_metal_context * ctx = (struct ggml_backend_metal_context *)backend->context;
+
+    ctx->abort_callback = abort_callback;
+    ctx->abort_callback_data = user_data;
 }
 
 bool ggml_backend_metal_supports_family(ggml_backend_t backend, int family) {
     GGML_ASSERT(ggml_backend_is_metal(backend));
 
-    struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
+    struct ggml_backend_metal_context * ctx = (struct ggml_backend_metal_context *)backend->context;
 
     return [ctx->device supportsFamily:(MTLGPUFamilyApple1 + family - 1)];
 }
@@ -3253,7 +3288,7 @@ bool ggml_backend_metal_supports_family(ggml_backend_t backend, int family) {
 void ggml_backend_metal_capture_next_compute(ggml_backend_t backend) {
     GGML_ASSERT(ggml_backend_is_metal(backend));
 
-    struct ggml_metal_context * ctx = (struct ggml_metal_context *)backend->context;
+    struct ggml_backend_metal_context * ctx = (struct ggml_backend_metal_context *)backend->context;
     ctx->should_capture_next_compute = true;
 }
 

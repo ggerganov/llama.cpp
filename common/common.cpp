@@ -1777,6 +1777,17 @@ std::string string_get_sortable_timestamp() {
     return std::string(timestamp_no_ns) + "." + std::string(timestamp_ns);
 }
 
+void string_replace_all(std::string & s, const std::string & search, const std::string & replace) {
+    if (search.empty()) {
+        return; // Avoid infinite loop if 'search' is an empty string
+    }
+    size_t pos = 0;
+    while ((pos = s.find(search, pos)) != std::string::npos) {
+        s.replace(pos, search.length(), replace);
+        pos += replace.length();
+    }
+}
+
 void string_process_escapes(std::string & input) {
     std::size_t input_len = input.length();
     std::size_t output_idx = 0;
@@ -2145,7 +2156,9 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
             tmp.clear();
             tmp.push_back(decoder_start_token_id);
         }
-        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
+        if (llama_model_has_decoder(model)) {
+            llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
+        }
         llama_kv_cache_clear(lctx);
         llama_synchronize(lctx);
         llama_reset_timings(lctx);
