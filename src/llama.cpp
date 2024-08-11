@@ -13823,9 +13823,6 @@ struct llm_build_context {
     struct ggml_cgraph * build_nemotron() {
         struct ggml_cgraph * gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
 
-        // mutable variable, needed during the last layer of the computation to skip unused tokens
-        int32_t n_tokens = this->n_tokens;
-
         const int64_t n_embd_head = hparams.n_embd_head_v;
         GGML_ASSERT(n_embd_head == hparams.n_embd_head_k);
         //GGML_ASSERT(n_embd_head == hparams.n_rot);
