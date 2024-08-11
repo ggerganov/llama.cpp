@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import logging
 import argparse
 import contextlib
@@ -2730,12 +2731,14 @@ class RwkvModel(Model):
         with open(self.dir_model / "rwkv_vocab_v20230424.txt", "r", encoding="utf-8") as f:
             lines = f.readlines()
             for line in lines:
-                x = eval(line[line.index(' '):line.rindex(' ')])
-                x = x.encode("utf-8") if isinstance(x, str) else x
-                assert isinstance(x, bytes)
-                assert len(x) == int(line[line.rindex(' '):])
+                parts = line.split(' ')
+                assert len(parts) >= 3
+                _, token, token_len = int(parts[0]), ast.literal_eval(' '.join(parts[1:-1])), int(parts[-1])
+                token = token.encode("utf-8") if isinstance(token, str) else token
+                assert isinstance(token, bytes)
+                assert len(token) == token_len
                 token_text: str = ""
-                for b in x:
+                for b in token:
                     token_text += f"\\x{b:02x}"
                 tokens.append(token_text.encode("utf-8"))
                 toktypes.append(gguf.TokenType.NORMAL)
