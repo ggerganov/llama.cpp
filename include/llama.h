@@ -97,7 +97,7 @@ extern "C" {
 
     enum llama_rope_type {
         LLAMA_ROPE_TYPE_NONE = -1,
-        LLAMA_ROPE_TYPE_NORM = GGML_ROPE_TYPE_NORM,
+        LLAMA_ROPE_TYPE_NORM = 0,
         LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX,
     };
 

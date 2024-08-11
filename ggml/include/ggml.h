@@ -244,6 +244,8 @@
 #define GGML_EXIT_SUCCESS 0
 #define GGML_EXIT_ABORTED 1
 
+#define GGML_ROPE_TYPE_NEOX 2
+
 #define GGUF_MAGIC "GGUF"
 
 #define GGUF_VERSION 3
@@ -435,12 +437,6 @@ extern "C" {
         GGML_FTYPE_MOSTLY_Q4_0_4_4 = 25, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_4_8 = 26, // except 1d tensors
         GGML_FTYPE_MOSTLY_Q4_0_8_8 = 27, // except 1d tensors
-    };
-
-    // Rotary Positional Embedding (RoPE) types
-    enum ggml_rope_type {
-        GGML_ROPE_TYPE_NORM =  0,
-        GGML_ROPE_TYPE_NEOX =  2,
     };
 
     // available tensor operations:
@@ -1460,7 +1456,7 @@ extern "C" {
 
     // rotary position embedding
     // if mode & 1 == 1, skip n_past elements (NOT SUPPORTED)
-    // if mode & 2 == 1, GPT-NeoX style
+    // if mode & GGML_ROPE_TYPE_NEOX == 1, GPT-NeoX style
     //
     // b is an int32 vector with size a->ne[2], it contains the positions
     GGML_API struct ggml_tensor * ggml_rope(
