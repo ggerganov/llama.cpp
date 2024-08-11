@@ -16514,6 +16514,7 @@ struct llama_sampling_params llama_sampling_default_params() {
         /*.penalize_nl       =*/ false,
         /*.ignore_eos        =*/ false,
         /*.grammar           =*/ nullptr,
+        /*.grammar_root      =*/ nullptr,
         /*.n_logit_bias      =*/ 0,
         /*.logit_bias        =*/ nullptr,
     };

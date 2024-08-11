@@ -386,6 +386,7 @@ extern "C" {
         bool     ignore_eos;        // ignore the end-of-sequence token
 
         const char * grammar;
+        const char * grammar_root;
 
         int32_t n_logit_bias;
         const llama_logit_bias * logit_bias;

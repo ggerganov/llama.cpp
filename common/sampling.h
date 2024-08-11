@@ -56,9 +56,6 @@ typedef struct gpt_sampling_params {
     float       cfg_scale     = 1.f; // how strong is guidance
 
     std::vector<llama_logit_bias> logit_bias; // logit biases to apply
-
-    std::vector<llama_token> penalty_prompt_tokens;
-    bool                     use_penalty_prompt_tokens = false;
 } gpt_sampling_params;
 
 // general sampler context

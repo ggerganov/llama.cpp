@@ -424,8 +424,6 @@ node index.js
 
     `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
 
-    `penalty_prompt`: This will replace the `prompt` for the purpose of the penalty evaluation. Can be either `null`, a string or an array of numbers representing tokens. Default: `null`, which is to use the original `prompt`.
-
     `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
 
     `mirostat_tau`: Set the Mirostat target entropy, parameter tau. Default: `5.0`
@@ -672,7 +670,6 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
             "stopping_word": ""
         },
         "penalize_nl": true,
-        "penalty_prompt_tokens": [],
         "presence_penalty": 0.0,
         "prompt": "Say hello to llama.cpp",
         "repeat_last_n": 64,
@@ -696,8 +693,7 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
         "tfs_z": 1.0,
         "top_k": 40,
         "top_p": 0.949999988079071,
-        "typical_p": 1.0,
-        "use_penalty_prompt_tokens": false
+        "typical_p": 1.0
     }
 ]
 ```
