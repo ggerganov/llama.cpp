@@ -1717,7 +1717,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "-Cr,   --cpu-range lo-hi",      "range of CPUs for affinity. Complements --cpu-mask"});
     options.push_back({ "*",           "       --cpu-strict <0|1>",     "use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu});
     options.push_back({ "*",           "       --priority N",           "set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority});
-    options.push_back({ "*",           "       --poll <0|1>",           "use polling to wait for work (default: %u)\n", (unsigned) params.cpuparams.poll});
+    options.push_back({ "*",           "       --poll <0...100>",       "use polling level to wait for work (0 - no polling, default: %u)\n", (unsigned) params.cpuparams.poll});
     options.push_back({ "*",           "-tb,   --threads-batch N",      "number of threads to use during batch and prompt processing (default: same as --threads)" });
     options.push_back({ "*",           "-Cb,   --cpu-mask-batch M",     "CPU affinity mask: arbitrarily long hex. Complements cpu-range-batch (default: same as --cpu-mask)"});
     options.push_back({ "*",           "-Crb,  --cpu-range-batch lo-hi",

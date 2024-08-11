@@ -627,13 +627,13 @@ extern "C" {
     typedef bool (*ggml_abort_callback)(void * data);
 
     struct ggml_threadpool_params {
-        bool    cpumask[GGML_MAX_N_THREADS];
-        bool    mask_specified;
-        int32_t n_threads;
-        int32_t prio;
-        bool    poll;
-        bool    strict_cpu;
-        bool    paused;
+        bool     cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores
+        bool     mask_specified;              // mask is non-empty
+        int32_t  n_threads;                   // number of threads
+        int32_t  prio;                        // thread priority
+        uint32_t poll;                        // polling level (0 - no polling, 100 - aggressive polling)
+        bool     strict_cpu;                  // strict cpu placement
+        bool     paused;                      // start in paused state
     };
 
     struct ggml_compute_threadpool;     // forward declaration, see ggml.c

@@ -1973,7 +1973,7 @@ struct ggml_compute_threadpool {
 
     int32_t      prio;       // Scheduling priority
     bool         disposable; // Doesn't initialize a conv-var
-    bool         poll;       // Use polling (busywait)  // TODO
+    uint32_t     poll;       // Polling level (0 - no polling)
 
     ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
     void * abort_callback_data;
@@ -19156,35 +19156,50 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
     return 0;
 }
 
-
-
 #ifndef GGML_USE_OPENMP
+
+static inline bool ggml_graph_compute_got_work(struct ggml_compute_state *state) {
+    struct ggml_compute_threadpool * threadpool = state->threadpool;
+    return (threadpool->new_work && state->ith < threadpool->n_threads_cur);
+}
+
+static inline bool ggml_graph_compute_ready(struct ggml_compute_state * state) {
+    struct ggml_compute_threadpool * threadpool = state->threadpool;
+    if (threadpool->stop || threadpool->pause) return true;
+    return ggml_graph_compute_got_work(state);
+}
+
+static inline bool ggml_graph_compute_poll_for_work(struct ggml_compute_state * state) {
+    struct ggml_compute_threadpool * threadpool = state->threadpool;
+
+    // This seems to make 0 ... 100 a decent range for polling level across modern processors.
+    // Perhaps, we can adjust it dynamically based on load and things.
+    const uint64_t n_rounds = 1024UL * 128 * threadpool->poll;
+
+    for (uint64_t i=0; !ggml_graph_compute_ready(state) && i<n_rounds; i++) {
+        // No new work. Keep polling.
+        __cpu_relax();
+    }
+
+    return ggml_graph_compute_got_work(state);
+}
 
 static bool ggml_graph_compute_check_for_work(struct ggml_compute_state * state) {
     struct ggml_compute_threadpool * threadpool = state->threadpool;
 
-    if (threadpool->poll) {
-        while (!((threadpool->new_work && state->ith < threadpool->n_threads_cur) ||
-                 threadpool->stop ||
-                 threadpool->pause
-                )
-        ) {
-            // No new work. Yield and keep polling.
-            __cpu_relax();
-        }
-    } else {
-        ggml_mutex_lock_shared(&threadpool->mutex);
-        while (!((threadpool->new_work && state->ith < threadpool->n_threads_cur) ||
-                 threadpool->stop ||
-                 threadpool->pause
-                )
-        ) {
-            // No new work. Wait for the signal.
-            ggml_cond_wait(&threadpool->cond, &threadpool->mutex);
-        }
-        ggml_mutex_unlock_shared(&threadpool->mutex);
+    if (ggml_graph_compute_poll_for_work(state)) {
+        return ggml_graph_compute_got_work(state);
     }
-    return threadpool->new_work;
+
+    ggml_mutex_lock_shared(&threadpool->mutex);
+    while (!ggml_graph_compute_ready(state)) {
+        // No new work. Wait for the signal.
+        GGML_PRINT_DEBUG("thread #%d waiting for work\n", state->ith);
+        ggml_cond_wait(&threadpool->cond, &threadpool->mutex);
+    }
+    ggml_mutex_unlock_shared(&threadpool->mutex);
+
+    return ggml_graph_compute_got_work(state);
 }
 
 static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
@@ -19404,24 +19419,19 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
             __thread_affinity(threadpool->workers[0].cpumask);
         }
 
-        if (!threadpool->poll) {
-            ggml_mutex_lock(&threadpool->mutex);
-            threadpool->new_work = true;
-            if (threadpool->pause) {
-               __ggml_resume_threadpool(threadpool);
-            } else {
-               ggml_cond_broadcast(&threadpool->cond);
-            }
-            ggml_mutex_unlock(&threadpool->mutex);
+        // always take the mutex here because the worker threads are doing hybrid poll/wait
+
+        ggml_mutex_lock(&threadpool->mutex);
+        threadpool->new_work = true;
+        if (!threadpool->pause) {
+           ggml_cond_broadcast(&threadpool->cond);
         } else {
-            threadpool->new_work = true;
-            if (threadpool->pause) {
-                ggml_mutex_lock(&threadpool->mutex);
-                __ggml_resume_threadpool(threadpool);
-                ggml_mutex_unlock(&threadpool->mutex);
-            }
+           // resume does cond broadcast
+           __ggml_resume_threadpool(threadpool);
         }
+        ggml_mutex_unlock(&threadpool->mutex);
     }
+
     // this is a work thread too
     ggml_graph_compute_thread(&threadpool->workers[0]);
 #endif
