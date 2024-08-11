@@ -49,7 +49,7 @@ variety of hardware - locally and in the cloud.
 - AVX, AVX2 and AVX512 support for x86 architectures
 - 1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
 - Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP)
-- Vulkan and SYCL backend support
+- Vulkan, SYCL, and (partial) OpenCL backend support
 - CPU+GPU hybrid inference to partially accelerate models larger than the total VRAM capacity
 
 Since its [inception](https://github.com/ggerganov/llama.cpp/issues/33#issuecomment-1465108022), the project has

@@ -378,6 +378,17 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 
 #if defined(GGML_USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
+#if defined(GGML_USE_CLBLAST) // allow usage of CLBlast alongside Accelerate functions
+#include "ggml-opencl.h"
+#endif
+#elif defined(GGML_USE_OPENBLAS)
+#if defined(GGML_BLAS_USE_MKL)
+#include <mkl.h>
+#else
+#include <cblas.h>
+#endif
+#elif defined(GGML_USE_CLBLAST)
+#include "ggml-opencl.h"
 #endif
 
 // floating point type used to accumulate sums
@@ -3516,6 +3527,9 @@ struct ggml_context * ggml_init(struct ggml_init_params params) {
             GGML_PRINT_DEBUG("%s: g_state initialized in %f ms\n", __func__, (t_end - t_start)/1000.0f);
         }
 
+#if defined(GGML_USE_CLBLAST)
+        ggml_cl_init();
+#endif
         is_first_call = false;
     }
 
@@ -9126,6 +9140,17 @@ static void ggml_compute_forward_add_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
+#ifdef GGML_USE_CLBLAST
+    if (src1->backend == GGML_BACKEND_TYPE_GPU) {
+        // TODO: OpenCL kernel support full broadcast
+        GGML_ASSERT(ggml_can_repeat_rows(src1, src0));
+        if (ith == 0) {
+            ggml_cl_add(src0, src1, dst);
+        }
+        return;
+    }
+#endif
+
     const int nr  = ggml_nrows(src0);
 
     GGML_TENSOR_BINARY_OP_LOCALS
@@ -10189,6 +10214,17 @@ static void ggml_compute_forward_mul_f32(
 
     const int ith = params->ith;
     const int nth = params->nth;
+
+#if defined(GGML_USE_CLBLAST)
+    if (src1->backend == GGML_BACKEND_TYPE_GPU) {
+        // TODO: OpenCL kernel support full broadcast
+        GGML_ASSERT(ggml_can_repeat_rows(src1, src0));
+        if (ith == 0) {
+            ggml_cl_mul(src0, src1, dst);
+        }
+        return;
+    }
+#endif
 
     const int64_t nr = ggml_nrows(src0);
 
@@ -12315,6 +12351,82 @@ static void ggml_compute_forward_mul_mat(
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
 
+#if defined(GGML_USE_CLBLAST)
+    if (ggml_cl_can_mul_mat(src0, src1, dst)) {
+        if (params->ith == 0 && params->type == GGML_TASK_TYPE_COMPUTE) {
+            ggml_cl_mul_mat(src0, src1, dst, params->wdata, params->wsize);
+        }
+        return;
+    }
+#endif
+
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+    if (ggml_compute_forward_mul_mat_use_blas(dst)) {
+        const int64_t ne_plane      = ne01*ne00;
+        const size_t  desired_wsize = ne13*ne12*ne_plane*sizeof(float);
+        UNUSED(desired_wsize);
+
+        if (params->type == GGML_TASK_TYPE_INIT) {
+            if (type != GGML_TYPE_F32) {
+                assert(params->wsize >= desired_wsize);
+                // parallelize by src0 rows
+                for (int64_t i13 = 0; i13 < ne13; i13++) {
+                    for (int64_t i12 = 0; i12 < ne12; i12++) {
+                        // broadcast src0 into src1 across 2nd,3rd dimension
+                        const int64_t i03 = i13/r3;
+                        const int64_t i02 = i12/r2;
+
+                        const void           *       x        = (char *)  src0->data    + i02*nb02          + i03*nb03;
+                              float          * const wdata    = (float *) params->wdata + i13*ne12*ne_plane + i12*ne_plane;
+                              ggml_to_float_t  const to_float = type_traits[type].to_float;
+
+                        for (int64_t i01 = ith; i01 < ne01; i01 += nth) {
+                            to_float((const char *) x + i01*nb01, wdata + i01*ne00, ne00);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        if (params->type == GGML_TASK_TYPE_FINALIZE) {
+            return;
+        }
+
+        // perform sgemm, parallelization controlled by blas lib
+        if (ith != 0) {
+            return;
+        }
+
+        //const int64_t tgemm0 = ggml_perf_time_us();
+        for (int64_t i13 = 0; i13 < ne13; i13++) {
+            for (int64_t i12 = 0; i12 < ne12; i12++) {
+                const int64_t i03 = i13/r3;
+                const int64_t i02 = i12/r2;
+
+                const void  * x = (char *)            src0->data + i02*nb02 + i03*nb03;
+                const float * y = (float *) ((char *) src1->data + i12*nb12 + i13*nb13);
+                      float * d = (float *) ((char *)  dst->data + i12*nb2  + i13*nb3);
+
+                if (type != GGML_TYPE_F32) {
+                    x = (float *) params->wdata + i13*ne12*ne_plane + i12*ne_plane;
+                }
+
+                cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                          ne1, ne01, ne10,
+                         1.0f,    y, ne10,
+                                  x, ne00,
+                         0.0f,    d, ne01);
+            }
+        }
+        //printf("cblas_sgemm = %.3f ms, %lld flops\n", (ggml_perf_time_us() - tgemm0)/1000.0, ne13*ne12*ne1*ne01*ne10*2);
+
+        //printf("CBLAS = %f ms, %d x %d x %d x %d\n", (ggml_perf_time_us() - t0)/1000.0, ne0, ne1, ne2, ne3);
+
+        return;
+    }
+#endif
+
 #if GGML_USE_LLAMAFILE
     // broadcast factors
     const int64_t r2 = ne12 / ne02;
@@ -12730,6 +12842,22 @@ static void ggml_compute_forward_out_prod_f32(
 
     // nb01 >= nb00 - src0 is not transposed
     //   compute by src0 rows
+
+    // TODO: #if defined(GGML_USE_CLBLAST)
+
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+    bool use_blas = ggml_is_matrix(src0) &&
+        ggml_is_matrix(src1) &&
+        ggml_is_contiguous(src0) &&
+        (ggml_is_contiguous(src1) || ggml_is_transposed(src1));
+#endif
+
+    if (params->type == GGML_TASK_TYPE_INIT) {
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS) // gemm beta will zero dst
+        if (use_blas) {
+            return;
+        }
+#endif
 
     if (ith == 0) {
         ggml_vec_set_f32(ne0*ne1*ne2*ne3, dst->data, 0);
@@ -18733,6 +18861,22 @@ struct ggml_cplan ggml_graph_plan(const struct ggml_cgraph * cgraph, int n_threa
                 {
                     const enum ggml_type vec_dot_type = type_traits[node->src[0]->type].vec_dot_type;
 
+#if defined(GGML_USE_CLBLAST)
+                    if (ggml_cl_can_mul_mat(node->src[0], node->src[1], node)) {
+                        cur = ggml_cl_mul_mat_get_wsize(node->src[0], node->src[1], node);
+                    } else
+#endif
+#if defined(GGML_USE_ACCELERATE) || defined(GGML_USE_OPENBLAS)
+                    if (ggml_compute_forward_mul_mat_use_blas(node)) {
+                        if (node->src[0]->type != GGML_TYPE_F32) {
+                            // here we need memory for fully dequantized matrix from src0
+                            // take into account that src0 can be broadcasted into src1[2,3]
+                            cur = ggml_type_size(GGML_TYPE_F32)
+                                * node->src[0]->ne[0]*node->src[0]->ne[1]
+                                * node->src[1]->ne[2]*node->src[1]->ne[3];
+                        }
+                    } else
+#endif
                     if (node->src[1]->type != vec_dot_type) {
                         cur = ggml_row_size(vec_dot_type, ggml_nelements(node->src[1]));
                     }
@@ -22022,7 +22166,7 @@ int ggml_cpu_has_wasm_simd(void) {
 }
 
 int ggml_cpu_has_blas(void) {
-#if defined(GGML_USE_BLAS) || defined(GGML_USE_CUDA) || defined(GGML_USE_VULKAN) || defined(GGML_USE_SYCL)
+#if defined(GGML_USE_BLAS) || defined(GGML_USE_CUDA) || defined(GGML_USE_VULKAN) || defined(GGML_USE_CLBLAST) || defined(GGML_USE_SYCL)
     return 1;
 #else
     return 0;
@@ -22031,6 +22175,14 @@ int ggml_cpu_has_blas(void) {
 
 int ggml_cpu_has_cuda(void) {
 #if defined(GGML_USE_CUDA)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int ggml_cpu_has_clblast(void) {
+#if defined(GGML_USE_CLBLAST)
     return 1;
 #else
     return 0;
@@ -22086,7 +22238,8 @@ int ggml_cpu_has_llamafile(void) {
 }
 
 int ggml_cpu_has_gpublas(void) {
-    return ggml_cpu_has_cuda() || ggml_cpu_has_vulkan() || ggml_cpu_has_kompute() || ggml_cpu_has_sycl();
+    return ggml_cpu_has_cuda() || ggml_cpu_has_clblast() || ggml_cpu_has_vulkan() || ggml_cpu_has_kompute() ||
+           ggml_cpu_has_sycl();
 }
 
 int ggml_cpu_has_sse3(void) {

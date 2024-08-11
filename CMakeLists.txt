@@ -42,6 +42,10 @@ endif()
 
 option(BUILD_SHARED_LIBS "build shared libraries" ${BUILD_SHARED_LIBS_DEFAULT})
 
+set(LLAMA_BLAS_VENDOR "Generic" CACHE STRING "llama: BLAS library vendor")
+option(GGML_CLBLAST                         "llama: use CLBlast"                               OFF)
+
+
 if (WIN32)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
 endif()
@@ -102,6 +106,7 @@ llama_option_depr(WARNING     LLAMA_CUDA                GGML_CUDA)
 llama_option_depr(WARNING     LLAMA_KOMPUTE             GGML_KOMPUTE)
 llama_option_depr(WARNING     LLAMA_METAL               GGML_METAL)
 llama_option_depr(WARNING     LLAMA_METAL_EMBED_LIBRARY GGML_METAL_EMBED_LIBRARY)
+llama_option_depr(WARNING     LLAMA_CLBLAST             GGML_CLBLAST)
 llama_option_depr(WARNING     LLAMA_NATIVE              GGML_NATIVE)
 llama_option_depr(WARNING     LLAMA_RPC                 GGML_RPC)
 llama_option_depr(WARNING     LLAMA_SYCL                GGML_SYCL)
@@ -164,6 +169,16 @@ write_basic_package_version_file(
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/llama-config.cmake
               ${CMAKE_CURRENT_BINARY_DIR}/llama-version.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/llama)
+
+set(GGML_PUBLIC_HEADERS "ggml.h" "ggml-alloc.h" "ggml-backend.h"
+        "${GGML_HEADERS_CUDA}"  "${GGML_HEADERS_OPENCL}"
+        "${GGML_HEADERS_METAL}" "${GGML_HEADERS_EXTRA}")
+
+set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
+install(TARGETS ggml PUBLIC_HEADER)
+
+set_target_properties(llama PROPERTIES PUBLIC_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/llama.h)
+install(TARGETS llama LIBRARY PUBLIC_HEADER)
 
 install(
     FILES convert_hf_to_gguf.py

@@ -117,6 +117,8 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-impl.h         -> ggml/src/ggml-impl.h
     # src/ggml-kompute.cpp    -> ggml/src/ggml-kompute.cpp
     # src/ggml-metal.m        -> ggml/src/ggml-metal.m
+    # src/ggml-opencl.cpp     -> ggml/src/ggml-opencl.cpp
+    # src/ggml-opencl.h       -> ggml/src/ggml-opencl.h
     # src/ggml-quants.c       -> ggml/src/ggml-quants.c
     # src/ggml-quants.h       -> ggml/src/ggml-quants.h
     # src/ggml-rpc.cpp        -> ggml/src/ggml-rpc.cpp
@@ -164,6 +166,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/ggml-impl\.h/\1ggml\/src\/ggml-impl.h/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-kompute\.cpp/\1ggml\/src\/ggml-kompute.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-metal\.m/\1ggml\/src\/ggml-metal.m/g' \
+        -e 's/([[:space:]]|[ab]\/)src\/ggml-opencl\.cpp/\1ggml\/src\/ggml-opencl.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-quants\.c/\1ggml\/src\/ggml-quants.c/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-quants\.h/\1ggml\/src\/ggml-quants.h/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-rpc\.cpp/\1ggml\/src\/ggml-rpc.cpp/g' \
@@ -179,6 +182,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)include\/ggml-cuda\.h/\1ggml\/include\/ggml-cuda.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-kompute\.h/\1ggml\/include\/ggml-kompute.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-metal\.h/\1ggml\/include\/ggml-metal.h/g' \
+        -e 's/([[:space:]]|[ab]\/)include\/ggml-opencl\.h/\1ggml\/include\/ggml-opencl.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-rpc\.h/\1ggml\/include\/ggml-rpc.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-sycl\.h/\1ggml\/include\/ggml-sycl.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-vulkan\.h/\1ggml\/include\/ggml-vulkan.h/g' \
