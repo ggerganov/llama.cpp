@@ -20,3 +20,4 @@ void main() {
         data_d[p.d_offset + dst_idx(idx)] = D_TYPE(FLOAT_TYPE(data_a[src0_idx(idx)]));
     }
 }
+
