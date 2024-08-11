@@ -270,7 +270,7 @@ struct vk_subbuffer {
     uint64_t size;
 
     operator vk::DescriptorBufferInfo() const {
-        return { buffer->buffer, offset ,size };
+        return { buffer->buffer, offset, size };
     }
 };
 
