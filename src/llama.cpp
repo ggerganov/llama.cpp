@@ -5903,7 +5903,7 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
-        case LLM_ARCH_RWKV: 
+        case LLM_ARCH_RWKV:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 ml.get_key(LLM_KV_WKV_HEAD_SIZE, hparams.wkv_head_size);
@@ -9546,7 +9546,6 @@ static struct ggml_tensor * llm_build_channel_mix(
     const struct llama_layer * layer,
     struct ggml_tensor * current,
     struct ggml_tensor * x_prev) {
-    
     struct ggml_tensor * sx = ggml_sub(ctx, x_prev, current);
     struct ggml_tensor * xk = ggml_add_inplace(
         ctx,
