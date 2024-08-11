@@ -33,6 +33,15 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
+struct llama_lora_adapter_info {
+    std::string path;
+    float scale;
+};
+
+struct llama_lora_adapter_container : llama_lora_adapter_info {
+    struct llama_lora_adapter * adapter;
+};
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
 extern char const * LLAMA_COMMIT;
@@ -126,8 +135,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
 
-    // TODO: avoid tuple, use struct
-    std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
+    bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_lora_adapter_apply)
+    std::vector<llama_lora_adapter_info> lora_adapters; // lora adapter path with user defined scale
 
     std::vector<llama_control_vector_load_info> control_vectors; // control vector with user defined scale
 
@@ -277,6 +286,8 @@ std::vector<std::string> string_split(std::string input, char separator);
 std::string string_strip(const std::string & str);
 std::string string_get_sortable_timestamp();
 
+void string_replace_all(std::string & s, const std::string & search, const std::string & replace);
+
 template<class T>
 static std::vector<T> string_split(const std::string & str, char delim) {
     std::vector<T> values;
@@ -308,14 +319,22 @@ std::string fs_get_cache_file(const std::string & filename);
 // Model utils
 //
 
-// TODO: avoid tuplue, use struct
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
+struct llama_init_result {
+    struct llama_model   * model   = nullptr;
+    struct llama_context * context = nullptr;
+    std::vector<llama_lora_adapter_container> lora_adapters;
+};
+
+struct llama_init_result    llama_init_from_gpt_params(gpt_params & params);
 
 struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
 struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+
+// clear LoRA adapters from context, then apply new list of adapters
+void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lora_adapter_container> & lora_adapters);
 
 // Batch utils
 

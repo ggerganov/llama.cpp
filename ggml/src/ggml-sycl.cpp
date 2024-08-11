@@ -3981,6 +3981,9 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
     ggml_sycl_func_t func;
 
     switch (tensor->op) {
+        case GGML_OP_CONV_TRANSPOSE_1D:
+            func = ggml_sycl_op_conv_transpose_1d;
+            break;
         case GGML_OP_REPEAT:
             func = ggml_sycl_repeat;
             break;
@@ -4104,6 +4107,9 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
             break;
         case GGML_OP_ARGSORT:
             func = ggml_sycl_argsort;
+            break;
+        case GGML_OP_TIMESTEP_EMBEDDING:
+            func = ggml_sycl_op_timestep_embedding;
             break;
         default:
             return false;
@@ -5090,6 +5096,15 @@ GGML_CALL static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t back
 
 GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
     switch (op->op) {
+        case GGML_OP_CONV_TRANSPOSE_1D:
+            {
+                ggml_type src0_type = op->src[0]->type;
+                ggml_type src1_type = op->src[1]->type;
+                if (src0_type == GGML_TYPE_F32 && src1_type == GGML_TYPE_F32) {
+                    return true;
+                }
+                return false;
+            } break;
         case GGML_OP_UNARY:
             switch (ggml_get_unary_op(op)) {
                 case GGML_UNARY_OP_GELU:
@@ -5213,6 +5228,7 @@ GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, cons
         case GGML_OP_UPSCALE:
         case GGML_OP_PAD:
         case GGML_OP_LEAKY_RELU:
+        case GGML_OP_TIMESTEP_EMBEDDING:
             return true;
         default:
             return false;
