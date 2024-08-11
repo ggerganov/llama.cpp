@@ -73,6 +73,8 @@ struct vk_queue {
     std::vector<vk::CommandBuffer> cmd_buffers;
 
     vk::PipelineStageFlags stage_flags;
+
+    bool transfer_only;
 };
 
 struct vk_pipeline_struct {
@@ -900,11 +902,12 @@ static uint32_t ggml_vk_find_queue_family_index(std::vector<vk::QueueFamilyPrope
     abort();
 }
 
-static void ggml_vk_create_queue(vk_device& device, vk_queue& q, uint32_t queue_family_index, uint32_t queue_index, vk::PipelineStageFlags&& stage_flags) {
+static void ggml_vk_create_queue(vk_device& device, vk_queue& q, uint32_t queue_family_index, uint32_t queue_index, vk::PipelineStageFlags&& stage_flags, bool transfer_only) {
     VK_LOG_DEBUG("ggml_vk_create_queue()");
     std::lock_guard<std::mutex> guard(device->mutex);
 
     q.queue_family_index = queue_family_index;
+    q.transfer_only = transfer_only;
 
     vk::CommandPoolCreateInfo command_pool_create_info_compute(vk::CommandPoolCreateFlags(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT), queue_family_index);
     q.pool = device->device.createCommandPool(command_pool_create_info_compute);
@@ -1101,13 +1104,16 @@ static vk_subbuffer ggml_vk_subbuffer(vk_buffer& buf) {
 
 static void ggml_vk_sync_buffers(vk_context& ctx) {
     VK_LOG_DEBUG("ggml_vk_sync_buffers()");
+
+    const bool transfer_queue = ctx->q->transfer_only;
+
     ctx->s->buffer.pipelineBarrier(
         ctx->q->stage_flags,
         ctx->q->stage_flags,
         {},
         { {
-          {vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eTransferRead | vk::AccessFlagBits::eTransferWrite},
-          {vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eTransferRead | vk::AccessFlagBits::eTransferWrite}
+          { !transfer_queue ? (vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eTransferRead | vk::AccessFlagBits::eTransferWrite) : (vk::AccessFlagBits::eTransferRead | vk::AccessFlagBits::eTransferWrite) },
+          { !transfer_queue ? (vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eShaderWrite | vk::AccessFlagBits::eTransferRead | vk::AccessFlagBits::eTransferWrite) : (vk::AccessFlagBits::eTransferRead | vk::AccessFlagBits::eTransferWrite) }
         } },
         {},
         {}
@@ -1873,14 +1879,14 @@ static vk_device ggml_vk_get_device(size_t idx) {
         device->device = device->physical_device.createDevice(device_create_info);
 
         // Queues
-        ggml_vk_create_queue(device, device->compute_queue, compute_queue_family_index, 0, { vk::PipelineStageFlagBits::eComputeShader | vk::PipelineStageFlagBits::eTransfer });
+        ggml_vk_create_queue(device, device->compute_queue, compute_queue_family_index, 0, { vk::PipelineStageFlagBits::eComputeShader | vk::PipelineStageFlagBits::eTransfer }, false);
 
         // Shaders
         ggml_vk_load_shaders(device);
 
         if (!device->single_queue) {
             const uint32_t transfer_queue_index = compute_queue_family_index == transfer_queue_family_index ? 1 : 0;
-            ggml_vk_create_queue(device, device->transfer_queue, transfer_queue_family_index, transfer_queue_index, { vk::PipelineStageFlagBits::eTransfer });
+            ggml_vk_create_queue(device, device->transfer_queue, transfer_queue_family_index, transfer_queue_index, { vk::PipelineStageFlagBits::eTransfer }, true);
         } else {
             // TODO: Use pointer or reference to avoid copy
             device->transfer_queue = device->compute_queue;
