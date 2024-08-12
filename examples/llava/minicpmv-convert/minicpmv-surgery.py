@@ -4,7 +4,7 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 
 ap = argparse.ArgumentParser()
-ap.add_argument("-m", "--model", help="Path to MiniCPM-V-2.6 model")
+ap.add_argument("-m", "--model", help="Path to MiniCPM-V model")
 args = ap.parse_args()
 
 # find the model part that includes the the multimodal projector weights
@@ -29,7 +29,6 @@ if len(clip_tensors) > 0:
             f.write("{}\n")
 
 config = model.llm.config
-config._name_or_path = "openbmb/MiniCPM-V-2.6"
 config.auto_map = {
     "AutoConfig": "configuration_minicpm.MiniCPMConfig",
     "AutoModel": "modeling_minicpm.MiniCPMModel",
