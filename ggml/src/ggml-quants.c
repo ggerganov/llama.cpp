@@ -3330,7 +3330,7 @@ void quantize_row_tq1_0_ref(const float * restrict x, block_tq1_0 * restrict y, 
             for (size_t m = 0; m < 32; ++m) {
                 uint8_t q = 0;
                 for (size_t n = 0; n < 5; ++n) {
-                    int xi = nearest_int(x[m + n*32] * id) + 1; // -1, 0, 1 -> 0, 1, 2
+                    int xi = lroundf(x[m + n*32] * id) + 1; // -1, 0, 1 -> 0, 1, 2
                     q *= 3;
                     q += xi;
                 }
@@ -3345,7 +3345,7 @@ void quantize_row_tq1_0_ref(const float * restrict x, block_tq1_0 * restrict y, 
             for (size_t m = 0; m < 16; ++m) {
                 uint8_t q = 0;
                 for (size_t n = 0; n < 5; ++n) {
-                    int xi = nearest_int(x[m + n*16] * id) + 1; // -1, 0, 1 -> 0, 1, 2
+                    int xi = lroundf(x[m + n*16] * id) + 1; // -1, 0, 1 -> 0, 1, 2
                     q *= 3;
                     q += xi;
                 }
@@ -3360,7 +3360,7 @@ void quantize_row_tq1_0_ref(const float * restrict x, block_tq1_0 * restrict y, 
             uint8_t q = 0;
             for (size_t m = 0; m < 4; ++m) {
                 // -1, 0, 1 -> 0, 1, 2
-                int xi = nearest_int(x[j + m*sizeof(y->qh)] * id) + 1;
+                int xi = lroundf(x[j + m*sizeof(y->qh)] * id) + 1;
                 q *= 3;
                 q += xi;
             }
@@ -3396,7 +3396,7 @@ void quantize_row_tq2_0_ref(const float * restrict x, block_tq2_0 * restrict y, 
                 uint8_t q = 0;
                 for (size_t n = 0; n < 4; ++n) {
                     // -1, 0, 1 -> 0, 1, 2
-                    int xi = nearest_int(x[m + n*32] * id) + 1;
+                    int xi = lroundf(x[m + n*32] * id) + 1;
                     q += (xi & 3) << (2*n);
                 }
                 y[i].qs[j + m] = q;
