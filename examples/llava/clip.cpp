@@ -3,7 +3,6 @@
 // I'll gradually clean and extend it
 // Note: Even when using identical normalized image inputs (see normalize_image_u8_to_f32()) we have a significant difference in resulting embeddings compared to pytorch
 #include "clip.h"
-#include "common.h"
 #include "log.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -1485,8 +1484,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         new_clip->compute_alloc = ggml_gallocr_new(ggml_backend_get_default_buffer_type(new_clip->backend));
         clip_image_f32_batch batch;
         batch.size = 1;
-        ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch, nullptr, false);
-        LOG_TEE("%s: flag\n", __func__);
+        ggml_cgraph * gf = clip_image_build_graph(new_clip, &batch, nullptr, false); 
         ggml_gallocr_reserve(new_clip->compute_alloc, gf);
         size_t compute_memory_buffer_size = ggml_gallocr_get_buffer_size(new_clip->compute_alloc, 0);
         LOG_TEE("%s: compute allocated memory: %.2f MB\n", __func__, compute_memory_buffer_size /1024.0/1024.0);
@@ -2608,7 +2606,7 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
     throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
 }
 
-int clip_is_minicpmv(const struct clip_ctx * ctx) { 
+int clip_is_minicpmv(const struct clip_ctx * ctx) {
     if (ctx->has_minicpmv_projector) {
         return ctx->minicpmv_version;
     }
