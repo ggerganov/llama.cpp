@@ -18843,6 +18843,15 @@ static void ggml_compute_backward(struct ggml_context * ctx, struct ggml_tensor 
                                         zero_table);
                             }
                         } break;
+                    case GGML_UNARY_OP_EXP:
+                        {
+                            if (src0->grad) {
+                                src0->grad = ggml_add_or_set(ctx,
+                                        src0->grad,
+                                        ggml_mul(ctx, tensor, tensor->grad),
+                                        zero_table);
+                            }
+                        } break;
                     default:
                         GGML_ABORT("fatal error");
                 }
