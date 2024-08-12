@@ -7757,6 +7757,7 @@ static int llama_model_load(const std::string & fname, llama_model & model, llam
                 model.ftype == LLAMA_FTYPE_MOSTLY_F16 ||
                 model.ftype == LLAMA_FTYPE_MOSTLY_BF16 ||
                 model.ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ||
+                model.ftype == LLAMA_FTYPE_MOSTLY_Q4_0_B16 ||
                 model.ftype == LLAMA_FTYPE_MOSTLY_Q4_1
             )
         )) {
@@ -15479,7 +15480,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                      ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
                 new_type = GGML_TYPE_Q5_K;
             }
-            else if (new_type != GGML_TYPE_Q8_0) {
+            else if ((new_type != GGML_TYPE_Q8_0) && (new_type != GGML_TYPE_Q8_0_B16)) {
                 new_type = GGML_TYPE_Q6_K;
             }
         }
@@ -15620,12 +15621,12 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         else if (ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S && arch != LLM_ARCH_FALCON && i_layer < n_layer/8) {
             new_type = GGML_TYPE_Q5_K;
         }
-        else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_0 || ftype == LLAMA_FTYPE_MOSTLY_Q5_0)
+        else if ((ftype == LLAMA_FTYPE_MOSTLY_Q4_0 || ftype == LLAMA_FTYPE_MOSTLY_Q5_0  || ftype == LLAMA_FTYPE_MOSTLY_Q4_0_B16)
                 && qs.has_imatrix && i_layer < n_layer/8) {
             // Guard against craziness in the first few ffn_down layers that can happen even with imatrix for Q4_0/Q5_0.
             // We only do it when an imatrix is provided because a) we want to make sure that one can always get the
             // same quantization as before imatrix stuff, and b) Q4_1/Q5_1 do go crazy on ffn_down without an imatrix.
-            new_type = ftype == LLAMA_FTYPE_MOSTLY_Q4_0 ? GGML_TYPE_Q4_1 : GGML_TYPE_Q5_1;
+            new_type = ((ftype == LLAMA_FTYPE_MOSTLY_Q4_0) || (ftype == LLAMA_FTYPE_MOSTLY_Q4_0_B16)) ? GGML_TYPE_Q4_1 : GGML_TYPE_Q5_1;
         }
         ++qs.i_ffn_down;
     } else if (name.find("attn_output.weight") != std::string::npos) {
@@ -15781,14 +15782,16 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
     llama_ftype ftype = params->ftype;
 
     switch (params->ftype) {
-        case LLAMA_FTYPE_MOSTLY_Q4_0: default_type = GGML_TYPE_Q4_0; break;
-        case LLAMA_FTYPE_MOSTLY_Q4_1: default_type = GGML_TYPE_Q4_1; break;
-        case LLAMA_FTYPE_MOSTLY_Q5_0: default_type = GGML_TYPE_Q5_0; break;
-        case LLAMA_FTYPE_MOSTLY_Q5_1: default_type = GGML_TYPE_Q5_1; break;
-        case LLAMA_FTYPE_MOSTLY_Q8_0: default_type = GGML_TYPE_Q8_0; break;
-        case LLAMA_FTYPE_MOSTLY_F16:  default_type = GGML_TYPE_F16;  break;
-        case LLAMA_FTYPE_MOSTLY_BF16: default_type = GGML_TYPE_BF16; break;
-        case LLAMA_FTYPE_ALL_F32:     default_type = GGML_TYPE_F32;  break;
+        case LLAMA_FTYPE_MOSTLY_Q4_0:     default_type = GGML_TYPE_Q4_0;     break;
+        case LLAMA_FTYPE_MOSTLY_Q4_0_B16: default_type = GGML_TYPE_Q4_0_B16; break;
+        case LLAMA_FTYPE_MOSTLY_Q4_1:     default_type = GGML_TYPE_Q4_1;     break;
+        case LLAMA_FTYPE_MOSTLY_Q5_0:     default_type = GGML_TYPE_Q5_0;     break;
+        case LLAMA_FTYPE_MOSTLY_Q5_1:     default_type = GGML_TYPE_Q5_1;     break;
+        case LLAMA_FTYPE_MOSTLY_Q8_0:     default_type = GGML_TYPE_Q8_0;     break;
+        case LLAMA_FTYPE_MOSTLY_Q8_0_B16: default_type = GGML_TYPE_Q8_0_B16; break;
+        case LLAMA_FTYPE_MOSTLY_F16:      default_type = GGML_TYPE_F16;      break;
+        case LLAMA_FTYPE_MOSTLY_BF16:     default_type = GGML_TYPE_BF16;     break;
+        case LLAMA_FTYPE_ALL_F32:         default_type = GGML_TYPE_F32;      break;
 
         // K-quants
         case LLAMA_FTYPE_MOSTLY_Q2_K_S:

@@ -20,11 +20,13 @@
 #if defined(_MSC_VER)
 
 #define m512bh(p) p
+#define m128bh(p) p
 #define m512i(p) p
 
 #else
 
 #define m512bh(p) (__m512bh)(p)
+#define m128bh(p) (__m128bh)(p)
 #define m512i(p) (__m512i)(p)
 
 #endif
