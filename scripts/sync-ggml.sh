@@ -19,6 +19,7 @@ cp -rpv ../ggml/src/ggml-impl.h         ./ggml/src/ggml-impl.h
 cp -rpv ../ggml/src/ggml-kompute.cpp    ./ggml/src/ggml-kompute.cpp
 cp -rpv ../ggml/src/ggml-metal.m        ./ggml/src/ggml-metal.m
 cp -rpv ../ggml/src/ggml-metal.metal    ./ggml/src/ggml-metal.metal
+cp -rpv ../ggml/src/ggml-opencl.cpp     ./ggml/src/ggml-opencl.cpp
 cp -rpv ../ggml/src/ggml-quants.c       ./ggml/src/ggml-quants.c
 cp -rpv ../ggml/src/ggml-quants.h       ./ggml/src/ggml-quants.h
 cp -rpv ../ggml/src/ggml-rpc.cpp        ./ggml/src/ggml-rpc.cpp
@@ -35,6 +36,7 @@ cp -rpv ../ggml/include/ggml-cann.h    ./ggml/include/ggml-cann.h
 cp -rpv ../ggml/include/ggml-cuda.h    ./ggml/include/ggml-cuda.h
 cp -rpv ../ggml/include/ggml-kompute.h ./ggml/include/ggml-kompute.h
 cp -rpv ../ggml/include/ggml-metal.h   ./ggml/include/ggml-metal.h
+cp -rpv ../ggml/include/ggml-opencl.h  ./ggml/include/ggml-opencl.h
 cp -rpv ../ggml/include/ggml-rpc.h     ./ggml/include/ggml-rpc.h
 cp -rpv ../ggml/include/ggml-sycl.h    ./ggml/include/ggml-sycl.h
 cp -rpv ../ggml/include/ggml-vulkan.h  ./ggml/include/ggml-vulkan.h

@@ -754,6 +754,7 @@ struct test {
     static const std::string build_commit;
     static const int build_number;
     static const bool cuda;
+    static const bool opencl;
     static const bool vulkan;
     static const bool kompute;
     static const bool metal;
@@ -843,6 +844,9 @@ struct test {
         if (cuda) {
             return GGML_CUDA_NAME;
         }
+        if (opencl) {
+            return "OpenCL";
+        }
         if (vulkan) {
             return "Vulkan";
         }
@@ -868,7 +872,7 @@ struct test {
     static const std::vector<std::string> & get_fields() {
         static const std::vector<std::string> fields = {
             "build_commit", "build_number",
-            "cuda", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas", "blas",
+            "cuda", "opencl", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas", "blas",
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_ubatch",
@@ -894,7 +898,7 @@ struct test {
             field == "avg_ns" || field == "stddev_ns") {
             return INT;
         }
-        if (field == "cuda" || field == "vulkan" || field == "kompute" || field == "metal" ||
+        if (field == "cuda" || field == "opencl"  || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
             field == "flash_attn" || field == "use_mmap" || field == "embeddings") {
             return BOOL;
@@ -924,7 +928,7 @@ struct test {
         std::vector<std::string> values = {
             build_commit, std::to_string(build_number),
             std::to_string(cuda), std::to_string(vulkan), std::to_string(vulkan),
-            std::to_string(metal), std::to_string(sycl), std::to_string(has_rpc), std::to_string(gpu_blas), std::to_string(blas),
+            std::to_string(metal), std::to_string(opencl), std::to_string(sycl), std::to_string(has_rpc), std::to_string(gpu_blas), std::to_string(blas),
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_ubatch),
@@ -952,6 +956,7 @@ struct test {
 const std::string test::build_commit = LLAMA_COMMIT;
 const int         test::build_number = LLAMA_BUILD_NUMBER;
 const bool        test::cuda         = !!ggml_cpu_has_cuda();
+const bool        test::opencl       = !!ggml_cpu_has_clblast();
 const bool        test::vulkan       = !!ggml_cpu_has_vulkan();
 const bool        test::kompute      = !!ggml_cpu_has_kompute();
 const bool        test::metal        = !!ggml_cpu_has_metal();

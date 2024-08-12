@@ -507,6 +507,23 @@ if (GGML_HIPBLAS)
     set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} PUBLIC hip::host roc::rocblas roc::hipblas)
 endif()
 
+if (GGML_CLBLAST)
+    find_package(CLBlast)
+    if (CLBlast_FOUND)
+        message(STATUS "CLBlast found")
+
+        set(GGML_HEADERS_OPENCL ggml-opencl.h)
+        set(GGML_SOURCES_OPENCL ggml-opencl.cpp)
+
+        add_compile_definitions(GGML_USE_CLBLAST)
+
+        set(LLAMA_EXTRA_LIBS ${LLAMA_EXTRA_LIBS} clblast)
+    else()
+        message(WARNING "CLBlast not found")
+    endif()
+endif()
+
+
 if (GGML_SYCL)
     if (NOT GGML_SYCL_TARGET MATCHES "^(INTEL|NVIDIA)$")
         message(FATAL_ERROR "Invalid backend chosen, supported options are INTEL or NVIDIA")
