@@ -15,9 +15,9 @@
 
 #include "common.hpp"
 
-typedef void (*dequantize_kernel_t)(const void * vx, const int ib, const int iqs, dfloat2 & v);
+typedef void (*dequantize_kernel_t)(const void * vx, const int64_t ib, const int iqs, dfloat2 & v);
 
-static __dpct_inline__ void dequantize_q4_0(const void *vx, const int ib,
+static __dpct_inline__ void dequantize_q4_0(const void *vx, const int64_t ib,
                                             const int iqs, dfloat2 &v) {
     const block_q4_0 * x = (const block_q4_0 *) vx;
 
@@ -40,7 +40,7 @@ static __dpct_inline__ void dequantize_q4_0(const void *vx, const int ib,
 #endif // GGML_SYCL_F16
 }
 
-static __dpct_inline__ void dequantize_q4_1(const void *vx, const int ib,
+static __dpct_inline__ void dequantize_q4_1(const void *vx, const int64_t ib,
                                             const int iqs, dfloat2 &v) {
     const block_q4_1 * x = (const block_q4_1 *) vx;
 
@@ -64,7 +64,7 @@ static __dpct_inline__ void dequantize_q4_1(const void *vx, const int ib,
 #endif // GGML_SYCL_F16
 }
 
-static __dpct_inline__ void dequantize_q5_0(const void *vx, const int ib,
+static __dpct_inline__ void dequantize_q5_0(const void *vx, const int64_t ib,
                                             const int iqs, dfloat2 &v) {
     const block_q5_0 * x = (const block_q5_0 *) vx;
 
@@ -91,7 +91,7 @@ static __dpct_inline__ void dequantize_q5_0(const void *vx, const int ib,
 #endif // GGML_SYCL_F16
 }
 
-static __dpct_inline__ void dequantize_q5_1(const void *vx, const int ib,
+static __dpct_inline__ void dequantize_q5_1(const void *vx, const int64_t ib,
                                             const int iqs, dfloat2 &v) {
     const block_q5_1 * x = (const block_q5_1 *) vx;
 
@@ -118,7 +118,7 @@ static __dpct_inline__ void dequantize_q5_1(const void *vx, const int ib,
 #endif // GGML_SYCL_F16
 }
 
-static __dpct_inline__ void dequantize_q8_0(const void *vx, const int ib,
+static __dpct_inline__ void dequantize_q8_0(const void *vx, const int64_t ib,
                                             const int iqs, dfloat2 &v) {
     const block_q8_0 * x = (const block_q8_0 *) vx;
 
@@ -138,7 +138,7 @@ static __dpct_inline__ void dequantize_q8_0(const void *vx, const int ib,
 }
 
 template<typename dst_t>
-static void dequantize_block_q4_0(const void * __restrict__ vx, dst_t * __restrict__ yy, int nb32,
+static void dequantize_block_q4_0(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t nb32,
                                   const sycl::nd_item<3> &item_ct1) {
 
     const int64_t i = item_ct1.get_group(2);
@@ -168,7 +168,7 @@ static void dequantize_block_q4_0(const void * __restrict__ vx, dst_t * __restri
 }
 
 template<typename dst_t>
-static void dequantize_block_q4_1(const void * __restrict__ vx, dst_t * __restrict__ yy, int nb32,
+static void dequantize_block_q4_1(const void * __restrict__ vx, dst_t * __restrict__ yy, int64_t nb32,
                                   const sycl::nd_item<3> &item_ct1) {
 
     const int64_t i = item_ct1.get_group(2);
