@@ -19,8 +19,6 @@
 import os
 import math
 import warnings
-from dataclasses import dataclass
-from typing import Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -33,7 +31,6 @@ from transformers.activations import ACT2FN
 from transformers.modeling_utils import PreTrainedModel
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import (
-    ModelOutput,
     logging,
 )
 from transformers.utils import logging
