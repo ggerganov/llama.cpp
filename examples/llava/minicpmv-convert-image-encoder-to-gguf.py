@@ -413,6 +413,7 @@ import re
 
 import numpy as np
 from gguf import *
+from transformers.models.idefics2.modeling_idefics2 import Idefics2VisionTransformer, Idefics2VisionConfig
 
 TEXT = "clip.text"
 VISION = "clip.vision"
@@ -542,6 +543,15 @@ if args.use_f32:
 #     model = CLIPModel.from_pretrained(dir_model)
 #     processor = CLIPProcessor.from_pretrained(dir_model)
 
+minicpmv_version = args.minicpmv_version
+emb_dim = 4096
+if minicpmv_version == 1:
+    emb_dim = 2304
+elif minicpmv_version == 2:
+    emb_dim = 4096
+elif minicpmv_version == 3:
+    emb_dim = 3584
+    
 default_vision_config = {
         "hidden_size": 1152,
         "image_size": 980,
@@ -552,8 +562,12 @@ default_vision_config = {
         "patch_size": 14,
     }
 
-vision_config = SiglipVisionConfig(**default_vision_config)
-model = SiglipVisionTransformer(vision_config)
+if minicpmv_version == 3:
+    vision_config = Idefics2VisionConfig(**default_vision_config)
+    model = Idefics2VisionTransformer(vision_config)
+elif minicpmv_version == 3:
+    vision_config = SiglipVisionConfig(**default_vision_config)
+    model = SiglipVisionTransformer(vision_config)
 
 processor = None
 # if model.attn_pool is not None:
@@ -566,14 +580,7 @@ fname_middle = None
 has_text_encoder = True
 has_vision_encoder = True
 has_minicpmv_projector = False
-minicpmv_version = args.minicpmv_version
-emb_dim = 4096
-if minicpmv_version == 1:
-    emb_dim = 2304
-elif minicpmv_version == 2:
-    emb_dim = 4096
-elif minicpmv_version == 3:
-    emb_dim = 3584
+
     
 if args.text_only:
     fname_middle = "text-"
