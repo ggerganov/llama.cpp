@@ -12,7 +12,7 @@ static bool g_verbose = false;
 
 static std::string get_kv_str(struct gguf_context * ctx_gguf, const std::string & key){
     int id = gguf_find_key(ctx_gguf, key.c_str());
-    return id < 0 ? "" : std::string(gguf_get_val_str(ctx_gguf, id));
+    return id < 0 ? "" : std::string(gguf_get_val_str(ctx_gguf, id), gguf_get_val_str_n(ctx_gguf, id));
 }
 
 static float get_kv_f32(struct gguf_context * ctx_gguf, const std::string & key) {

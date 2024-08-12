@@ -225,7 +225,7 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
 
     switch (type) {
         case GGUF_TYPE_STRING:
-            return gguf_get_val_str(ctx_gguf, i);
+            return std::string(gguf_get_val_str(ctx_gguf, i), gguf_get_val_str_n(ctx_gguf, i));
         case GGUF_TYPE_ARRAY:
             {
                 const enum gguf_type arr_type = gguf_get_arr_type(ctx_gguf, i);
@@ -235,7 +235,7 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
                 ss << "[";
                 for (int j = 0; j < arr_n; j++) {
                     if (arr_type == GGUF_TYPE_STRING) {
-                        std::string val = gguf_get_arr_str(ctx_gguf, i, j);
+                        std::string val(gguf_get_arr_str(ctx_gguf, i, j), gguf_get_arr_str_n(ctx_gguf, i, j));
                         // escape quotes
                         replace_all(val, "\\", "\\\\");
                         replace_all(val, "\"", "\\\"");

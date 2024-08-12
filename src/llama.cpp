@@ -1406,7 +1406,7 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
 
     switch (type) {
         case GGUF_TYPE_STRING:
-            return gguf_get_val_str(ctx_gguf, i);
+            return std::string(gguf_get_val_str(ctx_gguf, i), gguf_get_val_str_n(ctx_gguf, i));
         case GGUF_TYPE_ARRAY:
             {
                 const enum gguf_type arr_type = gguf_get_arr_type(ctx_gguf, i);
@@ -1416,7 +1416,7 @@ static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
                 ss << "[";
                 for (int j = 0; j < arr_n; j++) {
                     if (arr_type == GGUF_TYPE_STRING) {
-                        std::string val = gguf_get_arr_str(ctx_gguf, i, j);
+                        std::string val(gguf_get_arr_str(ctx_gguf, i, j), gguf_get_arr_str_n(ctx_gguf, i, j));
                         // escape quotes
                         replace_all(val, "\\", "\\\\");
                         replace_all(val, "\"", "\\\"");
@@ -3436,7 +3436,7 @@ namespace GGUFMeta {
         static constexpr gguf_type gt = GGUF_TYPE_STRING;
 
         static std::string getter(const gguf_context * ctx, const int kid) {
-            return gguf_get_val_str(ctx, kid);
+            return std::string(gguf_get_val_str(ctx, kid), gguf_get_val_str_n(ctx, kid));
         }
     };
 
@@ -5316,7 +5316,7 @@ static void llm_load_vocab(
 
             const int n_merges = gguf_get_arr_n(ctx, merges_keyidx);
             for (int i = 0; i < n_merges; i++) {
-                const std::string word = gguf_get_arr_str(ctx, merges_keyidx, i);
+                const std::string word(gguf_get_arr_str(ctx, merges_keyidx, i), gguf_get_arr_str_n(ctx, merges_keyidx, i));
                 GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
 
                 std::string first;
@@ -5521,7 +5521,7 @@ static void llm_load_vocab(
     vocab.id_to_token.resize(n_vocab);
 
     for (uint32_t i = 0; i < n_vocab; i++) {
-        std::string word = gguf_get_arr_str(ctx, token_idx, i);
+        std::string word(gguf_get_arr_str(ctx, token_idx, i), gguf_get_arr_str_n(ctx, token_idx, i));
         GGML_ASSERT(unicode_cpts_from_utf8(word).size() > 0);
 
         vocab.token_to_id[word] = i;
@@ -16207,7 +16207,7 @@ static void llama_lora_adapter_init_internal(struct llama_model * model, const c
     {
         auto get_kv_str = [&](const std::string & key) -> std::string {
             int id = gguf_find_key(ctx_gguf, key.c_str());
-            return id < 0 ? "" : std::string(gguf_get_val_str(ctx_gguf, id));
+            return id < 0 ? "" : std::string(gguf_get_val_str(ctx_gguf, id), gguf_get_val_str_n(ctx_gguf, id));
         };
         auto get_kv_f32 = [&](const std::string & key) -> float {
             int id = gguf_find_key(ctx_gguf, key.c_str());
