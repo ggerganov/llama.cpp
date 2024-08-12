@@ -9,9 +9,21 @@ struct llama_sampling {
     llama_sampling(const struct llama_vocab & vocab);
     ~llama_sampling();
 
-    const llama_vocab & vocab;
+    llama_sampling_params params;
+
+    std::string grammar_str;
+    std::string grammar_root;
+
+    std::string cfg_prompt;
+    float       cfg_scale = 1.0f;
+
+    std::vector<llama_logit_bias> logit_bias; // logit biases to apply
+
+    // state
 
     std::mt19937 rng;
+
+    const struct llama_vocab & vocab;
 
     struct llama_grammar * grammar = nullptr;
 
@@ -30,10 +42,13 @@ void llama_sampling_free_impl(struct llama_sampling * sampling);
 
 struct llama_sampling * llama_sampling_cp_impl(const struct llama_sampling & smpl);
 
-void llama_sampling_reset_impl(struct llama_sampling & smpl, const char * grammar_str, const char * grammar_root);
+void llama_sampling_reset_impl(struct llama_sampling & smpl);
 
 // TODO: move the API below as member functions of llama_sampling
-void llama_sampling_set_rng_seed_impl(struct llama_sampling & smpl, uint32_t seed);
+void llama_sampling_set_rng_seed_impl  (struct llama_sampling & smpl, uint32_t seed);
+void llama_sampling_set_grammar_impl   (struct llama_sampling & smpl, const char * grammar_str, const char * grammar_root);
+void llama_sampling_set_cfg_impl       (struct llama_sampling & smpl, const char * cfg_prompt, float cfg_scale);
+void llama_sampling_set_logit_bias_impl(struct llama_sampling & smpl, int32_t n_logit_bias, const llama_logit_bias * logit_bias);
 
 void llama_sampling_softmax_impl  (struct llama_sampling & smpl, llama_token_data_array * candidates);
 void llama_sampling_top_k_impl    (struct llama_sampling & smpl, llama_token_data_array * candidates, int32_t k, size_t min_keep);

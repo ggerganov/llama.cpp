@@ -36,11 +36,9 @@ llama_sampling::~llama_sampling() {
 struct llama_sampling * llama_sampling_init_impl(const struct llama_vocab & vocab, struct llama_sampling_params params) {
     auto * result = new llama_sampling(vocab);
 
-    // TODO: store params
+    result->params = params;
 
-    if (params.grammar != nullptr && params.grammar[0] != '\0') {
-        result->grammar = llama_grammar_init_impl(result->vocab, params.grammar, params.grammar_root);
-    }
+    llama_sampling_set_rng_seed_impl(*result, params.seed);
 
     return result;
 }
@@ -52,6 +50,16 @@ void llama_sampling_free_impl(struct llama_sampling * sampling) {
 struct llama_sampling * llama_sampling_cp_impl(const struct llama_sampling & smpl) {
     auto * result = new llama_sampling(smpl.vocab);
 
+    result->params = smpl.params;
+
+    result->grammar_str  = smpl.grammar_str;
+    result->grammar_root = smpl.grammar_root;
+
+    result->cfg_prompt = smpl.cfg_prompt;
+    result->cfg_scale  = smpl.cfg_scale;
+
+    result->logit_bias = smpl.logit_bias;
+
     if (smpl.grammar) {
         result->grammar = llama_grammar_copy_impl(*smpl.grammar);
     }
@@ -59,19 +67,14 @@ struct llama_sampling * llama_sampling_cp_impl(const struct llama_sampling & smp
     return result;
 }
 
-void llama_sampling_reset_impl(struct llama_sampling & smpl, const char * grammar_str, const char * grammar_root) {
-    // TODO: this is dumb, need to fix
-    const struct llama_vocab * vocab = nullptr;
-
+void llama_sampling_reset_impl(struct llama_sampling & smpl) {
     if (smpl.grammar) {
-        vocab = &smpl.grammar->vocab;
-
         llama_grammar_free_impl(smpl.grammar);
         smpl.grammar = nullptr;
     }
 
-    if (grammar_str != nullptr && grammar_str[0] != '\0') {
-        smpl.grammar = llama_grammar_init_impl(*vocab, grammar_str, grammar_root);
+    if (!smpl.grammar_str.empty()) {
+        smpl.grammar = llama_grammar_init_impl(smpl.vocab, smpl.grammar_str.data(), smpl.grammar_root.data());
     }
 }
 
@@ -81,6 +84,42 @@ void llama_sampling_set_rng_seed_impl(struct llama_sampling & smpl, uint32_t see
     }
 
     smpl.rng.seed(seed);
+}
+
+void llama_sampling_set_grammar_impl(struct llama_sampling & smpl, const char * grammar_str, const char * grammar_root) {
+    if (smpl.grammar) {
+        llama_grammar_free_impl(smpl.grammar);
+        smpl.grammar = nullptr;
+    }
+
+    if (grammar_str != nullptr && grammar_str[0] != '\0') {
+        smpl.grammar_str  = grammar_str;
+        smpl.grammar_root = grammar_root;
+
+        smpl.grammar = llama_grammar_init_impl(smpl.vocab, grammar_str, grammar_root);
+    } else {
+        smpl.grammar_str.clear();
+        smpl.grammar_root.clear();
+    }
+}
+
+void llama_sampling_set_cfg_impl(struct llama_sampling & smpl, const char * cfg_prompt, float cfg_scale) {
+    if (cfg_prompt != nullptr && cfg_prompt[0] != '\0') {
+        smpl.cfg_prompt = cfg_prompt;
+    } else {
+        smpl.cfg_prompt.clear();
+    }
+
+    smpl.cfg_scale = cfg_scale;
+}
+
+void llama_sampling_set_logit_bias_impl(struct llama_sampling & smpl, int32_t n_logit_bias, const llama_logit_bias * logit_bias) {
+    smpl.logit_bias.clear();
+    smpl.logit_bias.reserve(n_logit_bias);
+
+    for (int32_t i = 0; i < n_logit_bias; ++i) {
+        smpl.logit_bias.push_back(logit_bias[i]);
+    }
 }
 
 void llama_sampling_softmax_impl(struct llama_sampling & /*smpl*/, llama_token_data_array * candidates) {

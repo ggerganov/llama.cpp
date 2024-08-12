@@ -384,16 +384,6 @@ extern "C" {
         float    mirostat_tau;      // target entropy
         float    mirostat_eta;      // learning rate
 
-        // https://github.com/ggerganov/llama.cpp/pull/1773
-        const char * grammar;
-        const char * grammar_root;
-
-        const char * cfg_prompt; // string to help guidance in negative direction
-        float        cfg_scale;  // how strong is guidance
-
-        int32_t n_logit_bias;
-        const llama_logit_bias * logit_bias;
-
         // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
         bool penalize_nl; // consider newlines as a repeatable token
         bool ignore_eos;  // ignore the end-of-sequence token
@@ -1020,10 +1010,14 @@ extern "C" {
 
     LLAMA_API struct llama_sampling * llama_sampling_cp(const struct llama_sampling * smpl);
 
-    LLAMA_API void llama_sampling_reset(struct llama_sampling * smpl, const char * grammar_str, const char * grammar_root);
+    //LLAMA_API void llama_sampling_reset(struct llama_sampling * smpl, const char * grammar_str, const char * grammar_root);
+    LLAMA_API void llama_sampling_reset(struct llama_sampling * smpl);
 
     // Sets the current rng seed.
-    LLAMA_API void llama_sampling_set_rng_seed(struct llama_sampling * smpl, uint32_t seed);
+    LLAMA_API void llama_sampling_set_rng_seed  (struct llama_sampling * smpl, uint32_t seed);
+    LLAMA_API void llama_sampling_set_grammar   (struct llama_sampling * smpl, const char * grammar_str, const char * grammar_root);
+    LLAMA_API void llama_sampling_set_cfg       (struct llama_sampling * smpl, const char * cfg_prompt, float cfg_scale);
+    LLAMA_API void llama_sampling_set_logit_bias(struct llama_sampling * smpl, int32_t n_logit_bias, const llama_logit_bias * logit_bias);
 
     /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
     LLAMA_API void llama_sampling_softmax(
@@ -1098,7 +1092,7 @@ extern "C" {
     /// @param logits Logits extracted from the original generation context.
     /// @param logits_guidance Logits extracted from a separate context from the same model. Other than a negative prompt at the beginning, it should have all generated and user input tokens copied from the main context.
     /// @param scale Guidance strength. 1.0f means no guidance. Higher values mean stronger guidance.
-    LLAMA_API void llama_sampling_apply_guidance(
+    LLAMA_API void llama_sampling_cfg(
             struct llama_sampling * smpl,
                             float * logits,
                             float * logits_guidance,

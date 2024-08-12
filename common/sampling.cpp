@@ -32,23 +32,17 @@ struct llama_sampling_context * llama_sampling_init(const struct gpt_sampling_pa
         lp.penalize_nl       = params.penalize_nl;
         lp.ignore_eos        = params.ignore_eos;
 
-        lp.grammar = params.grammar.c_str();
-        lp.grammar_root = "root";
-
-        lp.cfg_prompt = params.cfg_negative_prompt.c_str();
-        lp.cfg_scale  = params.cfg_scale;
-
-        lp.n_logit_bias = params.logit_bias.size();
-        lp.logit_bias   = params.logit_bias.data();
-
         result->smpl = llama_sampling_init(model, lp);
+
+        llama_sampling_set_rng_seed  (result->smpl, params.seed);
+        llama_sampling_set_grammar   (result->smpl, params.grammar.c_str(), "root");
+        llama_sampling_set_cfg       (result->smpl, params.cfg_negative_prompt.c_str(), params.cfg_scale);
+        llama_sampling_set_logit_bias(result->smpl, params.logit_bias.size(), params.logit_bias.data());
     }
 
     result->prev.resize(params.n_prev);
 
     result->n_valid = 0;
-
-    llama_sampling_set_rng_seed(result->smpl, params.seed);
 
     return result;
 }
@@ -60,7 +54,7 @@ void llama_sampling_free(struct llama_sampling_context * ctx) {
 }
 
 void llama_sampling_reset(llama_sampling_context * ctx) {
-    llama_sampling_reset(ctx->smpl, ctx->params.grammar.c_str(), "root");
+    llama_sampling_reset(ctx->smpl);
 
     std::fill(ctx->prev.begin(), ctx->prev.end(), 0);
     ctx->cur.clear();
@@ -378,7 +372,7 @@ static llama_token_data_array llama_sampling_prepare_impl(
 
     if (ctx_cfg) {
         float * logits_guidance = llama_get_logits_ith(ctx_cfg, idx);
-        llama_sampling_apply_guidance(smpl, logits, logits_guidance, params.cfg_scale);
+        llama_sampling_cfg(smpl, logits, logits_guidance, params.cfg_scale);
     }
 
     cur.resize(n_vocab);

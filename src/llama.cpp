@@ -16511,12 +16511,6 @@ struct llama_sampling_params llama_sampling_default_params() {
         /*.mirostat          =*/ 0,
         /*.mirostat_tau      =*/ 5.00f,
         /*.mirostat_eta      =*/ 0.10f,
-        /*.grammar           =*/ nullptr,
-        /*.grammar_root      =*/ nullptr,
-        /*.cfg_prompt        =*/ nullptr,
-        /*.cfg_scale         =*/ 1.00f,
-        /*.n_logit_bias      =*/ 0,
-        /*.logit_bias        =*/ nullptr,
         /*.penalize_nl       =*/ false,
         /*.ignore_eos        =*/ false,
     };
@@ -19109,12 +19103,24 @@ struct llama_sampling * llama_sampling_cp(const struct llama_sampling * smpl) {
     return llama_sampling_cp_impl(*smpl);
 }
 
-void llama_sampling_reset(struct llama_sampling * smpl, const char * grammar_str, const char * grammar_root) {
-    llama_sampling_reset_impl(*smpl, grammar_str, grammar_root);
+void llama_sampling_reset(struct llama_sampling * smpl) {
+    llama_sampling_reset_impl(*smpl);
 }
 
 void llama_sampling_set_rng_seed(struct llama_sampling * smpl, uint32_t seed) {
     llama_sampling_set_rng_seed_impl(*smpl, seed);
+}
+
+void llama_sampling_set_grammar(struct llama_sampling * smpl, const char * grammar_str, const char * grammar_root) {
+    llama_sampling_set_grammar_impl(*smpl, grammar_str, grammar_root);
+}
+
+void llama_sampling_set_cfg(struct llama_sampling * smpl, const char * cfg_prompt, float cfg_scale) {
+    llama_sampling_set_cfg_impl(*smpl, cfg_prompt, cfg_scale);
+}
+
+void llama_sampling_set_logit_bias(struct llama_sampling * smpl, int32_t n_logit_bias, const llama_logit_bias * logit_bias) {
+    llama_sampling_set_logit_bias_impl(*smpl, n_logit_bias, logit_bias);
 }
 
 void llama_sampling_softmax(struct llama_sampling * smpl, llama_token_data_array * candidates) {
@@ -19186,7 +19192,7 @@ void llama_sampling_repetition_penalties(
     llama_sampling_repetition_penalties_impl(*smpl, candidates, last_tokens, penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
 }
 
-void llama_sampling_apply_guidance(
+void llama_sampling_cfg(
         struct llama_sampling * smpl,
                         float * logits,
                         float * logits_guidance,
