@@ -17,6 +17,7 @@ enum class llama_sampler_type : char {
 
 // sampling parameters
 typedef struct gpt_sampling_params {
+    uint32_t    seed                  = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampling_context
     int32_t     n_prev                = 64;                 // number of previous tokens to remember
     int32_t     n_probs               = 0;                  // if greater than 0, output the probabilities of top n_probs tokens.
     int32_t     min_keep              = 0;                  // 0 = disabled, otherwise samplers should return at least min_keep tokens
@@ -37,7 +38,6 @@ typedef struct gpt_sampling_params {
     float       mirostat_eta          = 0.10f;              // learning rate
     bool        penalize_nl           = false;              // consider newlines as a repeatable token
     bool        ignore_eos            = false;
-    uint32_t    seed                  = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampling_context
 
     std::vector<llama_sampler_type> samplers_sequence = {
         llama_sampler_type::TOP_K,

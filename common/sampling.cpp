@@ -6,7 +6,43 @@ struct llama_sampling_context * llama_sampling_init(const struct gpt_sampling_pa
     struct llama_sampling_context * result = new llama_sampling_context();
 
     result->params = params;
-    result->smpl   = llama_sampling_init(model, params.grammar.c_str(), "root");
+
+    {
+        auto lp = llama_sampling_default_params();
+
+        lp.seed              = params.seed;
+        lp.n_prev            = params.n_prev;
+        lp.n_probs           = params.n_probs;
+        lp.min_keep          = params.min_keep;
+        lp.top_k             = params.top_k;
+        lp.top_p             = params.top_p;
+        lp.min_p             = params.min_p;
+        lp.tfs_z             = params.tfs_z;
+        lp.typical_p         = params.typical_p;
+        lp.temp              = params.temp;
+        lp.dynatemp_range    = params.dynatemp_range;
+        lp.dynatemp_exponent = params.dynatemp_exponent;
+        lp.penalty_last_n    = params.penalty_last_n;
+        lp.penalty_repeat    = params.penalty_repeat;
+        lp.penalty_freq      = params.penalty_freq;
+        lp.penalty_present   = params.penalty_present;
+        lp.mirostat          = params.mirostat;
+        lp.mirostat_tau      = params.mirostat_tau;
+        lp.mirostat_eta      = params.mirostat_eta;
+        lp.penalize_nl       = params.penalize_nl;
+        lp.ignore_eos        = params.ignore_eos;
+
+        lp.grammar = params.grammar.c_str();
+        lp.grammar_root = "root";
+
+        lp.cfg_prompt = params.cfg_negative_prompt.c_str();
+        lp.cfg_scale  = params.cfg_scale;
+
+        lp.n_logit_bias = params.logit_bias.size();
+        lp.logit_bias   = params.logit_bias.data();
+
+        result->smpl = llama_sampling_init(model, lp);
+    }
 
     result->prev.resize(params.n_prev);
 

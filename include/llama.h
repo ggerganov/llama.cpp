@@ -328,7 +328,8 @@ extern "C" {
         enum ggml_type type_k; // data type for K cache [EXPERIMENTAL]
         enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
-        // Keep the booleans together to avoid misalignment during copy-by-value.
+        // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
+        // TODO: move at the end of the struct
         bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
@@ -382,14 +383,20 @@ extern "C" {
         int32_t  mirostat;          // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
         float    mirostat_tau;      // target entropy
         float    mirostat_eta;      // learning rate
-        bool     penalize_nl;       // consider newlines as a repeatable token
-        bool     ignore_eos;        // ignore the end-of-sequence token
 
+        // https://github.com/ggerganov/llama.cpp/pull/1773
         const char * grammar;
         const char * grammar_root;
 
+        const char * cfg_prompt; // string to help guidance in negative direction
+        float        cfg_scale;  // how strong is guidance
+
         int32_t n_logit_bias;
         const llama_logit_bias * logit_bias;
+
+        // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
+        bool penalize_nl; // consider newlines as a repeatable token
+        bool ignore_eos;  // ignore the end-of-sequence token
     } llama_sampling_params;
 
     // performance timing information
@@ -1006,9 +1013,8 @@ extern "C" {
     // Sampling functions
     //
 
-    // TODO: args become llama_sampling_params
     // TODO: llama_model should become llama_vocab
-    LLAMA_API struct llama_sampling * llama_sampling_init(const struct llama_model * model, const char * grammar_str, const char * grammar_root);
+    LLAMA_API struct llama_sampling * llama_sampling_init(const struct llama_model * model, struct llama_sampling_params params);
 
     LLAMA_API void llama_sampling_free(struct llama_sampling * smpl);
 

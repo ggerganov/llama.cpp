@@ -24,13 +24,7 @@ static void llama_log_softmax(float * array, size_t size) {
     }
 }
 
-llama_sampling::llama_sampling(uint32_t n_vocab) : n_vocab(n_vocab) {
-}
-
-llama_sampling::llama_sampling(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) : n_vocab(vocab.n_vocab) {
-    if (grammar_str != nullptr && grammar_str[0] != '\0') {
-        grammar = llama_grammar_init_impl(vocab, grammar_str, grammar_root);
-    }
+llama_sampling::llama_sampling(const struct llama_vocab & vocab) : vocab(vocab) {
 }
 
 llama_sampling::~llama_sampling() {
@@ -39,8 +33,16 @@ llama_sampling::~llama_sampling() {
     }
 }
 
-struct llama_sampling * llama_sampling_init_impl(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) {
-    return new llama_sampling(vocab, grammar_str, grammar_root);
+struct llama_sampling * llama_sampling_init_impl(const struct llama_vocab & vocab, struct llama_sampling_params params) {
+    auto * result = new llama_sampling(vocab);
+
+    // TODO: store params
+
+    if (params.grammar != nullptr && params.grammar[0] != '\0') {
+        result->grammar = llama_grammar_init_impl(result->vocab, params.grammar, params.grammar_root);
+    }
+
+    return result;
 }
 
 void llama_sampling_free_impl(struct llama_sampling * sampling) {
@@ -48,7 +50,7 @@ void llama_sampling_free_impl(struct llama_sampling * sampling) {
 }
 
 struct llama_sampling * llama_sampling_cp_impl(const struct llama_sampling & smpl) {
-    auto * result = new llama_sampling(smpl.n_vocab);
+    auto * result = new llama_sampling(smpl.vocab);
 
     if (smpl.grammar) {
         result->grammar = llama_grammar_copy_impl(*smpl.grammar);
@@ -493,7 +495,7 @@ void llama_sampling_apply_guidance_impl(
                         float * logits,
                         float * logits_guidance,
                         float   scale) {
-    const auto n_vocab = smpl.n_vocab;
+    const auto n_vocab = smpl.vocab.n_vocab;
 
     llama_log_softmax(logits, n_vocab);
     llama_log_softmax(logits_guidance, n_vocab);
@@ -507,7 +509,7 @@ void llama_sampling_apply_guidance_impl(
 }
 
 llama_token llama_sampling_sample_mirostat_impl(struct llama_sampling & smpl, llama_token_data_array * candidates, float tau, float eta, int32_t m, float * mu) {
-    const int32_t n_vocab = float(smpl.n_vocab);
+    const float n_vocab = float(smpl.vocab.n_vocab);
 
     llama_sampling_softmax_impl(smpl, candidates);
 

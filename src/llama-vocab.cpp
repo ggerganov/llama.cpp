@@ -93,6 +93,18 @@ int llama_vocab::find_bpe_rank(const std::string & token_left, const std::string
     return it->second;
 }
 
+llama_vocab llama_vocab::for_tests(uint32_t n_vocab) {
+    llama_vocab vocab;
+    vocab.n_vocab = n_vocab;
+    vocab.token_to_id.reserve(n_vocab);
+    vocab.id_to_token.reserve(n_vocab);
+    for (uint32_t i = 0; i < n_vocab; i++) {
+        vocab.token_to_id[format("token_%u", i)] = i;
+        vocab.id_to_token.push_back({ format("token_%u", i), 0.0f, LLAMA_TOKEN_ATTR_NORMAL });
+    }
+    return vocab;
+}
+
 static enum llama_vocab_type llama_vocab_get_type(const llama_vocab & vocab) {
     return vocab.type;
 }

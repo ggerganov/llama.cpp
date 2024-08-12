@@ -172,7 +172,7 @@ int main(int argc, char * argv[]) {
     // create generation context
     llama_context * ctx = llama_new_context_with_model(model, cparams);
 
-    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
+    llama_sampling * smpl = llama_sampling_init(model, llama_sampling_default_params());
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic

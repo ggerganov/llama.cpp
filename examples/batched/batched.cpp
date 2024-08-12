@@ -64,7 +64,7 @@ int main(int argc, char ** argv) {
     ctx_params.n_batch = std::max(n_predict, n_parallel);
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
-    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
+    llama_sampling * smpl = llama_sampling_init(model, llama_sampling_default_params());
 
     if (ctx == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);

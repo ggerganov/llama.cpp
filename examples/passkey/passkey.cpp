@@ -83,7 +83,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_sampling * smpl = llama_sampling_init(model, nullptr, nullptr);
+    llama_sampling * smpl = llama_sampling_init(model, llama_sampling_default_params());
 
     // tokenize the prompt
     std::vector<llama_token> tokens_list;

@@ -1,5 +1,6 @@
 #include "ggml.h"
 #include "llama.h"
+#include "llama-vocab.h"
 #include "llama-sampling.h"
 
 #ifdef NDEBUG
@@ -21,7 +22,7 @@ static void dump(const llama_token_data_array * candidates) {
 
 static void test_top_k(const std::vector<float> & probs, const std::vector<float> & expected_probs, int k) {
     const size_t n_vocab = probs.size();
-    llama_sampling smpl(n_vocab);
+    llama_sampling smpl(llama_vocab::for_tests(n_vocab));
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -44,7 +45,7 @@ static void test_top_k(const std::vector<float> & probs, const std::vector<float
 
 static void test_top_p(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
-    llama_sampling smpl(n_vocab);
+    llama_sampling smpl(llama_vocab::for_tests(n_vocab));
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -67,7 +68,7 @@ static void test_top_p(const std::vector<float> & probs, const std::vector<float
 
 static void test_tfs(const std::vector<float> & probs, const std::vector<float> & expected_probs, float z) {
     const size_t n_vocab = probs.size();
-    llama_sampling smpl(n_vocab);
+    llama_sampling smpl(llama_vocab::for_tests(n_vocab));
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -89,7 +90,7 @@ static void test_tfs(const std::vector<float> & probs, const std::vector<float> 
 
 static void test_min_p(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
-    llama_sampling smpl(n_vocab);
+    llama_sampling smpl(llama_vocab::for_tests(n_vocab));
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -112,7 +113,7 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
 
 static void test_typical(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
-    llama_sampling smpl(n_vocab);
+    llama_sampling smpl(llama_vocab::for_tests(n_vocab));
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -139,7 +140,7 @@ static void test_repetition_penalties(
     GGML_ASSERT(probs.size() == expected_probs.size());
 
     const size_t n_vocab = probs.size();
-    llama_sampling smpl(n_vocab);
+    llama_sampling smpl(llama_vocab::for_tests(n_vocab));
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);
@@ -163,7 +164,7 @@ static void test_repetition_penalties(
 
 static void test_sampler_queue(const size_t n_vocab, const std::string & samplers_sequence, const int top_k, const float top_p, const float min_p
 ) {
-    llama_sampling smpl(n_vocab);
+    llama_sampling smpl(llama_vocab::for_tests(n_vocab));
 
     std::vector<llama_token_data> candidates;
     candidates.reserve(n_vocab);

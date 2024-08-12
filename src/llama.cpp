@@ -16511,12 +16511,14 @@ struct llama_sampling_params llama_sampling_default_params() {
         /*.mirostat          =*/ 0,
         /*.mirostat_tau      =*/ 5.00f,
         /*.mirostat_eta      =*/ 0.10f,
-        /*.penalize_nl       =*/ false,
-        /*.ignore_eos        =*/ false,
         /*.grammar           =*/ nullptr,
         /*.grammar_root      =*/ nullptr,
+        /*.cfg_prompt        =*/ nullptr,
+        /*.cfg_scale         =*/ 1.00f,
         /*.n_logit_bias      =*/ 0,
         /*.logit_bias        =*/ nullptr,
+        /*.penalize_nl       =*/ false,
+        /*.ignore_eos        =*/ false,
     };
 
     return result;
@@ -19091,8 +19093,8 @@ int32_t llama_chat_apply_template(
 // sampling
 //
 
-struct llama_sampling * llama_sampling_init(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
-    return llama_sampling_init_impl(model->vocab, grammar_str, grammar_root);
+struct llama_sampling * llama_sampling_init(const struct llama_model * model, struct llama_sampling_params params) {
+    return llama_sampling_init_impl(model->vocab, params);
 }
 
 void llama_sampling_free(struct llama_sampling * smpl) {

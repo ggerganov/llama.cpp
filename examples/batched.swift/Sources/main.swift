@@ -50,7 +50,7 @@ defer {
     llama_free(context)
 }
 
-let smpl = llama_sampling_init(model, nil, nil)
+let smpl = llama_sampling_init(model, llama_sampling_default_params())
 guard smpl != nil else {
     print("Failed to initialize sampling")
     exit(1)
