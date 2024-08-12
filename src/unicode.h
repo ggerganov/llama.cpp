@@ -65,3 +65,5 @@ uint8_t unicode_utf8_to_byte(const std::string & utf8);
 uint32_t unicode_tolower(uint32_t cp);
 
 std::vector<std::string> unicode_regex_split(const std::string & text, const std::vector<std::string> & regex_exprs);
+
+std::string lowercase(const std::string & text);

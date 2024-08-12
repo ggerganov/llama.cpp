@@ -11,6 +11,7 @@
 #include <forward_list>
 #include <queue>
 #include <sstream>
+#include <regex>
 
 //
 // helpers
@@ -432,6 +433,9 @@ struct llm_tokenizer_bpe {
                     "[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))*((?=[\\p{L}])([^A-Z]))+|[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))+((?=[\\p{L}])([^A-Z]))*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
+            case LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH:
+                regex_exprs = {"\\w+|[^\\w\\s]+"};
+                break;
             default:
                 // default regex for BPE tokenization pre-processing
                 regex_exprs = {
@@ -484,7 +488,20 @@ struct llm_tokenizer_bpe {
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
         int final_prev_index = -1;
 
-        const auto word_collection = unicode_regex_split(text, regex_exprs);
+        std::vector<std::string> word_collection;
+        if (vocab.type_pre == LLAMA_VOCAB_PRE_TYPE_JINA_V2_ZH) {
+
+            std::string lowercase_text = lowercase(text);
+            std::regex regexPattern(regex_exprs[0]);
+            std::sregex_token_iterator it(lowercase_text.begin(), lowercase_text.end(), regexPattern);
+            std::sregex_token_iterator end;
+
+            while (it != end) {
+                word_collection.push_back(*it++);
+            }
+        } else {
+            word_collection = unicode_regex_split(text, regex_exprs);
+        }
 
         symbols_final.clear();
 
