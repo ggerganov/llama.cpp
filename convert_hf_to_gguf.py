@@ -2737,9 +2737,7 @@ class RwkvModel(Model):
                 token = token.encode("utf-8") if isinstance(token, str) else token
                 assert isinstance(token, bytes)
                 assert len(token) == token_len
-                token_text: str = ""
-                for b in token:
-                    token_text += f"\\x{b:02x}"
+                token_text: str = str(token)[2:-1]
                 tokens.append(token_text.encode("utf-8"))
                 toktypes.append(gguf.TokenType.NORMAL)
         remainder = vocab_size - len(tokens)
