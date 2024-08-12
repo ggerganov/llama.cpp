@@ -211,7 +211,7 @@ class MODEL_ARCH(IntEnum):
     GEMMA        = auto()
     GEMMA2       = auto()
     STARCODER2   = auto()
-    RWKV         = auto()
+    RWKV6        = auto()
     MAMBA        = auto()
     XVERSE       = auto()
     COMMAND_R    = auto()
@@ -365,7 +365,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GEMMA:          "gemma",
     MODEL_ARCH.GEMMA2:         "gemma2",
     MODEL_ARCH.STARCODER2:     "starcoder2",
-    MODEL_ARCH.RWKV:           "rwkv",
+    MODEL_ARCH.RWKV6:          "rwkv6",
     MODEL_ARCH.MAMBA:          "mamba",
     MODEL_ARCH.XVERSE:         "xverse",
     MODEL_ARCH.COMMAND_R:      "command-r",
@@ -908,7 +908,7 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
-    MODEL_ARCH.RWKV: [
+    MODEL_ARCH.RWKV6: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.TOKEN_EMBD_NORM,
         MODEL_TENSOR.OUTPUT_NORM,

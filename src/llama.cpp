@@ -212,7 +212,7 @@ enum llm_arch {
     LLM_ARCH_JAIS,
     LLM_ARCH_NEMOTRON,
     LLM_ARCH_EXAONE,
-    LLM_ARCH_RWKV,
+    LLM_ARCH_RWKV6,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -260,7 +260,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_JAIS,            "jais"         },
     { LLM_ARCH_NEMOTRON,        "nemotron"     },
     { LLM_ARCH_EXAONE,          "exaone"       },
-    { LLM_ARCH_RWKV,            "rwkv"         },
+    { LLM_ARCH_RWKV6,           "rwkv6"        },
     { LLM_ARCH_UNKNOWN,         "(unknown)"    },
 };
 
@@ -1371,7 +1371,7 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
         },
     },
     {
-        LLM_ARCH_RWKV,
+        LLM_ARCH_RWKV6,
         {
             { LLM_TENSOR_TOKEN_EMBD,                "token_embd" },
             { LLM_TENSOR_TOKEN_EMBD_NORM,           "token_embd_norm" },
@@ -5903,7 +5903,7 @@ static void llm_load_hparams(
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
             } break;
-        case LLM_ARCH_RWKV:
+        case LLM_ARCH_RWKV6:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 ml.get_key(LLM_KV_WKV_HEAD_SIZE, hparams.wkv_head_size);
@@ -8338,7 +8338,7 @@ static bool llm_load_tensors(
                         layer.ffn_up   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd,   n_ff});
                     }
                 } break;
-            case LLM_ARCH_RWKV:
+            case LLM_ARCH_RWKV6:
                 {
                     model.tok_embd = ml.create_tensor(ctx_input, tn(LLM_TENSOR_TOKEN_EMBD, "weight"), {n_embd, n_vocab});
 
@@ -9361,7 +9361,7 @@ static struct ggml_tensor * llm_build_mamba(
     return cur;
 }
 
-static struct ggml_tensor * llm_build_time_mix(
+static struct ggml_tensor * llm_build_time_mix_rwkv6(
     struct ggml_context * ctx,
     const struct llama_layer * layer,
     struct ggml_tensor * cur,
@@ -9522,7 +9522,7 @@ static struct ggml_tensor * llm_build_time_mix(
     return ggml_mul_mat(ctx, layer->time_mix_output, cur);
 }
 
-static struct ggml_tensor * llm_build_channel_mix(
+static struct ggml_tensor * llm_build_channel_mix_rwkv6(
     struct ggml_context * ctx,
     const struct llama_layer * layer,
     struct ggml_tensor * cur,
@@ -15064,7 +15064,7 @@ struct llm_build_context {
         return gf;
     }
 
-    ggml_cgraph * build_rwkv() {
+    ggml_cgraph * build_rwkv6() {
         ggml_cgraph *gf = ggml_new_graph_custom(ctx0, llama_model_max_nodes(model), false);
 
         // Token shift state dimensions should be 2 * n_emb
@@ -15112,7 +15112,7 @@ struct llm_build_context {
                 n_embd, n_tokens
             );
 
-            cur = ggml_add(ctx0, cur, llm_build_time_mix(ctx0, layer, x_norm, x_prev, &wkv_states, state_seq));
+            cur = ggml_add(ctx0, cur, llm_build_time_mix_rwkv6(ctx0, layer, x_norm, x_prev, &wkv_states, state_seq));
             ggml_build_forward_expand(gf, cur);
             ggml_build_forward_expand(
                 gf,
@@ -15148,7 +15148,7 @@ struct llm_build_context {
                 ggml_view_1d(ctx0, tmp, n_embd * n_tokens, 0),
                 n_embd, n_tokens
             );
-            cur = ggml_add(ctx0, cur, llm_build_channel_mix(ctx0, layer, x_norm, x_prev));
+            cur = ggml_add(ctx0, cur, llm_build_channel_mix_rwkv6(ctx0, layer, x_norm, x_prev));
             ggml_build_forward_expand(gf, cur);
             ggml_build_forward_expand(
                 gf,
@@ -15444,9 +15444,9 @@ static struct ggml_cgraph * llama_build_graph(
             {
                 result = llm.build_exaone();
             } break;
-        case LLM_ARCH_RWKV:
+        case LLM_ARCH_RWKV6:
             {
-                result = llm.build_rwkv();
+                result = llm.build_rwkv6();
             } break;
         default:
             GGML_ABORT("fatal error");
@@ -18477,7 +18477,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
         case LLM_ARCH_T5:
         case LLM_ARCH_T5ENCODER:
         case LLM_ARCH_JAIS:
-        case LLM_ARCH_RWKV:
+        case LLM_ARCH_RWKV6:
             return LLAMA_ROPE_TYPE_NONE;
 
         // use what we call a normal RoPE, operating on pairs of consecutive head values
@@ -18646,7 +18646,7 @@ llama_token llama_model_decoder_start_token(const struct llama_model * model) {
 bool llama_model_is_recurrent(const struct llama_model * model) {
     switch (model->arch) {
         case LLM_ARCH_MAMBA:  return true;
-        case LLM_ARCH_RWKV:   return true;
+        case LLM_ARCH_RWKV6:   return true;
         default:              return false;
     }
 }

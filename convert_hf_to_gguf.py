@@ -2719,7 +2719,7 @@ class StarCoder2Model(Model):
 
 @Model.register("Rwkv6ForCausalLM")
 class RwkvModel(Model):
-    model_arch = gguf.MODEL_ARCH.RWKV
+    model_arch = gguf.MODEL_ARCH.RWKV6
 
     def set_vocab(self):
         assert (self.dir_model / "rwkv_vocab_v20230424.txt").is_file()
