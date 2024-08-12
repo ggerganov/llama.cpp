@@ -17190,6 +17190,7 @@ bool llama_model_has_encoder(const struct llama_model * model) {
     switch (model->arch) {
         case LLM_ARCH_T5:        return true;
         case LLM_ARCH_T5ENCODER: return true;
+        case LLM_ARCH_JINA_BERT_V2: return true;
         default:                 return false;
     }
 }
