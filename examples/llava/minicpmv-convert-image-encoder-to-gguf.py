@@ -500,6 +500,7 @@ default_image_mean = [0.48145466, 0.4578275, 0.40821073]
 default_image_std = [0.26862954, 0.26130258, 0.27577711]
 ap.add_argument('--image-mean', type=float, nargs='+', help='Mean of the images for normalization (overrides processor) ', default=None)
 ap.add_argument('--image-std', type=float, nargs='+', help='Standard deviation of the images for normalization (overrides processor)', default=None)
+ap.add_argument('--minicpmv_version', type=int, help='minicpmv_version: MiniCPM-V-2 use 1; MiniCPM-V-2.5 use 2; MiniCPM-V-2.6 use 3', default=2)
 
 # with proper
 args = ap.parse_args()
@@ -565,7 +566,15 @@ fname_middle = None
 has_text_encoder = True
 has_vision_encoder = True
 has_minicpmv_projector = False
-minicpmv_version = 3
+minicpmv_version = args.minicpmv_version
+emb_dim = 4096
+if minicpmv_version == 1:
+    emb_dim = 2304
+elif minicpmv_version == 2:
+    emb_dim = 4096
+elif minicpmv_version == 3:
+    emb_dim = 3584
+    
 if args.text_only:
     fname_middle = "text-"
     has_vision_encoder = False
@@ -684,11 +693,11 @@ def _replace_name_resampler(s, v):
     if re.match("resampler.pos_embed", s):
         return {
             s: v,
-            re.sub("pos_embed", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(3584, (70, 70))),
+            re.sub("pos_embed", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(emb_dim, (70, 70))),
         }
     if re.match("resampler.proj", s):
         return {
-            re.sub("proj", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(3584, (70, 70))),
+            re.sub("proj", "pos_embed_k", s): torch.from_numpy(get_2d_sincos_pos_embed(emb_dim, (70, 70))),
             re.sub("proj", "proj.weight", s): v.transpose(-1, -2).contiguous(),
         }
     if re.match("resampler.attn.in_proj_.*", s):
