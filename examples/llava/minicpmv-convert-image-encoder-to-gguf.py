@@ -562,7 +562,7 @@ default_vision_config = {
         "patch_size": 14,
     }
 
-if minicpmv_version == 3:
+if minicpmv_version == 2:
     vision_config = Idefics2VisionConfig(**default_vision_config)
     model = Idefics2VisionTransformer(vision_config)
 elif minicpmv_version == 3:
