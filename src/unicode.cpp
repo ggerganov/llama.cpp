@@ -576,7 +576,7 @@ namespace std {
         string_type transform_primary(It first, It last) const {
             (void) first;
             (void) last;
-            GGML_ASSERT(*first < MAX_CODEPOINTS);  // valid codepoint
+            GGML_ASSERT((uint32_t) *first < MAX_CODEPOINTS);  // check valid codepoint
             return {};
         }
 
