@@ -15717,6 +15717,8 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
     }
     if (convert_incompatible_tensor) {
         switch (new_type) {
+            case GGML_TYPE_TQ1_0:
+            case GGML_TYPE_TQ2_0:  new_type = GGML_TYPE_Q4_0; break;  // TODO: use a symmetric type instead
             case GGML_TYPE_IQ2_XXS:
             case GGML_TYPE_IQ2_XS:
             case GGML_TYPE_IQ2_S:
