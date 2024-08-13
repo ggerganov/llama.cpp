@@ -549,10 +549,6 @@ namespace std {
             static const auto _Ch_alpha = std::ctype<CharT>::alpha;
         #endif
 
-        static size_type length(const CharT * str) {
-            return std::char_traits<CharT>::length(str);
-        }
-
         CharT translate(CharT c) const {
             return c;
         }
