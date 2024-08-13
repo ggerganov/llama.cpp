@@ -551,7 +551,7 @@ elif minicpmv_version == 2:
     emb_dim = 4096
 elif minicpmv_version == 3:
     emb_dim = 3584
-    
+
 default_vision_config = {
         "hidden_size": 1152,
         "image_size": 980,
@@ -562,10 +562,9 @@ default_vision_config = {
         "patch_size": 14,
     }
 
-if minicpmv_version == 2:
-    vision_config = Idefics2VisionConfig(**default_vision_config)
-    model = Idefics2VisionTransformer(vision_config)
-elif minicpmv_version == 3:
+vision_config = Idefics2VisionConfig(**default_vision_config)
+model = Idefics2VisionTransformer(vision_config)
+if minicpmv_version == 3:
     vision_config = SiglipVisionConfig(**default_vision_config)
     model = SiglipVisionTransformer(vision_config)
 
@@ -581,7 +580,6 @@ has_text_encoder = True
 has_vision_encoder = True
 has_minicpmv_projector = False
 
-    
 if args.text_only:
     fname_middle = "text-"
     has_vision_encoder = False
