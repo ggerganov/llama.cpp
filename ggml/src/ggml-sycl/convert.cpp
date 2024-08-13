@@ -421,7 +421,7 @@ template <typename src_t, typename dst_t>
 static void convert_unary(const void * __restrict__ vx, dst_t * __restrict__ y, const int64_t k,
                           const sycl::nd_item<3> &item_ct1) {
     const int64_t work_group_size = item_ct1.get_local_range(2);
-    const int64_t global_id = item_ct1.get_local_id(2) + item_ct1.get_group(2) * work_group_size;
+    const int64_t global_id = item_ct1.get_local_id(2) + work_group_size * item_ct1.get_group(2);
 
     // make each work-item deal with more elements since sycl global range can not exceed max int
     for (int64_t i = global_id; i < k; i += work_group_size * item_ct1.get_group_range(2)) {
