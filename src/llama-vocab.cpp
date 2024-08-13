@@ -710,7 +710,6 @@ struct llm_tokenizer_wpm {
                 continue;
             }
 
-            assert (!categ.is_S());
             if (cpt == 0 || cpt == 0xFFFD || categ.is_C()) {
                 continue;
             }
