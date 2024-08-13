@@ -471,8 +471,16 @@ static std::vector<size_t> unicode_regex_split_custom(const std::string & text, 
 //   std::wregex does not support unicode whitespaces \s: 0x85, 0xA0, 0x001680 ... 0x003000.
 //   std::wregex supports full 32 bit codepoints, not limited to standard max 0x110000.
 namespace std {
-    using codepoint = uint32_t;  // codepoint type for all template specializations
 
+// codepoint type for all template specializations
+#if (WCHAR_MAX > 0xFFFF)
+    using codepoint = wchar_t;  // sizeof(wchar_t) == 4
+#else
+    using codepoint = uint32_t;  // Windows: sizeof(wchar_t) == 2
+    #define CUSTOM_CTYPE_CODEPOINT
+#endif
+
+#ifdef CUSTOM_CTYPE_CODEPOINT
     // Minimal required implementation for std::regex string processing
     template<>  // custom specialized std::ctype<codepoint>
     class ctype<codepoint> {
@@ -530,6 +538,7 @@ namespace std {
     const std::ctype<codepoint> & use_facet<const std::ctype<codepoint>>(const std::locale & loc) {
         return use_facet<std::ctype<codepoint>>(loc);
     }
+#endif
 
     // Minimal required implementation for std::regex string processing
     template<>  // custom specialized std::regex_traits<codepoint>
