@@ -209,7 +209,7 @@ static std::vector<size_t> unicode_regex_split_custom_gpt2(const std::string & t
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : OUT_OF_RANGE;
         };
 
-        static const codepoint_categ SENTINEL = codepoint_categ::MASK + 1;
+        static const codepoint_categ SENTINEL = codepoint_categ::UNDEF + 1;
         auto _get_categ = [&] (const size_t pos) -> codepoint_categ {
             return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_category(cpts[pos]) : SENTINEL;
         };
@@ -328,7 +328,7 @@ static std::vector<size_t> unicode_regex_split_custom_llama3(const std::string &
             return (offset_ini <= pos && pos < offset_end) ? cpts[pos] : OUT_OF_RANGE;
         };
 
-        static const codepoint_categ SENTINEL = codepoint_categ::MASK + 1;
+        static const codepoint_categ SENTINEL = codepoint_categ::UNDEF + 1;
         auto _get_categ = [&] (const size_t pos) -> codepoint_categ {
             return (offset_ini <= pos && pos < offset_end) ? unicode_cpt_category(cpts[pos]) : SENTINEL;
         };
@@ -589,26 +589,22 @@ codepoint_categ unicode_cpt_category(const uint32_t cp) {
         for (uint16_t rle : unicode_rle_codepoints_categs) {
             const uint32_t index = rle & 31;
             const uint32_t count = rle >> 5;
-            const auto categ = codepoint_categ::from_index(index);
-            //printf( "Codepoints 0x%05X to 0x%05X categ %s\n", cpt, cpt + count, categ.c_str());
+            auto categ = codepoint_categ::from_index(index);
+            //printf("Codepoints 0x%05X to 0x%05X categ %s\n", cpt, cpt + count, categ.c_str());
+            categ.set_flag(codepoint_categ::DIGITS, categ.is_Nd());               // \d --> \p{Nd}
+            categ.set_flag(codepoint_categ::WORDS, categ.is_L() | categ.is_N());  // \w --> \p{L} \p{N} _
             for (uint32_t i = 0; i <= count; ++i) {
                 cpt_categs[cpt++] = categ;
             }
         }
         GGML_ASSERT(cpt == MAX_CODEPOINTS);
 
+        cpt_categs['_'].set_flag(codepoint_categ::WORDS);  // \w --> \p{L} \p{N} _
+
         for (auto p : unicode_ranges_whitespace) {
             for (uint32_t cpt = p.first; cpt <= p.second; ++cpt) {
-                cpt_categs[cpt].set_flag(codepoint_categ::WHITESPACE);
+                cpt_categs[cpt].set_flag(codepoint_categ::WHITESPACES);
             }
-        }
-
-        for (auto p : unicode_map_lowercase) {
-            cpt_categs[p.second].set_flag(codepoint_categ::LOWERCASE);
-        }
-
-        for (auto p : unicode_map_uppercase) {
-            cpt_categs[p.second].set_flag(codepoint_categ::UPPERCASE);
         }
 
         //for (auto &range : unicode_ranges_nfd) {  // start, last, nfd
