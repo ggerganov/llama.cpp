@@ -113,6 +113,23 @@ struct codepoint_categ {
     inline bool is_Zp() const { return (encoded & MASK) == Zp; }
     inline bool is_Zs() const { return (encoded & MASK) == Zs; }
 
+    inline uint64_t expand_bits(const bool add_categ=true) const {  // one bit for each category/subcateory and flags
+        const uint32_t subindex = encoded & SUBMASK;
+        const uint64_t bits = (encoded & MASK) >> 3;
+        const uint64_t flags = encoded >> 10;
+        return (flags << (7 * 8)) | (bits << (7 * subindex)) | (bits * add_categ);
+    }
+
+    inline bool is_in_range(const codepoint_categ other) const {  // this.first <= other <= this.last
+        if (encoded & SUBMASK) {
+            return encoded == other.encoded;  // no range
+        }
+        if (encoded & MASK) {
+            return encoded == (other.encoded & ~SUBMASK);  // from 0bffffff'ccccccc'000 to 0bffffff'ccccccc'111
+        }
+        return encoded == (other.encoded & ~MASK);  // from 0bffffff'0000000'000 to 0bffffff'1111111'111
+    }
+
     inline bool operator == (const codepoint_categ other) const {
         return encoded == other.encoded;
     }
