@@ -101,7 +101,6 @@ extern "C" {
         LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX,
     };
 
-
     enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
         LLAMA_TOKEN_TYPE_UNDEFINED    = 0,
         LLAMA_TOKEN_TYPE_NORMAL       = 1,
