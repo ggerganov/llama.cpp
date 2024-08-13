@@ -697,14 +697,17 @@ static std::vector<uint32_t> unicode_regex_prepare(const std::string & regex) {
 
 // use std::basic_regex<uint32_t> to split the text codepoints
 static std::vector<size_t> unicode_regex_split_stl(const std::vector<uint32_t> & text_cpts, const std::vector<uint32_t> & regex_cpts, const std::vector<size_t> & offsets) {
-    using regex_type = std::basic_regex<uint32_t>;
-    using iter_type = std::regex_iterator<const uint32_t *>;
-    regex_type regex(regex_cpts.begin(), regex_cpts.end());
+    GGML_ASSERT(sizeof(std::codepoint) == sizeof(uint32_t));
+    using regex_type = std::basic_regex<std::codepoint>;
+    using iter_type = std::regex_iterator<const std::codepoint *>;
+
+    const std::codepoint * text_data  = (const std::codepoint *) text_cpts.data();
+    const std::codepoint * regex_data = (const std::codepoint *) regex_cpts.data();
+    regex_type regex(regex_data, regex_data+regex_cpts.size());
     const iter_type end;
 
     std::vector<size_t> bpe_offsets; // store the offset of each word
     bpe_offsets.reserve(offsets.size()); // reserve memory for the approximate size
-    const uint32_t * text_data = text_cpts.data();
     for (auto offset : offsets) {
         iter_type it(text_data, text_data + offset, regex);
         int64_t start_idx = 0;
