@@ -2216,6 +2216,7 @@ enum e_model {
     MODEL_1B,
     MODEL_1_3B,
     MODEL_1_4B,
+    MODEL_1_6B,
     MODEL_2B,
     MODEL_2_8B,
     MODEL_3B,
@@ -5908,6 +5909,18 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 ml.get_key(LLM_KV_WKV_HEAD_SIZE, hparams.wkv_head_size);
                 ml.get_key(LLM_KV_RESCALE_EVERY_N_LAYERS, hparams.rescale_every_n_layers, false);
+
+                switch (hparams.n_layer) {
+                    case 24: model.type = e_model::MODEL_1_6B; break;
+                    case 32:
+                        switch (hparams.n_embd) {
+                            case 2560: model.type = e_model::MODEL_3B; break;
+                            case 4096: model.type = e_model::MODEL_7B; break;
+                            default: model.type = e_model::MODEL_UNKNOWN;
+                        } break;
+                    case 61: model.type = e_model::MODEL_14B; break;
+                    default: model.type = e_model::MODEL_UNKNOWN;
+                }
             } break;
         default: (void)0;
     }
