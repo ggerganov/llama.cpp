@@ -226,7 +226,7 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
     memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
-    const bool is_neox = mode & 2;
+    const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
 
     const int32_t * pos = (const int32_t *) src1_d;
 
@@ -251,7 +251,7 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
                 attn_factor, corr_dims, freq_factors, stream
             );
         } else {
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
         }
     } else {
         if (src0->type == GGML_TYPE_F32) {
@@ -265,7 +265,7 @@ void ggml_cuda_op_rope(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
                 attn_factor, corr_dims, freq_factors, stream
             );
         } else {
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
         }
     }
 }
