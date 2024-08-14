@@ -29,9 +29,9 @@ void ggml_cuda_op_mul_mat_q(
     const mmq_args args = {src0_dd_i, src1_ddq_i, dst_dd_i, ne00, row_diff, stride00, src1_padded_row_size, src1_ncols, ne11, nrows_dst};
 
     switch (src0->type) {
-//        case GGML_TYPE_Q4_0:
-//            mul_mat_q_case<GGML_TYPE_Q4_0>(ctx, args, stream);
-//            break;
+        case GGML_TYPE_Q4_0:
+            mul_mat_q_case<GGML_TYPE_Q4_0>(ctx, args, stream);
+            break;
 //        case GGML_TYPE_Q4_1:
 //            mul_mat_q_case<GGML_TYPE_Q4_1>(ctx, args, stream);
 //            break;
