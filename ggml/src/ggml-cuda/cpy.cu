@@ -302,12 +302,26 @@ static void ggml_backend_copy_cache_ptrs(char **& backend_cache_ptrs, const char
     cudaMemcpy(backend_cache_ptrs, host_cache_ptrs, size*sizeof(char *), cudaMemcpyHostToDevice);
 }
 
-void ggml_backend_copy_k_cache_ptrs(const char ** host_cache_ptrs, size_t size) {
-    ggml_backend_copy_cache_ptrs(k_cache_ptrs, host_cache_ptrs, size);
-}
+void ggml_backend_copy_kv_cache_ptrs(const int64_t n_layer, const int64_t kv_head, struct ggml_tensor ** kv_kl, struct ggml_tensor ** kv_vl, const int64_t n_embd_k_gqa,const int64_t n_embd_v_gqa, const bool flash_attn) {
 
-void ggml_backend_copy_v_cache_ptrs(const char ** host_cache_ptrs, size_t size) {
-    ggml_backend_copy_cache_ptrs(v_cache_ptrs, host_cache_ptrs, size);
+    std::vector<const char *> host_k_cache_ptrs;
+    std::vector<const char *> host_v_cache_ptrs;
+    for (int il = 0; il < n_layer; ++il) {
+        // K cache pointer for this layer
+        ggml_tensor * tmp_tensor =  kv_kl[il];
+        size_t tmp_offset = (ggml_row_size(kv_kl[il]->type, n_embd_k_gqa))*kv_head;
+        host_k_cache_ptrs.push_back(static_cast<char*>(tmp_tensor->data) + tmp_offset);
+        // V cache pointer for this layer
+        tmp_tensor = kv_vl[il];
+        if (flash_attn) {
+          tmp_offset = (kv_head)*ggml_row_size(kv_vl[il]->type, n_embd_v_gqa);
+        } else {
+          tmp_offset = (kv_head)*ggml_element_size(kv_vl[il]);
+        }
+        host_v_cache_ptrs.push_back(static_cast<char*>(tmp_tensor->data) + tmp_offset);
+    }
+    ggml_backend_copy_cache_ptrs(k_cache_ptrs, host_k_cache_ptrs.data(), host_k_cache_ptrs.size());
+    ggml_backend_copy_cache_ptrs(v_cache_ptrs, host_v_cache_ptrs.data(), host_v_cache_ptrs.size());
 }
 
 static void ggml_cpy_f16_f32_cuda(
