@@ -3759,7 +3759,7 @@ class NemotronModel(Model):
         self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
 
         # * RopeScaling for Nemotron
-        if self.hparams["rope_scaling"] is None:
+        if "rope_scaling" not in self.hparams or self.hparams["rope_scaling"] is None:
             self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
         else:
             self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
