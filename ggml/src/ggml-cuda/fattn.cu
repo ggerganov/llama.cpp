@@ -208,13 +208,7 @@ static void ggml_cuda_flash_attn_ext_vec_f16(ggml_backend_cuda_context & ctx, gg
 
     FATTN_VEC_F16_CASE(256, GGML_TYPE_F16, GGML_TYPE_F16)
 #else
-    FATTN_VEC_F16_CASE(128, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0)
-
-    FATTN_VEC_F16_CASE(128, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0)
-
-    FATTN_VEC_F16_CASE( 64, GGML_TYPE_F16, GGML_TYPE_F16)
     FATTN_VEC_F16_CASE(128, GGML_TYPE_F16, GGML_TYPE_F16)
-    FATTN_VEC_F16_CASE(256, GGML_TYPE_F16, GGML_TYPE_F16)
 #endif // GGML_CUDA_FA_ALL_QUANTS
 
     on_no_fattn_vec_case(Q->ne[0]);
@@ -283,13 +277,7 @@ static void ggml_cuda_flash_attn_ext_vec_f32(ggml_backend_cuda_context & ctx, gg
 
     FATTN_VEC_F32_CASE(256, GGML_TYPE_F16, GGML_TYPE_F16)
 #else
-    FATTN_VEC_F32_CASE(128, GGML_TYPE_Q4_0, GGML_TYPE_Q4_0)
-
-    FATTN_VEC_F32_CASE(128, GGML_TYPE_Q8_0, GGML_TYPE_Q8_0)
-
-    FATTN_VEC_F32_CASE( 64, GGML_TYPE_F16, GGML_TYPE_F16)
     FATTN_VEC_F32_CASE(128, GGML_TYPE_F16, GGML_TYPE_F16)
-    FATTN_VEC_F32_CASE(256, GGML_TYPE_F16, GGML_TYPE_F16)
 #endif // GGML_CUDA_FA_ALL_QUANTS
 
     on_no_fattn_vec_case(Q->ne[0]);
