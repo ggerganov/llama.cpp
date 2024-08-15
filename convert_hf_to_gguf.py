@@ -322,6 +322,19 @@ class Model:
                     else:
                         raise ValueError(f"Unknown file type: {self.ftype.name}")
 
+                if data_qtype in [
+                    gguf.GGMLQuantizationType.Q5_1, gguf.LlamaFileType.MOSTLY_Q5_0,
+                    gguf.GGMLQuantizationType.Q4_1, gguf.LlamaFileType.MOSTLY_Q4_0,
+                    ]:
+                    logger.warning("\n")
+                    logger.warning("**************************************************************************************")
+                    logger.warning("** WARNING: when quantizing to `Q4_0`, `Q4_1`, `Q5_0`, or `Q5_1`")
+                    logger.warning("**          is not equivalent to using `llama-quantize`")
+                    logger.warning("**          `llama-quantize` uses `Q4_K` and `Q6_K` for the token embeddings")
+                    logger.warning("**          but this code not")
+                    logger.warning("**************************************************************************************")
+                    logger.warning("\n")
+
                 try:
                     data = gguf.quants.quantize(data, data_qtype)
                 except gguf.QuantError as e:
@@ -3825,7 +3838,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--outtype", type=str, choices=["f32", "f16", "bf16", "q8_0", "q4_0", "q4_1", "q5_0", "q5_1", "auto"], default="f16",
         help="output format - use f32 for float32, f16 for float16, bf16 for bfloat16, "
-                "q8_0 for Q8_0, q4_0 for Q4_0, q4_1 for Q4_1, q5_0 for Q5_0, q5_1 for Q5_1,"
+                "q8_0 for Q8_0, limited: q4_0 for Q4_0, q4_1 for Q4_1, q5_0 for Q5_0, q5_1 for Q5_1,"
                 " auto for the highest-fidelity 16-bit float type depending on the first loaded tensor type",
     )
     parser.add_argument(
