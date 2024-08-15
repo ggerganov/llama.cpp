@@ -7,6 +7,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -14,20 +16,25 @@ static bool llama_sample_grammar_string(struct llama_grammar * grammar, const st
     auto decoded = decode_utf8(input_str, {});
     const auto & code_points = decoded.first;
 
+    const llama_grammar_rules  & rules      = llama_grammar_get_rules (grammar);
+          llama_grammar_stacks & cur_stacks = llama_grammar_get_stacks(grammar);
+
     size_t pos = 0;
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
-        auto prev_stacks = grammar->stacks;
-        llama_grammar_accept(grammar->rules, prev_stacks, *it, grammar->stacks);
-        if (grammar->stacks.empty()) {
+        const llama_grammar_stacks prev_stacks = llama_grammar_get_stacks(grammar); // copy
+
+        llama_grammar_accept(rules, prev_stacks, *it, cur_stacks);
+
+        if (cur_stacks.empty()) {
             error_pos = pos;
             error_msg = "Unexpected character '" + unicode_cpt_to_utf8(*it) + "'";
-            grammar->stacks = prev_stacks;
+            cur_stacks = prev_stacks;
             return false;
         }
         ++pos;
     }
 
-    for (const auto & stack : grammar->stacks) {
+    for (const auto & stack : cur_stacks) {
         if (stack.empty()) {
             return true;
         }
@@ -69,13 +76,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    fseek(grammar_file, 0, SEEK_END);
-    size_t grammar_size = ftell(grammar_file);
-    fseek(grammar_file, 0, SEEK_SET);
-
-    std::string grammar_str(grammar_size, ' ');
-    fread(&grammar_str[0], 1, grammar_size, grammar_file);
-    fclose(grammar_file);
+    std::string grammar_str;
+    {
+        std::ifstream grammar_file(grammar_filename);
+        GGML_ASSERT(grammar_file.is_open() && "Failed to open grammar file");
+        std::stringstream buffer;
+        buffer << grammar_file.rdbuf();
+        grammar_str = buffer.str();
+    }
 
     // Parse the GBNF grammar
     auto parsed_grammar = grammar_parser::parse(grammar_str.c_str());
@@ -98,21 +106,18 @@ int main(int argc, char** argv) {
     auto grammar = llama_grammar_init(
             grammar_rules.data(),
             grammar_rules.size(), parsed_grammar.symbol_ids.at("root"));
-
-    // Read the input file
-    FILE* input_file = fopen(input_filename.c_str(), "r");
-    if (!input_file) {
-        fprintf(stdout, "Failed to open input file: %s\n", input_filename.c_str());
-        return 1;
+    if (grammar == nullptr) {
+        throw std::runtime_error("Failed to initialize llama_grammar");
     }
-
-    fseek(input_file, 0, SEEK_END);
-    size_t input_size = ftell(input_file);
-    fseek(input_file, 0, SEEK_SET);
-
-    std::string input_str(input_size, ' ');
-    fread(&input_str[0], 1, input_size, input_file);
-    fclose(input_file);
+    // Read the input file
+    std::string input_str;
+    {
+        std::ifstream input_file(input_filename);
+        GGML_ASSERT(input_file.is_open() && "Failed to open input file");
+        std::stringstream buffer;
+        buffer << input_file.rdbuf();
+        input_str = buffer.str();
+    }
 
     // Validate the input string against the grammar
     size_t error_pos;

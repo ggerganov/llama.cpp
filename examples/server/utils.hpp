@@ -116,45 +116,37 @@ static inline void server_log(const char * level, const char * function, int lin
 // chat template utils
 //
 
-// Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
-inline bool verify_custom_template(const std::string & tmpl) {
-    llama_chat_message chat[] = {{"user", "test"}};
-    int res = llama_chat_apply_template(nullptr, tmpl.c_str(), chat, 1, true, nullptr, 0);
-    return res >= 0;
-}
-
 // Format given chat. If tmpl is empty, we take the template from model metadata
 inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
-    size_t alloc_size = 0;
-    // vector holding all allocated string to be passed to llama_chat_apply_template
-    std::vector<std::string> str(messages.size() * 2);
-    std::vector<llama_chat_message> chat(messages.size());
+    std::vector<llama_chat_msg> chat;
 
     for (size_t i = 0; i < messages.size(); ++i) {
         const auto & curr_msg = messages[i];
-        str[i*2 + 0]    = json_value(curr_msg, "role",    std::string(""));
-        str[i*2 + 1]    = json_value(curr_msg, "content", std::string(""));
-        alloc_size     += str[i*2 + 1].length();
-        chat[i].role    = str[i*2 + 0].c_str();
-        chat[i].content = str[i*2 + 1].c_str();
+
+        std::string role = json_value(curr_msg, "role", std::string(""));
+
+        std::string content;
+        if (curr_msg.contains("content")) {
+            if (curr_msg["content"].is_string()) {
+                content = curr_msg["content"].get<std::string>();
+            } else if (curr_msg["content"].is_array()) {
+                for (const auto & part : curr_msg["content"]) {
+                    if (part.contains("text")) {
+                        content += "\n" + part["text"].get<std::string>();
+                    }
+                }
+            } else {
+                throw std::runtime_error("Invalid 'content' type (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+            }
+        } else {
+            throw std::runtime_error("Missing 'content' (ref: https://github.com/ggerganov/llama.cpp/issues/8367)");
+        }
+
+        chat.push_back({role, content});
     }
 
-    const char * ptr_tmpl = tmpl.empty() ? nullptr : tmpl.c_str();
-    std::vector<char> buf(alloc_size * 2);
-
-    // run the first time to get the total output length
-    int32_t res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), true, buf.data(), buf.size());
-
-    // if it turns out that our buffer is too small, we resize it
-    if ((size_t) res > buf.size()) {
-        buf.resize(res);
-        res = llama_chat_apply_template(model, ptr_tmpl, chat.data(), chat.size(), true, buf.data(), buf.size());
-    }
-
-    const std::string formatted_chat(buf.data(), res);
-
+    auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true);
     LOG_VERBOSE("formatted_chat", {{"text", formatted_chat.c_str()}});
-
     return formatted_chat;
 }
 
@@ -260,6 +252,13 @@ static size_t common_part(const std::vector<llama_token> & a, const std::vector<
     return i;
 }
 
+static size_t common_part(const std::string & a, const std::string & b) {
+    size_t i;
+    for (i = 0; i < a.size() && i < b.size() && a[i] == b[i]; i++) {}
+
+    return i;
+}
+
 static bool ends_with(const std::string & str, const std::string & suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
@@ -355,24 +354,6 @@ static json oaicompat_completion_params_parse(
     json llama_params;
 
     llama_params["__oaicompat"] = true;
-
-    // Map OpenAI parameters to llama.cpp parameters
-    //
-    // For parameters that are defined by the OpenAI documentation (e.g.
-    // temperature), we explicitly specify OpenAI's intended default; we
-    // need to do that because sometimes OpenAI disagrees with llama.cpp
-    //
-    // https://platform.openai.com/docs/api-reference/chat/create
-    llama_sampling_params default_sparams;
-    llama_params["model"]             = json_value(body,   "model",             std::string("unknown"));
-    llama_params["frequency_penalty"] = json_value(body,   "frequency_penalty", 0.0);
-    llama_params["logit_bias"]        = json_value(body,   "logit_bias",        json::object());
-    llama_params["n_predict"]         = json_value(body,   "max_tokens",        -1);
-    llama_params["presence_penalty"]  = json_value(body,   "presence_penalty",  0.0);
-    llama_params["seed"]              = json_value(body,   "seed",              LLAMA_DEFAULT_SEED);
-    llama_params["stream"]            = json_value(body,   "stream",            false);
-    llama_params["temperature"]       = json_value(body,   "temperature",       1.0);
-    llama_params["top_p"]             = json_value(body,   "top_p",             1.0);
 
     // Apply chat template to the list of messages
     llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));

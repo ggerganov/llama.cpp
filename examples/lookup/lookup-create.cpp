@@ -14,17 +14,19 @@ int main(int argc, char ** argv){
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params)) {
+        gpt_params_print_usage(argc, argv, params);
         return 1;
     }
+
     // init llama.cpp
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    llama_model * model = NULL;
-    llama_context * ctx = NULL;
-
     // load the model
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
     GGML_ASSERT(model != nullptr);
 
     // tokenize the prompt

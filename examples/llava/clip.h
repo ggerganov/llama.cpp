@@ -18,13 +18,16 @@
 #    define CLIP_API
 #endif
 
-struct clip_ctx;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct clip_ctx;
+
+struct clip_image_size {
+    int width;
+    int height;
+};
 
 struct clip_image_u8_batch {
     struct clip_image_u8 * data;
@@ -55,6 +58,10 @@ CLIP_API const int32_t * clip_image_grid(const struct clip_ctx * ctx);
 CLIP_API int clip_n_patches    (const struct clip_ctx * ctx);
 CLIP_API int clip_n_mmproj_embd(const struct clip_ctx * ctx);
 
+CLIP_API int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip);
+CLIP_API void clip_add_load_image_size(struct clip_ctx * ctx_clip, struct clip_image_size * load_image_size);
+
+CLIP_API struct clip_image_size * clip_image_size_init();
 CLIP_API struct clip_image_u8  * clip_image_u8_init ();
 CLIP_API struct clip_image_f32 * clip_image_f32_init();
 
@@ -68,7 +75,7 @@ CLIP_API bool clip_image_load_from_file(const char * fname, struct clip_image_u8
 /** interpret bytes as an image file with length bytes_length, and use the result to populate img */
 CLIP_API bool clip_image_load_from_bytes(const unsigned char * bytes, size_t bytes_length, struct clip_image_u8 * img);
 
-/** preprocess img and store the result in res_imgs, pad_to_square may be overriden to false depending on model configuration */
+/** preprocess img and store the result in res_imgs, pad_to_square may be overridden to false depending on model configuration */
 CLIP_API bool clip_image_preprocess(struct clip_ctx * ctx, const struct clip_image_u8 * img, struct clip_image_f32_batch * res_imgs );
 
 CLIP_API struct ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx);
@@ -77,6 +84,8 @@ CLIP_API bool clip_image_encode      (struct clip_ctx * ctx, int n_threads, stru
 CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec);
 
 CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out, int itype);
+
+CLIP_API bool clip_is_minicpmv(const struct clip_ctx * ctx);
 
 #ifdef __cplusplus
 }

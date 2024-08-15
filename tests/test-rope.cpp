@@ -162,12 +162,12 @@ int main(int /*argc*/, const char ** /*argv*/) {
         x = get_random_tensor_f32(ctx0, ndims, ne, -1.0f, 1.0f);
 
         // 100, 101, 102, ..., 172
-        struct ggml_tensor * r0 = ggml_rope(ctx0, x,  p0, n_rot, mode, 1024);
+        struct ggml_tensor * r0 = ggml_rope(ctx0, x,  p0, n_rot, mode);
         // -67, -67, -67, ..., -67
-        struct ggml_tensor * r1 = ggml_rope(ctx0, r0, p1, n_rot, mode, 1024); // "context swap", i.e. forget n_past_0 - n_past_2 tokens
+        struct ggml_tensor * r1 = ggml_rope(ctx0, r0, p1, n_rot, mode); // "context swap", i.e. forget n_past_0 - n_past_2 tokens
 
         //  33,  34,  35, ..., 105
-        struct ggml_tensor * r2 = ggml_rope(ctx0, x,  p2, n_rot, mode, 1024);
+        struct ggml_tensor * r2 = ggml_rope(ctx0, x,  p2, n_rot, mode);
 
         ggml_cgraph * gf = ggml_new_graph(ctx0);
 
@@ -218,4 +218,3 @@ int main(int /*argc*/, const char ** /*argv*/) {
 
     return 0;
 }
-

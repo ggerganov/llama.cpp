@@ -32,13 +32,13 @@ CPU inference for Meta's Lllama2 models using default options.
 %setup -n llama.cpp-master
 
 %build
-make -j LLAMA_CUDA=1
+make -j GGML_CUDA=1
 
 %install
 mkdir -p %{buildroot}%{_bindir}/
-cp -p main %{buildroot}%{_bindir}/llamacppcuda
-cp -p server %{buildroot}%{_bindir}/llamacppcudaserver
-cp -p simple %{buildroot}%{_bindir}/llamacppcudasimple
+cp -p llama-cli %{buildroot}%{_bindir}/llama-cuda-cli
+cp -p llama-server %{buildroot}%{_bindir}/llama-cuda-server
+cp -p llama-simple %{buildroot}%{_bindir}/llama-cuda-simple
 
 mkdir -p %{buildroot}/usr/lib/systemd/system
 %{__cat} <<EOF  > %{buildroot}/usr/lib/systemd/system/llamacuda.service
@@ -49,7 +49,7 @@ After=syslog.target network.target local-fs.target remote-fs.target nss-lookup.t
 [Service]
 Type=simple
 EnvironmentFile=/etc/sysconfig/llama
-ExecStart=/usr/bin/llamacppcudaserver $LLAMA_ARGS
+ExecStart=/usr/bin/llama-cuda-server $LLAMA_ARGS
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=never
 
@@ -67,9 +67,9 @@ rm -rf %{buildroot}
 rm -rf %{_builddir}/*
 
 %files
-%{_bindir}/llamacppcuda
-%{_bindir}/llamacppcudaserver
-%{_bindir}/llamacppcudasimple
+%{_bindir}/llama-cuda-cli
+%{_bindir}/llama-cuda-server
+%{_bindir}/llama-cuda-simple
 /usr/lib/systemd/system/llamacuda.service
 %config /etc/sysconfig/llama
 
