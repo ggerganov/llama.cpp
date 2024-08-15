@@ -78,6 +78,7 @@ enum server_task_type {
     SERVER_TASK_TYPE_SLOT_SAVE,
     SERVER_TASK_TYPE_SLOT_RESTORE,
     SERVER_TASK_TYPE_SLOT_ERASE,
+    SERVER_TASK_TYPE_SET_LORA,
 };
 
 struct server_task {
@@ -622,6 +623,7 @@ struct server_response {
 struct server_context {
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
+    std::vector<llama_lora_adapter_container> lora_adapters;
 
     gpt_params params;
 
@@ -629,6 +631,7 @@ struct server_context {
 
     bool clean_kv_cache = true;
     bool add_bos_token  = true;
+    bool has_eos_token  = false;
 
     int32_t n_ctx; // total context for all clients / slots
 
@@ -677,7 +680,11 @@ struct server_context {
         // dedicate one sequence to the system prompt
         params.n_parallel += 1;
 
-        std::tie(model, ctx) = llama_init_from_gpt_params(params);
+        llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+        model = llama_init.model;
+        ctx = llama_init.context;
+        lora_adapters = llama_init.lora_adapters;
         params.n_parallel -= 1; // but be sneaky about it
         if (model == nullptr) {
             LOG_ERROR("unable to load model", {{"model", params.model}});
@@ -687,7 +694,7 @@ struct server_context {
         n_ctx = llama_n_ctx(ctx);
 
         add_bos_token = llama_should_add_bos_token(model);
-        GGML_ASSERT(llama_add_eos_token(model) != 1);
+        has_eos_token = llama_add_eos_token(model) != 1;
 
         return true;
     }
@@ -747,13 +754,13 @@ struct server_context {
         default_generation_settings_for_props = get_formated_generation(slots.front());
         default_generation_settings_for_props["seed"] = -1;
 
-        // the update_slots() logic will always submit a maximum of n_batch tokens
+        // the update_slots() logic will always submit a maximum of n_batch or n_parallel tokens
         // note that n_batch can be > n_ctx (e.g. for non-causal attention models such as BERT where the KV cache is not used)
         {
             const int32_t n_batch = llama_n_batch(ctx);
 
             // only a single seq_id per token is needed
-            batch = llama_batch_init(n_batch, 0, 1);
+            batch = llama_batch_init(std::max(n_batch, params.n_parallel), 0, 1);
         }
 
         metrics.init();
@@ -969,6 +976,8 @@ struct server_context {
                 (prompt->is_array() &&  prompt->size() == 1 && prompt->at(0).is_string()) ||
                 (prompt->is_array() && !prompt->empty()     && prompt->at(0).is_number_integer())) {
                 slot.prompt = *prompt;
+            } else if (prompt->is_array() && prompt->size() == 1 && prompt->at(0).is_array()) {
+                slot.prompt = prompt->at(0);
             } else {
                 send_error(task, "\"prompt\" must be a string or an array of integers", ERROR_TYPE_INVALID_REQUEST);
                 return false;
@@ -1023,7 +1032,7 @@ struct server_context {
         {
             slot.sparams.logit_bias.clear();
 
-            if (json_value(data, "ignore_eos", false)) {
+            if (json_value(data, "ignore_eos", false) && has_eos_token) {
                 slot.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
             }
 
@@ -1128,28 +1137,19 @@ struct server_context {
         if (!system_prompt.empty()) {
             system_tokens = ::llama_tokenize(ctx, system_prompt, true);
 
-            llama_batch_clear(batch);
-
-            for (int i = 0; i < (int)system_tokens.size(); ++i) {
-                llama_batch_add(batch, system_tokens[i], i, { 0 }, false);
-            }
-
             const int32_t n_batch = llama_n_batch(ctx);
+            const int32_t n_tokens_prompt = system_tokens.size();
 
-            for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
-                const int32_t n_tokens = std::min(params.n_batch, batch.n_tokens - i);
-                llama_batch batch_view = {
-                    n_tokens,
-                    batch.token    + i,
-                    nullptr,
-                    batch.pos      + i,
-                    batch.n_seq_id + i,
-                    batch.seq_id   + i,
-                    batch.logits   + i,
-                    0, 0, 0, // unused
-                };
+            for (int32_t i = 0; i < n_tokens_prompt; i += n_batch) {
+                const int32_t n_tokens = std::min(n_batch, n_tokens_prompt - i);
 
-                if (llama_decode(ctx, batch_view) != 0) {
+                llama_batch_clear(batch);
+
+                for (int32_t j = 0; j < n_tokens; ++j) {
+                    llama_batch_add(batch, system_tokens[i + j], i + j, { 0 }, false);
+                }
+
+                if (llama_decode(ctx, batch) != 0) {
                     LOG_ERROR("llama_decode() failed", {});
                     return;
                 }
@@ -1845,6 +1845,14 @@ struct server_context {
                         { "id_slot",  id_slot },
                         { "n_erased", n_erased }
                     };
+                    queue_results.send(result);
+                } break;
+            case SERVER_TASK_TYPE_SET_LORA:
+                {
+                    llama_lora_adapters_apply(ctx, lora_adapters);
+                    server_task_result result;
+                    result.id = task.id;
+                    result.data = json{{ "success", true }};
                     queue_results.send(result);
                 } break;
         }
@@ -3325,6 +3333,55 @@ int main(int argc, char ** argv) {
         return res.set_content(root.dump(), "application/json; charset=utf-8");
     };
 
+    const auto handle_lora_adapters_list = [&](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+        json result = json::array();
+        for (size_t i = 0; i < ctx_server.lora_adapters.size(); ++i) {
+            auto & la = ctx_server.lora_adapters[i];
+            result.push_back({
+                {"id", i},
+                {"path", la.path},
+                {"scale", la.scale},
+            });
+        }
+        res.set_content(result.dump(), "application/json");
+        res.status = 200; // HTTP OK
+    };
+
+    const auto handle_lora_adapters_apply = [&](const httplib::Request & req, httplib::Response & res) {
+        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+
+        const std::vector<json> body = json::parse(req.body);
+        int max_idx = ctx_server.lora_adapters.size();
+
+        // clear existing value
+        for (auto & la : ctx_server.lora_adapters) {
+            la.scale = 0.0f;
+        }
+
+        // set value
+        for (auto entry : body) {
+            int id      = entry.at("id");
+            float scale = entry.at("scale");
+            if (0 <= id && id < max_idx) {
+                ctx_server.lora_adapters[id].scale = scale;
+            } else {
+                throw std::runtime_error("invalid adapter id");
+            }
+        }
+
+        server_task task;
+        task.type = SERVER_TASK_TYPE_SET_LORA;
+        const int id_task = ctx_server.queue_tasks.post(task);
+        ctx_server.queue_results.add_waiting_task_id(id_task);
+
+        server_task_result result = ctx_server.queue_results.recv(id_task);
+        ctx_server.queue_results.remove_waiting_task_id(id_task);
+
+        res.set_content(result.data.dump(), "application/json");
+        res.status = 200; // HTTP OK
+    };
+
     auto handle_static_file = [](unsigned char * content, size_t len, const char * mime_type) {
         return [content, len, mime_type](const httplib::Request &, httplib::Response & res) {
             res.set_content(reinterpret_cast<const char*>(content), len, mime_type);
@@ -3363,7 +3420,6 @@ int main(int argc, char ** argv) {
 
     // register API routes
     svr->Get ("/health",              handle_health);
-    svr->Get ("/slots",               handle_slots);
     svr->Get ("/metrics",             handle_metrics);
     svr->Get ("/props",               handle_props);
     svr->Get ("/v1/models",           handle_models);
@@ -3378,6 +3434,11 @@ int main(int argc, char ** argv) {
     svr->Post("/v1/embeddings",       handle_embeddings);
     svr->Post("/tokenize",            handle_tokenize);
     svr->Post("/detokenize",          handle_detokenize);
+    // LoRA adapters hotswap
+    svr->Get ("/lora-adapters",       handle_lora_adapters_list);
+    svr->Post("/lora-adapters",       handle_lora_adapters_apply);
+    // Save & load slots
+    svr->Get ("/slots",               handle_slots);
     if (!params.slot_save_path.empty()) {
         // only enable slot endpoints if slot_save_path is set
         svr->Post("/slots/:id_slot",  handle_slots_action);
