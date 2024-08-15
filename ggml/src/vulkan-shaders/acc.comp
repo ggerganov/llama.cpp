@@ -4,12 +4,13 @@
 #include "generic_binary_head.comp"
 
 void main() {
-    const uint idx = get_idx();
+    const uint idx = gl_GlobalInvocationID.x;
     if (idx >= p.ne) {
         return;
     }
 
-    const uint src1_i = src1_idx(idx);
+    const uint offset = p.param3;
+    const uint src1_i = idx - offset;
     const uint oz = src1_i / p.nb02;
     const uint oy = (src1_i - (oz * p.nb02)) / p.nb01;
     const uint ox = src1_i % p.nb01;
