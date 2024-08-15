@@ -3575,13 +3575,8 @@ namespace GGUFMeta {
 
 using llama_buf_map = std::unordered_map<uint32_t, ggml_backend_buffer_t>;
 
-// TODO: update when needed or think of some clever automatic way to do this
-static size_t llama_model_max_nodes(const llama_model & /*model*/) {
-    //if (model.arch == LLM_ARCH_LLAMA && model.hparams.n_layer > ??) { // llama-3 405B
-    //    return 32768;
-    //}
-
-    return 8192;
+static size_t llama_model_max_nodes(const llama_model & model) {
+    return std::max<size_t>(8192, model.tensors_by_name.size()*5);
 }
 
 struct llama_model_loader {
@@ -5472,6 +5467,12 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "codeshell") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_CODESHELL;
+            } else if (
+                tokenizer_pre == "bloom") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_BLOOM;
+            } else if (
+                tokenizer_pre == "gpt3-finnish") {
+                vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH;
             } else {
                 throw std::runtime_error(format("unknown pre-tokenizer type: '%s'", tokenizer_pre.c_str()));
             }
@@ -18704,11 +18705,11 @@ llama_token llama_token_pad(const struct llama_model * model) {
     return llama_token_pad_impl(model->vocab);
 }
 
-int32_t llama_add_bos_token(const struct llama_model * model) {
+bool llama_add_bos_token(const struct llama_model * model) {
     return llama_add_bos_token_impl(model->vocab);
 }
 
-int32_t llama_add_eos_token(const struct llama_model * model) {
+bool llama_add_eos_token(const struct llama_model * model) {
     return llama_add_eos_token_impl(model->vocab);
 }
 
