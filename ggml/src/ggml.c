@@ -19375,8 +19375,6 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         threadpool->cgraph           = cgraph;
         threadpool->cplan            = cplan;
         threadpool->n_threads_cur    = n_threads;
-        threadpool->n_barrier        = 0;
-        threadpool->n_barrier_passed = 0;
         threadpool->current_chunk    = 0;
         threadpool->ec               = GGML_STATUS_SUCCESS;
     }
