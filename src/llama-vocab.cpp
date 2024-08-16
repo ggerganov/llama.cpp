@@ -207,8 +207,7 @@ struct llm_tokenizer_spm {
         }
 
         // seed the work queue with all possible 2-character tokens.
-        int symbols_size = static_cast<int>(symbols.size());
-        for (int i = 1; i < symbols_size; ++i) {
+        for (int i = 1; i < (int) symbols.size(); ++i) {
             try_add_bigram(i - 1, i);
         }
 
@@ -512,8 +511,7 @@ struct llm_tokenizer_bpe {
                 index++;
                 symbols.emplace_back(sym);
             }
-            int symbols_size = static_cast<int>(symbols.size());
-            for (int i = 1; i < symbols_size; ++i) {
+            for (int i = 1; i < (int) symbols.size(); ++i) {
                 add_new_bigram(i - 1, i);
             }
 
