@@ -690,11 +690,13 @@ struct server_context {
         if (model == nullptr) {
             LOG_ERROR("unable to load model", {{"model", params.model}});
             return false;
-        } else {
-            n_ctx = llama_n_ctx(ctx);
-            add_bos_token = llama_add_bos_token(model);
-            has_eos_token = !llama_add_eos_token(model);
         }
+
+        n_ctx = llama_n_ctx(ctx);
+
+        add_bos_token = llama_add_bos_token(model);
+        has_eos_token = !llama_add_eos_token(model);
+
         return true;
     }
 
