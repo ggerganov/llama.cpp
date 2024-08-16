@@ -1202,7 +1202,7 @@ async def wait_for_slots_status(context,
                 if context.debug:
                     print(f"slots responses {slots}\n")
                 if status_code == 503 and status_code == expected_http_status_code:
-                    return 
+                    return
                 if status_code == 200 and status_code == expected_http_status_code:
                     n_slots_idle = sum(1 if slot["state"] == 0 else 0 for slot in slots)
                     n_slots_processing = sum(1 if slot["state"] != 0 else 0 for slot in slots)
@@ -1222,7 +1222,7 @@ async def wait_for_slots_status(context,
                         if n_completions > 0:
                             return
 
-                assert False, f'{expected_health_status} timeout exceeded {counter}s>={timeout}'
+                assert False, f'slots check timeout exceeded {counter}s>={timeout}'
 
 
 def assert_embeddings(embeddings):
