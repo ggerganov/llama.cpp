@@ -5531,7 +5531,7 @@ static void llm_load_vocab(
             } else if (
                 tokenizer_pre == "gpt3-finnish") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH;
-            } else if ( 
+            } else if (
                 tokenizer_pre == "exaone") {
                 vocab.type_pre = LLAMA_VOCAB_PRE_TYPE_EXAONE;
             } else {
