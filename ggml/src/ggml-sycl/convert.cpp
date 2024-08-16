@@ -437,13 +437,7 @@ static void convert_unary_sycl(const void *__restrict__ vx,
     const int64_t num_blocks = (k + SYCL_DEQUANTIZE_BLOCK_SIZE - 1) / SYCL_DEQUANTIZE_BLOCK_SIZE;
 
     // decrease global range when it exceeds the max int
-    int local_size = SYCL_DEQUANTIZE_BLOCK_SIZE;
-    const int64_t max_range = std::numeric_limits<int>::max();
-    int64_t global_range = num_blocks * local_size;
-    while(global_range > max_range) {
-        local_size /= 2;
-        global_range = num_blocks * local_size;
-    }
+    int64_t local_size = downsample_sycl_global_range(num_blocks, SYCL_DEQUANTIZE_BLOCK_SIZE);
     sycl::range<3> block_nums(1, 1, num_blocks);
     sycl::range<3> local_range(1, 1, local_size);
     {
