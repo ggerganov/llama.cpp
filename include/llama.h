@@ -220,7 +220,7 @@ extern "C" {
     // - embd   : token embeddings (i.e. float vector of size n_embd) (used when token is NULL)
     // - pos    : the positions of the respective token in the sequence
     // - seq_id : the sequence to which the respective token belongs
-    // - logits : if zero, the logits (and/or the embeddings) for the respective token will not be output
+    // - output : if zero, the logits (and/or the embeddings) for the respective token will not be output
     //
     typedef struct llama_batch {
         int32_t n_tokens;
@@ -230,7 +230,7 @@ extern "C" {
         llama_pos    *  pos;
         int32_t      *  n_seq_id;
         llama_seq_id ** seq_id;
-        int8_t       *  logits; // TODO: rename this to "output"
+        int8_t       *  output; // Previously named 'logits', renamed to 'output' now.
 
         // NOTE: helpers for smooth API transition - can be deprecated in the future
         //       for future-proof code, use the above fields instead and ignore everything below
@@ -328,7 +328,7 @@ extern "C" {
         enum ggml_type type_v; // data type for V cache [EXPERIMENTAL]
 
         // Keep the booleans together to avoid misalignment during copy-by-value.
-        bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.logits instead)
+        bool logits_all;  // the llama_decode() call computes all logits, not just the last one (DEPRECATED - set llama_batch.output instead)
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
         bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
@@ -859,9 +859,9 @@ extern "C" {
     LLAMA_API void llama_synchronize(struct llama_context * ctx);
 
     // Token logits obtained from the last call to llama_decode()
-    // The logits for which llama_batch.logits[i] != 0 are stored contiguously
+    // The logits for which llama_batch.output[i] != 0 are stored contiguously
     // in the order they have appeared in the batch.
-    // Rows: number of tokens for which llama_batch.logits[i] != 0
+    // Rows: number of tokens for which llama_batch.output[i] != 0
     // Cols: n_vocab
     LLAMA_API float * llama_get_logits(struct llama_context * ctx);
 
@@ -873,7 +873,7 @@ extern "C" {
 
     // Get all output token embeddings.
     // when pooling_type == LLAMA_POOLING_TYPE_NONE or when using a generative model,
-    // the embeddings for which llama_batch.logits[i] != 0 are stored contiguously
+    // the embeddings for which llama_batch.output[i] != 0 are stored contiguously
     // in the order they have appeared in the batch.
     // shape: [n_outputs*n_embd]
     // Otherwise, returns NULL.

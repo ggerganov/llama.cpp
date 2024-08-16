@@ -102,21 +102,21 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
     llama_set_embeddings(ctx, false);
     llama_set_causal_attn(ctx, true);
 
-    llama_batch bat = llama_batch_init(llama_n_batch(ctx), 0, 1);
+    llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
     std::vector<llama_token> inputs = llama_tokenize(mdl, prompt, false, true);
     int32_t i_current_token = 0;
 
     while (true) {
-        llama_batch_clear(bat);
+        llama_batch_clear(batch);
         auto n_inputs = (int32_t)inputs.size();
         for (int32_t i = 0; i < n_inputs; i++) {
-            llama_batch_add(bat, inputs[i], i_current_token++, { 0 }, i == n_inputs - 1);
+            llama_batch_add(batch, inputs[i], i_current_token++, { 0 }, i == n_inputs - 1);
         }
         inputs.clear();
 
-        llama_decode(ctx, bat);
-        auto logits = llama_get_logits_ith(ctx, bat.n_tokens - 1);
+        llama_decode(ctx, batch);
+        auto logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
 
         auto candidates = std::vector<llama_token_data>(llama_n_vocab(mdl));
         auto n_candidates = (int32_t)candidates.size();
@@ -145,7 +145,7 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
         std::printf("\n");
     }
 
-    llama_batch_free(bat);
+    llama_batch_free(batch);
 
     return result;
 }

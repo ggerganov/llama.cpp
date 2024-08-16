@@ -2666,7 +2666,7 @@ void llama_batch_add(
     for (size_t i = 0; i < seq_ids.size(); ++i) {
         batch.seq_id[batch.n_tokens][i] = seq_ids[i];
     }
-    batch.logits  [batch.n_tokens] = logits;
+    batch.output  [batch.n_tokens] = logits;
 
     batch.n_tokens++;
 }

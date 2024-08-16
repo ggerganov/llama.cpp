@@ -407,7 +407,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
             const int batch_size  = std::min(end - batch_start, n_batch);
 
             //fprintf(stderr, "    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
-            // TODO: use llama_batch.logits instead of relying on logits_all == true
+            // TODO: use llama_batch.output instead of relying on logits_all == true
             if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
                 //fprintf(stderr, "%s : failed to eval\n", __func__);
                 return {tokens, -1, logit_history, prob_history};
@@ -601,9 +601,9 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                     batch.pos     [idx]    = j*n_batch + k;
                     batch.n_seq_id[idx]    = 1;
                     batch.seq_id  [idx][0] = seq;
-                    batch.logits  [idx]    = batch.pos[idx] >= first ? 1 : 0;
+                    batch.output  [idx]    = batch.pos[idx] >= first ? 1 : 0;
 
-                    n_outputs += batch.logits[idx] != 0;
+                    n_outputs += batch.output[idx] != 0;
                 }
                 batch.n_tokens += batch_size;
 
@@ -697,7 +697,7 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
             batch.pos      + i,
             batch.n_seq_id + i,
             batch.seq_id   + i,
-            batch.logits   + i,
+            batch.output   + i,
             0, 0, 0, // unused
         };
 
@@ -709,7 +709,7 @@ static bool decode_helper(llama_context * ctx, llama_batch & batch, std::vector<
 
         int n_outputs = 0;
         for (int i = 0; i < n_tokens; ++i) {
-            n_outputs += batch_view.logits[i] != 0;
+            n_outputs += batch_view.output[i] != 0;
         }
 
         memcpy(batch_logits.data() + prev_outputs*n_vocab, llama_get_logits(ctx), n_outputs*n_vocab*sizeof(float));
@@ -917,7 +917,7 @@ static void hellaswag_score(llama_context * ctx, const gpt_params & params) {
             for (size_t i = 0; i < hs_cur.common_prefix; ++i) {
                 llama_batch_add(batch, hs_cur.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3 }, false);
             }
-            batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
+            batch.output[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
             n_logits += 1;
 
             for (int s = 0; s < 4; ++s) {
@@ -1196,7 +1196,7 @@ static void winogrande_score(llama_context * ctx, const gpt_params & params) {
             for (size_t i = 0; i < data[i1].common_prefix; ++i) {
                 llama_batch_add(batch, data[i1].seq_tokens[0][i], i, { s0 + 0, s0 + 1 }, false);
             }
-            batch.logits[batch.n_tokens - 1] = true;
+            batch.output[batch.n_tokens - 1] = true;
             n_logits += 1;
 
             for (int s = 0; s < 2; ++s) {
@@ -1565,7 +1565,7 @@ static void multiple_choice_score(llama_context * ctx, const gpt_params & params
                 //llama_batch_add(batch, cur_task.seq_tokens[0][i], i, { s0 + 0, s0 + 1, s0 + 2, s0 + 3}, false);
                 llama_batch_add(batch, cur_task.seq_tokens[0][i], i, batch_indeces, false);
             }
-            batch.logits[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
+            batch.output[batch.n_tokens - 1] = true; // we need logits for the last token of the common prefix
             n_logits += 1;
 
             for (int s = 0; s < int(cur_task.seq_tokens.size()); ++s) {
@@ -1794,7 +1794,7 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
                 tokens[batch_start] = llama_token_bos(llama_get_model(ctx));
             }
 
-            // TODO: use llama_batch.logits instead of relying on logits_all == true
+            // TODO: use llama_batch.output instead of relying on logits_all == true
             if (llama_decode(ctx, llama_batch_get_one(tokens.data() + batch_start, batch_size, j * n_batch, 0))) {
                 fprintf(stderr, "%s : failed to eval\n", __func__);
                 return;

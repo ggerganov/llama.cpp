@@ -686,7 +686,7 @@ inline std::string LOG_BATCH_TOSTR_PRETTY(const C & ctx, const B & batch)
             << ":pos " << std::to_string(batch.pos[i])
             << ":n_seq_id  " << std::to_string(batch.n_seq_id[i])
             << ":seq_id " << std::to_string(batch.seq_id[i][0])
-            << ":logits " << std::to_string(batch.logits[i]);
+            << ":logits " << std::to_string(batch.output[i]);
     }
     buf << " ]";
 

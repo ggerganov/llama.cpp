@@ -14500,10 +14500,10 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
             for (int i = 0; i < n_tokens; ++i) {
                 data[i] = i;
             }
-        } else if (batch.logits) {
+        } else if (batch.output) {
             int32_t n_outputs = 0;
             for (int i = 0; i < n_tokens; ++i) {
-                if (batch.logits[i]) {
+                if (batch.output[i]) {
                     data[n_outputs++] = i;
                 }
             }
@@ -14972,13 +14972,13 @@ static int llama_decode_internal(
     std::vector<llama_seq_id *>            seq_id_arr;
     std::vector<std::vector<llama_seq_id>> seq_id;
 
-    // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
+    // this indicates we are doing pooled embedding, so we ignore batch.output and output all tokens
     const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
 
     // count outputs
-    if (batch_all.logits && !embd_pooled) {
+    if (batch_all.output && !embd_pooled) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            n_outputs += batch_all.logits[i] != 0;
+            n_outputs += batch_all.output[i] != 0;
         }
     } else if (lctx.logits_all || embd_pooled) {
         n_outputs = n_tokens_all;
@@ -14994,10 +14994,10 @@ static int llama_decode_internal(
     };
 
     // set output mappings
-    if (batch_all.logits) {
+    if (batch_all.output) {
         int32_t i_logits = 0;
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            if (batch_all.logits[i]) {
+            if (batch_all.output[i]) {
                 lctx.output_ids[i] = i_logits++;
             }
         }
@@ -15016,7 +15016,7 @@ static int llama_decode_internal(
             /* .pos        = */ batch_all.pos       ? batch_all.pos      + cur_token        : nullptr,
             /* .n_seq_id   = */ batch_all.n_seq_id  ? batch_all.n_seq_id + cur_token        : nullptr,
             /* .seq_id     = */ batch_all.seq_id    ? batch_all.seq_id   + cur_token        : nullptr,
-            /* .logits     = */ batch_all.logits    ? batch_all.logits   + cur_token        : nullptr,
+            /* .logits     = */ batch_all.output    ? batch_all.output   + cur_token        : nullptr,
             /* .all_pos_0  = */ batch_all.all_pos_0 + (llama_pos) cur_token*batch_all.all_pos_1,
             /* .all_pos_1  = */ batch_all.all_pos_1,
             /* .all_seq_id = */ batch_all.all_seq_id,
@@ -15026,9 +15026,9 @@ static int llama_decode_internal(
         {
             int32_t n_outputs_new = 0;
 
-            if (u_batch.logits && !embd_pooled) {
+            if (u_batch.output && !embd_pooled) {
                 for (uint32_t i = 0; i < n_tokens; i++) {
-                    n_outputs_new += u_batch.logits[i] != 0;
+                    n_outputs_new += u_batch.output[i] != 0;
                 }
             } else if (n_outputs == n_tokens_all) {
                 n_outputs_new = n_tokens;
@@ -18881,7 +18881,7 @@ struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_
     }
     batch.seq_id[n_tokens_alloc] = nullptr;
 
-    batch.logits   = (int8_t *)        malloc(sizeof(int8_t)         * n_tokens_alloc);
+    batch.output   = (int8_t *)        malloc(sizeof(int8_t)         * n_tokens_alloc);
 
     return batch;
 }
@@ -18897,7 +18897,7 @@ void llama_batch_free(struct llama_batch batch) {
         }
         free(batch.seq_id);
     }
-    if (batch.logits)   free(batch.logits);
+    if (batch.output)   free(batch.output);
 }
 
 int32_t llama_encode(
@@ -18975,7 +18975,7 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
         }
 
         if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
+            throw std::runtime_error(format("batch.output[%d] != true", i));
         }
         if (j >= ctx->n_outputs) {
             // This should not happen
@@ -19020,7 +19020,7 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
         }
 
         if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
+            throw std::runtime_error(format("batch.output[%d] != true", i));
         }
         if (j >= ctx->n_outputs) {
             // This should not happen

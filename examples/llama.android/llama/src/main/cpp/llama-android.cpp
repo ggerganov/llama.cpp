@@ -193,7 +193,7 @@ Java_android_llama_cpp_LLamaAndroid_bench_1model(
             llama_batch_add(*batch, 0, i, { 0 }, false);
         }
 
-        batch->logits[batch->n_tokens - 1] = true;
+        batch->output[batch->n_tokens - 1] = true;
         llama_kv_cache_clear(context);
 
         const auto t_pp_start = ggml_time_us();
@@ -306,7 +306,7 @@ Java_android_llama_cpp_LLamaAndroid_new_1batch(JNIEnv *, jobject, jint n_tokens,
     for (int i = 0; i < n_tokens; ++i) {
         batch->seq_id[i] = (llama_seq_id *) malloc(sizeof(llama_seq_id) * n_seq_max);
     }
-    batch->logits   = (int8_t *)        malloc(sizeof(int8_t)         * n_tokens);
+    batch->output   = (int8_t *)        malloc(sizeof(int8_t)         * n_tokens);
 
     return reinterpret_cast<jlong>(batch);
 }
@@ -363,7 +363,7 @@ Java_android_llama_cpp_LLamaAndroid_completion_1init(
     }
 
     // llama_decode will output logits only for the last token of the prompt
-    batch->logits[batch->n_tokens - 1] = true;
+    batch->output[batch->n_tokens - 1] = true;
 
     if (llama_decode(context, *batch) != 0) {
         LOGe("llama_decode() failed");
