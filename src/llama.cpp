@@ -2739,8 +2739,10 @@ struct llama_context {
     std::vector<uint8_t> buf_compute_meta;
     ggml_backend_sched_t sched = nullptr;
 
-    std::vector<uint8_t> buf_compute_meta_next;
+    //std::vector<uint8_t> buf_compute_meta_next;
     struct ggml_cgraph * gf_next = nullptr;
+    int                  pos_next = -1;
+    std::future<int>     fut_next;
 
     ggml_abort_callback abort_callback      = nullptr;
     void *              abort_callback_data = nullptr;
@@ -8446,15 +8448,14 @@ struct llm_build_context {
         pooling_type     (cparams.pooling_type),
         rope_type        (hparams.rope_type),
         cb               (cb),
-        buf_compute_meta (prepare_only ? lctx.buf_compute_meta_next : lctx.buf_compute_meta) {
-            // all initializations should be done in init()
-            if (prepare_only) {
-                const uint32_t pad = llama_kv_cache_get_padding(cparams);
-                n_kv = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self) + 1, pad)));
-            }
+        buf_compute_meta (lctx.buf_compute_meta) {
+        //buf_compute_meta (prepare_only ? lctx.buf_compute_meta_next : lctx.buf_compute_meta) {
+        // all initializations should be done in init()
+        if (prepare_only) {
+            const uint32_t pad = llama_kv_cache_get_padding(cparams);
+            n_kv = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self) + 1, pad)));
         }
-
-    void init() {
+        //printf("n_kv: %d, kv_head: %d [%d]\n", n_kv, kv_head, prepare_only);
         struct ggml_init_params params = {
             /*.mem_size   =*/ buf_compute_meta.size(),
             /*.mem_buffer =*/ buf_compute_meta.data(),
@@ -8480,11 +8481,8 @@ struct llm_build_context {
         lctx.inp_KQ_mask_cross = nullptr;
     }
 
-    void free() {
-        if (ctx0) {
-            ggml_free(ctx0);
-            ctx0 = nullptr;
-        }
+    ~llm_build_context() {
+        ggml_free(ctx0);
     }
 
     struct ggml_cgraph * build_k_shift() {
@@ -13767,11 +13765,7 @@ static struct ggml_cgraph * llama_build_graph_defrag(llama_context & lctx, const
 
     struct llm_build_context llm(lctx, dummy, cb, false);
 
-    llm.init();
-
     struct ggml_cgraph * result = llm.build_defrag(ids);
-
-    llm.free();
 
     return result;
 }
@@ -13784,11 +13778,7 @@ static struct ggml_cgraph * llama_build_graph_k_shift(llama_context & lctx) {
 
     struct llm_build_context llm(lctx, dummy, cb, false);
 
-    llm.init();
-
     struct ggml_cgraph * result = llm.build_k_shift();
-
-    llm.free();
 
     return result;
 }
@@ -13801,11 +13791,7 @@ static struct ggml_cgraph * llama_build_graph_s_copy(llama_context & lctx) {
 
     struct llm_build_context llm(lctx, dummy, cb, false);
 
-    llm.init();
-
     struct ggml_cgraph * result = llm.build_s_copy();
-
-    llm.free();
 
     return result;
 }
@@ -13816,6 +13802,8 @@ static struct ggml_cgraph * llama_build_graph(
                   bool   worst_case,
                   bool   prepare_only = false) {
     const auto & model = lctx.model;
+
+    //printf("llama_build_graph [%d]\n", prepare_only);
 
     // this callback allows us to apply custom logic to each tensor (e.g. ggml-alloc, offloading, etc.)
     llm_build_cb cb = [&](struct ggml_tensor * cur, const char * name, int il) {
@@ -13851,8 +13839,6 @@ static struct ggml_cgraph * llama_build_graph(
     struct ggml_cgraph * result = NULL;
 
     struct llm_build_context llm(lctx, batch, cb, worst_case, prepare_only);
-
-    llm.init();
 
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
@@ -14021,8 +14007,6 @@ static struct ggml_cgraph * llama_build_graph(
     if (lctx.cparams.embeddings) {
         result = llm.append_pooling(result);
     }
-
-    llm.free();
 
     return result;
 }
@@ -14548,6 +14532,13 @@ static int llama_decode_internal(
            llama_batch   batch_all,  // TODO: rename back to batch
            bool prepare_only = false) {
 
+    if (!prepare_only && lctx.fut_next.valid()) {
+        //int64_t t_start = ggml_time_us();
+        lctx.fut_next.wait();
+        //int64_t t_end = ggml_time_us();
+        //printf("waited %ld us\n", t_end - t_start);
+    }
+
     lctx.is_encoding = false;
     const uint32_t n_tokens_all = batch_all.n_tokens;
 
@@ -14584,10 +14575,14 @@ static int llama_decode_internal(
     const auto n_ubatch = cparams.n_ubatch;
 
     // TODO: simplify or deprecate
-    std::vector<llama_pos> pos;
-    std::vector<int32_t>                   n_seq_id;
-    std::vector<llama_seq_id *>            seq_id_arr;
-    std::vector<std::vector<llama_seq_id>> seq_id;
+    static std::vector<llama_pos> pos;
+    static std::vector<int32_t>                   n_seq_id;
+    static std::vector<llama_seq_id *>            seq_id_arr;
+    static std::vector<std::vector<llama_seq_id>> seq_id;
+    //pos.clear();
+    //n_seq_id.clear();
+    //seq_id_arr.clear();
+    //seq_id.clear();
 
     // this indicates we are doing pooled embedding, so we ignore batch.logits and output all tokens
     const bool embd_pooled = cparams.embeddings && cparams.pooling_type != LLAMA_POOLING_TYPE_NONE;
@@ -14605,7 +14600,7 @@ static int llama_decode_internal(
     }
 
     // reserve output buffer
-    if (llama_output_reserve(lctx, n_outputs) < n_outputs) {
+    if (!prepare_only && llama_output_reserve(lctx, n_outputs) < n_outputs) {
         LLAMA_LOG_ERROR("%s: could not reserve space for batch with %u outputs\n", __func__, n_outputs);
         return -2;
     };
@@ -14624,7 +14619,8 @@ static int llama_decode_internal(
         }
     }
 
-    if (n_tokens_all != 1) {
+    if (lctx.gf_next && (n_tokens_all != 1 || batch_all.all_pos_0 != lctx.pos_next)) {
+        //printf("wasted graph %d (need %d)\n", lctx.pos_next, batch_all.all_pos_0);
         lctx.gf_next = nullptr;
     }
 
@@ -14644,7 +14640,7 @@ static int llama_decode_internal(
         };
 
         // count the outputs in this u_batch
-        {
+        if (!prepare_only) {
             int32_t n_outputs_new = 0;
 
             if (u_batch.logits && !embd_pooled) {
@@ -14664,77 +14660,77 @@ static int llama_decode_internal(
             lctx.n_outputs = n_outputs_new;
         }
 
-        int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
-        GGML_ASSERT(n_threads > 0);
+        if (!prepare_only) {
+            // helpers for smoother batch API transition
+            // after deprecating the llama_eval calls, these will be removed
+            if (u_batch.pos == nullptr) {
+                pos.resize(n_tokens);
+                for (uint32_t i = 0; i < n_tokens; i++) {
+                    pos[i] = u_batch.all_pos_0 + i*u_batch.all_pos_1;
+                }
 
-        // helpers for smoother batch API transition
-        // after deprecating the llama_eval calls, these will be removed
-        if (u_batch.pos == nullptr) {
-            pos.resize(n_tokens);
-            for (uint32_t i = 0; i < n_tokens; i++) {
-                pos[i] = u_batch.all_pos_0 + i*u_batch.all_pos_1;
+                u_batch.pos = pos.data();
             }
 
-            u_batch.pos = pos.data();
-        }
+            if (u_batch.seq_id == nullptr) {
+                n_seq_id.resize(n_tokens);
+                seq_id.resize(n_tokens);
+                seq_id_arr.resize(n_tokens);
+                for (uint32_t i = 0; i < n_tokens; i++) {
+                    n_seq_id[i] = 1;
+                    seq_id[i].resize(1);
+                    seq_id[i][0] = u_batch.all_seq_id;
+                    seq_id_arr[i] = seq_id[i].data();
+                }
 
-        if (u_batch.seq_id == nullptr) {
-            n_seq_id.resize(n_tokens);
-            seq_id.resize(n_tokens);
-            seq_id_arr.resize(n_tokens);
-            for (uint32_t i = 0; i < n_tokens; i++) {
-                n_seq_id[i] = 1;
-                seq_id[i].resize(1);
-                seq_id[i][0] = u_batch.all_seq_id;
-                seq_id_arr[i] = seq_id[i].data();
+                u_batch.n_seq_id = n_seq_id.data();
+                u_batch.seq_id = seq_id_arr.data();
             }
 
-            u_batch.n_seq_id = n_seq_id.data();
-            u_batch.seq_id = seq_id_arr.data();
-        }
+            // non-causal masks do not use the KV cache
+            if (hparams.causal_attn) {
+                //llama_kv_cache_update(&lctx);
 
-        // non-causal masks do not use the KV cache
-        if (hparams.causal_attn && !prepare_only) {
-            llama_kv_cache_update(&lctx);
+                // if we have enough unused cells before the current head ->
+                //   better to start searching from the beginning of the cache, hoping to fill it
+                if (kv_self.head > kv_self.used + 2*n_tokens) {
+                    kv_self.head = 0;
+                }
 
-            // if we have enough unused cells before the current head ->
-            //   better to start searching from the beginning of the cache, hoping to fill it
-            if (kv_self.head > kv_self.used + 2*n_tokens) {
-                kv_self.head = 0;
-            }
+                if (!llama_kv_cache_find_slot(kv_self, u_batch)) {
+                    return 1;
+                }
 
-            if (!llama_kv_cache_find_slot(kv_self, u_batch)) {
-                return 1;
-            }
-
-            if (!kv_self.recurrent) {
-                // a heuristic, to avoid attending the full cache if it is not yet utilized
-                // after enough generations, the benefit from this heuristic disappears
-                // if we start defragmenting the cache, the benefit from this will be more important
-                const uint32_t pad = llama_kv_cache_get_padding(cparams);
-                kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self), pad)));
-                //kv_self.n = llama_kv_cache_cell_max(kv_self);
+                if (!kv_self.recurrent) {
+                    // a heuristic, to avoid attending the full cache if it is not yet utilized
+                    // after enough generations, the benefit from this heuristic disappears
+                    // if we start defragmenting the cache, the benefit from this will be more important
+                    const uint32_t pad = llama_kv_cache_get_padding(cparams);
+                    kv_self.n = std::min(kv_self.size, std::max(pad, GGML_PAD(llama_kv_cache_cell_max(kv_self), pad)));
+                    //kv_self.n = llama_kv_cache_cell_max(kv_self);
+                }
             }
         }
 
         //printf("kv_self.n = %5d, kv_self.used = %5d, kv_self.head = %5d\n", kv_self.n, kv_self.used, kv_self.head);
 
-
         ggml_cgraph * gf = lctx.gf_next;
 
         if (!gf) {
+            //printf("building %d\n", u_batch.all_pos_0);
             ggml_backend_sched_reset(lctx.sched);
-            ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
             gf = llama_build_graph(lctx, u_batch, false, prepare_only);
             ggml_backend_sched_alloc_graph(lctx.sched, gf);
+            if (prepare_only) {
+                //printf("prepared %d\n", u_batch.all_pos_0);
+                lctx.gf_next = gf;
+                lctx.pos_next = u_batch.all_pos_0;
+                return 0;
+            }
+        } else {
+            lctx.gf_next = nullptr;
+            //printf("using cached graph %d\n", u_batch.all_pos_0);
         }
-
-        if (prepare_only) {
-            lctx.gf_next = gf;
-            return 0;
-        }
-
-        lctx.gf_next = nullptr;
 
 
         // the output is always the last tensor in the graph
@@ -14761,8 +14757,12 @@ static int llama_decode_internal(
         }
         // LLAMA_LOG_INFO("graph build time: %.3f ms (%d nodes, %d leafs)\n", (ggml_time_us() - t_start_us)/1000.0, gf->n_nodes, gf->n_leafs);
 
-
         llama_set_inputs(lctx, u_batch);
+
+        int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
+        GGML_ASSERT(n_threads > 0);
+
+        ggml_backend_sched_set_eval_callback(lctx.sched, lctx.cparams.cb_eval, lctx.cparams.cb_eval_user_data);
 
         llama_graph_compute(lctx, gf, n_threads);
 
@@ -14856,21 +14856,28 @@ static int llama_decode_internal(
         if (fragmentation > cparams.defrag_thold) {
             //LLAMA_LOG_INFO("fragmentation: %.2f\n", fragmentation);
 
-            llama_kv_cache_defrag(kv_self);
+            //llama_kv_cache_defrag(kv_self);
         }
     }
 
-    // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
-    // overlap with device computation.
-    ggml_backend_sched_reset(lctx.sched);
+    if (true && n_tokens_all == 1 && !prepare_only) {
+        //int64_t t_prepare_start_us = ggml_time_us();
 
-    if (n_tokens_all == 1 && !prepare_only) {
         // prepare graph for the next token
-        llama_token next_token_dummy = 0;
+        llama_token * next_token_dummy = (llama_token *) 0x1;
         llama_pos n_past = batch_all.all_pos_0 + 1;
-        llama_seq_id seq_id = 0;
-        llama_batch batch_next = llama_batch_get_one(&next_token_dummy, 1, n_past, seq_id);
-        llama_decode_internal(lctx, batch_next, true);
+        llama_seq_id seq_id = batch_all.all_seq_id;
+        llama_batch batch_next = llama_batch_get_one(next_token_dummy, 1, n_past, seq_id);
+
+        //llama_decode_internal(lctx, batch_next, true);
+        lctx.fut_next = std::async(std::launch::async, llama_decode_internal, std::ref(lctx), batch_next, true);
+
+        //int64_t t_prepare_us = ggml_time_us() - t_prepare_start_us;
+        //printf("prepare time: %ld us\n", t_prepare_us);
+    } else {
+        // Reset state for the next token before backend sync, to allow the CPU activities in the reset to
+        // overlap with device computation.
+        ggml_backend_sched_reset(lctx.sched);
     }
 
     return 0;
@@ -16977,7 +16984,7 @@ struct llama_context * llama_new_context_with_model(
 
             // buffer used to store the computation graph and the tensor meta data
             ctx->buf_compute_meta.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
-            ctx->buf_compute_meta_next.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
+            //ctx->buf_compute_meta_next.resize(ggml_tensor_overhead()*max_nodes + ggml_graph_overhead_custom(max_nodes, false));
 
             // enabling pipeline parallelism in the scheduler increases memory usage, so it is only done when necessary
             bool pipeline_parallel =
@@ -18564,6 +18571,7 @@ int32_t llama_decode(
 }
 
 void llama_synchronize(struct llama_context * ctx) {
+    //printf("llama_synchronize\n");
     ggml_backend_sched_synchronize(ctx->sched);
 
     // FIXME: if multiple single tokens are evaluated without a synchronization,

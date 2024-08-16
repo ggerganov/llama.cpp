@@ -1329,11 +1329,19 @@ static void test_gen(llama_context * ctx, int n_gen, int n_past, int n_threads) 
 
     llama_token token = llama_add_bos_token(model) ? llama_token_bos(model) : std::rand() % n_vocab;
 
+    uint64_t t_decode_total = 0;
+    uint64_t t_sync_total = 0;
     for (int i = 0; i < n_gen; i++) {
+        uint64_t t_start = get_time_ns();
         llama_decode(ctx, llama_batch_get_one(&token, 1, n_past + i, 0));
+        uint64_t t_decode = get_time_ns();
         llama_synchronize(ctx);
+        uint64_t t_sync = get_time_ns();
+        t_decode_total += t_decode - t_start;
+        t_sync_total += t_sync - t_decode;
         token = std::rand() % n_vocab;
     }
+    //printf("decode: %lu us, sync: %lu us\n", t_decode_total / 1000 / n_gen, t_sync_total / 1000 / n_gen);
 }
 
 static void llama_null_log_callback(enum ggml_log_level level, const char * text, void * user_data) {
