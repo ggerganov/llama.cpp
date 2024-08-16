@@ -3812,6 +3812,7 @@ class ExaoneModel(Model):
         self.gguf_writer.add_layer_norm_rms_eps(layer_norm_eps)
         self.gguf_writer.add_feed_forward_length(intermediate_size)
         self.gguf_writer.add_block_count(num_layers)
+        self.gguf_writer.add_file_type(self.ftype)
 
         if (rope_theta := self.hparams.get("rope_theta")) is not None:
             self.gguf_writer.add_rope_freq_base(rope_theta)
