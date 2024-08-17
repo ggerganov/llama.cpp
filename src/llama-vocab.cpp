@@ -520,7 +520,7 @@ struct llm_tokenizer_bpe {
 
             // build token(s)
             while (!work_queue.empty()) {
-                auto bigram = work_queue.top();
+                auto bigram = std::move(const_cast<llm_bigram_bpe&>(work_queue.top()));
                 work_queue.pop();
 
                 auto & left_symbol = symbols[bigram.left];
