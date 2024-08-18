@@ -388,6 +388,7 @@ struct llm_tokenizer_bpe {
             case LLAMA_VOCAB_PRE_TYPE_COMMAND_R:
             case LLAMA_VOCAB_PRE_TYPE_SMOLLM:
             case LLAMA_VOCAB_PRE_TYPE_CODESHELL:
+            case LLAMA_VOCAB_PRE_TYPE_EXAONE:
                 regex_exprs = {
                     "\\p{N}",
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
@@ -410,6 +411,8 @@ struct llm_tokenizer_bpe {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_PORO:
+            case LLAMA_VOCAB_PRE_TYPE_BLOOM:
+            case LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH:
                 regex_exprs = {
                     " ?[^(\\s|.,!?…。，、।۔،)]+",
                 };
@@ -1466,11 +1469,11 @@ llama_token llama_token_pad_impl(const struct llama_vocab & vocab) {
     return vocab.special_pad_id;
 }
 
-int32_t llama_add_bos_token_impl(const struct llama_vocab & vocab) {
+bool llama_add_bos_token_impl(const struct llama_vocab & vocab) {
     return vocab.tokenizer_add_bos;
 }
 
-int32_t llama_add_eos_token_impl(const struct llama_vocab & vocab) {
+bool llama_add_eos_token_impl(const struct llama_vocab & vocab) {
     return vocab.tokenizer_add_eos;
 }
 

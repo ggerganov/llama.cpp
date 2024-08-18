@@ -590,6 +590,15 @@ class Model:
         if chkhsh == "855059429035d75a914d1eda9f10a876752e281a054a7a3d421ef0533e5b6249":
             # ref: https://huggingface.co/HuggingFaceTB/SmolLM-135M
             res = "smollm"
+        if chkhsh == "3c30d3ad1d6b64202cd222813e7736c2db6e1bd6d67197090fc1211fbc612ae7":
+            # ref: https://huggingface.co/bigscience/bloom
+            res = "bloom"
+        if chkhsh == "bc01ce58980e1db43859146dc51b1758b3b88729b217a74792e9f8d43e479d21":
+            # ref: https://huggingface.co/TurkuNLP/gpt3-finnish-small
+            res = "gpt3-finnish"
+        if chkhsh == "4e2b24cc4770243d65a2c9ec19770a72f08cffc161adbb73fcbb6b7dd45a0aae":
+            # ref: https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct
+            res = "exaone"
 
         if res is None:
             logger.warning("\n")
@@ -893,7 +902,7 @@ class GPTNeoXModel(Model):
         return tensors
 
 
-@Model.register("BloomForCausalLM")
+@Model.register("BloomForCausalLM", "BloomModel")
 class BloomModel(Model):
     model_arch = gguf.MODEL_ARCH.BLOOM
 
@@ -3733,6 +3742,118 @@ class ChatGLMModel(Model):
 
         name = name.removeprefix("transformer.")
         return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("NemotronForCausalLM")
+class NemotronModel(Model):
+    model_arch = gguf.MODEL_ARCH.NEMOTRON
+
+    def set_vocab(self):
+        self._set_vocab_sentencepiece()
+        self.gguf_writer.add_pad_token_id(0)
+        self.gguf_writer.add_unk_token_id(1)
+
+    def set_gguf_parameters(self):
+        super().set_gguf_parameters()
+        hparams = self.hparams
+        self.gguf_writer.add_vocab_size(hparams["vocab_size"])
+
+        f_norm_eps = self.find_hparam(["layer_norm_eps", "layer_norm_epsilon", "norm_epsilon", "norm_eps"])
+        self.gguf_writer.add_layer_norm_eps(f_norm_eps)
+
+        # * Partial RoPE
+        rot_pct = self.find_hparam(["partial_rotary_factor", "rope_pct", "rope_percent"])
+        n_embd = self.find_hparam(["hidden_size", "n_embd"])
+        n_head = self.find_hparam(["num_attention_heads", "n_head"])
+        self.gguf_writer.add_rope_dimension_count(int(rot_pct * n_embd) // n_head)
+
+        # * RopeScaling for Nemotron
+        if "rope_scaling" not in self.hparams or self.hparams["rope_scaling"] is None:
+            self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.NONE)
+        else:
+            self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+            self.gguf_writer.add_rope_scaling_factor(self.hparams["factor"])
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        # * Adding +1 to LayerNorm's weights here to implement layernorm1p w/o changing anything on the GGML engine side
+        #   model.layers.{l}.input_layernorm.weight
+        #   model.layers.{l}.post_attention_layernorm.weight
+        #   model.norm.weight
+        if name.endswith("norm.weight"):
+            data_torch = data_torch + 1
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+
+@Model.register("ExaoneForCausalLM")
+class ExaoneModel(Model):
+    model_arch = gguf.MODEL_ARCH.EXAONE
+
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+
+        assert(hparams["activation_function"] == "silu")
+
+        max_position_embeddings = hparams["max_position_embeddings"]
+        embed_dim = hparams["hidden_size"]
+        num_heads = hparams["num_attention_heads"]
+        num_kv_heads = hparams.get("num_key_value_heads", num_heads)
+        layer_norm_eps = hparams["layer_norm_epsilon"]
+        intermediate_size = hparams["intermediate_size"] if "intermediate_size" in hparams else 4 * embed_dim
+        num_layers = hparams["num_layers"]
+        # ignore for now as EXAONE-3.0-7.8B-Instruct attentino_dropout is 0.0
+        # attention_dropout_rate = hparams["attention_dropout"]
+        # ignore for now as EXAONE-3.0-7.8B-Instruct embed_dropout is 0.0
+        # embed_dropout_rate = hparams["embed_dropout"]
+        self.gguf_writer.add_embedding_length(embed_dim)
+        self.gguf_writer.add_head_count(num_heads)
+        self.gguf_writer.add_head_count_kv(num_kv_heads)
+        self.gguf_writer.add_context_length(max_position_embeddings)
+        self.gguf_writer.add_layer_norm_rms_eps(layer_norm_eps)
+        self.gguf_writer.add_feed_forward_length(intermediate_size)
+        self.gguf_writer.add_block_count(num_layers)
+        self.gguf_writer.add_file_type(self.ftype)
+
+        if (rope_theta := self.hparams.get("rope_theta")) is not None:
+            self.gguf_writer.add_rope_freq_base(rope_theta)
+        rotary_factor = self.find_hparam(["partial_rotary_factor", "rope_pct"], optional=True)
+        rotary_factor = rotary_factor if rotary_factor is not None else 1.0
+        self.gguf_writer.add_rope_dimension_count(int(rotary_factor * (hparams["hidden_size"] // hparams["num_attention_heads"])))
+        if hparams.get("rope_scaling") is not None and "factor" in hparams["rope_scaling"]:
+            if hparams["rope_scaling"].get("type") == "linear":
+                self.gguf_writer.add_rope_scaling_type(gguf.RopeScalingType.LINEAR)
+                self.gguf_writer.add_rope_scaling_factor(hparams["rope_scaling"]["factor"])
+
+    def prepare_tensors(self):
+        if rope_scaling := self.find_hparam(["rope_scaling"], optional=True):
+            if rope_scaling.get("rope_type", '').lower() == "llama3":
+                base = self.hparams.get("rope_theta", 10000.0)
+                dim = self.hparams["hidden_size"] // self.hparams["num_attention_heads"]
+                freqs = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+
+                factor = rope_scaling.get("factor", 8.0)
+                low_freq_factor = rope_scaling.get("low_freq_factor", 1.0)
+                high_freq_factor = rope_scaling.get("high_freq_factor", 4.0)
+                old_context_len = self.hparams.get("original_max_position_embeddings", 8192)
+
+                low_freq_wavelen = old_context_len / low_freq_factor
+                high_freq_wavelen = old_context_len / high_freq_factor
+                assert low_freq_wavelen != high_freq_wavelen
+
+                rope_factors = []
+                for freq in freqs:
+                    wavelen = 2 * math.pi / freq
+                    if wavelen < high_freq_wavelen:
+                        rope_factors.append(1)
+                    elif wavelen > low_freq_wavelen:
+                        rope_factors.append(factor)
+                    else:
+                        smooth = (old_context_len / wavelen - low_freq_factor) / (high_freq_factor - low_freq_factor)
+                        rope_factors.append(1 / ((1 - smooth) / factor + smooth))
+
+                self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
+
+        super().prepare_tensors()
 
 ###### CONVERSION LOGIC ######
 
