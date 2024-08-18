@@ -166,12 +166,16 @@ extern "C" {
         LLAMA_FTYPE_MOSTLY_Q4_0_4_4      = 33, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_0_4_8      = 34, // except 1d tensors
         LLAMA_FTYPE_MOSTLY_Q4_0_8_8      = 35, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_IQ2_XL        = 36, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_IQ3_XL        = 37, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_Q2_K_L        = 38, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_IQ1_XS        = 39, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_IQ1_XL        = 40, // except 1d tensors
-        LLAMA_FTYPE_MOSTLY_IQ4_XSR       = 41, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ2_XL        = 38, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ3_XL        = 39, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_Q2_K_L        = 40, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ1_XS        = 41, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ1_XL        = 42, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ4_XSR       = 43, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ3_XXL       = 44, // except 1d tensors
+        LLAMA_FTYPE_MOSTLY_IQ3_XXXL      = 45, // except 1d tensors
+        LLAMA_FTYPE_CQS                  = 99, // except 1d tensors
+
         LLAMA_FTYPE_GUESSED = 1024, // not specified in the model file
     };
 
