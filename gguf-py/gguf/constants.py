@@ -130,6 +130,7 @@ class Keys:
         INNER_SIZE     = "{arch}.ssm.inner_size"
         STATE_SIZE     = "{arch}.ssm.state_size"
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
+        B_DT_RMS = "{arch}.ssm.b_dt_rms"
 
     class Tokenizer:
         MODEL                = "tokenizer.ggml.model"
@@ -1372,6 +1373,7 @@ KEY_SSM_CONV_KERNEL    = Keys.SSM.CONV_KERNEL
 KEY_SSM_INNER_SIZE     = Keys.SSM.INNER_SIZE
 KEY_SSM_STATE_SIZE     = Keys.SSM.STATE_SIZE
 KEY_SSM_TIME_STEP_RANK = Keys.SSM.TIME_STEP_RANK
+KEY_SSM_B_DT_RMS = Keys.SSM.B_DT_RMS
 
 # tokenization
 KEY_TOKENIZER_MODEL      = Keys.Tokenizer.MODEL
