@@ -8,11 +8,6 @@ declare -a params=(
     "Phi3ForCausalLM 64"
 )
 
-verbose=false
-if [[ "$1" == "--verbose" ]]; then
-    verbose=true
-fi
-
 MODELS_REPO=lora-tests
 MODELS_REPO_URL=https://huggingface.co/ggml-org/$MODELS_REPO
 
@@ -56,36 +51,43 @@ run_conversion_and_inference_lora() {
     local model_name=$1
     local hidden_size=$2
 
+    echo -e "\n\n-------- RUNNING TEST FOR MODEL $model_name --------\n\n"
+
     # Convert safetensors to gguf
     echo "Running convert_hf_to_gguf.py for $model_name with hidden_size $hidden_size..."
     python convert_hf_to_gguf.py $MODELS_REPO/$model_name/hidden_size=$hidden_size/base \
-    --outfile $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
-    --outtype f32
+        --outfile $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
+        --outtype f32
 
+    echo -e "\n\n---------------------------\n\n"
     echo "Running convert_lora_to_gguf.py for $model_name with hidden_size $hidden_size..."
     python3 convert_lora_to_gguf.py $MODELS_REPO/$model_name/hidden_size=$hidden_size/lora \
-    --base $MODELS_REPO/$model_name/hidden_size=$hidden_size/base \
-    --outtype f32
+        --base $MODELS_REPO/$model_name/hidden_size=$hidden_size/base \
+        --outtype f32
 
+    echo -e "\n\n---------------------------\n\n"
     echo "Running llama-export-lora with lora for $model_name with hidden_size $hidden_size..."
     ./llama-export-lora \
-    -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
-    -o $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32-lora-merged.gguf \
-    --lora $MODELS_REPO/$model_name/hidden_size=$hidden_size/lora/Lora-F32-LoRA.gguf
+        -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
+        -o $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32-lora-merged.gguf \
+        --lora $MODELS_REPO/$model_name/hidden_size=$hidden_size/lora/Lora-F32-LoRA.gguf
 
     # Run inference
+    echo -e "\n\n---------------------------\n\n"
     echo "Running llama-cli without lora for $model_name with hidden_size $hidden_size..."
     OUTPUT_BASE=$(./llama-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
-    -p "$EXPECTED_BASE_FIRST_WORD" -n 50 --seed 42 --temp 0)
+        -p "$EXPECTED_BASE_FIRST_WORD" -n 50 --seed 42 --temp 0)
 
+    echo -e "\n\n---------------------------\n\n"
     echo "Running llama-cli with hot lora for $model_name with hidden_size $hidden_size..."
     OUTPUT_LORA_HOT=$(./llama-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32.gguf \
-    --lora $MODELS_REPO/$model_name/hidden_size=$hidden_size/lora/Lora-F32-LoRA.gguf \
-    -p "$EXPECTED_LORA_FIRST_WORD" -n 50 --seed 42 --temp 0)
+        --lora $MODELS_REPO/$model_name/hidden_size=$hidden_size/lora/Lora-F32-LoRA.gguf \
+        -p "$EXPECTED_LORA_FIRST_WORD" -n 50 --seed 42 --temp 0)
 
+    echo -e "\n\n---------------------------\n\n"
     echo "Running llama-cli with merged lora for $model_name with hidden_size $hidden_size..."
     OUTPUT_LORA_MERGED=$(./llama-cli -m $MODELS_REPO/$model_name/hidden_size=$hidden_size/base/Base-F32-lora-merged.gguf \
-    -p "$EXPECTED_LORA_FIRST_WORD" -n 50 --seed 42 --temp 0)
+        -p "$EXPECTED_LORA_FIRST_WORD" -n 50 --seed 42 --temp 0)
 
     # Remove any initial white space
     OUTPUT_BASE=$(trim_leading_whitespace "$OUTPUT_BASE")
@@ -130,9 +132,8 @@ for param in "${params[@]}"; do
 done
 
 # Print results
-if [ "$verbose" = true ]; then
-    echo -e "\n\033[1mSummary of All Results:\033[0m"
-    for result in "${results[@]}"; do
-        echo -e "$result"
-    done
-fi
+echo -e "\n\n---------------------------\n\n"
+echo -e "\n\033[1mSummary of All Results:\033[0m"
+for result in "${results[@]}"; do
+    echo -e "$result"
+done
