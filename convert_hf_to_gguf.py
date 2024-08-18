@@ -3793,7 +3793,7 @@ class ExaoneModel(Model):
     def set_gguf_parameters(self):
         hparams = self.hparams
 
-        assert(hparams["activation_function"] == "silu")
+        assert (hparams["activation_function"] == "silu")
 
         max_position_embeddings = hparams["max_position_embeddings"]
         embed_dim = hparams["hidden_size"]
@@ -3855,7 +3855,7 @@ class ExaoneModel(Model):
                 self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
 
         super().prepare_tensors()
-        
+
 
 @Model.register("FalconMambaForCausalLM")
 class FalconMambaModel(MambaModel):
