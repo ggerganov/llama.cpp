@@ -1,5 +1,5 @@
 # Server build and tests conversion from safetensors and inference
-name: Server conversion and inference
+name: LoRA adapters conversion and inference
 
 on:
   workflow_dispatch: # allows manual triggering
