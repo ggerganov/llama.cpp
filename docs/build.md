@@ -125,6 +125,14 @@ This provides BLAS acceleration using only the CPU. Make sure to have OpenBLAS i
         make GGML_OPENBLAS=1
         ```
 
+  - On Mac (with Intel GPU):
+    ```bash
+    brew install openblas
+    EXPORT PKG_CONFIG_PATH=<openblas_path>
+    make  GGML_OPENBLAS=1 GGML_NO_METAL=1
+    ```
+
+
 - Using `CMake` on Linux:
 
     ```bash
