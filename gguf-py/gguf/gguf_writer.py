@@ -715,7 +715,7 @@ class GGUFWriter:
     def add_rope_scaling_finetuned(self, value: bool) -> None:
         self.add_bool(Keys.Rope.SCALING_FINETUNED.format(arch=self.arch), value)
         
-    def add_mamba_dt_b_c_rms(self, value: bool) -> None:
+    def add_ssm_dt_b_c_rms(self, value: bool) -> None:
         self.add_bool(Keys.SSM.DT_B_C_RMS.format(arch=self.arch), value)
 
     def add_rope_scaling_yarn_log_mul(self, value: float) -> None:
