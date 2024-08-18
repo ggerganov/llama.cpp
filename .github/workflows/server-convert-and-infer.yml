@@ -68,7 +68,7 @@ jobs:
       - name: Tests dependencies
         id: test_dependencies
         run: |
-          pip install -r examples/server/tests/requirements.txt
+          pip install -r requirements/requirements-all.txt
 
       - name: Verify server deps
         id: verify_server_deps
