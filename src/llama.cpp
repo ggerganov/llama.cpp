@@ -328,7 +328,7 @@ enum llm_kv {
     LLM_KV_SSM_CONV_KERNEL,
     LLM_KV_SSM_STATE_SIZE,
     LLM_KV_SSM_TIME_STEP_RANK,
-    LLM_KV_SSM_B_DT_RMS,
+    LLM_KV_SSM_DT_B_C_RMS,
 
     LLM_KV_TOKENIZER_MODEL,
     LLM_KV_TOKENIZER_PRE,
@@ -2239,7 +2239,7 @@ struct llama_hparams {
     uint32_t ssm_d_inner = 0;
     uint32_t ssm_d_state = 0;
     uint32_t ssm_dt_rank = 0;
-    bool ssm_b_dt_rms = false;
+    bool ssm_dt_b_c_rms = false;
 
     float f_clamp_kqv      = 0.0f;
     float f_max_alibi_bias = 0.0f;
@@ -5055,7 +5055,7 @@ static void llm_load_hparams(
                 ml.get_key(LLM_KV_SSM_INNER_SIZE,     hparams.ssm_d_inner);
                 ml.get_key(LLM_KV_SSM_STATE_SIZE,     hparams.ssm_d_state);
                 ml.get_key(LLM_KV_SSM_TIME_STEP_RANK, hparams.ssm_dt_rank);
-                ml.get_key(LLM_KV_SSM_B_DT_RMS, hparams.ssm_b_dt_rms, false);
+                ml.get_key(LLM_KV_SSM_DT_B_C_RMS, hparams.ssm_dt_b_c_rms, false);
 
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
@@ -12166,7 +12166,7 @@ struct llm_build_context {
         const int64_t d_state = hparams.ssm_d_state;
         const int64_t dt_rank = hparams.ssm_dt_rank;
         // Some variants of Mamba arch (e.g. FalconMamba do apply layer norm on B and Dt layers)
-        const bool ssm_b_dt_rms = hparams.ssm_b_dt_rms;
+        const bool ssm_dt_b_c_rms = hparams.ssm_dt_b_c_rms;
         // Use the same RMS norm as the final layer norm
         const float norm_rms_eps = hparams.f_norm_rms_eps;
 
@@ -12250,7 +12250,7 @@ struct llm_build_context {
                 struct ggml_tensor * C  = ggml_view_2d(ctx0, x_db, d_state, n_tokens, x_db->nb[1], ggml_element_size(x_db)*(dt_rank+d_state));
 
                 // Some Mamba variants (e.g. FalconMamba) apply RMS norm in B, C & Dt layers
-                if (ssm_b_dt_rms) {
+                if (ssm_dt_b_c_rms) {
                     dt = ggml_rms_norm(ctx0, dt, norm_rms_eps);
                     B = ggml_rms_norm(ctx0, B, norm_rms_eps);
                     C = ggml_rms_norm(ctx0, C, norm_rms_eps);
