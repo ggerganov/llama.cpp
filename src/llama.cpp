@@ -15894,17 +15894,20 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
                 new_type = GGML_TYPE_Q8_0;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
-                if (qs.model.hparams.n_vocab >= 127999) new_type = GGML_TYPE_IQ4_XS;
+                if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q6_K;
+                else if (qs.model.hparams.n_vocab >= 127999) new_type = GGML_TYPE_IQ4_XS;
                 else new_type = GGML_TYPE_Q4_K;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS) {
-                if (qs.model.hparams.n_vocab >= 127999) new_type = GGML_TYPE_Q4_K;
+                if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q6_K;
+                else if (qs.model.hparams.n_vocab >= 127999) new_type = GGML_TYPE_Q4_K;
                 else new_type = GGML_TYPE_Q5_K;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
                      ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M  ||
                      ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S  || ftype == LLAMA_FTYPE_MOSTLY_Q2_K   || ftype == LLAMA_FTYPE_MOSTLY_Q2_K_L) {
-                new_type = GGML_TYPE_Q5_K;
+                if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q6_K;
+                else new_type = GGML_TYPE_Q5_K;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS  || ftype == LLAMA_FTYPE_MOSTLY_IQ3_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ3_M) {
                 if (qs.model.hparams.n_vocab >= 127999) new_type = GGML_TYPE_Q5_K;
@@ -15918,11 +15921,26 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         if (qs.params->token_embedding_type < GGML_TYPE_COUNT) {
             new_type = qs.params->token_embedding_type;
         } else {
-            if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
+            if (qs.model.hparams.n_expert >= 4) {
+                if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS ||
+                    ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS) {
+                new_type = GGML_TYPE_IQ3_S;
+                }
+                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M ||
+                         ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_S ||
+                         ftype == LLAMA_FTYPE_MOSTLY_IQ3_M   || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) {
+                new_type = GGML_TYPE_IQ4_XS;
+                }
+                else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K   || ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q2_K_L ||
+                         ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) {
+                new_type = GGML_TYPE_Q4_K;
+                }
+            }
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
                 if (qs.model.hparams.n_vocab >= 127999) new_type = GGML_TYPE_IQ2_XS;
                 else new_type = GGML_TYPE_IQ2_S;
             }
-            if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS) {
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS) {
                 new_type = GGML_TYPE_IQ2_S;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_S || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) {
@@ -16047,7 +16065,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             if (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2)
                 new_type =  use_few_bits(qs.i_attention_wk, qs.n_attention_wk) ? GGML_TYPE_Q5_K : GGML_TYPE_IQ4_XS;
             else new_type = use_few_bits(qs.i_attention_wk, qs.n_attention_wk) ? GGML_TYPE_IQ4_XS : GGML_TYPE_IQ3_S;
-        }	
+        }
         else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XL) {
             if (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2)
                new_type = use_some_bits(qs.i_attention_wk, qs.n_attention_wk) ? GGML_TYPE_Q5_K : GGML_TYPE_IQ4_XS;
