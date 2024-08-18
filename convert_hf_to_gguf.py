@@ -2744,7 +2744,7 @@ class MambaModel(Model):
         rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional=True) or 1e-5   
         use_b_dt_norm = False
         # For falconmamba we do apply RMS norm on B / DT and C layers
-        if self.find_hparam(["model_type"]) in ["falcon_mamba"]:
+        if self.find_hparam(["model_type"], optional=True) in ("falcon_mamba",):
             use_b_dt_norm = True
         # Fail early for models which don't have a block expansion factor of 2
         assert d_inner == 2 * d_model
