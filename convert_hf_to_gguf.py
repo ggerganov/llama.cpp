@@ -2759,7 +2759,7 @@ class MambaModel(Model):
         self.gguf_writer.add_ssm_state_size(d_state)
         self.gguf_writer.add_ssm_time_step_rank(dt_rank)
         self.gguf_writer.add_layer_norm_rms_eps(rms_norm_eps)
-        self.gguf_writer.add_mamba_dt_b_c_rms(use_dt_b_c_norm) # For classic Mamba we don't apply rms norm on B / DT layers
+        self.gguf_writer.add_ssm_dt_b_c_rms(use_dt_b_c_norm) # For classic Mamba we don't apply rms norm on B / DT layers
         self.gguf_writer.add_file_type(self.ftype)
 
     _tok_embd = None
