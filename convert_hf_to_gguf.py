@@ -2731,7 +2731,7 @@ class MambaModel(Model):
         else:
             # Use the GPT-NeoX tokenizer when no tokenizer files are present
             self._set_vocab_builtin("gpt-neox", vocab_size)
-    
+
     def set_gguf_parameters(self):
         d_model = self.find_hparam(["hidden_size",       "d_model"])
         d_conv  = self.find_hparam(["conv_kernel",       "d_conv"],  optional=True) or 4
@@ -2741,7 +2741,7 @@ class MambaModel(Model):
         # ref: https://stackoverflow.com/a/17511341/22827863
         # ref: https://github.com/state-spaces/mamba/blob/ce59daea3a090d011d6476c6e5b97f6d58ddad8b/mamba_ssm/modules/mamba_simple.py#L58
         dt_rank      = self.find_hparam(["time_step_rank",     "dt_rank"],      optional=True) or -(d_model // -16)
-        rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional=True) or 1e-5   
+        rms_norm_eps = self.find_hparam(["layer_norm_epsilon", "rms_norm_eps"], optional=True) or 1e-5
         use_dt_b_c_norm = False
         # For falconmamba we do apply RMS norm on B / DT and C layers
         if self.find_hparam(["model_type"], optional=True) in ("falcon_mamba",):
@@ -3858,7 +3858,7 @@ class ExaoneModel(Model):
                 self.gguf_writer.add_tensor(self.format_tensor_name(gguf.MODEL_TENSOR.ROPE_FREQS), np.array(rope_factors, dtype=np.float32))
 
         super().prepare_tensors()
-    
+
 
 ###### CONVERSION LOGIC ######
 
