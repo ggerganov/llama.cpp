@@ -215,25 +215,6 @@ effectiveStdenv.mkDerivation (finalAttrs: {
     cp $src/include/llama.h $out/include/
   '';
 
-  # Define the shells here, but don't add in the inputsFrom to avoid recursion.
-  passthru = {
-    inherit
-      useBlas
-      useCuda
-      useMetalKit
-      useMpi
-      useRocm
-      useVulkan
-      ;
-
-    shell = mkShell {
-      name = "shell-${finalAttrs.finalPackage.name}";
-      description = "contains numpy and sentencepiece";
-      nativeBuildInputs = [ cmake ];
-      inputsFrom = [ finalAttrs.finalPackage ];
-    };
-  };
-
   meta = {
     # Configurations we don't want even the CI to evaluate. Results in the
     # "unsupported platform" messages. This is mostly a no-op, because
