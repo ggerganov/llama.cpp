@@ -17,10 +17,11 @@
 #include <iostream>
 
 #include "ggml-sycl.h"
-#include "dnnl.hpp"
-#include "dnnl_sycl.hpp"
 
 #if GGML_SYCL_DNNL
+
+#include "dnnl.hpp"
+#include "dnnl_sycl.hpp"
 
 class DnnlGemmWrapper {
 public:

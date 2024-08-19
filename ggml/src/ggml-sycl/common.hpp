@@ -19,6 +19,10 @@
 #include "dpct/helper.hpp"
 #include "ggml-sycl.h"
 #include "presets.hpp"
+#if GGML_SYCL_DNNL
+#include "dnnl.hpp"
+#include "dnnl_sycl.hpp"
+#endif
 
 #define GGML_COMMON_DECL_SYCL
 #define GGML_COMMON_IMPL_SYCL
@@ -59,7 +63,7 @@ static int g_ggml_sycl_debug = 0;
 // define for XMX in Intel GPU
 // TODO: currently, it's not used for XMX really.
 #if !defined(GGML_SYCL_FORCE_MMQ)
-    #define SYCL_USE_XMX
+#define SYCL_USE_XMX
 #endif
 
 // max batch size to use MMQ kernels when tensor cores are available
@@ -80,16 +84,16 @@ static int g_ggml_sycl_debug = 0;
 typedef sycl::queue *queue_ptr;
 
 enum ggml_sycl_backend_gpu_mode {
-  SYCL_UNSET_GPU_MODE = -1,
-  SYCL_SINGLE_GPU_MODE = 0,
-  SYCL_MUL_GPU_MODE
+    SYCL_UNSET_GPU_MODE = -1,
+    SYCL_SINGLE_GPU_MODE = 0,
+    SYCL_MUL_GPU_MODE
 };
 
 static_assert(sizeof(sycl::half) == sizeof(ggml_fp16_t), "wrong fp16 size");
 
 static void crash() {
-  int* ptr = NULL;
-  *ptr = 0;
+    int* ptr = NULL;
+    *ptr = 0;
 }
 
 [[noreturn]] static void ggml_sycl_error(
@@ -98,9 +102,9 @@ static void crash() {
     const char* file,
     const int line,
     const char* msg) {
-  fprintf(stderr, "SYCL error: %s: %s\n", stmt, msg);
-  fprintf(stderr, "  in function %s at %s:%d\n", func, file, line);
-  GGML_ABORT("SYCL error");
+    fprintf(stderr, "SYCL error: %s: %s\n", stmt, msg);
+    fprintf(stderr, "  in function %s at %s:%d\n", func, file, line);
+    GGML_ABORT("SYCL error");
 }
 
 #define SYCL_CHECK(err)                     \
@@ -138,40 +142,40 @@ static int g_all_sycl_device_count = -1;
 static bool g_ggml_backend_sycl_buffer_type_initialized = false;
 
 static ggml_sycl_backend_gpu_mode g_ggml_sycl_backend_gpu_mode =
-    SYCL_UNSET_GPU_MODE;
+SYCL_UNSET_GPU_MODE;
 
 static void* g_scratch_buffer = nullptr;
 static size_t g_scratch_size = 0; // disabled by default
 static size_t g_scratch_offset = 0;
 
 [[noreturn]] static inline void bad_arch(const sycl::stream& stream_ct1) {
-  stream_ct1 << "ERROR: ggml-sycl was compiled without support for the "
-                "current GPU architecture.\n";
-  // __trap();
-  std::exit(1);
+    stream_ct1 << "ERROR: ggml-sycl was compiled without support for the "
+        "current GPU architecture.\n";
+    // __trap();
+    std::exit(1);
 
-  (void)bad_arch; // suppress unused function warning
+    (void)bad_arch; // suppress unused function warning
 }
 
 int get_current_device_id();
 
 inline dpct::err0 ggml_sycl_set_device(const int device) try {
 
-  int current_device_id;
-  SYCL_CHECK(CHECK_TRY_ERROR(current_device_id = get_current_device_id()));
+    int current_device_id;
+    SYCL_CHECK(CHECK_TRY_ERROR(current_device_id = get_current_device_id()));
 
-  // GGML_SYCL_DEBUG("ggml_sycl_set_device device_id=%d,
-  // current_device_id=%d\n", device, current_device);
-  if (device == current_device_id) {
-    return 0;
-  }
+    // GGML_SYCL_DEBUG("ggml_sycl_set_device device_id=%d,
+    // current_device_id=%d\n", device, current_device);
+    if (device == current_device_id) {
+        return 0;
+    }
 
-  return CHECK_TRY_ERROR(dpct::select_device(device));
+    return CHECK_TRY_ERROR(dpct::select_device(device));
 } catch (sycl::exception const& exc) {
-  std::cerr << exc.what() << "Exception caught at file:" << __FILE__
-            << ", line:" << __LINE__ << std::endl;
-  crash();
-  std::exit(1);
+    std::cerr << exc.what() << "Exception caught at file:" << __FILE__
+        << ", line:" << __LINE__ << std::endl;
+    crash();
+    std::exit(1);
 }
 
 //////////////////////
@@ -249,10 +253,10 @@ struct ggml_sycl_pool_alloc {
 // backend interface
 
 struct ggml_tensor_extra_gpu {
-  void* data_device[GGML_SYCL_MAX_DEVICES]; // 1 pointer for each device for split
-                                       // tensors
-  dpct::event_ptr events[GGML_SYCL_MAX_DEVICES]
-                        [GGML_SYCL_MAX_STREAMS]; // events for synchronizing multiple GPUs
+    void* data_device[GGML_SYCL_MAX_DEVICES]; // 1 pointer for each device for split
+    // tensors
+    dpct::event_ptr events[GGML_SYCL_MAX_DEVICES]
+        [GGML_SYCL_MAX_STREAMS]; // events for synchronizing multiple GPUs
 };
 
 struct ggml_backend_sycl_context {
@@ -276,6 +280,33 @@ struct ggml_backend_sycl_context {
     queue_ptr stream() {
         return stream(device, 0);
     }
+
+#if GGML_SYCL_DNNL
+    dnnl::stream make_stream(sycl::queue& q) {
+        // Get the device associated with the queue
+        sycl::device dev = q.get_device();
+        // Get the context associated with the queue
+        sycl::context ctx = q.get_context();
+        const dnnl::engine eng = dnnl::sycl_interop::make_engine(dev, ctx);
+        dnnl::stream stream = dnnl::sycl_interop::make_stream(eng, q);
+        return stream;
+    }
+    std::unordered_map<sycl::queue*, dnnl::stream> stream_map;
+    dnnl::stream stream_dnnl(int device, int _stream) {
+        auto q = stream(device, _stream);
+        return stream_dnnl(q);
+    }
+    dnnl::stream stream_dnnl(sycl::queue* qptr) {
+        auto it = stream_map.find(qptr);
+        if (it == stream_map.end()) {
+            stream_map[qptr] = make_stream(*qptr);
+        }
+        return it->second;
+    }
+    dnnl::stream stream_dnnl() {
+        return stream_dnnl(device, 0);
+    }
+#endif
 
     // pool
     std::unique_ptr<ggml_sycl_pool> pools[GGML_SYCL_MAX_DEVICES];
