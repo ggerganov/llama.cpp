@@ -22,6 +22,7 @@
 #ifdef _WIN32
     #include <windows.h>
     #include <direct.h> // For _mkdir on Windows
+    #include <algorithm> // For std::replace on w64devkit
 #else
     #include <unistd.h>
     #include <sys/wait.h>
@@ -179,11 +180,7 @@ bool string_ends_with(const std::string& str, const std::string& suffix) {
     return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
 }
 
-#ifdef _WIN32
-    static const char path_separator = '\\';
-#else
-    static const char path_separator = '/';
-#endif
+static const char path_separator = '/';
 
 std::string join_paths(const std::string& path1, const std::string& path2) {
     return path1 + path_separator + path2;
@@ -198,7 +195,11 @@ void string_to_spv(const std::string& _name, const std::string& in_fname, const 
     std::string out_fname = join_paths(output_dir, name + ".spv");
     std::string in_path = join_paths(input_dir, in_fname);
 
-    std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", in_path, "-o", out_fname};
+    #ifdef _WIN32
+        std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", "\"" + in_path + "\"", "-o", "\"" + out_fname + "\""};
+    #else
+        std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", in_path, "-o",  out_fname};
+    #endif
     for (const auto& define : defines) {
         cmd.push_back("-D" + define.first + "=" + define.second);
     }
@@ -269,9 +270,12 @@ void matmul_shaders(std::vector<std::future<void>>& tasks, bool fp16, bool matmu
 
     for (const auto& tname : type_names) {
         std::string data_a_key = "DATA_A_" + to_uppercase(tname);
+        // For unaligned, load one at a time for f32/f16, or two at a time for quants
+        std::string load_vec_a_unaligned = (tname == "f32" || tname == "f16") ? "1" : "2";
+        // For aligned matmul loads
         std::string load_vec_a = (tname == "f32" || tname == "f16") ? load_vec : "2";
         tasks.push_back(std::async(std::launch::async, [=] {
-            string_to_spv(shader_name + "_" + tname + "_f32", "mul_mm.comp", merge_maps(base_dict, {{data_a_key, "1"}, {"LOAD_VEC_A", load_vec_a}, {"B_TYPE", "float"}, {"D_TYPE", "float"}}), fp16);
+            string_to_spv(shader_name + "_" + tname + "_f32", "mul_mm.comp", merge_maps(base_dict, {{data_a_key, "1"}, {"LOAD_VEC_A", load_vec_a_unaligned}, {"B_TYPE", "float"}, {"D_TYPE", "float"}}), fp16);
         }));
         tasks.push_back(std::async(std::launch::async, [=] {
             string_to_spv(shader_name + "_" + tname + "_f32_aligned", "mul_mm.comp", merge_maps(base_dict, {{data_a_key, "1"}, {"LOAD_VEC_A", load_vec_a}, {"LOAD_VEC_B", load_vec}, {"B_TYPE", aligned_b_type_f32}, {"D_TYPE", "float"}}), fp16);
@@ -341,6 +345,9 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
         string_to_spv("norm_f32", "norm.comp", merge_maps(base_dict, {{"A_TYPE", "float"}, {"D_TYPE", "float"}}));
     }));
     tasks.push_back(std::async(std::launch::async, [=] {
+        string_to_spv("group_norm_f32", "group_norm.comp", merge_maps(base_dict, {{"A_TYPE", "float"}, {"D_TYPE", "float"}}));
+    }));
+    tasks.push_back(std::async(std::launch::async, [=] {
         string_to_spv("rms_norm_f32", "rms_norm.comp", merge_maps(base_dict, {{"A_TYPE", "float"}, {"D_TYPE", "float"}}));
     }));
 
@@ -357,6 +364,9 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
     tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("add_f32", "add.comp", {{"A_TYPE", "float"}, {"B_TYPE", "float"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
     }));
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("add_f16_f32_f16", "add.comp", {{"A_TYPE", "float16_t"}, {"B_TYPE", "float"}, {"D_TYPE", "float16_t"}, {"FLOAT_TYPE", "float"}});
+    }));
 
     tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("split_k_reduce", "mul_mat_split_k_reduce.comp", {});
@@ -368,6 +378,10 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
 
     tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("div_f32", "div.comp", {{"A_TYPE", "float"}, {"B_TYPE", "float"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("repeat_f32", "repeat.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
     }));
 
     tasks.push_back(std::async(std::launch::async, [] {
@@ -383,13 +397,40 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
     }));
 
     tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("pad_f32", "pad.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("concat_f32", "concat.comp", {{"A_TYPE", "float"}, {"B_TYPE", "float"}, {"D_TYPE", "float"}});
+    }));
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("concat_f16", "concat.comp", {{"A_TYPE", "float16_t"}, {"B_TYPE", "float16_t"}, {"D_TYPE", "float16_t"}, {"OPTIMIZATION_ERROR_WORKAROUND", "1"}});
+    }));
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("concat_i32", "concat.comp", {{"A_TYPE", "int"}, {"B_TYPE", "int"}, {"D_TYPE", "int"}});
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("upscale_f32", "upscale.comp", {{"A_TYPE", "float"}, {"B_TYPE", "float"}, {"D_TYPE", "float"}});
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("gelu_f32", "gelu.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
+    }));
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("gelu_quick_f32", "gelu_quick.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
     }));
     tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("silu_f32", "silu.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
     }));
     tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("relu_f32", "relu.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
+    }));
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("leaky_relu_f32", "leaky_relu.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
+    }));
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("tanh_f32", "tanh.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}});
     }));
 
     tasks.push_back(std::async(std::launch::async, [] {
@@ -424,6 +465,17 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
     tasks.push_back(std::async(std::launch::async, [=] {
         string_to_spv("sum_rows_f32", "sum_rows.comp", merge_maps(base_dict, {{"A_TYPE", "float"}, {"D_TYPE", "float"}}));
     }));
+
+    tasks.push_back(std::async(std::launch::async, [=] {
+        string_to_spv("im2col_f32", "im2col.comp", merge_maps(base_dict, {{"A_TYPE", "float"}, {"D_TYPE", "float"}}));
+    }));
+    tasks.push_back(std::async(std::launch::async, [=] {
+        string_to_spv("im2col_f32_f16", "im2col.comp", merge_maps(base_dict, {{"A_TYPE", "float"}, {"D_TYPE", "float16_t"}}));
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [=] {
+        string_to_spv("timestep_embedding_f32", "timestep_embedding.comp", merge_maps(base_dict, {{"A_TYPE", "float"}, {"D_TYPE", "float"}}));
+    }));
 }
 
 void write_output_files() {
@@ -435,10 +487,16 @@ void write_output_files() {
 
     for (const auto& pair : shader_fnames) {
         const std::string& name = pair.first;
-        const std::string& path = pair.second;
+        #ifdef _WIN32
+            std::string path = pair.second;
+            std::replace(path.begin(), path.end(), '/', '\\' );
+        #else
+            const std::string& path = pair.second;
+        #endif
+
         FILE* spv = fopen(path.c_str(), "rb");
         if (!spv) {
-            std::cerr << "Error opening SPIR-V file: " << path << "\n";
+            std::cerr << "Error opening SPIR-V file: " << path << " (" << strerror(errno) << ")\n";
             continue;
         }
 
@@ -450,7 +508,7 @@ void write_output_files() {
         size_t read_size = fread(data.data(), 1, size, spv);
         fclose(spv);
         if (read_size != size) {
-            std::cerr << "Error reading SPIR-V file: " << path << "\n";
+            std::cerr << "Error reading SPIR-V file: " << path << " (" << strerror(errno) << ")\n";
             continue;
         }
 

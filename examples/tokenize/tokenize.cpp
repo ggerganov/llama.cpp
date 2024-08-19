@@ -163,7 +163,7 @@ static void write_utf8_cstr_to_stdout(const char * str, bool & invalid_utf8) {
                 printf(">");
                 return;
             }
-            GGML_ASSERT(false && "MultiByteToWideChar() failed in an unexpected way.");
+            GGML_ABORT("MultiByteToWideChar() failed in an unexpected way.");
         }
 
         LPWSTR wstr = (LPWSTR) calloc(length_needed+1, sizeof(*wstr));
@@ -362,7 +362,7 @@ int main(int raw_argc, char ** raw_argv) {
         prompt = stdin_buffer.str();
     }
 
-    const bool model_wants_add_bos = llama_should_add_bos_token(model);
+    const bool model_wants_add_bos = llama_add_bos_token(model);
     const bool add_bos = model_wants_add_bos && !no_bos;
     const bool parse_special = !no_parse_special;
 

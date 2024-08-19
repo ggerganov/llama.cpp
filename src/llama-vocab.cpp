@@ -16,20 +16,6 @@
 // helpers
 //
 
-static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
-    std::string result;
-    for (size_t pos = 0; ; pos += search.length()) {
-        auto new_pos = s.find(search, pos);
-        if (new_pos == std::string::npos) {
-            result += s.substr(pos, s.size() - pos);
-            break;
-        }
-        result += s.substr(pos, new_pos - pos) + replace;
-        pos = new_pos;
-    }
-    s = std::move(result);
-}
-
 LLAMA_ATTRIBUTE_FORMAT(1, 2)
 static std::string format(const char * fmt, ...) {
     va_list ap;
@@ -152,14 +138,14 @@ static uint8_t llama_token_to_byte(const llama_vocab & vocab, llama_token id) {
             return strtol(buf.c_str(), NULL, 16);
         }
         case LLAMA_VOCAB_TYPE_BPE: {
-            GGML_ASSERT(false);
-            return unicode_utf8_to_byte(token_data.text); // TODO: why is this here after GGML_ASSERT?
+            GGML_ABORT("fatal error");
+            //return unicode_utf8_to_byte(token_data.text); // TODO: why is this here after GGML_ASSERT?
         }
         case LLAMA_VOCAB_TYPE_WPM: {
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
         }
         default:
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
     }
 }
 
@@ -402,6 +388,7 @@ struct llm_tokenizer_bpe {
             case LLAMA_VOCAB_PRE_TYPE_COMMAND_R:
             case LLAMA_VOCAB_PRE_TYPE_SMOLLM:
             case LLAMA_VOCAB_PRE_TYPE_CODESHELL:
+            case LLAMA_VOCAB_PRE_TYPE_EXAONE:
                 regex_exprs = {
                     "\\p{N}",
                     "'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
@@ -424,6 +411,8 @@ struct llm_tokenizer_bpe {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_PORO:
+            case LLAMA_VOCAB_PRE_TYPE_BLOOM:
+            case LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH:
                 regex_exprs = {
                     " ?[^(\\s|.,!?…。，、।۔،)]+",
                 };
@@ -816,6 +805,9 @@ struct llm_tokenizer_ugm {
      * the best tokenization.
     */
     void tokenize(const std::string & text, std::vector<llama_vocab::id> & output) {
+        // get current size of output (for reversal later)
+        size_t output_size = output.size();
+
         // normalize the input first
         std::string normalized;
         normalize(text, &normalized);
@@ -895,7 +887,7 @@ struct llm_tokenizer_ugm {
         }
 
         // reverse the output since we added tokens starting from the end of the input
-        std::reverse(output.begin(), output.end());
+        std::reverse(output.begin() + output_size, output.end());
     }
 
 private:
@@ -1396,7 +1388,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & vocab, 
                 }
             } break;
         case LLAMA_VOCAB_TYPE_NONE:
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
     }
 
     return output;
@@ -1422,7 +1414,7 @@ llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch) {
             return vocab.token_to_id.at(unicode_byte_to_utf8(ch));
         }
         default:
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
     }
 }
 
@@ -1444,7 +1436,8 @@ llama_token_attr llama_token_get_attr_impl(const struct llama_vocab & vocab, lla
 bool llama_token_is_eog_impl(const struct llama_vocab & vocab, llama_token token) {
     return token != -1 && (
         token == llama_token_eos_impl(vocab) ||
-        token == llama_token_eot_impl(vocab)
+        token == llama_token_eot_impl(vocab) ||
+        token == llama_token_eom_impl(vocab)
     );
 }
 
@@ -1476,11 +1469,11 @@ llama_token llama_token_pad_impl(const struct llama_vocab & vocab) {
     return vocab.special_pad_id;
 }
 
-int32_t llama_add_bos_token_impl(const struct llama_vocab & vocab) {
+bool llama_add_bos_token_impl(const struct llama_vocab & vocab) {
     return vocab.tokenizer_add_bos;
 }
 
-int32_t llama_add_eos_token_impl(const struct llama_vocab & vocab) {
+bool llama_add_eos_token_impl(const struct llama_vocab & vocab) {
     return vocab.tokenizer_add_eos;
 }
 
@@ -1498,6 +1491,10 @@ llama_token llama_token_suffix_impl(const struct llama_vocab & vocab) {
 
 llama_token llama_token_eot_impl(const struct llama_vocab & vocab) {
     return vocab.special_eot_id;
+}
+
+llama_token llama_token_eom_impl(const struct llama_vocab & vocab) {
+    return vocab.special_eom_id;
 }
 
 int32_t llama_tokenize_impl(
@@ -1606,7 +1603,7 @@ int32_t llama_token_to_piece_impl(const struct llama_vocab & vocab, llama_token 
                 break;
             }
             default:
-                GGML_ASSERT(false);
+                GGML_ABORT("fatal error");
         }
     }
 

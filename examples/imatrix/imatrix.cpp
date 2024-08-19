@@ -127,7 +127,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         }
         else if (e.values.size() != (size_t)src1->ne[0]*n_as) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
-            exit(1); //GGML_ASSERT(false);
+            exit(1); //GGML_ABORT("fatal error");
         }
         if (m_params.verbosity > 1) {
             printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[2], (int)src1->type);
@@ -176,7 +176,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         }
         else if (e.values.size() != (size_t)src1->ne[0]) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]);
-            exit(1); //GGML_ASSERT(false);
+            exit(1); //GGML_ABORT("fatal error");
         }
         ++e.ncall;
         if (m_params.verbosity > 1) {
@@ -433,8 +433,8 @@ static void process_logits(
 }
 
 static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
-    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(llama_add_eos_token(llama_get_model(ctx)) != 1);
+    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
+    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
     const int n_ctx = llama_n_ctx(ctx);
 
     auto tim1 = std::chrono::high_resolution_clock::now();
@@ -611,10 +611,10 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    llama_model * model;
-    llama_context * ctx;
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
 
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
     if (model == nullptr || ctx == nullptr) {
         fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;
