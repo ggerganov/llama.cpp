@@ -295,6 +295,7 @@ class Model:
                             gguf.MODEL_TENSOR.FFN_GATE_INP,
                             gguf.MODEL_TENSOR.POS_EMBD,
                             gguf.MODEL_TENSOR.TOKEN_TYPES,
+                            gguf.MODEL_TENSOR.SSM_CONV1D,
                         )
                     )
                     or not name.endswith(".weight")
@@ -2785,23 +2786,6 @@ class MambaModel(Model):
             self._tok_embd = data_torch
 
         return [(new_name, data_torch)]
-
-    def tensor_force_quant(self, name: str, new_name: str, bid: int | None, n_dims: int) -> gguf.GGMLQuantizationType | bool:
-        if bid is not None and new_name in (
-            self.format_tensor_name(
-                n, bid, ".weight" if name.endswith(".weight") else ""
-            )
-            for n in [
-                gguf.MODEL_TENSOR.SSM_CONV1D,
-                gguf.MODEL_TENSOR.SSM_X,
-                gguf.MODEL_TENSOR.SSM_DT,
-                gguf.MODEL_TENSOR.SSM_A,
-                gguf.MODEL_TENSOR.SSM_D,
-            ]
-        ):
-            return gguf.GGMLQuantizationType.F32
-
-        return super().tensor_force_quant(name, new_name, bid, n_dims)
 
 
 @Model.register("CohereForCausalLM")
