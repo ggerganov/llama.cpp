@@ -9383,7 +9383,7 @@ static struct ggml_tensor * llm_build_mamba2(
         // grouped RMS norm
         y = ggml_reshape_4d(ctx, y, d_inner / n_group, n_group, n_seq_tokens, n_seqs);
         y = llm_build_norm(ctx, y, hparams,
-                model.layers[il].ssm_norm, NULL,
+                ggml_reshape_2d(ctx, model.layers[il].ssm_norm, d_inner / n_group, n_group), NULL,
                 LLM_NORM_RMS, cb, il);
         y = ggml_reshape_3d(ctx, y, d_inner, n_seq_tokens, n_seqs);
 

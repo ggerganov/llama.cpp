@@ -2843,6 +2843,10 @@ class Mamba2Model(Model):
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
+        if name.startswith("model.backbone") or name.startswith("model.lm_head"):
+            # map Mamba-Codestral-7B-v0.1 tensor names to the names used by Mamba-2
+            name = name.removeprefix("model.")
+
         if name.endswith(".dt_bias"):
             name = name.rpartition(".dt_bias")[0] + ".dt_proj.bias"
 
