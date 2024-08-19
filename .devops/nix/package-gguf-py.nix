@@ -4,6 +4,7 @@
   numpy,
   tqdm,
   sentencepiece,
+  pyyaml,
   poetry-core,
   buildPythonPackage,
   pytestCheckHook,
@@ -18,6 +19,7 @@ buildPythonPackage {
     numpy
     tqdm
     sentencepiece
+    pyyaml
   ];
   src = lib.cleanSource ../../gguf-py;
   pythonImportsCheck = [

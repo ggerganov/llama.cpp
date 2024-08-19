@@ -11,6 +11,7 @@ let
   numpy = pythonPackages.numpy;
   tqdm = pythonPackages.tqdm;
   sentencepiece = pythonPackages.sentencepiece;
+  pyyaml = pythonPackages.pyyaml;
   poetry-core = pythonPackages.poetry-core;
   pytestCheckHook = pythonPackages.pytestCheckHook;
 in
@@ -28,6 +29,7 @@ lib.makeScope newScope (self: {
       tqdm
       sentencepiece
       poetry-core
+      pyyaml
       pytestCheckHook
       ;
   };
