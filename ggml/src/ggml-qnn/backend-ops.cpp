@@ -296,11 +296,13 @@ bool qnn_binary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src0, ggml_t
         succeed = execute_graph<2, 1>(graph_ptr, { src0, src1 }, { dst });
     }
 
+#ifndef NDEBUG
     if (!succeed) {
         print_ggml_tensor(src0);
         print_ggml_tensor(src1);
         print_ggml_tensor(dst);
     }
+#endif
 
     return succeed;
 }
@@ -317,10 +319,12 @@ bool qnn_unary_op_impl(ggml_backend_qnn_context *ctx, ggml_tensor *src, ggml_ten
         succeed = execute_graph<1, 1>(graph_ptr, { src }, { dst });
     }
 
+#ifndef NDEBUG
     if (!succeed) {
         print_ggml_tensor(src);
         print_ggml_tensor(dst);
     }
+#endif
 
     return succeed;
 }
@@ -541,10 +545,12 @@ bool ggml_qnn_supports_op(const ggml_tensor *op) {
             return false;
         }
 
+#ifndef NDEBUG
         if (op->op == GGML_OP_ADD && !is_tensor_dimensions_equal(op->src[0], op->src[1])) {
             QNN_LOG_DEBUG("src0 and src1 dimensions are not equal");
             return false;
         }
+#endif
     }
 
     switch (op->type) {
