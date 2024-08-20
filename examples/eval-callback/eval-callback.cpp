@@ -127,7 +127,7 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 }
 
 static bool run(llama_context * ctx, const gpt_params & params) {
-    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
 
     std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
@@ -163,9 +163,10 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    llama_model * model;
-    llama_context * ctx;
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
     if (model == nullptr || ctx == nullptr) {
         fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;

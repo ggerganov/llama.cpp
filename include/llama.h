@@ -93,15 +93,15 @@ extern "C" {
         LLAMA_VOCAB_PRE_TYPE_TEKKEN         = 20,
         LLAMA_VOCAB_PRE_TYPE_SMOLLM         = 21,
         LLAMA_VOCAB_PRE_TYPE_CODESHELL      = 22,
+        LLAMA_VOCAB_PRE_TYPE_BLOOM          = 23,
+        LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH   = 24,
+        LLAMA_VOCAB_PRE_TYPE_EXAONE         = 25,
     };
 
-    // note: these values should be synchronized with ggml_rope
-    // TODO: maybe move this enum to ggml.h (ggml_rope_type)
     enum llama_rope_type {
         LLAMA_ROPE_TYPE_NONE = -1,
-        LLAMA_ROPE_TYPE_NORM =  0,
-        LLAMA_ROPE_TYPE_NEOX =  2,
-        LLAMA_ROPE_TYPE_GLM  =  4,
+        LLAMA_ROPE_TYPE_NORM = 0,
+        LLAMA_ROPE_TYPE_NEOX = GGML_ROPE_TYPE_NEOX,
     };
 
     enum llama_token_type { //TODO: remove, required until per token attributes are available from GGUF file
@@ -345,7 +345,7 @@ extern "C" {
         int32_t nthread;                     // number of threads to use for quantizing, if <=0 will use std::thread::hardware_concurrency()
         enum llama_ftype ftype;              // quantize to this llama_ftype
         enum ggml_type output_tensor_type;   // output tensor type
-        enum ggml_type token_embedding_type; // itoken embeddings tensor type
+        enum ggml_type token_embedding_type; // token embeddings tensor type
         bool allow_requantize;               // allow quantizing non-f32/f16 tensors
         bool quantize_output_tensor;         // quantize output.weight
         bool only_copy;                      // only copy tensors - ftype, allow_requantize and quantize_output_tensor are ignored
@@ -503,6 +503,9 @@ extern "C" {
 
     // Returns true if the model contains an encoder that requires llama_encode() call
     LLAMA_API bool llama_model_has_encoder(const struct llama_model * model);
+
+    // Returns true if the model contains a decoder that requires llama_decode() call
+    LLAMA_API bool llama_model_has_decoder(const struct llama_model * model);
 
     // For encoder-decoder models, this function returns id of the token that must be provided
     // to the decoder to start generating output sequence. For other models, it returns -1.
@@ -912,11 +915,8 @@ extern "C" {
     LLAMA_API llama_token llama_token_nl (const struct llama_model * model); // next-line
     LLAMA_API llama_token llama_token_pad(const struct llama_model * model); // padding
 
-    // Returns -1 if unknown, 1 for true or 0 for false.
-    LLAMA_API int32_t llama_add_bos_token(const struct llama_model * model);
-
-    // Returns -1 if unknown, 1 for true or 0 for false.
-    LLAMA_API int32_t llama_add_eos_token(const struct llama_model * model);
+    LLAMA_API bool llama_add_bos_token(const struct llama_model * model);
+    LLAMA_API bool llama_add_eos_token(const struct llama_model * model);
 
     // Codellama infill tokens
     LLAMA_API llama_token llama_token_prefix(const struct llama_model * model); // Beginning of infill prefix

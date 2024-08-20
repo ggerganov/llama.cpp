@@ -10,6 +10,12 @@
 
 static bool g_verbose = false;
 
+struct tensor_transformation {
+    struct ggml_tensor * in;
+    struct ggml_tensor * out;
+    bool is_copy;
+};
+
 static std::string get_kv_str(struct gguf_context * ctx_gguf, const std::string & key){
     int id = gguf_find_key(ctx_gguf, key.c_str());
     return id < 0 ? "" : std::string(gguf_get_val_str(ctx_gguf, id));
@@ -48,20 +54,6 @@ static struct gguf_context * load_gguf(std::string & fname, struct ggml_context 
         throw std::runtime_error("failed to load input GGUF from " + fname);
     }
     return ctx_gguf;
-}
-
-static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
-    std::string result;
-    for (size_t pos = 0; ; pos += search.length()) {
-        auto new_pos = s.find(search, pos);
-        if (new_pos == std::string::npos) {
-            result += s.substr(pos, s.size() - pos);
-            break;
-        }
-        result += s.substr(pos, new_pos - pos) + replace;
-        pos = new_pos;
-    }
-    s = std::move(result);
 }
 
 struct file_input {
@@ -135,7 +127,7 @@ struct lora_merge_ctx {
 
     lora_merge_ctx(
             std::string & base_fname,
-            std::vector<std::tuple<std::string, float>> & lora_files,
+            std::vector<llama_lora_adapter_info> & lora_files,
             std::string & outfile,
             int n_threads) : base_model(base_fname, 0), n_threads(n_threads), fout(outfile, std::ios::binary) {
         fout.exceptions(std::ofstream::failbit); // fail fast on write errors
@@ -144,9 +136,9 @@ struct lora_merge_ctx {
             throw std::runtime_error("split model is not yet supported");
         }
 
-        for (auto lora_inp : lora_files) {
-            auto fname = std::get<0>(lora_inp);
-            auto scale = std::get<1>(lora_inp);
+        for (auto & lora_inp : lora_files) {
+            auto fname = lora_inp.path;
+            auto scale = lora_inp.scale;
             std::unique_ptr<file_input> adapter(new file_input(fname, scale));
             check_metadata_lora(adapter.get());
             adapters.push_back(std::move(adapter));
@@ -212,8 +204,7 @@ struct lora_merge_ctx {
         }
 
         // mapping base tensor to out tensor (same shape with base, but different type)
-        // if out_tensor == nullptr, we only copy it
-        std::vector<std::pair<struct ggml_tensor *, struct ggml_tensor *>> base_to_out_tensors;
+        std::vector<tensor_transformation> trans;
         for (auto & it : base_model.tensors) {
             bool t_a = true;
             bool t_b = true;
@@ -226,14 +217,22 @@ struct lora_merge_ctx {
                 // only copy
                 struct ggml_tensor * cpy_tensor = ggml_dup_tensor(ctx_out_ggml, base_tensor);
                 ggml_set_name(cpy_tensor, base_tensor->name);
-                base_to_out_tensors.push_back(std::make_pair(cpy_tensor, nullptr));
+                trans.push_back({
+                    cpy_tensor,
+                    cpy_tensor,
+                    true,
+                });
                 gguf_add_tensor(ctx_out, cpy_tensor);
             } else if (t_a && t_b) {
                 // need merging
                 struct ggml_tensor * out_tensor = ggml_new_tensor(
                     ctx_out_ggml, get_out_tensor_type(base_tensor), GGML_MAX_DIMS, base_tensor->ne);
                 ggml_set_name(out_tensor, base_tensor->name);
-                base_to_out_tensors.push_back(std::make_pair(base_tensor, out_tensor));
+                trans.push_back({
+                    base_tensor,
+                    out_tensor,
+                    false,
+                });
                 gguf_add_tensor(ctx_out, out_tensor);
             } else {
                 throw std::runtime_error("tensor " + it.first + " missing either lora_a or lora_b");
@@ -248,12 +247,12 @@ struct lora_merge_ctx {
 
         // process base model tensors
         size_t n_merged = 0;
-        for (auto & it : base_to_out_tensors) {
-            if (it.second != nullptr) {
-                merge_tensor(it.first, it.second);
+        for (auto & it : trans) {
+            if (!it.is_copy) {
+                merge_tensor(it.in, it.out);
                 n_merged++;
             } else {
-                copy_tensor(it.first);
+                copy_tensor(it.in);
             }
         }
 
@@ -266,7 +265,7 @@ struct lora_merge_ctx {
         }
 
         printf("%s : merged %ld tensors with lora adapters\n", __func__, n_merged);
-        printf("%s : wrote %ld tensors to output file\n", __func__, base_to_out_tensors.size());
+        printf("%s : wrote %ld tensors to output file\n", __func__, trans.size());
     }
 
     void copy_tensor(struct ggml_tensor * base) {
@@ -299,6 +298,10 @@ struct lora_merge_ctx {
         for (size_t i = 0; i < adapters.size(); ++i) {
             auto t_a = adapters[i]->get_tensor(name_lora_a);
             auto t_b = adapters[i]->get_tensor(name_lora_b);
+            // TODO: add support for quantized lora
+            if (ggml_is_quantized(t_a->type) || ggml_is_quantized(t_b->type)) {
+                throw std::runtime_error("quantized LoRA adapters is not supported, please retry with f16 or f32");
+            }
             inp_a[i] = ggml_dup_tensor(ctx, t_a);
             inp_b[i] = ggml_dup_tensor(ctx, t_b);
         }
@@ -407,7 +410,7 @@ int main(int argc, char ** argv) {
 
     g_verbose = (params.verbosity == 1);
     try {
-        lora_merge_ctx ctx(params.model, params.lora_adapter, params.lora_outfile, params.n_threads);
+        lora_merge_ctx ctx(params.model, params.lora_adapters, params.lora_outfile, params.n_threads);
         ctx.run_merge();
     } catch (const std::exception & err) {
         fprintf(stderr, "%s\n", err.what());

@@ -217,7 +217,10 @@ class MODEL_ARCH(IntEnum):
     CHATGLM      = auto()
     BITNET       = auto()
     T5           = auto()
+    T5ENCODER    = auto()
     JAIS         = auto()
+    NEMOTRON     = auto()
+    EXAONE       = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -344,7 +347,10 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.CHATGLM:        "chatglm",
     MODEL_ARCH.BITNET:         "bitnet",
     MODEL_ARCH.T5:             "t5",
+    MODEL_ARCH.T5ENCODER:      "t5encoder",
     MODEL_ARCH.JAIS:           "jais",
+    MODEL_ARCH.NEMOTRON:       "nemotron",
+    MODEL_ARCH.EXAONE:         "exaone",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -1036,6 +1042,21 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ENC_FFN_UP,
         MODEL_TENSOR.ENC_OUTPUT_NORM,
     ],
+    MODEL_ARCH.T5ENCODER: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ENC_ATTN_NORM,
+        MODEL_TENSOR.ENC_ATTN_Q,
+        MODEL_TENSOR.ENC_ATTN_K,
+        MODEL_TENSOR.ENC_ATTN_V,
+        MODEL_TENSOR.ENC_ATTN_OUT,
+        MODEL_TENSOR.ENC_ATTN_REL_B,
+        MODEL_TENSOR.ENC_FFN_NORM,
+        MODEL_TENSOR.ENC_FFN_GATE,
+        MODEL_TENSOR.ENC_FFN_DOWN,
+        MODEL_TENSOR.ENC_FFN_UP,
+        MODEL_TENSOR.ENC_OUTPUT_NORM,
+    ],
     MODEL_ARCH.JAIS: [
         MODEL_TENSOR.TOKEN_EMBD,
         MODEL_TENSOR.OUTPUT_NORM,
@@ -1046,6 +1067,37 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.NEMOTRON: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.EXAONE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
     ],
     # TODO
@@ -1087,6 +1139,10 @@ MODEL_TENSOR_SKIP: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
     ],
     MODEL_ARCH.CHATGLM: [
         MODEL_TENSOR.ROPE_FREQS,
+    ],
+    MODEL_ARCH.NEMOTRON: [
+        MODEL_TENSOR.ROPE_FREQS,
+        MODEL_TENSOR.ATTN_ROT_EMBD,
     ],
 }
 
@@ -1146,6 +1202,9 @@ class GGMLQuantizationType(IntEnum):
     F64     = 28
     IQ1_M   = 29
     BF16    = 30
+    Q4_0_4_4 = 31
+    Q4_0_4_8 = 32
+    Q4_0_8_8 = 33
 
 
 # TODO: add GGMLFileType from ggml_ftype in ggml.h
@@ -1158,7 +1217,7 @@ class LlamaFileType(IntEnum):
     MOSTLY_F16           = 1   # except 1d tensors
     MOSTLY_Q4_0          = 2   # except 1d tensors
     MOSTLY_Q4_1          = 3   # except 1d tensors
-    MOSTLY_Q4_1_SOME_F16 = 4   # tok_embeddings.weight and output.weight are F16
+    # MOSTLY_Q4_1_SOME_F16 = 4   # tok_embeddings.weight and output.weight are F16
     # MOSTLY_Q4_2        = 5   # support has been removed
     # MOSTLY_Q4_3        = 6   # support has been removed
     MOSTLY_Q8_0          = 7   # except 1d tensors
@@ -1187,6 +1246,9 @@ class LlamaFileType(IntEnum):
     MOSTLY_IQ4_XS        = 30  # except 1d tensors
     MOSTLY_IQ1_M         = 31  # except 1d tensors
     MOSTLY_BF16          = 32  # except 1d tensors
+    MOSTLY_Q4_0_4_4      = 33  # except 1d tensors
+    MOSTLY_Q4_0_4_8      = 34  # except 1d tensors
+    MOSTLY_Q4_0_8_8      = 35  # except 1d tensors
 
     GUESSED              = 1024  # not specified in the model file
 
@@ -1260,6 +1322,9 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.F64:     (1, 8),
     GGMLQuantizationType.IQ1_M:   (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
     GGMLQuantizationType.BF16:    (1, 2),
+    GGMLQuantizationType.Q4_0_4_4:(32, 2 + 16),
+    GGMLQuantizationType.Q4_0_4_8:(32, 2 + 16),
+    GGMLQuantizationType.Q4_0_8_8:(32, 2 + 16),
 }
 
 

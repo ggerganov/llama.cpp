@@ -433,8 +433,8 @@ static void process_logits(
 }
 
 static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
-    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
-    GGML_ASSERT(llama_add_eos_token(llama_get_model(ctx)) != 1);
+    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
+    GGML_ASSERT(!llama_add_eos_token(llama_get_model(ctx)));
     const int n_ctx = llama_n_ctx(ctx);
 
     auto tim1 = std::chrono::high_resolution_clock::now();
@@ -611,10 +611,10 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    llama_model * model;
-    llama_context * ctx;
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
 
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
     if (model == nullptr || ctx == nullptr) {
         fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;

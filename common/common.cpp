@@ -110,8 +110,34 @@ int32_t cpu_get_num_physical_cores() {
     if (result == 0) {
         return num_physical_cores;
     }
-#elif defined(_WIN32)
-    //TODO: Implement
+#elif defined(_WIN32) && (_WIN32_WINNT >= 0x0601) && !defined(__MINGW64__) // windows 7 and later
+    // TODO: windows + arm64 + mingw64
+    unsigned int n_threads_win = std::thread::hardware_concurrency();
+    unsigned int default_threads = n_threads_win > 0 ? (n_threads_win <= 4 ? n_threads_win : n_threads_win / 2) : 4;
+
+    DWORD buffer_size = 0;
+    if (!GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &buffer_size)) {
+        if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+            return default_threads;
+        }
+    }
+
+    std::vector<char> buffer(buffer_size);
+    if (!GetLogicalProcessorInformationEx(RelationProcessorCore, reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data()), &buffer_size)) {
+        return default_threads;
+    }
+
+    int32_t num_physical_cores = 0;
+    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buffer.data());
+    while (buffer_size > 0) {
+        if (info->Relationship == RelationProcessorCore) {
+            num_physical_cores += info->Processor.GroupCount;
+        }
+        buffer_size -= info->Size;
+        info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(reinterpret_cast<char*>(info) + info->Size);
+    }
+
+    return num_physical_cores > 0 ? num_physical_cores : default_threads;
 #endif
     unsigned int n_threads = std::thread::hardware_concurrency();
     return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
@@ -684,14 +710,24 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--lora") {
         CHECK_ARG
-        params.lora_adapter.emplace_back(argv[i], 1.0f);
+        params.lora_adapters.push_back({
+            std::string(argv[i]),
+            1.0,
+        });
         return true;
     }
     if (arg == "--lora-scaled") {
         CHECK_ARG
-        const char* lora_adapter = argv[i];
+        std::string lora_adapter = argv[i];
         CHECK_ARG
-        params.lora_adapter.emplace_back(lora_adapter, std::stof(argv[i]));
+        params.lora_adapters.push_back({
+            lora_adapter,
+            std::stof(argv[i]),
+        });
+        return true;
+    }
+    if (arg == "--lora-init-without-apply") {
+        params.lora_init_without_apply = true;
         return true;
     }
     if (arg == "--control-vector") {
@@ -1654,6 +1690,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
     options.push_back({ "server",      "-sps,  --slot-prompt-similarity SIMILARITY",
                                                                         "how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity });
+    options.push_back({ "server",      "       --lora-init-without-apply",     "load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_init_without_apply ? "enabled" : "disabled"});
 
 #ifndef LOG_DISABLE_LOGS
     options.push_back({ "logging" });
@@ -1716,7 +1753,13 @@ std::string gpt_params_get_system_info(const gpt_params & params) {
     if (params.n_threads_batch != -1) {
         os << " (n_threads_batch = " << params.n_threads_batch << ")";
     }
+#if defined(_WIN32) && (_WIN32_WINNT >= 0x0601) && !defined(__MINGW64__) // windows 7 and later
+    // TODO: windows + arm64 + mingw64
+    DWORD logicalProcessorCount = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+    os << " / " << logicalProcessorCount << " | " << llama_print_system_info();
+#else
     os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
+#endif
 
     return os.str();
 }
@@ -1764,6 +1807,17 @@ std::string string_get_sortable_timestamp() {
     snprintf(timestamp_ns, 11, "%09" PRId64, ns);
 
     return std::string(timestamp_no_ns) + "." + std::string(timestamp_ns);
+}
+
+void string_replace_all(std::string & s, const std::string & search, const std::string & replace) {
+    if (search.empty()) {
+        return; // Avoid infinite loop if 'search' is an empty string
+    }
+    size_t pos = 0;
+    while ((pos = s.find(search, pos)) != std::string::npos) {
+        s.replace(pos, search.length(), replace);
+        pos += replace.length();
+    }
 }
 
 void string_process_escapes(std::string & input) {
@@ -2039,8 +2093,8 @@ std::string fs_get_cache_file(const std::string & filename) {
 //
 // Model utils
 //
-
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params) {
+struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
+    llama_init_result iparams;
     auto mparams = llama_model_params_from_gpt_params(params);
 
     llama_model * model = nullptr;
@@ -2055,7 +2109,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
 
     if (model == NULL) {
         fprintf(stderr, "%s: error: failed to load model '%s'\n", __func__, params.model.c_str());
-        return std::make_tuple(nullptr, nullptr);
+        return iparams;
     }
 
     auto cparams = llama_context_params_from_gpt_params(params);
@@ -2064,7 +2118,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
     if (lctx == NULL) {
         fprintf(stderr, "%s: error: failed to create context with model '%s'\n", __func__, params.model.c_str());
         llama_free_model(model);
-        return std::make_tuple(nullptr, nullptr);
+        return iparams;
     }
 
     if (!params.control_vectors.empty()) {
@@ -2075,7 +2129,7 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         if (cvec.n_embd == -1) {
             llama_free(lctx);
             llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
+            return iparams;
         }
 
         int err = llama_control_vector_apply(lctx,
@@ -2087,21 +2141,26 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         if (err) {
             llama_free(lctx);
             llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
+            return iparams;
         }
     }
 
-    for (unsigned int i = 0; i < params.lora_adapter.size(); ++i) {
-        const std::string & lora_adapter = std::get<0>(params.lora_adapter[i]);
-        float lora_scale = std::get<1>(params.lora_adapter[i]);
-        auto adapter = llama_lora_adapter_init(model, lora_adapter.c_str());
-        if (adapter == nullptr) {
-            fprintf(stderr, "%s: error: failed to apply lora adapter\n", __func__);
+    // load and optionally apply lora adapters
+    for (auto & la : params.lora_adapters) {
+        llama_lora_adapter_container loaded_la;
+        loaded_la.path = la.path;
+        loaded_la.scale = la.scale;
+        loaded_la.adapter = llama_lora_adapter_init(model, la.path.c_str());
+        if (loaded_la.adapter == nullptr) {
+            fprintf(stderr, "%s: error: failed to apply lora adapter '%s'\n", __func__, la.path.c_str());
             llama_free(lctx);
             llama_free_model(model);
-            return std::make_tuple(nullptr, nullptr);
+            return iparams;
         }
-        llama_lora_adapter_set(lctx, adapter, lora_scale);
+        iparams.lora_adapters.push_back(loaded_la); // copy to list of loaded adapters
+    }
+    if (!params.lora_init_without_apply) {
+        llama_lora_adapters_apply(lctx, iparams.lora_adapters);
     }
 
     if (params.ignore_eos) {
@@ -2129,13 +2188,26 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
             tmp.clear();
             tmp.push_back(decoder_start_token_id);
         }
-        llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
+        if (llama_model_has_decoder(model)) {
+            llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
+        }
         llama_kv_cache_clear(lctx);
         llama_synchronize(lctx);
         llama_reset_timings(lctx);
     }
 
-    return std::make_tuple(model, lctx);
+    iparams.model   = model;
+    iparams.context = lctx;
+    return iparams;
+}
+
+void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lora_adapter_container> & lora_adapters) {
+    llama_lora_adapter_clear(ctx);
+    for (auto & la : lora_adapters) {
+        if (la.scale != 0.0f) {
+            llama_lora_adapter_set(ctx, la.adapter, la.scale);
+        }
+    }
 }
 
 struct llama_model_params llama_model_params_from_gpt_params(const gpt_params & params) {
@@ -2662,12 +2734,6 @@ std::string llama_detokenize(llama_context * ctx, const std::vector<llama_token>
     return text;
 }
 
-bool llama_should_add_bos_token(const llama_model * model) {
-    const int add_bos = llama_add_bos_token(model);
-
-    return add_bos != -1 ? bool(add_bos) : (llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
-}
-
 //
 // Chat template utils
 //
@@ -3160,19 +3226,18 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     }
 
     fprintf(stream, "lora:\n");
-    for (std::tuple<std::string, float> la : params.lora_adapter) {
-        if (std::get<1>(la) != 1.0f) {
-            continue;
+    for (auto & la : params.lora_adapters) {
+        if (la.scale == 1.0f) {
+            fprintf(stream, "  - %s\n", la.path.c_str());
         }
-        fprintf(stream, "  - %s\n", std::get<0>(la).c_str());
     }
     fprintf(stream, "lora_scaled:\n");
-    for (std::tuple<std::string, float> la : params.lora_adapter) {
-        if (std::get<1>(la) == 1.0f) {
-            continue;
+    for (auto & la : params.lora_adapters) {
+        if (la.scale != 1.0f) {
+            fprintf(stream, "  - %s: %f\n", la.path.c_str(), la.scale);
         }
-        fprintf(stream, "  - %s: %f\n", std::get<0>(la).c_str(), std::get<1>(la));
     }
+    fprintf(stream, "lora_init_without_apply: %s # default: false\n", params.lora_init_without_apply ? "true" : "false");
     fprintf(stream, "main_gpu: %d # default: 0\n", params.main_gpu);
     fprintf(stream, "min_keep: %d # default: 0 (disabled)\n", sparams.min_keep);
     fprintf(stream, "mirostat: %d # default: 0 (disabled)\n", sparams.mirostat);

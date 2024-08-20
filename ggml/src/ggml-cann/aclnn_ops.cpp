@@ -464,8 +464,10 @@ void ggml_cann_group_norm(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     aclTensor* acl_src = ggml_cann_create_tensor(src);
     aclTensor* acl_dst = ggml_cann_create_tensor(dst);
 
-    const float eps = 1e-6f;  // TODO: make this a parameter
     int n_groups = dst->op_params[0];
+
+    float eps;
+    memcpy(&eps, dst->op_params + 1, sizeof(float));
 
     uint64_t workspaceSize = 0;
     aclOpExecutor* executor;
@@ -2879,7 +2881,7 @@ void ggml_cann_rope(ggml_backend_cann_context& ctx, ggml_tensor* dst) {
     ggml_rope_yarn_corr_dims(n_dims, n_ctx_orig, freq_base, beta_fast,
                              beta_slow, corr_dims);
 
-    const bool is_neox = mode & 2;
+    const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
 
     // init cos/sin cache
     ggml_cann_pool_alloc sin_allocator(

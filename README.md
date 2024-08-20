@@ -105,6 +105,7 @@ Typically finetunes of the base models below are supported as well.
 - [x] [Open Elm models](https://huggingface.co/collections/apple/openelm-instruct-models-6619ad295d7ae9f868b759ca)
 - [x] [ChatGLM3-6b](https://huggingface.co/THUDM/chatglm3-6b) + [ChatGLM4-9b](https://huggingface.co/THUDM/glm-4-9b)
 - [x] [SmolLM](https://huggingface.co/collections/HuggingFaceTB/smollm-6695016cad7167254ce15966)
+- [x] [EXAONE-3.0-7.8B-Instruct](https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct)
 
 (instructions for supporting more models: [HOWTO-add-model.md](./docs/development/HOWTO-add-model.md))
 
@@ -186,10 +187,12 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 
 - [akx/ggify](https://github.com/akx/ggify) – download PyTorch models from HuggingFace Hub and convert them to GGML
 - [crashr/gppm](https://github.com/crashr/gppm) – launch llama.cpp instances utilizing NVIDIA Tesla P40 or P100 GPUs with reduced idle power consumption
+- [gpustack/gguf-parser](https://github.com/gpustack/gguf-parser-go/tree/main/cmd/gguf-parser) - review/check the GGUF file and estimate the memory usage
 
 **Infrastructure:**
 
 - [Paddler](https://github.com/distantmagic/paddler) - Stateful load balancer custom-tailored for llama.cpp
+- [GPUStack](https://github.com/gpustack/gpustack) - Manage GPU clusters for running LLMs
 
 **Games:**
 - [Lucy's Labyrinth](https://github.com/MorganRO8/Lucys_Labyrinth) - A simple maze game where agents controlled by an AI model will try to trick you.
@@ -422,6 +425,7 @@ Please refer to [Build llama.cpp locally](./docs/build.md)
 | [CUDA](./docs/build.md#cuda) | Nvidia GPU |
 | [hipBLAS](./docs/build.md#hipblas) | AMD GPU |
 | [Vulkan](./docs/build.md#vulkan) | GPU |
+| [CANN](./docs/build.md#cann) | Ascend NPU |
 
 ## Tools
 

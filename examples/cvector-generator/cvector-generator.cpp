@@ -271,7 +271,7 @@ struct tokenized_prompt {
     size_t max_seq_len;
 
     tokenized_prompt(llama_context * ctx, std::string pos, std::string neg) {
-        const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+        const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
         tokens_pos = ::llama_tokenize(ctx, pos, add_bos, true);
         tokens_neg = ::llama_tokenize(ctx, neg, add_bos, true);
         max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
@@ -414,9 +414,10 @@ int main(int argc, char ** argv) {
     llama_numa_init(params.numa);
 
     // load the model to get hparams
-    llama_model * model;
-    llama_context * ctx;
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
 
     // int n_ctx = llama_n_ctx(ctx);
     int n_layers = llama_n_layer(model);

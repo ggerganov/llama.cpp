@@ -179,7 +179,10 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+    model = llama_init.model;
+    ctx = llama_init.context;
 
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
@@ -200,8 +203,8 @@ int main(int argc, char ** argv) {
         LOG_TEE("\n");
         LOG_TEE("%s\n", gpt_params_get_system_info(params).c_str());
     }
-    const bool add_bos = llama_should_add_bos_token(model);
-    GGML_ASSERT(llama_add_eos_token(model) != 1);
+    const bool add_bos = llama_add_bos_token(model);
+    GGML_ASSERT(!llama_add_eos_token(model));
     LOG("add_bos: %d\n", add_bos);
 
     std::vector<llama_token> embd_inp;

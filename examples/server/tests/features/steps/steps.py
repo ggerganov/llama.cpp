@@ -7,6 +7,7 @@ import subprocess
 import sys
 import threading
 import time
+import requests
 from collections.abc import Sequence
 from contextlib import closing
 from re import RegexFlag
@@ -70,6 +71,7 @@ def step_server_config(context, server_fqdn: str, server_port: str):
     context.user_api_key = None
     context.response_format = None
     context.temperature = None
+    context.lora_file = None
 
     context.tasks_result = []
     context.concurrent_tasks = []
@@ -82,6 +84,12 @@ def step_download_hf_model(context, hf_file: str, hf_repo: str):
     context.model_hf_file = hf_file
     context.model_file = os.path.basename(hf_file)
 
+@step('a lora adapter file from {lora_file_url}')
+def step_download_lora_file(context, lora_file_url: str):
+    file_name = lora_file_url.split('/').pop()
+    context.lora_file = f'../../../{file_name}'
+    with open(context.lora_file, 'wb') as f:
+        f.write(requests.get(lora_file_url).content)
 
 @step('a model file {model_file}')
 def step_model_file(context, model_file: str):
@@ -197,27 +205,20 @@ def step_start_server(context):
 async def step_wait_for_the_server_to_be_started(context, expecting_status: Literal['healthy', 'ready', 'idle', 'busy'] | str):
     match expecting_status:
         case 'healthy':
-            await wait_for_health_status(context, context.base_url, 200, 'ok',
-                                         timeout=30)
+            await wait_for_slots_status(context, context.base_url, 200,
+                                        timeout=30)
 
         case 'ready' | 'idle':
-            await wait_for_health_status(context, context.base_url, 200, 'ok',
-                                         timeout=30,
-                                         params={'fail_on_no_slot': 0, 'include_slots': 0},
-                                         slots_idle=context.n_slots,
-                                         slots_processing=0,
-                                         expected_slots=[{'id': slot_id, 'state': 0}
-                                                         for slot_id in
-                                                         range(context.n_slots if context.n_slots else 1)])
+            await wait_for_slots_status(context, context.base_url, 200,
+                                        timeout=30,
+                                        params={'fail_on_no_slot': 1},
+                                        slots_idle=context.n_slots,
+                                        slots_processing=0)
         case 'busy':
-            await wait_for_health_status(context, context.base_url, 503,
-                                         'no slot available',
-                                         params={'fail_on_no_slot': 0, 'include_slots': 0},
-                                         slots_idle=0,
-                                         slots_processing=context.n_slots,
-                                         expected_slots=[{'id': slot_id, 'state': 1}
-                                                         for slot_id in
-                                                         range(context.n_slots if context.n_slots else 1)])
+            await wait_for_slots_status(context, context.base_url, 503,
+                                        params={'fail_on_no_slot': 1},
+                                        slots_idle=0,
+                                        slots_processing=context.n_slots)
         case _:
             assert False, "unknown status"
 
@@ -849,6 +850,17 @@ async def step_erase_slot(context, slot_id):
             context.response = response
 
 
+@step('switch {on_or_off} lora adapter {lora_id:d}')
+@async_run_until_complete
+async def toggle_lora_adapter(context, on_or_off: str, lora_id: int):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f'{context.base_url}/lora-adapters',
+                                json=[{'id': lora_id, 'scale': 1 if on_or_off == 'on' else 0}],
+                                headers={"Content-Type": "application/json"}) as response:
+            context.response = response
+            print([{'id': lora_id, 'scale': 1 if on_or_off == 'on' else 0}])
+
+
 @step('the server responds with status code {status_code:d}')
 def step_server_responds_with_status_code(context, status_code):
     assert context.response.status == status_code
@@ -1168,17 +1180,15 @@ async def gather_tasks_results(context):
     return n_completions
 
 
-async def wait_for_health_status(context,
-                                 base_url,
-                                 expected_http_status_code,
-                                 expected_health_status,
-                                 timeout=3,
-                                 params=None,
-                                 slots_idle=None,
-                                 slots_processing=None,
-                                 expected_slots=None):
+async def wait_for_slots_status(context,
+                                base_url,
+                                expected_http_status_code,
+                                timeout=3,
+                                params=None,
+                                slots_idle=None,
+                                slots_processing=None):
     if context.debug:
-        print(f"Starting checking for health for expected_health_status={expected_health_status}")
+        print(f"Starting checking for health for expected_http_status_code={expected_http_status_code}")
     interval = 0.5
     counter = 0
     if 'GITHUB_ACTIONS' in os.environ:
@@ -1186,26 +1196,19 @@ async def wait_for_health_status(context,
 
     async with aiohttp.ClientSession() as session:
         while True:
-            async with await session.get(f'{base_url}/health', params=params) as health_response:
-                status_code = health_response.status
-                health = await health_response.json()
+            async with await session.get(f'{base_url}/slots', params=params) as slots_response:
+                status_code = slots_response.status
+                slots = await slots_response.json()
                 if context.debug:
-                    print(f"HEALTH - response for expected health status='{expected_health_status}' on "
-                          f"'{base_url}/health'?{params} is {health}\n")
-                if (status_code == expected_http_status_code
-                        and health['status'] == expected_health_status
-                        and (slots_idle is None or health['slots_idle'] == slots_idle)
-                        and (slots_processing is None or health['slots_processing'] == slots_processing)):
-                    if expected_slots is not None:
-                        assert_slots_status(health['slots'], expected_slots)
+                    print(f"slots responses {slots}\n")
+                if status_code == 503 and status_code == expected_http_status_code:
                     return
-                if (status_code == expected_http_status_code
-                        and health['status'] == expected_health_status
-                        and (slots_idle is None or health['slots_idle'] == slots_idle)
-                        and (slots_processing is None or health['slots_processing'] == slots_processing)):
-                    if expected_slots is not None:
-                        assert_slots_status(health['slots'], expected_slots)
-                    return
+                if status_code == 200 and status_code == expected_http_status_code:
+                    n_slots_idle = sum(1 if slot["state"] == 0 else 0 for slot in slots)
+                    n_slots_processing = sum(1 if slot["state"] != 0 else 0 for slot in slots)
+                    if ((slots_idle is None or slots_idle == n_slots_idle)
+                        and (slots_processing is None or slots_processing == n_slots_processing)):
+                        return
             await asyncio.sleep(interval)
 
             counter += interval
@@ -1219,7 +1222,7 @@ async def wait_for_health_status(context,
                         if n_completions > 0:
                             return
 
-                assert False, f'{expected_health_status} timeout exceeded {counter}s>={timeout}'
+                assert False, f'slots check timeout exceeded {counter}s>={timeout}'
 
 
 def assert_embeddings(embeddings):
@@ -1326,6 +1329,8 @@ def start_server_background(context):
         server_args.extend(['--grp-attn-w', context.n_ga_w])
     if context.debug:
         server_args.append('--verbose')
+    if context.lora_file:
+        server_args.extend(['--lora', context.lora_file])
     if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
         server_args.extend(['--log-format', "text"])
 
