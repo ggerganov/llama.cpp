@@ -564,7 +564,7 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params, cons
         if (params.compute_ppl) {
             const int first = n_ctx/2;
             for (int seq = 0; seq < n_seq_batch; seq++) {
-                const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits_ith(ctx, seq*n_ctx + first);
+                const float * all_logits = num_batches > 1 ? logits.data() : llama_get_logits_ith(ctx, seq*n_ctx);
 
                 llama_token * tokens_data = tokens.data() + start + seq*n_ctx + first;
 
