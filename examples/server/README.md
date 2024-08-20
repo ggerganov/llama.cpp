@@ -262,6 +262,8 @@ Available environment variables (if specified, these variables will override par
 - `LLAMA_ARG_ENDPOINT_METRICS`
 - `LLAMA_ARG_ENDPOINT_SLOTS`
 - `LLAMA_ARG_EMBEDDINGS`
+- `LLAMA_ARG_FLASH_ATTN`
+- `LLAMA_ARG_DEFRAG_THOLD`
 
 ## Build
 

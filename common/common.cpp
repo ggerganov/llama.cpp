@@ -89,10 +89,17 @@ get_env(std::string name, T & target) {
 }
 
 template<typename T>
-static typename std::enable_if<!std::is_same<T, bool>::value &&std::is_integral<T>::value, void>::type
+static typename std::enable_if<!std::is_same<T, bool>::value && std::is_integral<T>::value, void>::type
 get_env(std::string name, T & target) {
     char * value = std::getenv(name.c_str());
     target = value ? std::stoi(value) : target;
+}
+
+template<typename T>
+static typename std::enable_if<std::is_floating_point<T>::value, void>::type
+get_env(std::string name, T & target) {
+    char * value = std::getenv(name.c_str());
+    target = value ? std::stof(value) : target;
 }
 
 template<typename T>
@@ -332,6 +339,8 @@ void gpt_params_parse_from_env(gpt_params & params) {
     get_env("LLAMA_ARG_ENDPOINT_METRICS", params.endpoint_metrics);
     get_env("LLAMA_ARG_ENDPOINT_SLOTS",   params.endpoint_slots);
     get_env("LLAMA_ARG_EMBEDDINGS",       params.embedding);
+    get_env("LLAMA_ARG_FLASH_ATTN",       params.flash_attn);
+    get_env("LLAMA_ARG_DEFRAG_THOLD",     params.defrag_thold);
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
