@@ -364,6 +364,10 @@ if __name__ == '__main__':
 
             def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
                 dest = super().modify_tensors(data_torch, name, bid)
+                # for now, we cannot convert archs that use the same tensor for tok_embd and output
+                # see: https://github.com/ggerganov/llama.cpp/issues/9065
+                if name == "lm_head.weight" and len(dest) == 0:
+                    raise ValueError(f"lm_head is present in adapter, but is ignored in base model")
                 for dest_name, dest_data in dest:
                     assert isinstance(dest_data, LoraTorchTensor)
                     lora_a, lora_b = dest_data.get_lora_A_B()
