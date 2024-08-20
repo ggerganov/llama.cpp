@@ -191,6 +191,7 @@ Unless otherwise noted these projects are open-source with permissive licensing:
 
 **Infrastructure:**
 
+- [llmaz](https://github.com/InftyAI/llmaz) - ☸️ Effortlessly serve state-of-the-art LLMs on Kubernetes, see [llama.cpp example](https://github.com/InftyAI/llmaz/tree/main/docs/examples/llamacpp) here.
 - [Paddler](https://github.com/distantmagic/paddler) - Stateful load balancer custom-tailored for llama.cpp
 - [GPUStack](https://github.com/gpustack/gpustack) - Manage GPU clusters for running LLMs
 
