@@ -583,7 +583,7 @@ static json format_embeddings_response_oaicompat(const json & request, const jso
     return res;
 }
 
-static json format_tokenizer_response(const std::vector<llama_token> & tokens) {
+static json format_tokenizer_response(const json & tokens) {
     return json {
         {"tokens", tokens}
     };

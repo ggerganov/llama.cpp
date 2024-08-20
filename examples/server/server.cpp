@@ -3189,12 +3189,26 @@ int main(int argc, char ** argv) {
     const auto handle_tokenize = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
         const json body = json::parse(req.body);
 
-        std::vector<llama_token> tokens;
+        json tokens_response = json::array();
         if (body.count("content") != 0) {
             const bool add_special = json_value(body, "add_special", false);
-            tokens = ctx_server.tokenize(body.at("content"), add_special);
+            const bool with_pieces = json_value(body, "with_pieces", false);
+            std::vector<llama_token> tokens = ctx_server.tokenize(body.at("content"), add_special);
+
+            if (with_pieces) {
+                for (const auto& token : tokens) {
+                    std::string piece = llama_token_to_piece(ctx_server.ctx, token);
+                    tokens_response.push_back({
+                        {"id", token},
+                        {"piece", piece}
+                    });
+                }
+            } else {
+                tokens_response = tokens;
+            }
         }
-        const json data = format_tokenizer_response(tokens);
+        
+        const json data = format_tokenizer_response(tokens_response);
         return res.set_content(data.dump(), MIMETYPE_JSON);
     };
 

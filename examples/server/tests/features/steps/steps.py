@@ -685,6 +685,32 @@ def step_tokenize_set_add_special(context):
     context.tokenize_add_special = True
 
 
+@step("tokenizing with pieces")
+@async_run_until_complete
+async def step_tokenize_with_pieces(context):
+    context.tokenized_text = context_text(context)
+    async with aiohttp.ClientSession() as session:
+        tokenize_args = {"content": context.tokenized_text, "with_pieces": True}
+        if getattr(context, "tokenize_add_special", None) is not None:
+            tokenize_args["add_special"] = context.tokenize_add_special
+
+        async with session.post(
+            f"{context.base_url}/tokenize", json=tokenize_args
+        ) as response:
+            assert response.status == 200
+            tokenize_json = await response.json()
+            context.tokens_with_pieces = tokenize_json["tokens"]
+
+
+@step("tokens with pieces are complete")
+@async_run_until_complete
+async def step_tokenize_with_pieces(context):
+    # Verify that the response contains both token IDs and pieces
+    assert all(
+        "id" in token and "piece" in token for token in context.tokens_with_pieces
+    )
+
+
 @step('tokenizing')
 @async_run_until_complete
 async def step_tokenize(context):
