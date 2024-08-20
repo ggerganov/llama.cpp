@@ -583,7 +583,9 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
 
             int n_outputs = 0;
 
-            batch.n_tokens = 0;
+            // clear the batch
+            llama_batch_clear(batch);
+
             for (int seq = 0; seq < n_seq_batch; seq++) {
                 int seq_start = batch_start + seq*n_ctx;
 
@@ -596,16 +598,10 @@ static results_perplexity perplexity(llama_context * ctx, const gpt_params & par
                 }
 
                 for (int k = 0; k < batch_size; ++k) {
-                    const int idx = seq*n_ctx + k;
-                    batch.token   [idx]    = tokens[seq_start + k];
-                    batch.pos     [idx]    = j*n_batch + k;
-                    batch.n_seq_id[idx]    = 1;
-                    batch.seq_id  [idx][0] = seq;
-                    batch.logits  [idx]    = batch.pos[idx] >= first ? 1 : 0;
-
-                    n_outputs += batch.logits[idx] != 0;
+                    llama_pos pos = j*n_batch + k;
+                    llama_batch_add(batch, tokens[seq_start + k], pos, { seq }, pos >= first);
+                    n_outputs += (int) (pos >= first);
                 }
-                batch.n_tokens += batch_size;
 
                 // restore the original token in case it was set to BOS
                 tokens[seq_start] = token_org;
