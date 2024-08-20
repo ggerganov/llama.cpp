@@ -1256,7 +1256,6 @@ class GGUFValueType(IntEnum):
 # Items here are (block size, type size)
 QK_K = 256
 GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
-<<<<<<< HEAD
     GGMLQuantizationType.F32:     (1, 4),
     GGMLQuantizationType.F16:     (1, 2),
     GGMLQuantizationType.Q4_0:    (32, 2 + 16),
@@ -1289,39 +1288,8 @@ GGML_QUANT_SIZES: dict[GGMLQuantizationType, tuple[int, int]] = {
     GGMLQuantizationType.Q4_0_4_4:(32, 2 + 16),
     GGMLQuantizationType.Q4_0_4_8:(32, 2 + 16),
     GGMLQuantizationType.Q4_0_8_8:(32, 2 + 16),
-=======
-    GGMLQuantizationType.F32:      (1, 4),
-    GGMLQuantizationType.F16:      (1, 2),
-    GGMLQuantizationType.Q4_0:     (32, 2 + 16),
-    GGMLQuantizationType.Q4_1:     (32, 2 + 2 + 16),
-    GGMLQuantizationType.Q5_0:     (32, 2 + 4 + 16),
-    GGMLQuantizationType.Q5_1:     (32, 2 + 2 + 4 + 16),
-    GGMLQuantizationType.Q8_0:     (32, 2 + 32),
-    GGMLQuantizationType.Q8_1:     (32, 4 + 4 + 32),
-    GGMLQuantizationType.Q2_K:     (256, 2 + 2 + QK_K // 16 + QK_K // 4),
-    GGMLQuantizationType.Q3_K:     (256, 2 + QK_K // 4 + QK_K // 8 + 12),
-    GGMLQuantizationType.Q4_K:     (256, 2 + 2 + QK_K // 2 + 12),
-    GGMLQuantizationType.Q5_K:     (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
-    GGMLQuantizationType.Q6_K:     (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
-    GGMLQuantizationType.Q8_K:     (256, 4 + QK_K + QK_K // 8),
-    GGMLQuantizationType.IQ2_XXS:  (256, 2 + QK_K // 4),
-    GGMLQuantizationType.IQ2_XS:   (256, 2 + QK_K // 4 + QK_K // 32),
-    GGMLQuantizationType.IQ3_XXS:  (256, 2 + QK_K // 4 + QK_K // 8),
-    GGMLQuantizationType.IQ1_S:    (256, 2 + QK_K // 8 + QK_K // 16),
-    GGMLQuantizationType.IQ4_NL:   (32, 2 + 16),
-    GGMLQuantizationType.IQ3_S:    (256, 2 + QK_K // 4 + QK_K // 8 + QK_K // 32 + 4),
-    GGMLQuantizationType.IQ2_S:    (256, 2 + QK_K // 4 + QK_K // 16),
-    GGMLQuantizationType.IQ4_XS:   (256, 2 + 2 + QK_K // 2 + QK_K // 64),
-    GGMLQuantizationType.I8:       (1, 1),
-    GGMLQuantizationType.I16:      (1, 2),
-    GGMLQuantizationType.I32:      (1, 4),
-    GGMLQuantizationType.I64:      (1, 8),
-    GGMLQuantizationType.F64:      (1, 8),
-    GGMLQuantizationType.IQ1_M:    (256, QK_K // 8 + QK_K // 16  + QK_K // 32),
-    GGMLQuantizationType.BF16:     (1, 2),
-    GGMLQuantizationType.Q4_0_B16: (32, 2 + 16),
-    GGMLQuantizationType.Q8_0_B16: (32, 2 + 32),
->>>>>>> 2f13a1e6 (Introduce Q4_0 and Q8_0 quantizations with BF16 delta values)
+    GGMLQuantizationType.Q4_0_B16:(32, 2 + 16),
+    GGMLQuantizationType.Q8_0_B16:(32, 2 + 32),
 }
 
 
