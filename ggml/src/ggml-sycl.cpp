@@ -38,7 +38,9 @@
 
 #include "ggml-sycl/backend.hpp"
 #include "ggml-sycl/presets.hpp"
-#include "ggml-sycl/gemm.hpp"
+#if GGML_SYCL_DNNL
+#include "ggml-sycl/onednn/gemm.hpp"
+#endif
 
 bool   ggml_sycl_loaded(void);
 void   ggml_sycl_free_data(struct ggml_tensor * tensor);
@@ -3892,6 +3894,9 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
     ggml_sycl_func_t func;
 
     switch (tensor->op) {
+        case GGML_OP_CONV_TRANSPOSE_2D:
+            func = ggml_sycl_op_conv_2d;
+            break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             func = ggml_sycl_op_conv_transpose_1d;
             break;
@@ -5007,6 +5012,10 @@ GGML_CALL static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t back
 
 GGML_CALL static bool ggml_backend_sycl_supports_op(ggml_backend_t backend, const ggml_tensor * op) {
     switch (op->op) {
+        case GGML_OP_CONV_TRANSPOSE_2D:
+            {
+                return true;
+            } break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             {
                 ggml_type src0_type = op->src[0]->type;

@@ -6770,6 +6770,35 @@ struct ggml_tensor * ggml_conv_2d(
         int                  p1,
         int                  d0,
         int                  d1) {
+#ifdef GGML_SYCL_DNNL
+    bool is_node = false;
+
+    if (a->grad || b->grad) {
+        GGML_ABORT("fatal error"); // TODO: implement backward
+        is_node = true;
+    }
+
+    const int64_t OH = ggml_calc_conv_output_size(b->ne[1], a->ne[1], s1, p1, d1);
+    const int64_t OW = ggml_calc_conv_output_size(b->ne[0], a->ne[0], s0, p0, d0);
+
+    const int64_t ne[4] = {
+        OW,
+        OH,
+        a->ne[3], // OC
+        b->ne[3], // N
+    };
+
+    struct ggml_tensor * result = ggml_new_tensor(ctx, b->type, 4, ne);
+    int32_t params[] = { s0, s1, p0, p1, d0, d1};
+    ggml_set_op_params(result, params, sizeof(params));
+
+    result->op = GGML_OP_CONV_TRANSPOSE_2D;
+    result->grad = is_node ? ggml_dup_tensor(ctx, result) : NULL;
+    result->src[0] = a;
+    result->src[1] = b;
+
+    return result;
+#else
     struct ggml_tensor * im2col = ggml_im2col(ctx, a, b, s0, s1, p0, p1, d0, d1, true, GGML_TYPE_F16); // [N, OH, OW, IC * KH * KW]
 
     struct ggml_tensor * result =
@@ -6782,6 +6811,7 @@ struct ggml_tensor * ggml_conv_2d(
 
 
     return result;
+#endif
 }
 
 // ggml_conv_2d_sk_p0

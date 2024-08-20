@@ -10,8 +10,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 
-#ifndef GGML_SYCL_GEMM_HPP
-#define GGML_SYCL_GEMM_HPP
+#ifndef GGML_SYCL_ONEDNN_GEMM_HPP
+#define GGML_SYCL_ONEDNN_GEMM_HPP
 
 #include <fstream>
 #include <iostream>
@@ -98,4 +98,4 @@ public:
 
 #endif
 
-#endif // GGML_SYCL_GEMM_HPP
+#endif // GGML_SYCL_ONEDNN_GEMM_HPP

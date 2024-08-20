@@ -11,6 +11,7 @@
 //
 
 #include "conv.hpp"
+#include "onednn/convolution.hpp"
 
 static  void conv_transpose_1d_kernel(
         const int s0, const int output_size,
@@ -95,5 +96,32 @@ void ggml_sycl_op_conv_transpose_1d(ggml_backend_sycl_context & ctx, const ggml_
         src0->ne[0], src0->ne[1], src0->ne[2],
         src1->ne[0], dst->ne[0],
         src0_d, src1_d, dst_d, stream);
+}
+
+
+void ggml_sycl_op_conv_2d(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
+    const ggml_tensor *src1, ggml_tensor *dst) {
+    const void * src0_d = (const void *)src0->data;
+    const void * src1_d = (const void *)src1->data;
+
+    void * dst_d = (void *)dst->data;
+    auto dnnl_stream = ctx.stream_dnnl(ctx.stream());
+
+    GGML_ASSERT(ggml_is_contiguous(src0));
+    GGML_ASSERT(ggml_is_contiguous(src1));
+
+    const int32_t * opts = (const int32_t *)dst->op_params;
+
+    DnnlConvWrapper::conv_params params = {
+        opts[0], opts[1], opts[2], opts[3], opts[4], opts[5], true
+    };
+
+    DnnlConvWrapper::forward(dnnl_stream,
+        src0->ne[0], src0->ne[1], src0->ne[2], src0->ne[3],
+        src1->ne[1], src1->ne[2], src1->ne[3],
+        params,
+        src0_d, DnnlConvWrapper::to_dt<float>(),
+        src1_d, DnnlConvWrapper::to_dt<float>(),
+        dst_d, DnnlConvWrapper::to_dt<float>());
 }
 

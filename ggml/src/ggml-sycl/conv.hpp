@@ -18,4 +18,7 @@
 void ggml_sycl_op_conv_transpose_1d(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
   const ggml_tensor *src1, ggml_tensor *dst);
 
+void ggml_sycl_op_conv_2d(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
+  const ggml_tensor *src1, ggml_tensor *dst);
+
 #endif // GGML_SYCL_CONV_HPP
