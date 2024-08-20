@@ -249,6 +249,8 @@ logging:
 
 Available environment variables (if specified, these variables will override parameters specified in arguments):
 
+- `LLAMA_CACHE` (cache directory, used by `--hf-repo`)
+- `HF_TOKEN` (Hugging Face access token, used when accessing a gated model with `--hf-repo`)
 - `LLAMA_ARG_MODEL`
 - `LLAMA_ARG_THREADS`
 - `LLAMA_ARG_CTX_SIZE`
