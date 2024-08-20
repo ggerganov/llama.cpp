@@ -322,7 +322,7 @@ private:
 // TODO: there are a lot of common parts between spm and bpe tokenizers, should be refactored and reused
 
 template<typename T, typename Container = std::vector<T>, typename Compare = std::less<typename Container::value_type>>
-class lama_priority_queue : public std::priority_queue<T, Container, Compare> {
+class llama_priority_queue : public std::priority_queue<T, Container, Compare> {
 public:
     using std::priority_queue<T, Container, Compare>::priority_queue;
 
@@ -344,7 +344,7 @@ struct llm_bigram_bpe {
     };
 
     using queue_storage = std::vector<llm_bigram_bpe>;
-    using queue = lama_priority_queue<llm_bigram_bpe, queue_storage, comparator>;
+    using queue = llama_priority_queue<llm_bigram_bpe, queue_storage, comparator>;
     llm_symbol::index left;
     llm_symbol::index right;
     std::string text;
