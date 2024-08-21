@@ -266,9 +266,10 @@ Available environment variables (if specified, these variables will override par
 - `LLAMA_ARG_CHAT_TEMPLATE`: equivalent to `--chat-template`
 - `LLAMA_ARG_N_PREDICT`: equivalent to `-n`
 - `LLAMA_ARG_ENDPOINT_METRICS`: if set to `1`, it will enable metrics endpoint (equivalent to `--metrics`)
-- `LLAMA_ARG_ENDPOINT_SLOTS`: if set to `0`, it will **disable** slots endpoint (equivalent to `--no-slots`)
+- `LLAMA_ARG_ENDPOINT_SLOTS`: if set to `0`, it will **disable** slots endpoint (equivalent to `--no-slots`). This feature is enabled by default.
 - `LLAMA_ARG_EMBEDDINGS`: if set to `1`, it will enable embeddings endpoint (equivalent to `--embeddings`)
 - `LLAMA_ARG_FLASH_ATTN`: if set to `1`, it will enable flash attention (equivalent to `-fa`)
+- `LLAMA_ARG_CONT_BATCHING`: if set to `0`, it will **disable** continuous batching (equivalent to `--no-cont-batching`). This feature is enabled by default.
 - `LLAMA_ARG_DEFRAG_THOLD`: equivalent to `-dt`
 - `LLAMA_ARG_HOST`: equivalent to `--host`
 - `LLAMA_ARG_PORT`: equivalent to `--port`
