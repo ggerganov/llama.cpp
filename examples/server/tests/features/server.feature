@@ -104,7 +104,15 @@ Feature: llama.cpp server
     Then  tokens begin with BOS
     Given first token is removed
     Then  tokens can be detokenized
-
+  
+  Scenario: Tokenize with pieces
+    When  tokenizing with pieces:
+    """
+    What is the capital of Germany? 
+    媽
+    """
+    Then  tokens are given with pieces
+  
   Scenario: Models available
     Given available models
     Then  1 models are supported

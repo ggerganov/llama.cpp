@@ -702,7 +702,7 @@ async def step_tokenize_with_pieces(context):
             context.tokens_with_pieces = tokenize_json["tokens"]
 
 
-@step("tokens with pieces are complete")
+@step("tokens are given with pieces")
 @async_run_until_complete
 async def step_tokenize_with_pieces(context):
     # Verify that the response contains both token IDs and pieces
