@@ -112,6 +112,10 @@ struct ggml_vk_memory {
     vk::Buffer *stagingBuffer = nullptr;
 };
 
+struct ggml_backend_kompute_buffer_context {
+    struct ggml_vk_memory memory;
+};
+
 #ifdef __linux__
 __attribute__((constructor))
 static void enable_sam() {
@@ -1826,15 +1830,16 @@ static const char * ggml_backend_kompute_buffer_get_name(ggml_backend_buffer_t b
 }
 
 static void ggml_backend_kompute_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    auto * memory = (ggml_vk_memory *)buffer->context;
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_context *>(buffer->context);
     if (ggml_vk_has_device()) {
-        ggml_vk_free_memory(*memory);
+        ggml_vk_free_memory(ctx->memory);
     }
-    delete memory;
+    delete ctx;
 }
 
 static void * ggml_backend_kompute_buffer_get_base(ggml_backend_buffer_t buffer) {
-    return ((ggml_vk_memory *)buffer->context)->data;
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_context *>(buffer->context);
+    return ctx->memory.data;
 }
 
 static void ggml_backend_kompute_buffer_set_tensor(ggml_backend_buffer_t buffer, ggml_tensor * tensor, const void * data, size_t offset, size_t size) {
@@ -1860,11 +1865,11 @@ static void ggml_backend_kompute_buffer_get_tensor(ggml_backend_buffer_t buffer,
 }
 
 static void ggml_backend_kompute_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
-    auto * memory = (ggml_vk_memory *)buffer->context;
-    memset(memory->data, value, buffer->size);
+    auto * ctx = static_cast<ggml_backend_kompute_buffer_context *>(buffer->context);
+    memset(ctx->memory.data, value, ctx->memory.size);
 
-    if (memory->stagingBuffer)
-        komputeManager()->sequence()->eval<kp::OpBufferSyncDevice>(memory->primaryBuffer, memory->stagingBuffer, memory->size);
+    if (ctx->memory.stagingBuffer)
+        komputeManager()->sequence()->eval<kp::OpBufferSyncDevice>(ctx->memory.primaryBuffer, ctx->memory.stagingBuffer, ctx->memory.size);
 }
 
 static ggml_backend_buffer_i ggml_backend_kompute_buffer_i = {
@@ -1888,7 +1893,8 @@ static const char * ggml_backend_kompute_buffer_type_get_name(ggml_backend_buffe
 
 static ggml_backend_buffer_t ggml_backend_kompute_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
     ggml_backend_kompute_device_ref(buft);
-    auto * ctx = new ggml_vk_memory(ggml_vk_allocate(size));
+    auto * ctx = new ggml_backend_kompute_buffer_context;
+    ctx->memory = ggml_vk_allocate(size);
     return ggml_backend_buffer_init(buft, ggml_backend_kompute_buffer_i, ctx, size);
 }
 
