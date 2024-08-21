@@ -11,6 +11,8 @@
 extern "C" {
 #endif
 
+#define GGML_KOMPUTE_MAX_DEVICES 16
+
 struct ggml_vk_device {
     int index;
     int type; // same as VkPhysicalDeviceType
