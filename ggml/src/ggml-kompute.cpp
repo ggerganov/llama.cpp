@@ -334,6 +334,11 @@ ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count
     return arr;
 }
 
+int ggml_backend_kompute_get_device_count(void) {
+    auto devices = ggml_vk_available_devices_internal(0);
+    return devices.size();
+}
+
 static void ggml_vk_filterByVendor(std::vector<ggml_vk_device>& devices, const std::string& targetVendor) {
     devices.erase(
         std::remove_if(devices.begin(), devices.end(),
