@@ -25,8 +25,6 @@ struct ggml_vk_device {
 struct ggml_vk_device * ggml_vk_available_devices(size_t memoryRequired, size_t * count);
 bool ggml_vk_get_device(struct ggml_vk_device * device, size_t memoryRequired, const char * name);
 bool ggml_vk_has_vulkan(void);
-bool ggml_vk_has_device(void);
-struct ggml_vk_device ggml_vk_current_device(void);
 
 //
 // backend API
