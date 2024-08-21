@@ -79,12 +79,6 @@ struct ggml_backend_kompute_context {
         : device(device), name(ggml_kompute_format_name(device)) { buft.context = nullptr; }
 };
 
-// FIXME: It would be good to consolidate the kompute manager and the kompute context into one object
-// and consolidate the init functions and simplify object lifetime management. As it currently stands,
-// we *have* to have the kompute manager no matter what for device discovery, but the kompute context
-// is only created when a device is set and vulkan is explicitly turned on.
-static ggml_backend_kompute_context *s_kompute_context = nullptr;
-
 
 struct ggml_backend_kompute_buffer_type_context {
     int         device;
@@ -1852,35 +1846,6 @@ kp::TensorT<uint8_t>::dataType()
 ////////////////////////////////////////////////////////////////////////////////
 
 // backend interface
-
-
-static void ggml_backend_kompute_device_ref(ggml_backend_buffer_type_t buft) {
-    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
-
-    if (!ctx->device_ref) {
-        s_kompute_context->manager.initializeDevice(
-            ctx->device, {}, {
-                "VK_KHR_shader_float16_int8", "VK_KHR_8bit_storage",
-                "VK_KHR_16bit_storage", "VK_KHR_shader_non_semantic_info"
-            }
-        );
-    }
-
-    assert(ggml_vk_has_device(s_kompute_context));
-    ctx->device_ref++;
-}
-
-static void ggml_backend_kompute_device_unref(ggml_backend_buffer_type_t buft) {
-    auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buft->context);
-
-    assert(ctx->device_ref > 0);
-
-    ctx->device_ref--;
-
-    if (!ctx->device_ref) {
-        s_kompute_context->manager.destroy();
-    }
-}
 
 static const char * ggml_backend_kompute_buffer_get_name(ggml_backend_buffer_t buffer) {
     auto * ctx = static_cast<ggml_backend_kompute_buffer_type_context *>(buffer->buft->context);
