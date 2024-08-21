@@ -508,7 +508,7 @@ Notice that each `probs` is an array of length `n_probs`.
 
 **Response:**
 
-Returns a JSON object with a `tokens` field containing the tokenization result. The `tokens` array contains either just token IDs or objects with `id` and `piece` fields, depending on the `with_pieces` parameter.
+Returns a JSON object with a `tokens` field containing the tokenization result. The `tokens` array contains either just token IDs or objects with `id` and `piece` fields, depending on the `with_pieces` parameter. The piece field is a string if the piece is valid unicode or a list of bytes otherwise.
 
 
 If `with_pieces` is `false`:

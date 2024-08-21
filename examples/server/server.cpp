@@ -3198,9 +3198,22 @@ int main(int argc, char ** argv) {
             if (with_pieces) {
                 for (const auto& token : tokens) {
                     std::string piece = llama_token_to_piece(ctx_server.ctx, token);
+                    json piece_json;
+
+                    // Check if the piece is valid UTF-8
+                    if (is_valid_utf8(piece)) {
+                        piece_json = piece;
+                    } else {
+                        // If not valid UTF-8, store as array of byte values
+                        piece_json = json::array();
+                        for (unsigned char c : piece) {
+                            piece_json.push_back(static_cast<int>(c));
+                        }
+                    }
+
                     tokens_response.push_back({
                         {"id", token},
-                        {"piece", piece}
+                        {"piece", piece_json}
                     });
                 }
             } else {
