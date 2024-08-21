@@ -88,6 +88,10 @@ typedef enum {
 static void atomic_store(atomic_int * ptr, LONG val) {
     InterlockedExchange(ptr, val);
 }
+static void atomic_store_explicit(atomic_int * ptr, LONG val, memory_order mo) {
+    // TODO: add support for explicit memory order
+    InterlockedExchange(ptr, val);
+}
 static LONG atomic_load(atomic_int * ptr) {
     return InterlockedCompareExchange(ptr, 0, 0);
 }
@@ -12472,7 +12476,7 @@ UseGgmlGemm1:;
 
     if (ith == 0) {
         // Every thread starts at ith, so the first unprocessed chunk is nth.  This save a bit of coordination right at the start.
-        atomic_store(&params->threadpool->current_chunk, nth);
+        atomic_store_explicit(&params->threadpool->current_chunk, nth, memory_order_relaxed);
     }
 
     ggml_barrier(params->threadpool);
@@ -12583,7 +12587,7 @@ UseGgmlGemm2:;
             break;
         }
 
-        current_chunk = atomic_fetch_add(&params->threadpool->current_chunk, 1);
+        current_chunk = atomic_fetch_add_explicit(&params->threadpool->current_chunk, 1, memory_order_relaxed);
     }
 }
 
