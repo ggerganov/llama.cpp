@@ -339,6 +339,19 @@ int ggml_backend_kompute_get_device_count(void) {
     return devices.size();
 }
 
+
+void ggml_backend_kompute_get_device_memory(int device, size_t * free, size_t * total) {
+    auto devices = ggml_vk_available_devices_internal(0);
+
+    for (std::size_t i = 0; i < devices.size(); i++) {
+        if (devices[i].index == device) {
+            *total = devices[i].heapSize;
+            *free = devices[i].heapSize;
+            break;
+        }
+    }
+}
+
 static void ggml_vk_filterByVendor(std::vector<ggml_vk_device>& devices, const std::string& targetVendor) {
     devices.erase(
         std::remove_if(devices.begin(), devices.end(),
