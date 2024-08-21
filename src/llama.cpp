@@ -9335,7 +9335,7 @@ static struct ggml_tensor * llm_build_mamba2(
             ggml_cpy(ctx, last_conv,
                 ggml_view_1d(ctx, conv_states_all,
                     (d_conv - 1)*(d_inner + 2*n_group*d_state)*(n_seqs),
-                    kv_head*(d_conv - 1)*(d_inner)*ggml_element_size(conv_states_all))));
+                    kv_head*(d_conv - 1)*(d_inner + 2*n_group*d_state)*ggml_element_size(conv_states_all))));
 
         // 1D convolution
         // The equivalent is to make a self-overlapping view of conv_x

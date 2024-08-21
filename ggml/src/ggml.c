@@ -10226,11 +10226,11 @@ static void ggml_compute_forward_mul_f32(
             if (scale == 0.0f) {
                 // NOTE: this also sets NANs to zero, which is not compliant with IEEE754,
                 //       but it is useful when resetting the state of recurrent models.
-                memset((char *)dst->data + ir*nb1, 0, nb1);
+                memset((char *) dst->data + ir*nb1, 0, ne0 * sizeof(float));
             } else {
                 if (dst->data != src0->data) {
                     // src0 is same shape as dst => same indices
-                    memcpy((char *)dst->data + ir*nb1, (char *)src0->data + ir*nb01, ne0 * sizeof(float));
+                    memcpy((char *) dst->data + ir*nb1, (char *) src0->data + ir*nb01, ne0 * sizeof(float));
                 }
                 if (scale != 1.0f) {
                     ggml_vec_scale_f32(ne0, (float *) ((char *) dst->data + ir*nb1), scale);
