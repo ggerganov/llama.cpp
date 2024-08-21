@@ -232,6 +232,8 @@ extern "C" {
     GGML_API void ggml_backend_tensor_alloc(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor, void * addr);
     GGML_API void ggml_backend_view_init(struct ggml_tensor * tensor);
 
+    // Copy K and V cache pointers to backend
+    GGML_API void ggml_backend_copy_kv_cache_ptrs(const int64_t n_layer, const int64_t kv_self_head, struct ggml_tensor ** kv_kl, struct ggml_tensor ** kv_vl, const int64_t n_embd_k_gqa, const int64_t n_embd_v_gqa, const bool flash_attn);
 
 #ifdef  __cplusplus
 }
