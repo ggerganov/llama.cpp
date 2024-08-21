@@ -20801,6 +20801,13 @@ struct gguf_context {
     void * data;
 };
 
+struct gguf_src {
+    FILE * file;
+    // for reading gguf from a buffer instead of a file
+    const char * buffer;
+    size_t       size;
+};
+
 static size_t gguf_type_size(enum gguf_type type) {
     GGML_ASSERT(0 <= type && type < GGUF_TYPE_COUNT);
     return GGUF_TYPE_SIZE[type];
@@ -20820,19 +20827,25 @@ static void gguf_tensor_info_sanitize(struct gguf_tensor_info * info) {
     GGML_ASSERT(INT64_MAX/info->ne[3] > info->ne[0]*info->ne[1]*info->ne[2]);
 }
 
-static bool gguf_fread_el(FILE * file, void * dst, size_t size, size_t * offset) {
-    const size_t n = fread(dst, 1, size, file);
+static bool gguf_fread_el(struct gguf_src * src, void * dst, size_t size, size_t * offset) {
+    size_t n;
+    if (src->file) {
+        n = fread(dst, 1, size, src->file);
+    } else {
+        n = MIN(src->size - *offset, size);
+        memcpy(dst, src->buffer + *offset, n);
+    }
     *offset += n;
     return n == size;
 }
 
-static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
+static bool gguf_fread_str(struct gguf_src * src, struct gguf_str * p, size_t * offset) {
     p->n    = 0;
     p->data = NULL;
 
     bool ok = true;
 
-    ok = ok && gguf_fread_el(file, &p->n, sizeof(p->n), offset);
+    ok = ok && gguf_fread_el(src, &p->n, sizeof(p->n), offset);
 
     // early exit if string length is invalid, prevents from integer overflow
     if (p->n == SIZE_MAX) {
@@ -20842,7 +20855,7 @@ static bool gguf_fread_str(FILE * file, struct gguf_str * p, size_t * offset) {
 
     p->data = GGML_CALLOC(p->n + 1, 1);
 
-    ok = ok && gguf_fread_el(file,  p->data, p->n, offset);
+    ok = ok && gguf_fread_el(src, p->data, p->n, offset);
 
     return ok;
 }
@@ -20893,13 +20906,7 @@ struct gguf_context * gguf_init_empty(void) {
     return ctx;
 }
 
-struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
-    FILE * file = ggml_fopen(fname, "rb");
-    if (!file) {
-        fprintf(stderr, "%s: failed to open '%s': '%s'\n", __func__, fname, strerror(errno));
-        return NULL;
-    }
-
+static struct gguf_context * gguf_init_internal(struct gguf_src * src, struct gguf_init_params params) {
     // offset from start of file
     size_t offset = 0;
 
@@ -20907,12 +20914,12 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
     // check the magic before making allocations
     {
-        gguf_fread_el(file, &magic, sizeof(magic), &offset);
+        gguf_fread_el(src, &magic, sizeof(magic), &offset);
 
         for (uint32_t i = 0; i < sizeof(magic); i++) {
             if (magic[i] != GGUF_MAGIC[i]) {
                 fprintf(stderr, "%s: invalid magic characters '%c%c%c%c'\n", __func__, magic[0], magic[1], magic[2], magic[3]);
-                fclose(file);
+                if (src->file) fclose(src->file);
                 return NULL;
             }
         }
@@ -20930,13 +20937,13 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ctx->infos = NULL;
         ctx->data  = NULL;
 
-        ok = ok && gguf_fread_el(file, &ctx->header.version,   sizeof(ctx->header.version),   &offset);
-        ok = ok && gguf_fread_el(file, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
-        ok = ok && gguf_fread_el(file, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
+        ok = ok && gguf_fread_el(src, &ctx->header.version,   sizeof(ctx->header.version),   &offset);
+        ok = ok && gguf_fread_el(src, &ctx->header.n_tensors, sizeof(ctx->header.n_tensors), &offset);
+        ok = ok && gguf_fread_el(src, &ctx->header.n_kv,      sizeof(ctx->header.n_kv),      &offset);
 
         if (ctx->header.version == 1) {
             fprintf(stderr, "%s: GGUFv1 is no longer supported. please use a more up-to-date version\n", __func__);
-            fclose(file);
+            if (src->file) fclose(src->file);
             gguf_free(ctx);
             return NULL;
         }
@@ -20949,7 +20956,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (!ok) {
             fprintf(stderr, "%s: failed to read header\n", __func__);
-            fclose(file);
+            if (src->file) fclose(src->file);
             gguf_free(ctx);
             return NULL;
         }
@@ -20968,28 +20975,28 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             //fprintf(stderr, "%s: reading kv %d\n", __func__, i);
 
-            ok = ok && gguf_fread_str(file, &kv->key,                    &offset);
-            ok = ok && gguf_fread_el (file, &kv->type, sizeof(kv->type), &offset);
+            ok = ok && gguf_fread_str(src, &kv->key,                    &offset);
+            ok = ok && gguf_fread_el (src, &kv->type, sizeof(kv->type), &offset);
 
             //fprintf(stderr, "%s: reading kv with key %s\n", __func__, kv->key.data);
 
             switch (kv->type) {
-                case GGUF_TYPE_UINT8:   ok = ok && gguf_fread_el (file, &kv->value.uint8,   sizeof(kv->value.uint8),   &offset); break;
-                case GGUF_TYPE_INT8:    ok = ok && gguf_fread_el (file, &kv->value.int8,    sizeof(kv->value.int8),    &offset); break;
-                case GGUF_TYPE_UINT16:  ok = ok && gguf_fread_el (file, &kv->value.uint16,  sizeof(kv->value.uint16),  &offset); break;
-                case GGUF_TYPE_INT16:   ok = ok && gguf_fread_el (file, &kv->value.int16,   sizeof(kv->value.int16),   &offset); break;
-                case GGUF_TYPE_UINT32:  ok = ok && gguf_fread_el (file, &kv->value.uint32,  sizeof(kv->value.uint32),  &offset); break;
-                case GGUF_TYPE_INT32:   ok = ok && gguf_fread_el (file, &kv->value.int32,   sizeof(kv->value.int32),   &offset); break;
-                case GGUF_TYPE_FLOAT32: ok = ok && gguf_fread_el (file, &kv->value.float32, sizeof(kv->value.float32), &offset); break;
-                case GGUF_TYPE_UINT64:  ok = ok && gguf_fread_el (file, &kv->value.uint64,  sizeof(kv->value.uint64),  &offset); break;
-                case GGUF_TYPE_INT64:   ok = ok && gguf_fread_el (file, &kv->value.int64,   sizeof(kv->value.int64),   &offset); break;
-                case GGUF_TYPE_FLOAT64: ok = ok && gguf_fread_el (file, &kv->value.float64, sizeof(kv->value.float64), &offset); break;
-                case GGUF_TYPE_BOOL:    ok = ok && gguf_fread_el (file, &kv->value.bool_,   sizeof(kv->value.bool_),   &offset); break;
-                case GGUF_TYPE_STRING:  ok = ok && gguf_fread_str(file, &kv->value.str,                                &offset); break;
+                case GGUF_TYPE_UINT8:   ok = ok && gguf_fread_el (src, &kv->value.uint8,   sizeof(kv->value.uint8),   &offset); break;
+                case GGUF_TYPE_INT8:    ok = ok && gguf_fread_el (src, &kv->value.int8,    sizeof(kv->value.int8),    &offset); break;
+                case GGUF_TYPE_UINT16:  ok = ok && gguf_fread_el (src, &kv->value.uint16,  sizeof(kv->value.uint16),  &offset); break;
+                case GGUF_TYPE_INT16:   ok = ok && gguf_fread_el (src, &kv->value.int16,   sizeof(kv->value.int16),   &offset); break;
+                case GGUF_TYPE_UINT32:  ok = ok && gguf_fread_el (src, &kv->value.uint32,  sizeof(kv->value.uint32),  &offset); break;
+                case GGUF_TYPE_INT32:   ok = ok && gguf_fread_el (src, &kv->value.int32,   sizeof(kv->value.int32),   &offset); break;
+                case GGUF_TYPE_FLOAT32: ok = ok && gguf_fread_el (src, &kv->value.float32, sizeof(kv->value.float32), &offset); break;
+                case GGUF_TYPE_UINT64:  ok = ok && gguf_fread_el (src, &kv->value.uint64,  sizeof(kv->value.uint64),  &offset); break;
+                case GGUF_TYPE_INT64:   ok = ok && gguf_fread_el (src, &kv->value.int64,   sizeof(kv->value.int64),   &offset); break;
+                case GGUF_TYPE_FLOAT64: ok = ok && gguf_fread_el (src, &kv->value.float64, sizeof(kv->value.float64), &offset); break;
+                case GGUF_TYPE_BOOL:    ok = ok && gguf_fread_el (src, &kv->value.bool_,   sizeof(kv->value.bool_),   &offset); break;
+                case GGUF_TYPE_STRING:  ok = ok && gguf_fread_str(src, &kv->value.str,                                &offset); break;
                 case GGUF_TYPE_ARRAY:
                     {
-                        ok = ok && gguf_fread_el(file, &kv->value.arr.type, sizeof(kv->value.arr.type), &offset);
-                        ok = ok && gguf_fread_el(file, &kv->value.arr.n,    sizeof(kv->value.arr.n),    &offset);
+                        ok = ok && gguf_fread_el(src, &kv->value.arr.type, sizeof(kv->value.arr.type), &offset);
+                        ok = ok && gguf_fread_el(src, &kv->value.arr.n,    sizeof(kv->value.arr.n),    &offset);
 
                         switch (kv->value.arr.type) {
                             case GGUF_TYPE_UINT8:
@@ -21007,21 +21014,21 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     // prevent from integer overflow in the malloc below
                                     if (kv->value.arr.n >= SIZE_MAX/gguf_type_size(kv->value.arr.type)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
-                                        fclose(file);
+                                        if (src->file) fclose(src->file);
                                         gguf_free(ctx);
                                         return NULL;
                                     }
 
                                     kv->value.arr.data = GGML_CALLOC(kv->value.arr.n, gguf_type_size(kv->value.arr.type));
 
-                                    ok = ok && gguf_fread_el(file, kv->value.arr.data, kv->value.arr.n * gguf_type_size(kv->value.arr.type), &offset);
+                                    ok = ok && gguf_fread_el(src, kv->value.arr.data, kv->value.arr.n * gguf_type_size(kv->value.arr.type), &offset);
                                 } break;
                             case GGUF_TYPE_STRING:
                                 {
                                     // prevent from integer overflow in the malloc below
                                     if (kv->value.arr.n >= SIZE_MAX/sizeof(struct gguf_str)) {
                                         fprintf(stderr, "%s: array size is too large (%" PRIu64 ")\n", __func__, kv->value.arr.n);
-                                        fclose(file);
+                                        if (src->file) fclose(src->file);
                                         gguf_free(ctx);
                                         return NULL;
                                     }
@@ -21029,7 +21036,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                                     kv->value.arr.data = GGML_CALLOC(kv->value.arr.n, sizeof(struct gguf_str));
 
                                     for (uint64_t j = 0; j < kv->value.arr.n; ++j) {
-                                        ok = ok && gguf_fread_str(file, &((struct gguf_str *) kv->value.arr.data)[j], &offset);
+                                        ok = ok && gguf_fread_str(src, &((struct gguf_str *) kv->value.arr.data)[j], &offset);
                                     }
                                 } break;
                             case GGUF_TYPE_ARRAY:
@@ -21048,7 +21055,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (!ok) {
             fprintf(stderr, "%s: failed to read key-value pairs\n", __func__);
-            fclose(file);
+            if (src->file) fclose(src->file);
             gguf_free(ctx);
             return NULL;
         }
@@ -21065,17 +21072,17 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
                 info->ne[j] = 1;
             }
 
-            ok = ok && gguf_fread_str(file, &info->name,                          &offset);
-            ok = ok && gguf_fread_el (file, &info->n_dims, sizeof(info->n_dims),  &offset);
+            ok = ok && gguf_fread_str(src, &info->name,                          &offset);
+            ok = ok && gguf_fread_el (src, &info->n_dims, sizeof(info->n_dims),  &offset);
 
             ok = ok && (info->n_dims <= GGML_MAX_DIMS);
 
             for (uint32_t j = 0; j < info->n_dims; ++j) {
-                ok = ok && gguf_fread_el(file, &info->ne[j], sizeof(info->ne[j]), &offset);
+                ok = ok && gguf_fread_el(src, &info->ne[j], sizeof(info->ne[j]), &offset);
             }
 
-            ok = ok && gguf_fread_el (file, &info->type,   sizeof(info->type),    &offset);
-            ok = ok && gguf_fread_el (file, &info->offset, sizeof(info->offset),  &offset);
+            ok = ok && gguf_fread_el (src, &info->type,   sizeof(info->type),    &offset);
+            ok = ok && gguf_fread_el (src, &info->offset, sizeof(info->offset),  &offset);
 
             // TODO: return an error instead of crashing with GGML_ASSERT
             gguf_tensor_info_sanitize(info);
@@ -21090,7 +21097,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
             if (!ok) {
                 fprintf(stderr, "%s: failed to read tensor info\n", __func__);
-                fclose(file);
+                if (src->file) fclose(src->file);
                 gguf_free(ctx);
                 return NULL;
             }
@@ -21110,7 +21117,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (offset_pad != 0) {
             offset += ctx->alignment - offset_pad;
-            fseek(file, offset, SEEK_SET);
+            if (src->file) fseek(src->file, offset, SEEK_SET);
         }
     }
 
@@ -21132,7 +21139,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             if (ggml_blck_size(info->type) == 0 || ne % ggml_blck_size(info->type) != 0) {
                 fprintf(stderr, "%s: tensor '%s' of type %d (%s) number of elements (%" PRId64 ") is not a multiple of block size (%" PRId64 ")\n",
                         __func__, info->name.data, (int) info->type, ggml_type_name(info->type), ne, ggml_blck_size(info->type));
-                fclose(file);
+                if (src->file) fclose(src->file);
                 gguf_free(ctx);
                 return NULL;
             }
@@ -21164,7 +21171,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         *params.ctx = ggml_init(pdata);
         if (*params.ctx == NULL) {
             fprintf(stderr, "%s: failed to initialize context\n", __func__);
-            fclose(file);
+            if (src->file) fclose(src->file);
             gguf_free(ctx);
             return NULL;
         }
@@ -21179,11 +21186,11 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
             ok = ok && data != NULL;
 
             // read the binary blob with the tensor data
-            ok = ok && gguf_fread_el(file, data->data, ctx->size, &offset);
+            ok = ok && gguf_fread_el(src, data->data, ctx->size, &offset);
 
             if (!ok) {
                 fprintf(stderr, "%s: failed to read tensor data\n", __func__);
-                fclose(file);
+                if (src->file) fclose(src->file);
                 ggml_free(ctx_data);
                 gguf_free(ctx);
                 return NULL;
@@ -21222,7 +21229,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
 
         if (!ok) {
             fprintf(stderr, "%s: failed to read the tensor data\n", __func__);
-            fclose(file);
+            if (src->file) fclose(src->file);
             ggml_free(ctx_data);
             gguf_free(ctx);
             return NULL;
@@ -21231,9 +21238,27 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
         ggml_set_no_alloc(ctx_data, params.no_alloc);
     }
 
-    fclose(file);
+    if (src->file) fclose(src->file);
 
     return ctx;
+}
+
+struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_params params) {
+    struct gguf_src src = {ggml_fopen(fname, "rb"), NULL, 0};
+    if (!src.file) {
+        fprintf(stderr, "%s: failed to open '%s': '%s'\n", __func__, fname, strerror(errno));
+        return NULL;
+    }
+    return gguf_init_internal(&src, params);
+}
+
+struct gguf_context * gguf_init_from_buffer(const char * buffer, size_t size, struct gguf_init_params params) {
+    if (!buffer) {
+        fprintf(stderr, "%s: buffer cannot be null\n", __func__);
+        return NULL;
+    }
+    struct gguf_src src = {NULL, buffer, size};
+    return gguf_init_internal(&src, params);
 }
 
 void gguf_free(struct gguf_context * ctx) {
