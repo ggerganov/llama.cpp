@@ -415,6 +415,12 @@ extern "C" {
     // lora adapter
     struct llama_lora_adapter;
 
+    // to be used by llama_load_model_from_buffers
+    struct llama_model_shard_buffer {
+        const char * data;
+        size_t       size;
+    };
+
     // Helpers for getting default parameters
     LLAMA_API struct llama_model_params llama_model_default_params(void);
     LLAMA_API struct llama_context_params llama_context_default_params(void);
@@ -433,7 +439,12 @@ extern "C" {
 
     LLAMA_API struct llama_model * llama_load_model_from_file(
                              const char * path_model,
-            struct llama_model_params     params);
+              struct llama_model_params   params);
+
+    LLAMA_API struct llama_model * llama_load_model_from_buffers(
+        struct llama_model_shard_buffer * shards,
+                                 size_t   n_shards,
+              struct llama_model_params   params);
 
     LLAMA_API void llama_free_model(struct llama_model * model);
 

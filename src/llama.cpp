@@ -1627,8 +1627,13 @@ public:
     }
 #else
     // use FILE * so we don't have to re-open the file to mmap
-    FILE * fp;
+    FILE * fp = nullptr;
     size_t size;
+
+    // when a buffer is used instead of a real file, we store the pointer here
+    const char * buffer = nullptr;
+    // curr is used as replacement for tell() when file is loaded from buffer
+    size_t curr = 0;
 
     llama_file(const char * fname, const char * mode) {
         fp = ggml_fopen(fname, mode);
@@ -1640,7 +1645,12 @@ public:
         seek(0, SEEK_SET);
     }
 
+    llama_file(const char * buffer, size_t size) : size(size), buffer(buffer) {}
+
     size_t tell() const {
+        if (buffer) {
+            return curr;
+        }
 #ifdef _WIN32
         __int64 ret = _ftelli64(fp);
 #else
@@ -1653,7 +1663,17 @@ public:
         return (size_t) ret;
     }
 
-    void seek(size_t offset, int whence) const {
+    void seek(size_t offset, int whence) {
+        if (buffer) {
+            if (whence == SEEK_END) {
+                curr = size;
+            } else if (whence == SEEK_SET) {
+                curr = offset;
+            } else {
+                throw std::runtime_error(format("invalid whence: %d", whence));
+            }
+            return;
+        }
 #ifdef _WIN32
         int ret = _fseeki64(fp, (__int64) offset, whence);
 #else
@@ -1666,6 +1686,13 @@ public:
 
     void read_raw(void * ptr, size_t len) const {
         if (len == 0) {
+            return;
+        }
+        if (buffer) {
+            if (curr + len > size) {
+                throw std::runtime_error("unexpectedly reached end of buffer");
+            }
+            memcpy(ptr, buffer + curr, len);
             return;
         }
         errno = 0;
@@ -1688,6 +1715,9 @@ public:
         if (len == 0) {
             return;
         }
+        if (buffer) {
+            throw std::runtime_error("cannot write to read-only buffer");
+        }
         errno = 0;
         size_t ret = std::fwrite(ptr, len, 1, fp);
         if (ret != 1) {
@@ -1708,9 +1738,15 @@ public:
 };
 using llama_files = std::vector<std::unique_ptr<llama_file>>;
 
+struct llama_shard_src {
+    std::string fname;
+    std::vector<llama_model_shard_buffer *> buffers;
+};
+
 struct llama_mmap {
     void * addr;
     size_t size;
+    bool   file_is_buffer = false;
 
     llama_mmap(const llama_mmap &) = delete;
 
@@ -1721,6 +1757,11 @@ struct llama_mmap {
     std::vector<std::pair<size_t, size_t>> mapped_fragments;
 
     llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1 /* -1 = max value */, bool numa = false) {
+        if (file->buffer) {
+            // in-memory buffer doesn't need to be mapped
+            file_is_buffer = true;
+            return;
+        }
         size = file->size;
         int fd = fileno(file->fp);
         int flags = MAP_SHARED;
@@ -1775,6 +1816,10 @@ struct llama_mmap {
 
     // partially unmap the file in the range [first, last)
     void unmap_fragment(size_t first, size_t last) {
+        if (file_is_buffer) {
+            // in-memory buffer doesn't need to be unmapped
+            return;
+        }
         // note: this function must not be called multiple times with overlapping ranges
         // otherwise, there is a risk of invalidating addresses that have been repurposed for other mappings
         int page_size = sysconf(_SC_PAGESIZE);
@@ -1820,6 +1865,9 @@ struct llama_mmap {
     }
 
     ~llama_mmap() {
+        if (file_is_buffer) {
+            return;
+        }
         for (const auto & frag : mapped_fragments) {
             if (munmap((char *) addr + frag.first, frag.second - frag.first)) {
                 LLAMA_LOG_WARN("warning: munmap failed: %s\n", strerror(errno));
@@ -1831,6 +1879,12 @@ struct llama_mmap {
 
     llama_mmap(struct llama_file * file, size_t prefetch = (size_t) -1, bool numa = false) {
         GGML_UNUSED(numa);
+
+        if (file->buffer) {
+            // in-memory buffer doesn't need to be mapped
+            file_is_buffer = true;
+            return;
+        }
 
         size = file->size;
 
@@ -1883,6 +1937,9 @@ struct llama_mmap {
     }
 
     ~llama_mmap() {
+        if (file->buffer) {
+            return;
+        }
         if (!UnmapViewOfFile(addr)) {
             LLAMA_LOG_WARN("warning: UnmapViewOfFile failed: %s\n",
                     llama_format_win_err(GetLastError()).c_str());
@@ -3667,7 +3724,7 @@ struct llama_model_loader {
     std::string arch_name;
     LLM_KV      llm_kv    = LLM_KV(LLM_ARCH_UNKNOWN);
 
-    llama_model_loader(const std::string & fname, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
+    llama_model_loader(const llama_shard_src & src, bool use_mmap, bool check_tensors, const struct llama_model_kv_override * param_overrides_p) {
         int trace = 0;
         if (getenv("LLAMA_TRACE")) {
             trace = atoi(getenv("LLAMA_TRACE"));
@@ -3679,21 +3736,32 @@ struct llama_model_loader {
             }
         }
 
+        bool file_is_buffer = src.fname.empty();
         struct ggml_context * ctx = NULL;
         struct gguf_init_params params = {
             /*.no_alloc = */ true,
             /*.ctx      = */ &ctx,
         };
 
-        meta = gguf_init_from_file(fname.c_str(), params);
+        if (file_is_buffer) {
+            if (src.buffers.empty()) {
+                throw std::runtime_error("list of shard buffers must not be empty");
+            }
+            meta = gguf_init_from_buffer(src.buffers[0]->data, src.buffers[0]->size, params);
+        } else {
+            meta = gguf_init_from_file(src.fname.c_str(), params);
+        }
         if (!meta) {
-            throw std::runtime_error(format("%s: failed to load model from %s\n", __func__, fname.c_str()));
+            throw std::runtime_error(format(
+                "%s: failed to load model from %s\n", __func__, file_is_buffer ? "buffer" : src.fname.c_str()));
         }
 
         get_key(llm_kv(LLM_KV_GENERAL_ARCHITECTURE), arch_name, false);
         llm_kv = LLM_KV(llm_arch_from_string(arch_name));
 
-        files.emplace_back(new llama_file(fname.c_str(), "rb"));
+        files.emplace_back(file_is_buffer
+            ? new llama_file(src.buffers[0]->data, src.buffers[0]->size)
+            : new llama_file(src.fname.c_str(), "rb"));
         contexts.emplace_back(ctx);
 
         // Save tensors data offset of the main file.
@@ -3713,9 +3781,16 @@ struct llama_model_loader {
                 throw std::runtime_error(format("illegal split file: %d, model must be loaded with the first split", idx));
             }
 
+            if (n_split < src.buffers.size()) {
+                throw std::runtime_error(format("expecting %d buffers, but only have %d", n_split, (int) src.buffers.size()));
+            }
+
             char split_prefix[PATH_MAX] = {0};
-            if (!llama_split_prefix(split_prefix, sizeof(split_prefix), fname.c_str(), idx, n_split)) {
-                throw std::runtime_error(format("invalid split file: %s", fname.c_str()));
+            if (!file_is_buffer) {
+                int ret = llama_split_prefix(split_prefix, sizeof(split_prefix), src.fname.c_str(), idx, n_split);
+                if (!ret) {
+                    throw std::runtime_error(format("invalid split file: %s", src.fname.c_str()));
+                }
             }
 
             if (trace > 0) {
@@ -3724,18 +3799,28 @@ struct llama_model_loader {
 
             char split_path[PATH_MAX] = {0};
             for (idx = 1; idx < n_split; idx++) {
-                llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
+                if (file_is_buffer) {
+                    if (idx >= src.buffers.size()) {
+                        throw std::runtime_error(format("missing buffer for shard number %d", idx+1));
+                    }
+                } else {
+                    llama_split_path(split_path, sizeof(split_path), split_prefix, idx, n_split);
+                }
 
                 struct gguf_init_params split_params = {
                     /*.no_alloc = */ true,
                     /*.ctx      = */ &ctx,
                 };
-                struct gguf_context * ctx_gguf = gguf_init_from_file(split_path, split_params);
+                struct gguf_context * ctx_gguf = file_is_buffer
+                    ? gguf_init_from_buffer(src.buffers[idx]->data, src.buffers[idx]->size, split_params)
+                    : gguf_init_from_file(split_path, split_params);
                 if (!ctx_gguf) {
                     throw std::runtime_error(format("%s: failed to load GGUF split from %s\n", __func__, split_path));
                 }
 
-                files.emplace_back(new llama_file(split_path, "rb"));
+                files.emplace_back(file_is_buffer
+                    ? new llama_file(src.buffers[idx]->data, src.buffers[idx]->size)
+                    : new llama_file(split_path, "rb"));
                 contexts.emplace_back(ctx);
 
                 // Save tensors data offset info of the shard.
@@ -3778,7 +3863,7 @@ struct llama_model_loader {
         }
 
         LLAMA_LOG_INFO("%s: loaded meta data with %d key-value pairs and %d tensors from %s (version %s)\n",
-                __func__, n_kv, n_tensors, fname.c_str(), llama_file_version_name(fver));
+                __func__, n_kv, n_tensors, file_is_buffer ? "buffer" : src.fname.c_str(), llama_file_version_name(fver));
 
         // determine file type based on the number of tensors for each quantization and print meta data
         // TODO: make optional
@@ -7855,9 +7940,9 @@ static bool llm_load_tensors(
 }
 
 // Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
-static int llama_model_load(const std::string & fname, llama_model & model, llama_model_params & params) {
+static int llama_model_load_internal(const llama_shard_src & src, llama_model & model, llama_model_params & params) {
     try {
-        llama_model_loader ml(fname, params.use_mmap, params.check_tensors, params.kv_overrides);
+        llama_model_loader ml(src, params.use_mmap, params.check_tensors, params.kv_overrides);
 
         model.hparams.vocab_only = params.vocab_only;
 
@@ -16249,7 +16334,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         auto v = (std::vector<llama_model_kv_override>*)params->kv_overrides;
         kv_overrides = v->data();
     }
-    llama_model_loader ml(fname_inp, use_mmap, /*check_tensors*/ true, kv_overrides);
+    llama_shard_src src;
+    src.fname = fname_inp;
+    llama_model_loader ml(src, use_mmap, /*check_tensors*/ true, kv_overrides);
     ml.init_mappings(false); // no prefetching
 
     llama_model model;
@@ -16949,9 +17036,9 @@ int64_t llama_time_us(void) {
     return ggml_time_us();
 }
 
-struct llama_model * llama_load_model_from_file(
-        const char * path_model,
-        struct llama_model_params   params) {
+static struct llama_model * llama_load_model_with_params(
+        const llama_shard_src & src,
+        struct llama_model_params params) {
     ggml_time_init();
 
     llama_model * model = new llama_model;
@@ -16983,7 +17070,7 @@ struct llama_model * llama_load_model_from_file(
         }
         model->rpc_servers.push_back(servers);
     }
-    int status = llama_model_load(path_model, *model, params);
+    int status = llama_model_load_internal(src, *model, params);
     GGML_ASSERT(status <= 0);
     if (status < 0) {
         if (status == -1) {
@@ -16996,6 +17083,26 @@ struct llama_model * llama_load_model_from_file(
     }
 
     return model;
+}
+
+struct llama_model * llama_load_model_from_file(
+        const char * path_model,
+        struct llama_model_params params) {
+    llama_shard_src src;
+    src.fname = path_model;
+    return llama_load_model_with_params(src, params);
+}
+
+struct llama_model * llama_load_model_from_buffers(
+        struct llama_model_shard_buffer * shards,
+        size_t n_shards,
+        struct llama_model_params params) {
+    llama_shard_src src;
+    src.buffers.reserve(n_shards);
+    for (size_t i = 0; i < n_shards; i++) {
+        src.buffers[i] = &shards[i];
+    }
+    return llama_load_model_with_params(src, params);
 }
 
 void llama_free_model(struct llama_model * model) {
