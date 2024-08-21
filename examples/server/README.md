@@ -529,6 +529,16 @@ If `with_pieces` is `true`:
 }
 ```
 
+With input 'á' (utf8 hex: C3 A1) on tinyllama/stories260k
+```json
+{
+  "tokens": [
+    {"id": 198, "piece": [195]}, // hex C3 
+    {"id": 164, "piece": [161]} // hex A1
+  ]
+}
+```
+
 ### POST `/detokenize`: Convert tokens to text
 
     *Options:*
