@@ -3292,8 +3292,7 @@ static bool llama_kv_cache_init(
 
     cache.has_shift = false;
 
-    // TODO: find a nicer way to add other recurrent model architectures
-    cache.recurrent = model.arch == LLM_ARCH_MAMBA;
+    cache.recurrent = llama_model_is_recurrent(&model);
     cache.v_trans   = !cache.recurrent && !cparams.flash_attn;
 
     cache.head = 0;
@@ -17235,7 +17234,7 @@ struct llama_context * llama_new_context_with_model(
     ggml_type type_v = params.type_v;
 
     // Mamba only needs a constant number of KV cache cells per sequence
-    if (model->arch == LLM_ARCH_MAMBA) {
+    if (llama_model_is_recurrent(model)) {
         // Mamba needs at least as many KV cells as there are sequences kept at any time
         kv_size = std::max((uint32_t) 1, params.n_seq_max);
         // it's probably best to keep as much precision as possible for the states
@@ -17707,6 +17706,13 @@ bool llama_model_has_decoder(const struct llama_model * model) {
 
 llama_token llama_model_decoder_start_token(const struct llama_model * model) {
     return model->hparams.dec_start_token_id;
+}
+
+bool llama_model_is_recurrent(const struct llama_model * model) {
+    switch (model->arch) {
+        case LLM_ARCH_MAMBA:  return true;
+        default:              return false;
+    }
 }
 
 uint32_t llama_model_quantize(
