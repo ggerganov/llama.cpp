@@ -2856,6 +2856,8 @@ static size_t llama_get_device_count(const llama_model & model) {
     count = ggml_backend_sycl_get_device_count();
 #elif defined(GGML_USE_VULKAN)
     count = ggml_backend_vk_get_device_count();
+#elif defined(GGML_USE_KOMPUTE)
+    count = ggml_backend_kompute_get_device_count();
 #elif defined(GGML_USE_CANN)
     return ggml_backend_cann_get_device_count();
 #endif
@@ -2951,6 +2953,11 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
     size_t total;
     size_t free;
     ggml_backend_vk_get_device_memory(device, &free, &total);
+    return free;
+#elif defined(GGML_USE_KOMPUTE)
+    size_t total;
+    size_t free;
+    ggml_backend_kompute_get_device_memory(device, &free, &total);
     return free;
 #elif defined(GGML_USE_CANN)
     size_t total;
@@ -16899,6 +16906,8 @@ size_t llama_max_devices(void) {
     return GGML_SYCL_MAX_DEVICES;
 #elif defined(GGML_USE_VULKAN)
     return GGML_VK_MAX_DEVICES;
+#elif defined(GGML_USE_KOMPUTE)
+    return GGML_KOMPUTE_MAX_DEVICES;
 #elif defined(GGML_USE_CANN)
     return GGML_CANN_MAX_DEVICES;
 #else
@@ -17234,13 +17243,35 @@ struct llama_context * llama_new_context_with_model(
         }
 #elif defined(GGML_USE_KOMPUTE)
         if (model->n_gpu_layers > 0) {
-            auto * backend = ggml_backend_kompute_init(model->main_gpu);
-            if (backend == nullptr) {
-                LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
+            if (model->split_mode == LLAMA_SPLIT_MODE_NONE) {
+                auto * backend = ggml_backend_kompute_init(model->main_gpu);
+                if (!backend) {
+                    LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
+                    llama_free(ctx);
+                    return nullptr;
+                }
+                ctx->backends.push_back(backend);
+            } else if (model->split_mode == LLAMA_SPLIT_MODE_LAYER) {
+                size_t count = 0;
+                auto * devices =ggml_vk_available_devices(0, &count);
+                for (size_t i = 0; i < count; i++) {
+                    LLAMA_LOG_INFO("Kompute: Found device #%d, %s, %s, max-alloc %ld, heap-size %lu\n",
+                                    devices[i].index, devices[i].vendor, devices[i].name,
+                                    devices[i].maxAlloc, devices[i].heapSize);
+                    auto * backend = ggml_backend_kompute_init(devices[i].index);
+                    if (!backend) {
+                        LLAMA_LOG_ERROR("%s: failed to initialize Kompute backend\n", __func__);
+                        llama_free(ctx);
+                        return nullptr;
+                    }
+                    ctx->backends.push_back(backend);
+                }
+                free(devices);
+            } else {
+                LLAMA_LOG_ERROR("%s: Failed to init Kompute backend: split mode %d not supported\n", __func__, model->split_mode);
                 llama_free(ctx);
                 return nullptr;
             }
-            ctx->backends.push_back(backend);
         }
 #elif defined(GGML_USE_CANN)
     // with split_mode LLAMA_SPLIT_MODE_NONE or LLAMA_SPLIT_MODE_ROW, only the main GPU backend is used
