@@ -785,6 +785,9 @@ static vk_submission ggml_vk_create_submission(vk_device& device, vk_queue& q, s
 
 static void ggml_vk_submit(vk_context& ctx, vk::Fence fence) {
     if (ctx->seqs.empty()) {
+        if (fence) {
+            ctx->q->queue.submit({}, fence);
+        }
         return;
     }
     VK_LOG_DEBUG("ggml_vk_submit(" << ctx << ", " << fence << ")");
@@ -5614,11 +5617,15 @@ static void ggml_vk_preallocate_buffers(ggml_backend_vk_context * ctx) {
     }
 }
 
-static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * node, int node_idx, bool last_node, bool dryrun){
+bool ggml_vk_compute_forward(ggml_backend_vk_context* ctx, ggml_tensor* tensor, int tensor_idx, bool use_fence);
+
+// Returns true if node has enqueued work into the queue, false otherwise
+// If submit is true the current all operations queued so far are being submitted to Vulkan to overlap cmdlist creation and GPU execution.
+static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * node, int node_idx, ggml_tensor *node_begin, int node_idx_begin, bool dryrun, bool submit){
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
 
     if (ggml_is_empty(node) || extra == nullptr) {
-        return;
+        return false;
     }
 
     VK_LOG_DEBUG("ggml_vk_build_graph(" << node << ", " << ggml_op_name(node->op) << ")");
@@ -5635,7 +5642,7 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     case GGML_OP_PERMUTE:
     case GGML_OP_TRANSPOSE:
     case GGML_OP_NONE:
-        return;
+        return false;
     case GGML_OP_UNARY:
         switch (ggml_get_unary_op(node)) {
         case GGML_UNARY_OP_SILU:
@@ -5645,7 +5652,7 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
         case GGML_UNARY_OP_TANH:
             break;
         default:
-            return;
+            return false;
         }
         break;
     case GGML_OP_REPEAT:
@@ -5680,7 +5687,7 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     default:
         std::cerr << "ggml_vulkan: Error: Missing op: " << ggml_op_name(node->op) << std::endl;
         GGML_ABORT("fatal error");
-        return;
+        return false;
     }
 
     vk_context compute_ctx;
@@ -5772,7 +5779,7 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
             ggml_vk_unary(ctx, compute_ctx, src0, node, dryrun);
             break;
         default:
-            return;
+            return false;
         }
         break;
     case GGML_OP_DIAG_MASK_INF:
@@ -5816,11 +5823,11 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
 
         break;
     default:
-        return;
+        return false;
     }
 
     if (dryrun) {
-        return;
+        return false;
     }
 
     ctx->tensor_ctxs[node_idx] = compute_ctx;
@@ -5831,14 +5838,26 @@ static void ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     last_node = true;
 #endif
 
-    if (last_node) {
+    if (submit) {
         ggml_vk_ctx_end(compute_ctx);
         compute_ctx->exit_tensor_idx = node_idx;
         ctx->compute_ctx.reset();
+
+        bool ok = ggml_vk_compute_forward(ctx, node_begin, node_idx_begin, false);
+        if (!ok) {
+            if (node->op == GGML_OP_UNARY) {
+                std::cerr << __func__ << ": error: op not supported UNARY " << node->name << " (" << ggml_unary_op_name(static_cast<ggml_unary_op>(node->op_params[0])) << ")" << std::endl;
+            }
+            else {
+                std::cerr << __func__ << ": error: op not supported " << node->name << " (" << ggml_op_name(node->op) << ")" << std::endl;
+            }
+        }
+
     }
+    return true;
 }
 
-static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor * tensor, int tensor_idx){
+static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor * tensor, int tensor_idx, bool use_fence = true){
     ggml_tensor_extra_gpu * extra = nullptr;
 
     switch (tensor->op) {
@@ -5910,9 +5929,7 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
 
     vk_context subctx = ctx->tensor_ctxs[tensor_idx].lock();
 
-#ifdef GGML_VULKAN_PERF
-    std::chrono::steady_clock::time_point start;
-#endif // GGML_VULKAN_PERF
+    VkFence fence = use_fence ? ctx->fence : VkFence{};
 
     // Only run if ctx hasn't been submitted yet
     if (!subctx->seqs.empty()) {
@@ -5921,20 +5938,13 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
             memcpy(cpy.dst, cpy.src, cpy.n);
         }
 
-#ifdef GGML_VULKAN_PERF
-        start = std::chrono::steady_clock::now();
-#endif // GGML_VULKAN_PERF
-
-        ggml_vk_submit(subctx, ctx->fence);
+        ggml_vk_submit(subctx, fence);
     }
 
-    if (tensor_idx == subctx->exit_tensor_idx) {
-        VK_CHECK(ctx->device->device.waitForFences({ ctx->fence }, true, UINT64_MAX), "ggml_vk_compute_forward waitForFences");
+    if (tensor_idx != 0 && tensor_idx == subctx->exit_tensor_idx) {
+        ggml_vk_submit(subctx, fence);
 
-#ifdef GGML_VULKAN_PERF
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start);
-        ctx->device->perf_logger->log_timing(tensor, duration.count());
-#endif // GGML_VULKAN_PERF
+        VK_CHECK(ctx->device->device.waitForFences({ ctx->fence }, true, UINT64_MAX), "ggml_vk_compute_forward waitForFences");
 
         ctx->device->device.resetFences({ ctx->fence });
 
@@ -6426,7 +6436,7 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_build_graph(ctx, cgraph->nodes[i], i, 0, true);
+        ggml_vk_build_graph(ctx, cgraph->nodes[i], i, nullptr, 0, true, false);
     }
     ggml_vk_preallocate_buffers(ctx);
     ggml_pipeline_allocate_descriptor_sets(ctx->device);
@@ -6441,32 +6451,39 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
     // Reserve tensor context space for all nodes
     ctx->tensor_ctxs.resize(cgraph->n_nodes);
 
+    bool first_node_in_batch = true; // true if next node will be first node in a batch
+    int submit_node_idx = 0; // index to first node in a batch
+
+    // submit work every submit_count node to overlap CPU cmdbuffer generation with GPU execution
+    constexpr int submit_count = 50;
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_build_graph(ctx, cgraph->nodes[i], i, i == last_node, false);
+        if (first_node_in_batch) {
+            submit_node_idx = i;
+        }
+            
+        bool submit = ((i % submit_count) == 0) || (i == last_node);
+        bool enqueued = ggml_vk_build_graph(ctx, cgraph->nodes[i], i, cgraph->nodes[submit_node_idx], submit_node_idx, false, submit);
+
+        if (first_node_in_batch && enqueued) {
+            first_node_in_batch = false;
+        }
+        if (submit) {
+            first_node_in_batch = true;
+        }
     }
 
-    for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_tensor * node = cgraph->nodes[i];
+    // wait for work on the GPU to complete work
+    bool ok = ggml_vk_compute_forward(ctx, cgraph->nodes[cgraph->n_nodes-1], cgraph->n_nodes - 1, true);
 
-        if (ggml_vk_is_empty(node)) {
-            continue;
-        }
-
-        bool ok = ggml_vk_compute_forward(ctx, node, i);
-        if (!ok) {
-            if (node->op == GGML_OP_UNARY) {
-                std::cerr << __func__ << ": error: op not supported UNARY " << node->name << " (" << ggml_unary_op_name(static_cast<ggml_unary_op>(node->op_params[0])) << ")" << std::endl;
-            } else {
-                std::cerr << __func__ << ": error: op not supported " << node->name << " (" << ggml_op_name(node->op) << ")" << std::endl;
-            }
-        }
+    if (!ok) {
+        std::cerr << __func__ << ": error: failed to enqueue cmdbuffer" << std::endl;
+    }
 #ifdef GGML_VULKAN_CHECK_RESULTS
-        else {
-            ggml_vk_check_results_1(node);
-        }
-#endif
-        GGML_ASSERT(ok);
+    else {
+        ggml_vk_check_results_1(node);
     }
+#endif
+    GGML_ASSERT(ok);
 
 #ifdef GGML_VULKAN_PERF
     ctx->device->perf_logger->print_timings();
