@@ -2818,7 +2818,7 @@ struct llama_sbatch {
                 }
             } else {
                 // simple split
-                ubatch.embd = batch->embd + seq.offset;
+                ubatch.embd = batch->embd + (n_embd * seq.offset);
             }
         } else {
             ubatch.embd = nullptr;
