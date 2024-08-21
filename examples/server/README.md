@@ -501,7 +501,7 @@ Notice that each `probs` is an array of length `n_probs`.
     *Options:*
 
     `content`: (Required) The text to tokenize.
-    
+
     `add_special`: (Optional) Boolean indicating if special tokens, i.e. `BOS`, should be inserted.  Default: `false`
 
     `with_pieces`: (Optional) Boolean indicating whether to return token pieces along with IDs.  Default: `false`

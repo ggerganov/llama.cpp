@@ -3220,7 +3220,7 @@ int main(int argc, char ** argv) {
                 tokens_response = tokens;
             }
         }
-        
+
         const json data = format_tokenizer_response(tokens_response);
         return res.set_content(data.dump(), MIMETYPE_JSON);
     };
