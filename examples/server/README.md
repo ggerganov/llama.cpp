@@ -252,6 +252,8 @@ Available environment variables (if specified, these variables will override par
 - `LLAMA_CACHE`: cache directory, used by `--hf-repo`
 - `HF_TOKEN`: Hugging Face access token, used when accessing a gated model with `--hf-repo`
 - `LLAMA_ARG_MODEL`: equivalent to `-m`
+- `LLAMA_ARG_MODEL_URL`: equivalent to `-mu`
+- `LLAMA_ARG_MODEL_ALIAS`: equivalent to `-a`
 - `LLAMA_ARG_HF_REPO`: equivalent to `--hf-repo`
 - `LLAMA_ARG_HF_FILE`: equivalent to `--hf-file`
 - `LLAMA_ARG_THREADS`: equivalent to `-t`
@@ -282,11 +284,11 @@ services:
     volumes:
       - ./models:/models
     environment:
+      # alternatively, you can use "LLAMA_ARG_MODEL_URL" to download the model
       LLAMA_ARG_MODEL: /models/my_model.gguf
       LLAMA_ARG_CTX_SIZE: 4096
       LLAMA_ARG_N_PARALLEL: 2
       LLAMA_ARG_ENDPOINT_METRICS: 1  # to disable, either remove or set to 0
-      LLAMA_ARG_HOST: 0.0.0.0
       LLAMA_ARG_PORT: 8080
 ```
 
