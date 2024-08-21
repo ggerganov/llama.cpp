@@ -66,12 +66,12 @@ static std::string ggml_kompute_format_name(int device) {
     return "Kompute" + std::to_string(device);
 }
 
-struct ggml_kompute_context {
+struct ggml_backend_kompute_context {
     int device;
     std::string name;
     std::shared_ptr<vk::DescriptorPool> pool;
 
-    ggml_kompute_context(int device)
+    ggml_backend_kompute_context(int device)
         : device(device), name(ggml_kompute_format_name(device)) {}
 };
 
@@ -79,7 +79,7 @@ struct ggml_kompute_context {
 // and consolidate the init functions and simplify object lifetime management. As it currently stands,
 // we *have* to have the kompute manager no matter what for device discovery, but the kompute context
 // is only created when a device is set and vulkan is explicitly turned on.
-static ggml_kompute_context *s_kompute_context = nullptr;
+static ggml_backend_kompute_context *s_kompute_context = nullptr;
 
 class kompute_manager {
     kp::Manager *s_mgr = nullptr;
@@ -348,7 +348,7 @@ ggml_vk_device ggml_vk_current_device() {
 }
 
 static
-void ggml_vk_allocate_descriptor_pool(struct ggml_kompute_context * ctx, size_t size) {
+void ggml_vk_allocate_descriptor_pool(struct ggml_backend_kompute_context * ctx, size_t size) {
     std::vector<vk::DescriptorPoolSize> descriptorPoolSizes = {
         vk::DescriptorPoolSize(
           vk::DescriptorType::eStorageBuffer,
@@ -370,7 +370,7 @@ void ggml_vk_allocate_descriptor_pool(struct ggml_kompute_context * ctx, size_t 
 }
 
 static
-void ggml_vk_free_descriptor_pool(struct ggml_kompute_context * ctx) {
+void ggml_vk_free_descriptor_pool(struct ggml_backend_kompute_context * ctx) {
     if (ctx->pool) {
         komputeManager()->device()->destroy(
           *ctx->pool,
@@ -1412,7 +1412,7 @@ static bool ggml_vk_supports_op(const struct ggml_tensor * op) {
     return false;
 }
 
-static void ggml_vk_graph_compute(struct ggml_kompute_context * ctx, struct ggml_cgraph * gf) {
+static void ggml_vk_graph_compute(struct ggml_backend_kompute_context * ctx, struct ggml_cgraph * gf) {
     const int n_seq = 8;
 
     // FIXME: Figure out if we can somehow optimize the size of the pool... right now we're setting
@@ -1935,12 +1935,12 @@ ggml_backend_buffer_type_t ggml_backend_kompute_buffer_type(int device) {
 // backend
 
 static const char * ggml_backend_kompute_name(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    auto * ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
     return ctx->name.c_str();
 }
 
 static void ggml_backend_kompute_free(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    auto * ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
 
     assert(ctx == s_kompute_context);
     s_kompute_context = nullptr;
@@ -1952,12 +1952,12 @@ static void ggml_backend_kompute_free(ggml_backend_t backend) {
 }
 
 static ggml_backend_buffer_type_t ggml_backend_kompute_get_default_buffer_type(ggml_backend_t backend) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    auto * ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
     return ggml_backend_kompute_buffer_type(ctx->device);
 }
 
 static ggml_status ggml_backend_kompute_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
-    auto * ctx = static_cast<ggml_kompute_context *>(backend->context);
+    auto * ctx = static_cast<ggml_backend_kompute_context *>(backend->context);
     ggml_vk_graph_compute(ctx, cgraph);
     return GGML_STATUS_SUCCESS;
 }
@@ -2002,7 +2002,7 @@ static ggml_guid_t ggml_backend_kompute_guid() {
 
 ggml_backend_t ggml_backend_kompute_init(int device) {
     GGML_ASSERT(s_kompute_context == nullptr);
-    s_kompute_context = new ggml_kompute_context(device);
+    s_kompute_context = new ggml_backend_kompute_context(device);
 
     ggml_backend_t kompute_backend = new ggml_backend {
         /* .guid      = */ ggml_backend_kompute_guid(),
