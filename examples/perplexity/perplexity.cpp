@@ -400,6 +400,7 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
 
         // clear the KV cache
         llama_kv_cache_clear(ctx);
+
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
             const int batch_size  = std::min(end - batch_start, n_batch);
