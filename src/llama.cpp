@@ -5628,7 +5628,7 @@ static void llm_load_hparams(
                         } break;
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
-            }
+            } break;
         case LLM_ARCH_XVERSE:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
