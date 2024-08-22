@@ -130,6 +130,7 @@ typedef sycl::float2 dfloat2;
 #endif // GGML_SYCL_F16
 
 #define MMVQ_MAX_BATCH_SIZE  8
+#define MMVQ_MIN_BATCH_SIZE  4
 
 static const int8_t kvalues_iq4nl[16]={-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 
@@ -351,5 +352,7 @@ template <typename Tp, int dim>
 static __dpct_inline__ Tp* get_pointer(sycl::local_accessor<Tp, dim> acc) {
     return acc.template get_multi_ptr<sycl::access::decorated::no>().get();
 }
+
+int64_t downsample_sycl_global_range(int64_t accumulate_block_num, int64_t block_size);
 
 #endif // GGML_SYCL_COMMON_HPP
