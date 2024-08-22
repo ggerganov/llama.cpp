@@ -230,7 +230,7 @@ extern "C" {
         llama_pos    *  pos;
         int32_t      *  n_seq_id;
         llama_seq_id ** seq_id;
-        int8_t       *  output; // Previously named 'logits', renamed to 'output' now.
+        int8_t       *  output;  // Previously named 'logits', renamed to 'output' now.
 
         // NOTE: helpers for smooth API transition - can be deprecated in the future
         //       for future-proof code, use the above fields instead and ignore everything below
