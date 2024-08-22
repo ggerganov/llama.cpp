@@ -603,7 +603,7 @@ static bool is_valid_utf8(const std::string & str) {
             bytes += 3;
         } else if ((*bytes & 0xF8) == 0xF0) {
             // 4-byte sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
-            if (end - bytes < 4 || (bytes[1] & 0xC0) != 0x80 || 
+            if (end - bytes < 4 || (bytes[1] & 0xC0) != 0x80 ||
                 (bytes[2] & 0xC0) != 0x80 || (bytes[3] & 0xC0) != 0x80)
                 return false;
             bytes += 4;
