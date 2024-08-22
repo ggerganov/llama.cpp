@@ -173,6 +173,7 @@ jobs:
         if: ${{ !matrix.disabled_on_pr || !github.event.pull_request }}
         run: |
           cd examples/server/tests
+          set PYTHONIOENCODING=utf-8
           behave.exe --summary --stop --no-capture --exclude 'issues|wrong_usages|passkey' --tags llama.cpp
 
       - name: Slow tests
