@@ -17328,6 +17328,9 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
             n_attn_layer *= 3;
         }
         GGML_ASSERT((qs.n_attention_wv == n_attn_layer) && "n_attention_wv is unexpected");
+        GGML_ASSERT((qs.n_attention_wk == n_attn_layer) && "n_attention_wk is unexpected");
+        GGML_ASSERT((qs.n_attention_wq == n_attn_layer) && "n_attention_wq is unexpected");
+        GGML_ASSERT((qs.n_attention_wo == n_attn_layer) && "n_attention_wo is unexpected");
     }
 
     size_t total_size_org = 0;
