@@ -15,6 +15,7 @@
 
 #include <sycl/sycl.hpp>
 #include <sycl/half_type.hpp>
+#include <oneapi/ccl.hpp>
 #include <oneapi/mkl.hpp>
 #include <map>
 
@@ -479,6 +480,8 @@ namespace dpct
         int _max_nd_range_size_i[3];
         uint32_t _device_id;
         std::array<unsigned char, 16> _uuid;
+        uint32_t _rank;
+        uint32_t _world_size;
     };
 
     static int get_major_version(const sycl::device &dev)
@@ -870,7 +873,12 @@ namespace dpct
             }
             return -1;
         }
-
+	inline int get_ccl_rank() { return _rank; }
+	inline int get_ccl_world_size() { return _world_size; }
+	inline ccl::communicator create_ccl_communicator(ccl::device dev, ccl::context ctx) {
+            return ccl::create_communicator(_world_size, _rank, dev, ctx, _kvs);
+	    
+	}
         inline std::string get_preferred_gpu_platform_name() {
             std::string result;
 
@@ -993,6 +1001,26 @@ namespace dpct
         static bool compare_backend(std::string &backend1, std::string &backend2) {
             return convert_backend_index(backend1) < convert_backend_index(backend2);
         }
+
+	static void init_ccl() {
+            ccl::init();
+	    MPI_Init(NULL, NULL);
+	    MPI_Comm_size(MPI_COMM_WORLD, &_world_size);
+	    MPI_Comm_rank(MPI_COMM_WORLD, &_rank);
+	    atexit(mpi_finalize);
+            ccl::kvs::address_type main_addr;
+            if (_rank == 0) {
+                _kvs = ccl::create_main_kvs();
+                main_addr = _kvs->get_address();
+                MPI_Bcast((void *)main_addr.data(), main_addr.size(), MPI_BYTE, 0, MPI_COMM_WORLD);
+            }
+            else {
+                MPI_Bcast((void *)main_addr.data(), main_addr.size(), MPI_BYTE, 0, MPI_COMM_WORLD);
+                _kvs = ccl::create_kvs(main_addr);
+            }
+
+	}
+
         dev_mgr()
         {
             sycl::device default_device =
@@ -1050,6 +1078,7 @@ namespace dpct
                     _cpu_device = _devs.size() - 1;
                 }
             }
+	    init_ccl();
         }
         void check_id(unsigned int id) const
         {
@@ -1066,6 +1095,10 @@ namespace dpct
         /// thread-id to device-id map.
         std::map<unsigned int, unsigned int> _thread2dev_map;
         int _cpu_device = -1;
+	// For tensor parallelsim
+        int _rank = 0;
+        int _world_size = 1;
+        ccl::shared_ptr_class<ccl::kvs> _kvs;
     };
 
     static inline sycl::queue &get_default_queue()

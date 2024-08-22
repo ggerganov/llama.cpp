@@ -581,6 +581,27 @@ extern "C" {
         GGML_TENSOR_FLAG_LOSS     = 8, // ...defines loss for numerical optimization (multiple loss tensors add up)
     };
 
+    // ggml object
+    struct ggml_object {
+        size_t offs;
+        size_t size;
+
+        struct ggml_object * next;
+
+        enum ggml_object_type type;
+
+        char padding[4];
+    };
+
+    static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
+
+    enum tensor_parallel_mode {
+        TENSOR_NO_CHANGE,
+	TENSOR_SPLIT_BY_ROW,
+	TENSOR_SPLIT_BY_COLUMN,
+	TENSOR_KEEPED_ON_MASTER,
+    }
+
     // n-dimensional tensor
     struct ggml_tensor {
         enum ggml_type type;
@@ -615,6 +636,8 @@ extern "C" {
         char name[GGML_MAX_NAME];
 
         void * extra; // extra things e.g. for ggml-cuda.cu
+
+	enum tensor_parallel_mode split_mode = tensor_parallel_mode::TENSOR_NO_CHANGE;
 
         // char padding[4];
     };
