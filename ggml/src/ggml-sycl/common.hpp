@@ -19,6 +19,10 @@
 #include "dpct/helper.hpp"
 #include "ggml-sycl.h"
 #include "presets.hpp"
+#if GGML_SYCL_DNNL
+#include "dnnl.hpp"
+#include "dnnl_sycl.hpp"
+#endif
 
 #define GGML_COMMON_DECL_SYCL
 #define GGML_COMMON_IMPL_SYCL
@@ -130,6 +134,7 @@ typedef sycl::float2 dfloat2;
 #endif // GGML_SYCL_F16
 
 #define MMVQ_MAX_BATCH_SIZE  8
+#define MMVQ_MIN_BATCH_SIZE  4
 
 static const int8_t kvalues_iq4nl[16]={-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 
@@ -276,6 +281,52 @@ struct ggml_backend_sycl_context {
         return stream(device, 0);
     }
 
+#if GGML_SYCL_DNNL
+    dnnl::engine make_engine(sycl::queue* q) {
+        // Get the device associated with the queue
+        sycl::device dev = q->get_device();
+        // Get the context associated with the queue
+        sycl::context ctx = q->get_context();
+        const dnnl::engine eng = dnnl::sycl_interop::make_engine(dev, ctx);
+        return eng;
+    }
+
+    std::unordered_map<sycl::queue*, dnnl::stream> stream_map;
+    std::unordered_map<sycl::queue*, dnnl::engine> engine_map;
+    dnnl::stream stream_dnnl(int device, int _stream) {
+        auto q = stream(device, _stream);
+        return stream_dnnl(q);
+    }
+    dnnl::engine engine_dnnl(sycl::queue* qptr) {
+        auto it = engine_map.find(qptr);
+        if (it == engine_map.end()) {
+            auto eng = make_engine(qptr);
+            engine_map[qptr] = eng;
+            return eng;
+        }
+        else
+        {
+            return it->second;
+        }
+    }
+    dnnl::stream stream_dnnl(sycl::queue* qptr) {
+        auto it = stream_map.find(qptr);
+        if (it == stream_map.end()) {
+            auto eng = engine_dnnl(qptr);
+            auto stream = dnnl::sycl_interop::make_stream(eng, *qptr);
+            stream_map[qptr] = stream;
+            return stream;
+        }
+        else
+        {
+            return it->second;
+        }
+    }
+    dnnl::stream stream_dnnl() {
+        return stream_dnnl(device, 0);
+    }
+#endif
+
     // pool
     std::unique_ptr<ggml_sycl_pool> pools[GGML_SYCL_MAX_DEVICES];
 
@@ -351,5 +402,7 @@ template <typename Tp, int dim>
 static __dpct_inline__ Tp* get_pointer(sycl::local_accessor<Tp, dim> acc) {
     return acc.template get_multi_ptr<sycl::access::decorated::no>().get();
 }
+
+int64_t downsample_sycl_global_range(int64_t accumulate_block_num, int64_t block_size);
 
 #endif // GGML_SYCL_COMMON_HPP

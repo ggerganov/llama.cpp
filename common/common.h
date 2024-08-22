@@ -267,7 +267,7 @@ struct gpt_params {
     std::string lora_outfile = "ggml-lora-merged-f16.gguf";
 };
 
-void gpt_params_handle_hf_token(gpt_params & params);
+void gpt_params_parse_from_env(gpt_params & params);
 void gpt_params_handle_model_default(gpt_params & params);
 
 bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
@@ -379,10 +379,6 @@ std::string llama_detokenize(
                          llama_context * ctx,
         const std::vector<llama_token> & tokens,
                                   bool   special = true);
-
-// Uses the value from the model metadata if possible, otherwise
-// defaults to true when model type is SPM, otherwise false.
-bool llama_should_add_bos_token(const llama_model * model);
 
 //
 // Chat template utils
