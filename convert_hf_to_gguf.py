@@ -2801,13 +2801,13 @@ class Mamba2Model(Model):
         vocab_size = -(vocab_size // -pad_vocab) * pad_vocab
         self.hparams["vocab_size"] = vocab_size
 
-        if (self.dir_model / "tokenizer.json").is_file():
-            self._set_vocab_gpt2()
-        elif (self.dir_model / "tokenizer.model").is_file():
+        if (self.dir_model / "tokenizer.model").is_file():
             self._set_vocab_sentencepiece()
         elif (self.dir_model / "tokenizer.model.v3").is_file():
             # mamba-codestral
             raise NotImplementedError(f"Please rename {self.dir_model / 'tokenizer.model.v3'} to {self.dir_model / 'tokenizer.model'}")
+        elif (self.dir_model / "tokenizer.json").is_file():
+            self._set_vocab_gpt2()
         else:
             # Use the GPT-NeoX tokenizer when no tokenizer files are present
             self._set_vocab_builtin("gpt-neox", vocab_size)
