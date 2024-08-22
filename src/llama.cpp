@@ -2874,17 +2874,17 @@ struct llama_sbatch {
                 ubatch.output[ubatch.n_tokens + i] = 1;
                 out_ids.push_back(ids[seq.offset + i]);
             }
-        } else if (batch->logits) {
+        } else if (batch->output) {
             if (ubatch.equal_seqs) {
                 for (size_t i = 0; i < length; ++i) {
                     size_t id = ids[seq.offset + i];
-                    int8_t is_output = batch->logits[id];
+                    int8_t is_output = batch->output[id];
                     ubatch.output[ubatch.n_tokens + i] = is_output;
                     if (is_output) { out_ids.push_back(id); }
                 }
             } else {
                 // simple split
-                ubatch.output = batch->logits + seq.offset;
+                ubatch.output = batch->output + seq.offset;
                 for (size_t i = 0; i < length; ++i) {
                     if (ubatch.output[i] != 0) { out_ids.push_back(seq.offset + i); }
                 }

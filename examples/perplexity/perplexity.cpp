@@ -399,7 +399,6 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
 
         // clear the KV cache
         llama_kv_cache_clear(ctx);
-
         for (int j = 0; j < num_batches; ++j) {
             const int batch_start = start + j * n_batch;
             const int batch_size  = std::min(end - batch_start, n_batch);
@@ -407,16 +406,8 @@ static results_perplexity perplexity_v2(llama_context * ctx, const gpt_params & 
             llama_batch batch = llama_batch_init(batch_size, 0, 1);
             for (int k = 0; k < batch_size; ++k) {
                 const int idx = batch_start + k;
-                batch.token  [k] = tokens[idx];
-                batch.output [k] = 1;
+                llama_batch_add(batch, tokens[idx], j*n_batch + k, {0}, true);
             }
-            batch.n_tokens   = batch_size;
-            batch.pos        = nullptr;
-            batch.n_seq_id   = nullptr;
-            batch.seq_id     = nullptr;
-            batch.all_pos_0  = j*n_batch;
-            batch.all_pos_1  = 1;
-            batch.all_seq_id = 0;
 
             //fprintf(stderr, "    Batch %d: starts at %d, size is %d, n_past is %d\n",j,batch_start,batch_size,j * n_batch);
             if (llama_decode(ctx, batch)) {
