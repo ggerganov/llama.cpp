@@ -2479,7 +2479,7 @@ static void ggml_vk_dispatch_pipeline(ggml_backend_vk_context* ctx, vk_context& 
     const uint32_t wg2 = CEIL_DIV(elements[2], pipeline->wg_denoms[2]);
     VK_LOG_DEBUG("ggml_vk_dispatch_pipeline(" << pipeline->name << ", {";
     for (auto& buffer : descriptor_buffer_infos) {
-        std::cerr << "(" << buffer << ", " << buffer.offset << ", " << buffer.size << "), ";
+        std::cerr << "(" << buffer.buffer << ", " << buffer.offset << ", " << buffer.range << "), ";
     }
     std::cerr << "}, (" << wg0 << "," << wg1 << "," << wg2 << "))");
     GGML_ASSERT(pipeline->descriptor_set_idx < pipeline->descriptor_sets.size());
@@ -5621,7 +5621,7 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context* ctx, ggml_tensor* t
 
 // Returns true if node has enqueued work into the queue, false otherwise
 // If submit is true the current all operations queued so far are being submitted to Vulkan to overlap cmdlist creation and GPU execution.
-static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * node, int node_idx, ggml_tensor *node_begin, int node_idx_begin, bool dryrun, bool submit){
+static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * node, int node_idx, ggml_tensor *node_begin, int node_idx_begin, bool dryrun, bool last_node, bool submit){
     ggml_tensor_extra_gpu * extra = (ggml_tensor_extra_gpu *) node->extra;
 
     if (ggml_is_empty(node) || extra == nullptr) {
@@ -5838,9 +5838,17 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
     last_node = true;
 #endif
 
-    if (submit) {
+    if (submit || last_node) {
         ggml_vk_ctx_end(compute_ctx);
-        compute_ctx->exit_tensor_idx = node_idx;
+
+        // TODO probably it'd be better to pass a exit_node flag to ggml_vk_compute_forward
+        if (last_node) {
+            compute_ctx->exit_tensor_idx = node_idx_begin; 
+        }
+        else {
+            compute_ctx->exit_tensor_idx = -1;
+        }
+
         ctx->compute_ctx.reset();
 
         bool ok = ggml_vk_compute_forward(ctx, node_begin, node_idx_begin, false);
@@ -5929,6 +5937,11 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
 
     vk_context subctx = ctx->tensor_ctxs[tensor_idx].lock();
 
+    // always wait for the GPU work to be done for the last submit
+    if (tensor_idx == subctx->exit_tensor_idx) {
+        use_fence = true;
+    }
+
     vk::Fence fence = use_fence ? ctx->fence : vk::Fence{};
 
     // Only run if ctx hasn't been submitted yet
@@ -5941,13 +5954,13 @@ static bool ggml_vk_compute_forward(ggml_backend_vk_context * ctx, ggml_tensor *
         ggml_vk_submit(subctx, fence);
     }
 
-    if (tensor_idx != 0 && tensor_idx == subctx->exit_tensor_idx) {
-        ggml_vk_submit(subctx, fence);
-
+    if (use_fence) {
         VK_CHECK(ctx->device->device.waitForFences({ ctx->fence }, true, UINT64_MAX), "ggml_vk_compute_forward waitForFences");
 
         ctx->device->device.resetFences({ ctx->fence });
+    }
 
+    if (tensor_idx == subctx->exit_tensor_idx) {
         // Do staging buffer copies
         for (auto& cpy : subctx->out_memcpys) {
             memcpy(cpy.dst, cpy.src, cpy.n);
@@ -6436,7 +6449,7 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
     ggml_backend_vk_context * ctx = (ggml_backend_vk_context *)backend->context;
 
     for (int i = 0; i < cgraph->n_nodes; i++) {
-        ggml_vk_build_graph(ctx, cgraph->nodes[i], i, nullptr, 0, true, false);
+        ggml_vk_build_graph(ctx, cgraph->nodes[i], i, nullptr, 0, true, false, false);
     }
     ggml_vk_preallocate_buffers(ctx);
     ggml_pipeline_allocate_descriptor_sets(ctx->device);
@@ -6460,9 +6473,10 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
         if (first_node_in_batch) {
             submit_node_idx = i;
         }
-            
-        bool submit = ((i % submit_count) == 0) || (i == last_node);
-        bool enqueued = ggml_vk_build_graph(ctx, cgraph->nodes[i], i, cgraph->nodes[submit_node_idx], submit_node_idx, false, submit);
+
+        // TODO probably it's better to move the submit conter to ggml_vk_build_graph since a lot of nodes might not contain actual vulkan work
+        bool submit = i && ((i % submit_count) == 0);
+        bool enqueued = ggml_vk_build_graph(ctx, cgraph->nodes[i], i, cgraph->nodes[submit_node_idx], submit_node_idx, false, i == last_node, submit);
 
         if (first_node_in_batch && enqueued) {
             first_node_in_batch = false;
@@ -6471,19 +6485,6 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
             first_node_in_batch = true;
         }
     }
-
-    // wait for work on the GPU to complete work
-    bool ok = ggml_vk_compute_forward(ctx, cgraph->nodes[cgraph->n_nodes-1], cgraph->n_nodes - 1, true);
-
-    if (!ok) {
-        std::cerr << __func__ << ": error: failed to enqueue cmdbuffer" << std::endl;
-    }
-#ifdef GGML_VULKAN_CHECK_RESULTS
-    else {
-        ggml_vk_check_results_1(node);
-    }
-#endif
-    GGML_ASSERT(ok);
 
 #ifdef GGML_VULKAN_PERF
     ctx->device->perf_logger->print_timings();
