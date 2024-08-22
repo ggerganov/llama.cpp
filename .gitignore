@@ -132,3 +132,4 @@ poetry.toml
 
 # Test models for lora adapters
 /lora-tests
+examples/xgenmm/imgs/*.csv

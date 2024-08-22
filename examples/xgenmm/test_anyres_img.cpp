@@ -1,14 +1,13 @@
-#include "ggml.h"
-#include "common.h"
-#include "clip.h"
-#include "xgenmm.h"
-#include "llama.h"
-
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <vector>
 
-
+#include "clip.h"
+#include "common.h"
+#include "ggml.h"
+#include "llama.h"
+#include "xgenmm.h"
 
 struct clip_image_u8
 {
@@ -351,6 +350,69 @@ void print_img(clip_image_u8* img)
     }
 }
 
+void img_to_csv(clip_image_u8* img, const char* filename)
+{
+        std::ofstream outFile(filename);
+    if (!outFile.is_open())
+    {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+    const int nx = img->nx;
+    const int ny = img->ny;
+
+    for (int k = 0; k < 3; k++)
+    {
+        for (int y = 0; y < ny; y++)
+        {
+            for (int x = 0; x < nx; x++)
+            {
+                outFile << int(img->buf[3 * (y * nx + x) + k]);
+                if (x < nx - 1)
+                {
+                    outFile << ",";
+                }
+            }
+            outFile << std::endl;
+        }
+        outFile << std::endl;
+    }
+
+    outFile.close();
+    printf("file saved to %s\n", filename);
+}
+
+void tensor_to_csv(clip_image_f32* img, const char* filename)
+{
+    
+    std::ofstream outFile(filename);
+    if (!outFile.is_open())
+    {
+        std::cerr << "Error opening file!" << std::endl;
+    }
+    const int nx = img->nx;
+    const int ny = img->ny;
+
+    for (int k = 0; k < 3; k++)
+    {
+        for (int y = 0; y < ny; y++)
+        {
+            for (int x = 0; x < nx; x++)
+            {
+                outFile << float(img->buf[3 * (y * nx + x) + k]);
+                if (x < nx - 1)
+                {
+                    outFile << ",";
+                }
+            }
+            outFile << std::endl;
+        }
+        outFile << std::endl;
+    }
+
+    outFile.close();
+    printf("file saved to %s\n", filename);
+}
+
 int main(){
     /*
     Pytorch Image Processing Pipeline
@@ -447,55 +509,58 @@ int main(){
     clip_image_u8* image_original_resize = clip_image_u8_init();
     bicubic_resize(*img, *image_original_resize, 384, 384);
 
+    printf("**********************************\n");
+
     print_img(image_original_resize);
+    img_to_csv(image_original_resize, "/export/home/llama.cpp/examples/xgenmm/imgs/image_original_resize.csv");
+    printf("num pixels: %d\n", image_original_resize->buf.size());
+    printf("raw img: nx:%d | ny:%d\n", image_original_resize->nx, image_original_resize->ny);
 
-    // printf("num pixels: %d\n", image_original_resize->buf.size());
-    // printf("raw img: nx:%d | ny:%d\n", image_original_resize->nx, image_original_resize->ny);
-
-    // /*
-    //     part of:
-    //     encode_image_with_clip
-    // */
-    // clip_image_f32_batch img_res_v;
-    // img_res_v.size = 0;
-    // img_res_v.data = nullptr;
+    /*
+        part of:
+        encode_image_with_clip
+    */
+    clip_image_f32_batch img_res_v;
+    img_res_v.size = 0;
+    img_res_v.data = nullptr;
     
-    // if (!clip_image_preprocess(ctx, img, &img_res_v))
-    // {
-    //     LOG_TEE("%s: unable to preprocess image\n", __func__);
-    //     delete[] img_res_v.data;
-    //     return false;
-    // }
-    // printf("img->nx:%ld | img->ny:%ld\n", img->nx, img->ny);
-    // // printf("img_res_v.size:%ld\n", img_res_v.size);
-    // printf("img_res_v->nx:%ld | img_res_v->ny:%ld\n", img_res_v.data->nx, img_res_v.data->ny);
-    // // std::cout << img_res_v.data->nx << " | " << img_res_v.data->ny << std::endl;
-    // // std::cout << img_res_v.data->buf.size() << std::endl;
+    if (!clip_image_preprocess(ctx, img, &img_res_v))
+    {
+        LOG_TEE("%s: unable to preprocess image\n", __func__);
+        delete[] img_res_v.data;
+        return false;
+    }
+    printf("img->nx:%ld | img->ny:%ld\n", img->nx, img->ny);
+    // printf("img_res_v.size:%ld\n", img_res_v.size);
+    printf("img_res_v->nx:%ld | img_res_v->ny:%ld\n", img_res_v.data->nx, img_res_v.data->ny);
+    // std::cout << img_res_v.data->nx << " | " << img_res_v.data->ny << std::endl;
+    // std::cout << img_res_v.data->buf.size() << std::endl;
 
-    // const char* mm_patch_merge_type = clip_patch_merge_type(ctx);
-    // printf("mm_patch_merge_type:%s\n", mm_patch_merge_type);
+    const char* mm_patch_merge_type = clip_patch_merge_type(ctx);
+    printf("mm_patch_merge_type:%s\n", mm_patch_merge_type);
 
+    std::string basename = "/export/home/llama.cpp/examples/xgenmm/imgs/image_res";
+    for (size_t i = 0; i < img_res_v.size; i++) {
+        const int nx = img_res_v.data[i].nx;
+        const int ny = img_res_v.data[i].ny;
+        printf("i:%d | nx:%d | ny:%d\n", i, nx, ny);
 
-    // for (size_t i = 0; i < img_res_v.size; i++) {
-    //     const int nx = img_res_v.data[i].nx;
-    //     const int ny = img_res_v.data[i].ny;
-    //     printf("i:%d | nx:%d | ny:%d\n", i, nx, ny);
-
-    //     const int n = nx * ny;
+        const int n = nx * ny;
 
  
-    //     for (int k = 0; k < 1; k++) {
-    //         for (int y = 0; y < 5; y++) {
-    //             for (int x = 0; x < 10; x++) {
-    //                 // data[(i * 3 * n) + k * n + y * nx + x] = imgs->data[i].buf[3 * (y * nx + x) + k];
-    //                 printf("%.4f ", img_res_v.data[i].buf[3 * (y * nx + x) + k]);
-    //             }
-    //             printf("\n");
-    //         }
-    //         printf("\n");
-    //     }
-        
-    // }
+        for (int k = 0; k < 1; k++) {
+            for (int y = 0; y < 5; y++) {
+                for (int x = 0; x < 10; x++) {
+                    // data[(i * 3 * n) + k * n + y * nx + x] = imgs->data[i].buf[3 * (y * nx + x) + k];
+                    printf("%.4f ", img_res_v.data[i].buf[3 * (y * nx + x) + k]);
+                }
+                printf("\n");
+            }
+            printf("\n");
+        }
+        std::string fileName = basename + "_" + std::to_string(i) + ".csv";
+        tensor_to_csv(&img_res_v.data[i], fileName.c_str());
+    }
     
 
     // /*
