@@ -5843,7 +5843,7 @@ static bool ggml_vk_build_graph(ggml_backend_vk_context * ctx, ggml_tensor * nod
 
         // TODO probably it'd be better to pass a exit_node flag to ggml_vk_compute_forward
         if (last_node) {
-            compute_ctx->exit_tensor_idx = node_idx_begin; 
+            compute_ctx->exit_tensor_idx = node_idx_begin;
         }
         else {
             compute_ctx->exit_tensor_idx = -1;
