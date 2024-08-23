@@ -9378,15 +9378,20 @@ static struct ggml_tensor * llm_build_time_mix_rwkv6(
     const struct llama_layer * layer,
     struct ggml_tensor * cur,
     struct ggml_tensor * x_prev,
-    struct ggml_tensor ** wkv_state,
-    struct ggml_tensor * state_seq) {
+    struct ggml_tensor ** wkv_state) {
     size_t n_embed = cur->ne[0];
-    size_t n_tokens = cur->ne[1];
+    size_t n_seq_tokens = cur->ne[1];
+    size_t n_seqs = cur->ne[2];
     size_t head_size = layer->time_mix_first->ne[0];
     size_t head_count = layer->time_mix_first->ne[1];
-    size_t n_kv = state_seq->ne[0];
+
+    size_t n_tokens = n_seqs * n_seq_tokens;
 
     struct ggml_tensor * sx = ggml_sub(ctx, x_prev, cur);
+
+    sx = ggml_reshape_2d(ctx, sx, n_embed, n_tokens);
+    cur = ggml_reshape_2d(ctx, cur, n_embed, n_tokens);
+
     struct ggml_tensor * xxx = ggml_add(ctx, ggml_mul(ctx, sx, layer->time_mix_lerp_x), cur);
 
     xxx = ggml_reshape_4d(
@@ -9489,9 +9494,9 @@ static struct ggml_tensor * llm_build_time_mix_rwkv6(
     k = ggml_transpose(ctx, k);
     v = ggml_transpose(ctx, v);
     r = ggml_transpose(ctx, r);
-    struct ggml_tensor * wkv_output = ggml_rwkv_wkv(ctx, k, v, r, layer->time_mix_first, w, *wkv_state, state_seq);
+    struct ggml_tensor * wkv_output = ggml_rwkv_wkv(ctx, k, v, r, layer->time_mix_first, w, *wkv_state);
     cur = ggml_view_1d(ctx, wkv_output, n_embed * n_tokens, 0);
-    *wkv_state = ggml_view_1d(ctx, wkv_output, n_embed * head_size * n_kv, n_embed * n_tokens * sizeof(float));
+    *wkv_state = ggml_view_1d(ctx, wkv_output, n_embed * head_size * n_seqs, n_embed * n_tokens * sizeof(float));
 
     // ggml_group_norm considers groups in the third dimension.
     cur = ggml_reshape_4d(ctx, cur, n_embed / head_count, 1, head_count, n_tokens);
@@ -9501,8 +9506,9 @@ static struct ggml_tensor * llm_build_time_mix_rwkv6(
     cur = ggml_add(ctx, ggml_mul(ctx, cur, layer->time_mix_ln), layer->time_mix_ln_b);
 
     cur = ggml_mul(ctx, cur, g);
+    cur = ggml_mul_mat(ctx, layer->time_mix_output, cur);
 
-    return ggml_mul_mat(ctx, layer->time_mix_output, cur);
+    return ggml_reshape_3d(ctx, cur, n_embed, n_seq_tokens, n_seqs);
 }
 
 static struct ggml_tensor * llm_build_channel_mix_rwkv6(
@@ -15053,49 +15059,56 @@ struct llm_build_context {
         // Token shift state dimensions should be 2 * n_emb
         GGML_ASSERT(n_embd == hparams.n_embd_k_s() / 2);
 
+        const int64_t n_seqs = batch.n_seqs;
+        const int64_t n_seq_tokens = batch.n_seq_tokens;
+        const int64_t n_tokens = batch.n_tokens;
+        GGML_ASSERT(n_seqs != 0);
+        GGML_ASSERT(batch.equal_seqs);
+        GGML_ASSERT(n_tokens == n_seq_tokens * n_seqs);
+
         ggml_tensor * input_embeddings = llm_build_inp_embd(ctx0, lctx, hparams, batch, model.tok_embd, cb);
 
+        struct ggml_tensor * state_copy = build_inp_s_copy();
         struct ggml_tensor * state_mask = build_inp_s_mask();
-        struct ggml_tensor * state_seq  = build_inp_s_seq();
 
         ggml_tensor * cur = llm_build_norm(ctx0, input_embeddings, hparams, model.tok_norm, model.tok_norm_b, LLM_NORM, cb, -1);
 
         for (int layer_i = 0; layer_i < n_layer; ++layer_i) {
             const llama_layer * layer = &model.layers[layer_i];
 
-            struct ggml_tensor * token_shift = ggml_reshape_2d(ctx0, kv_self.k_l[layer_i], hparams.n_embd_k_s(), kv_self.size);
-            struct ggml_tensor * wkv_states  = ggml_reshape_2d(ctx0, kv_self.v_l[layer_i], hparams.n_embd_v_s(), kv_self.size);
+            // (ab)using the KV cache to store the states
+            struct ggml_tensor * token_shift = llm_build_copy_mask_state(ctx0,
+                    gf, kv_self.k_l[layer_i], state_copy, state_mask,
+                    hparams.n_embd_k_s(), kv_self.size, kv_head, n_kv, n_seqs);
+            struct ggml_tensor * wkv_states = llm_build_copy_mask_state(ctx0,
+                    gf, kv_self.v_l[layer_i], state_copy, state_mask,
+                    hparams.n_embd_v_s(), kv_self.size, kv_head, n_kv, n_seqs);
 
-            {
-                token_shift = ggml_mul(ctx0,
-                    ggml_view_2d(ctx0, token_shift, token_shift->ne[0], n_kv, token_shift->nb[1], kv_head*token_shift->nb[1]),
-                    state_mask);
-                wkv_states  = ggml_mul(ctx0,
-                    ggml_view_2d(ctx0, wkv_states, wkv_states->ne[0], n_kv, wkv_states->nb[1], kv_head*wkv_states->nb[1]),
-                    state_mask);
-            }
+            cur = ggml_reshape_3d(ctx0, cur, n_embd, n_seq_tokens, n_seqs);
 
             token_shift = ggml_cont(
                 ctx0,
                 ggml_permute(
                     ctx0,
-                    ggml_reshape_3d(ctx0, token_shift, n_embd, 2, n_kv),
+                    ggml_reshape_3d(ctx0, token_shift, n_embd, 2, n_seqs),
                     0, 2, 1, 3
                 )
             );
 
-            struct ggml_tensor * att_shift = ggml_view_1d(ctx0, token_shift, n_embd * n_kv, 0);
-            struct ggml_tensor * ffn_shift = ggml_view_1d(ctx0, token_shift, n_embd * n_kv, n_embd * n_kv * ggml_element_size(kv_self.k_l[layer_i]));
+            struct ggml_tensor * att_shift = ggml_view_1d(ctx0, token_shift, n_embd * n_seqs, 0);
+            struct ggml_tensor * ffn_shift = ggml_view_1d(ctx0, token_shift, n_embd * n_seqs, n_embd * n_seqs * ggml_element_size(token_shift));
+            att_shift = ggml_reshape_3d(ctx0, att_shift, n_embd, 1, n_seqs);
+            ffn_shift = ggml_reshape_3d(ctx0, ffn_shift, n_embd, 1, n_seqs);
 
             struct ggml_tensor * x_norm = llm_build_norm(ctx0, cur, hparams, layer->attn_norm, layer->attn_norm_b, LLM_NORM, cb, layer_i);
-            struct ggml_tensor * tmp = ggml_rwkv_token_shift(ctx0, att_shift, x_norm, state_seq);
-            struct ggml_tensor * x_prev = ggml_reshape_2d(
+            struct ggml_tensor * x_prev = ggml_concat(
                 ctx0,
-                ggml_view_1d(ctx0, tmp, n_embd * n_tokens, 0),
-                n_embd, n_tokens
+                att_shift,
+                ggml_view_3d(ctx0, x_norm, n_embd, n_seq_tokens - 1, n_seqs, x_norm->nb[1], x_norm->nb[2], 0),
+                1
             );
 
-            cur = ggml_add(ctx0, cur, llm_build_time_mix_rwkv6(ctx0, layer, x_norm, x_prev, &wkv_states, state_seq));
+            cur = ggml_add(ctx0, cur, llm_build_time_mix_rwkv6(ctx0, layer, x_norm, x_prev, &wkv_states));
             ggml_build_forward_expand(gf, cur);
             ggml_build_forward_expand(
                 gf,
@@ -15105,45 +15118,35 @@ struct llm_build_context {
                     ggml_view_1d(
                         ctx0,
                         kv_self.v_l[layer_i],
-                        hparams.n_embd_v_s() * n_kv,
+                        hparams.n_embd_v_s() * n_seqs,
                         hparams.n_embd_v_s() * kv_head * ggml_type_size(kv_self.v_l[layer_i]->type)
                     )
                 )
             );
+            struct ggml_tensor * last_norm = ggml_view_3d(ctx0, x_norm, n_embd, 1, n_seqs, x_norm->nb[1], x_norm->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(x_norm));
             ggml_build_forward_expand(
                 gf,
                 ggml_cpy(
-                    ctx0,
-                    ggml_view_1d(
-                        ctx0,
-                        tmp,
-                        n_embd * n_kv,
-                        n_tokens * n_embd * ggml_type_size(kv_self.k_l[layer_i]->type)
-                    ),
-                    ggml_view_1d(ctx0, token_shift, n_embd * n_kv, 0)
+                    ctx0, last_norm,
+                    ggml_view_1d(ctx0, token_shift, n_embd * n_seqs, 0)
                 )
             );
 
             x_norm = llm_build_norm(ctx0, cur, hparams, layer->attn_norm_2, layer->attn_norm_2_b, LLM_NORM, cb, layer_i);
-            tmp = ggml_rwkv_token_shift(ctx0, ffn_shift, x_norm, state_seq);
-            x_prev = ggml_reshape_2d(
+            x_prev = ggml_concat(
                 ctx0,
-                ggml_view_1d(ctx0, tmp, n_embd * n_tokens, 0),
-                n_embd, n_tokens
+                ffn_shift,
+                ggml_view_3d(ctx0, x_norm, n_embd, n_seq_tokens - 1, n_seqs, x_norm->nb[1], x_norm->nb[2], 0),
+                1
             );
             cur = ggml_add(ctx0, cur, llm_build_channel_mix_rwkv6(ctx0, layer, x_norm, x_prev));
+            last_norm = ggml_view_3d(ctx0, x_norm, n_embd, 1, n_seqs, x_norm->nb[1], x_norm->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(x_norm));
             ggml_build_forward_expand(gf, cur);
             ggml_build_forward_expand(
                 gf,
                 ggml_cpy(
-                    ctx0,
-                    ggml_view_1d(
-                        ctx0,
-                        tmp,
-                        n_embd * n_kv,
-                        n_tokens * n_embd * ggml_type_size(kv_self.k_l[layer_i]->type)
-                    ),
-                    ggml_view_1d(ctx0, token_shift, n_embd * n_kv, n_kv * n_embd * ggml_type_size(kv_self.k_l[layer_i]->type))
+                    ctx0, last_norm,
+                    ggml_view_1d(ctx0, token_shift, n_embd * n_seqs, n_embd * n_seqs * ggml_element_size(token_shift))
                 )
             );
 
@@ -15151,7 +15154,7 @@ struct llm_build_context {
                 ctx0,
                 ggml_permute(
                     ctx0,
-                    ggml_reshape_3d(ctx0, token_shift, n_embd, n_kv, 2),
+                    ggml_reshape_3d(ctx0, token_shift, n_embd, n_seqs, 2),
                     0, 2, 1, 3
                 )
             );
@@ -15160,8 +15163,8 @@ struct llm_build_context {
                 gf,
                 ggml_cpy(
                     ctx0,
-                    ggml_view_1d(ctx0, token_shift, n_embd * n_kv * 2, 0),
-                    ggml_view_1d(ctx0, kv_self.k_l[layer_i], hparams.n_embd_k_s() * n_kv, hparams.n_embd_k_s() * kv_head * ggml_type_size(kv_self.k_l[layer_i]->type))
+                    ggml_view_1d(ctx0, token_shift, n_embd * n_seqs * 2, 0),
+                    ggml_view_1d(ctx0, kv_self.k_l[layer_i], hparams.n_embd_k_s() * n_seqs, hparams.n_embd_k_s() * kv_head * ggml_type_size(kv_self.k_l[layer_i]->type))
                 )
             );
 
@@ -15171,6 +15174,7 @@ struct llm_build_context {
         }
 
         ggml_tensor * inp_out_ids = build_inp_out_ids();
+        cur = ggml_reshape_2d(ctx0, cur, n_embd, n_tokens);
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
 
         cur = llm_build_norm(ctx0, cur, hparams, model.output_norm, model.output_norm_b, LLM_NORM, cb, -1);
