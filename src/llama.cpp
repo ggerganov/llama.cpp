@@ -16714,57 +16714,50 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
         }
         ++qs.i_attention_wq;
     } else if (name.find("attn_output.weight") != std::string::npos) {
-        if (arch != LLM_ARCH_FALCON) {
-            if (qs.model.hparams.n_expert >= 4) {
-                if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ2_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS  || ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) {
-                    new_type = GGML_TYPE_Q4_K;
-                }
-				else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K   || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
-                    ftype == LLAMA_FTYPE_MOSTLY_Q2_K_L || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL  || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XL ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXL || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XSR  ||
-                    ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ4_NL ||
-                    ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ3_S  ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ3_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XS) {
-                    new_type = GGML_TYPE_Q5_K;
-                }
-				else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q5_K;
-				else new_type = GGML_TYPE_Q8_0;
+        if (qs.model.hparams.n_expert >= 4) {
+            if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
+                ftype == LLAMA_FTYPE_MOSTLY_IQ2_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ2_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M ||
+                ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS  || ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_Q2_K_S ||
+                ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) {
+                new_type = GGML_TYPE_Q4_K;
             }
-            else if (qs.model.hparams.n_gqa() >= 4 || qs.model.hparams.n_expert >= 2) {
-                if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) new_type = GGML_TYPE_IQ2_XS;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS ||
-                         ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S) new_type = GGML_TYPE_IQ2_S;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) new_type = GGML_TYPE_IQ3_XXS;
-                }
-            else if (qs.model.hparams.n_gqa() >= 2) {
-                if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S ||
-                    ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) new_type = GGML_TYPE_IQ2_XXS;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS) new_type = GGML_TYPE_IQ2_XS;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S) new_type = GGML_TYPE_IQ2_S;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) new_type = GGML_TYPE_IQ3_XXS;
-            } else {
-                if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K || ftype == LLAMA_FTYPE_MOSTLY_Q2_K_L) new_type = GGML_TYPE_Q3_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M ) new_type = GGML_TYPE_Q4_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L ) new_type = GGML_TYPE_Q5_K;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS) {
-                    new_type = GGML_TYPE_IQ3_S;
-                }
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_M || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXL)
-                    new_type = GGML_TYPE_IQ4_XS;
-                else if (ftype == LLAMA_FTYPE_MOSTLY_IQ4_XSR) {
-                    if (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2) {
-                        new_type = qs.i_attention_wq < qs.n_attention_wq/8 ? GGML_TYPE_Q6_K :
-                                   difquant_first_last_tensors(qs.i_attention_wo, qs.n_attention_wo) ? GGML_TYPE_Q6_K : GGML_TYPE_Q5_K;
-                    }
-                    else difquant_three_eights_tensors(qs.i_attention_wo, qs.n_attention_wo) ? GGML_TYPE_Q6_K : GGML_TYPE_Q5_K;
-                }
+            else if (ftype == LLAMA_FTYPE_MOSTLY_Q2_K   || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS ||
+                ftype == LLAMA_FTYPE_MOSTLY_Q2_K_L || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL  || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XL ||
+                ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXL || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XSR  ||
+                ftype == LLAMA_FTYPE_MOSTLY_Q3_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ4_NL ||
+                ftype == LLAMA_FTYPE_MOSTLY_Q4_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q4_K_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ3_S  ||
+                ftype == LLAMA_FTYPE_MOSTLY_IQ3_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ4_XS) {
+                new_type = GGML_TYPE_Q5_K;
             }
+            else if (ftype == LLAMA_FTYPE_MOSTLY_Q5_K_S || ftype == LLAMA_FTYPE_MOSTLY_Q5_K_M) new_type = GGML_TYPE_Q6_K;
+            else new_type = GGML_TYPE_Q8_0;
+        }
+        else if (ftype == LLAMA_FTYPE_MOSTLY_IQ4_XSR) {
+            if (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2) {
+                new_type = qs.i_attention_wq < qs.n_attention_wq/8 ? GGML_TYPE_Q5_K :
+                           difquant_first_last_tensors(qs.i_attention_wo, qs.n_attention_wo) ? GGML_TYPE_Q5_K : GGML_TYPE_IQ4_XS;
+            }
+            else difquant_three_eights_tensors(qs.i_attention_wo, qs.n_attention_wo) ? GGML_TYPE_Q5_K : GGML_TYPE_IQ4_XS;
+        }
+        else if (qs.model.hparams.n_gqa() >= 4 || qs.model.hparams.n_expert >= 2) {
+            if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M)
+                new_type = GGML_TYPE_IQ2_XS;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS ||
+                     ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S) new_type = GGML_TYPE_IQ2_S;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) new_type = GGML_TYPE_IQ3_XXS;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS) new_type = GGML_TYPE_IQ3_S;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_M || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXL)
+                new_type = GGML_TYPE_IQ4_XS;
         } else {
-            if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
+            if      (ftype == LLAMA_FTYPE_MOSTLY_Q2_K || ftype == LLAMA_FTYPE_MOSTLY_Q2_K_L) new_type = GGML_TYPE_Q3_K;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_Q3_K_M || ftype == LLAMA_FTYPE_MOSTLY_Q3_K_L) new_type = GGML_TYPE_Q4_K;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M)
+                    new_type = GGML_TYPE_IQ2_XXS;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS) new_type = GGML_TYPE_IQ2_XS;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_S) new_type = GGML_TYPE_IQ2_S;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ2_M  || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XL) new_type = GGML_TYPE_IQ3_XXS;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XS) new_type = GGML_TYPE_IQ3_S;
+            else if (ftype == LLAMA_FTYPE_MOSTLY_IQ3_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ3_XXL) new_type = GGML_TYPE_IQ4_XS;
         }
         ++qs.i_attention_wo;
     } else if (name.find("attn_qkv.weight") != std::string::npos) {
