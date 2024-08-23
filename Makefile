@@ -1465,13 +1465,16 @@ llama-llava-cli: examples/llava/llava-cli.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
 
+FFMPEG_CFLAGS := $(shell pkg-config --cflags libavformat libavcodec libavutil)
+FFMPEG_LIBS := $(shell pkg-config --libs libavformat libavcodec libavutil) -lswscale
+
 llama-minicpmv-cli: examples/llava/minicpmv-cli.cpp \
 	examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
 	examples/llava/clip.h \
 	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
+	$(CXX) $(CXXFLAGS) $(FFMPEG_CFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) $(FFMPEG_LIBS) -Wno-cast-qual
 
 ifeq ($(UNAME_S),Darwin)
 swift: examples/batched.swift
