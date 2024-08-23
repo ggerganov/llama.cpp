@@ -2423,7 +2423,8 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     __m256i requiredOrder = _mm256_set_epi32(3 ,2 ,1 ,0, 7 ,6, 5, 4);
 
     // Take group of four block_q8_0x4 structures at each pass of the loop and perform dot product operation
-    for (; y < nr / 4; y += 4) {
+    int anr = nr - nr %16; // Used to align nr with boundary of 16
+    for (; y < anr / 4; y += 4) {
         const block_q8_0x4 * a_ptrs[4];
 
         a_ptrs[0] = a_ptr_start + (y * nb);
