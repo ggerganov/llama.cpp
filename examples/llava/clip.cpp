@@ -3,6 +3,7 @@
 // I'll gradually clean and extend it
 // Note: Even when using identical normalized image inputs (see normalize_image_u8_to_f32()) we have a significant difference in resulting embeddings compared to pytorch
 #include "clip.h"
+#include "common.h"
 #include "log.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -532,6 +533,7 @@ struct clip_ctx {
     bool has_llava_projector = false;
     bool has_minicpmv_projector = false;
     int minicpmv_version = 2;
+    int max_slice_nums = 9;
 
     struct clip_vision_model vision_model;
     projector_type proj_type = PROJECTOR_TYPE_MLP;
@@ -1926,7 +1928,7 @@ static std::vector<std::vector<clip_image_u8 *>> uhd_slice_image(const clip_imag
 }
 
 int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip) {
-    const int max_slice_nums=9;
+    const int max_slice_nums=ctx_clip->max_slice_nums;
     const int scale_resolution=448;
     const int original_width = ctx_clip->load_image_size->width;
     const int original_height = ctx_clip->load_image_size->height;
@@ -1942,7 +1944,7 @@ int clip_uhd_num_image_embeds_col(struct clip_ctx * ctx_clip) {
 bool clip_image_preprocess(struct clip_ctx * ctx, const clip_image_u8 * img, clip_image_f32_batch * res_imgs) {
 
     if(clip_is_minicpmv(ctx)){
-        int max_slice_nums = 9;
+        int max_slice_nums = ctx->max_slice_nums;
         std::vector<std::vector<clip_image_u8 *>> imgs = uhd_slice_image(img, max_slice_nums);
         res_imgs->size = 0;
         for (size_t i = 0; i < imgs.size(); ++i){
@@ -2619,4 +2621,8 @@ int clip_is_minicpmv(const struct clip_ctx * ctx) {
         return ctx->minicpmv_version;
     }
     return 0;
+}
+
+void clip_uhd_max_slice_nums(struct clip_ctx * ctx, int max_slice_nums) {
+    ctx->max_slice_nums = max_slice_nums;
 }
