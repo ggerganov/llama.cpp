@@ -15866,32 +15866,34 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
     const llm_arch arch = qs.model.arch;
     const auto       tn = LLM_TN(arch);
 
-    // difquant_first_last_tensors has a broad 13.75-16.66% bump to the upper quant.
+    // difquant_first_last_tensors has a broad 13.75-16.66% bump to the upper quant. Ex : 6/32
     auto difquant_first_last_tensors = [](int i_layer, int n_layers) -> bool {
         return i_layer < n_layers/8 || i_layer >= n_layers-2;
     };
-    // difquant_more_fl_tensors has a broad 26-29% bump to the upper quant.
+    // difquant_more_fl_tensors has a broad 26-29% bump to the upper quant. Ex : 9/32
     auto difquant_more_fl_tensors = [](int i_layer, int n_layers) -> bool {
         return i_layer <= n_layers/8 || i_layer >= 7*n_layers/8;
     };
-    // difquant_three_eights_tensors has a broad 37.5% bump to the upper quant.
+    // difquant_three_eights_tensors has a broad 37.5% bump to the upper quant. Ex : 12/32
     auto difquant_three_eights_tensors = [](int i_layer, int n_layers) -> bool {
         return i_layer <= n_layers/8 || i_layer >= 7*n_layers/8 || (i_layer > 2*n_layers/8 && i_layer < 3*n_layers/8);
     };
     // original formula use_more_bits :
     // return i_layer < n_layers/8 || i_layer >= 7*n_layers/8 || (i_layer - n_layers/8)%3 == 2;
     // The intervals of 3 are replaced by a broad bump in the central layers.
-    // difquant_half_tensors replaces it and keeps the broad 50% bump to the upper quant.
+	// In the case of a 32 layers model, layers 5-7 and layers 12-16 are always skipped.
+	// In the case of a 40 layers model, layers 6-9 and layers 15-20 are always skipped.
+    // difquant_half_tensors replaces it and keeps the broad 50% bump to the upper quant. Ex : 16/32
     auto difquant_half_tensors = [](int i_layer, int n_layers) -> bool {
         return i_layer <= n_layers/8 || i_layer > 6*n_layers/8 || (i_layer >= 2*n_layers/8 && i_layer < 3*n_layers/8);
     };
-    // difquant_five_eights_tensors has a broad 62.5% bump to the upper quant.
+    // difquant_five_eights_tensors has a broad 62.5% bump to the upper quant. Ex : 20/32
     auto difquant_five_eights_tensors = [](int i_layer, int n_layers) -> bool {
         return i_layer <= n_layers/8 || i_layer > 5*n_layers/8 || (i_layer >= 2*n_layers/8 && i_layer < 3*n_layers/8);
     };
-    // difquant_six_eights_tensors has a broad 75% bump to the upper quant.
+    // difquant_six_eights_tensors has a broad 75% bump to the upper quant. Ex : 24/32
     auto difquant_six_eights_tensors = [](int i_layer, int n_layers) -> bool {
-        return i_layer <= n_layers/8 || i_layer > 5*n_layers/8 || (i_layer >= 2*n_layers/8 && i_layer < 4*n_layers/8);
+        return i_layer <= n_layers/8 || i_layer > 4*n_layers/8 || (i_layer >= 2*n_layers/8 && i_layer < 3*n_layers/8);
     };
     const int n_expert = std::max(1, (int)qs.model.hparams.n_expert);
     auto layer_info = [n_expert] (int i_layer, int n_layer, const char * name) {
