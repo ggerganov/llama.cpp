@@ -1979,9 +1979,6 @@ struct ggml_compute_threadpool {
     int32_t      prio;        // Scheduling priority
     uint32_t     poll;        // Polling level (0 - no polling)
 
-    ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
-    void * abort_callback_data;
-
     enum ggml_status ec;
 };
 
@@ -19286,10 +19283,7 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
         threadpool->n_threads_cur    = tpp->n_threads;
         threadpool->poll             = tpp->poll;
         threadpool->prio             = tpp->prio;
-
-        threadpool->abort_callback      = NULL;
-        threadpool->abort_callback_data = NULL;
-        threadpool->ec                  = GGML_STATUS_SUCCESS;
+        threadpool->ec               = GGML_STATUS_SUCCESS;
     }
 
 #ifndef GGML_USE_OPENMP
