@@ -16444,7 +16444,7 @@ static ggml_type llama_tensor_get_type(quantize_state_internal & qs, ggml_type n
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XS || ftype == LLAMA_FTYPE_MOSTLY_IQ1_S   || ftype == LLAMA_FTYPE_MOSTLY_IQ1_M) {
                 if (qs.model.hparams.n_expert >= 4) new_type = GGML_TYPE_Q6_K;
                 else if (qs.model.hparams.n_vocab >= 127999) new_type = GGML_TYPE_IQ4_XS;
-				else if (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_Q4_K;
+                else if (qs.model.hparams.n_gqa() >= 2 || qs.model.hparams.n_expert >= 2) new_type = GGML_TYPE_Q4_K;
                 else new_type = GGML_TYPE_IQ4_XS;
             }
             else if (ftype == LLAMA_FTYPE_MOSTLY_IQ1_XL || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XXS || ftype == LLAMA_FTYPE_MOSTLY_IQ2_XS ||
