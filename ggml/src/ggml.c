@@ -18736,7 +18736,7 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
     return true;
 }
 
-static bool ggml_thread_apply_process_prio(int32_t prio) {
+static bool ggml_thread_apply_process_priority(int32_t prio) {
     int32_t p = 0;
 
     switch (prio) {
@@ -18786,7 +18786,7 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
     return true;
 }
 
-static bool ggml_thread_apply_process_prio(int32_t prio) {
+static bool ggml_thread_apply_process_priority(int32_t prio) {
     struct sched_param p;
     int32_t policy = SCHED_OTHER;
 
@@ -19320,7 +19320,7 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
 #else  // Not using OPENMP
     int32_t cpumask_iter = 0;
 
-    ggml_thread_apply_process_prio(tpp->prio);
+    ggml_thread_apply_process_priority(tpp->prio);
     ggml_thread_apply_thread_priority(tpp->prio);
 
     for (int j = 0; j < tpp->n_threads; j++) {
