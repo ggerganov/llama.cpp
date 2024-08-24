@@ -1973,8 +1973,8 @@ struct ggml_compute_threadpool {
     atomic_bool pause;        // Used for pausing the threadpool or individual threads
 
     struct ggml_compute_state * workers;   // per thread state
-    int32_t                     n_threads_max; // number of threads in the pool
-    int32_t                     n_threads_cur; // number of threads used in the current graph
+    int          n_threads_max; // number of threads in the pool
+    int          n_threads_cur; // number of threads used in the current graph
 
     int32_t      prio;        // Scheduling priority
     uint32_t     poll;        // Polling level (0 - no polling)
@@ -18859,7 +18859,7 @@ void ggml_release_threadpool(struct ggml_compute_threadpool* threadpool) {
 
 #ifndef GGML_USE_OPENMP
     struct ggml_compute_state* workers = threadpool->workers;
-    const int32_t n_threads = threadpool->n_threads_max;
+    const int n_threads = threadpool->n_threads_max;
 
     ggml_mutex_lock(&threadpool->mutex);
 
@@ -18869,7 +18869,7 @@ void ggml_release_threadpool(struct ggml_compute_threadpool* threadpool) {
     ggml_cond_broadcast(&threadpool->cond);
     ggml_mutex_unlock(&threadpool->mutex);
 
-    for (int32_t j = 1; j < n_threads; j++) {
+    for (int j = 1; j < n_threads; j++) {
         int32_t rc = ggml_thread_join(workers[j].thrd, NULL);
         GGML_ASSERT(rc == GGML_EXIT_SUCCESS || rc == GGML_EXIT_ABORTED);
         UNUSED(rc);
@@ -18925,11 +18925,11 @@ void ggml_resume_threadpool(struct ggml_compute_threadpool * threadpool) {
 
 struct ggml_cplan ggml_graph_plan(
           const struct ggml_cgraph * cgraph,
-                           int32_t   n_threads,
+                           int       n_threads,
     struct ggml_compute_threadpool * threadpool) {
 
     if (threadpool == NULL) {
-        GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %u\n", n_threads);
+        GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
     }
     if (n_threads <= 0) {
         n_threads = threadpool ? threadpool->n_threads_max : GGML_DEFAULT_N_THREADS;
@@ -19348,13 +19348,13 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     GGML_ASSERT(cplan->n_threads > 0);
     GGML_ASSERT(cplan->work_size == 0 || cplan->work_data != NULL);
 
-    int32_t n_threads                           = cplan->n_threads;
+    int n_threads                               = cplan->n_threads;
     struct ggml_compute_threadpool * threadpool = cplan->threadpool;
 
     bool disposable_threadpool = false;
 
     if (threadpool == NULL) {
-        GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %u\n", n_threads);
+        GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
         disposable_threadpool = true;
 
         struct ggml_threadpool_params ttp = {

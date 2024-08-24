@@ -223,7 +223,7 @@ int main(int argc, char ** argv) {
 
     LOG("%s: llama threadpool init = n_threads = %d\n",
         __func__,
-        (int32_t) params.cpuparams.n_threads
+        (int) params.cpuparams.n_threads
     );
     struct ggml_threadpool_params tpp_batch =
             ggml_threadpool_params_from_cpu_params(params.cpuparams_batch);

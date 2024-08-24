@@ -54,7 +54,7 @@ static void tensor_dump(const ggml_tensor * tensor, const char * name) {
 #define TENSOR_DUMP(tensor) tensor_dump(tensor, #tensor)
 
 struct benchmark_params_struct {
-    int32_t n_threads     = 1;
+    int     n_threads     = 1;
     int32_t n_iterations  = 10;
 };
 

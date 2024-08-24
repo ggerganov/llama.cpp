@@ -629,7 +629,7 @@ extern "C" {
     struct ggml_threadpool_params {
         bool     cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores
         bool     mask_specified;              // mask is non-empty
-        int32_t  n_threads;                   // number of threads
+        int      n_threads;                   // number of threads
         int32_t  prio;                        // thread priority
         uint32_t poll;                        // polling level (0 - no polling, 100 - aggressive polling)
         bool     strict_cpu;                  // strict cpu placement
@@ -2028,7 +2028,7 @@ extern "C" {
     GGML_API bool                            ggml_threadpool_params_match (const struct ggml_threadpool_params *p0, const struct ggml_threadpool_params *p1);
     GGML_API struct ggml_compute_threadpool* ggml_create_threadpool       (struct ggml_threadpool_params  * params);
     GGML_API void                            ggml_release_threadpool      (struct ggml_compute_threadpool * threadpool);
-    GGML_API int32_t                         ggml_threadpool_get_n_threads(struct ggml_compute_threadpool * threadpool);
+    GGML_API int                             ggml_threadpool_get_n_threads(struct ggml_compute_threadpool * threadpool);
     GGML_API void                            ggml_pause_threadpool        (struct ggml_compute_threadpool * threadpool);
     GGML_API void                            ggml_resume_threadpool       (struct ggml_compute_threadpool * threadpool);
 

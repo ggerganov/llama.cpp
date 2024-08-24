@@ -68,7 +68,7 @@ enum dimre_method {
 };
 
 struct cpu_params {
-    int32_t  n_threads                   = -1;
+    int      n_threads                   = -1;
     bool     cpumask[GGML_MAX_N_THREADS] = {false}; // CPU affinity mask.
     bool     mask_valid                  = false;   // Default: any CPU
     int32_t  priority                    =  0;      // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
@@ -214,7 +214,7 @@ struct gpt_params {
     int32_t port           = 8080;         // server listens on this network port
     int32_t timeout_read   = 600;          // http read timeout in seconds
     int32_t timeout_write  = timeout_read; // http write timeout in seconds
-    int32_t n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
+    int     n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";

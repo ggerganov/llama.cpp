@@ -2373,8 +2373,8 @@ struct llama_cparams {
     uint32_t n_batch;
     uint32_t n_ubatch;
     uint32_t n_seq_max;
-    uint32_t n_threads;       // number of threads to use for generation
-    uint32_t n_threads_batch; // number of threads to use for batch processing
+    int      n_threads;       // number of threads to use for generation
+    int      n_threads_batch; // number of threads to use for batch processing
 
     float rope_freq_base;
     float rope_freq_scale;
@@ -15530,7 +15530,7 @@ static std::pair<int32_t, ggml_compute_threadpool_t> llama_swap_threadpools(
               int32_t   n_tokens) {
 
     const auto & cparams = lctx.cparams;
-    int32_t n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
+    int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
 
     ggml_compute_threadpool_t threadpool = nullptr;  // nullptr -> disposable threadpool
 
@@ -15665,7 +15665,7 @@ static int llama_decode_internal(
         std::pair<int32_t, ggml_compute_threadpool_t> threads =
             llama_swap_threadpools(lctx, n_tokens);
 
-        int32_t n_threads                    = threads.first;
+        int n_threads                        = threads.first;
         ggml_compute_threadpool_t threadpool = threads.second;
 
         GGML_ASSERT(n_threads > 0);
@@ -15909,7 +15909,7 @@ static int llama_encode_internal(
     std::pair<int32_t, ggml_compute_threadpool_t> threads =
         llama_swap_threadpools(lctx, n_tokens);
 
-    int32_t n_threads                    = threads.first;
+    int n_threads                        = threads.first;
     ggml_compute_threadpool_t threadpool = threads.second;
     GGML_ASSERT(n_threads > 0);
 
@@ -19448,16 +19448,16 @@ size_t llama_state_seq_load_file(struct llama_context * ctx, const char * filepa
     }
 }
 
-void llama_set_n_threads(struct llama_context * ctx, uint32_t n_threads, uint32_t n_threads_batch) {
+void llama_set_n_threads(struct llama_context * ctx, int n_threads, int n_threads_batch) {
     ctx->cparams.n_threads       = n_threads;
     ctx->cparams.n_threads_batch = n_threads_batch;
 }
 
-uint32_t llama_n_threads(struct llama_context * ctx) {
+int llama_n_threads(struct llama_context * ctx) {
     return ctx->cparams.n_threads;
 }
 
-uint32_t llama_n_threads_batch(struct llama_context * ctx) {
+int llama_n_threads_batch(struct llama_context * ctx) {
     return ctx->cparams.n_threads_batch;
 }
 
