@@ -3053,15 +3053,15 @@ static_assert(sizeof(struct ggml_tensor)%GGML_MEM_ALIGN == 0, "ggml_tensor size 
 
 // Helpers for polling loops
 #if defined(__aarch64__) && ( defined(__clang__) || defined(__GNUC__) )
-static inline void __cpu_relax(void) {
+static inline void ggml_thread_cpu_relax(void) {
     __asm__ volatile("yield" ::: "memory");
 }
 #elif defined(__x86_64__)
-static inline void __cpu_relax(void) {
+static inline void ggml_thread_cpu_relax(void) {
     _mm_pause();
 }
 #else
-static inline void __cpu_relax(void) {;}
+static inline void ggml_thread_cpu_relax(void) {;}
 #endif
 
 //
@@ -3140,7 +3140,7 @@ static void ggml_barrier(struct ggml_compute_threadpool * threadpool) {
             if (atomic_load_explicit(n_barrier_passed, memory_order_relaxed) != passed_old) {
                 return;
             }
-            __cpu_relax();
+            ggml_thread_cpu_relax();
         }
     }
 }
@@ -18667,7 +18667,7 @@ enum {
 #include "windows.h"
 
 // TODO: support > 64 CPUs
-static bool __thread_affinity(bool * mask) {
+static bool ggml_thread_apply_affinity(bool * mask) {
     HANDLE    h = GetCurrentThread();
     uint64_t  bitmask = 0ULL;
 
@@ -18701,7 +18701,7 @@ static bool __thread_affinity(bool * mask) {
     return m != 0;
 }
 
-static bool __process_priority(int32_t prio) {
+static bool ggml_thread_apply_process_priority(int32_t prio) {
     DWORD p = NORMAL_PRIORITY_CLASS;
 
     switch (prio) {
@@ -18714,7 +18714,7 @@ static bool __process_priority(int32_t prio) {
     return SetPriorityClass(GetCurrentProcess(), p);
 }
 
-static bool __thread_priority(int32_t prio) {
+static bool ggml_thread_apply_thread_priority(int32_t prio) {
     DWORD p = NORMAL_PRIORITY_CLASS;
 
     switch (prio) {
@@ -18732,12 +18732,12 @@ static bool __thread_priority(int32_t prio) {
 #include <sys/types.h>
 #include <sys/resource.h>
 
-static bool __thread_affinity(const bool * mask) {
+static bool ggml_thread_apply_affinity(const bool * mask) {
     UNUSED(mask);
     return true;
 }
 
-static bool __process_priority(int32_t prio) {
+static bool ggml_thread_apply_process_prio(int32_t prio) {
     int32_t p = 0;
 
     switch (prio) {
@@ -18751,14 +18751,14 @@ static bool __process_priority(int32_t prio) {
     return r != -1;
 }
 
-static bool __thread_priority(int32_t prio) {
+static bool ggml_thread_apply_thread_priority(int32_t prio) {
     UNUSED(prio);
     return true;
 }
 
 #else // posix?
 
-static bool __thread_affinity(const bool * mask) {
+static bool ggml_thread_apply_affinity(const bool * mask) {
     cpu_set_t cpuset;
     int32_t err;
 
@@ -18787,7 +18787,7 @@ static bool __thread_affinity(const bool * mask) {
     return true;
 }
 
-static bool __process_priority(int32_t prio) {
+static bool ggml_thread_apply_process_prio(int32_t prio) {
     struct sched_param p;
     int32_t policy = SCHED_OTHER;
 
@@ -18807,7 +18807,7 @@ static bool __process_priority(int32_t prio) {
     return true;
 }
 
-static bool __thread_priority(int32_t prio) {
+static bool ggml_thread_apply_thread_priority(int32_t prio) {
     struct sched_param p;
     int32_t policy = SCHED_OTHER;
     switch (prio) {
@@ -18828,7 +18828,7 @@ static bool __thread_priority(int32_t prio) {
 
 #endif
 
-static void __cpumask_next(const bool * global_mask, bool * local_mask, bool strict, int32_t* iter) {
+static void ggml_thread_cpumask_next(const bool * global_mask, bool * local_mask, bool strict, int32_t* iter) {
     if (!global_mask) {
         memset(local_mask, 1, GGML_MAX_N_THREADS);
         return;
@@ -19160,7 +19160,7 @@ static inline bool ggml_graph_compute_poll_for_work(struct ggml_compute_state * 
 
     for (uint64_t i=0; !ggml_graph_compute_ready(state) && i<n_rounds; i++) {
         // No new work. Keep polling.
-        __cpu_relax();
+        ggml_thread_cpu_relax();
     }
 
     return state->pending;
@@ -19188,9 +19188,9 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
     struct ggml_compute_threadpool * threadpool = state->threadpool;
 
-    __thread_priority(threadpool->prio);
+    ggml_thread_apply_thread_priority(threadpool->prio);
     if (state->mask_specified)
-        __thread_affinity(state->cpumask);
+        ggml_thread_apply_affinity(state->cpumask);
 
     while (true) {
         // Check if we need to sleep
@@ -19306,8 +19306,8 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
 #else  // Not using OPENMP
     int32_t cpumask_iter = 0;
 
-    __process_priority(tpp->prio);
-    __thread_priority(tpp->prio);
+    ggml_thread_apply_process_prio(tpp->prio);
+    ggml_thread_apply_thread_priority(tpp->prio);
 
     for (int j = 0; j < tpp->n_threads; j++) {
         workers[j] = (struct ggml_compute_state) {
@@ -19320,7 +19320,7 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
         };
 
         if (tpp->mask_specified) {
-            __cpumask_next(tpp->cpumask, workers[j].cpumask, tpp->strict_cpu, &cpumask_iter);
+            ggml_thread_cpumask_next(tpp->cpumask, workers[j].cpumask, tpp->strict_cpu, &cpumask_iter);
         }
 
         // Spin threads for all secondary workers
@@ -19408,7 +19408,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
 #else
     // Update main thread affinity to match the current threadpool
     if (threadpool->workers[0].mask_specified) {
-        __thread_affinity(threadpool->workers[0].cpumask);
+        ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
     }
 
     // Kick all threads to start the new graph
