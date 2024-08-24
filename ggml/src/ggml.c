@@ -1987,7 +1987,6 @@ struct ggml_compute_state {
 #ifndef GGML_USE_OPENMP
     ggml_thread_t thrd;
     bool cpumask[GGML_MAX_N_THREADS];
-    bool mask_specified;
     int  last_graph;
     bool pending;
 #endif
@@ -18828,11 +18827,14 @@ static bool ggml_thread_apply_thread_priority(int32_t prio) {
 
 #endif
 
-static void ggml_thread_cpumask_next(const bool * global_mask, bool * local_mask, bool strict, int32_t* iter) {
-    if (!global_mask) {
-        memset(local_mask, 1, GGML_MAX_N_THREADS);
-        return;
+static bool ggml_thread_cpumask_is_valid(const bool * mask) {
+    for (int i = 0; i < GGML_MAX_N_THREADS; i++) {
+        if (mask[i]) { return true; }
     }
+    return false;
+}
+
+static void ggml_thread_cpumask_next(const bool * global_mask, bool * local_mask, bool strict, int32_t* iter) {
     if (!strict) {
         memcpy(local_mask, global_mask, GGML_MAX_N_THREADS);
         return;
@@ -19189,8 +19191,10 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
     struct ggml_compute_threadpool * threadpool = state->threadpool;
 
     ggml_thread_apply_thread_priority(threadpool->prio);
-    if (state->mask_specified)
+
+    if (ggml_thread_cpumask_is_valid(state->cpumask)) {
         ggml_thread_apply_affinity(state->cpumask);
+    }
 
     while (true) {
         // Check if we need to sleep
@@ -19249,17 +19253,27 @@ static void ggml_graph_compute_kickoff(struct ggml_compute_threadpool * threadpo
 
 #endif // GGML_USE_OPENMP
 
+void ggml_threadpool_params_init(struct ggml_threadpool_params * p, int n_threads) {
+    p->n_threads  = n_threads;
+    p->prio       = 0;     // default priority (usually means normal or inherited)
+    p->poll       = 50;    // hybrid-polling enabled
+    p->strict_cpu = false; // no strict placement (all threads share same cpumask)
+    p->paused     = false; // threads are ready to go
+    memset(p->cpumask, 0, GGML_MAX_N_THREADS); // all-zero means use the default affinity (usually inherited)
+}
+
+struct ggml_threadpool_params ggml_threadpool_params_default(int n_threads) {
+    struct ggml_threadpool_params p;
+    ggml_threadpool_params_init(&p, n_threads);
+    return p;
+}
+
 bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, const struct ggml_threadpool_params * p1) {
     if (p0->n_threads      != p1->n_threads  )    return false;
     if (p0->prio           != p1->prio       )    return false;
     if (p0->poll           != p1->poll       )    return false;
     if (p0->strict_cpu     != p1->strict_cpu )    return false;
-    if (p0->mask_specified != p1->mask_specified) return false;
-    if (p0->mask_specified) {
-        return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
-    }
-
-    return true;
+    return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
 }
 
 static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
@@ -19312,16 +19326,13 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
     for (int j = 0; j < tpp->n_threads; j++) {
         workers[j] = (struct ggml_compute_state) {
             .thrd           = 0,
-            .mask_specified = tpp->mask_specified,
             .threadpool     = threadpool,
             .ith            = j,
             .last_graph     = 0,
             .pending        = false
         };
 
-        if (tpp->mask_specified) {
-            ggml_thread_cpumask_next(tpp->cpumask, workers[j].cpumask, tpp->strict_cpu, &cpumask_iter);
-        }
+        ggml_thread_cpumask_next(tpp->cpumask, workers[j].cpumask, tpp->strict_cpu, &cpumask_iter);
 
         // Spin threads for all secondary workers
         if (j > 0) {
@@ -19357,15 +19368,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
         disposable_threadpool = true;
 
-        struct ggml_threadpool_params ttp = {
-            .mask_specified = false,
-            .n_threads      = n_threads,
-            .prio           = 0,
-            .poll           = 1,
-            .strict_cpu     = false,
-            .paused         = false
-        };
-
+        struct ggml_threadpool_params ttp = ggml_threadpool_params_default(n_threads);
         threadpool = ggml_create_threadpool_impl(&ttp, cgraph, cplan);
     } else {
         // Reset some of the parameters that need resetting
@@ -19407,7 +19410,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     }
 #else
     // Update main thread affinity to match the current threadpool
-    if (threadpool->workers[0].mask_specified) {
+    if (!ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
         ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
     }
 

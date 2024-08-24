@@ -295,13 +295,7 @@ void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model)
         }
     }
 
-    if (n_set == 0) {
-        // You hit the jackpot!
-        memset(&cpuparams.cpumask[0], 1, GGML_MAX_N_THREADS);
-        n_set = GGML_MAX_N_THREADS;
-    }
-
-    if (n_set < cpuparams.n_threads) {
+    if (n_set && n_set < cpuparams.n_threads) {
         // Not enough set bits, may experience performance issues.
         fprintf(stderr, "warn: Not enough set bits in CPU mask (%d) to satisfy requested thread count: %d\n", n_set, cpuparams.n_threads);
     }
@@ -2606,16 +2600,15 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params) {
     struct ggml_threadpool_params tpp;
 
-    tpp.mask_specified = params.mask_valid;
+    ggml_threadpool_params_init(&tpp, params.n_threads); // setup the defaults
+
     if (params.mask_valid) {
         std::memcpy(&tpp.cpumask, &params.cpumask, GGML_MAX_N_THREADS);
     }
 
-    tpp.n_threads  = params.n_threads;
     tpp.prio       = params.priority;
     tpp.poll       = params.poll;
     tpp.strict_cpu = params.strict_cpu;
-    tpp.paused     = false;
 
     return tpp;
 }

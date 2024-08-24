@@ -1462,14 +1462,13 @@ int main(int argc, char ** argv) {
 
         llama_kv_cache_clear(ctx);
 
-        struct ggml_threadpool_params tpp;
-        tpp.n_threads      = t.n_threads;
-        tpp.mask_specified = params.cpuparams.mask_valid;
+        struct ggml_threadpool_params tpp = ggml_threadpool_params_default(t.n_threads);
         tpp.strict_cpu     = params.cpuparams.strict_cpu;
         tpp.prio           = params.cpuparams.priority;
         tpp.poll           = params.cpuparams.poll;
-
-        std::memcpy(&tpp.cpumask[0], &params.cpuparams.cpumask[0], GGML_MAX_N_THREADS);
+        if (params.cpuparams.mask_valid) {
+            std::memcpy(&tpp.cpumask[0], &params.cpuparams.cpumask[0], GGML_MAX_N_THREADS);
+        }
 
         struct ggml_compute_threadpool* threadpool = ggml_create_threadpool(&tpp);
         if (!threadpool) {

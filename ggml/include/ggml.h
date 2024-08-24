@@ -626,9 +626,10 @@ extern "C" {
     // If it returns true, the computation is aborted
     typedef bool (*ggml_abort_callback)(void * data);
 
+    // Threadpool params
+    // Use ggml_threadpool_params_default() or ggml_threadpool_params_init() to populate the defaults
     struct ggml_threadpool_params {
-        bool     cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores
-        bool     mask_specified;              // mask is non-empty
+        bool     cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores (all-zeros means use default affinity settings)
         int      n_threads;                   // number of threads
         int32_t  prio;                        // thread priority
         uint32_t poll;                        // polling level (0 - no polling, 100 - aggressive polling)
@@ -2025,6 +2026,8 @@ extern "C" {
     GGML_API size_t ggml_graph_overhead(void);
     GGML_API size_t ggml_graph_overhead_custom(size_t size, bool grads);
 
+    GGML_API struct ggml_threadpool_params   ggml_threadpool_params_default(int n_threads);
+    GGML_API void                            ggml_threadpool_params_init(struct ggml_threadpool_params *p, int n_threads);
     GGML_API bool                            ggml_threadpool_params_match (const struct ggml_threadpool_params *p0, const struct ggml_threadpool_params *p1);
     GGML_API struct ggml_compute_threadpool* ggml_create_threadpool       (struct ggml_threadpool_params  * params);
     GGML_API void                            ggml_release_threadpool      (struct ggml_compute_threadpool * threadpool);
