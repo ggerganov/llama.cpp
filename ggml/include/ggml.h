@@ -639,6 +639,8 @@ extern "C" {
 
     struct ggml_compute_threadpool;     // forward declaration, see ggml.c
 
+    typedef struct  ggml_compute_threadpool * ggml_compute_threadpool_t;
+
     // the compute plan that needs to be prepared for ggml_graph_compute()
     // since https://github.com/ggerganov/ggml/issues/287
     struct ggml_cplan {
