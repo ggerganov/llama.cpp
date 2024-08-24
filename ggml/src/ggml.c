@@ -19218,13 +19218,9 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
         if (state->pending) {
             state->pending = false;
 
-            int64_t ret = (int64_t) ggml_graph_compute_thread(state);
-            if (ret == GGML_EXIT_ABORTED)
-                return (thread_ret_t) ret;
-
-            if (ret != GGML_EXIT_SUCCESS && ret != GGML_EXIT_ABORTED) {
-                fprintf(stderr, "ggml_graph_compute_thread exited with an unexpected error: %lld\n", (long long int) ret);
-                GGML_ASSERT(false);
+            ggml_graph_compute_thread(state);
+            if (state->threadpool->ec != GGML_STATUS_SUCCESS) {
+                break;
             }
         }
     }
