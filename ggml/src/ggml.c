@@ -18888,13 +18888,13 @@ void ggml_release_threadpool(struct ggml_compute_threadpool* threadpool) {
 
 #ifndef GGML_USE_OPENMP
 // pause/resume must be called under mutex
-static void __ggml_pause_threadpool(struct ggml_compute_threadpool * threadpool) {
+static void ggml_pause_threadpool_locked(struct ggml_compute_threadpool * threadpool) {
     GGML_PRINT_DEBUG("Pausing threadpool\n");
     threadpool->pause = true;
     ggml_cond_broadcast(&threadpool->cond);
 }
 
-static void __ggml_resume_threadpool(struct ggml_compute_threadpool * threadpool) {
+static void ggml_resume_threadpool_locked(struct ggml_compute_threadpool * threadpool) {
     GGML_PRINT_DEBUG("Resuming threadpool\n");
     threadpool->pause = false;
     ggml_cond_broadcast(&threadpool->cond);
@@ -18905,7 +18905,7 @@ void ggml_pause_threadpool(struct ggml_compute_threadpool * threadpool) {
 #ifndef GGML_USE_OPENMP
     ggml_mutex_lock(&threadpool->mutex);
     if (!threadpool->pause) {
-       __ggml_pause_threadpool(threadpool);
+       ggml_pause_threadpool_locked(threadpool);
     }
     ggml_mutex_unlock(&threadpool->mutex);
 #else
@@ -18917,7 +18917,7 @@ void ggml_resume_threadpool(struct ggml_compute_threadpool * threadpool) {
 #ifndef GGML_USE_OPENMP
     ggml_mutex_lock(&threadpool->mutex);
     if (threadpool->pause) {
-       __ggml_resume_threadpool(threadpool);
+       ggml_resume_threadpool_locked(threadpool);
     }
     ggml_mutex_unlock(&threadpool->mutex);
 #else
@@ -19238,7 +19238,7 @@ static void ggml_graph_compute_kickoff(struct ggml_compute_threadpool * threadpo
 
     if (threadpool->pause) {
        // resume does cond broadcast
-       __ggml_resume_threadpool(threadpool);
+       ggml_resume_threadpool_locked(threadpool);
     } else {
        ggml_cond_broadcast(&threadpool->cond);
     }
