@@ -18877,12 +18877,11 @@ void ggml_release_threadpool(struct ggml_compute_threadpool* threadpool) {
         UNUSED(rc);
     }
 
-    GGML_ALIGNED_FREE(workers);
-
     ggml_mutex_destroy(&threadpool->mutex);
     ggml_cond_destroy(&threadpool->cond);
 #endif // GGML_USE_OPENMP
 
+    GGML_ALIGNED_FREE(threadpool->workers);
     GGML_ALIGNED_FREE(threadpool);
 }
 
