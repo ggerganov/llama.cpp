@@ -8369,7 +8369,7 @@ static bool llm_load_tensors(
                     const int time_decay_extra_dim = (n_embd == 4096) ? 128 : 64;
                     const int head_size = hparams.wkv_head_size;
                     const int attn_hidden_size = n_embd;
-                    const int ffn_size = (int)(n_embd * 3.5 / 32) * 32;
+                    const int ffn_size = hparams.n_ff_arr[0];
 
                     for (int i = 0; i < n_layer; ++i) {
                         ggml_context * ctx_layer = ctx_for_layer(i);
@@ -8392,7 +8392,6 @@ static bool llm_load_tensors(
                         layer.time_mix_lerp_r = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_R, "weight", i), {n_embd, 1, 1});
                         layer.time_mix_lerp_g = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_LERP_G, "weight", i), {n_embd, 1, 1});
 
-                        // TODO: Parametrize hardcoded dimensions for first & decay
                         layer.time_mix_first = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_FIRST, "weight", i), {head_size, n_embd / head_size});
                         layer.time_mix_decay = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_DECAY, "weight", i), {n_embd});
                         layer.time_mix_decay_w1 = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_TIME_MIX_DECAY_W1, "weight", i), {n_embd, time_decay_extra_dim});

@@ -2757,6 +2757,7 @@ class Rwkv6Model(Model):
         hidden_size = self.hparams["hidden_size"]
         layer_norm_eps = self.hparams["layer_norm_epsilon"]
         rescale_every_n_layers = self.hparams["rescale_every"]
+        intermediate_size = self.hparams["intermediate_size"] if self.hparams["intermediate_size"] is not None else int((hidden_size * 3.5) // 32 * 32)
 
         # RWKV isn't context limited
         self.gguf_writer.add_context_length(1048576)
@@ -2765,11 +2766,11 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_layer_norm_eps(layer_norm_eps)
         self.gguf_writer.add_rescale_every_n_layers(rescale_every_n_layers)
         self.gguf_writer.add_wkv_head_size(head_size)
+        self.gguf_writer.add_feed_forward_length(intermediate_size)
         self.gguf_writer.add_file_type(self.ftype)
 
         # required by llama.cpp, unused
         self.gguf_writer.add_head_count(0)
-        self.gguf_writer.add_feed_forward_length(0)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         new_name = self.map_tensor_name(name)
