@@ -812,11 +812,11 @@ static bool params_parse(int argc, char ** argv, struct train_params * params) {
     bool reqd_param_found = false;
     std::string arg;
     struct train_params default_params = get_default_train_params();
-    const std::string arg_prefix = "--";
+    static constexpr auto arg_prefix = "--";
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+        if (arg.compare(0, std::char_traits<char>::length(arg_prefix), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 

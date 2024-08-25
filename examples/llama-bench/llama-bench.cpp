@@ -330,7 +330,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     cmd_params params;
     std::string arg;
     bool invalid_param = false;
-    const std::string arg_prefix = "--";
+    static constexpr auto arg_prefix = "--";
     const char split_delim = ',';
 
     params.verbose = cmd_params_defaults.verbose;
@@ -341,7 +341,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+        if (arg.compare(0, std::char_traits<char>::length(arg_prefix), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 

@@ -280,12 +280,12 @@ void gpt_params_handle_model_default(gpt_params & params) {
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
     bool invalid_param = false;
     std::string arg;
-    const std::string arg_prefix = "--";
+    static constexpr auto arg_prefix = "--";
     llama_sampling_params & sparams = params.sparams;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+        if (arg.compare(0, std::char_traits<char>::length(arg_prefix), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
         if (!gpt_params_find_arg(argc, argv, arg, params, i, invalid_param)) {

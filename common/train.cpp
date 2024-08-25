@@ -1147,8 +1147,8 @@ bool consume_common_train_arg(
 ) {
     int& i = *idx;
     std::string arg = argv[i];
-    const std::string arg_prefix = "--";
-    if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+    static constexpr auto arg_prefix = "--";
+    if (arg.compare(0, std::char_traits<char>::length(arg_prefix), arg_prefix) == 0) {
         std::replace(arg.begin(), arg.end(), '_', '-');
     }
     if (arg == "--train-data") {

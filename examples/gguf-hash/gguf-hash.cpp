@@ -115,12 +115,12 @@ static void hash_print_usage(const char * executable) {
 static void hash_params_parse_ex(int argc, const char ** argv, hash_params & params) {
     std::string arg;
     bool invalid_param = false;
-    const std::string arg_prefix = "--";
+    static constexpr auto arg_prefix = "--";
 
     int arg_idx = 1;
     for (; arg_idx < argc && strncmp(argv[arg_idx], "--", 2) == 0; arg_idx++) {
         arg = argv[arg_idx];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+        if (arg.compare(0, std::char_traits<char>::length(arg_prefix), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 

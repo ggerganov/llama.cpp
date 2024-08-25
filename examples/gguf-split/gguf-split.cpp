@@ -76,13 +76,13 @@ static size_t split_str_to_n_bytes(std::string str) {
 
 static void split_params_parse_ex(int argc, const char ** argv, split_params & params) {
     std::string arg;
-    const std::string arg_prefix = "--";
+    static constexpr auto arg_prefix = "--";
     bool invalid_param = false;
 
     int arg_idx = 1;
     for (; arg_idx < argc && strncmp(argv[arg_idx], "--", 2) == 0; arg_idx++) {
         arg = argv[arg_idx];
-        if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
+        if (arg.compare(0, std::char_traits<char>::length(arg_prefix), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
 

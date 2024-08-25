@@ -349,10 +349,10 @@ static bool get_hidden_layers(llama_context * ctx, std::vector<llama_token> & to
 static void export_gguf(const std::vector<struct ggml_tensor *> & v_ctrl, const std::string fname, const std::string model_hint) {
     struct gguf_context * ctx = gguf_init_empty();
 
-    const std::string arch = "controlvector";
-    gguf_set_val_str(ctx, "general.architecture", arch.c_str());
-    gguf_set_val_str(ctx, (arch + ".model_hint").c_str(), model_hint.c_str());
-    gguf_set_val_i32(ctx, (arch + ".layer_count").c_str(), v_ctrl.size());
+    static constexpr auto arch = "controlvector";
+    gguf_set_val_str(ctx, "general.architecture", arch);
+    gguf_set_val_str(ctx, (std::string{arch} + ".model_hint").c_str(), model_hint.c_str());
+    gguf_set_val_i32(ctx, (std::string{arch} + ".layer_count").c_str(), v_ctrl.size());
 
     for (size_t i = 0; i < v_ctrl.size(); ++i) {
         gguf_add_tensor(ctx, v_ctrl[i]);
