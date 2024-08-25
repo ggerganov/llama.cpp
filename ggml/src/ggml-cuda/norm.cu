@@ -153,9 +153,9 @@ static void group_norm_f32_cuda(const float * x, float * dst, const int num_grou
 }
 
 static void rms_norm_f32_cuda(const float * x, float * dst, const int ncols, const int nrows, const float eps, cudaStream_t stream) {
-    GGML_ASSERT(ncols % WARP_SIZE == 0);
+    GGML_ASSERT(ncols % WARP_SIZE == 0 || ncols < WARP_SIZE);
     if (ncols < 1024) {
-        const dim3 block_dims(WARP_SIZE, 1, 1);
+        const dim3 block_dims(min(ncols, WARP_SIZE), 1, 1);
         rms_norm_f32<WARP_SIZE><<<nrows, block_dims, 0, stream>>>(x, dst, ncols, eps);
     } else {
         const dim3 block_dims(1024, 1, 1);

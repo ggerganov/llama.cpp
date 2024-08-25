@@ -9119,9 +9119,9 @@ static struct ggml_tensor * llm_build_mamba(
 
         // Some Mamba variants (e.g. FalconMamba) apply RMS norm in B, C & Dt layers
         if (ssm_dt_b_c_rms) {
-            dt = ggml_rms_norm(ctx, dt, norm_rms_eps);
-            B = ggml_rms_norm(ctx, B, norm_rms_eps);
-            C = ggml_rms_norm(ctx, C, norm_rms_eps);
+            dt = ggml_rms_norm(ctx, ggml_cont(ctx, dt), norm_rms_eps);
+            B = ggml_rms_norm(ctx, ggml_cont(ctx, B), norm_rms_eps);
+            C = ggml_rms_norm(ctx, ggml_cont(ctx, C), norm_rms_eps);
         }
 
         // {dt_rank, d_inner} @ {dt_rank, n_seq_tokens, n_seqs} => {d_inner, n_seq_tokens, n_seqs}
