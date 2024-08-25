@@ -19191,7 +19191,6 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
     struct ggml_compute_threadpool * threadpool = state->threadpool;
 
     ggml_thread_apply_thread_priority(threadpool->prio);
-
     if (ggml_thread_cpumask_is_valid(state->cpumask)) {
         ggml_thread_apply_affinity(state->cpumask);
     }
@@ -19296,51 +19295,35 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
         threadpool->ec               = GGML_STATUS_SUCCESS;
     }
 
-#ifndef GGML_USE_OPENMP
-    ggml_mutex_init(&threadpool->mutex);
-    ggml_cond_init(&threadpool->cond);
-#endif // GGML_USE_OPENMP
+    // Allocate and init workers state
+    const size_t workers_size = sizeof(struct ggml_compute_state) * tpp->n_threads;
+    struct ggml_compute_state * workers = GGML_ALIGNED_MALLOC(workers_size);
 
-    struct ggml_compute_state * workers =
-        GGML_ALIGNED_MALLOC(sizeof(struct ggml_compute_state) * tpp->n_threads);
+    memset(workers, 0, workers_size);
+    for (int j = 0; j < tpp->n_threads; j++) {
+        workers[j].threadpool = threadpool;
+        workers[j].ith        = j;
+    }
 
     threadpool->workers = workers;
 
-#ifdef GGML_USE_OPENMP
-    for (int j = 0; j < tpp->n_threads; j++) {
-        workers[j] = (struct ggml_compute_state) {
-            .threadpool     = threadpool,
-            .ith            = j
-        };
-    }
-#else  // Not using OPENMP
+#ifndef GGML_USE_OPENMP
+    ggml_mutex_init(&threadpool->mutex);
+    ggml_cond_init(&threadpool->cond);
+
+    // Spin the threads for all workers, and update CPU placements.
+    // Place the main thread last (towards the higher numbered CPU cores).
+
     int32_t cpumask_iter = 0;
 
-    ggml_thread_apply_process_priority(tpp->prio);
-    ggml_thread_apply_thread_priority(tpp->prio);
-
-    for (int j = 0; j < tpp->n_threads; j++) {
-        workers[j] = (struct ggml_compute_state) {
-            .thrd           = 0,
-            .threadpool     = threadpool,
-            .ith            = j,
-            .last_graph     = 0,
-            .pending        = false
-        };
-
+    for (int j = 1; j < tpp->n_threads; j++) {
         ggml_thread_cpumask_next(tpp->cpumask, workers[j].cpumask, tpp->strict_cpu, &cpumask_iter);
 
-        // Spin threads for all secondary workers
-        if (j > 0) {
-            int32_t rc = ggml_thread_create(
-                &workers[j].thrd,
-                NULL,
-                ggml_graph_compute_secondary_thread,
-                &workers[j]
-            );
-            GGML_ASSERT(rc == 0);
-        }
+        int32_t rc = ggml_thread_create(&workers[j].thrd, NULL, ggml_graph_compute_secondary_thread, &workers[j]);
+        GGML_ASSERT(rc == 0);
     }
+
+    ggml_thread_cpumask_next(tpp->cpumask, workers[0].cpumask, tpp->strict_cpu, &cpumask_iter);
 #endif // GGML_USE_OPENMP
 
     return threadpool;
@@ -19391,22 +19374,16 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
                 threadpool->n_threads_cur = n_threads;
             }
 
-            struct ggml_compute_state worker = {
-                .ith        = omp_get_thread_num(),
-                .threadpool = threadpool,
-            };
-            ggml_graph_compute_thread(&worker);
+            ggml_graph_compute_thread(&threadpool->workers[omp_get_thread_num()]);
         }
     } else {
-        struct ggml_compute_state worker = {
-            .ith        = 0,
-            .threadpool = threadpool,
-        };
-        ggml_graph_compute_thread(&worker);
+        ggml_graph_compute_thread(&threadpool->workers[0]);
     }
 #else
-    // Update main thread affinity to match the current threadpool
-    if (!ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
+    // Update main thread prio and affinity to match the current threadpool
+    ggml_thread_apply_process_priority(threadpool->prio);
+    ggml_thread_apply_thread_priority(threadpool->prio);
+    if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
         ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
     }
 
