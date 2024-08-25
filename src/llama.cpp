@@ -298,6 +298,8 @@ enum llm_kv {
     LLM_KV_ATTN_LOGIT_SOFTCAPPING,
     LLM_KV_FINAL_LOGIT_SOFTCAPPING,
     LLM_KV_RESCALE_EVERY_N_LAYERS,
+    LLM_KV_TIME_MIX_EXTRA_DIM,
+    LLM_KV_TIME_DECAY_EXTRA_DIM,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -400,6 +402,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTN_LOGIT_SOFTCAPPING,            "%s.attn_logit_softcapping"            },
     { LLM_KV_FINAL_LOGIT_SOFTCAPPING,           "%s.final_logit_softcapping"           },
     { LLM_KV_RESCALE_EVERY_N_LAYERS,            "%s.rescale_every_n_layers"            },
+    { LLM_KV_TIME_MIX_EXTRA_DIM,                "%s.time_mix_extra_dim"                },
+    { LLM_KV_TIME_DECAY_EXTRA_DIM,              "%s.time_decay_extra_dim"              },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,             "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,          "%s.attention.head_count_kv"          },
@@ -2296,6 +2300,8 @@ struct llama_hparams {
 
     // for RWKV
     uint32_t rescale_every_n_layers = 0;
+    uint32_t time_mix_extra_dim = 0;
+    uint32_t time_decay_extra_dim = 0;
     uint32_t wkv_head_size = 0;
 
     float    rope_attn_factor = 1.0f;
@@ -2362,6 +2368,8 @@ struct llama_hparams {
         if (this->ssm_dt_b_c_rms != other.ssm_dt_b_c_rms) return true;
 
         if (this->rescale_every_n_layers != other.rescale_every_n_layers) return true;
+        if (this->time_mix_extra_dim     != other.time_mix_extra_dim)     return true;
+        if (this->time_decay_extra_dim   != other.time_decay_extra_dim)   return true;
         if (this->wkv_head_size          != other.wkv_head_size)          return true;
 
         if (this->dec_start_token_id != other.dec_start_token_id) return true;
@@ -5909,6 +5917,8 @@ static void llm_load_hparams(
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_EPS, hparams.f_norm_eps);
                 ml.get_key(LLM_KV_WKV_HEAD_SIZE, hparams.wkv_head_size);
+                ml.get_key(LLM_KV_TIME_MIX_EXTRA_DIM, hparams.time_mix_extra_dim);
+                ml.get_key(LLM_KV_TIME_DECAY_EXTRA_DIM, hparams.time_decay_extra_dim);
                 ml.get_key(LLM_KV_RESCALE_EVERY_N_LAYERS, hparams.rescale_every_n_layers, false);
 
                 switch (hparams.n_layer) {
@@ -8365,8 +8375,8 @@ static bool llm_load_tensors(
                     model.output_norm_b = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT_NORM, "bias"), {n_embd});
                     model.output = ml.create_tensor(ctx_output, tn(LLM_TENSOR_OUTPUT, "weight"), {n_embd, n_vocab});
 
-                    const int time_mix_extra_dim = (n_embd == 4096) ? 64 : 32;
-                    const int time_decay_extra_dim = (n_embd == 4096) ? 128 : 64;
+                    const int time_mix_extra_dim = hparams.time_mix_extra_dim;
+                    const int time_decay_extra_dim = hparams.time_decay_extra_dim;
                     const int head_size = hparams.wkv_head_size;
                     const int attn_hidden_size = n_embd;
                     const int ffn_size = hparams.n_ff_arr[0];

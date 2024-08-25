@@ -673,6 +673,12 @@ class GGUFWriter:
     def add_rescale_every_n_layers(self, count: int) -> None:
         self.add_uint32(Keys.LLM.RESCALE_EVERY_N_LAYERS.format(arch=self.arch), count)
 
+    def add_time_mix_extra_dim(self, dim: int) -> None:
+        self.add_uint32(Keys.LLM.TIME_MIX_EXTRA_DIM.format(arch=self.arch), dim)
+
+    def add_time_decay_extra_dim(self, dim: int) -> None:
+        self.add_uint32(Keys.LLM.TIME_DECAY_EXTRA_DIM.format(arch=self.arch), dim)
+
     def add_wkv_head_size(self, size: int) -> None:
         self.add_uint32(Keys.WKV.HEAD_SIZE.format(arch=self.arch), size)
 

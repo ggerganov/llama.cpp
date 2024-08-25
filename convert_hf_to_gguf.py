@@ -2758,6 +2758,8 @@ class Rwkv6Model(Model):
         layer_norm_eps = self.hparams["layer_norm_epsilon"]
         rescale_every_n_layers = self.hparams["rescale_every"]
         intermediate_size = self.hparams["intermediate_size"] if self.hparams["intermediate_size"] is not None else int((hidden_size * 3.5) // 32 * 32)
+        time_mix_extra_dim = 64 if hidden_size == 4096 else 32
+        time_decay_extra_dim = 128 if hidden_size == 4096 else 64
 
         # RWKV isn't context limited
         self.gguf_writer.add_context_length(1048576)
@@ -2766,6 +2768,8 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_layer_norm_eps(layer_norm_eps)
         self.gguf_writer.add_rescale_every_n_layers(rescale_every_n_layers)
         self.gguf_writer.add_wkv_head_size(head_size)
+        self.gguf_writer.add_time_mix_extra_dim(time_mix_extra_dim)
+        self.gguf_writer.add_time_decay_extra_dim(time_decay_extra_dim)
         self.gguf_writer.add_feed_forward_length(intermediate_size)
         self.gguf_writer.add_file_type(self.ftype)
 

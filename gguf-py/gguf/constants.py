@@ -95,6 +95,8 @@ class Keys:
         ATTN_LOGIT_SOFTCAPPING            = "{arch}.attn_logit_softcapping"
         FINAL_LOGIT_SOFTCAPPING           = "{arch}.final_logit_softcapping"
         RESCALE_EVERY_N_LAYERS            = "{arch}.rescale_every_n_layers"
+        TIME_MIX_EXTRA_DIM                = "{arch}.time_mix_extra_dim"
+        TIME_DECAY_EXTRA_DIM              = "{arch}.time_decay_extra_dim"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
