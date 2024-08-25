@@ -2719,7 +2719,7 @@ class StarCoder2Model(Model):
 
 
 @Model.register("Rwkv6ForCausalLM")
-class RwkvModel(Model):
+class Rwkv6Model(Model):
     model_arch = gguf.MODEL_ARCH.RWKV6
 
     def set_vocab(self):
