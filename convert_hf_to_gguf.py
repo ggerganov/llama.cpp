@@ -299,6 +299,7 @@ class Model:
                             gguf.MODEL_TENSOR.POS_EMBD,
                             gguf.MODEL_TENSOR.TOKEN_TYPES,
                             gguf.MODEL_TENSOR.SSM_CONV1D,
+                            gguf.MODEL_TENSOR.TIME_MIX_FIRST,
                         )
                     )
                     or not name.endswith(".weight")
@@ -2764,6 +2765,7 @@ class RwkvModel(Model):
         self.gguf_writer.add_layer_norm_eps(layer_norm_eps)
         self.gguf_writer.add_rescale_every_n_layers(rescale_every_n_layers)
         self.gguf_writer.add_wkv_head_size(head_size)
+        self.gguf_writer.add_file_type(self.ftype)
 
         # required by llama.cpp, unused
         self.gguf_writer.add_head_count(0)
