@@ -18636,7 +18636,7 @@ llama_token llama_model_decoder_start_token(const struct llama_model * model) {
 bool llama_model_is_recurrent(const struct llama_model * model) {
     switch (model->arch) {
         case LLM_ARCH_MAMBA:  return true;
-        case LLM_ARCH_RWKV6:   return true;
+        case LLM_ARCH_RWKV6:  return true;
         default:              return false;
     }
 }
