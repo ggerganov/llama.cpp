@@ -2144,7 +2144,7 @@ kernel void kernel_flash_attn_ext_f16(
             }
 
             // scale and apply the mask (assume C = 32)
-            for (short j = 0; j < Q && iq1 + j < ne01; ++j) {
+            for (short j = 0; j < Q; ++j) {
                 // mqk = mqk*scale
                 ss[j*TF + tiisg] *= scale;
 
