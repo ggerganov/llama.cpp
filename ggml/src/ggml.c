@@ -19237,6 +19237,12 @@ static void ggml_graph_compute_kickoff(struct ggml_compute_threadpool * threadpo
     atomic_fetch_add_explicit(&threadpool->n_graph, 1, memory_order_relaxed);
 
     if (threadpool->pause) {
+       // Update main thread prio and affinity to match the threadpool settings
+       ggml_thread_apply_thread_priority(threadpool->prio);
+       if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
+           ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
+       }
+
        // resume does cond broadcast
        ggml_resume_threadpool_locked(threadpool);
     } else {
@@ -19324,6 +19330,14 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
     }
 
     ggml_thread_cpumask_next(tpp->cpumask, workers[0].cpumask, tpp->strict_cpu, &cpumask_iter);
+
+    if (!threadpool->pause) {
+        // Update main thread prio and affinity at the start, otherwise we'll do it in resume
+        ggml_thread_apply_thread_priority(threadpool->prio);
+        if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
+            ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
+        }
+    }
 #endif // GGML_USE_OPENMP
 
     return threadpool;
@@ -19380,12 +19394,6 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         ggml_graph_compute_thread(&threadpool->workers[0]);
     }
 #else
-    // Update main thread prio and affinity to match the current threadpool
-    ggml_thread_apply_thread_priority(threadpool->prio);
-    if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
-        ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
-    }
-
     // Kick all threads to start the new graph
     ggml_graph_compute_kickoff(threadpool);
 
