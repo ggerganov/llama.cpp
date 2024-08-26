@@ -15135,15 +15135,6 @@ struct llm_build_context {
             cur = ggml_add(ctx0, cur, llm_build_channel_mix_rwkv6(ctx0, layer, x_norm_ffn, x_prev));
             ggml_build_forward_expand(gf, cur);
 
-            token_shift = ggml_cont(
-                ctx0,
-                ggml_permute(
-                    ctx0,
-                    ggml_reshape_3d(ctx0, token_shift, n_embd, n_seqs, 2),
-                    0, 2, 1, 3
-                )
-            );
-
             struct ggml_tensor * last_norm_att = ggml_view_3d(ctx0, x_norm_att, n_embd, 1, n_seqs, x_norm_att->nb[1], x_norm_att->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(x_norm_att));
             struct ggml_tensor * last_norm_ffn = ggml_view_3d(ctx0, x_norm_ffn, n_embd, 1, n_seqs, x_norm_ffn->nb[1], x_norm_ffn->nb[2], (n_seq_tokens-1)*n_embd*ggml_element_size(x_norm_ffn));
 
