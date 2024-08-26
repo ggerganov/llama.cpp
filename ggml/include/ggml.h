@@ -1659,6 +1659,17 @@ extern "C" {
             struct ggml_tensor  * b,
             int                   stride);
 
+    GGML_API struct ggml_tensor * ggml_conv_transpose_2d(
+            struct ggml_context * ctx,
+            struct ggml_tensor  * a,
+            struct ggml_tensor  * b,
+            int                   s0,
+            int                   s1,
+            int                   p0,
+            int                   p1,
+            int                   d0,
+            int                   d1);
+
     enum ggml_op_pool {
         GGML_OP_POOL_MAX,
         GGML_OP_POOL_AVG,

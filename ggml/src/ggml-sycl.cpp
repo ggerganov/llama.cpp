@@ -3895,7 +3895,7 @@ bool ggml_sycl_compute_forward(ggml_backend_sycl_context & ctx, struct ggml_tens
 
     switch (tensor->op) {
         case GGML_OP_CONV_TRANSPOSE_2D:
-            func = ggml_sycl_op_conv_2d;
+            func = ggml_sycl_op_conv_transpose_2d;
             break;
         case GGML_OP_CONV_TRANSPOSE_1D:
             func = ggml_sycl_op_conv_transpose_1d;

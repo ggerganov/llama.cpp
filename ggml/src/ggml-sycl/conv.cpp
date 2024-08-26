@@ -99,7 +99,7 @@ void ggml_sycl_op_conv_transpose_1d(ggml_backend_sycl_context & ctx, const ggml_
 }
 
 
-void ggml_sycl_op_conv_2d(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
+void ggml_sycl_op_conv_transpose_2d(ggml_backend_sycl_context & ctx, const ggml_tensor *src0,
     const ggml_tensor *src1, ggml_tensor *dst) {
     const void * src0_d = (const void *)src0->data;
     const void * src1_d = (const void *)src1->data;
