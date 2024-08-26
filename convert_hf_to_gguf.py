@@ -302,7 +302,7 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_FIRST,
                         )
                     )
-                    or not name.endswith(".weight")
+                    or not new_name.endswith(".weight")
                 ):
                     data_qtype = gguf.GGMLQuantizationType.F32
 
