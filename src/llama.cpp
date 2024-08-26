@@ -15125,7 +15125,7 @@ struct llm_build_context {
                 )
             );
 
-            ggml_tensor * x_norm_ffn = llm_build_norm(ctx0, cur, hparams, layer->attn_norm_2, layer->attn_norm_2_b, LLM_NORM, cb, il);
+            struct ggml_tensor * x_norm_ffn = llm_build_norm(ctx0, cur, hparams, layer->attn_norm_2, layer->attn_norm_2_b, LLM_NORM, cb, il);
             x_prev = ggml_concat(
                 ctx0,
                 ffn_shift,
@@ -15161,7 +15161,7 @@ struct llm_build_context {
         }
 
         cur = inpL;
-        ggml_tensor * inp_out_ids = build_inp_out_ids();
+        struct ggml_tensor * inp_out_ids = build_inp_out_ids();
         cur = ggml_reshape_2d(ctx0, cur, n_embd, n_tokens);
         cur = ggml_get_rows(ctx0, cur, inp_out_ids);
 
