@@ -18700,8 +18700,15 @@ static bool ggml_thread_apply_affinity(bool * mask) {
     return m != 0;
 }
 
-static bool ggml_thread_apply_process_priority(int32_t prio) {
+static bool ggml_thread_apply_thread_priority(int32_t prio) {
     DWORD p = NORMAL_PRIORITY_CLASS;
+
+    if (prio == SCHED_PRIO_NORMAL) {
+        // Keep inherited policy/priority
+        return true;
+    }
+
+    // On Windows we have to update Process Priority Class in order to set Thread priority.
 
     switch (prio) {
         case SCHED_PRIO_NORMAL:   p = NORMAL_PRIORITY_CLASS;       break;
@@ -18710,11 +18717,10 @@ static bool ggml_thread_apply_process_priority(int32_t prio) {
         case SCHED_PRIO_REALTIME: p = REALTIME_PRIORITY_CLASS;     break;
     }
 
-    return SetPriorityClass(GetCurrentProcess(), p);
-}
-
-static bool ggml_thread_apply_thread_priority(int32_t prio) {
-    DWORD p = NORMAL_PRIORITY_CLASS;
+    if (!SetPriorityClass(GetCurrentProcess(), p)) {
+        fprintf(stderr, "warn: failed to set process priority class %d : (%d)\n", prio, (int) GetLastError());
+        return false;
+    }
 
     switch (prio) {
         case SCHED_PRIO_NORMAL:   p = THREAD_PRIORITY_NORMAL;        break;
@@ -18723,8 +18729,12 @@ static bool ggml_thread_apply_thread_priority(int32_t prio) {
         case SCHED_PRIO_REALTIME: p = THREAD_PRIORITY_TIME_CRITICAL; break;
     }
 
-    return SetThreadPriority(GetCurrentThread(), p);
+    if (!SetThreadPriority(GetCurrentThread(), p)) {
+        fprintf(stderr, "warn: failed to set thread priority %d : (%d)\n", prio, (int) GetLastError());
+        return false;
+    }
 
+    return true;
 }
 
 #elif defined(__APPLE__)
@@ -18732,26 +18742,32 @@ static bool ggml_thread_apply_thread_priority(int32_t prio) {
 #include <sys/resource.h>
 
 static bool ggml_thread_apply_affinity(const bool * mask) {
+    // Not supported on Apple platforms
     UNUSED(mask);
     return true;
 }
 
-static bool ggml_thread_apply_process_priority(int32_t prio) {
-    int32_t p = 0;
-
+static bool ggml_thread_apply_thread_priority(int32_t prio) {
+    struct sched_param p;
+    int32_t policy = SCHED_OTHER;
     switch (prio) {
-        case SCHED_PRIO_NORMAL:   p =  0;  break;
-        case SCHED_PRIO_MEDIUM:   p = -5;  break;
-        case SCHED_PRIO_HIGH:     p = -10; break;
-        case SCHED_PRIO_REALTIME: p = -20; break;
+        case SCHED_PRIO_NORMAL:   policy = SCHED_OTHER; p.sched_priority = 0;  break;
+        case SCHED_PRIO_MEDIUM:   policy = SCHED_FIFO;  p.sched_priority = 40; break;
+        case SCHED_PRIO_HIGH:     policy = SCHED_FIFO;  p.sched_priority = 80; break;
+        case SCHED_PRIO_REALTIME: policy = SCHED_FIFO;  p.sched_priority = 90; break;
     }
 
-    int32_t r = setpriority(PRIO_PROCESS, 0, p);
-    return r != -1;
-}
+    if (prio == SCHED_PRIO_NORMAL) {
+        // Keep inherited policy/priority
+        return true;
+    }
 
-static bool ggml_thread_apply_thread_priority(int32_t prio) {
-    UNUSED(prio);
+    int32_t err = pthread_setschedparam(pthread_self(), policy, &p);
+    if (err != 0) {
+        fprintf(stderr, "warn: failed to set thread priority %d : %s (%d)\n", prio, strerror(err), err);
+        return false;
+    }
+
     return true;
 }
 
@@ -18759,7 +18775,7 @@ static bool ggml_thread_apply_thread_priority(int32_t prio) {
 
 static bool ggml_thread_apply_affinity(const bool * mask) {
     cpu_set_t cpuset;
-    int32_t err;
+    int err;
 
     CPU_ZERO(&cpuset);
 
@@ -18779,27 +18795,7 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
     err = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
 #endif
     if (err != 0) {
-        //fprintf(stderr, "warn: failed to set affinity mask 0x%llx (err %d: %s)\n", (unsigned long long)mask, err, strerror(err));
-        return false;
-    }
-
-    return true;
-}
-
-static bool ggml_thread_apply_process_priority(int32_t prio) {
-    struct sched_param p;
-    int32_t policy = SCHED_OTHER;
-
-    switch (prio) {
-        case SCHED_PRIO_NORMAL:   policy = SCHED_OTHER; p.sched_priority = 0;  break;
-        case SCHED_PRIO_MEDIUM:   policy = SCHED_FIFO;  p.sched_priority = 40; break;
-        case SCHED_PRIO_HIGH:     policy = SCHED_FIFO;  p.sched_priority = 80; break;
-        case SCHED_PRIO_REALTIME: policy = SCHED_FIFO;  p.sched_priority = 90; break;
-    }
-
-    int32_t err = sched_setscheduler(0, policy, &p);
-    if (err != 0) {
-        //fprintf(stderr, "warn: failed to set process priority %d (err %d)\n", prio, err);
+        fprintf(stderr, "warn: failed to set affinity mask 0x%llx : %s (%d)\n", (unsigned long long)mask, strerror(err), err);
         return false;
     }
 
@@ -18816,9 +18812,14 @@ static bool ggml_thread_apply_thread_priority(int32_t prio) {
         case SCHED_PRIO_REALTIME: policy = SCHED_FIFO;  p.sched_priority = 90; break;
     }
 
+    if (prio == SCHED_PRIO_NORMAL) {
+        // Keep inherited policy/priority
+        return true;
+    }
+
     int32_t err = pthread_setschedparam(pthread_self(), policy, &p);
     if (err != 0) {
-        //fprintf(stderr, "warn: failed to set thread priority %d (err %d)\n", prio, err);
+        fprintf(stderr, "warn: failed to set thread priority %d : %s (%d)\n", prio, strerror(err), err);
         return false;
     }
 
@@ -19380,7 +19381,6 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     }
 #else
     // Update main thread prio and affinity to match the current threadpool
-    ggml_thread_apply_process_priority(threadpool->prio);
     ggml_thread_apply_thread_priority(threadpool->prio);
     if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
         ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
