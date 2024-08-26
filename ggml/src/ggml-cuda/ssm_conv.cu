@@ -7,10 +7,12 @@ static __global__ void ssm_conv_f32(
     const int src1_nb1,
     float * dst,
     const int dst_nb0, const int dst_nb1, const int dst_nb2,
-    const int nc, const int ncs, const int nr, const int n_t, const int n_s) {
+    const int nc, const int ncs, const int nr) {
 
 //    const int row = blockIdx.x*blockDim.y + threadIdx.y;
     const int tid = threadIdx.x;
+    const int i2 = blockIdx.x;
+    const int i3 = threadIdx.y;
 
     const int ith = tid;
     const int nth = WARP_SIZE;
@@ -19,32 +21,27 @@ static __global__ void ssm_conv_f32(
     const int dr = (nr + nth - 1)/nth;
 
     // row range for this thread
-    const int ir0 = dr*ith;
+    const int ir0 = dr * ith;
     const int ir1 = min(ir0 + dr, nr);
     const int ir  = ir1 - ir0;
-
-    for (int i3 = 0; i3 < n_s; ++i3) {
-        for (int i2 = 0; i2 < n_t; ++i2) {
-            // {d_conv - 1 + n_t, d_inner, n_seqs}
-            // sliding window
-            const float * s = (const float *) ((const char *) src0 + ir0*src0_nb1 + i2*src0_nb0 + i3*src0_nb2); // {d_conv, d_inner, n_s}
-            const float * c = (const float *) ((const char *) src1 + ir0*src1_nb1); // {d_conv, d_inner}
-            float * x = (float *) ((char *) dst + ir0*dst_nb0 + i2*dst_nb1 + i3*dst_nb2); // {d_inner, n_t, n_s}
-
-            // TODO: transpose the output for smaller strides for big batches?
-            // d_inner
-            for (int i1 = 0; i1 < ir; ++i1) {
-                // rowwise dot product
-                // NOTE: not using ggml_vec_dot_f32, because its sum is in double precision
-                float sumf = 0.0f;
-
-                // d_conv
-                for (int i0 = 0; i0 < nc; ++i0) {
-                    sumf += s[i0 + i1*ncs] * c[i0 + i1*nc];
-                }
-                x[i1] = sumf;
-            }
+    
+    // {d_conv - 1 + n_t, d_inner, n_seqs}
+    // sliding window
+    const float * s = (const float *) ((const char *) src0 + ir0*src0_nb1 + i2*src0_nb0 + i3*src0_nb2); // {d_conv, d_inner, n_s}
+    const float * c = (const float *) ((const char *) src1 + ir0*src1_nb1); // {d_conv, d_inner}
+    float * x = (float *) ((char *) dst + ir0*dst_nb0 + i2*dst_nb1 + i3*dst_nb2); // {d_inner, n_t, n_s}
+    // TODO: transpose the output for smaller strides for big batches?
+    // d_inner
+    #pragma unroll
+    for (int i1 = 0; i1 < ir; ++i1) {
+        // rowwise dot product
+        // NOTE: not using ggml_vec_dot_f32, because its sum is in double precision
+        float sumf = 0.0f;
+        #pragma unroll
+        for (int i0 = 0; i0 < nc; ++i0) {
+            sumf += s[i0 + i1*ncs] * c[i0 + i1*nc];
         }
+        x[i1] = sumf;
     }
 }
 
@@ -57,8 +54,8 @@ static void ssm_conv_f32_cuda(
     const int nc, const int ncs, const int nr, const int n_t, const int n_s,
     cudaStream_t stream) {
 
-    const dim3 block_dims(WARP_SIZE, 1, 1);
-    const int nblocks = 1; // TODO
+    const dim3 block_dims(WARP_SIZE, n_s, 1);
+    const int nblocks = n_t; 
 
     ssm_conv_f32<WARP_SIZE><<<nblocks, block_dims, 0, stream>>>(
         src0, src1,
@@ -66,7 +63,7 @@ static void ssm_conv_f32_cuda(
         src1_nb1,
         dst,
         dst_nb0, dst_nb1, dst_nb2,
-        nc, ncs, nr, n_t, n_s);
+        nc, ncs, nr);
 }
 
 void ggml_cuda_op_ssm_conv(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
@@ -100,3 +97,4 @@ void ggml_cuda_op_ssm_conv(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         nc, ncs, nr, n_t, n_s,
         stream);
 }
+
