@@ -24,7 +24,7 @@ static __global__ void ssm_conv_f32(
     const int ir0 = dr * ith;
     const int ir1 = min(ir0 + dr, nr);
     const int ir  = ir1 - ir0;
-    
+
     // {d_conv - 1 + n_t, d_inner, n_seqs}
     // sliding window
     const float * s = (const float *) ((const char *) src0 + ir0*src0_nb1 + i2*src0_nb0 + i3*src0_nb2); // {d_conv, d_inner, n_s}
@@ -54,7 +54,7 @@ static void ssm_conv_f32_cuda(
     cudaStream_t stream) {
 
     const dim3 block_dims(WARP_SIZE, n_s, 1);
-    const int nblocks = n_t; 
+    const int nblocks = n_t;
     printf("size is %d\n",nr);
     ssm_conv_f32<WARP_SIZE><<<nblocks, block_dims, 0, stream>>>(
         src0, src1,
