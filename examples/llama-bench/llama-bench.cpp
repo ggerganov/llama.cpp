@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "ggml.h"
 #include "llama.h"
@@ -240,6 +241,7 @@ struct cmd_params {
     ggml_numa_strategy numa;
     int reps;
     int prio;
+    int delay;
     bool verbose;
     output_formats output_format;
     output_formats output_format_stderr;
@@ -270,6 +272,7 @@ static const cmd_params cmd_params_defaults = {
     /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
     /* reps                 */ 5,
     /* prio                 */ 0,
+    /* delay                */ 0,
     /* verbose              */ false,
     /* output_format        */ MARKDOWN,
     /* output_format_stderr */ NONE,
@@ -304,6 +307,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -ts, --tensor-split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
     printf("  --prio <0|1|2|3>                    (default: %d)\n", cmd_params_defaults.prio);
+    printf("  --delay <0...N>                     (default: %d)\n", cmd_params_defaults.delay);
     printf("  -o, --output <csv|json|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
     printf("  -oe, --output-err <csv|json|md|sql> (default: %s)\n", output_format_str(cmd_params_defaults.output_format_stderr));
     printf("  -v, --verbose                       (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
@@ -351,6 +355,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     params.reps = cmd_params_defaults.reps;
     params.numa = cmd_params_defaults.numa;
     params.prio = cmd_params_defaults.prio;
+    params.delay = cmd_params_defaults.delay;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
@@ -467,12 +472,6 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<int>(argv[i], split_delim);
             params.poll.insert(params.poll.end(), p.begin(), p.end());
-        } else if (arg == "--prio") {
-            if (++i >= argc) {
-                invalid_param = true;
-                break;
-            }
-            params.prio = std::stoi(argv[i]);
         } else if (arg == "-ngl" || arg == "--n-gpu-layers") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -581,6 +580,18 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 break;
             }
             params.reps = std::stoi(argv[i]);
+        } else if (arg == "--prio") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.prio = std::stoi(argv[i]);
+        } else if (arg == "--delay") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.delay = std::stoi(argv[i]);
         } else if (arg == "-o" || arg == "--output") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1503,6 +1514,11 @@ int main(int argc, char ** argv) {
         test t(inst, lmodel, ctx);
 
         llama_kv_cache_clear(ctx);
+
+        // cool off before the test
+        if (params.delay) {
+            std::this_thread::sleep_for(std::chrono::seconds(params.delay));
+        }
 
         struct ggml_threadpool_params tpp = ggml_threadpool_params_default(t.n_threads);
         if (!parse_cpu_mask(t.cpu_mask, tpp.cpumask)) {
