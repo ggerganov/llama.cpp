@@ -250,8 +250,7 @@ void IMatrixCollector::save_imatrix(int ncall) const {
         }
 
         if (n_zeros > 0) {
-            fprintf(stderr, "%s: entry '%40s' has partial data (%.2f%%) - skipping\n", __func__, kv.first.c_str(), 100.0f * (n_all - n_zeros) / n_all);
-            continue;
+            fprintf(stderr, "%s: entry '%40s' has partial data (%.2f%%)\n", __func__, kv.first.c_str(), 100.0f * (n_all - n_zeros) / n_all);
         }
 
         n_entries++;
@@ -275,7 +274,7 @@ void IMatrixCollector::save_imatrix(int ncall) const {
         if (nval > 0) {
             std::vector<float> tmp(nval);
             for (int i = 0; i < nval; i++) {
-                tmp[i] = (stat.values[i] / static_cast<float>(stat.counts[i])) * static_cast<float>(stat.ncall);
+                tmp[i] = stat.counts[i] ? (stat.values[i] / static_cast<float>(stat.counts[i])) * static_cast<float>(stat.ncall) : 0.0f;
             }
             out.write((const char*)tmp.data(), nval*sizeof(float));
         }
@@ -344,8 +343,10 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
 
         // Recreate the state as expected by save_imatrix(), and corerct for weighted sum.
         for (int i = 0; i < nval; i++) {
-            e.values[i] += tmp[i];
-            e.counts[i] += ncall;
+            if (std::isnormal(tmp[i])) {
+                e.values[i] += tmp[i];
+                e.counts[i] += ncall;
+            }
         }
         e.ncall += ncall;
 
