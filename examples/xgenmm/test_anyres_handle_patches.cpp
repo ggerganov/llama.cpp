@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <type_traits>
+#include <typeinfo>
 #include <vector>
 
 #include "clip.h"
@@ -8,6 +10,33 @@
 #include "ggml.h"
 #include "llama.h"
 #include "xgenmm.h"
+#ifndef _MSC_VER
+#include <cxxabi.h>
+#endif
+#include <cstdlib>
+#include <memory>
+#include <string>
+
+template <class T>
+std::string type_name()
+{
+    typedef typename std::remove_reference<T>::type TR;
+    std::unique_ptr<char, void (*)(void*)>          own(
+#ifndef _MSC_VER
+        abi::__cxa_demangle(typeid(TR).name(), nullptr, nullptr, nullptr),
+#else
+        nullptr,
+#endif
+        std::free);
+    std::string r = own != nullptr ? own.get() : typeid(TR).name();
+    if (std::is_const<TR>::value) r += " const";
+    if (std::is_volatile<TR>::value) r += " volatile";
+    if (std::is_lvalue_reference<T>::value)
+        r += "&";
+    else if (std::is_rvalue_reference<T>::value)
+        r += "&&";
+    return r;
+}
 
 struct clip_image_u8
 {
@@ -261,7 +290,7 @@ struct clip_ctx
     bool has_vision_encoder = false;
     bool has_llava_projector = false;
     bool has_minicpmv_projector = false;
-    bool has_xgenmm_projector = true;
+    bool has_xgenmm_projector = false;
     int  minicpmv_version = 2;
 
     struct clip_vision_model vision_model;
@@ -415,44 +444,65 @@ void tensor_to_csv(clip_image_f32* img, const char* filename)
     printf("file saved to %s\n", filename);
 }
 
-int main(){
-    /*
-    Pytorch Image Processing Pipeline
-        n_px = hf_processor.image_processor.size['height']
-        image_processor = Compose([
-            Resize((n_px, n_px), interpolation=InterpolationMode.BICUBIC, antialias=True),
-            Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
-            ToTensor(),
-            Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
-        ])
-        anyres_grids = [[384, 768], [768, 384], [768, 768], [1152, 384], [384, 1152]]
-        grid_pinpoints = anyres_grids
-        best_resolution = select_best_resolution(image.size, possible_resolutions)
-        image_padded = resize_and_pad_image(image, best_resolution)
-        processor_size = processor.transforms[0].size
-        patches = divide_to_patches(image_padded, processor_size[0])
-        image_original_resize = image.resize((processor_size[0], processor_size[0]))
-        image_patches = [image_original_resize] + patches
-        image_patches = [processor(image_patch) for image_patch in image_patches]
-        return torch.stack(image_patches, dim=0)
+struct clip_image_grid_shape
+{
+    int first;
+    int second;
+};
 
-        this part is already implemented in the clip_image_preprocess function in clip.cpp
-    */
+static std::pair<int, int> select_best_resolution(const std::pair<int, int>&              original_size,
+                                                  const std::vector<std::pair<int, int>>& possible_resolutions)
+{
+    int original_width = original_size.first;
+    int original_height = original_size.second;
+
+    std::pair<int, int> best_fit;
+    int                 max_effective_resolution = 0;
+    int                 min_wasted_resolution = std::numeric_limits<int>::max();
+
+    for (const auto& resolution : possible_resolutions)
+    {
+        int   width = resolution.first;
+        int   height = resolution.second;
+        float scale =
+            std::min(static_cast<float>(width) / original_width, static_cast<float>(height) / original_height);
+        int downscaled_width = static_cast<int>(original_width * scale);
+        int downscaled_height = static_cast<int>(original_height * scale);
+        int effective_resolution = std::min(downscaled_width * downscaled_height, original_width * original_height);
+        int wasted_resolution = (width * height) - effective_resolution;
+        // LOG_TEE("resolution: %d %d, scale: %f, downscaled: %d %d, effective: %d, wasted: %d\n", width, height, scale,
+        // downscaled_width, downscaled_height, effective_resolution, wasted_resolution);
+        if (effective_resolution > max_effective_resolution ||
+            (effective_resolution == max_effective_resolution && wasted_resolution < min_wasted_resolution))
+        {
+            max_effective_resolution = effective_resolution;
+            min_wasted_resolution = wasted_resolution;
+            best_fit = resolution;
+        }
+    }
+
+    return best_fit;
+}
+
+static struct clip_image_grid_shape get_anyres_image_grid_shape(const std::pair<int, int>&              image_size,
+                                                                const std::vector<std::pair<int, int>>& grid_pinpoints,
+                                                                int image_patch_size)
+{
+    /**
+        Conversion from gguf flat array to vector:
+        std::vector<std::pair<int, int>> possible_resolutions;
+        for (int i = 0; i < 32 && params.image_grid_pinpoints[i] != 0; i+=2) {
+            possible_resolutions.push_back({params.image_grid_pinpoints[i], params.image_grid_pinpoints[i+1]});
+        }
+     */
+    auto best_resolution = select_best_resolution(image_size, grid_pinpoints);
+    return {best_resolution.first / image_patch_size, best_resolution.second / image_patch_size};
+}
+
+int main(){
+
 
     const char*      clip_path = "/export/share/yutong/xgenmm/llamacpp_wd/llava-1.6/vit/mmproj-model-f16.gguf";
-    // struct ggml_context* meta = NULL;
-
-    // struct gguf_init_params params = {
-    //     /*.no_alloc = */ true,
-    //     /*.ctx      = */ &meta,
-    // };
-
-    // struct gguf_context* ctx = gguf_init_from_file(clip_path, params);
-    // if (!ctx)
-    // {
-    //     throw std::runtime_error(
-    //         format("%s: failed to load CLIP model from %s. Does this file exist?\n", __func__, clip_path));
-    // }
     struct clip_ctx * ctx = clip_model_load(clip_path, /*verbosity=*/2);
     printf("Model loaded\n");
     for (int i=0; i < 3; i++){
@@ -506,17 +556,6 @@ int main(){
         return NULL;
     }
 
-    // print_img(img);
-
-    // clip_image_u8* image_original_resize = clip_image_u8_init();
-    // bicubic_resize(*img, *image_original_resize, 384, 384);
-
-    // printf("**********************************\n");
-
-    // print_img(image_original_resize);
-    // img_to_csv(image_original_resize, "/export/home/llama.cpp/examples/xgenmm/imgs/image_original_resize.csv");
-    // printf("num pixels: %d\n", image_original_resize->buf.size());
-    // printf("raw img: nx:%d | ny:%d\n", image_original_resize->nx, image_original_resize->ny);
 
     /*
         part of:
@@ -532,63 +571,67 @@ int main(){
         return false;
     }
     printf("img->nx:%ld | img->ny:%ld\n", img->nx, img->ny);
-    printf("img_res_v.size:%ld\n", img_res_v.size);
-    printf("img_res_v->nx:%ld | img_res_v->ny:%ld\n", img_res_v.data->nx, img_res_v.data->ny);
+    printf("Bacth size: img_res_v.size:%ld\n", img_res_v.size);
+
+    // std::cout << "decltype(img_res_v.data) is " << type_name<decltype(img_res_v.data)>() << '\n';
+
+    // printf("Image Dimension in this batch: img_res_v.data->nx:%ld | img_res_v.data->nx:%ld\n", img_res_v.data->nx,
+    //        img_res_v.data->ny);
+    // printf("img_res_v.data->buf.size():%ld\n", img_res_v.data->buf.size());
+
+    
+    // std::cout << "decltype(img_res_v.data[0]) is " << type_name<decltype(img_res_v.data[0])>() << '\n';
+    // std::cout << "decltype(img_res_v.data[0].buf[0]) is " << type_name<decltype(img_res_v.data[0].buf[0])>() << '\n';
+    // for (size_t i = 0; i < img_res_v.size; i++) {
+    //     const int nx = img_res_v.data[i].nx;
+    //     const int ny = img_res_v.data[i].ny;
+    //     const int vec_len = img_res_v.data[i].buf.size();
+    //     printf("i:%d | nx:%d | ny:%d | vec len:%d\n", i, nx, ny, vec_len);
+    // }
 
     const char* mm_patch_merge_type = clip_patch_merge_type(ctx);
     printf("mm_patch_merge_type:%s\n", mm_patch_merge_type);
 
-    // std::string basename = "/export/home/llama.cpp/examples/xgenmm/imgs/image_res";
-    // for (size_t i = 0; i < img_res_v.size; i++) {
-    //     const int nx = img_res_v.data[i].nx;
-    //     const int ny = img_res_v.data[i].ny;
-    //     printf("i:%d | nx:%d | ny:%d\n", i, nx, ny);
+    struct clip_ctx* ctx_clip = ctx;
+    const int32_t* image_grid = clip_image_grid(ctx_clip);
 
-    //     const int n = nx * ny;
+    std::vector<std::pair<int, int>> grid_pinpoints;
+    for (int i = 0; i < 32 && image_grid[i] != 0; i += 2)
+    {
+        grid_pinpoints.push_back({image_grid[i], image_grid[i + 1]});
+    }
+    for (const auto& point : grid_pinpoints)
+    {
+        std::cout << "(" << point.first << ", " << point.second << ")" << std::endl;
+    }
 
- 
-    //     for (int k = 0; k < 1; k++) {
-    //         for (int y = 0; y < 5; y++) {
-    //             for (int x = 0; x < 10; x++) {
-    //                 // data[(i * 3 * n) + k * n + y * nx + x] = imgs->data[i].buf[3 * (y * nx + x) + k];
-    //                 printf("%.4f ", img_res_v.data[i].buf[3 * (y * nx + x) + k]);
-    //             }
-    //             printf("\n");
-    //         }
-    //         printf("\n");
-    //     }
-    //     std::string fileName = basename + "_" + std::to_string(i) + ".csv";
-    //     tensor_to_csv(&img_res_v.data[i], fileName.c_str());
-    // }
-    
+    const int32_t image_size = clip_image_size(ctx_clip);
+    printf("image_size:%d\n", image_size);
 
-    // /*
-    // part of:
-    // clip_image_encode
-    // */
-    // clip_image_f32_batch imgs{};
-    // imgs.size = 1;
-    // imgs.data = &img_res_v.data[0];
+    struct clip_image_grid_shape grid_shape =
+        get_anyres_image_grid_shape({img->nx, img->ny}, grid_pinpoints, image_size);
 
+    printf("grid_shape.first:%d | grid_shape.second:%d\n", grid_shape.first, grid_shape.second);
 
-    // /*
-    // part of:
-    // clip_image_batch_encode
-    // */
-    // const clip_image_f32_batch * imgs_f32_const = &imgs;
-    // int batch_size = imgs_f32_const->size;
-    // if (ctx->has_llava_projector) {
-    //     GGML_ASSERT(batch_size == 1); // TODO: support multiple images
-    // }
-    // if (ctx->has_minicpmv_projector) {
-    //     GGML_ASSERT(batch_size == 1);
-    // }
-
-
-    
+    std::vector<float*> image_embd_v;
+    image_embd_v.resize(img_res_v.size);
+    printf("image_embd_v.size():%d\n", image_embd_v.size());
+    for (size_t i = 0; i < img_res_v.size; i++)
+    {
+        image_embd_v[i] =
+            (float*)malloc(clip_embd_nbytes(ctx_clip));  // 576 patches * 4096 embeddings * 4 bytes = 9437184
+        const bool encoded = clip_image_encode(
+            ctx_clip, 1, &img_res_v.data[i],
+            image_embd_v[i]);  // image data is in 3x336x336 format and will be converted to 336x336x3 inside
+        if (!encoded)
+        {
+            LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int)i + 1, (int)img_res_v.size);
+            return false;
+        }
+    }
 
     return 0;
 }
 
 
-// make test_anyres_img && ./bin/test_anyres_img
+// make test_anyres_handle_patches && ./bin/test_anyres_handle_patches

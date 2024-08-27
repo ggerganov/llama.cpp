@@ -133,3 +133,23 @@ poetry.toml
 # Test models for lora adapters
 /lora-tests
 examples/xgenmm/imgs/*.csv
+examples/xgenmm copy/clip.cpp
+examples/xgenmm copy/clip.h
+examples/xgenmm copy/CMakeLists.txt
+examples/xgenmm copy/convert.sh
+examples/xgenmm copy/debug.py
+examples/xgenmm copy/playground.ipynb
+examples/xgenmm copy/test_anyres_img.cpp
+examples/xgenmm copy/xgenmm_convert_image_encoder_to_gguf.py
+examples/xgenmm copy/xgenmm_surgery.py
+examples/xgenmm copy/xgenmm.cpp
+examples/xgenmm copy/xgenmm.h
+examples/xgenmm copy/bak/xgenmm-surgery copy.py
+examples/xgenmm copy/imgs/image_original_resize.csv
+examples/xgenmm copy/imgs/image_res_0.csv
+examples/xgenmm copy/imgs/image_res_1.csv
+examples/xgenmm copy/imgs/image_res_2.csv
+examples/xgenmm copy/imgs/image_res_3.csv
+examples/xgenmm copy/imgs/image_res_4.csv
+examples/xgenmm copy/imgs/image-1d100e9-1.jpg
+examples/xgenmm copy/imgs/image-1d100e9.jpg

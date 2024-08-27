@@ -38,6 +38,13 @@ target_link_libraries(test_anyres_img PRIVATE common xgenmm ${CMAKE_THREAD_LIBS_
 target_compile_features(xgenmm PRIVATE cxx_std_11)
 
 
+set(TARGET test_anyres_handle_patches)
+add_executable(test_anyres_handle_patches test_anyres_handle_patches.cpp)
+install(TARGETS test_anyres_handle_patches RUNTIME)
+target_link_libraries(test_anyres_handle_patches PRIVATE common xgenmm ${CMAKE_THREAD_LIBS_INIT})
+target_compile_features(xgenmm PRIVATE cxx_std_11)
+
+
 # not implemented yet
 # set(TARGET xgenmm-cli)
 # add_executable(xgenmm-cli xgenmm-cli.cpp)
