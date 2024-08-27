@@ -626,15 +626,23 @@ extern "C" {
     // If it returns true, the computation is aborted
     typedef bool (*ggml_abort_callback)(void * data);
 
+    // Scheduling priorities
+    enum ggml_sched_priority {
+        GGML_SCHED_PRIO_NORMAL,
+        GGML_SCHED_PRIO_MEDIUM,
+        GGML_SCHED_PRIO_HIGH,
+        GGML_SCHED_PRIO_REALTIME
+    };
+
     // Threadpool params
     // Use ggml_threadpool_params_default() or ggml_threadpool_params_init() to populate the defaults
     struct ggml_threadpool_params {
-        bool     cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores (all-zeros means use default affinity settings)
-        int      n_threads;                   // number of threads
-        int32_t  prio;                        // thread priority
-        uint32_t poll;                        // polling level (0 - no polling, 100 - aggressive polling)
-        bool     strict_cpu;                  // strict cpu placement
-        bool     paused;                      // start in paused state
+        bool                cpumask[GGML_MAX_N_THREADS]; // mask of cpu cores (all-zeros means use default affinity settings)
+        int                 n_threads;                   // number of threads
+        enum ggml_sched_priority prio;                   // thread priority
+        uint32_t            poll;                        // polling level (0 - no polling, 100 - aggressive polling)
+        bool                strict_cpu;                  // strict cpu placement
+        bool                paused;                      // start in paused state
     };
 
     struct ggml_compute_threadpool;     // forward declaration, see ggml.c

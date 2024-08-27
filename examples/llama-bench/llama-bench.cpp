@@ -240,7 +240,7 @@ struct cmd_params {
     std::vector<bool> embeddings;
     ggml_numa_strategy numa;
     int reps;
-    int prio;
+    ggml_sched_priority prio;
     int delay;
     bool verbose;
     output_formats output_format;
@@ -271,7 +271,7 @@ static const cmd_params cmd_params_defaults = {
     /* embeddings           */ {false},
     /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
     /* reps                 */ 5,
-    /* prio                 */ 0,
+    /* prio                 */ GGML_SCHED_PRIO_NORMAL,
     /* delay                */ 0,
     /* verbose              */ false,
     /* output_format        */ MARKDOWN,
@@ -585,7 +585,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 invalid_param = true;
                 break;
             }
-            params.prio = std::stoi(argv[i]);
+            params.prio = (enum ggml_sched_priority) std::stoi(argv[i]);
         } else if (arg == "--delay") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -1470,6 +1470,8 @@ int main(int argc, char ** argv) {
     llama_backend_init();
     llama_numa_init(params.numa);
 
+    set_process_priority(params.prio);
+
     // initialize printer
     std::unique_ptr<printer> p = create_printer(params.output_format);
     std::unique_ptr<printer> p_err = create_printer(params.output_format_stderr);
@@ -1525,9 +1527,9 @@ int main(int argc, char ** argv) {
             LOG_TEE("%s: failed to parse cpu-mask: %s\n", __func__, t.cpu_mask.c_str());
             exit(1);
         }
-        tpp.strict_cpu     = t.cpu_strict;
-        tpp.poll           = t.poll;
-        tpp.prio           = params.prio;
+        tpp.strict_cpu = t.cpu_strict;
+        tpp.poll       = t.poll;
+        tpp.prio       = params.prio;
 
         struct ggml_compute_threadpool* threadpool = ggml_create_threadpool(&tpp);
         if (!threadpool) {

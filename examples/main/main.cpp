@@ -230,6 +230,8 @@ int main(int argc, char ** argv) {
     struct ggml_threadpool_params tpp =
             ggml_threadpool_params_from_cpu_params(params.cpuparams);
 
+    set_process_priority(params.cpuparams.priority);
+
     struct ggml_compute_threadpool * threadpool_batch = NULL;
     if (!ggml_threadpool_params_match(&tpp, &tpp_batch)) {
         threadpool_batch = ggml_create_threadpool(&tpp_batch);

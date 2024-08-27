@@ -251,6 +251,57 @@ int32_t cpu_get_num_math() {
     return cpu_get_num_physical_cores();
 }
 
+// Helper for setting process priority
+
+#if defined(_WIN32)
+
+bool set_process_priority(enum ggml_sched_priority prio) {
+    if (prio == GGML_SCHED_PRIO_NORMAL) {
+        return true;
+    }
+
+    DWORD p = NORMAL_PRIORITY_CLASS;
+    switch (prio) {
+        case GGML_SCHED_PRIO_NORMAL:   p = NORMAL_PRIORITY_CLASS;       break;
+        case GGML_SCHED_PRIO_MEDIUM:   p = ABOVE_NORMAL_PRIORITY_CLASS; break;
+        case GGML_SCHED_PRIO_HIGH:     p = HIGH_PRIORITY_CLASS;         break;
+        case GGML_SCHED_PRIO_REALTIME: p = REALTIME_PRIORITY_CLASS;     break;
+    }
+
+    if (!SetPriorityClass(GetCurrentProcess(), p)) {
+        fprintf(stderr, "warn: failed to set process priority class %d : (%d)\n", prio, (int) GetLastError());
+        return false;
+    }
+
+    return true;
+}
+
+#else // MacOS and POSIX
+#include <sys/types.h>
+#include <sys/resource.h>
+
+bool set_process_priority(enum ggml_sched_priority prio) {
+    if (prio == GGML_SCHED_PRIO_NORMAL) {
+        return true;
+    }
+
+    int32_t p = 0;
+    switch (prio) {
+        case GGML_SCHED_PRIO_NORMAL:   p =  0;  break;
+        case GGML_SCHED_PRIO_MEDIUM:   p = -5;  break;
+        case GGML_SCHED_PRIO_HIGH:     p = -10; break;
+        case GGML_SCHED_PRIO_REALTIME: p = -20; break;
+    }
+
+    if (!setpriority(PRIO_PROCESS, 0, p)) {
+        fprintf(stderr, "warn: failed to set process priority class %d : %s (%d)\n", prio, strerror(errno), errno);
+        return false;
+    }
+    return true;
+}
+
+#endif
+
 //
 // CLI argument parsing
 //
@@ -508,7 +559,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--prio") {
         CHECK_ARG
-        params.cpuparams.priority = std::stoul(argv[i]);
+        params.cpuparams.priority = (enum ggml_sched_priority) std::stoul(argv[i]);
         return true;
     }
     if (arg == "--cpu-strict") {
@@ -545,7 +596,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--prio-batch") {
         CHECK_ARG
-        params.cpuparams_batch.priority = std::stoul(argv[i]);
+        params.cpuparams_batch.priority = (enum ggml_sched_priority) std::stoul(argv[i]);
         return true;
     }
     if (arg == "--cpu-strict-batch") {
@@ -581,7 +632,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--prio-draft") {
         CHECK_ARG
-        params.draft_cpuparams.priority = std::stoul(argv[i]);
+        params.draft_cpuparams.priority = (enum ggml_sched_priority) std::stoul(argv[i]);
         return true;
     }
     if (arg == "--cpu-strict-draft") {
@@ -610,7 +661,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--prio-batch-draft") {
         CHECK_ARG
-        params.draft_cpuparams_batch.priority = std::stoul(argv[i]);
+        params.draft_cpuparams_batch.priority = (enum ggml_sched_priority) std::stoul(argv[i]);
         return true;
     }
     if (arg == "--cpu-strict-batch-draft") {

@@ -18655,18 +18655,11 @@ static int ggml_get_n_tasks(struct ggml_tensor * node, int n_threads) {
 
 static thread_ret_t ggml_graph_compute_secondary_thread(void* data);
 
-enum {
-    SCHED_PRIO_NORMAL,
-    SCHED_PRIO_MEDIUM,
-    SCHED_PRIO_HIGH,
-    SCHED_PRIO_REALTIME
-};
-
 #if defined(_WIN32)
 #include "windows.h"
 
 // TODO: support > 64 CPUs
-static bool ggml_thread_apply_affinity(bool * mask) {
+bool ggml_thread_apply_affinity(bool * mask) {
     HANDLE    h = GetCurrentThread();
     uint64_t  bitmask = 0ULL;
 
@@ -18700,33 +18693,20 @@ static bool ggml_thread_apply_affinity(bool * mask) {
     return m != 0;
 }
 
-static bool ggml_thread_apply_thread_priority(int32_t prio) {
-    DWORD p = NORMAL_PRIORITY_CLASS;
+static bool ggml_thread_apply_priority(int32_t prio) {
+    // Note that on Windows the Process Priority Class must be updated in order to set Thread priority.
+    // This is up to the applications.
+    DWORD p = THREAD_PRIORITY_NORMAL;
+    switch (prio) {
+        case GGML_SCHED_PRIO_NORMAL:   p = THREAD_PRIORITY_NORMAL;        break;
+        case GGML_SCHED_PRIO_MEDIUM:   p = THREAD_PRIORITY_ABOVE_NORMAL;  break;
+        case GGML_SCHED_PRIO_HIGH:     p = THREAD_PRIORITY_HIGHEST;       break;
+        case GGML_SCHED_PRIO_REALTIME: p = THREAD_PRIORITY_TIME_CRITICAL; break;
+    }
 
-    if (prio == SCHED_PRIO_NORMAL) {
+    if (prio == GGML_SCHED_PRIO_NORMAL) {
         // Keep inherited policy/priority
         return true;
-    }
-
-    // On Windows we have to update Process Priority Class in order to set Thread priority.
-
-    switch (prio) {
-        case SCHED_PRIO_NORMAL:   p = NORMAL_PRIORITY_CLASS;       break;
-        case SCHED_PRIO_MEDIUM:   p = ABOVE_NORMAL_PRIORITY_CLASS; break;
-        case SCHED_PRIO_HIGH:     p = HIGH_PRIORITY_CLASS;         break;
-        case SCHED_PRIO_REALTIME: p = REALTIME_PRIORITY_CLASS;     break;
-    }
-
-    if (!SetPriorityClass(GetCurrentProcess(), p)) {
-        fprintf(stderr, "warn: failed to set process priority class %d : (%d)\n", prio, (int) GetLastError());
-        return false;
-    }
-
-    switch (prio) {
-        case SCHED_PRIO_NORMAL:   p = THREAD_PRIORITY_NORMAL;        break;
-        case SCHED_PRIO_MEDIUM:   p = THREAD_PRIORITY_ABOVE_NORMAL;  break;
-        case SCHED_PRIO_HIGH:     p = THREAD_PRIORITY_HIGHEST;       break;
-        case SCHED_PRIO_REALTIME: p = THREAD_PRIORITY_TIME_CRITICAL; break;
     }
 
     if (!SetThreadPriority(GetCurrentThread(), p)) {
@@ -18747,17 +18727,17 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
     return true;
 }
 
-static bool ggml_thread_apply_thread_priority(int32_t prio) {
+static bool ggml_thread_apply_priority(int32_t prio) {
     struct sched_param p;
     int32_t policy = SCHED_OTHER;
     switch (prio) {
-        case SCHED_PRIO_NORMAL:   policy = SCHED_OTHER; p.sched_priority = 0;  break;
-        case SCHED_PRIO_MEDIUM:   policy = SCHED_FIFO;  p.sched_priority = 40; break;
-        case SCHED_PRIO_HIGH:     policy = SCHED_FIFO;  p.sched_priority = 80; break;
-        case SCHED_PRIO_REALTIME: policy = SCHED_FIFO;  p.sched_priority = 90; break;
+        case GGML_SCHED_PRIO_NORMAL:   policy = SCHED_OTHER; p.sched_priority = 0;  break;
+        case GGML_SCHED_PRIO_MEDIUM:   policy = SCHED_FIFO;  p.sched_priority = 40; break;
+        case GGML_SCHED_PRIO_HIGH:     policy = SCHED_FIFO;  p.sched_priority = 80; break;
+        case GGML_SCHED_PRIO_REALTIME: policy = SCHED_FIFO;  p.sched_priority = 90; break;
     }
 
-    if (prio == SCHED_PRIO_NORMAL) {
+    if (prio == GGML_SCHED_PRIO_NORMAL) {
         // Keep inherited policy/priority
         return true;
     }
@@ -18802,17 +18782,17 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
     return true;
 }
 
-static bool ggml_thread_apply_thread_priority(int32_t prio) {
+static bool ggml_thread_apply_priority(int32_t prio) {
     struct sched_param p;
     int32_t policy = SCHED_OTHER;
     switch (prio) {
-        case SCHED_PRIO_NORMAL:   policy = SCHED_OTHER; p.sched_priority = 0;  break;
-        case SCHED_PRIO_MEDIUM:   policy = SCHED_FIFO;  p.sched_priority = 40; break;
-        case SCHED_PRIO_HIGH:     policy = SCHED_FIFO;  p.sched_priority = 80; break;
-        case SCHED_PRIO_REALTIME: policy = SCHED_FIFO;  p.sched_priority = 90; break;
+        case GGML_SCHED_PRIO_NORMAL:   policy = SCHED_OTHER; p.sched_priority = 0;  break;
+        case GGML_SCHED_PRIO_MEDIUM:   policy = SCHED_FIFO;  p.sched_priority = 40; break;
+        case GGML_SCHED_PRIO_HIGH:     policy = SCHED_FIFO;  p.sched_priority = 80; break;
+        case GGML_SCHED_PRIO_REALTIME: policy = SCHED_FIFO;  p.sched_priority = 90; break;
     }
 
-    if (prio == SCHED_PRIO_NORMAL) {
+    if (prio == GGML_SCHED_PRIO_NORMAL) {
         // Keep inherited policy/priority
         return true;
     }
@@ -19190,7 +19170,7 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
     struct ggml_compute_threadpool * threadpool = state->threadpool;
 
-    ggml_thread_apply_thread_priority(threadpool->prio);
+    ggml_thread_apply_priority(threadpool->prio);
     if (ggml_thread_cpumask_is_valid(state->cpumask)) {
         ggml_thread_apply_affinity(state->cpumask);
     }
@@ -19238,7 +19218,7 @@ static void ggml_graph_compute_kickoff(struct ggml_compute_threadpool * threadpo
 
     if (threadpool->pause) {
        // Update main thread prio and affinity to match the threadpool settings
-       ggml_thread_apply_thread_priority(threadpool->prio);
+       ggml_thread_apply_priority(threadpool->prio);
        if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
            ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
        }
@@ -19333,7 +19313,7 @@ static struct ggml_compute_threadpool * ggml_create_threadpool_impl(
 
     if (!threadpool->pause) {
         // Update main thread prio and affinity at the start, otherwise we'll do it in resume
-        ggml_thread_apply_thread_priority(threadpool->prio);
+        ggml_thread_apply_priority(threadpool->prio);
         if (ggml_thread_cpumask_is_valid(threadpool->workers[0].cpumask)) {
             ggml_thread_apply_affinity(threadpool->workers[0].cpumask);
         }

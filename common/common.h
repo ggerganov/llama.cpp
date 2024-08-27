@@ -71,7 +71,7 @@ struct cpu_params {
     int      n_threads                   = -1;
     bool     cpumask[GGML_MAX_N_THREADS] = {false}; // CPU affinity mask.
     bool     mask_valid                  = false;   // Default: any CPU
-    int32_t  priority                    =  0;      // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
+    enum ggml_sched_priority  priority   = GGML_SCHED_PRIO_NORMAL;  // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
     bool     strict_cpu                  = false;   // Use strict CPU placement
     uint32_t poll                        = 50;      // Polling (busywait) level (0 - no polling, 100 - mostly polling)
 };
@@ -290,6 +290,7 @@ std::string gpt_params_get_system_info(const gpt_params & params);
 bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);
 bool parse_cpu_mask(const std::string& mask, bool(&boolmask)[GGML_MAX_N_THREADS]);
 void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model = nullptr);
+bool set_process_priority(enum ggml_sched_priority prio);
 
 //
 // String utils
