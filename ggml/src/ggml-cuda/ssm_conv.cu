@@ -2,7 +2,7 @@
 
 template <int block_size>
 static __global__ void ssm_conv_f32(
-    const float * src0, const float * src1,
+    const float * __restrict__ src0, const float * __restrict__ src1,
     const int src0_nb0, const int src0_nb1, const int src0_nb2,
     const int src1_nb1,
     float * dst,
@@ -32,7 +32,6 @@ static __global__ void ssm_conv_f32(
     float * x = (float *) ((char *) dst + ir0*dst_nb0 + i2*dst_nb1 + i3*dst_nb2); // {d_inner, n_t, n_s}
     // TODO: transpose the output for smaller strides for big batches?
     // d_inner
-    #pragma unroll
     for (int i1 = 0; i1 < ir; ++i1) {
         // rowwise dot product
         // NOTE: not using ggml_vec_dot_f32, because its sum is in double precision
@@ -56,7 +55,7 @@ static void ssm_conv_f32_cuda(
 
     const dim3 block_dims(WARP_SIZE, n_s, 1);
     const int nblocks = n_t; 
-
+    printf("size is %d\n",nr);
     ssm_conv_f32<WARP_SIZE><<<nblocks, block_dims, 0, stream>>>(
         src0, src1,
         src0_nb0, src0_nb1, src0_nb2,
@@ -97,4 +96,3 @@ void ggml_cuda_op_ssm_conv(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         nc, ncs, nr, n_t, n_s,
         stream);
 }
-
