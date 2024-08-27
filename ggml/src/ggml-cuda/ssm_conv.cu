@@ -2,7 +2,7 @@
 
 template <int block_size>
 static __global__ void ssm_conv_f32(
-    const float * src0, const float * src1,
+    const float * __restrict__ src0, const float * __restrict__ src1,
     const int src0_nb0, const int src0_nb1, const int src0_nb2,
     const int src1_nb1,
     float * dst,
