@@ -240,11 +240,6 @@ int main(int argc, char ** argv) {
             exit(1);
         }
 
-        llama_attach_batch_threadpool(ctx, threadpool_batch);
-        if (ctx_guidance) {
-            llama_attach_batch_threadpool(ctx_guidance, threadpool_batch);
-        }
-
         // Start the non-batch threadpool in the paused state
         tpp.paused = true;
     }
@@ -255,9 +250,9 @@ int main(int argc, char ** argv) {
         exit(1);
     }
 
-    llama_attach_threadpool(ctx, threadpool);
+    llama_attach_threadpool(ctx, threadpool, threadpool_batch);
     if (ctx_guidance) {
-        llama_attach_threadpool(ctx_guidance, threadpool);
+        llama_attach_threadpool(ctx_guidance, threadpool, threadpool_batch);
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);

@@ -19198,9 +19198,6 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data) {
             state->pending = false;
 
             ggml_graph_compute_thread(state);
-            if (state->threadpool->ec != GGML_STATUS_SUCCESS) {
-                break;
-            }
         }
     }
 

@@ -1537,7 +1537,7 @@ int main(int argc, char ** argv) {
             exit(1);
         }
 
-        llama_attach_threadpool(ctx, threadpool);
+        llama_attach_threadpool(ctx, threadpool, NULL);
 
         // warmup run
         if (t.n_prompt > 0) {

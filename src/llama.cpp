@@ -15523,39 +15523,6 @@ static void llama_graph_compute(
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
 
-// Optionally swaps the batch and single-tok threadpools.
-// Returns the number of threads, and if a valid threadpool exists, returns it too.
-static std::pair<int32_t, ggml_compute_threadpool_t> llama_swap_threadpools(
-        llama_context & lctx,
-              int32_t   n_tokens) {
-
-    const auto & cparams = lctx.cparams;
-    int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
-
-    ggml_compute_threadpool_t threadpool = nullptr;  // nullptr -> disposable threadpool
-
-    // A batch threadpool without a non-batch threadpool isn't supported.
-    GGML_ASSERT(!lctx.threadpool_batch || lctx.threadpool);
-
-    if (lctx.threadpool_batch && lctx.threadpool) {
-        // Switch between the 2 threadpools as needed
-        if (n_tokens > 1) {
-            ggml_pause_threadpool(lctx.threadpool);
-            threadpool = lctx.threadpool_batch;
-            n_threads = cparams.n_threads_batch;
-        } else {
-            ggml_pause_threadpool(lctx.threadpool_batch);
-            threadpool = lctx.threadpool;
-            n_threads = cparams.n_threads;
-        }
-    } else if (lctx.threadpool) {
-        threadpool = lctx.threadpool;
-        n_threads = cparams.n_threads;
-    }
-    return std::make_pair(n_threads, threadpool);
-}
-
-
 // decode a batch of tokens by evaluating the transformer
 //
 //   - lctx:      llama context
@@ -15662,11 +15629,8 @@ static int llama_decode_internal(
             lctx.n_outputs = n_outputs_new;
         }
 
-        std::pair<int32_t, ggml_compute_threadpool_t> threads =
-            llama_swap_threadpools(lctx, n_tokens);
-
-        int n_threads                        = threads.first;
-        ggml_compute_threadpool_t threadpool = threads.second;
+        int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
+        ggml_compute_threadpool_t threadpool = n_tokens == 1 ? lctx.threadpool : lctx.threadpool_batch;
 
         GGML_ASSERT(n_threads > 0);
 
@@ -15906,11 +15870,9 @@ static int llama_encode_internal(
     lctx.inp_embd_enc = NULL;
     lctx.n_outputs = n_tokens;
 
-    std::pair<int32_t, ggml_compute_threadpool_t> threads =
-        llama_swap_threadpools(lctx, n_tokens);
+    int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
+    ggml_compute_threadpool_t threadpool = n_tokens == 1 ? lctx.threadpool : lctx.threadpool_batch;
 
-    int n_threads                        = threads.first;
-    ggml_compute_threadpool_t threadpool = threads.second;
     GGML_ASSERT(n_threads > 0);
 
     ggml_backend_sched_reset(lctx.sched);
@@ -17500,36 +17462,15 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
 
 void llama_attach_threadpool(
              struct llama_context * ctx,
-        ggml_compute_threadpool_t   threadpool) {
-    ctx->threadpool = threadpool;
-}
-
-void llama_attach_batch_threadpool(
-             struct llama_context * ctx,
+        ggml_compute_threadpool_t   threadpool,
         ggml_compute_threadpool_t   threadpool_batch) {
-    ctx->threadpool_batch = threadpool_batch;
+    ctx->threadpool       = threadpool;
+    ctx->threadpool_batch = threadpool_batch ? threadpool_batch : threadpool;
 }
 
 void llama_detach_threadpool(struct llama_context * ctx) {
-    ctx->threadpool = nullptr;
-}
-
-void llama_detach_batch_threadpool(struct llama_context * ctx) {
-    ctx->threadpool = nullptr;
-}
-
-void llama_detach_threadpools(struct llama_context * ctx) {
-    llama_detach_threadpool(ctx);
-    llama_detach_batch_threadpool(ctx);
-}
-
-void llama_pause_threadpools(struct llama_context * ctx) {
-    if (ctx->threadpool) {
-        ggml_pause_threadpool(ctx->threadpool);
-    }
-    if (ctx->threadpool_batch) {
-        ggml_pause_threadpool(ctx->threadpool_batch);
-    }
+    ctx->threadpool       = nullptr;
+    ctx->threadpool_batch = nullptr;
 }
 
 void llama_backend_free(void) {

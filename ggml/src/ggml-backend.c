@@ -910,6 +910,11 @@ void ggml_backend_cpu_set_threadpool(ggml_backend_t backend_cpu, ggml_compute_th
     GGML_ASSERT(ggml_backend_is_cpu(backend_cpu));
 
     struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
+
+    if (ctx->threadpool && ctx->threadpool != threadpool) {
+       // already had a different threadpool, pause/suspend it before switching
+       ggml_pause_threadpool(ctx->threadpool);
+    }
     ctx->threadpool = threadpool;
 }
 
