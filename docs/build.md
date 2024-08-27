@@ -380,3 +380,9 @@ For detailed info, such as model/device supports, CANN install, please refer to 
 ### Android
 
 To read documentation for how to build on Android, [click here](./android.md)
+
+### Arm CPU optimized mulmat kernels
+
+Llama.cpp includes a set of optimized mulmat kernels for the Arm architecture, leveraging Arm® Neon™, int8mm and SVE instructions. These kernels are enabled at build time through the appropriate compiler cpu-type flags, such as `-DCMAKE_C_FLAGS=-march=armv8.2a+i8mm+sve`. Note that these optimized kernels require the model to be quantized into one of the formats: `Q4_0_4_4` (Arm Neon), `Q4_0_4_8` (int8mm) or `Q4_0_8_8` (SVE). The SVE mulmat kernel specifically requires a vector width of 256 bits. When running on devices with a different vector width, it is recommended to use the `Q4_0_4_8` (int8mm) or `Q4_0_4_4` (Arm Neon) formats for better performance. Refer to [examples/quantize/README.md](../examples/quantize/README.md) for more information on the quantization formats.
+
+To support `Q4_0_4_4`, you must build with `GGML_NO_LLAMAFILE=1` (`make`) or `-DGGML_LLAMAFILE=OFF` (`cmake`).
