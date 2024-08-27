@@ -55,7 +55,6 @@ static void ssm_conv_f32_cuda(
 
     const dim3 block_dims(WARP_SIZE, n_s, 1);
     const int nblocks = n_t;
-    printf("size is %d\n",nr);
     ssm_conv_f32<WARP_SIZE><<<nblocks, block_dims, 0, stream>>>(
         src0, src1,
         src0_nb0, src0_nb1, src0_nb2,
