@@ -6470,21 +6470,27 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
     int submit_node_idx = 0; // index to first node in a batch
 
     // submit work every submit_count node to overlap CPU cmdbuffer generation with GPU execution
-    constexpr int submit_count = 50;
+    constexpr int submit_count = 100;
+    int submitted_nodes = 0;
     for (int i = 0; i < cgraph->n_nodes; i++) {
         if (first_node_in_batch) {
             submit_node_idx = i;
         }
 
-        // TODO probably it's better to move the submit conter to ggml_vk_build_graph since a lot of nodes might not contain actual vulkan work
-        bool submit = i && ((i % submit_count) == 0);
+        bool submit = (submitted_nodes >= submit_count) || (i == last_node);
         bool enqueued = ggml_vk_build_graph(ctx, cgraph->nodes[i], i, cgraph->nodes[submit_node_idx], submit_node_idx, false, i == last_node, submit);
 
-        if (first_node_in_batch && enqueued) {
-            first_node_in_batch = false;
+        if (enqueued) {
+            ++submitted_nodes;
+
+            if (first_node_in_batch) {
+                first_node_in_batch = false;
+            }
         }
+
         if (submit) {
             first_node_in_batch = true;
+            submitted_nodes = 0;
         }
     }
 
