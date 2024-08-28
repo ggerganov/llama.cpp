@@ -483,7 +483,11 @@ int main(int argc, char ** argv) {
         }
         process_input(ctx_llava, &params, 0, params.prompt.c_str(), n_past);
         process_prompt(2, ctx_llava, &params, n_past);
-
+        if (!params.prompt.empty()) {
+            LOG_TEE("minicpmv_version: %d\n", clip_is_minicpmv(ctx_llava->ctx_clip));
+            LOG_TEE("<user>%s\n", params.prompt.c_str());
+            LOG_TEE("<assistant>");
+        }
         struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams);
         const int max_tgt_len = params.n_predict < 0 ? 8192 : params.n_predict;
         std::string response = "";
@@ -512,7 +516,11 @@ int main(int argc, char ** argv) {
                 process_input(ctx_llava, &params, 1, "", n_past, embeds);
             }
             process_prompt(2, ctx_llava, &params, n_past);
-
+            if (!params.prompt.empty()) {
+                LOG_TEE("minicpmv_version: %d\n", clip_is_minicpmv(ctx_llava->ctx_clip));
+                LOG_TEE("<user>%s\n", params.prompt.c_str());
+                LOG_TEE("<assistant>");
+            }
             struct llama_sampling_context * ctx_sampling = llama_sampling_init(params.sparams);
             const int max_tgt_len = params.n_predict < 0 ? 8192 : params.n_predict;
             std::string response = "";
@@ -537,6 +545,7 @@ int main(int argc, char ** argv) {
             ctx_llava = minicpmv_init(&params, image, n_past);
             
             if (!params.prompt.empty()) {
+                LOG_TEE("minicpmv_version: %d\n", clip_is_minicpmv(ctx_llava->ctx_clip));
                 LOG_TEE("<user>%s\n", params.prompt.c_str());
                 LOG_TEE("<assistant>");
                 auto ctx_sampling = llama_init(ctx_llava, &params, params.prompt.c_str(), n_past, false);
@@ -560,6 +569,7 @@ int main(int argc, char ** argv) {
             }
             else {
                 while (true) {
+                    LOG_TEE("minicpmv_version: %d\n", clip_is_minicpmv(ctx_llava->ctx_clip));
                     LOG_TEE("<user>");
                     std::string prompt;
                     std::getline(std::cin, prompt);
