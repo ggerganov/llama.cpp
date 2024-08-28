@@ -364,7 +364,9 @@ if __name__ == '__main__':
 
             def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
                 dest = list(super().modify_tensors(data_torch, name, bid))
-                # for now, we cannot convert archs that use the same tensor for tok_embd and output
+                # some archs may have the same tensor for lm_head and output (tie word embeddings)
+                # in this case, adapters targeting lm_head will fail when using llama-export-lora
+                # therefore, we ignore them for now
                 # see: https://github.com/ggerganov/llama.cpp/issues/9065
                 if name == "lm_head.weight" and len(dest) == 0:
                     raise ValueError("lm_head is present in adapter, but is ignored in base model")
