@@ -267,6 +267,8 @@ if __name__ == "__main__":
             # ggml implements gelu_with_tanh approximation
             use_gelu = "gelu" in vision_config["hidden_act"].lower()
             fout.add_bool("clip.use_gelu", use_gelu)
+            fout.add_string("clip.vision.mm_patch_merge_type", 'spatial_unpad')
+            print("hard coded mm_patch_merge_type as spatial_unpad")
     
     # for VIT model
     with print_time("Loading vision encoder and converting to gguf"):

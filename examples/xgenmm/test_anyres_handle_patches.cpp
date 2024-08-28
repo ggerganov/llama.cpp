@@ -502,33 +502,34 @@ static struct clip_image_grid_shape get_anyres_image_grid_shape(const std::pair<
 int main(){
 
 
-    const char*      clip_path = "/export/share/yutong/xgenmm/llamacpp_wd/llava-1.6/vit/mmproj-model-f16.gguf";
+    // const char*      clip_path = "/export/share/yutong/xgenmm/llamacpp_wd/llava-1.6/vit/mmproj-model-f16.gguf";
+    const char*      clip_path = "/export/share/yutong/xgenmm/llamacpp_wd/siglip_kosmos_phi3_4k_instruct/gguf_test/mmproj-model-f32.gguf";
     struct clip_ctx * ctx = clip_model_load(clip_path, /*verbosity=*/2);
-    printf("Model loaded\n");
-    for (int i=0; i < 3; i++){
-        ctx->image_mean[i] = 0.5;
-        ctx->image_std[i] = 0.5;
-    }
-    LOG_TEE("v_image_mean       %f %f %f\n", ctx->image_mean[0], ctx->image_mean[1], ctx->image_mean[2]);
-    LOG_TEE("v_image_std        %f %f %f\n", ctx->image_std[0], ctx->image_std[1], ctx->image_std[2]);
-    // [[384, 768], [768, 384], [768, 768], [1152, 384], [384, 1152]]
-    ctx->vision_model.hparams.image_grid_pinpoints[0] = 384;
-    ctx->vision_model.hparams.image_grid_pinpoints[1] = 768;
-    ctx->vision_model.hparams.image_grid_pinpoints[2] = 768;
-    ctx->vision_model.hparams.image_grid_pinpoints[3] = 384;
-    ctx->vision_model.hparams.image_grid_pinpoints[4] = 768;
-    ctx->vision_model.hparams.image_grid_pinpoints[5] = 768;
-    ctx->vision_model.hparams.image_grid_pinpoints[6] = 1152;
-    ctx->vision_model.hparams.image_grid_pinpoints[7] = 384;
-    ctx->vision_model.hparams.image_grid_pinpoints[8] = 384;
-    ctx->vision_model.hparams.image_grid_pinpoints[9] = 1152;
-    for (int i = 0; i < 10; i++)
-    {
-        printf("grid[%d]:%d ", i, ctx->vision_model.hparams.image_grid_pinpoints[i]);
-    }
-    printf("\n");
-    ctx->vision_model.hparams.image_size = 384;
-    printf("in test_anyres: params.image_size:%d\n", ctx->vision_model.hparams.image_size);
+    // printf("Model loaded\n");
+    // for (int i=0; i < 3; i++){
+    //     ctx->image_mean[i] = 0.5;
+    //     ctx->image_std[i] = 0.5;
+    // }
+    // LOG_TEE("v_image_mean       %f %f %f\n", ctx->image_mean[0], ctx->image_mean[1], ctx->image_mean[2]);
+    // LOG_TEE("v_image_std        %f %f %f\n", ctx->image_std[0], ctx->image_std[1], ctx->image_std[2]);
+    // // [[384, 768], [768, 384], [768, 768], [1152, 384], [384, 1152]]
+    // ctx->vision_model.hparams.image_grid_pinpoints[0] = 384;
+    // ctx->vision_model.hparams.image_grid_pinpoints[1] = 768;
+    // ctx->vision_model.hparams.image_grid_pinpoints[2] = 768;
+    // ctx->vision_model.hparams.image_grid_pinpoints[3] = 384;
+    // ctx->vision_model.hparams.image_grid_pinpoints[4] = 768;
+    // ctx->vision_model.hparams.image_grid_pinpoints[5] = 768;
+    // ctx->vision_model.hparams.image_grid_pinpoints[6] = 1152;
+    // ctx->vision_model.hparams.image_grid_pinpoints[7] = 384;
+    // ctx->vision_model.hparams.image_grid_pinpoints[8] = 384;
+    // ctx->vision_model.hparams.image_grid_pinpoints[9] = 1152;
+    // for (int i = 0; i < 10; i++)
+    // {
+    //     printf("grid[%d]:%d ", i, ctx->vision_model.hparams.image_grid_pinpoints[i]);
+    // }
+    // printf("\n");
+    // ctx->vision_model.hparams.image_size = 384;
+    // printf("in test_anyres: params.image_size:%d\n", ctx->vision_model.hparams.image_size);
     /* 
         part of: 
             llava_image_embed_make_with_filename
@@ -618,6 +619,7 @@ int main(){
     printf("image_embd_v.size():%d\n", image_embd_v.size());
     for (size_t i = 0; i < img_res_v.size; i++)
     {
+        printf("encode patch %d\n", i);
         image_embd_v[i] =
             (float*)malloc(clip_embd_nbytes(ctx_clip));  // 576 patches * 4096 embeddings * 4 bytes = 9437184
         const bool encoded = clip_image_encode(
