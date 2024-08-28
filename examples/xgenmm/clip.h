@@ -91,6 +91,7 @@ CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out
 
 CLIP_API int clip_is_minicpmv(const struct clip_ctx * ctx);
 
+CLIP_API int clip_is_xgenmm(const struct clip_ctx * ctx);
 #ifdef __cplusplus
 }
 #endif

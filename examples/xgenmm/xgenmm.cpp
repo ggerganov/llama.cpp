@@ -285,7 +285,6 @@ static bool encode_image_with_clip(clip_ctx *ctx_clip, int n_threads, const clip
     const int64_t t_img_enc_start_us = ggml_time_us();
 
     const char *mm_patch_merge_type = clip_patch_merge_type(ctx_clip);
-
     if (clip_is_minicpmv(ctx_clip))
     {
         std::vector<float *> image_embd_v;
@@ -341,6 +340,20 @@ static bool encode_image_with_clip(clip_ctx *ctx_clip, int n_threads, const clip
         load_image_size->height = img->ny;
         clip_add_load_image_size(ctx_clip, load_image_size);
         LOG_TEE("%s: load_image_size %d %d\n", __func__, load_image_size->width, load_image_size->height);
+    }
+    else if (clip_is_xgenmm(ctx_clip))
+    {
+        // xgenmm embedding
+        *n_img_pos = clip_n_patches(ctx_clip);
+        bool encoded =
+            clip_image_encode(ctx_clip, n_threads, &img_res_v.data[0], image_embd);  // image_embd shape is 729 x 
+        delete[] img_res_v.data;
+        if (!encoded)
+        {
+            LOG_TEE("Unable to encode image\n");
+
+            return false;
+        }
     }
     else if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0)
     {
@@ -414,7 +427,7 @@ static bool encode_image_with_clip(clip_ctx *ctx_clip, int n_threads, const clip
         // clip_image_convert_f32_to_u8(*image_feature, *tmp);
         // clip_image_save_to_bmp(*tmp, "image_feature.bmp");
     }
-
+    std::cout << __LINE__ << std::endl;
     LOG_TEE("%s: image embedding created: %d tokens\n", __func__, *n_img_pos);
 
     const int64_t t_img_enc_end_us = ggml_time_us();
@@ -458,7 +471,7 @@ bool llava_image_embed_make_with_clip_img(clip_ctx *ctx_clip, int n_threads, con
         return false;
     }
 
-    int n_img_pos;
+    int n_img_pos;  // 0
     if (!encode_image_with_clip(ctx_clip, n_threads, img, image_embd, &n_img_pos))
     {
         LOG_TEE("%s: cannot encode image, aborting\n", __func__);
@@ -583,7 +596,6 @@ struct llava_image_embed *llava_image_embed_make_with_filename(struct clip_ctx *
         LOG_TEE("%s: failed to load %s\n", __func__, image_path);
         return NULL;
     }
-
     llava_image_embed *embed = llava_image_embed_make_with_bytes(ctx_clip, n_threads, image_bytes, image_bytes_length);
     free(image_bytes);
 

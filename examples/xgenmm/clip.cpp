@@ -151,7 +151,7 @@ enum projector_type
     PROJECTOR_TYPE_LDP,
     PROJECTOR_TYPE_LDPV2,
     PROJECTOR_TYPE_RESAMPLER,
-    PROJECTOR_TYPE_PERCIVER_RESAMPLER,
+    PROJECTOR_TYPE_PERCEIVER_RESAMPLER,
     PROJECTOR_TYPE_UNKNOWN,
 };
 
@@ -160,7 +160,7 @@ static std::map<projector_type, std::string> PROJECTOR_TYPE_NAMES = {
     { PROJECTOR_TYPE_LDP, "ldp" },
     { PROJECTOR_TYPE_LDPV2, "ldpv2"},
     { PROJECTOR_TYPE_RESAMPLER, "resampler"},
-    { PROJECTOR_TYPE_PERCIVER_RESAMPLER, "PercevierResampler"}
+    { PROJECTOR_TYPE_PERCEIVER_RESAMPLER, "PerceiverResampler"}  // CT: fix name
 };
 
 
@@ -626,6 +626,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
             image_size_height = imgs->data->ny;
         }
     }
+
     if (ctx->has_xgenmm_projector) {
         //TODO: implement something for example, image masks
         printf("use has_xgenmm_projector\n");
@@ -650,16 +651,12 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         /*.mem_buffer =*/ ctx->buf_compute_meta.data(),
         /*.no_alloc   =*/ true,
     };
-
     struct ggml_context * ctx0 = ggml_init(params);
     struct ggml_cgraph * gf = ggml_new_graph(ctx0);
-
     struct ggml_tensor * inp_raw = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, image_size_width, image_size_height, 3, batch_size);
     ggml_set_name(inp_raw, "inp_raw");
     ggml_set_input(inp_raw);
-
     struct ggml_tensor * inp = ggml_conv_2d(ctx0, model.patch_embeddings, inp_raw, patch_size, patch_size, 0, 0, 1, 1);
-
     inp = ggml_reshape_3d(ctx0, inp, num_patches, hidden_size, batch_size);
     inp = ggml_cont(ctx0, ggml_permute(ctx0, inp, 1, 0, 2, 3));
 
@@ -669,7 +666,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     }
     struct ggml_tensor * embeddings = inp;
     struct ggml_tensor * pos_embed = nullptr;
-
     if (ctx->has_llava_projector) {
         printf("use has_llava_projector\n");
         // concat class_embeddings and patch_embeddings
@@ -686,15 +682,15 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
                     embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], model.class_embedding->nb[1]);
         }
     }
-    printf("hi1!");
+    // printf("hi1!");
     struct ggml_tensor * positions = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, num_positions);
     ggml_set_name(positions, "positions");
     ggml_set_input(positions);
-    printf("hi2!");
+    // printf("hi2!");
 
     embeddings =
         ggml_add(ctx0, embeddings, ggml_get_rows(ctx0, model.position_embeddings, positions));
-    printf("hi3!");
+    // printf("hi3!");
     if (ctx->has_minicpmv_projector) {
         int pos_w = image_size_width/patch_size;
         int pos_h = image_size_height/patch_size;
@@ -707,7 +703,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         ggml_set_name(pos_embed, "pos_embed");
         ggml_set_input(pos_embed);
     }
-
     // pre-layernorm
     if (ctx->has_pre_norm) {
         embeddings = ggml_norm(ctx0, embeddings, eps);
@@ -715,7 +710,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.pre_ln_w), model.pre_ln_b);
     }
-
     // loop over layers
     if (ctx->has_minicpmv_projector) {
         n_layer += 1;
@@ -766,7 +760,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
             cur = ggml_cont_3d(ctx0, KQV, hidden_size, num_positions, batch_size);
         }
-
         // attention output
         cur = ggml_add(ctx0, ggml_mul_mat(ctx0, model.layers[il].o_w, cur), model.layers[il].o_b);
 
@@ -774,7 +767,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
         cur = ggml_add(ctx0, cur, embeddings);
 
         embeddings = cur; // embeddings = residual, cur = hidden_states
-
         // layernorm2
         {
             cur = ggml_norm(ctx0, cur, eps);
@@ -799,7 +791,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         embeddings = cur;
     }
-
     // post-layernorm
     if (ctx->has_post_norm) {
         embeddings = ggml_norm(ctx0, embeddings, eps);
@@ -807,7 +798,6 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
         embeddings = ggml_add(ctx0, ggml_mul(ctx0, embeddings, model.post_ln_w), model.post_ln_b);
     }
-
     // llava projector
     if (ctx->has_llava_projector) {
         embeddings = ggml_reshape_2d(ctx0, embeddings, embeddings->ne[0], embeddings->ne[1]);
@@ -1062,7 +1052,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     // xgenmm-projector
     else if (ctx->has_xgenmm_projector)
     {
-        if (ctx->proj_type == PROJECTOR_TYPE_PERCIVER_RESAMPLER)
+        if (ctx->proj_type == PROJECTOR_TYPE_PERCEIVER_RESAMPLER)
         {
             struct ggml_tensor * self_latents = model.mm_model_latents;
             struct ggml_tensor *img_embeddings = embeddings;
@@ -1287,8 +1277,8 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     {
         int idx = gguf_find_key(ctx, KEY_PROJ_TYPE);
         if (idx != -1) {
-            const std::string proj_type = gguf_get_val_str(ctx, idx);
-            new_clip->proj_type = clip_projector_type_from_string(proj_type);
+            const std::string proj_type = gguf_get_val_str(ctx, idx);  // CT: assign projector name
+            new_clip->proj_type = clip_projector_type_from_string(proj_type);  
         } else {
             new_clip->proj_type = PROJECTOR_TYPE_MLP;
         }
@@ -1333,7 +1323,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         if (idx != -1) {
             new_clip->has_llava_projector = gguf_get_val_bool(ctx, idx);
         }
-
+        
         idx = gguf_find_key(ctx, KEY_HAS_MINICPMV_PROJ);
         if (idx != -1) {
             new_clip->has_minicpmv_projector = gguf_get_val_bool(ctx, idx);
@@ -1342,6 +1332,11 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         idx = gguf_find_key(ctx, KEY_MINICPMV_VERSION);
         if (idx != -1) {
             new_clip->minicpmv_version = gguf_get_val_i32(ctx, idx);
+        }
+
+        idx = gguf_find_key(ctx, KEY_HAS_XGENMM_PROJ);  // CT: checked.
+        if (idx != -1) {
+            new_clip->has_xgenmm_projector = gguf_get_val_bool(ctx, idx);
         }
 
         // GGML_ASSERT(new_clip->has_llava_projector); // see monatis/clip.cpp for image and/or text encoding for semantic search
@@ -1357,6 +1352,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             LOG_TEE("%s: vision_encoder: %d\n", __func__, new_clip->has_vision_encoder);
             LOG_TEE("%s: llava_projector:  %d\n", __func__, new_clip->has_llava_projector);
             LOG_TEE("%s: minicpmv_projector:  %d\n", __func__, new_clip->has_minicpmv_projector);
+            LOG_TEE("%s: xgenmm_projector:  %d\n", __func__, new_clip->has_xgenmm_projector);
             LOG_TEE("%s: model size:     %.2f MB\n", __func__, model_size / 1024.0 / 1024.0);
             LOG_TEE("%s: metadata size:  %.2f MB\n", __func__, ggml_get_mem_size(meta) / 1024.0 / 1024.0);
         }
@@ -1437,7 +1433,6 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         hparams.patch_size     = get_u32(ctx, KEY_PATCH_SIZE);
         hparams.projection_dim = get_u32(ctx, format(KEY_PROJ_DIM, "vision"));
         hparams.eps            = get_f32(ctx, format(KEY_LAYER_NORM_EPS, "vision"));
-
         try {
             int idx = get_key_idx(ctx, KEY_IMAGE_GRID_PINPOINTS);
             int n = gguf_get_arr_n(ctx, idx);
@@ -1619,7 +1614,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
             vision_model.mm_model_ln_post_w = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "weight"));
             vision_model.mm_model_ln_post_b = get_tensor(new_clip->ctx_data, format(TN_MINICPMV_LN, "post", "bias"));
         }
-        else if(new_clip->proj_type == PROJECTOR_TYPE_PERCIVER_RESAMPLER){
+        else if(new_clip->proj_type == PROJECTOR_TYPE_PERCEIVER_RESAMPLER){
             vision_model.mm_model_latents = ggml_get_tensor(new_clip->ctx_data, "perceiver_resampler.latents");
             vision_model.mm_model_projection_w =
                 ggml_get_tensor(new_clip->ctx_data, "perceiver_resampler.projection.weight");
@@ -1706,8 +1701,10 @@ void clip_add_load_image_size(struct clip_ctx * ctx_clip, struct clip_image_size
 
 struct clip_image_size * clip_image_size_init() {
     struct clip_image_size * load_image_size = new struct clip_image_size();
-    load_image_size->width = 448;
-    load_image_size->height = 448;
+    // load_image_size->width = 448;  // CT: this part is hard coded, need check
+    // load_image_size->height = 448;
+    load_image_size->width = 384;  // CT: this part is hard coded, need check
+    load_image_size->height = 384;
     return load_image_size;
 }
 
@@ -2504,11 +2501,9 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     // build the inference graph
     ggml_cgraph * gf = clip_image_build_graph(ctx, imgs, ctx->load_image_size, true);
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
-
     // set inputs
     const auto & model = ctx->vision_model;
     const auto & hparams = model.hparams;
-
     const int image_size = hparams.image_size;
     int image_size_width  = image_size;
     int image_size_height = image_size;
@@ -2522,9 +2517,9 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
     if(ctx->load_image_size==nullptr){
         ctx->load_image_size= clip_image_size_init();
     }
+    ctx->load_image_size= clip_image_size_init();  // CT: hard code
     const int pos_w = ctx->load_image_size->width/patch_size;
     const int pos_h = ctx->load_image_size->height/patch_size;
-
     {
         struct ggml_tensor * inp_raw = ggml_graph_get_tensor(gf, "inp_raw");
         float * data = (float *)malloc(ggml_nbytes(inp_raw));
@@ -2611,7 +2606,6 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
                 free(zero_mem);
             }
         }
-
         {
             struct ggml_tensor * positions = ggml_graph_get_tensor(gf, "positions");
 
@@ -2622,18 +2616,19 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
             free(positions_data);
         }
-
-        {
-            struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "patches");
-            int* patches_data = (int*)malloc(ggml_nbytes(patches));
-            for (int i = 0; i < num_patches; i++) {
-                patches_data[i] = i + 1;
-            }
-            ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
-            free(patches_data);
-        }
+        // {
+        //            std::cout << __LINE__ << std::endl;
+        //     struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "patches");
+        //     std::cout << __LINE__ << std::endl;
+        //     int* patches_data = (int*)malloc(ggml_nbytes(patches));
+        //     std::cout << __LINE__ << std::endl;
+        //     for (int i = 0; i < num_patches; i++) {
+        //         patches_data[i] = i + 1;
+        //     }
+        //     ggml_backend_tensor_set(patches, patches_data, 0, ggml_nbytes(patches));
+        //     free(patches_data);
+        // }
     }
-
     if (ggml_backend_is_cpu(ctx->backend)) {
         ggml_backend_cpu_set_n_threads(ctx->backend, n_threads);
     }
@@ -2643,15 +2638,11 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         ggml_backend_metal_set_n_cb(ctx->backend, n_threads);
     }
 #endif
-
     ggml_backend_graph_compute(ctx->backend, gf);
-
     // the last node is the embedding tensor
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 1];
-
     // copy the embeddings to the location passed by the user
     ggml_backend_tensor_get(embeddings, vec, 0, ggml_nbytes(embeddings));
-
     return true;
 }
 
@@ -2809,6 +2800,9 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
             return 3584;
         }
     }
+    if (ctx->proj_type == PROJECTOR_TYPE_PERCEIVER_RESAMPLER) {
+        return 3072;  // CT: hard coded
+    }
 
     std::string proj_type = PROJECTOR_TYPE_NAMES[ctx->proj_type];
     throw std::runtime_error(format("%s: don't support projector with: %s currently\n", __func__, proj_type.c_str()));
@@ -2817,6 +2811,13 @@ int clip_n_mmproj_embd(const struct clip_ctx * ctx) {
 int clip_is_minicpmv(const struct clip_ctx * ctx) {
     if (ctx->has_minicpmv_projector) {
         return ctx->minicpmv_version;
+    }
+    return 0;
+}
+
+int clip_is_xgenmm(const struct clip_ctx * ctx) {
+    if (ctx->has_xgenmm_projector) {
+        return 1;
     }
     return 0;
 }

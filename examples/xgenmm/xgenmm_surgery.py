@@ -70,6 +70,8 @@ if __name__ == "__main__":
                                         tokenizer_path=cfg.lm_path,
                                         model_family=cfg.model_family,
                                         **additional_kwargs)
+    print(model)
+    exit(1)
     model.load_state_dict(ckpt, strict=True)
     end = time.time()
     print(f"🟢 time used: [{end-start:.3f} s] | Done with instaiating the model.")

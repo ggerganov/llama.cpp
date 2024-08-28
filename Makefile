@@ -20,6 +20,7 @@ BUILD_TARGETS = \
 	llama-infill \
 	llama-llava-cli \
 	llama-minicpmv-cli\
+	xgenmm-cli\
 	llama-lookahead \
 	llama-lookup \
 	llama-lookup-create \
@@ -1470,6 +1471,14 @@ llama-minicpmv-cli: examples/llava/minicpmv-cli.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
 	examples/llava/clip.h \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
+
+xgenmm-cli: examples/xgenmm/xgenmm-cli.cpp \
+	examples/xgenmm/xgenmm.cpp \
+	examples/xgenmm/xgenmm.h \
+	examples/xgenmm/clip.cpp \
+	examples/xgenmm/clip.h \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
 
