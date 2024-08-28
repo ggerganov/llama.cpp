@@ -645,9 +645,9 @@ extern "C" {
         bool                paused;                      // start in paused state
     };
 
-    struct ggml_compute_threadpool;     // forward declaration, see ggml.c
+    struct ggml_threadpool;     // forward declaration, see ggml.c
 
-    typedef struct  ggml_compute_threadpool * ggml_compute_threadpool_t;
+    typedef struct  ggml_threadpool * ggml_threadpool_t;
 
     // the compute plan that needs to be prepared for ggml_graph_compute()
     // since https://github.com/ggerganov/ggml/issues/287
@@ -656,7 +656,7 @@ extern "C" {
         uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
 
         int n_threads;
-        struct ggml_compute_threadpool * threadpool;
+        struct ggml_threadpool * threadpool;
 
         // abort ggml_graph_compute when true
         ggml_abort_callback abort_callback;
@@ -2039,18 +2039,18 @@ extern "C" {
     GGML_API struct ggml_threadpool_params   ggml_threadpool_params_default(int n_threads);
     GGML_API void                            ggml_threadpool_params_init(struct ggml_threadpool_params *p, int n_threads);
     GGML_API bool                            ggml_threadpool_params_match (const struct ggml_threadpool_params *p0, const struct ggml_threadpool_params *p1);
-    GGML_API struct ggml_compute_threadpool* ggml_create_threadpool       (struct ggml_threadpool_params  * params);
-    GGML_API void                            ggml_release_threadpool      (struct ggml_compute_threadpool * threadpool);
-    GGML_API int                             ggml_threadpool_get_n_threads(struct ggml_compute_threadpool * threadpool);
-    GGML_API void                            ggml_pause_threadpool        (struct ggml_compute_threadpool * threadpool);
-    GGML_API void                            ggml_resume_threadpool       (struct ggml_compute_threadpool * threadpool);
+    GGML_API struct ggml_threadpool*         ggml_threadpool_create       (struct ggml_threadpool_params  * params);
+    GGML_API void                            ggml_threadpool_release      (struct ggml_threadpool * threadpool);
+    GGML_API int                             ggml_threadpool_get_n_threads(struct ggml_threadpool * threadpool);
+    GGML_API void                            ggml_threadpool_pause        (struct ggml_threadpool * threadpool);
+    GGML_API void                            ggml_threadpool_resume       (struct ggml_threadpool * threadpool);
 
     // ggml_graph_plan() has to be called before ggml_graph_compute()
     // when plan.work_size > 0, caller must allocate memory for plan.work_data
     GGML_API struct ggml_cplan ggml_graph_plan(
                   const struct ggml_cgraph * cgraph,
                                        int   n_threads, /* = GGML_DEFAULT_N_THREADS */
-            struct ggml_compute_threadpool * threadpool /* = NULL */ );
+                    struct ggml_threadpool * threadpool /* = NULL */ );
     GGML_API enum ggml_status  ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
 
     // same as ggml_graph_compute() but the work data is allocated as a part of the context

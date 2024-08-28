@@ -232,9 +232,9 @@ int main(int argc, char ** argv) {
 
     set_process_priority(params.cpuparams.priority);
 
-    struct ggml_compute_threadpool * threadpool_batch = NULL;
+    struct ggml_threadpool * threadpool_batch = NULL;
     if (!ggml_threadpool_params_match(&tpp, &tpp_batch)) {
-        threadpool_batch = ggml_create_threadpool(&tpp_batch);
+        threadpool_batch = ggml_threadpool_create(&tpp_batch);
         if (!threadpool_batch) {
             LOG_TEE("%s: batch threadpool create failed : n_threads %d\n", __func__, tpp_batch.n_threads);
             exit(1);
@@ -244,7 +244,7 @@ int main(int argc, char ** argv) {
         tpp.paused = true;
     }
 
-    struct ggml_compute_threadpool * threadpool = ggml_create_threadpool(&tpp);
+    struct ggml_threadpool * threadpool = ggml_threadpool_create(&tpp);
     if (!threadpool) {
         LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
         exit(1);
@@ -1023,8 +1023,8 @@ int main(int argc, char ** argv) {
     llama_sampling_free(ctx_sampling);
     llama_backend_free();
 
-    ggml_release_threadpool(threadpool);
-    ggml_release_threadpool(threadpool_batch);
+    ggml_threadpool_release(threadpool);
+    ggml_threadpool_release(threadpool_batch);
 
 #ifndef LOG_DISABLE_LOGS
     LOG_TEE("Log end\n");

@@ -3091,8 +3091,8 @@ struct llama_context {
 #endif
     ggml_backend_t backend_cpu = nullptr;
 
-    ggml_compute_threadpool_t threadpool       = nullptr;
-    ggml_compute_threadpool_t threadpool_batch = nullptr;
+    ggml_threadpool_t threadpool       = nullptr;
+    ggml_threadpool_t threadpool_batch = nullptr;
 
     bool has_evaluated_once = false;
 
@@ -15500,7 +15500,7 @@ static void llama_graph_compute(
                   llama_context & lctx,
                     ggml_cgraph * gf,
                             int   n_threads,
-        ggml_compute_threadpool * threadpool) {
+        ggml_threadpool * threadpool) {
 #ifdef GGML_USE_METAL
     if (ggml_backend_is_metal(lctx.backend_metal)) {
         ggml_backend_metal_set_n_cb(lctx.backend_metal, n_threads);
@@ -15630,7 +15630,7 @@ static int llama_decode_internal(
         }
 
         int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
-        ggml_compute_threadpool_t threadpool = n_tokens == 1 ? lctx.threadpool : lctx.threadpool_batch;
+        ggml_threadpool_t threadpool = n_tokens == 1 ? lctx.threadpool : lctx.threadpool_batch;
 
         GGML_ASSERT(n_threads > 0);
 
@@ -15871,7 +15871,7 @@ static int llama_encode_internal(
     lctx.n_outputs = n_tokens;
 
     int n_threads = n_tokens == 1 ? cparams.n_threads : cparams.n_threads_batch;
-    ggml_compute_threadpool_t threadpool = n_tokens == 1 ? lctx.threadpool : lctx.threadpool_batch;
+    ggml_threadpool_t threadpool = n_tokens == 1 ? lctx.threadpool : lctx.threadpool_batch;
 
     GGML_ASSERT(n_threads > 0);
 
@@ -17462,8 +17462,8 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
 
 void llama_attach_threadpool(
              struct llama_context * ctx,
-        ggml_compute_threadpool_t   threadpool,
-        ggml_compute_threadpool_t   threadpool_batch) {
+        ggml_threadpool_t   threadpool,
+        ggml_threadpool_t   threadpool_batch) {
     ctx->threadpool       = threadpool;
     ctx->threadpool_batch = threadpool_batch ? threadpool_batch : threadpool;
 }

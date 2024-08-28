@@ -723,7 +723,7 @@ ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type(void) {
 
 struct ggml_backend_cpu_context {
     int                       n_threads;
-    ggml_compute_threadpool_t threadpool;
+    ggml_threadpool_t threadpool;
 
     void * work_data;
     size_t work_size;
@@ -906,14 +906,14 @@ void ggml_backend_cpu_set_n_threads(ggml_backend_t backend_cpu, int n_threads) {
     ctx->n_threads = n_threads;
 }
 
-void ggml_backend_cpu_set_threadpool(ggml_backend_t backend_cpu, ggml_compute_threadpool_t threadpool) {
+void ggml_backend_cpu_set_threadpool(ggml_backend_t backend_cpu, ggml_threadpool_t threadpool) {
     GGML_ASSERT(ggml_backend_is_cpu(backend_cpu));
 
     struct ggml_backend_cpu_context * ctx = (struct ggml_backend_cpu_context *)backend_cpu->context;
 
     if (ctx->threadpool && ctx->threadpool != threadpool) {
        // already had a different threadpool, pause/suspend it before switching
-       ggml_pause_threadpool(ctx->threadpool);
+       ggml_threadpool_pause(ctx->threadpool);
     }
     ctx->threadpool = threadpool;
 }

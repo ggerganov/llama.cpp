@@ -431,8 +431,8 @@ extern "C" {
     // Optional: an auto threadpool gets created in ggml if not passed explicitly
     LLAMA_API void llama_attach_threadpool(
                struct   llama_context * ctx,
-            ggml_compute_threadpool_t   threadpool,
-            ggml_compute_threadpool_t   threadpool_batch);
+            ggml_threadpool_t   threadpool,
+            ggml_threadpool_t   threadpool_batch);
     LLAMA_API void llama_detach_threadpool(struct llama_context * ctx);
 
     // Call once at the end of the program - currently only used for MPI
