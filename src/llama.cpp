@@ -15497,9 +15497,9 @@ static void llama_output_reorder(struct llama_context * ctx) {
 }
 
 static void llama_graph_compute(
-                  llama_context & lctx,
-                    ggml_cgraph * gf,
-                            int   n_threads,
+          llama_context & lctx,
+            ggml_cgraph * gf,
+                    int   n_threads,
         ggml_threadpool * threadpool) {
 #ifdef GGML_USE_METAL
     if (ggml_backend_is_metal(lctx.backend_metal)) {

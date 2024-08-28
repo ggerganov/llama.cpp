@@ -722,11 +722,11 @@ ggml_backend_buffer_type_t ggml_backend_cpu_hbm_buffer_type(void) {
 #endif
 
 struct ggml_backend_cpu_context {
-    int                       n_threads;
-    ggml_threadpool_t threadpool;
+    int                 n_threads;
+    ggml_threadpool_t   threadpool;
 
-    void * work_data;
-    size_t work_size;
+    void *              work_data;
+    size_t              work_size;
 
     ggml_abort_callback abort_callback;
     void *              abort_callback_data;
