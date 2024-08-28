@@ -31,6 +31,7 @@ ENV GGML_CUDA=1
 # Enable cURL
 ENV LLAMA_CURL=1
 
+# Only build targets used by tools.sh
 RUN make -j$(nproc) llama-quantize llama-cli llama-server
 
 ENTRYPOINT ["/app/.devops/tools.sh"]

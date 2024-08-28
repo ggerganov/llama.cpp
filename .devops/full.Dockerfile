@@ -17,7 +17,7 @@ COPY . .
 
 ENV LLAMA_CURL=1
 
-
+# Only build targets used by tools.sh
 RUN make -j$(nproc) llama-quantize llama-cli llama-server
 
 ENV LC_ALL=C.utf8
