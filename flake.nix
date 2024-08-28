@@ -162,7 +162,7 @@
                 cuda = config.legacyPackages.llamaPackagesCuda.llama-cpp;
 
                 mpi-cpu = config.packages.default.override { useMpi = true; };
-                mpi-cuda = config.packages.default.override { useMpi = true; };
+                mpi-cuda = config.packages.cuda.override { useMpi = true; };
               }
               // lib.optionalAttrs (system == "x86_64-linux") {
                 rocm = config.legacyPackages.llamaPackagesRocm.llama-cpp;
