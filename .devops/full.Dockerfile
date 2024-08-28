@@ -18,7 +18,7 @@ COPY . .
 ENV LLAMA_CURL=1
 
 
-RUN make -j$(nproc)
+RUN make -j$(nproc) llama-quantize llama-cli llama-server
 
 ENV LC_ALL=C.utf8
 
