@@ -846,7 +846,7 @@ public:
             return cache[url] = json::parse(response.str());
         };
 #else
-        fetch_json = [](const std::string &) {
+        _fetch_json = [&](const std::string &) {
             _errors.push_back("Fetching external refs not supported, please recompile with CURL support.");
             return json::object();
         };
