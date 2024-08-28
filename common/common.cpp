@@ -285,7 +285,7 @@ bool set_process_priority(enum ggml_sched_priority prio) {
         return true;
     }
 
-    int32_t p = 0;
+    int p = 0;
     switch (prio) {
         case GGML_SCHED_PRIO_NORMAL:   p =  0;  break;
         case GGML_SCHED_PRIO_MEDIUM:   p = -5;  break;
@@ -294,7 +294,7 @@ bool set_process_priority(enum ggml_sched_priority prio) {
     }
 
     if (!setpriority(PRIO_PROCESS, 0, p)) {
-        fprintf(stderr, "warn: failed to set process priority class %d : %s (%d)\n", prio, strerror(errno), errno);
+        fprintf(stderr, "warn: failed to set process priority %d : %s (%d)\n", prio, strerror(errno), errno);
         return false;
     }
     return true;
