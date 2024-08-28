@@ -19,6 +19,10 @@
 #include "dpct/helper.hpp"
 #include "ggml-sycl.h"
 #include "presets.hpp"
+#if GGML_SYCL_DNNL
+#include "dnnl.hpp"
+#include "dnnl_sycl.hpp"
+#endif
 
 #define GGML_COMMON_DECL_SYCL
 #define GGML_COMMON_IMPL_SYCL
@@ -47,10 +51,6 @@ static int g_ggml_sycl_debug = 0;
     }                                                                    \
   }()
 
-// #define DEBUG_SYCL_MALLOC
-
-static int g_work_group_size = 0;
-// typedef sycl::half ggml_fp16_t;
 
 #define __SYCL_ARCH__ DPCT_COMPATIBILITY_TEMP
 #define VER_4VEC 610 // todo for hardward optimize.
@@ -104,7 +104,7 @@ static void crash() {
     const char* msg) {
   fprintf(stderr, "SYCL error: %s: %s\n", stmt, msg);
   fprintf(stderr, "  in function %s at %s:%d\n", func, file, line);
-  GGML_ASSERT(!"SYCL error");
+  GGML_ABORT("SYCL error");
 }
 
 #define SYCL_CHECK(err)                     \
@@ -134,6 +134,7 @@ typedef sycl::float2 dfloat2;
 #endif // GGML_SYCL_F16
 
 #define MMVQ_MAX_BATCH_SIZE  8
+#define MMVQ_MIN_BATCH_SIZE  4
 
 static const int8_t kvalues_iq4nl[16]={-127, -104, -83, -65, -49, -35, -22, -10, 1, 13, 25, 38, 53, 69, 89, 113};
 
@@ -193,6 +194,8 @@ struct ggml_sycl_device_info {
     sycl_device_info devices[GGML_SYCL_MAX_DEVICES] = {};
 
     std::array<float, GGML_SYCL_MAX_DEVICES> default_tensor_split = {};
+
+    int max_work_group_sizes[GGML_SYCL_MAX_DEVICES] = {0};
 };
 
 const ggml_sycl_device_info & ggml_sycl_info();
@@ -269,7 +272,7 @@ struct ggml_backend_sycl_context {
 
     queue_ptr stream(int device, int stream) {
         if (qptrs[device][stream] == nullptr) {
-            qptrs[device][stream] = &(dpct::get_current_device().default_queue());
+            qptrs[device][stream] = &(dpct::get_device(device).default_queue());
         }
         return qptrs[device][stream];
     }
@@ -277,6 +280,52 @@ struct ggml_backend_sycl_context {
     queue_ptr stream() {
         return stream(device, 0);
     }
+
+#if GGML_SYCL_DNNL
+    dnnl::engine make_engine(sycl::queue* q) {
+        // Get the device associated with the queue
+        sycl::device dev = q->get_device();
+        // Get the context associated with the queue
+        sycl::context ctx = q->get_context();
+        const dnnl::engine eng = dnnl::sycl_interop::make_engine(dev, ctx);
+        return eng;
+    }
+
+    std::unordered_map<sycl::queue*, dnnl::stream> stream_map;
+    std::unordered_map<sycl::queue*, dnnl::engine> engine_map;
+    dnnl::stream stream_dnnl(int device, int _stream) {
+        auto q = stream(device, _stream);
+        return stream_dnnl(q);
+    }
+    dnnl::engine engine_dnnl(sycl::queue* qptr) {
+        auto it = engine_map.find(qptr);
+        if (it == engine_map.end()) {
+            auto eng = make_engine(qptr);
+            engine_map[qptr] = eng;
+            return eng;
+        }
+        else
+        {
+            return it->second;
+        }
+    }
+    dnnl::stream stream_dnnl(sycl::queue* qptr) {
+        auto it = stream_map.find(qptr);
+        if (it == stream_map.end()) {
+            auto eng = engine_dnnl(qptr);
+            auto stream = dnnl::sycl_interop::make_stream(eng, *qptr);
+            stream_map[qptr] = stream;
+            return stream;
+        }
+        else
+        {
+            return it->second;
+        }
+    }
+    dnnl::stream stream_dnnl() {
+        return stream_dnnl(device, 0);
+    }
+#endif
 
     // pool
     std::unique_ptr<ggml_sycl_pool> pools[GGML_SYCL_MAX_DEVICES];
@@ -295,5 +344,65 @@ struct ggml_backend_sycl_context {
     }
 };
 
+// common device functions
+
+static __dpct_inline__ float warp_reduce_sum(float x,
+    const sycl::nd_item<3>& item_ct1) {
+#pragma unroll
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
+        /*
+        DPCT1096:98: The right-most dimension of the work-group used in the SYCL
+        kernel that calls this function may be less than "32". The function
+        "dpct::permute_sub_group_by_xor" may return an unexpected result on the
+        CPU device. Modify the size of the work-group to ensure that the value
+        of the right-most dimension is a multiple of "32".
+        */
+        x += dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), x, mask);
+    }
+    return x;
+}
+
+static __dpct_inline__ sycl::float2
+warp_reduce_sum(sycl::float2 a, const sycl::nd_item<3>& item_ct1) {
+#pragma unroll
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
+        a.x() += dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), a.x(),
+            mask);
+        a.y() += dpct::permute_sub_group_by_xor(item_ct1.get_sub_group(), a.y(),
+            mask);
+    }
+    return a;
+}
+
+static __dpct_inline__ float warp_reduce_max(float x,
+    const sycl::nd_item<3>& item_ct1) {
+#pragma unroll
+    for (int mask = WARP_SIZE / 2; mask > 0; mask >>= 1) {
+        /*
+        DPCT1096:97: The right-most dimension of the work-group used in the SYCL
+        kernel that calls this function may be less than "32". The function
+        "dpct::permute_sub_group_by_xor" may return an unexpected result on the
+        CPU device. Modify the size of the work-group to ensure that the value
+        of the right-most dimension is a multiple of "32".
+        */
+        x = sycl::fmax(x, dpct::permute_sub_group_by_xor(
+            item_ct1.get_sub_group(), x, mask));
+    }
+    return x;
+}
+
+// Helper for vec loading aligned data
+template <typename Tp, int n>
+inline sycl::vec<Tp, n> vec_aligned_load(const Tp* aligned_ptr) {
+    return *reinterpret_cast<const sycl::vec<Tp, n>*>(aligned_ptr);
+}
+
+// Helper for accessing pointers with no warnings
+template <typename Tp, int dim>
+static __dpct_inline__ Tp* get_pointer(sycl::local_accessor<Tp, dim> acc) {
+    return acc.template get_multi_ptr<sycl::access::decorated::no>().get();
+}
+
+int64_t downsample_sycl_global_range(int64_t accumulate_block_num, int64_t block_size);
 
 #endif // GGML_SYCL_COMMON_HPP

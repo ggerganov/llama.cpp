@@ -29,21 +29,23 @@ extern "C" {
     enum ggml_backend_buffer_usage {
         GGML_BACKEND_BUFFER_USAGE_ANY = 0,
         GGML_BACKEND_BUFFER_USAGE_WEIGHTS = 1,
+        GGML_BACKEND_BUFFER_USAGE_COMPUTE = 2,
     };
 
-    GGML_API           const char *               ggml_backend_buffer_name          (ggml_backend_buffer_t buffer);
-    GGML_API           void                       ggml_backend_buffer_free          (ggml_backend_buffer_t buffer);
-    GGML_API           void *                     ggml_backend_buffer_get_base      (ggml_backend_buffer_t buffer);
-    GGML_API           size_t                     ggml_backend_buffer_get_size      (ggml_backend_buffer_t buffer);
-    GGML_API GGML_CALL void                       ggml_backend_buffer_init_tensor   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
-    GGML_API           size_t                     ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer);
-    GGML_API           size_t                     ggml_backend_buffer_get_max_size  (ggml_backend_buffer_t buffer);
-    GGML_API           size_t                     ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
-    GGML_API           void                       ggml_backend_buffer_clear         (ggml_backend_buffer_t buffer, uint8_t value);
-    GGML_API           bool                       ggml_backend_buffer_is_host       (ggml_backend_buffer_t buffer);
-    GGML_API           void                       ggml_backend_buffer_set_usage     (ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
-    GGML_API           ggml_backend_buffer_type_t ggml_backend_buffer_get_type      (ggml_backend_buffer_t buffer);
-    GGML_API           void                       ggml_backend_buffer_reset         (ggml_backend_buffer_t buffer);
+    GGML_API           const char *                   ggml_backend_buffer_name          (ggml_backend_buffer_t buffer);
+    GGML_API           void                           ggml_backend_buffer_free          (ggml_backend_buffer_t buffer);
+    GGML_API           void *                         ggml_backend_buffer_get_base      (ggml_backend_buffer_t buffer);
+    GGML_API           size_t                         ggml_backend_buffer_get_size      (ggml_backend_buffer_t buffer);
+    GGML_API GGML_CALL void                           ggml_backend_buffer_init_tensor   (ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+    GGML_API           size_t                         ggml_backend_buffer_get_alignment (ggml_backend_buffer_t buffer);
+    GGML_API           size_t                         ggml_backend_buffer_get_max_size  (ggml_backend_buffer_t buffer);
+    GGML_API           size_t                         ggml_backend_buffer_get_alloc_size(ggml_backend_buffer_t buffer, struct ggml_tensor * tensor);
+    GGML_API           void                           ggml_backend_buffer_clear         (ggml_backend_buffer_t buffer, uint8_t value);
+    GGML_API           bool                           ggml_backend_buffer_is_host       (ggml_backend_buffer_t buffer);
+    GGML_API           void                           ggml_backend_buffer_set_usage     (ggml_backend_buffer_t buffer, enum ggml_backend_buffer_usage usage);
+    GGML_API           enum ggml_backend_buffer_usage ggml_backend_buffer_get_usage     (ggml_backend_buffer_t buffer);
+    GGML_API           ggml_backend_buffer_type_t     ggml_backend_buffer_get_type      (ggml_backend_buffer_t buffer);
+    GGML_API           void                           ggml_backend_buffer_reset         (ggml_backend_buffer_t buffer);
 
     //
     // Backend
@@ -61,6 +63,7 @@ extern "C" {
     GGML_API void ggml_backend_tensor_set_async(ggml_backend_t backend,       struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
     GGML_API void ggml_backend_tensor_get_async(ggml_backend_t backend, const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
 
+    // "offset" refers to the offset of the tensor data for setting/getting data
     GGML_API GGML_CALL void ggml_backend_tensor_set(      struct ggml_tensor * tensor, const void * data, size_t offset, size_t size);
     GGML_API GGML_CALL void ggml_backend_tensor_get(const struct ggml_tensor * tensor,       void * data, size_t offset, size_t size);
 

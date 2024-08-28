@@ -33,6 +33,15 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
+struct llama_lora_adapter_info {
+    std::string path;
+    float scale;
+};
+
+struct llama_lora_adapter_container : llama_lora_adapter_info {
+    struct llama_lora_adapter * adapter;
+};
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
 extern char const * LLAMA_COMMIT;
@@ -99,6 +108,7 @@ struct gpt_params {
     enum llama_split_mode        split_mode        = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
+    enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
     // // sampling parameters
     struct llama_sampling_params sparams;
@@ -107,6 +117,7 @@ struct gpt_params {
     std::string model_draft          = ""; // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = ""; // model url to download
+    std::string hf_token             = ""; // HF token
     std::string hf_repo              = ""; // HF repo
     std::string hf_file              = ""; // HF file
     std::string prompt               = "";
@@ -124,9 +135,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
 
-    // TODO: avoid tuple, use struct
-    std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
-    std::string lora_base  = "";                              // base model path for the lora adapter
+    bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_lora_adapter_apply)
+    std::vector<llama_lora_adapter_info> lora_adapters; // lora adapter path with user defined scale
 
     std::vector<llama_control_vector_load_info> control_vectors; // control vector with user defined scale
 
@@ -200,6 +210,7 @@ struct gpt_params {
     std::string public_path   = "";
     std::string chat_template = "";
     std::string system_prompt = "";
+    bool enable_chat_template = true;
 
     std::vector<std::string> api_keys;
 
@@ -252,8 +263,11 @@ struct gpt_params {
     std::string cvector_negative_file = "examples/cvector-generator/negative.txt";
 
     bool spm_infill = false; // suffix/prefix/middle pattern for infill
+
+    std::string lora_outfile = "ggml-lora-merged-f16.gguf";
 };
 
+void gpt_params_parse_from_env(gpt_params & params);
 void gpt_params_handle_model_default(gpt_params & params);
 
 bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
@@ -271,6 +285,8 @@ std::vector<std::string> string_split(std::string input, char separator);
 
 std::string string_strip(const std::string & str);
 std::string string_get_sortable_timestamp();
+
+void string_replace_all(std::string & s, const std::string & search, const std::string & replace);
 
 template<class T>
 static std::vector<T> string_split(const std::string & str, char delim) {
@@ -303,14 +319,22 @@ std::string fs_get_cache_file(const std::string & filename);
 // Model utils
 //
 
-// TODO: avoid tuplue, use struct
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
+struct llama_init_result {
+    struct llama_model   * model   = nullptr;
+    struct llama_context * context = nullptr;
+    std::vector<llama_lora_adapter_container> lora_adapters;
+};
+
+struct llama_init_result    llama_init_from_gpt_params(gpt_params & params);
 
 struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
 struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
 
-struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const struct llama_model_params & params);
-struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+
+// clear LoRA adapters from context, then apply new list of adapters
+void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lora_adapter_container> & lora_adapters);
 
 // Batch utils
 
@@ -348,25 +372,13 @@ std::string llama_token_to_piece(
                        llama_token   token,
                        bool          special = true);
 
-// TODO: these should be moved in llama.h C-style API under single `llama_detokenize` function
-//       that takes into account the tokenizer type and decides how to handle the leading space
-//
 // detokenizes a vector of tokens into a string
 // should work similar to Python's `tokenizer.decode`
-// removes the leading space from the first non-BOS token
-std::string llama_detokenize_spm(
+// optionally renders special/control tokens
+std::string llama_detokenize(
                          llama_context * ctx,
-        const std::vector<llama_token> & tokens);
-
-// detokenizes a vector of tokens into a string
-// should work similar to Python's `tokenizer.decode`
-std::string llama_detokenize_bpe(
-                         llama_context * ctx,
-        const std::vector<llama_token> & tokens);
-
-// Uses the value from the model metadata if possible, otherwise
-// defaults to true when model type is SPM, otherwise false.
-bool llama_should_add_bos_token(const llama_model * model);
+        const std::vector<llama_token> & tokens,
+                                  bool   special = true);
 
 //
 // Chat template utils
@@ -458,4 +470,3 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
 void yaml_dump_non_result_info(
     FILE * stream, const gpt_params & params, const llama_context * lctx,
     const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc);
-

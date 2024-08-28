@@ -62,7 +62,7 @@ static void ggml_print_tensor(uint8_t * data, ggml_type type, const int64_t * ne
                     } else if (type == GGML_TYPE_I8) {
                         v = (float) *(int8_t *) &data[i];
                     } else {
-                        GGML_ASSERT(false);
+                        GGML_ABORT("fatal error");
                     }
                     printf("%12.4f", v);
                     sum += v;
@@ -99,7 +99,7 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 
     char src1_str[128] = {0};
     if (src1) {
-        sprintf(src1_str, "%s{%s}", src1->name, ggml_ne_string(src1).c_str());
+        snprintf(src1_str, sizeof(src1_str), "%s{%s}", src1->name, ggml_ne_string(src1).c_str());
     }
 
     printf("%s: %24s = (%s) %10s(%s{%s}, %s}) = {%s}\n", __func__,
@@ -127,7 +127,7 @@ static bool ggml_debug(struct ggml_tensor * t, bool ask, void * user_data) {
 }
 
 static bool run(llama_context * ctx, const gpt_params & params) {
-    const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+    const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
 
     std::vector<llama_token> tokens = ::llama_tokenize(ctx, params.prompt, add_bos);
 
@@ -163,9 +163,10 @@ int main(int argc, char ** argv) {
     params.warmup = false;
 
     // init
-    llama_model * model;
-    llama_context * ctx;
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
     if (model == nullptr || ctx == nullptr) {
         fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;

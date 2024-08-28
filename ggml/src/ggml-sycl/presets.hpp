@@ -16,7 +16,7 @@
 #define GGML_SYCL_MAX_STREAMS       8
 #define GGML_SYCL_MAX_BUFFERS       256
 
-#define WARP_SIZE 32
+#define WARP_SIZE GGML_SYCL_WARP_SIZE
 #define MATRIX_ROW_PADDING 512 // last row of quant. matrices is a multiple of this to avoid out-of-bounds memory accesses
 
 #define SYCL_GELU_BLOCK_SIZE 256
@@ -41,6 +41,8 @@
 #define SYCL_ACC_BLOCK_SIZE 256
 #define SYCL_IM2COL_BLOCK_SIZE 256
 #define SYCL_POOL2D_BLOCK_SIZE 256
+#define SYCL_CONV_TRANPOSE_1D_BLOCK_SIZE 256
+#define SYCL_TIMESTEP_EMBEDDING_BLOCK_SIZE 256
 
 // dmmv = dequantize_mul_mat_vec
 #ifndef GGML_SYCL_DMMV_X
@@ -62,4 +64,5 @@ static_assert(K_QUANTS_PER_ITERATION == 1 || K_QUANTS_PER_ITERATION == 2, "K_QUA
 
 #define MUL_MAT_SRC1_COL_STRIDE 128
 
+#define QK_WARP_SIZE 32
 #endif // GGML_SYCL_PRESETS_HPP

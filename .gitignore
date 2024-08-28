@@ -47,8 +47,10 @@ build*
 !build-info.cpp.in
 !build-info.sh
 !build.zig
+!docs/build.md
 /libllama.so
 /llama-*
+/vulkan-shaders-gen
 android-ndk-*
 arm_neon.h
 cmake-build-*
@@ -59,6 +61,11 @@ llama-batched-swift
 /rpc-server
 out/
 tmp/
+
+# Deprecated
+
+/main
+/server
 
 # CI
 
@@ -72,7 +79,6 @@ models-mnt
 !models/ggml-vocab-*.gguf*
 
 # Zig
-
 zig-out/
 zig-cache/
 
@@ -98,12 +104,13 @@ examples/server/*.mjs.hpp
 
 # Python
 
-__pycache__
-.venv
-/Pipfile
-dist
-poetry.lock
+/.venv
+__pycache__/
+*/poetry.lock
 poetry.toml
+
+# Nix
+/result
 
 # Test binaries
 /tests/test-backend-ops
@@ -122,3 +129,6 @@ poetry.toml
 
 # Scripts
 !/scripts/install-oneapi.bat
+
+# Test models for lora adapters
+/lora-tests

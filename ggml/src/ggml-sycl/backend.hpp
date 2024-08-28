@@ -13,11 +13,18 @@
 #ifndef GGML_SYCL_BACKEND_HPP
 #define GGML_SYCL_BACKEND_HPP
 
+#include "concat.hpp"
 #include "common.hpp"
+#include "conv.hpp"
 #include "convert.hpp"
 #include "dequantize.hpp"
 #include "dmmv.hpp"
 #include "mmq.hpp"
 #include "mmvq.hpp"
+#include "rope.hpp"
+#include "norm.hpp"
+#include "softmax.hpp"
+#include "tsembd.hpp"
+#include "im2col.hpp"
 
 #endif // GGML_SYCL_BACKEND_HPP
