@@ -629,7 +629,7 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
 
     if (ctx->has_xgenmm_projector) {
         //TODO: implement something for example, image masks
-        printf("use has_xgenmm_projector\n");
+        printf("    use has_xgenmm_projector\n");
     }
     const int patch_size           = hparams.patch_size;
     const int num_patches          = ((image_size_width / patch_size) * (image_size_height / patch_size));
@@ -667,18 +667,14 @@ static ggml_cgraph * clip_image_build_graph(clip_ctx * ctx, const clip_image_f32
     struct ggml_tensor * embeddings = inp;
     struct ggml_tensor * pos_embed = nullptr;
     if (ctx->has_llava_projector) {
-        printf("    use has_llava_projector\n");
         // concat class_embeddings and patch_embeddings
         if (ctx->has_class_embedding) {
             embeddings = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, hidden_size, num_positions, batch_size);
-            ggml_set_name(embeddings, "embeddings");
             ggml_set_input(embeddings);
             embeddings = ggml_acc(ctx0, embeddings, model.class_embedding,
                     embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], 0);
-            printf("    first acc worked\n");
             embeddings = ggml_acc(ctx0, embeddings, inp,
                     embeddings->nb[1], embeddings->nb[2], embeddings->nb[3], model.class_embedding->nb[1]);
-            printf("    second acc worked\n");
         }
     }
     // printf("    after ctx->has_llava_projector\n");
@@ -2499,7 +2495,6 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
 
     // build the inference graph
     ggml_cgraph * gf = clip_image_build_graph(ctx, imgs, ctx->load_image_size, true);
-    printf("    build graph done\n");
     ggml_gallocr_alloc_graph(ctx->compute_alloc, gf);
     // set inputs
     const auto & model = ctx->vision_model;
@@ -2546,7 +2541,6 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         ggml_backend_tensor_set(inp_raw, data, 0, ggml_nbytes(inp_raw));
         free(data);
     }
-    printf("    before ctx->has_minicpmv_projector\n");
     if (ctx->has_minicpmv_projector) {
         {
             // inspired from siglip:
@@ -2617,6 +2611,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
             ggml_backend_tensor_set(positions, positions_data, 0, ggml_nbytes(positions));
             free(positions_data);
         }
+        // FIXEME: this is a hack;
         // {
         //            std::cout << __LINE__ << std::endl;
         //     struct ggml_tensor * patches = ggml_graph_get_tensor(gf, "patches");
@@ -2639,9 +2634,7 @@ bool clip_image_batch_encode(clip_ctx * ctx, const int n_threads, const clip_ima
         ggml_backend_metal_set_n_cb(ctx->backend, n_threads);
     }
 #endif
-    printf("    before ggml_backend_graph_compute\n");
     ggml_backend_graph_compute(ctx->backend, gf);
-    printf("    after ggml_backend_graph_compute\n");
     // the last node is the embedding tensor
     struct ggml_tensor * embeddings = gf->nodes[gf->n_nodes - 1];
     // copy the embeddings to the location passed by the user

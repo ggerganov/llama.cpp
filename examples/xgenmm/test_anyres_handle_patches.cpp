@@ -13,6 +13,7 @@
 #ifndef _MSC_VER
 #include <cxxabi.h>
 #endif
+#include <chrono>
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -620,6 +621,11 @@ int main(){
     for (size_t i = 0; i < img_res_v.size; i++)
     {
         printf("encode patch %d\n", i);
+        const int nx = img_res_v.data[i].nx;
+        const int ny = img_res_v.data[i].ny;
+        const int vec_len = img_res_v.data[i].buf.size();
+        printf("    i:%d | nx:%d | ny:%d | vec len:%d\n", i, nx, ny, vec_len); // 384^2 * 3(channel) = 442368
+        auto start = std::chrono::high_resolution_clock::now();
         image_embd_v[i] =
             (float*)malloc(clip_embd_nbytes(ctx_clip));  // 576 patches * 4096 embeddings * 4 bytes = 9437184
         const bool encoded = clip_image_encode(
@@ -630,7 +636,13 @@ int main(){
             LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int)i + 1, (int)img_res_v.size);
             return false;
         }
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration = end - start;
+        std::cout << "  Wall time: " << duration.count() << " seconds" << std::endl;
     }
+
+    // handle patches goes here
+    
 
     return 0;
 }
