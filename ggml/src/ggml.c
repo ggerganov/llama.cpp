@@ -144,10 +144,6 @@ static int sched_yield (void) {
 }
 #else
 
-#ifndef __USE_GNU
-#define __USE_GNU
-#endif
-
 #include <pthread.h>
 #include <stdatomic.h>
 #include <sched.h>
