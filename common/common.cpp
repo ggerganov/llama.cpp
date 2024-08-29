@@ -327,6 +327,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
 void gpt_params_parse_from_env(gpt_params & params) {
     // we only care about server-related params for now
     get_env("LLAMA_ARG_MODEL",            params.model);
+    get_env("LLAMA_ARG_MODEL_URL",        params.model_url);
+    get_env("LLAMA_ARG_MODEL_ALIAS",      params.model_alias);
+    get_env("LLAMA_ARG_HF_REPO",          params.hf_repo);
+    get_env("LLAMA_ARG_HF_FILE",          params.hf_file);
     get_env("LLAMA_ARG_THREADS",          params.n_threads);
     get_env("LLAMA_ARG_CTX_SIZE",         params.n_ctx);
     get_env("LLAMA_ARG_N_PARALLEL",       params.n_parallel);
@@ -341,6 +345,9 @@ void gpt_params_parse_from_env(gpt_params & params) {
     get_env("LLAMA_ARG_EMBEDDINGS",       params.embedding);
     get_env("LLAMA_ARG_FLASH_ATTN",       params.flash_attn);
     get_env("LLAMA_ARG_DEFRAG_THOLD",     params.defrag_thold);
+    get_env("LLAMA_ARG_CONT_BATCHING",    params.cont_batching);
+    get_env("LLAMA_ARG_HOST",             params.hostname);
+    get_env("LLAMA_ARG_PORT",             params.port);
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
@@ -914,7 +921,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         }
         return true;
     }
-    if (arg == "-ngld" || arg == "--gpu-layers-draft" || arg == "--gpu-layers-draft") {
+    if (arg == "-ngld" || arg == "--gpu-layers-draft" || arg == "--n-gpu-layers-draft") {
         CHECK_ARG
         params.n_gpu_layers_draft = std::stoi(argv[i]);
         if (!llama_supports_gpu_offload()) {
@@ -1876,13 +1883,19 @@ std::string string_get_sortable_timestamp() {
 
 void string_replace_all(std::string & s, const std::string & search, const std::string & replace) {
     if (search.empty()) {
-        return; // Avoid infinite loop if 'search' is an empty string
+        return;
     }
+    std::string builder;
+    builder.reserve(s.length());
     size_t pos = 0;
-    while ((pos = s.find(search, pos)) != std::string::npos) {
-        s.replace(pos, search.length(), replace);
-        pos += replace.length();
+    size_t last_pos = 0;
+    while ((pos = s.find(search, last_pos)) != std::string::npos) {
+        builder.append(s, last_pos, pos - last_pos);
+        builder.append(replace);
+        last_pos = pos + search.length();
     }
+    builder.append(s, last_pos, std::string::npos);
+    s = std::move(builder);
 }
 
 void string_process_escapes(std::string & input) {

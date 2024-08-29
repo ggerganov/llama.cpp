@@ -217,13 +217,19 @@ static std::string gguf_data_to_str(enum gguf_type type, const void * data, int 
 
 static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
     if (search.empty()) {
-        return; // Avoid infinite loop if 'search' is an empty string
+        return;
     }
+    std::string builder;
+    builder.reserve(s.length());
     size_t pos = 0;
-    while ((pos = s.find(search, pos)) != std::string::npos) {
-        s.replace(pos, search.length(), replace);
-        pos += replace.length();
+    size_t last_pos = 0;
+    while ((pos = s.find(search, last_pos)) != std::string::npos) {
+        builder.append(s, last_pos, pos - last_pos);
+        builder.append(replace);
+        last_pos = pos + search.length();
     }
+    builder.append(s, last_pos, std::string::npos);
+    s = std::move(builder);
 }
 
 static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
@@ -1619,7 +1625,7 @@ static void normalize_image_u8_to_f32(const clip_image_u8* src, clip_image_f32* 
     }
 }
 
-inline float clip(float x, float lower, float upper) {
+inline int clip(int x, int lower, int upper) {
     return std::max(lower, std::min(x, upper));
 }
 
@@ -1821,10 +1827,6 @@ static std::pair<int, int> uhd_get_refine_size(std::pair<int, int> original_size
   //  std::pair<int, int> refine_size = std::make_tuple(best_grid_width * grid_x, best_grid_height * grid_y); (old line)
     std::pair<int, int> refine_size = std::make_pair(best_grid_width * grid_x, best_grid_height * grid_y); // (new line)
     return refine_size;
-}
-
-inline int clip(int x, int lower, int upper) {
-    return std::max(lower, std::min(x, upper));
 }
 
 static std::pair<int, int> uhd_best_grid(const int max_slice_nums, const int multiple, const float log_ratio) {
