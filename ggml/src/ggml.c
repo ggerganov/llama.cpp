@@ -18837,7 +18837,7 @@ static void ggml_thread_cpumask_next(const bool * global_mask, bool * local_mask
     }
 }
 
-void ggml_threadpool_release(struct ggml_threadpool* threadpool) {
+void ggml_threadpool_free(struct ggml_threadpool* threadpool) {
     if (!threadpool) return;
 
 #ifndef GGML_USE_OPENMP
@@ -19254,7 +19254,7 @@ bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, cons
     return memcmp(p0->cpumask, p1->cpumask, GGML_MAX_N_THREADS) == 0;
 }
 
-static struct ggml_threadpool * ggml_threadpool_create_impl(
+static struct ggml_threadpool * ggml_threadpool_new_impl(
     struct ggml_threadpool_params * tpp,
                struct ggml_cgraph * cgraph,
                 struct ggml_cplan * cplan) {
@@ -19320,8 +19320,8 @@ static struct ggml_threadpool * ggml_threadpool_create_impl(
     return threadpool;
 }
 
-struct ggml_threadpool * ggml_threadpool_create(struct ggml_threadpool_params * tpp) {
-    return ggml_threadpool_create_impl(tpp, NULL, NULL);
+struct ggml_threadpool * ggml_threadpool_new(struct ggml_threadpool_params * tpp) {
+    return ggml_threadpool_new_impl(tpp, NULL, NULL);
 }
 
 enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
@@ -19339,7 +19339,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         disposable_threadpool = true;
 
         struct ggml_threadpool_params ttp = ggml_threadpool_params_default(n_threads);
-        threadpool = ggml_threadpool_create_impl(&ttp, cgraph, cplan);
+        threadpool = ggml_threadpool_new_impl(&ttp, cgraph, cplan);
     } else {
         // Reset some of the parameters that need resetting
         // No worker threads should be accessing the parameters below at this stage
@@ -19384,7 +19384,7 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     enum ggml_status ret = threadpool->ec;
 
     if (disposable_threadpool) {
-        ggml_threadpool_release(threadpool);
+        ggml_threadpool_free(threadpool);
     }
 
     return ret;

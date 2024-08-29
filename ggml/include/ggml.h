@@ -2037,10 +2037,10 @@ extern "C" {
     GGML_API size_t ggml_graph_overhead_custom(size_t size, bool grads);
 
     GGML_API struct ggml_threadpool_params   ggml_threadpool_params_default(int n_threads);
-    GGML_API void                            ggml_threadpool_params_init(struct ggml_threadpool_params *p, int n_threads);
+    GGML_API void                            ggml_threadpool_params_init  (struct ggml_threadpool_params *p, int n_threads);
     GGML_API bool                            ggml_threadpool_params_match (const struct ggml_threadpool_params *p0, const struct ggml_threadpool_params *p1);
-    GGML_API struct ggml_threadpool*         ggml_threadpool_create       (struct ggml_threadpool_params  * params);
-    GGML_API void                            ggml_threadpool_release      (struct ggml_threadpool * threadpool);
+    GGML_API struct ggml_threadpool*         ggml_threadpool_new          (struct ggml_threadpool_params  * params);
+    GGML_API void                            ggml_threadpool_free         (struct ggml_threadpool * threadpool);
     GGML_API int                             ggml_threadpool_get_n_threads(struct ggml_threadpool * threadpool);
     GGML_API void                            ggml_threadpool_pause        (struct ggml_threadpool * threadpool);
     GGML_API void                            ggml_threadpool_resume       (struct ggml_threadpool * threadpool);

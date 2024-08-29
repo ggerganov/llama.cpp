@@ -1531,7 +1531,7 @@ int main(int argc, char ** argv) {
         tpp.poll       = t.poll;
         tpp.prio       = params.prio;
 
-        struct ggml_threadpool* threadpool = ggml_threadpool_create(&tpp);
+        struct ggml_threadpool* threadpool = ggml_threadpool_new(&tpp);
         if (!threadpool) {
             LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
             exit(1);
@@ -1578,7 +1578,7 @@ int main(int argc, char ** argv) {
 
         llama_free(ctx);
 
-        ggml_threadpool_release(threadpool);
+        ggml_threadpool_free(threadpool);
     }
 
     llama_free_model(lmodel);
