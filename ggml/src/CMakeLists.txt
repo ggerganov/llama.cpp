@@ -612,6 +612,10 @@ if (GGML_VULKAN)
             add_compile_definitions(GGML_VULKAN_MEMORY_DEBUG)
         endif()
 
+        if (GGML_VULKAN_SHADER_DEBUG_INFO)
+            add_compile_definitions(GGML_VULKAN_SHADER_DEBUG_INFO)
+        endif()
+
         if (GGML_VULKAN_PERF)
             add_compile_definitions(GGML_VULKAN_PERF)
         endif()
@@ -646,7 +650,7 @@ if (GGML_VULKAN)
                 --target-cpp ${_ggml_vk_source}
                 --no-clean
 
-            DEPENDS ${_ggml_vk_shader_deps}
+            DEPENDS vulkan-shaders-gen ${_ggml_vk_shader_deps}
             COMMENT "Generate vulkan shaders"
         )
 
