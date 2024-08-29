@@ -650,7 +650,7 @@ if (GGML_VULKAN)
                 --target-cpp ${_ggml_vk_source}
                 --no-clean
 
-            DEPENDS vulkan-shaders-gen ${_ggml_vk_shader_deps}
+            DEPENDS ${_ggml_vk_shader_deps}
             COMMENT "Generate vulkan shaders"
         )
 
