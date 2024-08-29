@@ -19389,7 +19389,7 @@ size_t llama_state_seq_load_file(struct llama_context * ctx, const char * filepa
     }
 }
 
-void llama_set_n_threads(struct llama_context * ctx, int n_threads, int n_threads_batch) {
+void llama_set_n_threads(struct llama_context * ctx, int32_t n_threads, int32_t n_threads_batch) {
     ctx->cparams.n_threads       = n_threads;
     ctx->cparams.n_threads_batch = n_threads_batch;
 }
