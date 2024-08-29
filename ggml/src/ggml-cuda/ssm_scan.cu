@@ -10,7 +10,7 @@ static __global__ void ssm_scan_f32(
     const int src3_nb1,
     const int src4_nb1, const int src4_nb2,
     const int src5_nb1, const int src5_nb2,
-    float * dst,
+    float * __restrict__ dst,
     const int nc, const int nr, const int n_t, const int n_s) {
 
 //    const int row = blockIdx.x*blockDim.y + threadIdx.y;

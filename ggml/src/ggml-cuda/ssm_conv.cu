@@ -5,7 +5,7 @@ static __global__ void ssm_conv_f32(
     const float * __restrict__ src0, const float * __restrict__ src1,
     const int src0_nb0, const int src0_nb1, const int src0_nb2,
     const int src1_nb1,
-    float * dst,
+    float * __restrict__ dst,
     const int dst_nb0, const int dst_nb1, const int dst_nb2,
     const int nc, const int ncs, const int nr, const int n_t, const int n_s) {
 
