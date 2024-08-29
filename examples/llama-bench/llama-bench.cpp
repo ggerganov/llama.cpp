@@ -307,7 +307,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -ts, --tensor-split <ts0/ts1/..>    (default: 0)\n");
     printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
     printf("  --prio <0|1|2|3>                    (default: %d)\n", cmd_params_defaults.prio);
-    printf("  --delay <0...N>                     (default: %d)\n", cmd_params_defaults.delay);
+    printf("  --delay <0...N> (seconds)           (default: %d)\n", cmd_params_defaults.delay);
     printf("  -o, --output <csv|json|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
     printf("  -oe, --output-err <csv|json|md|sql> (default: %s)\n", output_format_str(cmd_params_defaults.output_format_stderr));
     printf("  -v, --verbose                       (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
