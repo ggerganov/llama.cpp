@@ -19394,11 +19394,11 @@ void llama_set_n_threads(struct llama_context * ctx, int32_t n_threads, int32_t 
     ctx->cparams.n_threads_batch = n_threads_batch;
 }
 
-int llama_n_threads(struct llama_context * ctx) {
+int32_t llama_n_threads(struct llama_context * ctx) {
     return ctx->cparams.n_threads;
 }
 
-int llama_n_threads_batch(struct llama_context * ctx) {
+int32_t llama_n_threads_batch(struct llama_context * ctx) {
     return ctx->cparams.n_threads_batch;
 }
 

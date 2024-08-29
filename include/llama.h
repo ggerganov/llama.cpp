@@ -847,10 +847,10 @@ extern "C" {
     LLAMA_API void llama_set_n_threads(struct llama_context * ctx, int32_t n_threads, int32_t n_threads_batch);
 
     // Get the number of threads used for generation of a single token.
-    LLAMA_API int llama_n_threads(struct llama_context * ctx);
+    LLAMA_API int32_t llama_n_threads(struct llama_context * ctx);
 
     // Get the number of threads used for prompt and batch processing (multiple token).
-    LLAMA_API int llama_n_threads_batch(struct llama_context * ctx);
+    LLAMA_API int32_t llama_n_threads_batch(struct llama_context * ctx);
 
     // Set whether the model is in embeddings mode or not
     // If true, embeddings will be returned but logits will not
