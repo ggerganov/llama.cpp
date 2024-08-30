@@ -35,6 +35,10 @@
                       package
                       scripts
                     ];
+                    # Extra packages that *may* be used by some scripts
+                    packages = [
+                        pkgs.python3Packages.tiktoken
+                    ];
                     shellHook = ''
                       echo "Entering ${name} devShell"
                       addToSearchPath "LD_LIBRARY_PATH" "${lib.getLib stdenv.cc.cc}/lib"
