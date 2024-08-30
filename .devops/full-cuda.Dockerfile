@@ -1,18 +1,16 @@
 ARG UBUNTU_VERSION=22.04
-
 # This needs to generally match the container host's environment.
-ARG CUDA_VERSION=11.7.1
-
+ARG CUDA_VERSION=12.6.0
 # Target the CUDA build image
 ARG BASE_CUDA_DEV_CONTAINER=nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
 
 FROM ${BASE_CUDA_DEV_CONTAINER} AS build
 
-# Unless otherwise specified, we make a fat build.
-ARG CUDA_DOCKER_ARCH=all
+# CUDA architecture to build for (defaults to all supported archs)
+ARG CUDA_DOCKER_ARCH=default
 
 RUN apt-get update && \
-    apt-get install -y build-essential python3 python3-pip git libcurl4-openssl-dev libgomp1
+    apt-get install -y build-essential cmake python3 python3-pip git libcurl4-openssl-dev libgomp1
 
 COPY requirements.txt   requirements.txt
 COPY requirements       requirements
@@ -24,14 +22,16 @@ WORKDIR /app
 
 COPY . .
 
-# Set nvcc architecture
-ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
-# Enable CUDA
-ENV GGML_CUDA=1
-# Enable cURL
-ENV LLAMA_CURL=1
-
-# Only build targets used by tools.sh
-RUN make -j$(nproc) llama-quantize llama-cli llama-server
+# Use the default CUDA archs if not specified
+# Then, only build targets used by tools.sh
+RUN if [ "${CUDA_DOCKER_ARCH}" != "default" ]; then \
+        export CMAKE_ARGS="-DCMAKE_CUDA_ARCHITECTURES=${CUDA_DOCKER_ARCH}"; \
+    fi && \
+    cmake -B build -DGGML_CUDA=ON -DLLAMA_CURL=ON ${CMAKE_ARGS} -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined . && \
+    cmake --build build --config Release --target llama-quantize llama-cli llama-server -j$(nproc) && \
+    mv build/bin/* . && \
+    mv build/src/libllama.so . && \
+    mv build/ggml/src/libggml.so . && \
+    rm -rf build
 
 ENTRYPOINT ["/app/.devops/tools.sh"]
