@@ -3,14 +3,11 @@
   glibc,
   config,
   stdenv,
-  mkShell,
   runCommand,
   cmake,
-  gcc,
   ninja,
   pkg-config,
   git,
-  python3,
   mpi,
   blas,
   cudaPackages,
@@ -43,8 +40,7 @@
   effectiveStdenv ? if useCuda then cudaPackages.backendStdenv else stdenv,
   enableStatic ? effectiveStdenv.hostPlatform.isStatic,
   precompileMetalShaders ? false,
-  gguf-py,
-}@inputs:
+}:
 
 let
   inherit (lib)
@@ -52,7 +48,6 @@ let
     cmakeFeature
     optionals
     strings
-    versionOlder
     ;
 
   stdenv = throw "Use effectiveStdenv instead";
@@ -71,8 +66,6 @@ let
   descriptionSuffix = strings.optionalString (
     suffices != [ ]
   ) ", accelerated with ${strings.concatStringsSep ", " suffices}";
-
-  executableSuffix = effectiveStdenv.hostPlatform.extensions.executable;
 
   xcrunHost = runCommand "xcrunHost" { } ''
     mkdir -p $out/bin

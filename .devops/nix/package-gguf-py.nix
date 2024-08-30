@@ -8,7 +8,7 @@
   poetry-core,
   buildPythonPackage,
   pytestCheckHook,
-}@inputs:
+}:
 
 buildPythonPackage {
   pname = "gguf";
