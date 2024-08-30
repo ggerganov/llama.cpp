@@ -2361,10 +2361,22 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         curl_easy_setopt(curl.get(), CURLOPT_HEADERFUNCTION, static_cast<CURLOPT_HEADERFUNCTION_PTR>(header_callback));
         curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, &headers);
 
-        CURLcode res = curl_easy_perform(curl.get());
-        if (res != CURLE_OK) {
-            fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
-            return false;
+        int head_request_attempts = 3;
+        int remaining_request_attempts = 3;
+        int retry_delay = 2;
+        while (remaining_request_attempts > 0){
+            CURLcode res = curl_easy_perform(curl.get());
+            if (res != CURLE_OK) {
+                int exponential_backoff_delay = std::pow(retry_delay, (head_request_attempts - remaining_request_attempts)) * 1000;
+                fprintf(stderr, "%s: curl_easy_perform() failed: %s, retrying after %d miliseconds\n", __func__, curl_easy_strerror(res), exponential_backoff_delay);
+                remaining_request_attempts--;
+                std::this_thread::sleep_for(std::chrono::milliseconds(exponential_backoff_delay));
+            } else if (remaining_request_attempts <= 0) {
+                fprintf(stderr, "%s: curl_easy_perform() failed\n", __func__);
+                return false;
+            } else {
+                break;
+            }
         }
 
         long http_code = 0;
@@ -2438,12 +2450,24 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         };
 
         // start the download
-        fprintf(stderr, "%s: downloading from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__,
-                llama_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
-        auto res = curl_easy_perform(curl.get());
-        if (res != CURLE_OK) {
-            fprintf(stderr, "%s: curl_easy_perform() failed: %s\n", __func__, curl_easy_strerror(res));
-            return false;
+        int download_attempts = 3;
+        int remaining_attempts = 3;
+        int retry_delay = 2;
+        while (remaining_attempts > 0){
+            fprintf(stderr, "%s: trying to download model from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__, 
+            llama_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
+            auto res = curl_easy_perform(curl.get());
+            if (res != CURLE_OK) {
+                int exponential_backoff_delay = std::pow(retry_delay, (download_attempts - remaining_attempts)) * 1000;
+                fprintf(stderr, "\n%s: curl_easy_perform() failed: %s, retrying after %d miliseconnds\n", __func__, curl_easy_strerror(res), exponential_backoff_delay);
+                remaining_attempts--;
+                std::this_thread::sleep_for(std::chrono::milliseconds(exponential_backoff_delay));
+            } else if (remaining_attempts <= 0) {
+                fprintf(stderr, "%s: curl_easy_perform() failed\n", __func__);
+                return false;
+            } else {
+                break;
+            }
         }
 
         long http_code = 0;
