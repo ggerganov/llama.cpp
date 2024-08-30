@@ -428,6 +428,7 @@ void gpt_params_parse_from_env(gpt_params & params) {
     get_env("LLAMA_ARG_CONT_BATCHING",    params.cont_batching);
     get_env("LLAMA_ARG_HOST",             params.hostname);
     get_env("LLAMA_ARG_PORT",             params.port);
+    get_env("LLAMA_ARG_TOOL_CALLS",       params.enable_tool_calls);
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
@@ -1044,6 +1045,10 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--lora-init-without-apply") {
         params.lora_init_without_apply = true;
+        return true;
+    }
+    if (arg == "--tool-call" || arg == "--tool-calls") {
+        params.enable_tool_calls = true;
         return true;
     }
     if (arg == "--control-vector") {
@@ -2036,6 +2041,7 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "server",      "-sps,  --slot-prompt-similarity SIMILARITY",
                                                                         "how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity });
     options.push_back({ "server",      "       --lora-init-without-apply",     "load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_init_without_apply ? "enabled" : "disabled"});
+    options.push_back({ "server",      "       --tool-call(s)",         "enable OAI tool calls for chat completion endpoint (default: %s)", params.enable_tool_calls ? "enabled" : "disabled"});
 
 #ifndef LOG_DISABLE_LOGS
     options.push_back({ "logging" });

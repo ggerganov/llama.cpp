@@ -3071,6 +3071,7 @@ int main(int argc, char ** argv) {
 
         if (body.contains("tools") && ctx_server.tool_format != LLAMA_TOOL_FORMAT_NOT_SUPPORTED) {
             body["prompt"] = format_chat_with_tool(ctx_server.tool_format, body.at("messages"), body.at("tools"));
+            body.erase(body.find("tools"));
         }
 
         json data = oaicompat_completion_params_parse(ctx_server.model, body, params.chat_template);
@@ -3441,14 +3442,26 @@ int main(int argc, char ** argv) {
         }
 
         // decide if we can enable tool calls
-        ctx_server.tool_format = get_tool_format(ctx_server.ctx);
+        bool tool_call_support = false;
+        if (ctx_server.params.enable_tool_calls) {
+            ctx_server.tool_format = get_tool_format(ctx_server.ctx);
+            tool_call_support = ctx_server.tool_format != LLAMA_TOOL_FORMAT_NOT_SUPPORTED;
+            if (tool_call_support) {
+                LOG_WARNING("Tool call is EXPERIMENTAL and maybe unstable. Use with your own risk", {});
+            } else {
+                LOG_ERROR("Tool call is not supported for this model. Please remove --tool-call or use with a supported model", {});
+                clean_up();
+                t.join();
+                return 1;
+            }
+        }
 
         // print sample chat example to make it clear which template is used
         {
             LOG_INFO("chat template", {
                 {"chat_example",      llama_chat_format_example(ctx_server.model, params.chat_template)},
                 {"built_in",          params.chat_template.empty()},
-                {"tool_call_enabled", ctx_server.tool_format != LLAMA_TOOL_FORMAT_NOT_SUPPORTED },
+                {"tool_call_support", tool_call_support},
             });
         }
 
