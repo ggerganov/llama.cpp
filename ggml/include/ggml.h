@@ -1899,12 +1899,12 @@ extern "C" {
 
     GGML_API struct ggml_tensor * ggml_rwkv_wkv(
             struct ggml_context * ctx,
-            struct ggml_tensor * k,
-            struct ggml_tensor * v,
-            struct ggml_tensor * r,
-            struct ggml_tensor * tf,
-            struct ggml_tensor * td,
-            struct ggml_tensor * state);
+            struct ggml_tensor  * k,
+            struct ggml_tensor  * v,
+            struct ggml_tensor  * r,
+            struct ggml_tensor  * tf,
+            struct ggml_tensor  * td,
+            struct ggml_tensor  * state);
 
     // custom operators
 
