@@ -18058,7 +18058,7 @@ int32_t llama_model_meta_val_str(const struct llama_model * model, const char * 
         }
         return -1;
     }
-    return snprintf(buf, buf_size, "%s", it->second.c_str());
+    return buf != NULL ? snprintf(buf, buf_size, "%s", it->second.c_str()) : it->second.size();
 }
 
 int32_t llama_model_meta_count(const struct llama_model * model) {
@@ -19757,8 +19757,8 @@ static int32_t llama_chat_apply_template_internal(
     std::string & dest, bool add_ass) {
     // Taken from the research: https://github.com/ggerganov/llama.cpp/issues/5527
     std::stringstream ss;
-    auto tmpl_contains = [&tmpl](std::string haystack) -> bool {
-        return tmpl.find(haystack) != std::string::npos;
+    auto tmpl_contains = [&tmpl](std::string part) -> bool {
+        return tmpl.find(part) != std::string::npos;
     };
     if (tmpl == "chatml" || tmpl_contains("<|im_start|>")) {
         // chatml template
@@ -20026,13 +20026,15 @@ int32_t llama_chat_apply_template(
     if (tmpl == nullptr) {
         GGML_ASSERT(model != nullptr);
         // load template from model
-        std::vector<char> model_template(2048, 0); // longest known template is about 1200 bytes
         std::string template_key = "tokenizer.chat_template";
-        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        // call with NULL buffer to get the total size of the string
+        int32_t res = llama_model_meta_val_str(model, template_key.c_str(), NULL, 0);
         if (res < 0) {
             // worst case: there is no information about template, we will use chatml by default
             curr_tmpl = "chatml"; // see llama_chat_apply_template_internal
         } else {
+            std::vector<char> model_template(res, 0);
+            llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
             curr_tmpl = std::string(model_template.data(), model_template.size());
         }
     }

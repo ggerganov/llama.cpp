@@ -4,6 +4,7 @@
 #include "json-schema-to-grammar.h"
 #include "llama.h"
 #include "grammar-parser.h"
+#include "tool-call.hpp"
 
 #ifndef NDEBUG
 // crash the server in debug mode, otherwise send an http 500 error
@@ -157,6 +158,7 @@ struct server_slot {
     std::string generated_text;
     std::vector<llama_token> cache_tokens;
     std::vector<completion_token_output> generated_token_probs;
+    enum llama_response_state response_state = LLAMA_RESPONSE_STATE_UNKNOWN;
 
     bool infill         = false;
     bool embedding      = false;
@@ -207,6 +209,7 @@ struct server_slot {
         infill             = false;
         ga_i               = 0;
         n_past_se          = 0;
+        response_state     = LLAMA_RESPONSE_STATE_UNKNOWN;
 
         generated_token_probs.clear();
     }
@@ -625,6 +628,7 @@ struct server_context {
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
     std::vector<llama_lora_adapter_container> lora_adapters;
+    llama_tool_format tool_format = LLAMA_TOOL_FORMAT_NOT_SUPPORTED;
 
     gpt_params params;
 
@@ -1217,7 +1221,13 @@ struct server_context {
             break;
         }
 
-        if (!incomplete) {
+        if (slot.response_state == LLAMA_RESPONSE_STATE_UNKNOWN) {
+            slot.response_state = check_response_state(tool_format, slot.generated_text);
+        }
+
+        // if response is tool call, we cannot stream it
+        // instead, we wait for the full response, then extract JSON
+        if (!incomplete && slot.response_state == LLAMA_RESPONSE_STATE_TEXT) {
             size_t pos = std::min(slot.n_sent_text, slot.generated_text.size());
 
             const std::string str_test = slot.generated_text.substr(pos);
@@ -1247,9 +1257,7 @@ struct server_context {
             if (slot.params.stream) {
                 send_partial_response(slot, result);
             }
-        }
-
-        if (incomplete) {
+        } else {
             slot.has_next_token = true;
         }
 
@@ -1396,6 +1404,10 @@ struct server_context {
             {"multimodal", false}
         };
 
+        if (slot.response_state == LLAMA_RESPONSE_STATE_TOOL_CALL) {
+            res.data["tool_calls"] = parse_tool_response(tool_format, tkn.text_to_send);
+        }
+
         if (slot.sparams.n_probs > 0) {
             const std::vector<llama_token> to_send_toks = llama_tokenize(ctx, tkn.text_to_send, false);
             const size_t probs_pos      = std::min(slot.n_sent_token_probs,                       slot.generated_token_probs.size());
@@ -1443,6 +1455,10 @@ struct server_context {
             {"tokens_cached",       slot.n_past},
             {"timings",             slot.get_formated_timings()}
         };
+
+        if (slot.response_state == LLAMA_RESPONSE_STATE_TOOL_CALL) {
+            res.data["tool_calls"] = parse_tool_response(tool_format, slot.generated_text);
+        }
 
         if (slot.sparams.n_probs > 0) {
             std::vector<completion_token_output> probs;
@@ -2937,19 +2953,14 @@ int main(int argc, char ** argv) {
     };
 
     const auto handle_props = [&ctx_server](const httplib::Request &, httplib::Response & res) {
-        std::string template_key = "tokenizer.chat_template", curr_tmpl;
-        int32_t tlen = llama_model_meta_val_str(ctx_server.model, template_key.c_str(), nullptr, 0);
-        if (tlen > 0) {
-            std::vector<char> curr_tmpl_buf(tlen + 1, 0);
-            if (llama_model_meta_val_str(ctx_server.model, template_key.c_str(), curr_tmpl_buf.data(), curr_tmpl_buf.size()) == tlen) {
-                curr_tmpl = std::string(curr_tmpl_buf.data(), tlen);
-            }
-        }
+        std::string chat_tmpl = ctx_server.params.chat_template.empty()
+            ? llama_get_chat_template(ctx_server.model)
+            : ctx_server.params.chat_template;
         json data = {
             { "system_prompt",               ctx_server.system_prompt.c_str() },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel },
-            { "chat_template",               curr_tmpl.c_str() }
+            { "chat_template",               chat_tmpl },
         };
 
         res.set_content(data.dump(), MIMETYPE_JSON);
@@ -3056,7 +3067,13 @@ int main(int argc, char ** argv) {
             res_error(res, format_error_response("This server does not support chat completions. Start it without `--embeddings`", ERROR_TYPE_NOT_SUPPORTED));
             return;
         }
-        json data = oaicompat_completion_params_parse(ctx_server.model, json::parse(req.body), params.chat_template);
+        json body = json::parse(req.body);
+
+        if (body.contains("tools") && ctx_server.tool_format != LLAMA_TOOL_FORMAT_NOT_SUPPORTED) {
+            body["prompt"] = format_chat_with_tool(ctx_server.tool_format, body.at("messages"), body.at("tools"));
+        }
+
+        json data = oaicompat_completion_params_parse(ctx_server.model, body, params.chat_template);
 
         const int id_task = ctx_server.queue_tasks.get_new_id();
 
@@ -3423,11 +3440,15 @@ int main(int argc, char ** argv) {
             }
         }
 
+        // decide if we can enable tool calls
+        ctx_server.tool_format = get_tool_format(ctx_server.ctx);
+
         // print sample chat example to make it clear which template is used
         {
             LOG_INFO("chat template", {
-                {"chat_example", llama_chat_format_example(ctx_server.model, params.chat_template)},
-                {"built_in",     params.chat_template.empty()},
+                {"chat_example",      llama_chat_format_example(ctx_server.model, params.chat_template)},
+                {"built_in",          params.chat_template.empty()},
+                {"tool_call_enabled", ctx_server.tool_format != LLAMA_TOOL_FORMAT_NOT_SUPPORTED },
             });
         }
 

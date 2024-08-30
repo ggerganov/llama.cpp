@@ -2253,6 +2253,10 @@ bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_over
     return true;
 }
 
+bool string_contains(std::string haystack, std::string needle) {
+    return haystack.find(needle) != std::string::npos;
+}
+
 //
 // Filesystem utils
 //
@@ -3184,6 +3188,19 @@ std::string llama_chat_format_example(const struct llama_model * model,
         {"user",      "How are you?"},
     };
     return llama_chat_apply_template(model, tmpl, msgs, true);
+}
+
+std::string llama_get_chat_template(const struct llama_model * model) {
+    std::string template_key = "tokenizer.chat_template";
+    // call with NULL buffer to get the total size of the string
+    int32_t res = llama_model_meta_val_str(model, template_key.c_str(), NULL, 0);
+    if (res < 0) {
+        return "";
+    } else {
+        std::vector<char> model_template(res, 0);
+        llama_model_meta_val_str(model, template_key.c_str(), model_template.data(), model_template.size());
+        return std::string(model_template.data(), model_template.size());
+    }
 }
 
 //
