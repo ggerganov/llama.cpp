@@ -499,7 +499,15 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
         finish_reason = "length";
     }
 
-    std::time_t t = std::time(0);
+    auto wrap_choices = [&completion_id, &modelname](json choices) -> json {
+        return json{
+            {"choices", choices},
+            {"created", std::time(0)},
+            {"id",      completion_id},
+            {"model",   modelname},
+            {"object",  "chat.completion.chunk"}
+        };
+    };
 
     json choices;
     json delta = has_tool_calls
@@ -519,22 +527,14 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
                                     {"delta", json::object()}}});
         if (has_tool_calls) {
             // tool call must be send as two updates
-            json initial_ret = json{{"choices", json::array({json{
-                                    {"finish_reason", nullptr},
-                                    {"index", 0},
-                                    {"delta", delta}}})},
-                        {"created", t},
-                        {"id", completion_id},
-                        {"model", modelname},
-                        {"object", "chat.completion.chunk"}};
-
-            json second_ret = json{
-                        {"choices", choices},
-                        {"created", t},
-                        {"id", completion_id},
-                        {"model", modelname},
-                        {"object", "chat.completion.chunk"}};
-
+            json initial_ret = wrap_choices(json::array({
+                json{
+                    {"finish_reason", nullptr},
+                    {"index", 0},
+                    {"delta", delta},
+                }
+            }));
+            json second_ret = wrap_choices(choices);
             return std::vector<json>({initial_ret, second_ret});
         }
     } else {
@@ -545,26 +545,22 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
                                             {"delta", json{{"role", "assistant"}}}}});
             } else {
                 // We have to send this as two updates to conform to openai behavior
-                json initial_ret = json{{"choices", json::array({json{
-                                        {"finish_reason", nullptr},
-                                        {"index", 0},
-                                        {"delta", json{
-                                            {"role", "assistant"}
-                                        }}}})},
-                            {"created", t},
-                            {"id", completion_id},
-                            {"model", modelname},
-                            {"object", "chat.completion.chunk"}};
-
-                json second_ret = json{
-                            {"choices", json::array({json{{"finish_reason", nullptr},
-                                                            {"index", 0},
-                                                            {"delta", delta}}})},
-                            {"created", t},
-                            {"id", completion_id},
-                            {"model", modelname},
-                            {"object", "chat.completion.chunk"}};
-
+                json initial_ret = wrap_choices(json::array({
+                    json{
+                        {"finish_reason", nullptr},
+                        {"index", 0},
+                        {"delta", json{
+                            {"role", "assistant"},
+                        }},
+                    }
+                }));
+                json second_ret = wrap_choices(json::array({
+                    json{
+                        {"finish_reason", nullptr},
+                        {"index", 0},
+                        {"delta", delta},
+                    }
+                }));
                 return std::vector<json>({initial_ret, second_ret});
             }
         } else {
@@ -582,13 +578,7 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
         }
     }
 
-    json ret = json {
-        {"choices", choices},
-        {"created", t},
-        {"id",      completion_id},
-        {"model",   modelname},
-        {"object",  "chat.completion.chunk"}
-    };
+    json ret = wrap_choices(choices);
     if (!finish_reason.empty()) {
         int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
         int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);

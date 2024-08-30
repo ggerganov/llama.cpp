@@ -3069,9 +3069,14 @@ int main(int argc, char ** argv) {
         }
         json body = json::parse(req.body);
 
-        if (body.contains("tools") && ctx_server.tool_format != LLAMA_TOOL_FORMAT_NOT_SUPPORTED) {
-            body["prompt"] = format_chat_with_tool(ctx_server.tool_format, body.at("messages"), body.at("tools"));
-            body.erase(body.find("tools"));
+        if (body.contains("tools")) {
+            if (ctx_server.tool_format != LLAMA_TOOL_FORMAT_NOT_SUPPORTED) {
+                body["prompt"] = format_chat_with_tool(ctx_server.tool_format, body.at("messages"), body.at("tools"));
+                body.erase(body.find("tools"));
+            } else {
+                res_error(res, format_error_response("This server does not support tool calls. Start it with `--tool-calls`", ERROR_TYPE_NOT_SUPPORTED));
+                return;
+            }
         }
 
         json data = oaicompat_completion_params_parse(ctx_server.model, body, params.chat_template);
