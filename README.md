@@ -126,6 +126,7 @@ Typically finetunes of the base models below are supported as well.
 
 - Python: [abetlen/llama-cpp-python](https://github.com/abetlen/llama-cpp-python)
 - Go: [go-skynet/go-llama.cpp](https://github.com/go-skynet/go-llama.cpp)
+- Bun (experimental): [mattzcarey/llama.js](https://github.com/mattzcarey/llama.js) 
 - Node.js: [withcatai/node-llama-cpp](https://github.com/withcatai/node-llama-cpp)
 - JS/TS (llama.cpp server client): [lgrammel/modelfusion](https://modelfusion.dev/integration/model-provider/llamacpp)
 - JavaScript/Wasm (works in browser): [tangledgroup/llama-cpp-wasm](https://github.com/tangledgroup/llama-cpp-wasm)
