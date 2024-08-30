@@ -78,6 +78,41 @@
 using json = nlohmann::ordered_json;
 
 //
+// Environment variable utils
+//
+
+template<typename T>
+static typename std::enable_if<std::is_same<T, std::string>::value, void>::type
+get_env(std::string name, T & target) {
+    char * value = std::getenv(name.c_str());
+    target = value ? std::string(value) : target;
+}
+
+template<typename T>
+static typename std::enable_if<!std::is_same<T, bool>::value && std::is_integral<T>::value, void>::type
+get_env(std::string name, T & target) {
+    char * value = std::getenv(name.c_str());
+    target = value ? std::stoi(value) : target;
+}
+
+template<typename T>
+static typename std::enable_if<std::is_floating_point<T>::value, void>::type
+get_env(std::string name, T & target) {
+    char * value = std::getenv(name.c_str());
+    target = value ? std::stof(value) : target;
+}
+
+template<typename T>
+static typename std::enable_if<std::is_same<T, bool>::value, void>::type
+get_env(std::string name, T & target) {
+    char * value = std::getenv(name.c_str());
+    if (value) {
+        std::string val(value);
+        target = val == "1" || val == "true";
+    }
+}
+
+//
 // CPU utils
 //
 
@@ -220,12 +255,6 @@ int32_t cpu_get_num_math() {
 // CLI argument parsing
 //
 
-void gpt_params_handle_hf_token(gpt_params & params) {
-    if (params.hf_token.empty() && std::getenv("HF_TOKEN")) {
-        params.hf_token = std::getenv("HF_TOKEN");
-    }
-}
-
 void gpt_params_handle_model_default(gpt_params & params) {
     if (!params.hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
@@ -273,7 +302,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
 
     gpt_params_handle_model_default(params);
 
-    gpt_params_handle_hf_token(params);
+    if (params.hf_token.empty()) {
+        get_env("HF_TOKEN", params.hf_token);
+    }
 
     if (params.escape) {
         string_process_escapes(params.prompt);
@@ -291,6 +322,32 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
     }
 
     return true;
+}
+
+void gpt_params_parse_from_env(gpt_params & params) {
+    // we only care about server-related params for now
+    get_env("LLAMA_ARG_MODEL",            params.model);
+    get_env("LLAMA_ARG_MODEL_URL",        params.model_url);
+    get_env("LLAMA_ARG_MODEL_ALIAS",      params.model_alias);
+    get_env("LLAMA_ARG_HF_REPO",          params.hf_repo);
+    get_env("LLAMA_ARG_HF_FILE",          params.hf_file);
+    get_env("LLAMA_ARG_THREADS",          params.n_threads);
+    get_env("LLAMA_ARG_CTX_SIZE",         params.n_ctx);
+    get_env("LLAMA_ARG_N_PARALLEL",       params.n_parallel);
+    get_env("LLAMA_ARG_BATCH",            params.n_batch);
+    get_env("LLAMA_ARG_UBATCH",           params.n_ubatch);
+    get_env("LLAMA_ARG_N_GPU_LAYERS",     params.n_gpu_layers);
+    get_env("LLAMA_ARG_THREADS_HTTP",     params.n_threads_http);
+    get_env("LLAMA_ARG_CHAT_TEMPLATE",    params.chat_template);
+    get_env("LLAMA_ARG_N_PREDICT",        params.n_predict);
+    get_env("LLAMA_ARG_ENDPOINT_METRICS", params.endpoint_metrics);
+    get_env("LLAMA_ARG_ENDPOINT_SLOTS",   params.endpoint_slots);
+    get_env("LLAMA_ARG_EMBEDDINGS",       params.embedding);
+    get_env("LLAMA_ARG_FLASH_ATTN",       params.flash_attn);
+    get_env("LLAMA_ARG_DEFRAG_THOLD",     params.defrag_thold);
+    get_env("LLAMA_ARG_CONT_BATCHING",    params.cont_batching);
+    get_env("LLAMA_ARG_HOST",             params.hostname);
+    get_env("LLAMA_ARG_PORT",             params.port);
 }
 
 bool gpt_params_parse(int argc, char ** argv, gpt_params & params) {
@@ -851,7 +908,7 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         }
         return true;
     }
-    if (arg == "-ngld" || arg == "--gpu-layers-draft" || arg == "--gpu-layers-draft") {
+    if (arg == "-ngld" || arg == "--gpu-layers-draft" || arg == "--n-gpu-layers-draft") {
         CHECK_ARG
         params.n_gpu_layers_draft = std::stoi(argv[i]);
         if (!llama_supports_gpu_offload()) {
@@ -1811,13 +1868,19 @@ std::string string_get_sortable_timestamp() {
 
 void string_replace_all(std::string & s, const std::string & search, const std::string & replace) {
     if (search.empty()) {
-        return; // Avoid infinite loop if 'search' is an empty string
+        return;
     }
+    std::string builder;
+    builder.reserve(s.length());
     size_t pos = 0;
-    while ((pos = s.find(search, pos)) != std::string::npos) {
-        s.replace(pos, search.length(), replace);
-        pos += replace.length();
+    size_t last_pos = 0;
+    while ((pos = s.find(search, last_pos)) != std::string::npos) {
+        builder.append(s, last_pos, pos - last_pos);
+        builder.append(replace);
+        last_pos = pos + search.length();
     }
+    builder.append(s, last_pos, std::string::npos);
+    s = std::move(builder);
 }
 
 void string_process_escapes(std::string & input) {

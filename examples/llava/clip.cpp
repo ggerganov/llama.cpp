@@ -20,6 +20,10 @@
 #include "ggml-cann.h"
 #endif
 
+#ifdef GGML_USE_VULKAN
+#include "ggml-vulkan.h"
+#endif
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -212,13 +216,19 @@ static std::string gguf_data_to_str(enum gguf_type type, const void * data, int 
 
 static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
     if (search.empty()) {
-        return; // Avoid infinite loop if 'search' is an empty string
+        return;
     }
+    std::string builder;
+    builder.reserve(s.length());
     size_t pos = 0;
-    while ((pos = s.find(search, pos)) != std::string::npos) {
-        s.replace(pos, search.length(), replace);
-        pos += replace.length();
+    size_t last_pos = 0;
+    while ((pos = s.find(search, last_pos)) != std::string::npos) {
+        builder.append(s, last_pos, pos - last_pos);
+        builder.append(replace);
+        last_pos = pos + search.length();
     }
+    builder.append(s, last_pos, std::string::npos);
+    s = std::move(builder);
 }
 
 static std::string gguf_kv_to_str(const struct gguf_context * ctx_gguf, int i) {
@@ -1108,7 +1118,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
         }
     }
 
-    clip_ctx * new_clip = new clip_ctx;
+    clip_ctx * new_clip = new clip_ctx{};
 
     // update projector type
     {
@@ -1142,6 +1152,10 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
     LOG_TEE("%s: CLIP using CANN backend\n", __func__);
 #endif
 
+#ifdef GGML_USE_VULKAN
+    new_clip->backend = ggml_backend_vk_init(0);
+    LOG_TEE("%s: CLIP using Vulkan backend\n", __func__);
+#endif
 
     if (!new_clip->backend) {
         new_clip->backend = ggml_backend_cpu_init();
