@@ -271,7 +271,7 @@ struct tokenized_prompt {
     size_t max_seq_len;
 
     tokenized_prompt(llama_context * ctx, std::string pos, std::string neg) {
-        const bool add_bos = llama_should_add_bos_token(llama_get_model(ctx));
+        const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
         tokens_pos = ::llama_tokenize(ctx, pos, add_bos, true);
         tokens_neg = ::llama_tokenize(ctx, neg, add_bos, true);
         max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
@@ -486,8 +486,8 @@ int main(int argc, char ** argv) {
     if (use_pca) {
         // run PCA
         PCA::pca_params pca_params;
-        pca_params.n_threads = params.n_threads;
-        pca_params.n_batch = params.n_pca_batch;
+        pca_params.n_threads    = params.cpuparams.n_threads;
+        pca_params.n_batch      = params.n_pca_batch;
         pca_params.n_iterations = params.n_pca_iterations;
         PCA::run_pca(pca_params, ctx_train.v_diff, ctx_train.v_final);
     } else {

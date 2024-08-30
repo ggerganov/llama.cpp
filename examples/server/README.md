@@ -247,6 +247,51 @@ logging:
          --log-append             Don't truncate the old log file.
 ```
 
+Available environment variables (if specified, these variables will override parameters specified in arguments):
+
+- `LLAMA_CACHE`: cache directory, used by `--hf-repo`
+- `HF_TOKEN`: Hugging Face access token, used when accessing a gated model with `--hf-repo`
+- `LLAMA_ARG_MODEL`: equivalent to `-m`
+- `LLAMA_ARG_MODEL_URL`: equivalent to `-mu`
+- `LLAMA_ARG_MODEL_ALIAS`: equivalent to `-a`
+- `LLAMA_ARG_HF_REPO`: equivalent to `--hf-repo`
+- `LLAMA_ARG_HF_FILE`: equivalent to `--hf-file`
+- `LLAMA_ARG_THREADS`: equivalent to `-t`
+- `LLAMA_ARG_CTX_SIZE`: equivalent to `-c`
+- `LLAMA_ARG_N_PARALLEL`: equivalent to `-np`
+- `LLAMA_ARG_BATCH`: equivalent to `-b`
+- `LLAMA_ARG_UBATCH`: equivalent to `-ub`
+- `LLAMA_ARG_N_GPU_LAYERS`: equivalent to `-ngl`
+- `LLAMA_ARG_THREADS_HTTP`: equivalent to `--threads-http`
+- `LLAMA_ARG_CHAT_TEMPLATE`: equivalent to `--chat-template`
+- `LLAMA_ARG_N_PREDICT`: equivalent to `-n`
+- `LLAMA_ARG_ENDPOINT_METRICS`: if set to `1`, it will enable metrics endpoint (equivalent to `--metrics`)
+- `LLAMA_ARG_ENDPOINT_SLOTS`: if set to `0`, it will **disable** slots endpoint (equivalent to `--no-slots`). This feature is enabled by default.
+- `LLAMA_ARG_EMBEDDINGS`: if set to `1`, it will enable embeddings endpoint (equivalent to `--embeddings`)
+- `LLAMA_ARG_FLASH_ATTN`: if set to `1`, it will enable flash attention (equivalent to `-fa`)
+- `LLAMA_ARG_CONT_BATCHING`: if set to `0`, it will **disable** continuous batching (equivalent to `--no-cont-batching`). This feature is enabled by default.
+- `LLAMA_ARG_DEFRAG_THOLD`: equivalent to `-dt`
+- `LLAMA_ARG_HOST`: equivalent to `--host`
+- `LLAMA_ARG_PORT`: equivalent to `--port`
+
+Example usage of docker compose with environment variables:
+
+```yml
+services:
+  llamacpp-server:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    ports:
+      - 8080:8080
+    volumes:
+      - ./models:/models
+    environment:
+      # alternatively, you can use "LLAMA_ARG_MODEL_URL" to download the model
+      LLAMA_ARG_MODEL: /models/my_model.gguf
+      LLAMA_ARG_CTX_SIZE: 4096
+      LLAMA_ARG_N_PARALLEL: 2
+      LLAMA_ARG_ENDPOINT_METRICS: 1  # to disable, either remove or set to 0
+      LLAMA_ARG_PORT: 8080
+```
 
 ## Build
 
@@ -368,15 +413,16 @@ node index.js
 
 ## API Endpoints
 
-### GET `/health`: Returns the current state of the server
+### GET `/health`: Returns heath check result
 
-  - 503 -> `{"status": "loading model"}` if the model is still being loaded.
-  - 500 -> `{"status": "error"}` if the model failed to load.
-  - 200 -> `{"status": "ok", "slots_idle": 1, "slots_processing": 2 }` if the model is successfully loaded and the server is ready for further requests mentioned below.
-  - 200 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if no slots are currently available.
-  - 503 -> `{"status": "no slot available", "slots_idle": 0, "slots_processing": 32}` if the query parameter `fail_on_no_slot` is provided and no slots are currently available.
+**Response format**
 
-  If the query parameter `include_slots` is passed, `slots` field will contain internal slots data except if `--slots-endpoint-disable` is set.
+- HTTP status code 503
+  - Body: `{"error": {"code": 503, "message": "Loading model", "type": "unavailable_error"}}`
+  - Explanation: the model is still being loaded.
+- HTTP status code 200
+  - Body: `{"status": "ok" }`
+  - Explanation: the model is successfully loaded and the server is ready.
 
 ### POST `/completion`: Given a `prompt`, it returns the predicted completion.
 
@@ -639,9 +685,15 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
     }'
     ```
 
-### GET `/slots`: Returns the current slots processing state. Can be disabled with `--slots-endpoint-disable`.
+### GET `/slots`: Returns the current slots processing state
+
+This endpoint can be disabled with `--no-slots`
+
+If query param `?fail_on_no_slot=1` is set, this endpoint will respond with status code 503 if there is no available slots.
 
 **Response format**
+
+Example:
 
 ```json
 [
@@ -702,7 +754,13 @@ Given a ChatML-formatted json description in `messages`, it returns the predicte
 ]
 ```
 
-### GET `/metrics`: Prometheus compatible metrics exporter endpoint if `--metrics` is enabled:
+Possible values for `slot[i].state` are:
+- `0`: SLOT_STATE_IDLE
+- `1`: SLOT_STATE_PROCESSING
+
+### GET `/metrics`: Prometheus compatible metrics exporter
+
+This endpoint is only accessible if `--metrics` is set.
 
 Available metrics:
 - `llamacpp:prompt_tokens_total`: Number of prompt tokens processed.
@@ -766,6 +824,10 @@ Available metrics:
 ```
 
 ### GET `/lora-adapters`: Get list of all LoRA adapters
+
+This endpoint returns the loaded LoRA adapters. You can add adapters using `--lora` when starting the server, for example: `--lora my_adapter_1.gguf --lora my_adapter_2.gguf ...`
+
+By default, all adapters will be loaded with scale set to 1. To initialize all adapters scale to 0, add `--lora-init-without-apply`
 
 If an adapter is disabled, the scale will be set to 0.
 
