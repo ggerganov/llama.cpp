@@ -2365,7 +2365,7 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         while (remaining_request_attempts > 0){
             CURLcode res = curl_easy_perform(curl.get());
             if (res != CURLE_OK) {
-                int exponential_backoff_delay = std::pow(retry_delay, (head_request_attempts - remaining_request_attempts)) * 1000;
+                int exponential_backoff_delay = std::pow(CURL_RETRY_DELAY_SECONDS, (CURL_MAX_RETRY - remaining_request_attempts)) * 1000;
                 fprintf(stderr, "%s: curl_easy_perform() failed: %s, retrying after %d miliseconds\n", __func__, curl_easy_strerror(res), exponential_backoff_delay);
                 remaining_request_attempts--;
                 std::this_thread::sleep_for(std::chrono::milliseconds(exponential_backoff_delay));
