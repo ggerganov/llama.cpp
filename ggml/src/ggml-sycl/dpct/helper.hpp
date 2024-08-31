@@ -910,15 +910,17 @@ namespace dpct
             auto platform_list = sycl::platform::get_platforms();
 
             for (const auto& platform : platform_list) {
-                auto devices = platform.get_devices();
-                auto gpu_dev = std::find_if(devices.begin(), devices.end(), [](const sycl::device& d) {
-                    return d.is_gpu();
-                });
+                if (!env || !std::strstr(env, "cpu")) {
+                    auto devices = platform.get_devices();
+                    auto gpu_dev = std::find_if(devices.begin(), devices.end(), [](const sycl::device& d) {
+                        return d.is_gpu();
+                    });
 
-                if (gpu_dev == devices.end()) {
-                    // cout << "platform [" << platform_name
-                    //      << "] does not contain GPU devices, skipping\n";
-                    continue;
+                    if (gpu_dev == devices.end()) {
+                        // cout << "platform [" << platform_name
+                        //      << "] does not contain GPU devices, skipping\n";
+                        continue;
+                    }
                 }
 
                 auto platform_name = platform.get_info<sycl::info::platform::name>();
