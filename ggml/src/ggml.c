@@ -147,6 +147,9 @@ static int sched_yield (void) {
 #include <pthread.h>
 #include <stdatomic.h>
 #include <sched.h>
+#if defined(__FreeBSD__)
+#include <pthread_np.h>
+#endif
 
 typedef void * thread_ret_t;
 
