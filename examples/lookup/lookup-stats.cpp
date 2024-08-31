@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <set>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -80,22 +81,42 @@ int main(int argc, char ** argv){
 
         while ((int) pseudo_output.size() < n_ctx) {
             // Simulate drafting and decoding from draft:
-            std::vector<llama_token> draft;
-            draft.push_back(pseudo_output.back());
+            std::vector<llama_draft_t> drafts;
+            llama_draft_t draft0;
+            draft0.push_back(pseudo_output.back());
+            drafts.push_back(draft0);
 
             {
                 const int64_t t_start_draft_us = ggml_time_us();
-                llama_ngram_cache_draft(pseudo_output, draft, n_draft, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
+                llama_ngram_cache_draft(
+                    pseudo_output, drafts, n_draft, LLAMA_NGRAM_MIN, LLAMA_NGRAM_MAX, ngram_cache_context, ngram_cache_dynamic, ngram_cache_static);
                 t_draft_us += ggml_time_us() - t_start_draft_us;
             }
+            GGML_ASSERT((int) drafts.size() <= n_draft || n_draft <= 0);
 
-            n_drafted += draft.size() - 1;
+            // FIXME wrong KV mask for converging sequences (does not seem to happen in practice).
+            for (int j = 1; j < n_draft + 1; ++j) {
+                std::set<llama_token> seen_tokens;
 
-            for (size_t j = 1; j < draft.size() && (int) pseudo_output.size() < n_ctx; ++j) {
+                for (const llama_draft_t & draft : drafts) {
+                    if (j < (int) draft.size() && seen_tokens.find(draft[j]) == seen_tokens.end()) {
+                        seen_tokens.emplace(draft[j]);
+                        n_drafted++;
+                    }
+                }
+            }
+
+            for (int j = 1; j < n_draft + 1 && (int) pseudo_output.size() < n_ctx; ++j) {
                 const llama_token ground_truth = inp_slice[pseudo_output.size()];
-                const llama_token drafted = draft[j];
 
-                if (ground_truth != drafted) {
+                bool ground_truth_in_drafts = false;
+                for (const llama_draft_t & draft : drafts) {
+                    if (j < (int) draft.size() && draft[j] == ground_truth) {
+                        ground_truth_in_drafts = true;
+                        break;
+                    }
+                }
+                if (!ground_truth_in_drafts) {
                     break;
                 }
 
@@ -119,7 +140,7 @@ int main(int argc, char ** argv){
                 }
             }
 
-            draft.erase(draft.begin());
+            drafts.clear();
 
         }
         if (i_start > 0 && i_start / 100000 != (i_start - n_ctx) / 100000) {
