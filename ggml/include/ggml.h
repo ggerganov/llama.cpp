@@ -681,8 +681,8 @@ extern "C" {
 
     struct ggml_hash_set {
         size_t size;
-        ggml_bitset_t * used;
-        struct ggml_tensor ** keys;
+        ggml_bitset_t * used;       // whether or not the keys are in use i.e. set
+        struct ggml_tensor ** keys; // actual tensors in the set, keys[i] is only defined if ggml_bitset_get(used, i)
     };
 
     // computation graph

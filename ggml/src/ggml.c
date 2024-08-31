@@ -19130,7 +19130,8 @@ void ggml_graph_cpy(struct ggml_cgraph * src, struct ggml_cgraph * dst) {
     }
 
     for (size_t i = 0; i < src->visited_hash_set.size; ++i) {
-        if (src->visited_hash_set.keys[i]) {
+        // copy all hashset keys (tensors) that are in use
+        if (ggml_bitset_get(src->visited_hash_set.used, i)) {
             ggml_hash_insert(&dst->visited_hash_set, src->visited_hash_set.keys[i]);
         }
     }
