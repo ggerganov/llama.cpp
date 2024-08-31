@@ -2253,6 +2253,10 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 
 #ifdef LLAMA_USE_CURL
 
+#define CURL_MAX_RETRY 3
+#define CURL_RETRY_DELAY_SECONDS 2
+
+
 static bool starts_with(const std::string & str, const std::string & prefix) {
     // While we wait for C++20's std::string::starts_with...
     return str.rfind(prefix, 0) == 0;
@@ -2448,15 +2452,13 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         };
 
         // start the download
-        int download_attempts = 3;
-        int remaining_attempts = 3;
-        int retry_delay = 2;
+        int remaining_attempts = CURL_MAX_RETRY;
         while (remaining_attempts > 0){
             fprintf(stderr, "%s: trying to download model from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__, 
             llama_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
             auto res = curl_easy_perform(curl.get());
             if (res != CURLE_OK) {
-                int exponential_backoff_delay = std::pow(retry_delay, (download_attempts - remaining_attempts)) * 1000;
+                int exponential_backoff_delay = std::pow(CURL_RETRY_DELAY_SECONDS, (CURL_MAX_RETRY - remaining_attempts)) * 1000;
                 fprintf(stderr, "\n%s: curl_easy_perform() failed: %s, retrying after %d miliseconnds\n", __func__, curl_easy_strerror(res), exponential_backoff_delay);
                 remaining_attempts--;
                 std::this_thread::sleep_for(std::chrono::milliseconds(exponential_backoff_delay));
