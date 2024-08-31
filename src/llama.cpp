@@ -15156,7 +15156,7 @@ struct llm_build_context {
                 )
             );
 
-            if ((il + 1) % hparams.rescale_every_n_layers == 0) {
+            if (hparams.rescale_every_n_layers != 0 && (il + 1) % hparams.rescale_every_n_layers == 0) {
                 cur = ggml_scale(ctx0, cur, 0.5F);
             }
 
