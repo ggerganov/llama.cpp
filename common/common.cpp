@@ -2361,9 +2361,7 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         curl_easy_setopt(curl.get(), CURLOPT_HEADERFUNCTION, static_cast<CURLOPT_HEADERFUNCTION_PTR>(header_callback));
         curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, &headers);
 
-        int head_request_attempts = 3;
-        int remaining_request_attempts = 3;
-        int retry_delay = 2;
+        int remaining_request_attempts = CURL_MAX_RETRY;
         while (remaining_request_attempts > 0){
             CURLcode res = curl_easy_perform(curl.get());
             if (res != CURLE_OK) {
