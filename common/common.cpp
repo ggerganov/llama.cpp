@@ -1435,6 +1435,12 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         sparams.grammar = json_schema_to_grammar(json::parse(argv[i]));
         return true;
     }
+    if (arg == "-th" || arg == "--token-healing") {
+        CHECK_ARG
+        std::string value(argv[i]);
+        invalid_param = !llama_token_healing_parse_params(value, sparams.token_healing);
+        return true;
+    }
     if (arg == "--override-kv") {
         CHECK_ARG
         if (!string_parse_kv_override(argv[i], params.kv_overrides)) {
@@ -1872,6 +1878,10 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
                                                                         "if suffix/prefix are specified, template will be disabled\n"
                                                                         "only commonly used templates are accepted:\n"
                                                                         "https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template" });
+
+    options.push_back({ "main",        "-th,   --token-healing {0,1,d1,d,r{N}}",
+                                                                        "Token healing type. (default: 0, disabled)\n"
+                                                                        "1: replace one token, d1: replace longest suffix with one token, d: replace longest suffix, r{N}: roll back N tokens" });
     options.push_back({ "grammar" });
     options.push_back({ "*",           "       --grammar GRAMMAR",      "BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", sparams.grammar.c_str() });
     options.push_back({ "*",           "       --grammar-file FNAME",   "file to read grammar from" });

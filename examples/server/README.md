@@ -482,6 +482,8 @@ node index.js
 
     `json_schema`: Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems": 10, "maxItems": 100}` of a list of strings, or `{}` for any JSON). See [tests](../../tests/test-json-schema-to-grammar.cpp) for supported features.  Default: no JSON schema.
 
+    `token_healing`: Set the token healing strategy. Default: `0`, which is disabled. Possible values: `1` to replace one token, `d1` to replace the longest suffix with a single token, `d` to replace the longest suffix, `rN` to roll back N tokens (e.g. `r3`). See [here](../main/README.md#token-healing) for more details.
+
     `seed`: Set the random number generator (RNG) seed.  Default: `-1`, which is a random seed.
 
     `ignore_eos`: Ignore end of stream token and continue generating.  Default: `false`
