@@ -94,6 +94,9 @@ class Keys:
         DECODER_START_TOKEN_ID            = "{arch}.decoder_start_token_id"
         ATTN_LOGIT_SOFTCAPPING            = "{arch}.attn_logit_softcapping"
         FINAL_LOGIT_SOFTCAPPING           = "{arch}.final_logit_softcapping"
+        RESCALE_EVERY_N_LAYERS            = "{arch}.rescale_every_n_layers"
+        TIME_MIX_EXTRA_DIM                = "{arch}.time_mix_extra_dim"
+        TIME_DECAY_EXTRA_DIM              = "{arch}.time_decay_extra_dim"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -131,6 +134,9 @@ class Keys:
         STATE_SIZE     = "{arch}.ssm.state_size"
         TIME_STEP_RANK = "{arch}.ssm.time_step_rank"
         DT_B_C_RMS     = "{arch}.ssm.dt_b_c_rms"
+
+    class WKV:
+        HEAD_SIZE = "{arch}.wkv.head_size"
 
     class Tokenizer:
         MODEL                = "tokenizer.ggml.model"
@@ -207,6 +213,7 @@ class MODEL_ARCH(IntEnum):
     GEMMA        = auto()
     GEMMA2       = auto()
     STARCODER2   = auto()
+    RWKV6        = auto()
     MAMBA        = auto()
     XVERSE       = auto()
     COMMAND_R    = auto()
@@ -270,6 +277,29 @@ class MODEL_TENSOR(IntEnum):
     SSM_A                = auto()
     SSM_D                = auto()
     SSM_OUT              = auto()
+    TIME_MIX_W1          = auto()
+    TIME_MIX_W2          = auto()
+    TIME_MIX_LERP_X      = auto()
+    TIME_MIX_LERP_K      = auto()
+    TIME_MIX_LERP_V      = auto()
+    TIME_MIX_LERP_R      = auto()
+    TIME_MIX_LERP_G      = auto()
+    TIME_MIX_LERP_W      = auto()
+    TIME_MIX_FIRST       = auto()
+    TIME_MIX_DECAY       = auto()
+    TIME_MIX_DECAY_W1    = auto()
+    TIME_MIX_DECAY_W2    = auto()
+    TIME_MIX_KEY         = auto()
+    TIME_MIX_VALUE       = auto()
+    TIME_MIX_RECEPTANCE  = auto()
+    TIME_MIX_GATE        = auto()
+    TIME_MIX_LN          = auto()
+    TIME_MIX_OUTPUT      = auto()
+    CHANNEL_MIX_LERP_K   = auto()
+    CHANNEL_MIX_LERP_R   = auto()
+    CHANNEL_MIX_KEY      = auto()
+    CHANNEL_MIX_RECEPTANCE = auto()
+    CHANNEL_MIX_VALUE    = auto()
     ATTN_Q_A             = auto()
     ATTN_Q_B             = auto()
     ATTN_KV_A_MQA        = auto()
@@ -337,6 +367,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.GEMMA:          "gemma",
     MODEL_ARCH.GEMMA2:         "gemma2",
     MODEL_ARCH.STARCODER2:     "starcoder2",
+    MODEL_ARCH.RWKV6:          "rwkv6",
     MODEL_ARCH.MAMBA:          "mamba",
     MODEL_ARCH.XVERSE:         "xverse",
     MODEL_ARCH.COMMAND_R:      "command-r",
@@ -355,87 +386,110 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
-    MODEL_TENSOR.TOKEN_EMBD:           "token_embd",
-    MODEL_TENSOR.TOKEN_EMBD_NORM:      "token_embd_norm",
-    MODEL_TENSOR.TOKEN_TYPES:          "token_types",
-    MODEL_TENSOR.POS_EMBD:             "position_embd",
-    MODEL_TENSOR.OUTPUT_NORM:          "output_norm",
-    MODEL_TENSOR.OUTPUT:               "output",
-    MODEL_TENSOR.ROPE_FREQS:           "rope_freqs",
-    MODEL_TENSOR.ROPE_FACTORS_LONG:    "rope_factors_long",
-    MODEL_TENSOR.ROPE_FACTORS_SHORT:   "rope_factors_short",
-    MODEL_TENSOR.ATTN_NORM:            "blk.{bid}.attn_norm",
-    MODEL_TENSOR.ATTN_NORM_2:          "blk.{bid}.attn_norm_2",
-    MODEL_TENSOR.ATTN_QKV:             "blk.{bid}.attn_qkv",
-    MODEL_TENSOR.ATTN_Q:               "blk.{bid}.attn_q",
-    MODEL_TENSOR.ATTN_K:               "blk.{bid}.attn_k",
-    MODEL_TENSOR.ATTN_V:               "blk.{bid}.attn_v",
-    MODEL_TENSOR.ATTN_OUT:             "blk.{bid}.attn_output",
-    MODEL_TENSOR.ATTN_ROT_EMBD:        "blk.{bid}.attn_rot_embd",
-    MODEL_TENSOR.ATTN_Q_NORM:          "blk.{bid}.attn_q_norm",
-    MODEL_TENSOR.ATTN_K_NORM:          "blk.{bid}.attn_k_norm",
-    MODEL_TENSOR.ATTN_OUT_NORM:        "blk.{bid}.attn_output_norm",
-    MODEL_TENSOR.ATTN_POST_NORM:       "blk.{bid}.post_attention_norm",
-    MODEL_TENSOR.FFN_GATE_INP:         "blk.{bid}.ffn_gate_inp",
-    MODEL_TENSOR.FFN_GATE_INP_SHEXP:   "blk.{bid}.ffn_gate_inp_shexp",
-    MODEL_TENSOR.FFN_NORM:             "blk.{bid}.ffn_norm",
-    MODEL_TENSOR.FFN_PRE_NORM:         "blk.{bid}.ffn_norm",
-    MODEL_TENSOR.FFN_POST_NORM:        "blk.{bid}.post_ffw_norm",
-    MODEL_TENSOR.FFN_GATE:             "blk.{bid}.ffn_gate",
-    MODEL_TENSOR.FFN_DOWN:             "blk.{bid}.ffn_down",
-    MODEL_TENSOR.FFN_UP:               "blk.{bid}.ffn_up",
-    MODEL_TENSOR.FFN_GATE_SHEXP:       "blk.{bid}.ffn_gate_shexp",
-    MODEL_TENSOR.FFN_DOWN_SHEXP:       "blk.{bid}.ffn_down_shexp",
-    MODEL_TENSOR.FFN_UP_SHEXP:         "blk.{bid}.ffn_up_shexp",
-    MODEL_TENSOR.FFN_ACT:              "blk.{bid}.ffn",
-    MODEL_TENSOR.FFN_NORM_EXP:         "blk.{bid}.ffn_norm_exps",
-    MODEL_TENSOR.FFN_GATE_EXP:         "blk.{bid}.ffn_gate_exps",
-    MODEL_TENSOR.FFN_DOWN_EXP:         "blk.{bid}.ffn_down_exps",
-    MODEL_TENSOR.FFN_UP_EXP:           "blk.{bid}.ffn_up_exps",
-    MODEL_TENSOR.LAYER_OUT_NORM:       "blk.{bid}.layer_output_norm",
-    MODEL_TENSOR.SSM_IN:               "blk.{bid}.ssm_in",
-    MODEL_TENSOR.SSM_CONV1D:           "blk.{bid}.ssm_conv1d",
-    MODEL_TENSOR.SSM_X:                "blk.{bid}.ssm_x",
-    MODEL_TENSOR.SSM_DT:               "blk.{bid}.ssm_dt",
-    MODEL_TENSOR.SSM_A:                "blk.{bid}.ssm_a",
-    MODEL_TENSOR.SSM_D:                "blk.{bid}.ssm_d",
-    MODEL_TENSOR.SSM_OUT:              "blk.{bid}.ssm_out",
-    MODEL_TENSOR.ATTN_Q_A:             "blk.{bid}.attn_q_a",
-    MODEL_TENSOR.ATTN_Q_B:             "blk.{bid}.attn_q_b",
-    MODEL_TENSOR.ATTN_KV_A_MQA:        "blk.{bid}.attn_kv_a_mqa",
-    MODEL_TENSOR.ATTN_KV_B:            "blk.{bid}.attn_kv_b",
-    MODEL_TENSOR.ATTN_Q_A_NORM:        "blk.{bid}.attn_q_a_norm",
-    MODEL_TENSOR.ATTN_KV_A_NORM:       "blk.{bid}.attn_kv_a_norm",
-    MODEL_TENSOR.ATTN_SUB_NORM:        "blk.{bid}.attn_sub_norm",
-    MODEL_TENSOR.FFN_SUB_NORM:         "blk.{bid}.ffn_sub_norm",
-    MODEL_TENSOR.DEC_ATTN_NORM:        "dec.blk.{bid}.attn_norm",
-    MODEL_TENSOR.DEC_ATTN_Q:           "dec.blk.{bid}.attn_q",
-    MODEL_TENSOR.DEC_ATTN_K:           "dec.blk.{bid}.attn_k",
-    MODEL_TENSOR.DEC_ATTN_V:           "dec.blk.{bid}.attn_v",
-    MODEL_TENSOR.DEC_ATTN_OUT:         "dec.blk.{bid}.attn_o",
-    MODEL_TENSOR.DEC_ATTN_REL_B:       "dec.blk.{bid}.attn_rel_b",
-    MODEL_TENSOR.DEC_CROSS_ATTN_NORM:  "dec.blk.{bid}.cross_attn_norm",
-    MODEL_TENSOR.DEC_CROSS_ATTN_Q:     "dec.blk.{bid}.cross_attn_q",
-    MODEL_TENSOR.DEC_CROSS_ATTN_K:     "dec.blk.{bid}.cross_attn_k",
-    MODEL_TENSOR.DEC_CROSS_ATTN_V:     "dec.blk.{bid}.cross_attn_v",
-    MODEL_TENSOR.DEC_CROSS_ATTN_OUT:   "dec.blk.{bid}.cross_attn_o",
-    MODEL_TENSOR.DEC_CROSS_ATTN_REL_B: "dec.blk.{bid}.cross_attn_rel_b",
-    MODEL_TENSOR.DEC_FFN_NORM:         "dec.blk.{bid}.ffn_norm",
-    MODEL_TENSOR.DEC_FFN_GATE:         "dec.blk.{bid}.ffn_gate",
-    MODEL_TENSOR.DEC_FFN_DOWN:         "dec.blk.{bid}.ffn_down",
-    MODEL_TENSOR.DEC_FFN_UP:           "dec.blk.{bid}.ffn_up",
-    MODEL_TENSOR.DEC_OUTPUT_NORM:      "dec.output_norm",
-    MODEL_TENSOR.ENC_ATTN_NORM:        "enc.blk.{bid}.attn_norm",
-    MODEL_TENSOR.ENC_ATTN_Q:           "enc.blk.{bid}.attn_q",
-    MODEL_TENSOR.ENC_ATTN_K:           "enc.blk.{bid}.attn_k",
-    MODEL_TENSOR.ENC_ATTN_V:           "enc.blk.{bid}.attn_v",
-    MODEL_TENSOR.ENC_ATTN_OUT:         "enc.blk.{bid}.attn_o",
-    MODEL_TENSOR.ENC_ATTN_REL_B:       "enc.blk.{bid}.attn_rel_b",
-    MODEL_TENSOR.ENC_FFN_NORM:         "enc.blk.{bid}.ffn_norm",
-    MODEL_TENSOR.ENC_FFN_GATE:         "enc.blk.{bid}.ffn_gate",
-    MODEL_TENSOR.ENC_FFN_DOWN:         "enc.blk.{bid}.ffn_down",
-    MODEL_TENSOR.ENC_FFN_UP:           "enc.blk.{bid}.ffn_up",
-    MODEL_TENSOR.ENC_OUTPUT_NORM:      "enc.output_norm",
+    MODEL_TENSOR.TOKEN_EMBD:                "token_embd",
+    MODEL_TENSOR.TOKEN_EMBD_NORM:           "token_embd_norm",
+    MODEL_TENSOR.TOKEN_TYPES:               "token_types",
+    MODEL_TENSOR.POS_EMBD:                  "position_embd",
+    MODEL_TENSOR.OUTPUT_NORM:               "output_norm",
+    MODEL_TENSOR.OUTPUT:                    "output",
+    MODEL_TENSOR.ROPE_FREQS:                "rope_freqs",
+    MODEL_TENSOR.ROPE_FACTORS_LONG:         "rope_factors_long",
+    MODEL_TENSOR.ROPE_FACTORS_SHORT:        "rope_factors_short",
+    MODEL_TENSOR.ATTN_NORM:                 "blk.{bid}.attn_norm",
+    MODEL_TENSOR.ATTN_NORM_2:               "blk.{bid}.attn_norm_2",
+    MODEL_TENSOR.ATTN_QKV:                  "blk.{bid}.attn_qkv",
+    MODEL_TENSOR.ATTN_Q:                    "blk.{bid}.attn_q",
+    MODEL_TENSOR.ATTN_K:                    "blk.{bid}.attn_k",
+    MODEL_TENSOR.ATTN_V:                    "blk.{bid}.attn_v",
+    MODEL_TENSOR.ATTN_OUT:                  "blk.{bid}.attn_output",
+    MODEL_TENSOR.ATTN_ROT_EMBD:             "blk.{bid}.attn_rot_embd",
+    MODEL_TENSOR.ATTN_Q_NORM:               "blk.{bid}.attn_q_norm",
+    MODEL_TENSOR.ATTN_K_NORM:               "blk.{bid}.attn_k_norm",
+    MODEL_TENSOR.ATTN_OUT_NORM:             "blk.{bid}.attn_output_norm",
+    MODEL_TENSOR.ATTN_POST_NORM:            "blk.{bid}.post_attention_norm",
+    MODEL_TENSOR.FFN_GATE_INP:              "blk.{bid}.ffn_gate_inp",
+    MODEL_TENSOR.FFN_GATE_INP_SHEXP:        "blk.{bid}.ffn_gate_inp_shexp",
+    MODEL_TENSOR.FFN_NORM:                  "blk.{bid}.ffn_norm",
+    MODEL_TENSOR.FFN_PRE_NORM:              "blk.{bid}.ffn_norm",
+    MODEL_TENSOR.FFN_POST_NORM:             "blk.{bid}.post_ffw_norm",
+    MODEL_TENSOR.FFN_GATE:                  "blk.{bid}.ffn_gate",
+    MODEL_TENSOR.FFN_DOWN:                  "blk.{bid}.ffn_down",
+    MODEL_TENSOR.FFN_UP:                    "blk.{bid}.ffn_up",
+    MODEL_TENSOR.FFN_GATE_SHEXP:            "blk.{bid}.ffn_gate_shexp",
+    MODEL_TENSOR.FFN_DOWN_SHEXP:            "blk.{bid}.ffn_down_shexp",
+    MODEL_TENSOR.FFN_UP_SHEXP:              "blk.{bid}.ffn_up_shexp",
+    MODEL_TENSOR.FFN_ACT:                   "blk.{bid}.ffn",
+    MODEL_TENSOR.FFN_NORM_EXP:              "blk.{bid}.ffn_norm_exps",
+    MODEL_TENSOR.FFN_GATE_EXP:              "blk.{bid}.ffn_gate_exps",
+    MODEL_TENSOR.FFN_DOWN_EXP:              "blk.{bid}.ffn_down_exps",
+    MODEL_TENSOR.FFN_UP_EXP:                "blk.{bid}.ffn_up_exps",
+    MODEL_TENSOR.LAYER_OUT_NORM:            "blk.{bid}.layer_output_norm",
+    MODEL_TENSOR.SSM_IN:                    "blk.{bid}.ssm_in",
+    MODEL_TENSOR.SSM_CONV1D:                "blk.{bid}.ssm_conv1d",
+    MODEL_TENSOR.SSM_X:                     "blk.{bid}.ssm_x",
+    MODEL_TENSOR.SSM_DT:                    "blk.{bid}.ssm_dt",
+    MODEL_TENSOR.SSM_A:                     "blk.{bid}.ssm_a",
+    MODEL_TENSOR.SSM_D:                     "blk.{bid}.ssm_d",
+    MODEL_TENSOR.SSM_OUT:                   "blk.{bid}.ssm_out",
+    MODEL_TENSOR.TIME_MIX_W1:               "blk.{bid}.time_mix_w1",
+    MODEL_TENSOR.TIME_MIX_W2:               "blk.{bid}.time_mix_w2",
+    MODEL_TENSOR.TIME_MIX_LERP_X:           "blk.{bid}.time_mix_lerp_x",
+    MODEL_TENSOR.TIME_MIX_LERP_K:           "blk.{bid}.time_mix_lerp_k",
+    MODEL_TENSOR.TIME_MIX_LERP_V:           "blk.{bid}.time_mix_lerp_v",
+    MODEL_TENSOR.TIME_MIX_LERP_R:           "blk.{bid}.time_mix_lerp_r",
+    MODEL_TENSOR.TIME_MIX_LERP_G:           "blk.{bid}.time_mix_lerp_g",
+    MODEL_TENSOR.TIME_MIX_LERP_W:           "blk.{bid}.time_mix_lerp_w",
+    MODEL_TENSOR.TIME_MIX_FIRST:            "blk.{bid}.time_mix_first",
+    MODEL_TENSOR.TIME_MIX_DECAY:            "blk.{bid}.time_mix_decay",
+    MODEL_TENSOR.TIME_MIX_DECAY_W1:         "blk.{bid}.time_mix_decay_w1",
+    MODEL_TENSOR.TIME_MIX_DECAY_W2:         "blk.{bid}.time_mix_decay_w2",
+    MODEL_TENSOR.TIME_MIX_KEY:              "blk.{bid}.time_mix_key",
+    MODEL_TENSOR.TIME_MIX_VALUE:            "blk.{bid}.time_mix_value",
+    MODEL_TENSOR.TIME_MIX_RECEPTANCE:       "blk.{bid}.time_mix_receptance",
+    MODEL_TENSOR.TIME_MIX_GATE:             "blk.{bid}.time_mix_gate",
+    MODEL_TENSOR.TIME_MIX_LN:               "blk.{bid}.time_mix_ln",
+    MODEL_TENSOR.TIME_MIX_OUTPUT:           "blk.{bid}.time_mix_output",
+    MODEL_TENSOR.CHANNEL_MIX_LERP_K:        "blk.{bid}.channel_mix_lerp_k",
+    MODEL_TENSOR.CHANNEL_MIX_LERP_R:        "blk.{bid}.channel_mix_lerp_r",
+    MODEL_TENSOR.CHANNEL_MIX_KEY:           "blk.{bid}.channel_mix_key",
+    MODEL_TENSOR.CHANNEL_MIX_RECEPTANCE:    "blk.{bid}.channel_mix_receptance",
+    MODEL_TENSOR.CHANNEL_MIX_VALUE:         "blk.{bid}.channel_mix_value",
+    MODEL_TENSOR.ATTN_Q_A:                  "blk.{bid}.attn_q_a",
+    MODEL_TENSOR.ATTN_Q_B:                  "blk.{bid}.attn_q_b",
+    MODEL_TENSOR.ATTN_KV_A_MQA:             "blk.{bid}.attn_kv_a_mqa",
+    MODEL_TENSOR.ATTN_KV_B:                 "blk.{bid}.attn_kv_b",
+    MODEL_TENSOR.ATTN_Q_A_NORM:             "blk.{bid}.attn_q_a_norm",
+    MODEL_TENSOR.ATTN_KV_A_NORM:            "blk.{bid}.attn_kv_a_norm",
+    MODEL_TENSOR.ATTN_SUB_NORM:             "blk.{bid}.attn_sub_norm",
+    MODEL_TENSOR.FFN_SUB_NORM:              "blk.{bid}.ffn_sub_norm",
+    MODEL_TENSOR.DEC_ATTN_NORM:             "dec.blk.{bid}.attn_norm",
+    MODEL_TENSOR.DEC_ATTN_Q:                "dec.blk.{bid}.attn_q",
+    MODEL_TENSOR.DEC_ATTN_K:                "dec.blk.{bid}.attn_k",
+    MODEL_TENSOR.DEC_ATTN_V:                "dec.blk.{bid}.attn_v",
+    MODEL_TENSOR.DEC_ATTN_OUT:              "dec.blk.{bid}.attn_o",
+    MODEL_TENSOR.DEC_ATTN_REL_B:            "dec.blk.{bid}.attn_rel_b",
+    MODEL_TENSOR.DEC_CROSS_ATTN_NORM:       "dec.blk.{bid}.cross_attn_norm",
+    MODEL_TENSOR.DEC_CROSS_ATTN_Q:          "dec.blk.{bid}.cross_attn_q",
+    MODEL_TENSOR.DEC_CROSS_ATTN_K:          "dec.blk.{bid}.cross_attn_k",
+    MODEL_TENSOR.DEC_CROSS_ATTN_V:          "dec.blk.{bid}.cross_attn_v",
+    MODEL_TENSOR.DEC_CROSS_ATTN_OUT:        "dec.blk.{bid}.cross_attn_o",
+    MODEL_TENSOR.DEC_CROSS_ATTN_REL_B:      "dec.blk.{bid}.cross_attn_rel_b",
+    MODEL_TENSOR.DEC_FFN_NORM:              "dec.blk.{bid}.ffn_norm",
+    MODEL_TENSOR.DEC_FFN_GATE:              "dec.blk.{bid}.ffn_gate",
+    MODEL_TENSOR.DEC_FFN_DOWN:              "dec.blk.{bid}.ffn_down",
+    MODEL_TENSOR.DEC_FFN_UP:                "dec.blk.{bid}.ffn_up",
+    MODEL_TENSOR.DEC_OUTPUT_NORM:           "dec.output_norm",
+    MODEL_TENSOR.ENC_ATTN_NORM:             "enc.blk.{bid}.attn_norm",
+    MODEL_TENSOR.ENC_ATTN_Q:                "enc.blk.{bid}.attn_q",
+    MODEL_TENSOR.ENC_ATTN_K:                "enc.blk.{bid}.attn_k",
+    MODEL_TENSOR.ENC_ATTN_V:                "enc.blk.{bid}.attn_v",
+    MODEL_TENSOR.ENC_ATTN_OUT:              "enc.blk.{bid}.attn_o",
+    MODEL_TENSOR.ENC_ATTN_REL_B:            "enc.blk.{bid}.attn_rel_b",
+    MODEL_TENSOR.ENC_FFN_NORM:              "enc.blk.{bid}.ffn_norm",
+    MODEL_TENSOR.ENC_FFN_GATE:              "enc.blk.{bid}.ffn_gate",
+    MODEL_TENSOR.ENC_FFN_DOWN:              "enc.blk.{bid}.ffn_down",
+    MODEL_TENSOR.ENC_FFN_UP:                "enc.blk.{bid}.ffn_up",
+    MODEL_TENSOR.ENC_OUTPUT_NORM:           "enc.output_norm",
 }
 
 MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
@@ -855,6 +909,37 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_DOWN,
         MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.RWKV6: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.TOKEN_EMBD_NORM,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.OUTPUT,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_NORM_2,
+        MODEL_TENSOR.TIME_MIX_W1,
+        MODEL_TENSOR.TIME_MIX_W2,
+        MODEL_TENSOR.TIME_MIX_LERP_X,
+        MODEL_TENSOR.TIME_MIX_LERP_K,
+        MODEL_TENSOR.TIME_MIX_LERP_V,
+        MODEL_TENSOR.TIME_MIX_LERP_R,
+        MODEL_TENSOR.TIME_MIX_LERP_G,
+        MODEL_TENSOR.TIME_MIX_LERP_W,
+        MODEL_TENSOR.TIME_MIX_FIRST,
+        MODEL_TENSOR.TIME_MIX_DECAY,
+        MODEL_TENSOR.TIME_MIX_DECAY_W1,
+        MODEL_TENSOR.TIME_MIX_DECAY_W2,
+        MODEL_TENSOR.TIME_MIX_KEY,
+        MODEL_TENSOR.TIME_MIX_VALUE,
+        MODEL_TENSOR.TIME_MIX_RECEPTANCE,
+        MODEL_TENSOR.TIME_MIX_GATE,
+        MODEL_TENSOR.TIME_MIX_LN,
+        MODEL_TENSOR.TIME_MIX_OUTPUT,
+        MODEL_TENSOR.CHANNEL_MIX_LERP_K,
+        MODEL_TENSOR.CHANNEL_MIX_LERP_R,
+        MODEL_TENSOR.CHANNEL_MIX_KEY,
+        MODEL_TENSOR.CHANNEL_MIX_RECEPTANCE,
+        MODEL_TENSOR.CHANNEL_MIX_VALUE,
     ],
     MODEL_ARCH.MAMBA: [
         MODEL_TENSOR.TOKEN_EMBD,
