@@ -2899,7 +2899,12 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_slots_action = [&res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_slots_action = [&params, &res_error, &handle_slots_save, &handle_slots_restore, &handle_slots_erase](const httplib::Request & req, httplib::Response & res) {
+        if (params.slot_save_path.empty()) {
+            res_error(res, format_error_response("This server does not support slots action. Start it with `--slot-save-path`", ERROR_TYPE_NOT_SUPPORTED));
+            return;
+        }
+
         std::string id_slot_str = req.path_params.at("id_slot");
         int id_slot;
 
@@ -3237,10 +3242,7 @@ int main(int argc, char ** argv) {
     svr->Post("/lora-adapters",       handle_lora_adapters_apply);
     // Save & load slots
     svr->Get ("/slots",               handle_slots);
-    if (!params.slot_save_path.empty()) {
-        // only enable slot endpoints if slot_save_path is set
-        svr->Post("/slots/:id_slot",  handle_slots_action);
-    }
+    svr->Post("/slots/:id_slot",      handle_slots_action);
 
     //
     // Start the server
