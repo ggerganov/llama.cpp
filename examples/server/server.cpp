@@ -2686,7 +2686,7 @@ int main(int argc, char ** argv) {
     const auto handle_health = [&](const httplib::Request &, httplib::Response & res) {
         // error and loading states are handled by middleware
         json health = {{"status", "ok"}};
-        res.set_content(health.dump(), "application/json");
+        res_ok(res, health);
     };
 
     const auto handle_slots = [&](const httplib::Request & req, httplib::Response & res) {
@@ -2716,8 +2716,7 @@ int main(int argc, char ** argv) {
             }
         }
 
-        res.set_content(result.data.at("slots").dump(), MIMETYPE_JSON);
-        res.status = 200; // HTTP OK
+        res_ok(res, result.data.at("slots"));
     };
 
     const auto handle_metrics = [&](const httplib::Request &, httplib::Response & res) {
@@ -2820,7 +2819,7 @@ int main(int argc, char ** argv) {
         res.status = 200; // HTTP OK
     };
 
-    const auto handle_slots_save = [&ctx_server, &res_error, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
+    const auto handle_slots_save = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
         if (!fs_validate_filename(filename)) {
@@ -2846,11 +2845,11 @@ int main(int argc, char ** argv) {
         if (result.error) {
             res_error(res, result.data);
         } else {
-            res.set_content(result.data.dump(), MIMETYPE_JSON);
+            res_ok(res, result.data);
         }
     };
 
-    const auto handle_slots_restore = [&ctx_server, &res_error, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
+    const auto handle_slots_restore = [&ctx_server, &res_error, &res_ok, &params](const httplib::Request & req, httplib::Response & res, int id_slot) {
         json request_data = json::parse(req.body);
         std::string filename = request_data.at("filename");
         if (!fs_validate_filename(filename)) {
@@ -2876,11 +2875,11 @@ int main(int argc, char ** argv) {
         if (result.error) {
             res_error(res, result.data);
         } else {
-            res.set_content(result.data.dump(), MIMETYPE_JSON);
+            res_ok(res, result.data);
         }
     };
 
-    const auto handle_slots_erase = [&ctx_server, &res_error](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
+    const auto handle_slots_erase = [&ctx_server, &res_error, &res_ok](const httplib::Request & /* req */, httplib::Response & res, int id_slot) {
         server_task task;
         task.type = SERVER_TASK_TYPE_SLOT_ERASE;
         task.data = {
@@ -2896,7 +2895,7 @@ int main(int argc, char ** argv) {
         if (result.error) {
             res_error(res, result.data);
         } else {
-            res.set_content(result.data.dump(), MIMETYPE_JSON);
+            res_ok(res, result.data);
         }
     };
 
@@ -2924,7 +2923,7 @@ int main(int argc, char ** argv) {
         }
     };
 
-    const auto handle_props = [&ctx_server](const httplib::Request &, httplib::Response & res) {
+    const auto handle_props = [&ctx_server, &res_ok](const httplib::Request &, httplib::Response & res) {
         std::string template_key = "tokenizer.chat_template", curr_tmpl;
         int32_t tlen = llama_model_meta_val_str(ctx_server.model, template_key.c_str(), nullptr, 0);
         if (tlen > 0) {
@@ -2940,7 +2939,7 @@ int main(int argc, char ** argv) {
             { "chat_template",               curr_tmpl.c_str() }
         };
 
-        res.set_content(data.dump(), MIMETYPE_JSON);
+        res_ok(res, data);
     };
 
     const auto handle_completions_generic = [&ctx_server, &res_error, &res_ok](server_task_cmpl_type cmpl_type, json & data, httplib::Response & res) {
@@ -3061,7 +3060,7 @@ int main(int argc, char ** argv) {
         res.set_content(models.dump(), MIMETYPE_JSON);
     };
 
-    const auto handle_tokenize = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_tokenize = [&ctx_server, &res_ok](const httplib::Request & req, httplib::Response & res) {
         const json body = json::parse(req.body);
 
         std::vector<llama_token> tokens;
@@ -3070,10 +3069,10 @@ int main(int argc, char ** argv) {
             tokens = ctx_server.tokenize(body.at("content"), add_special);
         }
         const json data = format_tokenizer_response(tokens);
-        return res.set_content(data.dump(), MIMETYPE_JSON);
+        res_ok(res, data);
     };
 
-    const auto handle_detokenize = [&ctx_server](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_detokenize = [&ctx_server, &res_ok](const httplib::Request & req, httplib::Response & res) {
         const json body = json::parse(req.body);
 
         std::string content;
@@ -3083,10 +3082,10 @@ int main(int argc, char ** argv) {
         }
 
         const json data = format_detokenized_response(content);
-        return res.set_content(data.dump(), MIMETYPE_JSON);
+        res_ok(res, data);
     };
 
-    const auto handle_embeddings = [&ctx_server, &res_error](const httplib::Request & req, httplib::Response & res) {
+    const auto handle_embeddings = [&ctx_server, &res_error, &res_ok](const httplib::Request & req, httplib::Response & res) {
         const json body = json::parse(req.body);
         bool is_openai = false;
 
@@ -3132,7 +3131,7 @@ int main(int argc, char ** argv) {
         json root = is_openai
             ? format_embeddings_response_oaicompat(body, responses)
             : responses[0];
-        return res.set_content(root.dump(), MIMETYPE_JSON);
+        res_ok(res, root);
     };
 
     const auto handle_lora_adapters_list = [&](const httplib::Request &, httplib::Response & res) {
@@ -3145,7 +3144,7 @@ int main(int argc, char ** argv) {
                 {"scale", la.scale},
             });
         }
-        res.set_content(result.dump(), MIMETYPE_JSON);
+        res_ok(res, result);
         res.status = 200; // HTTP OK
     };
 
@@ -3177,7 +3176,7 @@ int main(int argc, char ** argv) {
         server_task_result result = ctx_server.queue_results.recv(id_task);
         ctx_server.queue_results.remove_waiting_task_id(id_task);
 
-        res.set_content(result.data.dump(), MIMETYPE_JSON);
+        res_ok(res, result.data);
         res.status = 200; // HTTP OK
     };
 
