@@ -55,7 +55,7 @@ static void rope_norm(
     const int i = row*ne0 + i0;
     const int i2 = row/p_delta_rows;
 
-    const float theta_base = pos[i2]*powf(theta_scale, i0/2.0f);
+    const float theta_base = pos[i2] * sycl::pow(theta_scale, i0 / 2.0f);
 
     const float freq_factor = has_ff ? freq_factors[i0/2] : 1.0f;
 
@@ -98,7 +98,7 @@ static void rope_neox(
     const int i  = row*ne0 + i0/2;
     const int i2 = row/p_delta_rows;
 
-    const float theta_base = pos[i2]*powf(theta_scale, i0/2.0f);
+    const float theta_base = pos[i2] * sycl::pow(theta_scale, i0 / 2.0f);
 
     const float freq_factor = has_ff ? freq_factors[i0/2] : 1.0f;
 
@@ -226,7 +226,7 @@ void ggml_sycl_op_rope(
     memcpy(&beta_fast,   (int32_t *) dst->op_params +  9, sizeof(float));
     memcpy(&beta_slow,   (int32_t *) dst->op_params + 10, sizeof(float));
 
-    const bool is_neox = mode & 2;
+    const bool is_neox = mode & GGML_ROPE_TYPE_NEOX;
 
     const int32_t * pos = (const int32_t *) src1_dd;
 
@@ -251,7 +251,7 @@ void ggml_sycl_op_rope(
                 attn_factor, corr_dims, freq_factors, main_stream
             );
         } else {
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
         }
     } else {
         if (src0->type == GGML_TYPE_F32) {
@@ -265,7 +265,7 @@ void ggml_sycl_op_rope(
                 attn_factor, corr_dims, freq_factors, main_stream
             );
         } else {
-            GGML_ASSERT(false);
+            GGML_ABORT("fatal error");
         }
     }
 

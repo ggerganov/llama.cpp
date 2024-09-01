@@ -37,7 +37,8 @@ static gpt_params               * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
 static std::vector<llama_token> * g_output_tokens;
-static bool is_interacting = false;
+static bool is_interacting  = false;
+static bool need_insert_eot = false;
 
 static bool file_exists(const std::string & path) {
     std::ifstream f(path.c_str());
@@ -99,7 +100,8 @@ static void write_logfile(
 static void sigint_handler(int signo) {
     if (signo == SIGINT) {
         if (!is_interacting && g_params->interactive) {
-            is_interacting = true;
+            is_interacting  = true;
+            need_insert_eot = true;
         } else {
             console::cleanup();
             printf("\n");
@@ -122,6 +124,7 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
     auto formatted = llama_chat_format_single(
         model, g_params->chat_template, chat_msgs, new_msg, role == "user");
     chat_msgs.push_back({role, content});
+    LOG("formatted: %s\n", formatted.c_str());
     return formatted;
 }
 
@@ -204,7 +207,10 @@ int main(int argc, char ** argv) {
 
     // load the model and apply lora adapter, if any
     LOG("%s: load the model and apply lora adapter, if any\n", __func__);
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+    model = llama_init.model;
+    ctx = llama_init.context;
     if (sparams.cfg_scale > 1.f) {
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
         ctx_guidance = llama_new_context_with_model(model, lparams);
@@ -213,6 +219,40 @@ int main(int argc, char ** argv) {
     if (model == NULL) {
         LOG_TEE("%s: error: unable to load model\n", __func__);
         return 1;
+    }
+
+    LOG("%s: llama threadpool init = n_threads = %d\n",
+        __func__,
+        (int) params.cpuparams.n_threads
+    );
+    struct ggml_threadpool_params tpp_batch =
+            ggml_threadpool_params_from_cpu_params(params.cpuparams_batch);
+    struct ggml_threadpool_params tpp =
+            ggml_threadpool_params_from_cpu_params(params.cpuparams);
+
+    set_process_priority(params.cpuparams.priority);
+
+    struct ggml_threadpool * threadpool_batch = NULL;
+    if (!ggml_threadpool_params_match(&tpp, &tpp_batch)) {
+        threadpool_batch = ggml_threadpool_new(&tpp_batch);
+        if (!threadpool_batch) {
+            LOG_TEE("%s: batch threadpool create failed : n_threads %d\n", __func__, tpp_batch.n_threads);
+            exit(1);
+        }
+
+        // Start the non-batch threadpool in the paused state
+        tpp.paused = true;
+    }
+
+    struct ggml_threadpool * threadpool = ggml_threadpool_new(&tpp);
+    if (!threadpool) {
+        LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
+        exit(1);
+    }
+
+    llama_attach_threadpool(ctx, threadpool, threadpool_batch);
+    if (ctx_guidance) {
+        llama_attach_threadpool(ctx_guidance, threadpool, threadpool_batch);
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
@@ -224,7 +264,14 @@ int main(int argc, char ** argv) {
                 __func__, n_ctx_train, n_ctx);
     }
 
-    LOG_TEE("%s: chat template example: %s\n", __func__, llama_chat_format_example(model, params.chat_template).c_str());
+    // print chat template example in conversation mode
+    if (params.conversation) {
+        if (params.enable_chat_template) {
+            LOG_TEE("%s: chat template example: %s\n", __func__, llama_chat_format_example(model, params.chat_template).c_str());
+        } else {
+            LOG_TEE("%s: in-suffix/prefix is specified, chat template will be disabled\n", __func__);
+        }
+    }
 
     // print system information
     {
@@ -254,16 +301,16 @@ int main(int argc, char ** argv) {
         }
     }
 
-    const bool add_bos = llama_should_add_bos_token(model);
+    const bool add_bos = llama_add_bos_token(model);
     if (!llama_model_has_encoder(model)) {
-        GGML_ASSERT(llama_add_eos_token(model) != 1);
+        GGML_ASSERT(!llama_add_eos_token(model));
     }
     LOG("add_bos: %d\n", add_bos);
 
     std::vector<llama_token> embd_inp;
 
     {
-        auto prompt = (params.conversation && params.enable_chat_template)
+        auto prompt = (params.conversation && params.enable_chat_template && !params.prompt.empty())
             ? chat_add_and_format(model, chat_msgs, "system", params.prompt) // format the system prompt in conversation mode
             : params.prompt;
         if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
@@ -280,8 +327,13 @@ int main(int argc, char ** argv) {
 
     // Should not run without any tokens
     if (embd_inp.empty()) {
-        embd_inp.push_back(llama_token_bos(model));
-        LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+        if (add_bos) {
+            embd_inp.push_back(llama_token_bos(model));
+            LOG("embd_inp was considered empty and bos was added: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, embd_inp).c_str());
+        } else {
+            LOG_TEE("error: input is empty\n");
+            return -1;
+        }
     }
 
     // Tokenize negative prompt
@@ -910,6 +962,13 @@ int main(int argc, char ** argv) {
 
                     LOG("input tokens: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, line_inp).c_str());
 
+                    // if user stop generation mid-way, we must add EOT to finish model's last response
+                    if (need_insert_eot && format_chat) {
+                        llama_token eot = llama_token_eot(model);
+                        embd_inp.push_back(eot == -1 ? llama_token_eos(model) : eot);
+                        need_insert_eot = false;
+                    }
+
                     embd_inp.insert(embd_inp.end(), line_pfx.begin(), line_pfx.end());
                     embd_inp.insert(embd_inp.end(), line_inp.begin(), line_inp.end());
                     embd_inp.insert(embd_inp.end(), line_sfx.begin(), line_sfx.end());
@@ -968,6 +1027,9 @@ int main(int argc, char ** argv) {
 
     llama_sampling_free(ctx_sampling);
     llama_backend_free();
+
+    ggml_threadpool_free(threadpool);
+    ggml_threadpool_free(threadpool_batch);
 
 #ifndef LOG_DISABLE_LOGS
     LOG_TEE("Log end\n");

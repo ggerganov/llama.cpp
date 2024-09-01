@@ -33,6 +33,15 @@
 
 #define DEFAULT_MODEL_PATH "models/7B/ggml-model-f16.gguf"
 
+struct llama_lora_adapter_info {
+    std::string path;
+    float scale;
+};
+
+struct llama_lora_adapter_container : llama_lora_adapter_info {
+    struct llama_lora_adapter * adapter;
+};
+
 // build info
 extern int LLAMA_BUILD_NUMBER;
 extern char const * LLAMA_COMMIT;
@@ -58,13 +67,18 @@ enum dimre_method {
     DIMRE_METHOD_MEAN,
 };
 
+struct cpu_params {
+    int      n_threads                   = -1;
+    bool     cpumask[GGML_MAX_N_THREADS] = {false}; // CPU affinity mask.
+    bool     mask_valid                  = false;   // Default: any CPU
+    enum ggml_sched_priority  priority   = GGML_SCHED_PRIO_NORMAL;  // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
+    bool     strict_cpu                  = false;   // Use strict CPU placement
+    uint32_t poll                        = 50;      // Polling (busywait) level (0 - no polling, 100 - mostly polling)
+};
+
 struct gpt_params {
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
-    int32_t n_threads             = cpu_get_num_math();
-    int32_t n_threads_draft       =    -1;
-    int32_t n_threads_batch       =    -1; // number of threads to use for batch processing (-1 = use n_threads)
-    int32_t n_threads_batch_draft =    -1;
     int32_t n_predict             =    -1; // new tokens to predict
     int32_t n_ctx                 =     0; // context size
     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
@@ -91,6 +105,11 @@ struct gpt_params {
     int32_t yarn_orig_ctx         =     0; // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
 
+    struct cpu_params cpuparams;
+    struct cpu_params cpuparams_batch;
+    struct cpu_params draft_cpuparams;
+    struct cpu_params draft_cpuparams_batch;
+
     ggml_backend_sched_eval_callback cb_eval = nullptr;
     void * cb_eval_user_data                 = nullptr;
 
@@ -99,6 +118,7 @@ struct gpt_params {
     enum llama_split_mode        split_mode        = LLAMA_SPLIT_MODE_LAYER; // how to split the model across GPUs
     enum llama_rope_scaling_type rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED;
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
+    enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
     // // sampling parameters
     struct llama_sampling_params sparams;
@@ -107,6 +127,7 @@ struct gpt_params {
     std::string model_draft          = ""; // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = ""; // model url to download
+    std::string hf_token             = ""; // HF token
     std::string hf_repo              = ""; // HF repo
     std::string hf_file              = ""; // HF file
     std::string prompt               = "";
@@ -124,9 +145,8 @@ struct gpt_params {
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
 
-    // TODO: avoid tuple, use struct
-    std::vector<std::tuple<std::string, float>> lora_adapter; // lora adapter path with user defined scale
-    std::string lora_base  = "";                              // base model path for the lora adapter
+    bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_lora_adapter_apply)
+    std::vector<llama_lora_adapter_info> lora_adapters; // lora adapter path with user defined scale
 
     std::vector<llama_control_vector_load_info> control_vectors; // control vector with user defined scale
 
@@ -194,7 +214,7 @@ struct gpt_params {
     int32_t port           = 8080;         // server listens on this network port
     int32_t timeout_read   = 600;          // http read timeout in seconds
     int32_t timeout_write  = timeout_read; // http write timeout in seconds
-    int32_t n_threads_http = -1;           // number of threads to process HTTP requests
+    int     n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";
@@ -253,8 +273,11 @@ struct gpt_params {
     std::string cvector_negative_file = "examples/cvector-generator/negative.txt";
 
     bool spm_infill = false; // suffix/prefix/middle pattern for infill
+
+    std::string lora_outfile = "ggml-lora-merged-f16.gguf";
 };
 
+void gpt_params_parse_from_env(gpt_params & params);
 void gpt_params_handle_model_default(gpt_params & params);
 
 bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
@@ -264,6 +287,11 @@ void gpt_params_print_usage(int argc, char ** argv, const gpt_params & params);
 
 std::string gpt_params_get_system_info(const gpt_params & params);
 
+bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);
+bool parse_cpu_mask(const std::string& mask, bool(&boolmask)[GGML_MAX_N_THREADS]);
+void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model = nullptr);
+bool set_process_priority(enum ggml_sched_priority prio);
+
 //
 // String utils
 //
@@ -272,6 +300,8 @@ std::vector<std::string> string_split(std::string input, char separator);
 
 std::string string_strip(const std::string & str);
 std::string string_get_sortable_timestamp();
+
+void string_replace_all(std::string & s, const std::string & search, const std::string & replace);
 
 template<class T>
 static std::vector<T> string_split(const std::string & str, char delim) {
@@ -304,14 +334,23 @@ std::string fs_get_cache_file(const std::string & filename);
 // Model utils
 //
 
-// TODO: avoid tuplue, use struct
-std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_params(gpt_params & params);
+struct llama_init_result {
+    struct llama_model   * model   = nullptr;
+    struct llama_context * context = nullptr;
+    std::vector<llama_lora_adapter_container> lora_adapters;
+};
 
-struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
-struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
+struct llama_init_result    llama_init_from_gpt_params(gpt_params & params);
 
-struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const struct llama_model_params & params);
-struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const struct llama_model_params & params);
+struct llama_model_params     llama_model_params_from_gpt_params    (const gpt_params & params);
+struct llama_context_params   llama_context_params_from_gpt_params  (const gpt_params & params);
+struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params);
+
+struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);
+
+// clear LoRA adapters from context, then apply new list of adapters
+void llama_lora_adapters_apply(struct llama_context * ctx, std::vector<llama_lora_adapter_container> & lora_adapters);
 
 // Batch utils
 
@@ -349,25 +388,13 @@ std::string llama_token_to_piece(
                        llama_token   token,
                        bool          special = true);
 
-// TODO: these should be moved in llama.h C-style API under single `llama_detokenize` function
-//       that takes into account the tokenizer type and decides how to handle the leading space
-//
 // detokenizes a vector of tokens into a string
 // should work similar to Python's `tokenizer.decode`
-// removes the leading space from the first non-BOS token
-std::string llama_detokenize_spm(
+// optionally renders special/control tokens
+std::string llama_detokenize(
                          llama_context * ctx,
-        const std::vector<llama_token> & tokens);
-
-// detokenizes a vector of tokens into a string
-// should work similar to Python's `tokenizer.decode`
-std::string llama_detokenize_bpe(
-                         llama_context * ctx,
-        const std::vector<llama_token> & tokens);
-
-// Uses the value from the model metadata if possible, otherwise
-// defaults to true when model type is SPM, otherwise false.
-bool llama_should_add_bos_token(const llama_model * model);
+        const std::vector<llama_token> & tokens,
+                                  bool   special = true);
 
 //
 // Chat template utils

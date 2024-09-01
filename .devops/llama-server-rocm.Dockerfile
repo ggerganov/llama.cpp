@@ -6,7 +6,7 @@ ARG ROCM_VERSION=5.6
 # Target the CUDA build image
 ARG BASE_ROCM_DEV_CONTAINER=rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
 
-FROM ${BASE_ROCM_DEV_CONTAINER} as build
+FROM ${BASE_ROCM_DEV_CONTAINER} AS build
 
 # Unless otherwise specified, we make a fat build.
 # List from https://github.com/ggerganov/llama.cpp/pull/1087#issuecomment-1682807878
@@ -39,6 +39,8 @@ ENV GPU_TARGETS=${ROCM_DOCKER_ARCH}
 ENV GGML_HIPBLAS=1
 ENV CC=/opt/rocm/llvm/bin/clang
 ENV CXX=/opt/rocm/llvm/bin/clang++
+# Must be set to 0.0.0.0 so it can listen to requests from host machine
+ENV LLAMA_ARG_HOST=0.0.0.0
 
 # Enable cURL
 ENV LLAMA_CURL=1

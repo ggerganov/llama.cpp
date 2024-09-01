@@ -148,11 +148,12 @@ int main(int argc, char ** argv) {
     llama_backend_init();
     llama_numa_init(params.numa);
 
-    llama_model * model;
-    llama_context * ctx;
-
     // load the model
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
+
     if (model == NULL) {
         fprintf(stderr, "%s: error: unable to load model\n", __func__);
         return 1;
@@ -252,6 +253,8 @@ int main(int argc, char ** argv) {
         chunks[i].tokens.clear();
     }
 
+    struct llama_batch query_batch = llama_batch_init(n_batch, 0, 1);
+
     // start loop, receive query and return top k similar chunks based on cosine similarity
     std::string query;
     while (true) {
@@ -259,7 +262,6 @@ int main(int argc, char ** argv) {
         std::getline(std::cin, query);
         std::vector<int32_t> query_tokens = llama_tokenize(ctx, query, true);
 
-        struct llama_batch query_batch = llama_batch_init(n_batch, 0, 1);
         batch_add_seq(query_batch, query_tokens, 0);
 
         std::vector<float> query_emb(n_embd, 0);
@@ -292,6 +294,7 @@ int main(int argc, char ** argv) {
     }
 
     // clean up
+    llama_batch_free(query_batch);
     llama_print_timings(ctx);
     llama_free(ctx);
     llama_free_model(model);
