@@ -279,6 +279,18 @@ static size_t find_partial_stop_string(const std::string &stop, const std::strin
     return std::string::npos;
 }
 
+static bool json_is_array_of_numbers(json data) {
+    if (data.is_array()) {
+        for (const auto & e : data) {
+            if (!e.is_number()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 // TODO: reuse llama_detokenize
 template <class Iter>
 static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
