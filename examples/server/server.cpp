@@ -92,7 +92,7 @@ struct server_task {
     server_task_cmpl_type cmpl_type = SERVER_TASK_CMPL_TYPE_NORMAL;
 
     // utility function
-    static std::unordered_set<int> get_list_id(std::vector<server_task> tasks) {
+    static std::unordered_set<int> get_list_id(const std::vector<server_task> & tasks) {
         std::unordered_set<int> ids(tasks.size());
         for (size_t i = 0; i < tasks.size(); i++) {
             ids.insert(tasks[i].id);
@@ -533,7 +533,7 @@ struct server_response {
         waiting_task_ids.insert(id_task);
     }
 
-    void add_waiting_tasks(std::vector<server_task> & tasks) {
+    void add_waiting_tasks(const std::vector<server_task> & tasks) {
         for (const auto & t : tasks) {
             add_waiting_task_id(t.id);
         }
