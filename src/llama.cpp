@@ -3810,7 +3810,8 @@ static bool llama_kv_cache_seq_rm(
                 if ((0 < p0 && p0 <= cell.pos) || (0 < p1 && p1 <= cell.pos)) {
                     return false;
                 }
-                if (p0 <= cell.pos && p1 < cell.pos) {
+                // invalidate tails which will be cleared
+                if (p0 <= cell.pos && cell.pos < p1) {
                     tail_id = -1;
                 }
             }
