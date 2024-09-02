@@ -53,6 +53,7 @@ enum stop_type {
 enum slot_state {
     SLOT_STATE_IDLE,
     SLOT_STATE_PROCESSING_PROMPT,
+    SLOT_STATE_DONE_PROMPT,
     SLOT_STATE_GENERATING,
 };
 
@@ -2235,9 +2236,9 @@ struct server_context {
                         {"progress", (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens},
                     });
 
-                    // entire prompt has been processed - start decoding new tokens
+                    // entire prompt has been processed
                     if (slot.n_past == slot.n_prompt_tokens) {
-                        slot.state = SLOT_STATE_GENERATING;
+                        slot.state = SLOT_STATE_DONE_PROMPT;
 
                         GGML_ASSERT(batch.n_tokens > 0);
 
@@ -2349,15 +2350,22 @@ struct server_context {
             }
 
             for (auto & slot : slots) {
-                if (slot.state != SLOT_STATE_GENERATING || slot.i_batch < (int) i || slot.i_batch >= (int) (i + n_tokens)) {
+                if (slot.i_batch < (int) i || slot.i_batch >= (int) (i + n_tokens)) {
                     continue; // continue loop of slots
                 }
 
-                // prompt evaluated for embedding
-                if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_EMBEDDING) {
-                    send_embedding(slot, batch_view);
-                    slot.release();
-                    slot.i_batch = -1;
+                if (slot.state == SLOT_STATE_DONE_PROMPT) {
+                    if (slot.cmpl_type == SERVER_TASK_CMPL_TYPE_EMBEDDING) {
+                        // prompt evaluated for embedding
+                        send_embedding(slot, batch_view);
+                        slot.release();
+                        slot.i_batch = -1;
+                        continue; // continue loop of slots
+                    } else {
+                        // prompt evaluated for next-token prediction
+                        slot.state = SLOT_STATE_GENERATING;
+                    }
+                } else if (slot.state != SLOT_STATE_GENERATING) {
                     continue; // continue loop of slots
                 }
 
