@@ -547,14 +547,8 @@ struct server_response {
         waiting_task_ids.erase(id_task);
     }
 
-    void remove_waiting_tasks(std::vector<server_task> & tasks) {
-        for (const auto & t : tasks) {
-            remove_waiting_task_id(t.id);
-        }
-    }
-
     // This function blocks the thread until there is a response for one of the id_tasks
-    server_task_result recv(std::unordered_set<int> & id_tasks) {
+    server_task_result recv(const std::unordered_set<int> & id_tasks) {
         while (true) {
             std::unique_lock<std::mutex> lock(mutex_results);
             condition_results.wait(lock, [&]{
@@ -1539,7 +1533,7 @@ struct server_context {
         return tasks;
     }
 
-    void cancel_tasks(std::unordered_set<int> & id_tasks) {
+    void cancel_tasks(const std::unordered_set<int> & id_tasks) {
         std::vector<server_task> cancel_tasks;
         cancel_tasks.reserve(id_tasks.size());
         for (const auto & id_task : id_tasks) {
@@ -1555,7 +1549,7 @@ struct server_context {
     }
 
     // receive the results from task(s) created by create_tasks_cmpl
-    void receive_cmpl_results(std::unordered_set<int> & id_tasks, std::function<void(std::vector<server_task_result>&)> result_handler, std::function<void(json)> error_handler) {
+    void receive_cmpl_results(const std::unordered_set<int> & id_tasks, std::function<void(std::vector<server_task_result>&)> result_handler, std::function<void(json)> error_handler) {
         // TODO: currently, there is no way to detect the client has cancelled the request
         std::vector<server_task_result> results(id_tasks.size());
         for (size_t i = 0; i < id_tasks.size(); i++) {
@@ -1574,7 +1568,7 @@ struct server_context {
     }
 
     // receive the results from task(s) created by create_tasks_cmpl, in stream mode
-    void receive_cmpl_results_stream(std::unordered_set<int> & id_tasks, std::function<bool(server_task_result&)> result_handler, std::function<void(json)> error_handler) {
+    void receive_cmpl_results_stream(const std::unordered_set<int> & id_tasks, std::function<bool(server_task_result&)> result_handler, std::function<void(json)> error_handler) {
         size_t n_finished = 0;
         while (true) {
             server_task_result result = queue_results.recv(id_tasks);
@@ -2966,7 +2960,7 @@ int main(int argc, char ** argv) {
         ctx_server.queue_tasks.post(tasks);
 
         bool stream = json_value(data, "stream", false);
-        std::unordered_set<int> task_ids = server_task::get_list_id(tasks);
+        const auto task_ids = server_task::get_list_id(tasks);
 
         if (!stream) {
             ctx_server.receive_cmpl_results(task_ids, [&](std::vector<server_task_result> & results) {
@@ -2985,7 +2979,7 @@ int main(int argc, char ** argv) {
                 res_error(res, error_data);
             });
         } else {
-            const auto chunked_content_provider = [task_ids, &ctx_server](size_t, httplib::DataSink & sink) mutable {
+            const auto chunked_content_provider = [task_ids, &ctx_server](size_t, httplib::DataSink & sink) {
                 ctx_server.receive_cmpl_results_stream(task_ids, [&](server_task_result result) -> bool {
                     return server_sent_event(sink, "data", result.data);
                 }, [&](json error_data) {
@@ -3022,7 +3016,7 @@ int main(int argc, char ** argv) {
         ctx_server.queue_tasks.post(tasks);
 
         bool stream = json_value(data, "stream", false);
-        std::unordered_set<int> task_ids = server_task::get_list_id(tasks);
+        const auto task_ids = server_task::get_list_id(tasks);
         const auto completion_id = gen_chatcmplid();
 
         if (!stream) {
@@ -3034,7 +3028,7 @@ int main(int argc, char ** argv) {
                 res_error(res, error_data);
             });
         } else {
-            const auto chunked_content_provider = [task_ids, &ctx_server, completion_id](size_t, httplib::DataSink & sink) mutable {
+            const auto chunked_content_provider = [task_ids, &ctx_server, completion_id](size_t, httplib::DataSink & sink) {
                 ctx_server.receive_cmpl_results_stream(task_ids, [&](server_task_result result) -> bool {
                     std::vector<json> result_array = format_partial_response_oaicompat(result.data, completion_id);
                     for (auto & event_data : result_array) {
