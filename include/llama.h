@@ -471,7 +471,7 @@ extern "C" {
     LLAMA_API enum llama_vocab_type   llama_get_vocab_type  (const struct llama_model * model);
     LLAMA_API enum llama_rope_type    llama_get_rope_type   (const struct llama_model * model);
 
-    // DEPRECATED: use the API above
+    // OLD API (use the new API above: https://github.com/ggerganov/llama.cpp/pull/9270)
     //LLAMA_API enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx);
     //LLAMA_API enum llama_vocab_type   llama_vocab_type  (const struct llama_model * model);
     //LLAMA_API enum llama_rope_type    llama_rope_type   (const struct llama_model * model);
