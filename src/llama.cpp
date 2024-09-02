@@ -20963,7 +20963,7 @@ struct llama_data_read {
 
     bool read_cache_seq_meta(struct llama_context * ctx, uint32_t cell_count, llama_seq_id seq_id = -1) {
 
-        if (seq_id < 0 || seq_id >= llama_n_seq_max(ctx)) {
+        if (seq_id < 0 || seq_id >= (llama_seq_id) llama_n_seq_max(ctx)) {
             LLAMA_LOG_ERROR("%s: seq_id out of range [0, %d): %d\n", __func__, llama_n_seq_max(ctx), seq_id);
             return false;
         }
