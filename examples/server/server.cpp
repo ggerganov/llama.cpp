@@ -38,6 +38,7 @@
 #include <memory>
 #include <unordered_set>
 #include <unordered_map>
+#include <deque>
 
 using json = nlohmann::ordered_json;
 
@@ -383,8 +384,8 @@ struct server_queue {
     bool running;
 
     // queues
-    std::vector<server_task> queue_tasks;
-    std::vector<server_task> queue_tasks_deferred;
+    std::deque<server_task> queue_tasks;
+    std::deque<server_task> queue_tasks_deferred;
 
     std::mutex mutex_tasks;
     std::condition_variable condition_tasks;
@@ -401,7 +402,7 @@ struct server_queue {
             LOG_VERBOSE("new task id", {{"new_id", task.id}});
         }
         if (front) {
-            queue_tasks.insert(queue_tasks.begin(), std::move(task));
+            queue_tasks.push_front(std::move(task));
         } else {
             queue_tasks.push_back(std::move(task));
         }
@@ -417,7 +418,7 @@ struct server_queue {
                 LOG_VERBOSE("new task id", {{"new_id", task.id}});
             }
             if (front) {
-                queue_tasks.insert(queue_tasks.begin(), std::move(task));
+                queue_tasks.push_front(std::move(task));
             } else {
                 queue_tasks.push_back(std::move(task));
             }
@@ -574,14 +575,14 @@ struct server_response {
     }
 
     // Send a new result to a waiting id_task
-    void send(server_task_result result) {
+    void send(server_task_result & result) {
         LOG_VERBOSE("send new result", {{"id_task", result.id}});
 
         std::unique_lock<std::mutex> lock(mutex_results);
         for (const auto & id_task : waiting_task_ids) {
             if (result.id == id_task) {
                 LOG_VERBOSE("queue_results.push_back", {{"id_task", id_task}});
-                queue_results.push_back(result);
+                queue_results.push_back(std::move(result));
                 condition_results.notify_all();
                 return;
             }
