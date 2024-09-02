@@ -2450,7 +2450,7 @@ struct server_context {
 
     json model_meta() const {
         return json {
-            {"vocab_type",  llama_vocab_type    (model)},
+            {"vocab_type",  llama_get_vocab_type(model)},
             {"n_vocab",     llama_n_vocab       (model)},
             {"n_ctx_train", llama_n_ctx_train   (model)},
             {"n_embd",      llama_n_embd        (model)},

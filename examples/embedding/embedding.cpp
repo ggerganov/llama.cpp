@@ -31,7 +31,7 @@ static void batch_add_seq(llama_batch & batch, const std::vector<int32_t> & toke
 }
 
 static void batch_decode(llama_context * ctx, llama_batch & batch, float * output, int n_seq, int n_embd, int embd_norm) {
-    const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
+    const enum llama_pooling_type pooling_type = llama_get_pooling_type(ctx);
     const struct llama_model * model = llama_get_model(ctx);
 
     // clear previous kv_cache values (irrelevant for embeddings)
@@ -114,7 +114,7 @@ int main(int argc, char ** argv) {
     const int n_ctx_train = llama_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
-    const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
+    const enum llama_pooling_type pooling_type = llama_get_pooling_type(ctx);
 
     if (llama_model_has_encoder(model) && llama_model_has_decoder(model)) {
         fprintf(stderr, "%s: error: computing embeddings in encoder-decoder models is not supported\n", __func__);

@@ -82,10 +82,10 @@ int main(int argc, char ** argv) {
     model_dft = llama_init_dft.model;
     ctx_dft = llama_init_dft.context;
 
-    const bool vocab_type_tgt = llama_vocab_type(model_tgt);
+    const bool vocab_type_tgt = llama_get_vocab_type(model_tgt);
     LOG("vocab_type tgt: %d\n", vocab_type_tgt);
 
-    const bool vocab_type_dft = llama_vocab_type(model_dft);
+    const bool vocab_type_dft = llama_get_vocab_type(model_dft);
     LOG("vocab_type dft: %d\n", vocab_type_dft);
 
     if (vocab_type_tgt != vocab_type_dft) {

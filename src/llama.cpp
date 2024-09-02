@@ -5945,7 +5945,7 @@ static void llm_load_hparams(
         hparams.use_alibi = true;
     }
 
-    hparams.rope_type = llama_rope_type(&model);
+    hparams.rope_type = llama_get_rope_type(&model);
 }
 
 static void llm_load_vocab(
@@ -18469,11 +18469,11 @@ uint32_t llama_n_seq_max(const struct llama_context * ctx) {
     return ctx->kv_self.size;
 }
 
-enum llama_vocab_type llama_vocab_type(const struct llama_model * model) {
+enum llama_vocab_type llama_get_vocab_type(const struct llama_model * model) {
     return model->vocab.type;
 }
 
-enum llama_rope_type llama_rope_type(const struct llama_model * model) {
+enum llama_rope_type llama_get_rope_type(const struct llama_model * model) {
     switch (model->arch) {
         // these models do not use RoPE
         case LLM_ARCH_GPT2:
@@ -18536,7 +18536,7 @@ enum llama_rope_type llama_rope_type(const struct llama_model * model) {
     return LLAMA_ROPE_TYPE_NONE;
 }
 
-enum llama_pooling_type llama_pooling_type(const struct llama_context * ctx) {
+enum llama_pooling_type llama_get_pooling_type(const struct llama_context * ctx) {
     return ctx->cparams.pooling_type;
 }
 

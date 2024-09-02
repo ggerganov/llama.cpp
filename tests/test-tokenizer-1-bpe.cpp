@@ -64,8 +64,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    //GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_BPE);
-    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
+    //GGML_ASSERT(llama_get_vocab_type(model) == LLAMA_VOCAB_TYPE_BPE);
+    if (llama_get_vocab_type(model) != LLAMA_VOCAB_TYPE_BPE) {
         return 99;
     }
 

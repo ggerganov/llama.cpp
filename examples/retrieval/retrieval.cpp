@@ -162,7 +162,7 @@ int main(int argc, char ** argv) {
     const int n_ctx_train = llama_n_ctx_train(model);
     const int n_ctx = llama_n_ctx(ctx);
 
-    const enum llama_pooling_type pooling_type = llama_pooling_type(ctx);
+    const enum llama_pooling_type pooling_type = llama_get_pooling_type(ctx);
     if (pooling_type == LLAMA_POOLING_TYPE_NONE) {
         fprintf(stderr, "%s: error: pooling type NONE not supported\n", __func__);
         return 1;

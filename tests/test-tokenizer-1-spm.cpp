@@ -52,8 +52,8 @@ int main(int argc, char ** argv) {
         }
     }
 
-    //GGML_ASSERT(llama_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
-    if (llama_vocab_type(model) != LLAMA_VOCAB_TYPE_SPM) {
+    //GGML_ASSERT(llama_get_vocab_type(model) == LLAMA_VOCAB_TYPE_SPM);
+    if (llama_get_vocab_type(model) != LLAMA_VOCAB_TYPE_SPM) {
         return 99;
     }
 
