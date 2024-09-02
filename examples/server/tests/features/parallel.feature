@@ -52,8 +52,8 @@ Feature: Parallel
     Then all prompts are predicted with <n_predict> tokens
     Examples:
       | streaming | n_predict |
-      | disabled  | 128       |
-      | enabled   | 64        |
+      | disabled  | 200       |
+      | enabled   | 200       |
 
   Scenario Outline: Multi users OAI completions compatibility no v1
     Given a system prompt You are a writer.
