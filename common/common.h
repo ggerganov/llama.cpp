@@ -221,6 +221,7 @@ struct gpt_params {
     std::string chat_template = "";
     std::string system_prompt = "";
     bool enable_chat_template = true;
+    bool enable_tool_calls    = false;
 
     std::vector<std::string> api_keys;
 
@@ -319,6 +320,8 @@ static std::vector<T> string_split(const std::string & str, char delim) {
 
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);
+
+bool string_contains(std::string haystack, std::string needle);
 
 //
 // Filesystem utils
@@ -427,6 +430,10 @@ std::string llama_chat_format_single(const struct llama_model * model,
 // Returns an example of formatted chat
 std::string llama_chat_format_example(const struct llama_model * model,
         const std::string & tmpl);
+
+// Returns the chat template stored inside the model
+// (empty string if model does not have built-in chat template)
+std::string llama_get_chat_template(const struct llama_model * model);
 
 //
 // KV cache utils

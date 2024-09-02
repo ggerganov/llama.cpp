@@ -116,10 +116,9 @@ static inline void server_log(const char * level, const char * function, int lin
 // chat template utils
 //
 
-// Format given chat. If tmpl is empty, we take the template from model metadata
-inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
+// convert input chat messages from JSON to llama_chat_msg
+inline std::vector<llama_chat_msg> parse_chat_messages(const std::vector<json> & messages) {
     std::vector<llama_chat_msg> chat;
-
     for (size_t i = 0; i < messages.size(); ++i) {
         const auto & curr_msg = messages[i];
 
@@ -144,7 +143,12 @@ inline std::string format_chat(const struct llama_model * model, const std::stri
 
         chat.push_back({role, content});
     }
+    return chat;
+}
 
+// Format given chat. If tmpl is empty, we take the template from model metadata
+inline std::string format_chat(const struct llama_model * model, const std::string & tmpl, const std::vector<json> & messages) {
+    auto chat = parse_chat_messages(messages);
     auto formatted_chat = llama_chat_apply_template(model, tmpl, chat, true);
     LOG_VERBOSE("formatted_chat", {{"text", formatted_chat.c_str()}});
     return formatted_chat;
@@ -356,7 +360,9 @@ static json oaicompat_completion_params_parse(
     llama_params["__oaicompat"] = true;
 
     // Apply chat template to the list of messages
-    llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
+    if (!body.contains("prompt")) {
+        llama_params["prompt"] = format_chat(model, chat_template, body.at("messages"));
+    }
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
@@ -417,11 +423,23 @@ static json format_final_response_oaicompat(const json & request, json result, c
     int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
     int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
     std::string content      = json_value(result, "content", std::string(""));
+    bool has_tool_calls      = result.contains("tool_calls");
 
     std::string finish_reason = "length";
     if (stopped_word || stopped_eos) {
-        finish_reason = "stop";
+        finish_reason = has_tool_calls ? "tool_calls" : "stop";
     }
+
+    json message = has_tool_calls
+        ? json{
+            {"content", nullptr},
+            {"role", "assistant"},
+            {"tool_calls", result.at("tool_calls")},
+        }
+        : json{
+            {"content", content},
+            {"role", "assistant"},
+        };
 
     json choices =
         streaming ? json::array({json{{"finish_reason", finish_reason},
@@ -429,8 +447,7 @@ static json format_final_response_oaicompat(const json & request, json result, c
                                         {"delta", json::object()}}})
                   : json::array({json{{"finish_reason", finish_reason},
                                         {"index", 0},
-                                        {"message", json{{"content", content},
-                                                         {"role", "assistant"}}}}});
+                                        {"message", message}}});
 
     std::time_t t = std::time(0);
 
@@ -472,23 +489,54 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
     bool stopped_eos    = json_value(result, "stopped_eos",   false);
     bool stopped_limit  = json_value(result, "stopped_limit", false);
     std::string content = json_value(result, "content",       std::string(""));
+    bool has_tool_calls = result.contains("tool_calls");
 
     std::string finish_reason;
     if (stopped_word || stopped_eos) {
-        finish_reason = "stop";
+        finish_reason = has_tool_calls ? "tool_calls" : "stop";
     }
     if (stopped_limit) {
         finish_reason = "length";
     }
 
-    std::time_t t = std::time(0);
+    auto wrap_choices = [&completion_id, &modelname](json choices) -> json {
+        return json{
+            {"choices", choices},
+            {"created", std::time(0)},
+            {"id",      completion_id},
+            {"model",   modelname},
+            {"object",  "chat.completion.chunk"}
+        };
+    };
 
     json choices;
+    json delta = has_tool_calls
+        ? json{
+            {"content", nullptr},
+            {"role", "assistant"},
+            {"tool_calls", result.at("tool_calls")},
+        }
+        : json{
+            {"content", content},
+            {"role", "assistant"},
+        };
 
     if (!finish_reason.empty()) {
         choices = json::array({json{{"finish_reason", finish_reason},
                                     {"index", 0},
                                     {"delta", json::object()}}});
+        if (has_tool_calls) {
+            // tool call must be send as two updates
+            json initial_ret = wrap_choices(json::array({
+                json{
+                    {"finish_reason", nullptr},
+                    {"index", 0},
+                    {"delta", delta},
+                }
+            }));
+            json second_ret = wrap_choices(choices);
+            return std::vector<json>({initial_ret, second_ret});
+        }
     } else {
         if (first) {
             if (content.empty()) {
@@ -497,28 +545,22 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
                                             {"delta", json{{"role", "assistant"}}}}});
             } else {
                 // We have to send this as two updates to conform to openai behavior
-                json initial_ret = json{{"choices", json::array({json{
-                                        {"finish_reason", nullptr},
-                                        {"index", 0},
-                                        {"delta", json{
-                                            {"role", "assistant"}
-                                        }}}})},
-                            {"created", t},
-                            {"id", completion_id},
-                            {"model", modelname},
-                            {"object", "chat.completion.chunk"}};
-
-                json second_ret = json{
-                            {"choices", json::array({json{{"finish_reason", nullptr},
-                                                            {"index", 0},
-                                                            {"delta", json{
-                                                            {"content", content}}}
-                                                            }})},
-                            {"created", t},
-                            {"id", completion_id},
-                            {"model", modelname},
-                            {"object", "chat.completion.chunk"}};
-
+                json initial_ret = wrap_choices(json::array({
+                    json{
+                        {"finish_reason", nullptr},
+                        {"index", 0},
+                        {"delta", json{
+                            {"role", "assistant"},
+                        }},
+                    }
+                }));
+                json second_ret = wrap_choices(json::array({
+                    json{
+                        {"finish_reason", nullptr},
+                        {"index", 0},
+                        {"delta", delta},
+                    }
+                }));
                 return std::vector<json>({initial_ret, second_ret});
             }
         } else {
@@ -531,21 +573,12 @@ static std::vector<json> format_partial_response_oaicompat(json result, const st
             choices = json::array({json{
                 {"finish_reason", nullptr},
                 {"index", 0},
-                {"delta",
-                json{
-                    {"content", content},
-                }},
+                {"delta", delta},
             }});
         }
     }
 
-    json ret = json {
-        {"choices", choices},
-        {"created", t},
-        {"id",      completion_id},
-        {"model",   modelname},
-        {"object",  "chat.completion.chunk"}
-    };
+    json ret = wrap_choices(choices);
     if (!finish_reason.empty()) {
         int num_tokens_predicted = json_value(result, "tokens_predicted", 0);
         int num_prompt_tokens    = json_value(result, "tokens_evaluated", 0);
