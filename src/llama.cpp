@@ -10806,7 +10806,7 @@ struct llm_build_context {
                         ggml_view_3d(ctx0, kv_self.k_l[il],
                             n_embd_head_k, n_head_kv, n_ctx,
                             ggml_row_size(kv_self.k_l[il]->type, n_embd_head_k),
-                            ggml_row_size(kv_self.k_l[il]->type, hparams.n_embd_k_gqa(il)),
+                            ggml_row_size(kv_self.k_l[il]->type, n_embd_k_gqa),
                             0),
                         lctx.inp_K_shift, rope_factors, n_rot, rope_type, n_ctx_orig, freq_base, freq_scale,
                         ext_factor, attn_factor, beta_fast, beta_slow);
