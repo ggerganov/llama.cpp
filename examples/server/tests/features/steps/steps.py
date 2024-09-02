@@ -818,7 +818,7 @@ async def concurrent_requests(context, f_completion, *args, **kwargs):
     for prompt_no in range(context.n_prompts):
         shifted_args = [context.prompts.pop(), seeds[prompt_no], *args]
         context.concurrent_tasks.append(asyncio.create_task(f_completion(*shifted_args, **kwargs)))
-    await asyncio.sleep(0.1)
+    await asyncio.sleep(0.01)
 
 
 @step('the slot {slot_id:d} is saved with filename "{filename}"')
