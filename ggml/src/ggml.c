@@ -19820,7 +19820,6 @@ struct ggml_cplan ggml_graph_plan(
                         cur += sizeof(float)*mxDn*n_tasks; // this is overestimated by x2
                     }
                 } break;
-
             case GGML_OP_CROSS_ENTROPY_LOSS:
                 {
                     cur = ggml_type_size(node->type)*(n_tasks + node->src[0]->ne[0]*n_tasks);

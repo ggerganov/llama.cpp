@@ -194,7 +194,8 @@ int main(int argc, char ** argv){
 
         // KV cache management
         // clean the cache of draft tokens that weren't accepted
-        llama_kv_cache_seq_rm(ctx, 0, n_past, -1);
+        // FIXME: recurrent and hybrid models
+        llama_past_seq_rm(ctx, 0, n_past, -1);
 
         llama_batch_clear(batch_tgt);
         llama_batch_add(batch_tgt, draft[0], n_past, { 0 }, true);

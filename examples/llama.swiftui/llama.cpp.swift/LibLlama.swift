@@ -216,7 +216,7 @@ actor LlamaContext {
             }
             batch.logits[Int(batch.n_tokens) - 1] = 1 // true
 
-            llama_kv_cache_clear(context)
+            llama_past_clear(context)
 
             let t_pp_start = ggml_time_us()
 
@@ -229,7 +229,7 @@ actor LlamaContext {
 
             // bench text generation
 
-            llama_kv_cache_clear(context)
+            llama_past_clear(context)
 
             let t_tg_start = ggml_time_us()
 
@@ -248,7 +248,7 @@ actor LlamaContext {
 
             let t_tg_end = ggml_time_us()
 
-            llama_kv_cache_clear(context)
+            llama_past_clear(context)
 
             let t_pp = Double(t_pp_end - t_pp_start) / 1000000.0
             let t_tg = Double(t_tg_end - t_tg_start) / 1000000.0
@@ -298,7 +298,7 @@ actor LlamaContext {
     func clear() {
         tokens_list.removeAll()
         temporary_invalid_cchars.removeAll()
-        llama_kv_cache_clear(context)
+        llama_past_clear(context)
     }
 
     private func tokenize(text: String, add_bos: Bool) -> [llama_token] {

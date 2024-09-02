@@ -38,10 +38,10 @@
 #define LLAMA_FILE_MAGIC_GGSQ 0x67677371u // 'ggsq'
 
 #define LLAMA_SESSION_MAGIC   LLAMA_FILE_MAGIC_GGSN
-#define LLAMA_SESSION_VERSION 8
+#define LLAMA_SESSION_VERSION 9
 
 #define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
-#define LLAMA_STATE_SEQ_VERSION 2
+#define LLAMA_STATE_SEQ_VERSION 3
 
 #ifdef __cplusplus
 extern "C" {
@@ -621,6 +621,12 @@ extern "C" {
     // Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
     LLAMA_API void llama_kv_cache_view_update(const struct llama_context * ctx, struct llama_kv_cache_view * view);
 
+    // Rebuild and check the validity of the recurrent state cache's tree of sequences.
+    // (slow, use only for debugging purposes)
+    // Returns whether or not the rs cache was valid.
+    // The errors are always corrected, but only logged when debug is true.
+    LLAMA_API bool llama_rs_cache_rebuild(struct llama_context * ctx, bool debug);
+
     // Returns the number of tokens in the KV cache (slow, use only for debug)
     // If a KV cell has multiple sequences assigned to it, it will be counted multiple times
     LLAMA_API int32_t llama_get_kv_cache_token_count(const struct llama_context * ctx);
@@ -628,36 +634,62 @@ extern "C" {
     // Returns the number of used KV cells (i.e. have at least one sequence assigned to them)
     LLAMA_API int32_t llama_get_kv_cache_used_cells(const struct llama_context * ctx);
 
-    // Clear the KV cache - both cell info is erased and KV data is zeroed
-    LLAMA_API void llama_kv_cache_clear(
+    // Returns the number of used recurrent state cells (i.e. have at least one sequence assigned to them)
+    LLAMA_API int32_t llama_get_rs_cache_used_cells(const struct llama_context * ctx);
+
+    // Clear the KV cache and recurrent states - both cell info is erased and KV data is zeroed
+    LLAMA_API void llama_past_clear(
             struct llama_context * ctx);
+    LLAMA_API DEPRECATED(void llama_kv_cache_clear(
+            struct llama_context * ctx),
+        "use llama_past_clear instead");
 
     // Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
-    // Returns false if a partial sequence cannot be removed. Removing a whole sequence never fails
     // seq_id < 0 : match any sequence
     // p0 < 0     : [0,  p1]
     // p1 < 0     : [p0, inf)
-    LLAMA_API bool llama_kv_cache_seq_rm(
+    // Returns n_past (one more than the largest remaining pos in the seq_id)
+    // which is only meaningful to handle for partial removals.
+    LLAMA_API llama_pos llama_past_seq_rm(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
                        llama_pos   p0,
                        llama_pos   p1);
+    LLAMA_API DEPRECATED(bool llama_kv_cache_seq_rm(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id,
+                       llama_pos   p0,
+                       llama_pos   p1),
+        "use llama_past_seq_rm instead, and handle its return value for partial removals");
 
     // Copy all tokens that belong to the specified sequence to another sequence
-    // Note that this does not allocate extra KV cache memory - it simply assigns the tokens to the new sequence
+    // Note that this does not allocate extra KV or RS cache memory - it simply assigns the tokens to the new sequence
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
-    LLAMA_API void llama_kv_cache_seq_cp(
+    // Returns n_past (one more than the largest remaining pos in the destination seq_id)
+    // which is only meaningful to handle when partially copying.
+    LLAMA_API llama_pos llama_past_seq_cp(
             struct llama_context * ctx,
                     llama_seq_id   seq_id_src,
                     llama_seq_id   seq_id_dst,
                        llama_pos   p0,
                        llama_pos   p1);
+    LLAMA_API DEPRECATED(void llama_kv_cache_seq_cp(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id_src,
+                    llama_seq_id   seq_id_dst,
+                       llama_pos   p0,
+                       llama_pos   p1),
+        "use llama_past_seq_cp instead, and handle its return value for partial copies");
 
     // Removes all tokens that do not belong to the specified sequence
-    LLAMA_API void llama_kv_cache_seq_keep(
+    LLAMA_API void llama_past_seq_keep(
             struct llama_context * ctx,
                     llama_seq_id   seq_id);
+    LLAMA_API DEPRECATED(void llama_kv_cache_seq_keep(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id),
+        "use llama_past_seq_keep instead");
 
     // Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
     // If the KV cache is RoPEd, the KV data is updated accordingly:
@@ -665,12 +697,19 @@ extern "C" {
     //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
-    LLAMA_API void llama_kv_cache_seq_add(
+    LLAMA_API void llama_past_seq_add(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
                        llama_pos   p0,
                        llama_pos   p1,
                        llama_pos   delta);
+    LLAMA_API DEPRECATED(void llama_kv_cache_seq_add(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id,
+                       llama_pos   p0,
+                       llama_pos   p1,
+                       llama_pos   delta),
+        "use llama_past_seq_add instead");
 
     // Integer division of the positions by factor of `d > 1`
     // If the KV cache is RoPEd, the KV data is updated accordingly:
@@ -678,17 +717,28 @@ extern "C" {
     //   - explicitly with llama_kv_cache_update()
     // p0 < 0 : [0,  p1]
     // p1 < 0 : [p0, inf)
-    LLAMA_API void llama_kv_cache_seq_div(
+    LLAMA_API void llama_past_seq_div(
             struct llama_context * ctx,
                     llama_seq_id   seq_id,
                        llama_pos   p0,
                        llama_pos   p1,
                              int   d);
+    LLAMA_API DEPRECATED(void llama_kv_cache_seq_div(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id,
+                       llama_pos   p0,
+                       llama_pos   p1,
+                             int   d),
+        "use llama_past_seq_div instead");
 
-    // Returns the largest position present in the KV cache for the specified sequence
-    LLAMA_API llama_pos llama_kv_cache_seq_pos_max(
+    // Returns the largest position present in the KV and/or RS cache for the specified sequence
+    LLAMA_API llama_pos llama_past_seq_pos_max(
             struct llama_context * ctx,
                     llama_seq_id   seq_id);
+    LLAMA_API DEPRECATED(llama_pos llama_kv_cache_seq_pos_max(
+            struct llama_context * ctx,
+                    llama_seq_id   seq_id),
+        "use llama_past_seq_pos_max instead, which now returns -1 instead of 0 when the seq_id has no cells");
 
     // Defragment the KV cache
     // This will be applied:
