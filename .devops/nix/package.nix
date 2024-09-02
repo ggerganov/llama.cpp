@@ -1,5 +1,6 @@
 {
   lib,
+  autoAddDriverRunpath,
   glibc,
   config,
   stdenv,
