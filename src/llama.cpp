@@ -3346,7 +3346,11 @@ static size_t llama_get_device_count(const llama_model & model) {
 static ggml_backend_buffer_type_t llama_default_buffer_type_offload(const llama_model & model, int gpu) {
     ggml_backend_buffer_type_t buft = nullptr;
 
+#ifdef GGML_USE_RPC
     int rpc_count = (int)model.rpc_servers.size();
+#else
+    int rpc_count = 0;
+#endif
     int local_gpu = gpu - rpc_count;
 #if defined(GGML_USE_RPC)
     if (gpu < rpc_count) {
@@ -3403,7 +3407,11 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_split(const llama_mo
 }
 
 static size_t llama_get_device_memory(const llama_model & model, int device) {
+#ifdef GGML_USE_RPC
     int rpc_count = (int)model.rpc_servers.size();
+#else
+    int rpc_count = 0;
+#endif
     int local_device = device - rpc_count;
 #if defined(GGML_USE_RPC)
     if (device < rpc_count) {
