@@ -62,7 +62,7 @@ extern "C" {
     struct llama_model;
     struct llama_context;
     struct llama_sampler;
-    struct llama_sampling;
+    struct llama_sampling; // TODO: remove before merge
 
     typedef int32_t llama_pos;
     typedef int32_t llama_token;
@@ -414,7 +414,8 @@ extern "C" {
     } llama_sampling_params;
 
     typedef struct llama_sampler_params {
-        bool dummy;
+        uint32_t seed;              // the seed used to initialize the rng of the sampler
+
         // TODO: add type of sampler: greedy, dist, mirostat, etc.
     } llama_sampler_params;
 
@@ -1175,10 +1176,11 @@ extern "C" {
     typedef void * llama_constraint_context_t;
 
     struct llama_constraint_i {
-        void (*accept)(struct llama_constraint * cnstr, llama_token token);
+        void (*accept)(struct llama_constraint * cnstr, llama_token token); // can be NULL
         void (*apply) (struct llama_constraint * cnstr, llama_token_data_array * candidates);
-        void (*reset) (struct llama_constraint * cnstr); // e.g. for grammar and penalty constraints
-        void (*free)  (struct llama_constraint * cnstr);
+        void (*reset) (struct llama_constraint * cnstr); // e.g. for grammar and penalty constraints, can be NULL
+        void (*copy)  (struct llama_constraint * cnstr, const struct llama_constraint * cnstr_src);
+        void (*free)  (struct llama_constraint * cnstr); // can be NULL
 
         // TODO: API for internal libllama usage for appending the sampling to an existing ggml_cgraph
         //void (*apply_ggml) (struct llama_constraint * cnstr, ...);
@@ -1192,10 +1194,13 @@ extern "C" {
     LLAMA_API struct llama_constraint * llama_constraint_init_top_k(int32_t k, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_top_p(float   p, int32_t min_keep);
     // ...
+
+    // do not call if used with llama_sampler_add_constraint
     LLAMA_API void llama_constraint_free(struct llama_constraint * cnstr);
 
     LLAMA_API void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token);
     LLAMA_API void llama_constraint_apply (struct llama_constraint * cnstr, llama_token_data_array * candidates);
+    LLAMA_API void llama_constraint_reset (struct llama_constraint * cnstr);
 
     // samplers
 
@@ -1206,6 +1211,8 @@ extern "C" {
 
     // TODO: should this take ownership so the user does not need to call llama_constraint_free
     //       or should just make a reference to the constraint so that it can be reused in multiple llama_sampler?
+    //
+    //       seems better to take the ownership, otherwise the copying of the sampler will be more complicated
     LLAMA_API void llama_sampler_add_constraint(struct llama_sampler * smpl, struct llama_constraint * cnstr);
 
     LLAMA_API void        llama_sampler_accept(struct llama_sampler * smpl, llama_token token);

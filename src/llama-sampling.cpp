@@ -50,6 +50,10 @@ struct llama_sampling * llama_sampling_init_impl(const struct llama_vocab & voca
 }
 
 void llama_sampling_free_impl(struct llama_sampling * sampling) {
+    if (sampling == nullptr) {
+        return;
+    }
+
     delete sampling;
 }
 
@@ -632,4 +636,167 @@ llama_token llama_sampling_prev_impl(const struct llama_sampling & smpl, int ith
 
 int llama_sampling_n_prev_impl(const struct llama_sampling & smpl) {
     return smpl.prev.size();
+}
+
+//
+// sampling v2
+//
+
+// constraints
+
+// top-k
+
+struct llama_constraint_context_top_k {
+    int32_t k;
+    size_t min_keep;
+};
+
+static struct llama_constraint_i llama_constraint_top_k_i = {
+    /* .accept = */ nullptr,
+    /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * candidates) {
+        auto * ctx = (llama_constraint_context_top_k *) cnstr->ctx;
+        llama_sampling_top_k_impl(candidates, ctx->k, ctx->min_keep);
+    },
+    /* .reset  = */ nullptr,
+    /* .copy   = */ [](struct llama_constraint * cnstr, const struct llama_constraint * cnstr_src) {
+        cnstr->ctx = new llama_constraint_context_top_k;
+        const auto * ctx_src = (const llama_constraint_context_top_k *) cnstr_src->ctx;
+              auto * ctx_dst = (      llama_constraint_context_top_k *) cnstr->ctx;
+        *ctx_dst = *ctx_src;
+    },
+    /* .free   = */ [](struct llama_constraint * cnstr) {
+        delete (llama_constraint_context_top_k *) cnstr->ctx;
+        delete cnstr;
+    }
+};
+
+struct llama_constraint * llama_constraint_init_top_k_impl(int32_t k, size_t min_keep) {
+    struct llama_constraint * result = new llama_constraint;
+
+    result->iface = &llama_constraint_top_k_i;
+    result->ctx = new llama_constraint_context_top_k{k, min_keep};
+
+    return result;
+}
+
+// top-p
+
+struct llama_constraint_context_top_p {
+    float p;
+    size_t min_keep;
+};
+
+static struct llama_constraint_i llama_constraint_top_p_i = {
+    /* .accept = */ nullptr,
+    /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * candidates) {
+        llama_constraint_context_top_p * ctx = (llama_constraint_context_top_p *) cnstr->ctx;
+        llama_sampling_top_p_impl(candidates, ctx->p, ctx->min_keep);
+    },
+    /* .reset  = */ nullptr,
+    /* .copy   = */ [](struct llama_constraint * cnstr, const struct llama_constraint * cnstr_src) {
+        cnstr->ctx = new llama_constraint_context_top_p;
+        const auto * ctx_src = (const llama_constraint_context_top_p *) cnstr_src->ctx;
+              auto * ctx_dst = (      llama_constraint_context_top_p *) cnstr->ctx;
+        *ctx_dst = *ctx_src;
+    },
+    /* .free   = */ [](struct llama_constraint * cnstr) {
+        delete (llama_constraint_context_top_p *) cnstr->ctx;
+        delete cnstr;
+    }
+};
+
+struct llama_constraint * llama_constraint_init_top_p_impl(float p, size_t min_keep) {
+    struct llama_constraint * result = new llama_constraint;
+
+    result->iface = &llama_constraint_top_p_i;
+    result->ctx = new llama_constraint_context_top_p{p, min_keep};
+
+    return result;
+}
+
+void llama_constraint_free_impl(struct llama_constraint * constraint) {
+    if (constraint->iface->free) {
+        constraint->iface->free(constraint);
+    }
+}
+
+void llama_constraint_accept_impl(struct llama_constraint * constraint, llama_token token) {
+    if (constraint->iface->accept) {
+        constraint->iface->accept(constraint, token);
+    }
+}
+
+void llama_constraint_apply_impl(struct llama_constraint * constraint, struct llama_token_data_array * candidates) {
+    GGML_ASSERT(constraint->iface->apply);
+    constraint->iface->apply(constraint, candidates);
+}
+
+void llama_constraint_reset_impl(struct llama_constraint * constraint) {
+    if (constraint->iface->reset) {
+        constraint->iface->reset(constraint);
+    }
+}
+
+// samplers
+
+struct llama_sampler * llama_sampler_init_impl(struct llama_sampler_params params) {
+    auto * result = new llama_sampler;
+
+    result->params = params;
+
+    result->rng.seed(params.seed);
+
+    return result;
+}
+
+void llama_sampler_free_impl(struct llama_sampler * smpl) {
+    if (smpl == nullptr) {
+        return;
+    }
+
+    for (auto * constraint : smpl->constraints) {
+        llama_constraint_free_impl(constraint);
+    }
+
+    delete smpl;
+}
+
+struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) {
+    auto * result = new llama_sampler;
+
+    *result = smpl;
+
+    // copy the constraints objects
+    result->constraints.clear();
+    for (const auto & constraint : smpl.constraints) {
+        GGML_ASSERT(constraint->iface->copy);
+
+        result->constraints.push_back(new llama_constraint);
+        result->constraints.back()->iface = constraint->iface;
+        result->constraints.back()->iface->copy(result->constraints.back(), constraint);
+    }
+
+    return result;
+}
+
+void llama_sampler_reset_impl(struct llama_sampler & smpl) {
+    smpl.prev.clear();
+
+    for (auto * constraint : smpl.constraints) {
+        llama_constraint_reset_impl(constraint);
+    }
+
+    // TODO: should we reset the timings?
+}
+
+void llama_sampler_add_constraint_impl(struct llama_sampler & smpl, struct llama_constraint * cnstr) {
+    smpl.constraints.push_back(cnstr);
+}
+
+void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token) {
+    smpl.prev.push_back(token);
+
+    for (auto * constraint : smpl.constraints) {
+        llama_constraint_accept_impl(constraint, token);
+    }
 }

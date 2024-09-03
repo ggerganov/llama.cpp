@@ -17937,7 +17937,7 @@ struct llama_context_params llama_context_default_params() {
 
 struct llama_sampler_params llama_sampler_default_params() {
     struct llama_sampler_params result = {
-        /*.dummy =*/ false,
+        /*.seed              =*/ LLAMA_DEFAULT_SEED,
     };
 
     return result;
@@ -20969,6 +20969,70 @@ llama_token llama_sampling_prev(const struct llama_sampling * smpl, int32_t ith)
 
 llama_token llama_sampling_last(const struct llama_sampling * smpl) {
     return llama_sampling_prev_impl(*smpl, 0);
+}
+
+//
+// sampling v2
+//
+
+struct llama_constraint * llama_constraint_init_top_k(int32_t k, int32_t min_keep) {
+    return llama_constraint_init_top_k_impl(k, min_keep);
+}
+
+struct llama_constraint * llama_constraint_init_top_p(float p, int32_t min_keep) {
+    return llama_constraint_init_top_p_impl(p, min_keep);
+}
+
+void llama_constraint_free(struct llama_constraint * cnstr) {
+    if (cnstr == nullptr) {
+        return;
+    }
+
+    llama_constraint_free_impl(cnstr);
+}
+
+void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token) {
+    llama_constraint_accept_impl(cnstr, token);
+}
+
+void llama_constraint_apply(struct llama_constraint * cnstr, llama_token_data_array * candidates) {
+    llama_constraint_apply_impl(cnstr, candidates);
+}
+
+void llama_constraint_reset(struct llama_constraint * cnstr) {
+    llama_constraint_reset_impl(cnstr);
+}
+
+struct llama_sampler * llama_sampler_init(struct llama_sampler_params params) {
+    return llama_sampler_init_impl(params);
+}
+
+void  llama_sampler_free(struct llama_sampler * smpl) {
+    if (smpl == nullptr) {
+        return;
+    }
+
+    llama_sampler_free_impl(smpl);
+}
+
+struct llama_sampler * llama_sampler_cp(const struct llama_sampler * smpl) {
+    return llama_sampler_cp_impl(*smpl);
+}
+
+void llama_sampler_reset(struct llama_sampler * smpl) {
+    llama_sampler_reset_impl(*smpl);
+}
+
+void llama_sampler_add_constraint(struct llama_sampler * smpl, struct llama_constraint * cnstr) {
+    llama_sampler_add_constraint_impl(*smpl, cnstr);
+}
+
+void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
+    llama_sampler_accept_impl(*smpl, token);
+}
+
+llama_token llama_sampler_sample(struct llama_sampler * smpl, const struct llama_context * ctx, int32_t i) {
+    GGML_ABORT("not implemented");
 }
 
 //

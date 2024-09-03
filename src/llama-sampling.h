@@ -105,3 +105,48 @@ void llama_sampling_accept_impl(struct llama_sampling & smpl, llama_token token,
 
 llama_token llama_sampling_prev_impl  (const struct llama_sampling & smpl, int ith);
 int         llama_sampling_n_prev_impl(const struct llama_sampling & smpl);
+
+
+//
+// sampling v2
+//
+
+// constraints
+
+struct llama_constraint * llama_constraint_init_top_k_impl(int32_t k, size_t min_keep);
+struct llama_constraint * llama_constraint_init_top_p_impl(float   p, size_t min_keep);
+
+void llama_constraint_free_impl(struct llama_constraint * constraint);
+
+void llama_constraint_accept_impl(struct llama_constraint * constraint, llama_token token);
+void llama_constraint_apply_impl (struct llama_constraint * constraint, struct llama_token_data_array * candidates);
+void llama_constraint_reset_impl (struct llama_constraint * constraint);
+
+// samplers
+
+struct llama_sampler {
+    llama_sampler_params params;
+
+    // state
+
+    std::mt19937 rng;
+
+    // TODO: move to a standalone penalty constraint?
+    ring_buffer<llama_token> prev;
+
+    std::vector<llama_constraint *> constraints;
+
+    // timing
+
+    mutable int64_t t_sample_us = 0;
+
+    mutable int32_t n_sample = 0;
+};
+
+struct llama_sampler * llama_sampler_init_impl (      struct llama_sampler_params params);
+void                   llama_sampler_free_impl (      struct llama_sampler * smpl);
+struct llama_sampler * llama_sampler_cp_impl   (const struct llama_sampler & smpl);
+void                   llama_sampler_reset_impl(      struct llama_sampler & smpl);
+
+void llama_sampler_add_constraint_impl(struct llama_sampler & smpl, struct llama_constraint * cnstr);
+void llama_sampler_accept_impl        (struct llama_sampler & smpl, llama_token token);
