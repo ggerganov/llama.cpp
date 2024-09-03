@@ -228,6 +228,7 @@ async def step_wait_for_server_status_with_timeout(context, expecting_status: Li
 
 
 @step("the server is {expecting_status}")
+@async_run_until_complete
 async def step_wait_for_server_status(context, expecting_status: Literal['healthy', 'ready', 'idle', 'busy'] | str):
     await wait_for_server_status_with_timeout(context, expecting_status, 30)
 
