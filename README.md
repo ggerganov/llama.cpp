@@ -10,32 +10,14 @@
 
 Inference of Meta's [LLaMA](https://arxiv.org/abs/2302.13971) model (and others) in pure C/C++
 
-> [!IMPORTANT]
-[2024 Jun 12] Binaries have been renamed w/ a `llama-` prefix. `main` is now `llama-cli`, `server` is `llama-server`, etc (https://github.com/ggerganov/llama.cpp/pull/7809)
-
 ## Recent API changes
 
-- [2024 Jun 26] The source code and CMake build scripts have been restructured https://github.com/ggerganov/llama.cpp/pull/8006
-- [2024 Apr 21] `llama_token_to_piece` can now optionally render special tokens https://github.com/ggerganov/llama.cpp/pull/6807
-- [2024 Apr 4] State and session file functions reorganized under `llama_state_*` https://github.com/ggerganov/llama.cpp/pull/6341
-- [2024 Mar 26] Logits and embeddings API updated for compactness https://github.com/ggerganov/llama.cpp/pull/6122
-- [2024 Mar 13] Add `llama_synchronize()` + `llama_context_params.n_ubatch` https://github.com/ggerganov/llama.cpp/pull/6017
-- [2024 Mar 8] `llama_kv_cache_seq_rm()` returns a `bool` instead of `void`, and new `llama_n_seq_max()` returns the upper limit of acceptable `seq_id` in batches (relevant when dealing with multiple sequences) https://github.com/ggerganov/llama.cpp/pull/5328
-- [2024 Mar 4] Embeddings API updated https://github.com/ggerganov/llama.cpp/pull/5796
-- [2024 Mar 3] `struct llama_context_params` https://github.com/ggerganov/llama.cpp/pull/5849
+- [Changelog for `libllama` API](https://github.com/ggerganov/llama.cpp/issues/9289)
+- [Changelog for `llama-server` REST API](https://github.com/ggerganov/llama.cpp/issues/9291)
 
 ## Hot topics
 
-- **`convert.py` has been deprecated and moved to `examples/convert_legacy_llama.py`, please use `convert_hf_to_gguf.py`** https://github.com/ggerganov/llama.cpp/pull/7430
-- Initial Flash-Attention support: https://github.com/ggerganov/llama.cpp/pull/5021
-- BPE pre-tokenization support has been added: https://github.com/ggerganov/llama.cpp/pull/6920
-- MoE memory layout has been updated - reconvert models for `mmap` support and regenerate `imatrix` https://github.com/ggerganov/llama.cpp/pull/6387
-- Model sharding instructions using `gguf-split` https://github.com/ggerganov/llama.cpp/discussions/6404
-- Fix major bug in Metal batched inference https://github.com/ggerganov/llama.cpp/pull/6225
-- Multi-GPU pipeline parallelism support https://github.com/ggerganov/llama.cpp/pull/6017
-- Looking for contributions to add Deepseek support: https://github.com/ggerganov/llama.cpp/issues/5981
-- Quantization blind testing: https://github.com/ggerganov/llama.cpp/discussions/5962
-- Initial Mamba support has been added: https://github.com/ggerganov/llama.cpp/pull/5328
+- *add hot topics here*
 
 ----
 
