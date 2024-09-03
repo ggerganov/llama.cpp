@@ -973,8 +973,14 @@ struct llama_constraint * llama_constraint_init_grammar_impl(const struct llama_
     auto * ctx = (llama_constraint_context_grammar *) result->ctx;
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
+        ctx->grammar_str = grammar_str;
+        ctx->grammar_root = grammar_root;
+
         ctx->grammar = llama_grammar_init_impl(&vocab, grammar_str, grammar_root);
     } else {
+        ctx->grammar_str.clear();
+        ctx->grammar_root.clear();
+
         ctx->grammar = nullptr;
     }
 
