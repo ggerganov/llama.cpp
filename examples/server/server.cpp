@@ -471,7 +471,7 @@ struct server_queue {
         if (!queue_tasks_deferred.empty()) {
             server_task task = queue_tasks_deferred.front();
             queue_tasks_deferred.erase(queue_tasks_deferred.begin());
-            queue_tasks.push_back(std::move(task));
+            queue_tasks.push_back(task);
         }
     }
 
