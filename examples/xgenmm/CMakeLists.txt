@@ -44,6 +44,12 @@ install(TARGETS test_anyres_handle_patches RUNTIME)
 target_link_libraries(test_anyres_handle_patches PRIVATE common xgenmm ${CMAKE_THREAD_LIBS_INIT})
 target_compile_features(xgenmm PRIVATE cxx_std_11)
 
+set(TARGET test_patch_ops)
+add_executable(test_patch_ops test_patch_ops.cpp)
+install(TARGETS test_patch_ops RUNTIME)
+target_link_libraries(test_patch_ops PRIVATE common xgenmm ${CMAKE_THREAD_LIBS_INIT})
+target_compile_features(xgenmm PRIVATE cxx_std_11)
+
 
 # not implemented yet
 # set(TARGET xgenmm-cli)

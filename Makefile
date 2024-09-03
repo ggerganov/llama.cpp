@@ -21,6 +21,7 @@ BUILD_TARGETS = \
 	llama-llava-cli \
 	llama-minicpmv-cli\
 	xgenmm-cli\
+	test_anyres_handle_patches\
 	llama-lookahead \
 	llama-lookup \
 	llama-lookup-create \
@@ -1481,6 +1482,14 @@ xgenmm-cli: examples/xgenmm/xgenmm-cli.cpp \
 	examples/xgenmm/clip.h \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
+
+test_anyres_handle_patches: examples/xgenmm/test_anyres_handle_patches.cpp \
+	examples/xgenmm/xgenmm.cpp \
+	examples/xgenmm/xgenmm.h \
+	examples/xgenmm/clip.cpp \
+	examples/xgenmm/clip.h \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual	
 
 ifeq ($(UNAME_S),Darwin)
 swift: examples/batched.swift

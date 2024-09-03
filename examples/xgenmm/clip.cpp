@@ -485,7 +485,7 @@ struct clip_vision_model {
 
     struct ggml_tensor * projection;
 
-    // LLaVA projection
+    // LLaVA projecclip_image_encodeion
     struct ggml_tensor * mm_0_w = NULL;
     struct ggml_tensor * mm_0_b = NULL;
     struct ggml_tensor * mm_2_w = NULL;

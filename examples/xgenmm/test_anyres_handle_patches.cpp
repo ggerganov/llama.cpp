@@ -535,8 +535,8 @@ int main(){
         part of: 
             llava_image_embed_make_with_filename
     */
-    const char*    image_path = "/export/home/llama.cpp/examples/xgenmm/imgs/image-1d100e9.jpg";  // Porcelain
-    // const char*    image_path = "/export/home/llama.cpp/examples/xgenmm/imgs/image-1d100e9-1.jpg";
+    // const char*    image_path = "/export/home/llama.cpp/examples/xgenmm/imgs/image-1d100e9.jpg";  // Porcelain
+    const char*    image_path = "/export/home/llama.cpp/examples/xgenmm/imgs/image-1d100e9-1.jpg";
     unsigned char* image_bytes;
     long           image_bytes_length;
     auto           loaded = load_file_to_bytes(image_path, &image_bytes, &image_bytes_length);
@@ -618,31 +618,36 @@ int main(){
     std::vector<float*> image_embd_v;
     image_embd_v.resize(img_res_v.size);
     printf("image_embd_v.size():%d\n", image_embd_v.size());
-    for (size_t i = 0; i < img_res_v.size; i++)
-    {
-        printf("encode patch %d\n", i);
-        const int nx = img_res_v.data[i].nx;
-        const int ny = img_res_v.data[i].ny;
-        const int vec_len = img_res_v.data[i].buf.size();
-        printf("    i:%d | nx:%d | ny:%d | vec len:%d\n", i, nx, ny, vec_len); // 384^2 * 3(channel) = 442368
-        auto start = std::chrono::high_resolution_clock::now();
-        image_embd_v[i] =
-            (float*)malloc(clip_embd_nbytes(ctx_clip));  // 576 patches * 4096 embeddings * 4 bytes = 9437184
-        const bool encoded = clip_image_encode(
-            ctx_clip, 1, &img_res_v.data[i],
-            image_embd_v[i]);  // image data is in 3x336x336 format and will be converted to 336x336x3 inside
-        if (!encoded)
-        {
-            LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int)i + 1, (int)img_res_v.size);
-            return false;
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> duration = end - start;
-        std::cout << "  Wall time: " << duration.count() << " seconds" << std::endl;
-    }
+    // for (size_t i = 0; i < img_res_v.size; i++)
+    // {
+    //     printf("encode patch %d\n", i);
+    //     const int nx = img_res_v.data[i].nx;
+    //     const int ny = img_res_v.data[i].ny;
+    //     const int vec_len = img_res_v.data[i].buf.size();
+    //     printf("    i:%d | nx:%d | ny:%d | vec len:%d\n", i, nx, ny, vec_len); // 384^2 * 3(channel) = 442368
+    //     auto start = std::chrono::high_resolution_clock::now();
+    //     image_embd_v[i] =
+    //         (float*)malloc(clip_embd_nbytes(ctx_clip));  // 576 patches * 4096 embeddings * 4 bytes = 9437184
+    //     const bool encoded = clip_image_encode(
+    //         ctx_clip, 1, &img_res_v.data[i],
+    //         image_embd_v[i]);  // image data is in 3x336x336 format and will be converted to 336x336x3 inside
+    //     if (!encoded)
+    //     {
+    //         LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int)i + 1, (int)img_res_v.size);
+    //         return false;
+    //     }
+    //     auto end = std::chrono::high_resolution_clock::now();
+    //     std::chrono::duration<double> duration = end - start;
+    //     std::cout << "  Wall time: " << duration.count() << " seconds" << std::endl;
+    //     for (int j = 0; j < 5; j++)
+    //     {
+    //         printf("    %.4f ", image_embd_v[i][j]);
+    //     }
+    //     printf("\n");
+    // }
 
     // handle patches goes here
-    
+
 
     return 0;
 }

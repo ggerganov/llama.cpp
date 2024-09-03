@@ -153,3 +153,5 @@ examples/xgenmm copy/imgs/image_res_3.csv
 examples/xgenmm copy/imgs/image_res_4.csv
 examples/xgenmm copy/imgs/image-1d100e9-1.jpg
 examples/xgenmm copy/imgs/image-1d100e9.jpg
+examples/xgenmm/imgs/4patches_embeddings.pt
+examples/xgenmm/imgs/attention_mask_4patchhes.pt
