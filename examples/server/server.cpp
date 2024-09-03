@@ -354,6 +354,9 @@ struct server_metrics {
     uint64_t n_tokens_predicted  = 0;
     uint64_t t_tokens_generation = 0;
 
+    uint64_t n_decode_total     = 0;
+    uint64_t n_busy_slots_total = 0;
+
     void init() {
         t_start = ggml_time_us();
     }
@@ -370,6 +373,15 @@ struct server_metrics {
         n_tokens_predicted         += slot.n_decoded;
         t_tokens_generation        += slot.t_token_generation;
         t_tokens_generation_total  += slot.t_token_generation;
+    }
+
+    void on_decoded(const std::vector<server_slot> & slots) {
+        n_decode_total++;
+        for (const auto & slot : slots) {
+            if (slot.is_processing()) {
+                n_busy_slots_total++;
+            }
+        }
     }
 
     void reset_bucket() {
@@ -1733,6 +1745,9 @@ struct server_context {
                         { "n_tokens_predicted",              metrics.n_tokens_predicted},
                         { "t_tokens_generation",             metrics.t_tokens_generation},
 
+                        { "n_decode_total",                  metrics.n_decode_total},
+                        { "n_busy_slots_total",              metrics.n_busy_slots_total},
+
                         { "kv_cache_tokens_count",           llama_get_kv_cache_token_count(ctx)},
                         { "kv_cache_used_cells",             llama_get_kv_cache_used_cells(ctx)},
 
@@ -2317,6 +2332,7 @@ struct server_context {
             };
 
             const int ret = llama_decode(ctx, batch_view);
+            metrics.on_decoded(slots);
 
             if (ret != 0) {
                 if (n_batch == 1 || ret < 0) {
@@ -2736,6 +2752,9 @@ int main(int argc, char ** argv) {
         const uint64_t n_tokens_predicted  = data.at("n_tokens_predicted");
         const uint64_t t_tokens_generation = data.at("t_tokens_generation");
 
+        const uint64_t n_decode_total     = data.at("n_decode_total");
+        const uint64_t n_busy_slots_total = data.at("n_busy_slots_total");
+
         const int32_t kv_cache_used_cells = data.at("kv_cache_used_cells");
 
         // metrics definition: https://prometheus.io/docs/practices/naming/#metric-names
@@ -2756,6 +2775,14 @@ int main(int argc, char ** argv) {
                     {"name",  "tokens_predicted_seconds_total"},
                     {"help",  "Predict process time"},
                     {"value",  (uint64_t) data.at("t_tokens_generation_total") / 1.e3}
+            }, {
+                    {"name",  "n_decode_total"},
+                    {"help",  "Total number of llama_decode() calls"},
+                    {"value",  n_decode_total}
+            }, {
+                    {"name",  "n_busy_slots_per_decode"},
+                    {"help",  "Average number of busy slots per llama_decode() call"},
+                    {"value",  (float) n_busy_slots_total / (float) n_decode_total}
             }}},
             {"gauge", {{
                     {"name",  "prompt_tokens_seconds"},
