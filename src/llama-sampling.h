@@ -116,11 +116,11 @@ int         llama_sampling_n_prev_impl(const struct llama_sampling & smpl);
 struct llama_constraint * llama_constraint_init_top_k_impl(int32_t k, size_t min_keep);
 struct llama_constraint * llama_constraint_init_top_p_impl(float   p, size_t min_keep);
 
-void llama_constraint_free_impl(struct llama_constraint * constraint);
+void llama_constraint_free_impl(struct llama_constraint * cnstr);
 
-void llama_constraint_accept_impl(struct llama_constraint * constraint, llama_token token);
-void llama_constraint_apply_impl (struct llama_constraint * constraint, struct llama_token_data_array * candidates);
-void llama_constraint_reset_impl (struct llama_constraint * constraint);
+void llama_constraint_accept_impl(struct llama_constraint & cnstr, llama_token token);
+void llama_constraint_apply_impl (struct llama_constraint & cnstr, struct llama_token_data_array * candidates);
+void llama_constraint_reset_impl (struct llama_constraint & cnstr);
 
 // samplers
 

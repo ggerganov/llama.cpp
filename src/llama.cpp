@@ -20992,22 +20992,22 @@ void llama_constraint_free(struct llama_constraint * cnstr) {
 }
 
 void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token) {
-    llama_constraint_accept_impl(cnstr, token);
+    llama_constraint_accept_impl(*cnstr, token);
 }
 
 void llama_constraint_apply(struct llama_constraint * cnstr, llama_token_data_array * candidates) {
-    llama_constraint_apply_impl(cnstr, candidates);
+    llama_constraint_apply_impl(*cnstr, candidates);
 }
 
 void llama_constraint_reset(struct llama_constraint * cnstr) {
-    llama_constraint_reset_impl(cnstr);
+    llama_constraint_reset_impl(*cnstr);
 }
 
 struct llama_sampler * llama_sampler_init(struct llama_sampler_params params) {
     return llama_sampler_init_impl(params);
 }
 
-void  llama_sampler_free(struct llama_sampler * smpl) {
+void llama_sampler_free(struct llama_sampler * smpl) {
     if (smpl == nullptr) {
         return;
     }

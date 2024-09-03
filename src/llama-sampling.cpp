@@ -665,7 +665,9 @@ static struct llama_constraint_i llama_constraint_top_k_i = {
         *ctx_dst = *ctx_src;
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
-        delete (llama_constraint_context_top_k *) cnstr->ctx;
+        if (cnstr->ctx) {
+            delete (llama_constraint_context_top_k *) cnstr->ctx;
+        }
         delete cnstr;
     }
 };
@@ -700,7 +702,9 @@ static struct llama_constraint_i llama_constraint_top_p_i = {
         *ctx_dst = *ctx_src;
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
-        delete (llama_constraint_context_top_p *) cnstr->ctx;
+        if (cnstr->ctx) {
+            delete (llama_constraint_context_top_p *) cnstr->ctx;
+        }
         delete cnstr;
     }
 };
@@ -714,26 +718,26 @@ struct llama_constraint * llama_constraint_init_top_p_impl(float p, size_t min_k
     return result;
 }
 
-void llama_constraint_free_impl(struct llama_constraint * constraint) {
-    if (constraint->iface->free) {
-        constraint->iface->free(constraint);
+void llama_constraint_free_impl(struct llama_constraint * cnstr) {
+    if (cnstr->iface->free && cnstr) {
+        cnstr->iface->free(cnstr);
     }
 }
 
-void llama_constraint_accept_impl(struct llama_constraint * constraint, llama_token token) {
-    if (constraint->iface->accept) {
-        constraint->iface->accept(constraint, token);
+void llama_constraint_accept_impl(struct llama_constraint & cnstr, llama_token token) {
+    if (cnstr.iface->accept) {
+        cnstr.iface->accept(&cnstr, token);
     }
 }
 
-void llama_constraint_apply_impl(struct llama_constraint * constraint, struct llama_token_data_array * candidates) {
-    GGML_ASSERT(constraint->iface->apply);
-    constraint->iface->apply(constraint, candidates);
+void llama_constraint_apply_impl(struct llama_constraint & cnstr, struct llama_token_data_array * candidates) {
+    GGML_ASSERT(cnstr.iface->apply);
+    cnstr.iface->apply(&cnstr, candidates);
 }
 
-void llama_constraint_reset_impl(struct llama_constraint * constraint) {
-    if (constraint->iface->reset) {
-        constraint->iface->reset(constraint);
+void llama_constraint_reset_impl(struct llama_constraint & cnstr) {
+    if (cnstr.iface->reset) {
+        cnstr.iface->reset(&cnstr);
     }
 }
 
@@ -754,8 +758,8 @@ void llama_sampler_free_impl(struct llama_sampler * smpl) {
         return;
     }
 
-    for (auto * constraint : smpl->constraints) {
-        llama_constraint_free_impl(constraint);
+    for (auto * cnstr : smpl->constraints) {
+        llama_constraint_free_impl(cnstr);
     }
 
     delete smpl;
@@ -768,12 +772,14 @@ struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) 
 
     // copy the constraints objects
     result->constraints.clear();
-    for (const auto & constraint : smpl.constraints) {
-        GGML_ASSERT(constraint->iface->copy);
-
+    for (const auto & cnstr : smpl.constraints) {
         result->constraints.push_back(new llama_constraint);
-        result->constraints.back()->iface = constraint->iface;
-        result->constraints.back()->iface->copy(result->constraints.back(), constraint);
+        result->constraints.back()->iface = cnstr->iface;
+
+        if (cnstr->ctx) {
+            GGML_ASSERT(cnstr->iface->copy);
+            result->constraints.back()->iface->copy(result->constraints.back(), cnstr);
+        }
     }
 
     return result;
@@ -782,8 +788,8 @@ struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) 
 void llama_sampler_reset_impl(struct llama_sampler & smpl) {
     smpl.prev.clear();
 
-    for (auto * constraint : smpl.constraints) {
-        llama_constraint_reset_impl(constraint);
+    for (auto * cnstr : smpl.constraints) {
+        llama_constraint_reset_impl(*cnstr);
     }
 
     // TODO: should we reset the timings?
@@ -796,7 +802,7 @@ void llama_sampler_add_constraint_impl(struct llama_sampler & smpl, struct llama
 void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token) {
     smpl.prev.push_back(token);
 
-    for (auto * constraint : smpl.constraints) {
-        llama_constraint_accept_impl(constraint, token);
+    for (auto * cnstr : smpl.constraints) {
+        llama_constraint_accept_impl(*cnstr, token);
     }
 }
