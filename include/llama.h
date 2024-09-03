@@ -1048,6 +1048,7 @@ extern "C" {
 
     //
     // Sampling API
+    // TODO: remove before merge
     //
 
     // TODO: llama_model should become llama_vocab
@@ -1175,6 +1176,23 @@ extern "C" {
     //
     // Sampling v2 API
     //
+    // - Constraints
+    //   The llama_constraint object works on a set of candidate tokens (llama_token_data_array), by modifying their
+    //   logits and probabilities inplace. The interface is abstracted so that users can implement custom constraints.
+    //
+    // - Samplers
+    //   The llama_sampler samples a token based on the candidate token probabilities. Before the actual sampling, the
+    //   sampler can apply a sequence of constraints to the candidate tokens.
+    //
+    // The llama_sampler object contains the entire sampling information:
+    //
+    //   - RNG state (seed and generator)
+    //   - Custom set of constraints (see llama_sampler_add_constraint)
+    //   - Sampling method (greedy, dist, mirostat)
+    //   - Previous tokens
+    //
+    // In the future, it will be utilized offload the sampling to the backends (e.g. GPU).
+    //
 
     // constraints
 
@@ -1182,6 +1200,7 @@ extern "C" {
 
     typedef void * llama_constraint_context_t;
 
+    // user code can implement the interface below in order to create custom llama_constraint
     struct llama_constraint_i {
         // TODO: add name API
 
@@ -1263,9 +1282,7 @@ extern "C" {
     /// @details Get the ith accepted token
     /// @param ith [0, n_prev), ith == 0 is the last accepted token.
     /// returns LLAMA_TOKEN_NULL if ith is out of bounds
-    LLAMA_API llama_token llama_sampler_prev(
-            const struct llama_sampler * smpl,
-                               int32_t   ith);
+    LLAMA_API llama_token llama_sampler_prev(const struct llama_sampler * smpl, int32_t ith);
 
     /// @details Get the last accepted token
     /// Same as llama_sampler_prev(smpl, 0)
