@@ -128,57 +128,57 @@ std::string llama_sampling_prev_str(llama_sampling * smpl, llama_context * ctx_m
     return result;
 }
 
-char llama_sampling_type_to_chr(llama_sampler_type sampler) {
+char llama_sampling_type_to_chr(llama_constraint_type sampler) {
     switch (sampler) {
-        case LLAMA_SAMPLER_TYPE_TOP_K:       return 'k';
-        case LLAMA_SAMPLER_TYPE_TFS_Z:       return 'f';
-        case LLAMA_SAMPLER_TYPE_TYPICAL_P:   return 'y';
-        case LLAMA_SAMPLER_TYPE_TOP_P:       return 'p';
-        case LLAMA_SAMPLER_TYPE_MIN_P:       return 'm';
-        case LLAMA_SAMPLER_TYPE_TEMPERATURE: return 't';
+        case LLAMA_CONSTRAINT_TYPE_TOP_K:       return 'k';
+        case LLAMA_CONSTRAINT_TYPE_TFS_Z:       return 'f';
+        case LLAMA_CONSTRAINT_TYPE_TYPICAL_P:   return 'y';
+        case LLAMA_CONSTRAINT_TYPE_TOP_P:       return 'p';
+        case LLAMA_CONSTRAINT_TYPE_MIN_P:       return 'm';
+        case LLAMA_CONSTRAINT_TYPE_TEMPERATURE: return 't';
         default : return '?';
     }
 }
 
-std::string llama_sampling_type_to_str(llama_sampler_type sampler) {
+std::string llama_sampling_type_to_str(llama_constraint_type sampler) {
     switch (sampler) {
-        case LLAMA_SAMPLER_TYPE_TOP_K:       return "top_k";
-        case LLAMA_SAMPLER_TYPE_TFS_Z:       return "tfs_z";
-        case LLAMA_SAMPLER_TYPE_TYPICAL_P:   return "typ_p";
-        case LLAMA_SAMPLER_TYPE_TOP_P:       return "top_p";
-        case LLAMA_SAMPLER_TYPE_MIN_P:       return "min_p";
-        case LLAMA_SAMPLER_TYPE_TEMPERATURE: return "temperature";
+        case LLAMA_CONSTRAINT_TYPE_TOP_K:       return "top_k";
+        case LLAMA_CONSTRAINT_TYPE_TFS_Z:       return "tfs_z";
+        case LLAMA_CONSTRAINT_TYPE_TYPICAL_P:   return "typ_p";
+        case LLAMA_CONSTRAINT_TYPE_TOP_P:       return "top_p";
+        case LLAMA_CONSTRAINT_TYPE_MIN_P:       return "min_p";
+        case LLAMA_CONSTRAINT_TYPE_TEMPERATURE: return "temperature";
         default : return "";
     }
 }
 
-std::vector<llama_sampler_type> llama_sampling_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
-    std::unordered_map<std::string, llama_sampler_type> sampler_canonical_name_map {
-        { "top_k",       LLAMA_SAMPLER_TYPE_TOP_K },
-        { "top_p",       LLAMA_SAMPLER_TYPE_TOP_P },
-        { "typ_p",       LLAMA_SAMPLER_TYPE_TYPICAL_P },
-        { "min_p",       LLAMA_SAMPLER_TYPE_MIN_P },
-        { "tfs_z",       LLAMA_SAMPLER_TYPE_TFS_Z },
-        { "temperature", LLAMA_SAMPLER_TYPE_TEMPERATURE },
+std::vector<llama_constraint_type> llama_sampling_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
+    std::unordered_map<std::string, llama_constraint_type> sampler_canonical_name_map {
+        { "top_k",       LLAMA_CONSTRAINT_TYPE_TOP_K },
+        { "top_p",       LLAMA_CONSTRAINT_TYPE_TOP_P },
+        { "typ_p",       LLAMA_CONSTRAINT_TYPE_TYPICAL_P },
+        { "min_p",       LLAMA_CONSTRAINT_TYPE_MIN_P },
+        { "tfs_z",       LLAMA_CONSTRAINT_TYPE_TFS_Z },
+        { "temperature", LLAMA_CONSTRAINT_TYPE_TEMPERATURE },
     };
 
     // since samplers names are written multiple ways
     // make it ready for both system names and input names
-    std::unordered_map<std::string, llama_sampler_type> sampler_alt_name_map {
-        { "top-k",       LLAMA_SAMPLER_TYPE_TOP_K },
-        { "top-p",       LLAMA_SAMPLER_TYPE_TOP_P },
-        { "nucleus",     LLAMA_SAMPLER_TYPE_TOP_P },
-        { "typical-p",   LLAMA_SAMPLER_TYPE_TYPICAL_P },
-        { "typical",     LLAMA_SAMPLER_TYPE_TYPICAL_P },
-        { "typ-p",       LLAMA_SAMPLER_TYPE_TYPICAL_P },
-        { "typ",         LLAMA_SAMPLER_TYPE_TYPICAL_P },
-        { "min-p",       LLAMA_SAMPLER_TYPE_MIN_P },
-        { "tfs-z",       LLAMA_SAMPLER_TYPE_TFS_Z },
-        { "tfs",         LLAMA_SAMPLER_TYPE_TFS_Z },
-        { "temp",        LLAMA_SAMPLER_TYPE_TEMPERATURE },
+    std::unordered_map<std::string, llama_constraint_type> sampler_alt_name_map {
+        { "top-k",       LLAMA_CONSTRAINT_TYPE_TOP_K },
+        { "top-p",       LLAMA_CONSTRAINT_TYPE_TOP_P },
+        { "nucleus",     LLAMA_CONSTRAINT_TYPE_TOP_P },
+        { "typical-p",   LLAMA_CONSTRAINT_TYPE_TYPICAL_P },
+        { "typical",     LLAMA_CONSTRAINT_TYPE_TYPICAL_P },
+        { "typ-p",       LLAMA_CONSTRAINT_TYPE_TYPICAL_P },
+        { "typ",         LLAMA_CONSTRAINT_TYPE_TYPICAL_P },
+        { "min-p",       LLAMA_CONSTRAINT_TYPE_MIN_P },
+        { "tfs-z",       LLAMA_CONSTRAINT_TYPE_TFS_Z },
+        { "tfs",         LLAMA_CONSTRAINT_TYPE_TFS_Z },
+        { "temp",        LLAMA_CONSTRAINT_TYPE_TEMPERATURE },
     };
 
-    std::vector<llama_sampler_type> samplers;
+    std::vector<llama_constraint_type> samplers;
     samplers.reserve(names.size());
 
     for (const auto & name : names) {
@@ -198,17 +198,17 @@ std::vector<llama_sampler_type> llama_sampling_types_from_names(const std::vecto
     return samplers;
 }
 
-std::vector<llama_sampler_type> llama_sampling_types_from_chars(const std::string & chars) {
-    std::unordered_map<char, llama_sampler_type> sampler_name_map {
-        { llama_sampling_type_to_chr(LLAMA_SAMPLER_TYPE_TOP_K),       LLAMA_SAMPLER_TYPE_TOP_K },
-        { llama_sampling_type_to_chr(LLAMA_SAMPLER_TYPE_TFS_Z),       LLAMA_SAMPLER_TYPE_TFS_Z },
-        { llama_sampling_type_to_chr(LLAMA_SAMPLER_TYPE_TYPICAL_P),   LLAMA_SAMPLER_TYPE_TYPICAL_P },
-        { llama_sampling_type_to_chr(LLAMA_SAMPLER_TYPE_TOP_P),       LLAMA_SAMPLER_TYPE_TOP_P },
-        { llama_sampling_type_to_chr(LLAMA_SAMPLER_TYPE_MIN_P),       LLAMA_SAMPLER_TYPE_MIN_P },
-        { llama_sampling_type_to_chr(LLAMA_SAMPLER_TYPE_TEMPERATURE), LLAMA_SAMPLER_TYPE_TEMPERATURE }
+std::vector<llama_constraint_type> llama_sampling_types_from_chars(const std::string & chars) {
+    std::unordered_map<char, llama_constraint_type> sampler_name_map {
+        { llama_sampling_type_to_chr(LLAMA_CONSTRAINT_TYPE_TOP_K),       LLAMA_CONSTRAINT_TYPE_TOP_K },
+        { llama_sampling_type_to_chr(LLAMA_CONSTRAINT_TYPE_TFS_Z),       LLAMA_CONSTRAINT_TYPE_TFS_Z },
+        { llama_sampling_type_to_chr(LLAMA_CONSTRAINT_TYPE_TYPICAL_P),   LLAMA_CONSTRAINT_TYPE_TYPICAL_P },
+        { llama_sampling_type_to_chr(LLAMA_CONSTRAINT_TYPE_TOP_P),       LLAMA_CONSTRAINT_TYPE_TOP_P },
+        { llama_sampling_type_to_chr(LLAMA_CONSTRAINT_TYPE_MIN_P),       LLAMA_CONSTRAINT_TYPE_MIN_P },
+        { llama_sampling_type_to_chr(LLAMA_CONSTRAINT_TYPE_TEMPERATURE), LLAMA_CONSTRAINT_TYPE_TEMPERATURE }
     };
 
-    std::vector<llama_sampler_type> samplers;
+    std::vector<llama_constraint_type> samplers;
     samplers.reserve(chars.size());
 
     for (const auto & c : chars) {

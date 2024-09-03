@@ -46,6 +46,7 @@
 #define LLAMA_STATE_SEQ_MAGIC   LLAMA_FILE_MAGIC_GGSQ
 #define LLAMA_STATE_SEQ_VERSION 2
 
+// TODO: remove before merge
 #define LLAMA_MAX_SAMPLERS 16
 
 #ifdef __cplusplus
@@ -209,14 +210,15 @@ extern "C" {
         LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
     };
 
-    enum llama_sampler_type {
-        LLAMA_SAMPLER_TYPE_NONE        = 0,
-        LLAMA_SAMPLER_TYPE_TOP_K       = 1,
-        LLAMA_SAMPLER_TYPE_TOP_P       = 2,
-        LLAMA_SAMPLER_TYPE_MIN_P       = 3,
-        LLAMA_SAMPLER_TYPE_TFS_Z       = 4,
-        LLAMA_SAMPLER_TYPE_TYPICAL_P   = 5,
-        LLAMA_SAMPLER_TYPE_TEMPERATURE = 6,
+    // TODO: move to common, rename to gpt_constraint_type
+    enum llama_constraint_type {
+        LLAMA_CONSTRAINT_TYPE_NONE        = 0,
+        LLAMA_CONSTRAINT_TYPE_TOP_K       = 1,
+        LLAMA_CONSTRAINT_TYPE_TOP_P       = 2,
+        LLAMA_CONSTRAINT_TYPE_MIN_P       = 3,
+        LLAMA_CONSTRAINT_TYPE_TFS_Z       = 4,
+        LLAMA_CONSTRAINT_TYPE_TYPICAL_P   = 5,
+        LLAMA_CONSTRAINT_TYPE_TEMPERATURE = 6,
     };
 
     typedef struct llama_token_data {
@@ -382,6 +384,7 @@ extern "C" {
         float bias;
     } llama_logit_bias;
 
+    // TODO: remove before merge
     // parameters for sampling the logits
     typedef struct llama_sampling_params {
         uint32_t seed;              // the seed used to initialize llama_sampling_context
@@ -406,7 +409,7 @@ extern "C" {
 
         // samplers
         int32_t n_samplers;
-        enum llama_sampler_type samplers[LLAMA_MAX_SAMPLERS];
+        enum llama_constraint_type samplers[LLAMA_MAX_SAMPLERS];
 
         // Keep the booleans together and at the end of the struct to avoid misalignment during copy-by-value.
         bool penalize_nl; // consider newlines as a repeatable token
@@ -414,7 +417,11 @@ extern "C" {
     } llama_sampling_params;
 
     typedef struct llama_sampler_params {
-        uint32_t seed;              // the seed used to initialize the rng of the sampler
+        uint32_t seed; // the seed used to initialize the rng of the sampler
+
+        int32_t mirostat;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+        float   mirostat_tau; // target entropy
+        float   mirostat_eta; // learning rate
 
         // TODO: add type of sampler: greedy, dist, mirostat, etc.
     } llama_sampler_params;
@@ -1176,6 +1183,8 @@ extern "C" {
     typedef void * llama_constraint_context_t;
 
     struct llama_constraint_i {
+        // TODO: add name API
+
         void (*accept)(struct llama_constraint * cnstr, llama_token token);                         // can be NULL
         void (*apply) (struct llama_constraint * cnstr, llama_token_data_array * candidates);       // required
         void (*reset) (struct llama_constraint * cnstr);                                            // can be NULL
@@ -1184,6 +1193,8 @@ extern "C" {
 
         // TODO: API for internal libllama usage for appending the sampling to an existing ggml_cgraph
         //void (*apply_ggml) (struct llama_constraint * cnstr, ...);
+
+        // TODO: add API to get timing stats
     };
 
     struct llama_constraint {
@@ -1191,14 +1202,28 @@ extern "C" {
         llama_constraint_context_t   ctx;
     };
 
-    LLAMA_API struct llama_constraint * llama_constraint_init_top_k    (int32_t k, int32_t min_keep);
-    LLAMA_API struct llama_constraint * llama_constraint_init_top_p    (float   p, int32_t min_keep);
-    LLAMA_API struct llama_constraint * llama_constraint_init_min_p    (float   p, int32_t min_keep);
-    LLAMA_API struct llama_constraint * llama_constraint_init_tail_free(float   z, int32_t min_keep);
-    LLAMA_API struct llama_constraint * llama_constraint_init_typical  (float   p, int32_t min_keep);
-    LLAMA_API struct llama_constraint * llama_constraint_init_temp     (float   t);
-    LLAMA_API struct llama_constraint * llama_constraint_init_temp_ext (float   t, float delta, float exponent);
-    LLAMA_API struct llama_constraint * llama_constraint_init_grammar  (struct llama_model * model, const char * grammar_str, const char * grammar_root);
+    LLAMA_API struct llama_constraint * llama_constraint_init_top_k     (int32_t k, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_top_p     (float   p, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_min_p     (float   p, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_tail_free (float   z, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_typical   (float   p, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_temp      (float   t);
+    LLAMA_API struct llama_constraint * llama_constraint_init_temp_ext  (float   t, float delta, float exponent);
+    LLAMA_API struct llama_constraint * llama_constraint_init_grammar   (struct llama_model * model, const char * grammar_str, const char * grammar_root);
+
+    LLAMA_API struct llama_constraint * llama_constraint_init_penalties(
+            struct llama_model * model,
+                       int32_t   penalty_last_n,  // last n tokens to penalize (0 = disable penalty, -1 = context size)
+                         float   penalty_repeat,  // 1.0 = disabled
+                         float   penalty_freq,    // 0.0 = disabled
+                         float   penalty_present, // 0.0 = disabled
+                          bool   penalize_nl,     // consider newlines as a repeatable token
+                          bool   ignore_eos);     // ignore the end-of-sequence token
+
+    LLAMA_API struct llama_constraint * llama_constraint_init_logit_bias(
+            struct llama_model * model,
+                       int32_t   n_logit_bias,
+        const llama_logit_bias * logit_bias);
 
     // do not call if used with llama_sampler_add_constraint
     LLAMA_API void llama_constraint_free(struct llama_constraint * cnstr);
@@ -1209,10 +1234,15 @@ extern "C" {
 
     // samplers
 
-    LLAMA_API struct llama_sampler * llama_sampler_init (      struct llama_sampler_params params);
+    LLAMA_API struct llama_sampler * llama_sampler_init (const struct llama_model   * model, struct llama_sampler_params params);
     LLAMA_API void                   llama_sampler_free (      struct llama_sampler * smpl);
     LLAMA_API struct llama_sampler * llama_sampler_cp   (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_reset(      struct llama_sampler * smpl);
+
+    LLAMA_API void llama_sampler_set_logits(struct llama_sampler * smpl, const float * logits);
+
+    LLAMA_API llama_token_data_array * llama_sampler_get_candidates(struct llama_sampler * smpl);
+
 
     // TODO: should this take ownership so the user does not need to call llama_constraint_free
     //       or should just make a reference to the constraint so that it can be reused in multiple llama_sampler?
@@ -1220,8 +1250,31 @@ extern "C" {
     //       seems better to take the ownership, otherwise the copying of the sampler will be more complicated
     LLAMA_API void llama_sampler_add_constraint(struct llama_sampler * smpl, struct llama_constraint * cnstr);
 
-    LLAMA_API void        llama_sampler_accept(struct llama_sampler * smpl, llama_token token);
-    LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, const struct llama_context * ctx, int32_t i);
+    LLAMA_API void llama_sampler_accept(struct llama_sampler * smpl, llama_token token);
+    LLAMA_API void llama_sampler_apply (struct llama_sampler * smpl, llama_token_data_array * candidates);
+
+    LLAMA_API llama_token llama_sampler_sample_dist    (struct llama_sampler * smpl, llama_token_data_array * candidates);
+    LLAMA_API llama_token llama_sampler_sample_greedy  (struct llama_sampler * smpl, llama_token_data_array * candidates);
+    LLAMA_API llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_token_data_array * candidates);
+
+    /// @details Get the number of accepted tokens so far (max of n_prev)
+    LLAMA_API int llama_sampler_n_prev(const struct llama_sampler * smpl);
+
+    /// @details Get the ith accepted token
+    /// @param ith [0, n_prev), ith == 0 is the last accepted token.
+    /// returns LLAMA_TOKEN_NULL if ith is out of bounds
+    LLAMA_API llama_token llama_sampler_prev(
+            const struct llama_sampler * smpl,
+                               int32_t   ith);
+
+    /// @details Get the last accepted token
+    /// Same as llama_sampler_prev(smpl, 0)
+    /// returns LLAMA_TOKEN_NULL if there are no accepted tokens
+    LLAMA_API llama_token llama_sampler_last(const struct llama_sampler * smpl);
+
+    // TODO: extend in the future
+    //LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t i);
+    //LLAMA_API void llama_decode_with_sampler(struct llama_context * ctx, struct llama_sampler * smpl, struct llama_batch batch, ...);
 
     //
     // Model split

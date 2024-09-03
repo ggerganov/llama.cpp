@@ -6,7 +6,7 @@
 #include <vector>
 
 // sampling parameters
-typedef struct gpt_sampling_params {
+struct gpt_sampling_params {
     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampling
 
     int32_t n_prev            = 64;    // number of previous tokens to remember
@@ -30,13 +30,13 @@ typedef struct gpt_sampling_params {
     bool    penalize_nl       = false; // consider newlines as a repeatable token
     bool    ignore_eos        = false;
 
-    std::vector<enum llama_sampler_type> samplers = {
-        LLAMA_SAMPLER_TYPE_TOP_K,
-        LLAMA_SAMPLER_TYPE_TFS_Z,
-        LLAMA_SAMPLER_TYPE_TYPICAL_P,
-        LLAMA_SAMPLER_TYPE_TOP_P,
-        LLAMA_SAMPLER_TYPE_MIN_P,
-        LLAMA_SAMPLER_TYPE_TEMPERATURE
+    std::vector<enum llama_constraint_type> samplers = {
+        LLAMA_CONSTRAINT_TYPE_TOP_K,
+        LLAMA_CONSTRAINT_TYPE_TFS_Z,
+        LLAMA_CONSTRAINT_TYPE_TYPICAL_P,
+        LLAMA_CONSTRAINT_TYPE_TOP_P,
+        LLAMA_CONSTRAINT_TYPE_MIN_P,
+        LLAMA_CONSTRAINT_TYPE_TEMPERATURE
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
@@ -48,7 +48,16 @@ typedef struct gpt_sampling_params {
 
     // print the samplers into a string
     std::string print_samplers() const;
-} gpt_sampling_params;
+};
+
+// TODO: implement
+struct gpt_sampler {
+    gpt_sampling_params params;
+
+    struct llama_constraint * grmr = nullptr;
+
+    struct llama_sampler * smpl = nullptr;
+};
 
 // overload of llama_sampling_init using gpt_sampling_params
 struct llama_sampling * llama_sampling_init(const struct llama_model * model, const struct gpt_sampling_params & params);
@@ -72,8 +81,8 @@ llama_token llama_sampling_sample(
 // get a string representation of the last accepted tokens
 std::string llama_sampling_prev_str(llama_sampling * smpl, llama_context * ctx, int n);
 
-char        llama_sampling_type_to_chr(enum llama_sampler_type sampler_type);
-std::string llama_sampling_type_to_str(enum llama_sampler_type sampler_type);
+char        llama_sampling_type_to_chr(enum llama_constraint_type sampler_type);
+std::string llama_sampling_type_to_str(enum llama_constraint_type sampler_type);
 
-std::vector<enum llama_sampler_type> llama_sampling_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
-std::vector<enum llama_sampler_type> llama_sampling_types_from_chars(const std::string & chars);
+std::vector<enum llama_constraint_type> llama_sampling_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
+std::vector<enum llama_constraint_type> llama_sampling_types_from_chars(const std::string & chars);

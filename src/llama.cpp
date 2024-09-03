@@ -17938,6 +17938,9 @@ struct llama_context_params llama_context_default_params() {
 struct llama_sampler_params llama_sampler_default_params() {
     struct llama_sampler_params result = {
         /*.seed              =*/ LLAMA_DEFAULT_SEED,
+        /*.mirostat          =*/ 0,
+        /*.mirostat_tau      =*/ 5.00f,
+        /*.mirostat_eta      =*/ 0.10f,
     };
 
     return result;
@@ -17965,7 +17968,7 @@ struct llama_sampling_params llama_sampling_default_params() {
         /*.mirostat_tau      =*/ 5.00f,
         /*.mirostat_eta      =*/ 0.10f,
         /*.n_samplers        =*/ 3,
-        /*.samplers          =*/ { LLAMA_SAMPLER_TYPE_TEMPERATURE, LLAMA_SAMPLER_TYPE_TOP_K, LLAMA_SAMPLER_TYPE_TOP_P, },
+        /*.samplers          =*/ { LLAMA_CONSTRAINT_TYPE_TEMPERATURE, LLAMA_CONSTRAINT_TYPE_TOP_K, LLAMA_CONSTRAINT_TYPE_TOP_P, },
         /*.penalize_nl       =*/ false,
         /*.ignore_eos        =*/ false,
     };
@@ -20916,12 +20919,12 @@ llama_token llama_sampling_sample(struct llama_sampling * smpl, llama_token_data
         } else {
             for (const auto & sampler : smpl->samplers) {
                 switch (sampler) {
-                    case LLAMA_SAMPLER_TYPE_TOP_K:       llama_sampling_top_k_impl    (cur_p, smpl->params.top_k, smpl->params.min_keep); break;
-                    case LLAMA_SAMPLER_TYPE_TFS_Z:       llama_sampling_tail_free_impl(cur_p, smpl->params.tfs_z, smpl->params.min_keep); break;
-                    case LLAMA_SAMPLER_TYPE_TYPICAL_P:   llama_sampling_typical_impl  (cur_p, smpl->params.typ_p, smpl->params.min_keep); break;
-                    case LLAMA_SAMPLER_TYPE_TOP_P:       llama_sampling_top_p_impl    (cur_p, smpl->params.top_p, smpl->params.min_keep); break;
-                    case LLAMA_SAMPLER_TYPE_MIN_P:       llama_sampling_min_p_impl    (cur_p, smpl->params.min_p, smpl->params.min_keep); break;
-                    case LLAMA_SAMPLER_TYPE_TEMPERATURE: llama_sampling_temp_impl     (cur_p, temp); break;
+                    case LLAMA_CONSTRAINT_TYPE_TOP_K:       llama_sampling_top_k_impl    (cur_p, smpl->params.top_k, smpl->params.min_keep); break;
+                    case LLAMA_CONSTRAINT_TYPE_TFS_Z:       llama_sampling_tail_free_impl(cur_p, smpl->params.tfs_z, smpl->params.min_keep); break;
+                    case LLAMA_CONSTRAINT_TYPE_TYPICAL_P:   llama_sampling_typical_impl  (cur_p, smpl->params.typ_p, smpl->params.min_keep); break;
+                    case LLAMA_CONSTRAINT_TYPE_TOP_P:       llama_sampling_top_p_impl    (cur_p, smpl->params.top_p, smpl->params.min_keep); break;
+                    case LLAMA_CONSTRAINT_TYPE_MIN_P:       llama_sampling_min_p_impl    (cur_p, smpl->params.min_p, smpl->params.min_keep); break;
+                    case LLAMA_CONSTRAINT_TYPE_TEMPERATURE: llama_sampling_temp_impl     (cur_p, temp); break;
                     default : break;
                 }
             }
@@ -21007,6 +21010,24 @@ struct llama_constraint * llama_constraint_init_grammar(struct llama_model * mod
     return llama_constraint_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
 
+struct llama_constraint * llama_constraint_init_penalties(
+        struct llama_model * model,
+                   int32_t   penalty_last_n,
+                     float   penalty_repeat,
+                     float   penalty_freq,
+                     float   penalty_present,
+                      bool   penalize_nl,
+                      bool   ignore_eos) {
+    return llama_constraint_init_penalties_impl(model->vocab, penalty_last_n, penalty_repeat, penalty_freq, penalty_present, penalize_nl, ignore_eos);
+}
+
+LLAMA_API struct llama_constraint * llama_constraint_init_logit_bias(
+        struct llama_model * model,
+                   int32_t   n_logit_bias,
+    const llama_logit_bias * logit_bias) {
+    return llama_constraint_init_logit_bias_impl(model->vocab, n_logit_bias, logit_bias);
+}
+
 void llama_constraint_free(struct llama_constraint * cnstr) {
     if (cnstr == nullptr) {
         return;
@@ -21027,8 +21048,8 @@ void llama_constraint_reset(struct llama_constraint * cnstr) {
     llama_constraint_reset_impl(*cnstr);
 }
 
-struct llama_sampler * llama_sampler_init(struct llama_sampler_params params) {
-    return llama_sampler_init_impl(params);
+struct llama_sampler * llama_sampler_init(const struct llama_model * model, struct llama_sampler_params params) {
+    return llama_sampler_init_impl(model->vocab, params);
 }
 
 void llama_sampler_free(struct llama_sampler * smpl) {
@@ -21047,6 +21068,22 @@ void llama_sampler_reset(struct llama_sampler * smpl) {
     llama_sampler_reset_impl(*smpl);
 }
 
+void llama_sampler_set_logits(struct llama_sampler * smpl, const float * logits) {
+    const int n_vocab = smpl->vocab->n_vocab;
+
+    smpl->cur.resize(n_vocab);
+
+    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+        smpl->cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
+    }
+
+    smpl->cur_p = { smpl->cur.data(), smpl->cur.size(), false };
+}
+
+llama_token_data_array * llama_sampler_get_candidates(struct llama_sampler * smpl) {
+    return &smpl->cur_p;
+}
+
 void llama_sampler_add_constraint(struct llama_sampler * smpl, struct llama_constraint * cnstr) {
     llama_sampler_add_constraint_impl(*smpl, cnstr);
 }
@@ -21055,9 +21092,89 @@ void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
     llama_sampler_accept_impl(*smpl, token);
 }
 
-llama_token llama_sampler_sample(struct llama_sampler * smpl, const struct llama_context * ctx, int32_t i) {
-    GGML_ABORT("not implemented");
+void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * candidates) {
+    time_meas tm(smpl->t_sample_us);
+
+    llama_sampler_apply_impl(*smpl, candidates);
 }
+
+llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_token_data_array * candidates) {
+    time_meas tm(smpl->t_sample_us);
+
+    if (candidates == nullptr) {
+        candidates = &smpl->cur_p;
+    }
+
+    const auto type = smpl->params.mirostat;
+
+    llama_token res;
+
+    if (type == 1) {
+        res = llama_sampling_sample_mirostat_impl(candidates,
+                smpl->rng,
+                smpl->params.mirostat_tau,
+                smpl->params.mirostat_eta,
+                100,
+                smpl->vocab->n_vocab,
+                smpl->mirostat_mu);
+    } else if (type == 2) {
+        res = llama_sampling_sample_mirostat_v2_impl(candidates,
+                smpl->rng,
+                smpl->params.mirostat_tau,
+                smpl->params.mirostat_eta,
+                smpl->mirostat_mu);
+    } else {
+        GGML_ABORT("invalid mirostat type: %d", type);
+    }
+
+    smpl->n_sample++;
+
+    return res;
+}
+
+llama_token llama_sampler_sample_greedy(struct llama_sampler * smpl, llama_token_data_array * candidates) {
+    time_meas tm(smpl->t_sample_us);
+
+    if (candidates == nullptr) {
+        candidates = &smpl->cur_p;
+    }
+
+    auto res = llama_sampling_sample_greedy_impl(candidates);
+
+    smpl->n_sample++;
+
+    return res;
+}
+
+llama_token llama_sampler_sample_dist(struct llama_sampler * smpl, llama_token_data_array * candidates) {
+    time_meas tm(smpl->t_sample_us);
+
+    if (candidates == nullptr) {
+        candidates = &smpl->cur_p;
+    }
+
+    auto res = llama_sampling_sample_dist_impl(candidates, smpl->rng);
+
+    smpl->n_sample++;
+
+    return res;
+}
+
+int llama_sampler_n_prev(const struct llama_sampler * smpl) {
+    return llama_sampler_n_prev_impl(*smpl);
+}
+
+llama_token llama_sampler_prev(const struct llama_sampler * smpl, int32_t ith) {
+    return llama_sampler_prev_impl(*smpl, ith);
+}
+
+llama_token llama_sampler_last(const struct llama_sampler * smpl) {
+    return llama_sampler_prev_impl(*smpl, 0);
+}
+
+//llama_token llama_sampler_sample(struct llama_sampler * smpl, const struct llama_context * ctx, int32_t i) {
+//    GGML_ABORT("not implemented");
+//}
 
 //
 // model split
