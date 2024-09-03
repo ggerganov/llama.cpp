@@ -2690,7 +2690,7 @@ int main(int argc, char ** argv) {
         task.type = SERVER_TASK_TYPE_METRICS;
 
         ctx_server.queue_results.add_waiting_task_id(task.id);
-        ctx_server.queue_tasks.post(task);
+        ctx_server.queue_tasks.post(task, true); // high-priority task
 
         // get the result
         server_task_result result = ctx_server.queue_results.recv(task.id);
@@ -2722,7 +2722,7 @@ int main(int argc, char ** argv) {
         task.data.push_back({{"reset_bucket", true}});
 
         ctx_server.queue_results.add_waiting_task_id(task.id);
-        ctx_server.queue_tasks.post(task);
+        ctx_server.queue_tasks.post(task, true); // high-priority task
 
         // get the result
         server_task_result result = ctx_server.queue_results.recv(task.id);
@@ -2822,7 +2822,7 @@ int main(int argc, char ** argv) {
         task.data = {
             { "id_slot", id_slot },
             { "filename", filename },
-            { "filepath", filepath }
+            { "filepath", filepath },
         };
 
         const int id_task = ctx_server.queue_tasks.post(task);
@@ -2852,7 +2852,7 @@ int main(int argc, char ** argv) {
         task.data = {
             { "id_slot", id_slot },
             { "filename", filename },
-            { "filepath", filepath }
+            { "filepath", filepath },
         };
 
         const int id_task = ctx_server.queue_tasks.post(task);
@@ -2930,7 +2930,7 @@ int main(int argc, char ** argv) {
             { "system_prompt",               ctx_server.system_prompt.c_str() },
             { "default_generation_settings", ctx_server.default_generation_settings_for_props },
             { "total_slots",                 ctx_server.params.n_parallel },
-            { "chat_template",               curr_tmpl.c_str() }
+            { "chat_template",               curr_tmpl.c_str() },
         };
 
         res_ok(res, data);
@@ -3041,13 +3041,13 @@ int main(int argc, char ** argv) {
         json models = {
             {"object", "list"},
             {"data", {
-                 {
-                     {"id",       params.model_alias},
-                     {"object",   "model"},
-                     {"created",  std::time(0)},
-                     {"owned_by", "llamacpp"},
-                     {"meta",     ctx_server.model_meta()}
-                 },
+                {
+                    {"id",       params.model_alias},
+                    {"object",   "model"},
+                    {"created",  std::time(0)},
+                    {"owned_by", "llamacpp"},
+                    {"meta",     ctx_server.model_meta()}
+                },
              }}
         };
 
