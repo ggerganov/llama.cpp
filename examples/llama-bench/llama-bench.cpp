@@ -1110,7 +1110,6 @@ static std::string format_json_value(const std::string & field, const std::strin
 struct json_printer : public printer {
     bool first = true;
 
-
     void print_header(const cmd_params & params) override {
         fprintf(fout, "[\n");
         (void) params;
@@ -1144,7 +1143,6 @@ struct json_printer : public printer {
 
 
 struct jsonl_printer : public printer {
-
     void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
         assert(fields.size() == values.size());
         for (size_t i = 0; i < fields.size(); i++) {
