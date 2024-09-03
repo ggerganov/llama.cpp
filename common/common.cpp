@@ -1234,11 +1234,13 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
 #endif // GGML_USE_CUDA_SYCL_VULKAN
         return true;
     }
+#ifdef GGML_USE_RPC
     if (arg == "--rpc") {
         CHECK_ARG
         params.rpc_servers = argv[i];
         return true;
     }
+#endif
     if (arg == "--no-mmap") {
         params.use_mmap = false;
         return true;
@@ -1929,7 +1931,9 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "*",           "       --image FILE",           "path to an image file. use with multimodal models. Specify multiple times for batching" });
 
     options.push_back({ "backend" });
+#ifdef GGML_USE_RPC
     options.push_back({ "*",           "       --rpc SERVERS",          "comma separated list of RPC servers" });
+#endif
 
     if (llama_supports_mlock()) {
         options.push_back({ "*",           "       --mlock",                "force system to keep model in RAM rather than swapping or compressing" });
