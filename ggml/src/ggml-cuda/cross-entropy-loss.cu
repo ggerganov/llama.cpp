@@ -1,6 +1,6 @@
 #include "common.cuh"
 #include "cross-entropy-loss.cuh"
-#include "sumrows.cuh"
+#include "sum.cuh"
 
 #include <cmath>
 #include <cstdint>
@@ -102,5 +102,5 @@ void ggml_cuda_cross_entropy_loss(ggml_backend_cuda_context & ctx, ggml_tensor *
     cross_entropy_loss_f32<<<blocks_num, blocks_dim, shmem, stream>>>(src0_d, src1_d, dst_tmp.ptr, ne00, nrows);
 
     // Combine results from individual blocks:
-    sum_rows_f32_cuda(dst_tmp.ptr, dst_d, blocks_num.x, 1, stream);
+    sum_f32_cuda(pool, dst_tmp.ptr, dst_d, blocks_num.x, stream);
 }
