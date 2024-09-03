@@ -50,6 +50,7 @@ enum stop_type {
     STOP_TYPE_PARTIAL,
 };
 
+// state diagram: https://github.com/ggerganov/llama.cpp/pull/9283
 enum slot_state {
     SLOT_STATE_IDLE,
     SLOT_STATE_PROCESSING_PROMPT,
@@ -251,7 +252,6 @@ struct server_slot {
                 {"truncated", truncated}
             });
             callback_on_release(id);
-            // queue_tasks.notify_slot_changed();
         }
     }
 
@@ -456,14 +456,15 @@ struct server_queue {
         callback_update_slots = std::move(callback);
     }
 
-    // Call when the state of one slot is changed
-    void notify_slot_changed() {
+    // Call when the state of one slot is changed, it will move one task from deferred to main queue
+    void pop_deferred_task() {
         // move deferred tasks back to main loop
         std::unique_lock<std::mutex> lock(mutex_tasks);
-        for (auto & task : queue_tasks_deferred) {
+        if (!queue_tasks_deferred.empty()) {
+            server_task task = queue_tasks_deferred.front();
+            queue_tasks_deferred.erase(queue_tasks_deferred.begin());
             queue_tasks.push_back(std::move(task));
         }
-        queue_tasks_deferred.clear();
     }
 
     // end the start_loop routine
@@ -722,7 +723,7 @@ struct server_context {
             slot.sparams = params.sparams;
 
             slot.callback_on_release = [this](int) {
-                queue_tasks.notify_slot_changed();
+                queue_tasks.pop_deferred_task();
             };
 
             slot.reset();
@@ -2412,6 +2413,7 @@ struct server_context {
                 }
 
                 if (!process_token(result, slot)) {
+                    // release slot because of stop condition
                     slot.release();
                     slot.print_timings();
                     send_final_response(slot);
