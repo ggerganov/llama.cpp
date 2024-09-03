@@ -3821,7 +3821,6 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
 
     svfloat32_t sumv0 = svdup_n_f32(0.0f);
     svfloat32_t sumv1 = svdup_n_f32(0.0f);
-    assert(nb % 2 == 0); // TODO: handle odd nb
     const int vector_length = ggml_sve_cnt_b*8;
 
     // VLA Implementation using switch case    
@@ -5402,7 +5401,6 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     svfloat32_t sumv0 = svdup_n_f32(0.0f);
     svfloat32_t sumv1 = svdup_n_f32(0.0f);
 
-    assert(nb % 2 == 0); // TODO: handle odd nb
     const int vector_length = ggml_sve_cnt_b*8;
 
     //VLA Implemenation for SVE 
