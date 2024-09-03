@@ -14,7 +14,8 @@ Performance testing tool for llama.cpp.
     1. [Markdown](#markdown)
     2. [CSV](#csv)
     3. [JSON](#json)
-    4. [SQL](#sql)
+    4. [JSONL](#jsonl)
+    5. [SQL](#sql)
 
 ## Syntax
 
@@ -237,6 +238,19 @@ $ ./llama-bench -o json
   }
 ]
 ```
+
+
+### JSONL
+
+```sh
+$ ./llama-bench -o jsonl
+```
+
+```json lines
+{"build_commit":"3469684","build_number":1275,"cuda":true,"metal":false,"gpu_blas":true,"blas":true,"cpu_info":"13th Gen Intel(R) Core(TM) i9-13900K","gpu_info":"NVIDIA GeForce RTX 3090 Ti","model_filename":"models/7B/ggml-model-q4_0.gguf","model_type":"llama 7B mostly Q4_0","model_size":3825065984,"model_n_params":6738415616,"n_batch":512,"n_threads":16,"f16_kv":true,"n_gpu_layers":99,"main_gpu":0,"mul_mat_q":true,"tensor_split":"0.00","n_prompt":512,"n_gen":0,"test_time":"2023-09-23T12:09:57Z","avg_ns":212365953,"stddev_ns":985423,"avg_ts":2410.974041,"stddev_ts":11.163766,"samples_ns":[213837238,211635853,212328053,211329715,212698907],"samples_ts":[2394.34,2419.25,2411.36,2422.75,2407.16]}
+{"build_commit":"3469684","build_number":1275,"cuda":true,"metal":false,"gpu_blas":true,"blas":true,"cpu_info":"13th Gen Intel(R) Core(TM) i9-13900K","gpu_info":"NVIDIA GeForce RTX 3090 Ti","model_filename":"models/7B/ggml-model-q4_0.gguf","model_type":"llama 7B mostly Q4_0","model_size":3825065984,"model_n_params":6738415616,"n_batch":512,"n_threads":16,"f16_kv":true,"n_gpu_layers":99,"main_gpu":0,"mul_mat_q":true,"tensor_split":"0.00","n_prompt":0,"n_gen":128,"test_time":"2023-09-23T12:09:59Z","avg_ns":977425219,"stddev_ns":9268593,"avg_ts":130.965708,"stddev_ts":1.238924,"samples_ns":[984472709,974901233,989474741,970729355,967548060],"samples_ts":[130.019,131.295,129.362,131.86,132.293]}
+```
+
 
 ### SQL
 

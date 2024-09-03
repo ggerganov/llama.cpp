@@ -171,13 +171,14 @@ static std::string get_gpu_info() {
 }
 
 // command line params
-enum output_formats {NONE, CSV, JSON, MARKDOWN, SQL};
+enum output_formats {NONE, CSV, JSON, JSONL, MARKDOWN, SQL};
 
 static const char * output_format_str(output_formats format) {
     switch (format) {
         case NONE:     return "none";
         case CSV:      return "csv";
         case JSON:     return "json";
+        case JSONL:    return "jsonl";
         case MARKDOWN: return "md";
         case SQL:      return "sql";
         default: GGML_ABORT("invalid output format");
@@ -191,6 +192,8 @@ static bool output_format_from_str(const std::string & s, output_formats & forma
         format = CSV;
     } else if (s == "json") {
         format = JSON;
+    } else if (s == "jsonl") {
+        format = JSONL;
     } else if (s == "md") {
         format = MARKDOWN;
     } else if (s == "sql") {
@@ -1074,37 +1077,39 @@ struct csv_printer : public printer {
     }
 };
 
+
+static std::string escape_json(const std::string & value) {
+    std::string escaped;
+    for (auto c : value) {
+        if (c == '"') {
+            escaped += "\\\"";
+        } else if (c == '\\') {
+            escaped += "\\\\";
+        } else  if (c <= 0x1f) {
+            char buf[8];
+            snprintf(buf, sizeof(buf), "\\u%04x", c);
+            escaped += buf;
+        } else {
+            escaped += c;
+        }
+    }
+    return escaped;
+}
+
+static std::string format_json_value(const std::string & field, const std::string & value) {
+    switch (test::get_field_type(field)) {
+        case test::STRING:
+            return "\"" + escape_json(value) + "\"";
+        case test::BOOL:
+            return value == "0" ? "false" : "true";
+        default:
+            return value;
+    }
+}
+
 struct json_printer : public printer {
     bool first = true;
 
-    static std::string escape_json(const std::string & value) {
-        std::string escaped;
-        for (auto c : value) {
-            if (c == '"') {
-                escaped += "\\\"";
-            } else if (c == '\\') {
-                escaped += "\\\\";
-            } else  if (c <= 0x1f) {
-                char buf[8];
-                snprintf(buf, sizeof(buf), "\\u%04x", c);
-                escaped += buf;
-            } else {
-                escaped += c;
-            }
-        }
-        return escaped;
-    }
-
-    static std::string format_value(const std::string & field, const std::string & value) {
-        switch (test::get_field_type(field)) {
-            case test::STRING:
-                return "\"" + escape_json(value) + "\"";
-            case test::BOOL:
-                return value == "0" ? "false" : "true";
-            default:
-                return value;
-        }
-    }
 
     void print_header(const cmd_params & params) override {
         fprintf(fout, "[\n");
@@ -1114,7 +1119,7 @@ struct json_printer : public printer {
     void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
         assert(fields.size() == values.size());
         for (size_t i = 0; i < fields.size(); i++) {
-            fprintf(fout, "    \"%s\": %s,\n", fields.at(i).c_str(), format_value(fields.at(i), values.at(i)).c_str());
+            fprintf(fout, "    \"%s\": %s,\n", fields.at(i).c_str(), format_json_value(fields.at(i), values.at(i)).c_str());
         }
     }
 
@@ -1134,6 +1139,26 @@ struct json_printer : public printer {
 
     void print_footer() override {
         fprintf(fout, "\n]\n");
+    }
+};
+
+
+struct jsonl_printer : public printer {
+
+    void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
+        assert(fields.size() == values.size());
+        for (size_t i = 0; i < fields.size(); i++) {
+            fprintf(fout, "\"%s\": %s, ", fields.at(i).c_str(), format_json_value(fields.at(i), values.at(i)).c_str());
+        }
+    }
+
+    void print_test(const test & t) override {
+        fprintf(fout, "{");
+        print_fields(test::get_fields(), t.get_values());
+        fprintf(fout, "\"samples_ns\": [ %s ],", join(t.samples_ns, ", ").c_str());
+        fprintf(fout, "\"samples_ts\": [ %s ]", join(t.get_ts(), ", ").c_str());
+        fprintf(fout, "}\n");
+        fflush(fout);
     }
 };
 
@@ -1437,6 +1462,8 @@ static std::unique_ptr<printer> create_printer(output_formats format) {
             return std::unique_ptr<printer>(new csv_printer());
         case JSON:
             return std::unique_ptr<printer>(new json_printer());
+        case JSONL:
+            return std::unique_ptr<printer>(new jsonl_printer());
         case MARKDOWN:
             return std::unique_ptr<printer>(new markdown_printer());
         case SQL:
