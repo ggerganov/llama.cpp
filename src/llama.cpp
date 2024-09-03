@@ -17935,6 +17935,14 @@ struct llama_context_params llama_context_default_params() {
     return result;
 }
 
+struct llama_sampler_params llama_sampler_default_params() {
+    struct llama_sampler_params result = {
+        /*.dummy =*/ false,
+    };
+
+    return result;
+}
+
 struct llama_sampling_params llama_sampling_default_params() {
     struct llama_sampling_params result = {
         /*.seed              =*/ LLAMA_DEFAULT_SEED,
