@@ -113,8 +113,14 @@ int         llama_sampling_n_prev_impl(const struct llama_sampling & smpl);
 
 // constraints
 
-struct llama_constraint * llama_constraint_init_top_k_impl(int32_t k, size_t min_keep);
-struct llama_constraint * llama_constraint_init_top_p_impl(float   p, size_t min_keep);
+struct llama_constraint * llama_constraint_init_top_k_impl    (int32_t k, size_t min_keep);
+struct llama_constraint * llama_constraint_init_top_p_impl    (float   p, size_t min_keep);
+struct llama_constraint * llama_constraint_init_min_p_impl    (float   p, size_t min_keep);
+struct llama_constraint * llama_constraint_init_tail_free_impl(float   z, size_t min_keep);
+struct llama_constraint * llama_constraint_init_typical_impl  (float   p, size_t min_keep);
+struct llama_constraint * llama_constraint_init_temp_impl     (float   t);
+struct llama_constraint * llama_constraint_init_temp_ext_impl (float   t, float  delta, float exponent);
+struct llama_constraint * llama_constraint_init_grammar_impl  (const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root);
 
 void llama_constraint_free_impl(struct llama_constraint * cnstr);
 

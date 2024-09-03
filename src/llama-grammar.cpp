@@ -1043,6 +1043,10 @@ struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab,
 }
 
 void llama_grammar_free_impl(struct llama_grammar * grammar) {
+    if (grammar == nullptr) {
+        return;
+    }
+
     delete grammar;
 }
 

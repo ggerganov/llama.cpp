@@ -1176,11 +1176,11 @@ extern "C" {
     typedef void * llama_constraint_context_t;
 
     struct llama_constraint_i {
-        void (*accept)(struct llama_constraint * cnstr, llama_token token); // can be NULL
-        void (*apply) (struct llama_constraint * cnstr, llama_token_data_array * candidates);
-        void (*reset) (struct llama_constraint * cnstr); // e.g. for grammar and penalty constraints, can be NULL
-        void (*copy)  (struct llama_constraint * cnstr, const struct llama_constraint * cnstr_src);
-        void (*free)  (struct llama_constraint * cnstr); // can be NULL
+        void (*accept)(struct llama_constraint * cnstr, llama_token token);                         // can be NULL
+        void (*apply) (struct llama_constraint * cnstr, llama_token_data_array * candidates);       // required
+        void (*reset) (struct llama_constraint * cnstr);                                            // can be NULL
+        void (*copy)  (struct llama_constraint * cnstr, const struct llama_constraint * cnstr_src); // can be NULL if ctx is NULL
+        void (*free)  (struct llama_constraint * cnstr);                                            // can be NULL
 
         // TODO: API for internal libllama usage for appending the sampling to an existing ggml_cgraph
         //void (*apply_ggml) (struct llama_constraint * cnstr, ...);
@@ -1191,9 +1191,14 @@ extern "C" {
         llama_constraint_context_t   ctx;
     };
 
-    LLAMA_API struct llama_constraint * llama_constraint_init_top_k(int32_t k, int32_t min_keep);
-    LLAMA_API struct llama_constraint * llama_constraint_init_top_p(float   p, int32_t min_keep);
-    // ...
+    LLAMA_API struct llama_constraint * llama_constraint_init_top_k    (int32_t k, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_top_p    (float   p, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_min_p    (float   p, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_tail_free(float   z, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_typical  (float   p, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_temp     (float   t);
+    LLAMA_API struct llama_constraint * llama_constraint_init_temp_ext (float   t, float delta, float exponent);
+    LLAMA_API struct llama_constraint * llama_constraint_init_grammar  (struct llama_model * model, const char * grammar_str, const char * grammar_root);
 
     // do not call if used with llama_sampler_add_constraint
     LLAMA_API void llama_constraint_free(struct llama_constraint * cnstr);

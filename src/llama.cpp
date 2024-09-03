@@ -20983,6 +20983,30 @@ struct llama_constraint * llama_constraint_init_top_p(float p, int32_t min_keep)
     return llama_constraint_init_top_p_impl(p, min_keep);
 }
 
+struct llama_constraint * llama_constraint_init_min_p(float p, int32_t min_keep) {
+    return llama_constraint_init_min_p_impl(p, min_keep);
+}
+
+struct llama_constraint * llama_constraint_init_tail_free(float z, int32_t min_keep) {
+    return llama_constraint_init_tail_free_impl(z, min_keep);
+}
+
+struct llama_constraint * llama_constraint_init_typical(float p, int32_t min_keep) {
+    return llama_constraint_init_typical_impl(p, min_keep);
+}
+
+struct llama_constraint * llama_constraint_init_temp(float temp) {
+    return llama_constraint_init_temp_impl(temp);
+}
+
+struct llama_constraint * llama_constraint_init_temp_ext(float temp, float delta, float exponent) {
+    return llama_constraint_init_temp_ext_impl(temp, delta, exponent);
+}
+
+struct llama_constraint * llama_constraint_init_grammar(struct llama_model * model, const char * grammar_str, const char * grammar_root) {
+    return llama_constraint_init_grammar_impl(model->vocab, grammar_str, grammar_root);
+}
+
 void llama_constraint_free(struct llama_constraint * cnstr) {
     if (cnstr == nullptr) {
         return;
