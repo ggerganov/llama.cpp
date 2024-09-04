@@ -182,6 +182,8 @@ int main(int argc, char ** argv) {
     // target model sampling context (reuse the llama_context's sampling instance)
     struct gpt_sampler * smpl = gpt_sampler_init(model_tgt, params.sparams);
 
+    struct llama_constraint * softmax = llama_constraint_init_softmax();
+
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
 
@@ -236,7 +238,7 @@ int main(int argc, char ** argv) {
                     auto & dist_tgt = *gpt_sampler_get_candidates(smpl);
 
                     gpt_sampler_apply_grammar(smpl, &dist_tgt);
-                    gpt_sampler_sample_greedy(smpl, &dist_tgt, true); // applies softmax
+                    llama_constraint_apply(softmax, &dist_tgt);
 
                     float p_tgt = 0.0f;
                     float p_dft = 0.0f;
@@ -335,11 +337,10 @@ int main(int argc, char ** argv) {
                         // all drafted tokens were rejected
                         // sample from the target model
                         LOG("all drafted tokens were rejected, sampling from residual distribution\n");
-                        token_id = gpt_sampler_sample_dist(smpl, &dist_tgt);
+                        token_id = gpt_sampler_sample(smpl, &dist_tgt);
                         gpt_sampler_accept(smpl, token_id, true);
                         token_str = llama_token_to_piece(ctx_tgt, token_id);
                     }
-
                 } else {
                     // greedy verification
 
@@ -615,6 +616,7 @@ int main(int argc, char ** argv) {
         gpt_sampler_free(drafts[s].smpl);
     }
 
+    llama_constraint_free(softmax);
     llama_batch_free(batch_dft);
 
     llama_free(ctx_tgt);

@@ -124,7 +124,7 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
 
         llama_sampler_set_logits(smpl, logits);
 
-        llama_token token = llama_sampler_sample_greedy(smpl, nullptr, false);
+        llama_token token = llama_sampler_sample(smpl, nullptr);
         if (token == eos_token) {
             break;
         }
@@ -171,7 +171,11 @@ int main(int argc, char * argv[]) {
     // create generation context
     llama_context * ctx = llama_new_context_with_model(model, cparams);
 
-    llama_sampler * smpl = llama_sampler_init(model, llama_sampler_default_params());
+    auto sparams = llama_sampler_default_params();
+
+    sparams.type = LLAMA_SAMPLER_TYPE_GREEDY;
+
+    llama_sampler * smpl = llama_sampler_init(model, sparams);
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic

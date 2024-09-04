@@ -1183,6 +1183,20 @@ void llama_sampler_reset_impl(struct llama_sampler & smpl) {
     // TODO: should we reset the timings?
 }
 
+void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token) {
+    smpl.prev.push_back(token);
+
+    for (auto * cnstr : smpl.constraints) {
+        llama_constraint_accept_impl(*cnstr, token);
+    }
+}
+
+void llama_sampler_apply_impl(struct llama_sampler & smpl, struct llama_token_data_array * cur_p) {
+    for (auto * cnstr : smpl.constraints) {
+        llama_constraint_apply_impl(*cnstr, cur_p);
+    }
+}
+
 void llama_sampler_constraint_add_impl(struct llama_sampler & smpl, struct llama_constraint * cnstr) {
     smpl.constraints.push_back(cnstr);
 }
@@ -1199,17 +1213,31 @@ struct llama_constraint * llama_sampler_constraint_get_impl(const struct llama_s
     return smpl.constraints[ith];
 }
 
-void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token) {
-    smpl.prev.push_back(token);
+llama_token llama_sampler_sample_impl(struct llama_token_data_array * cur_p, std::mt19937 & rng, enum llama_sampler_type type) {
+    switch (type) {
+        case LLAMA_SAMPLER_TYPE_GREEDY:
+            {
+                llama_constraint_softmax_impl(cur_p);
 
-    for (auto * cnstr : smpl.constraints) {
-        llama_constraint_accept_impl(*cnstr, token);
-    }
-}
+                return cur_p->data[0].id;
+            }
+        case LLAMA_SAMPLER_TYPE_DIST:
+            {
+                llama_constraint_softmax_impl(cur_p);
 
-void llama_sampler_apply_impl(struct llama_sampler & smpl, struct llama_token_data_array * cur_p) {
-    for (auto * cnstr : smpl.constraints) {
-        llama_constraint_apply_impl(*cnstr, cur_p);
+                std::vector<float> probs(cur_p->size);
+                for (size_t i = 0; i < cur_p->size; ++i) {
+                    probs[i] = cur_p->data[i].p;
+                }
+
+                std::discrete_distribution<> dist(probs.begin(), probs.end());
+
+                const int idx = dist(rng);
+
+                return cur_p->data[idx].id;
+            }
+        default:
+            GGML_ABORT("invalid sampler type");
     }
 }
 
@@ -1223,41 +1251,4 @@ llama_token llama_sampler_prev_impl(const struct llama_sampler & smpl, int ith) 
 
 int llama_sampler_n_prev_impl(const struct llama_sampler & smpl) {
     return smpl.prev.size();
-}
-
-llama_token llama_sampler_sample_greedy_impl(llama_token_data_array * cur_p, bool probs) {
-    if (probs) {
-        // if probs are needed, we apply softmax to get the probabilities
-        llama_constraint_softmax_impl(cur_p);
-
-        // the cur_p are sorted, so we can just return the first one
-        return cur_p->data[0].id;
-    }
-
-    // return the token with the highest logit
-    auto * max_iter = std::max_element(cur_p->data, cur_p->data + cur_p->size, [](const llama_token_data & a, const llama_token_data & b) {
-        return a.logit < b.logit;
-    });
-
-    llama_token result = max_iter->id;
-
-    return result;
-}
-
-llama_token llama_sampler_sample_dist_impl(struct llama_token_data_array * cur_p, std::mt19937 & rng) {
-    llama_constraint_softmax_impl(cur_p);
-
-    std::vector<float> probs;
-    probs.reserve(cur_p->size);
-
-    for (size_t i = 0; i < cur_p->size; ++i) {
-        probs.push_back(cur_p->data[i].p);
-    }
-
-    std::discrete_distribution<> dist(probs.begin(), probs.end());
-
-    const int idx = dist(rng);
-    llama_token result = cur_p->data[idx].id;
-
-    return result;
 }

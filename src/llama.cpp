@@ -17939,7 +17939,7 @@ struct llama_sampler_params llama_sampler_default_params() {
     struct llama_sampler_params result = {
         /*.seed              =*/ LLAMA_DEFAULT_SEED,
         /*.n_prev            =*/ 256,
-        /*.type              =*/ LLAMA_SAMPLER_TYPE_GREEDY,
+        /*.type              =*/ LLAMA_SAMPLER_TYPE_DIST,
     };
 
     return result;
@@ -20713,6 +20713,20 @@ void llama_sampler_reset(struct llama_sampler * smpl) {
     llama_sampler_reset_impl(*smpl);
 }
 
+void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
+    llama_sampler_accept_impl(*smpl, token);
+}
+
+void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    time_meas tm(smpl->t_sample_us);
+
+    if (cur_p == nullptr) {
+        cur_p = &smpl->cur_p;
+    }
+
+    llama_sampler_apply_impl(*smpl, cur_p);
+}
+
 void llama_sampler_set_logits(struct llama_sampler * smpl, const float * logits) {
     const int n_vocab = smpl->vocab->n_vocab;
 
@@ -20741,42 +20755,14 @@ struct llama_constraint * llama_sampler_constraint_get(const struct llama_sample
     return llama_sampler_constraint_get_impl(*smpl, i);
 }
 
-void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
-    llama_sampler_accept_impl(*smpl, token);
-}
-
-void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+llama_token llama_sampler_sample(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     time_meas tm(smpl->t_sample_us);
 
     if (cur_p == nullptr) {
         cur_p = &smpl->cur_p;
     }
 
-    llama_sampler_apply_impl(*smpl, cur_p);
-}
-
-llama_token llama_sampler_sample_greedy(struct llama_sampler * smpl, llama_token_data_array * cur_p, bool probs) {
-    time_meas tm(smpl->t_sample_us);
-
-    if (cur_p == nullptr) {
-        cur_p = &smpl->cur_p;
-    }
-
-    auto res = llama_sampler_sample_greedy_impl(cur_p, probs);
-
-    smpl->n_sample++;
-
-    return res;
-}
-
-llama_token llama_sampler_sample_dist(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    time_meas tm(smpl->t_sample_us);
-
-    if (cur_p == nullptr) {
-        cur_p = &smpl->cur_p;
-    }
-
-    auto res = llama_sampler_sample_dist_impl(cur_p, smpl->rng);
+    auto res = llama_sampler_sample_impl(cur_p, smpl->rng, smpl->params.type);
 
     smpl->n_sample++;
 

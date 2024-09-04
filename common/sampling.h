@@ -73,15 +73,19 @@ struct gpt_sampler * gpt_sampler_cp(gpt_sampler * gsmpl);
 void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool apply_grammar);
 void gpt_sampler_reset (struct gpt_sampler * gsmpl);
 
+void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p);
+
 void gpt_sampler_set_logits(struct gpt_sampler * gsmpl, const float * logits);
 
 llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl);
+
+llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_token_data_array * cur_p);
 
 llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl);
 
 void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl);
 
-// common sampling implementation:
+// extended sampling implementation:
 //
 // - set logits
 // - apply the configured sampling constraints
@@ -89,11 +93,6 @@ void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl);
 // - if not: resample by first applying the grammar constraints and then sampling again (slower path)
 //
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx);
-
-void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p);
-
-llama_token gpt_sampler_sample_dist  (struct gpt_sampler * gsmpl, llama_token_data_array * cur_p);
-llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p, bool probs);
 
 // helpers
 

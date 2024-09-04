@@ -73,7 +73,7 @@ int main(int argc, char ** argv) {
 
         llama_sampler_set_logits(smpl, logits);
 
-        auto next_token = llama_sampler_sample_dist(smpl, nullptr);
+        auto next_token     = llama_sampler_sample(smpl, nullptr);
         auto next_token_str = llama_token_to_piece(ctx, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -130,7 +130,7 @@ int main(int argc, char ** argv) {
 
         llama_sampler_set_logits(smpl2, logits);
 
-        auto next_token = llama_sampler_sample_dist(smpl2, nullptr);
+        auto next_token     = llama_sampler_sample(smpl2, nullptr);
         auto next_token_str = llama_token_to_piece(ctx2, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -219,7 +219,7 @@ int main(int argc, char ** argv) {
 
         llama_sampler_set_logits(smpl3, logits);
 
-        auto next_token = llama_sampler_sample_dist(smpl3, nullptr);
+        auto next_token     = llama_sampler_sample(smpl3, nullptr);
         auto next_token_str = llama_token_to_piece(ctx3, next_token);
 
         printf("%s", next_token_str.c_str());

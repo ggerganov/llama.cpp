@@ -66,7 +66,7 @@ int main(int argc, char ** argv) {
 
     auto sparams = llama_sampler_default_params();
 
-    sparams.seed  = params.sparams.seed;
+    sparams.seed = params.sparams.seed;
 
     llama_sampler * smpl = llama_sampler_init(model, sparams);
 
@@ -177,9 +177,7 @@ int main(int argc, char ** argv) {
 
             llama_sampler_set_logits(smpl, logits);
 
-            const llama_token new_token_id = llama_sampler_sample_dist(smpl, nullptr);
-
-            //const llama_token new_token_id = llama_sampler_sample_greedy(smpl, nullptr, false);
+            const llama_token new_token_id = llama_sampler_sample(smpl, nullptr);
 
             // is it an end of generation? -> mark the stream as finished
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {

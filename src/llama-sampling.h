@@ -104,20 +104,18 @@ struct llama_sampler {
     mutable int32_t n_sample;
 };
 
-struct llama_sampler * llama_sampler_init_impl (const struct llama_vocab   & vocab, struct llama_sampler_params params);
-void                   llama_sampler_free_impl (      struct llama_sampler * smpl);
-struct llama_sampler * llama_sampler_cp_impl   (const struct llama_sampler & smpl);
-void                   llama_sampler_reset_impl(      struct llama_sampler & smpl);
+struct llama_sampler * llama_sampler_init_impl  (const struct llama_vocab   & vocab, struct llama_sampler_params params);
+void                   llama_sampler_free_impl  (      struct llama_sampler * smpl);
+struct llama_sampler * llama_sampler_cp_impl    (const struct llama_sampler & smpl);
+void                   llama_sampler_reset_impl (      struct llama_sampler & smpl);
+void                   llama_sampler_accept_impl(      struct llama_sampler & smpl, llama_token token);
+void                   llama_sampler_apply_impl (      struct llama_sampler & smpl, struct llama_token_data_array * cur_p);
 
 void                      llama_sampler_constraint_add_impl(      struct llama_sampler & smpl, struct llama_constraint * cnstr);
 int                       llama_sampler_n_constraints_impl (const struct llama_sampler & smpl);
 struct llama_constraint * llama_sampler_constraint_get_impl(const struct llama_sampler & smpl, int ith);
 
-void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token);
-void llama_sampler_apply_impl (struct llama_sampler & smpl, struct llama_token_data_array * cur_p);
+llama_token llama_sampler_sample_impl(struct llama_token_data_array * cur_p, std::mt19937 & rng, enum llama_sampler_type type);
 
 llama_token llama_sampler_prev_impl  (const struct llama_sampler & smpl, int ith);
 int         llama_sampler_n_prev_impl(const struct llama_sampler & smpl);
-
-llama_token llama_sampler_sample_greedy_impl(struct llama_token_data_array * cur_p, bool probs);
-llama_token llama_sampler_sample_dist_impl  (struct llama_token_data_array * cur_p, std::mt19937 & rng);

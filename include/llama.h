@@ -370,8 +370,8 @@ extern "C" {
     } llama_logit_bias;
 
     enum llama_sampler_type {
-        LLAMA_SAMPLER_TYPE_GREEDY   = 0,
-        LLAMA_SAMPLER_TYPE_DIST     = 1,
+        LLAMA_SAMPLER_TYPE_GREEDY = 0,
+        LLAMA_SAMPLER_TYPE_DIST   = 1,
     };
 
     typedef struct llama_sampler_params {
@@ -1092,10 +1092,12 @@ extern "C" {
 
     // samplers
 
-    LLAMA_API struct llama_sampler * llama_sampler_init (const struct llama_model   * model, struct llama_sampler_params params);
-    LLAMA_API void                   llama_sampler_free (      struct llama_sampler * smpl);
-    LLAMA_API struct llama_sampler * llama_sampler_cp   (const struct llama_sampler * smpl);
-    LLAMA_API void                   llama_sampler_reset(      struct llama_sampler * smpl);
+    LLAMA_API struct llama_sampler * llama_sampler_init  (const struct llama_model   * model, struct llama_sampler_params params);
+    LLAMA_API void                   llama_sampler_free  (      struct llama_sampler * smpl);
+    LLAMA_API struct llama_sampler * llama_sampler_cp    (const struct llama_sampler * smpl);
+    LLAMA_API void                   llama_sampler_reset (      struct llama_sampler * smpl);
+    LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
+    LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
 
     LLAMA_API void llama_sampler_set_logits(struct llama_sampler * smpl, const float * logits);
 
@@ -1107,11 +1109,7 @@ extern "C" {
     LLAMA_API struct llama_constraint * llama_sampler_constraint_get(const struct llama_sampler * smpl, int32_t i);
 
 
-    LLAMA_API void llama_sampler_accept(struct llama_sampler * smpl, llama_token token);
-    LLAMA_API void llama_sampler_apply (struct llama_sampler * smpl, llama_token_data_array * cur_p);
-
-    LLAMA_API llama_token llama_sampler_sample_dist  (struct llama_sampler * smpl, llama_token_data_array * cur_p);
-    LLAMA_API llama_token llama_sampler_sample_greedy(struct llama_sampler * smpl, llama_token_data_array * cur_p, bool probs);
+    LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, llama_token_data_array * cur_p);
 
     /// @details Get the number of accepted tokens so far (max of n_prev)
     LLAMA_API int llama_sampler_n_prev(const struct llama_sampler * smpl);
