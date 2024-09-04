@@ -232,18 +232,18 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     return gpt_sampler_sample(smpl, cur_p, params.temp, params.mirostat, params.n_probs);
 }
 
-void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * candidates) {
-    GGML_ASSERT(candidates != nullptr);
+void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p) {
+    GGML_ASSERT(cur_p != nullptr);
 
-    llama_constraint_apply(gsmpl->grmr, candidates);
+    llama_constraint_apply(gsmpl->grmr, cur_p);
 }
 
-llama_token gpt_sampler_sample_dist(struct gpt_sampler * gsmpl, llama_token_data_array * candidates) {
-    return llama_sampler_sample_dist(gsmpl->smpl, candidates);
+llama_token gpt_sampler_sample_dist(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p) {
+    return llama_sampler_sample_dist(gsmpl->smpl, cur_p);
 }
 
-llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * candidates, bool probs) {
-    return llama_sampler_sample_greedy(gsmpl->smpl, candidates, probs);
+llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p, bool probs) {
+    return llama_sampler_sample_greedy(gsmpl->smpl, cur_p, probs);
 }
 
 std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx_main, int n) {

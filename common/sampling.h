@@ -93,10 +93,10 @@ void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl);
 //
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx);
 
-void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * candidates);
+void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p);
 
-llama_token gpt_sampler_sample_dist  (struct gpt_sampler * gsmpl, llama_token_data_array * candidates);
-llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * candidates, bool probs);
+llama_token gpt_sampler_sample_dist  (struct gpt_sampler * gsmpl, llama_token_data_array * cur_p);
+llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p, bool probs);
 
 // helpers
 

@@ -20609,6 +20609,10 @@ int32_t llama_chat_apply_template(
 // sampling
 //
 
+struct llama_constraint * llama_constraint_init_softmax() {
+    return llama_constraint_init_softmax_impl();
+}
+
 struct llama_constraint * llama_constraint_init_top_k(int32_t k, int32_t min_keep) {
     return llama_constraint_init_top_k_impl(k, min_keep);
 }
@@ -20675,8 +20679,8 @@ void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token)
     llama_constraint_accept_impl(*cnstr, token);
 }
 
-void llama_constraint_apply(struct llama_constraint * cnstr, llama_token_data_array * candidates) {
-    llama_constraint_apply_impl(*cnstr, candidates);
+void llama_constraint_apply(struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
+    llama_constraint_apply_impl(*cnstr, cur_p);
 }
 
 void llama_constraint_reset(struct llama_constraint * cnstr) {
@@ -20727,21 +20731,21 @@ void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
     llama_sampler_accept_impl(*smpl, token);
 }
 
-void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * candidates) {
+void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     time_meas tm(smpl->t_sample_us);
 
-    if (candidates == nullptr) {
-        candidates = &smpl->cur_p;
+    if (cur_p == nullptr) {
+        cur_p = &smpl->cur_p;
     }
 
-    llama_sampler_apply_impl(*smpl, candidates);
+    llama_sampler_apply_impl(*smpl, cur_p);
 }
 
-llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_token_data_array * candidates) {
+llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     time_meas tm(smpl->t_sample_us);
 
-    if (candidates == nullptr) {
-        candidates = &smpl->cur_p;
+    if (cur_p == nullptr) {
+        cur_p = &smpl->cur_p;
     }
 
     const auto type = smpl->params.mirostat;
@@ -20749,7 +20753,7 @@ llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_tok
     llama_token res;
 
     if (type == 1) {
-        res = llama_sampler_sample_mirostat_impl(candidates,
+        res = llama_sampler_sample_mirostat_impl(cur_p,
                 smpl->rng,
                 smpl->params.mirostat_tau,
                 smpl->params.mirostat_eta,
@@ -20757,7 +20761,7 @@ llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_tok
                 smpl->vocab->n_vocab,
                 smpl->mirostat_mu);
     } else if (type == 2) {
-        res = llama_sampler_sample_mirostat_v2_impl(candidates,
+        res = llama_sampler_sample_mirostat_v2_impl(cur_p,
                 smpl->rng,
                 smpl->params.mirostat_tau,
                 smpl->params.mirostat_eta,
@@ -20771,28 +20775,28 @@ llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_tok
     return res;
 }
 
-llama_token llama_sampler_sample_greedy(struct llama_sampler * smpl, llama_token_data_array * candidates, bool probs) {
+llama_token llama_sampler_sample_greedy(struct llama_sampler * smpl, llama_token_data_array * cur_p, bool probs) {
     time_meas tm(smpl->t_sample_us);
 
-    if (candidates == nullptr) {
-        candidates = &smpl->cur_p;
+    if (cur_p == nullptr) {
+        cur_p = &smpl->cur_p;
     }
 
-    auto res = llama_sampler_sample_greedy_impl(candidates, probs);
+    auto res = llama_sampler_sample_greedy_impl(cur_p, probs);
 
     smpl->n_sample++;
 
     return res;
 }
 
-llama_token llama_sampler_sample_dist(struct llama_sampler * smpl, llama_token_data_array * candidates) {
+llama_token llama_sampler_sample_dist(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
     time_meas tm(smpl->t_sample_us);
 
-    if (candidates == nullptr) {
-        candidates = &smpl->cur_p;
+    if (cur_p == nullptr) {
+        cur_p = &smpl->cur_p;
     }
 
-    auto res = llama_sampler_sample_dist_impl(candidates, smpl->rng);
+    auto res = llama_sampler_sample_dist_impl(cur_p, smpl->rng);
 
     smpl->n_sample++;
 

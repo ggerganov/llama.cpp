@@ -1069,7 +1069,7 @@ struct llama_grammar * llama_grammar_cp_impl(const struct llama_grammar & gramma
     return result;
 }
 
-void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_data_array * candidates) {
+void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_data_array * cur_p) {
     GGML_ASSERT(grammar.vocab != nullptr);
 
     bool allow_eog = false;
@@ -1081,21 +1081,21 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
     }
 
     std::vector<std::pair<std::vector<uint32_t>, llama_partial_utf8>> candidates_decoded;
-    candidates_decoded.reserve(candidates->size);
+    candidates_decoded.reserve(cur_p->size);
 
     llama_grammar_candidates candidates_grammar;
-    candidates_grammar.reserve(candidates->size);
+    candidates_grammar.reserve(cur_p->size);
 
-    for (size_t i = 0; i < candidates->size; ++i) {
-        const llama_token id      = candidates->data[i].id;
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        const llama_token id      = cur_p->data[i].id;
         const std::string & piece = grammar.vocab->cache_token_to_piece.at(id);
 
         if (llama_token_is_eog_impl(*grammar.vocab, id)) {
             if (!allow_eog) {
-                candidates->data[i].logit = -INFINITY;
+                cur_p->data[i].logit = -INFINITY;
             }
         } else if (piece.empty() || piece[0] == 0) {
-            candidates->data[i].logit = -INFINITY;
+            cur_p->data[i].logit = -INFINITY;
         } else {
             candidates_decoded.push_back(decode_utf8(piece, grammar.partial_utf8));
             candidates_grammar.push_back({ i, candidates_decoded.back().first.data(), candidates_decoded.back().second });
@@ -1104,7 +1104,7 @@ void llama_grammar_apply_impl(const struct llama_grammar & grammar, llama_token_
 
     const auto rejects = llama_grammar_reject_candidates(grammar.rules, grammar.stacks, candidates_grammar);
     for (const auto & reject : rejects) {
-        candidates->data[reject.index].logit = -INFINITY;
+        cur_p->data[reject.index].logit = -INFINITY;
     }
 }
 

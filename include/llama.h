@@ -1027,11 +1027,11 @@ extern "C" {
     struct llama_constraint_i {
         // TODO: add name API
 
-        void                      (*accept)(      struct llama_constraint * cnstr, llama_token token);                   // can be NULL
-        void                      (*apply) (      struct llama_constraint * cnstr, llama_token_data_array * candidates); // required
-        void                      (*reset) (      struct llama_constraint * cnstr);                                      // can be NULL
-        struct llama_constraint * (*copy)  (const struct llama_constraint * cnstr);                                      // can be NULL if ctx is NULL
-        void                      (*free)  (      struct llama_constraint * cnstr);                                      // can be NULL
+        void                      (*accept)(      struct llama_constraint * cnstr, llama_token token);              // can be NULL
+        void                      (*apply) (      struct llama_constraint * cnstr, llama_token_data_array * cur_p); // required
+        void                      (*reset) (      struct llama_constraint * cnstr);                                 // can be NULL
+        struct llama_constraint * (*copy)  (const struct llama_constraint * cnstr);                                 // can be NULL if ctx is NULL
+        void                      (*free)  (      struct llama_constraint * cnstr);                                 // can be NULL if ctx is NULL
 
         // TODO: API for internal libllama usage for appending the sampling to an existing ggml_cgraph
         //void (*apply_ggml) (struct llama_constraint * cnstr, ...);
@@ -1044,6 +1044,7 @@ extern "C" {
         llama_constraint_context_t   ctx;
     };
 
+    LLAMA_API struct llama_constraint * llama_constraint_init_softmax   ();
     LLAMA_API struct llama_constraint * llama_constraint_init_top_k     (int32_t k, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_top_p     (float   p, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_min_p     (float   p, int32_t min_keep);
@@ -1077,7 +1078,7 @@ extern "C" {
     LLAMA_API void llama_constraint_free(struct llama_constraint * cnstr);
 
     LLAMA_API void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token);
-    LLAMA_API void llama_constraint_apply (struct llama_constraint * cnstr, llama_token_data_array * candidates);
+    LLAMA_API void llama_constraint_apply (struct llama_constraint * cnstr, llama_token_data_array * cur_p);
     LLAMA_API void llama_constraint_reset (struct llama_constraint * cnstr);
 
     // samplers
@@ -1095,11 +1096,11 @@ extern "C" {
     LLAMA_API void llama_sampler_add_constraint(struct llama_sampler * smpl, struct llama_constraint * cnstr);
 
     LLAMA_API void llama_sampler_accept(struct llama_sampler * smpl, llama_token token);
-    LLAMA_API void llama_sampler_apply (struct llama_sampler * smpl, llama_token_data_array * candidates);
+    LLAMA_API void llama_sampler_apply (struct llama_sampler * smpl, llama_token_data_array * cur_p);
 
-    LLAMA_API llama_token llama_sampler_sample_dist    (struct llama_sampler * smpl, llama_token_data_array * candidates);
-    LLAMA_API llama_token llama_sampler_sample_greedy  (struct llama_sampler * smpl, llama_token_data_array * candidates, bool probs);
-    LLAMA_API llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_token_data_array * candidates);
+    LLAMA_API llama_token llama_sampler_sample_dist    (struct llama_sampler * smpl, llama_token_data_array * cur_p);
+    LLAMA_API llama_token llama_sampler_sample_greedy  (struct llama_sampler * smpl, llama_token_data_array * cur_p, bool probs);
+    LLAMA_API llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_token_data_array * cur_p);
 
     /// @details Get the number of accepted tokens so far (max of n_prev)
     LLAMA_API int llama_sampler_n_prev(const struct llama_sampler * smpl);

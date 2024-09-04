@@ -11,119 +11,125 @@
 #include <string>
 #include <vector>
 
-static void dump(const llama_token_data_array * candidates) {
-    for (size_t i = 0; i < candidates->size; i++) {
-        printf("%d: %f (%f)\n", candidates->data[i].id, candidates->data[i].p, candidates->data[i].logit);
+static void dump(const llama_token_data_array * cur_p) {
+    for (size_t i = 0; i < cur_p->size; i++) {
+        printf("%d: %f (%f)\n", cur_p->data[i].id, cur_p->data[i].p, cur_p->data[i].logit);
     }
 }
 
-#define DUMP(__candidates) do { printf("%s:%d (%s)\n", __FILE__, __LINE__, __func__); dump((__candidates)); printf("-\n"); } while(0)
+#define DUMP(__cur_p) do { printf("%s:%d (%s)\n", __FILE__, __LINE__, __func__); dump((__cur_p)); printf("-\n"); } while(0)
+
+#define TEST(__cnstr, __cur_p) do { \
+    auto * cnstr = (__cnstr); \
+    llama_constraint_apply(cnstr, (__cur_p)); \
+    llama_constraint_free(cnstr); \
+} while(0)
 
 static void test_top_k(const std::vector<float> & probs, const std::vector<float> & expected_probs, int k) {
     const size_t n_vocab = probs.size();
 
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
         const float logit = logf(probs[token_id]);
-        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    llama_constraint_softmax_impl(&candidates_p);
-    DUMP(&candidates_p);
-    llama_constraint_top_k_impl(&candidates_p, k, 1);
-    DUMP(&candidates_p);
+    llama_token_data_array cur_p = { cur.data(), cur.size(), false };
+    TEST(llama_constraint_init_softmax(), &cur_p);
+    DUMP(&cur_p);
+    TEST(llama_constraint_init_top_k(k, 1), &cur_p);
+    DUMP(&cur_p);
 
-    GGML_ASSERT(candidates_p.size == expected_probs.size());
-    for (size_t i = 0; i < candidates_p.size; i++) {
-        GGML_ASSERT(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-5);
+    GGML_ASSERT(cur_p.size == expected_probs.size());
+    for (size_t i = 0; i < cur_p.size; i++) {
+        GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-5);
     }
 }
 
 static void test_top_p(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
 
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
         const float logit = logf(probs[token_id]);
-        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    llama_constraint_softmax_impl(&candidates_p);
-    DUMP(&candidates_p);
-    llama_constraint_top_p_impl(&candidates_p, p, 1);
-    DUMP(&candidates_p);
+    llama_token_data_array cur_p = { cur.data(), cur.size(), false };
+    TEST(llama_constraint_init_softmax(), &cur_p);
+    DUMP(&cur_p);
+    TEST(llama_constraint_init_top_p(p, 1), &cur_p);
+    DUMP(&cur_p);
 
-    GGML_ASSERT(candidates_p.size == expected_probs.size());
-    for (size_t i = 0; i < candidates_p.size; i++) {
-        GGML_ASSERT(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-3);
+    GGML_ASSERT(cur_p.size == expected_probs.size());
+    for (size_t i = 0; i < cur_p.size; i++) {
+        GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-3);
     }
 }
 
 static void test_tfs(const std::vector<float> & probs, const std::vector<float> & expected_probs, float z) {
     const size_t n_vocab = probs.size();
 
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
         const float logit = logf(probs[token_id]);
-        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    DUMP(&candidates_p);
-    llama_constraint_tail_free_impl(&candidates_p, z, 1);
-    DUMP(&candidates_p);
+    llama_token_data_array cur_p = { cur.data(), cur.size(), false };
+    DUMP(&cur_p);
+    TEST(llama_constraint_init_tail_free(z, 1), &cur_p);
+    DUMP(&cur_p);
 
-    GGML_ASSERT(candidates_p.size == expected_probs.size());
-    for (size_t i = 0; i < candidates_p.size; i++) {
-        GGML_ASSERT(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-3);
+    GGML_ASSERT(cur_p.size == expected_probs.size());
+    for (size_t i = 0; i < cur_p.size; i++) {
+        GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-3);
     }
 }
 
 static void test_min_p(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
 
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
         const float logit = logf(probs[token_id]);
-        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    DUMP(&candidates_p);
-    llama_constraint_min_p_impl(&candidates_p, p, 1);
-    DUMP(&candidates_p);
-    llama_constraint_softmax_impl(&candidates_p);
+    llama_token_data_array cur_p = { cur.data(), cur.size(), false };
+    DUMP(&cur_p);
+    TEST(llama_constraint_init_min_p(p, 1), &cur_p);
+    DUMP(&cur_p);
+    TEST(llama_constraint_init_softmax(), &cur_p);
 
-    GGML_ASSERT(candidates_p.size == expected_probs.size());
-    for (size_t i = 0; i < candidates_p.size; i++) {
-        GGML_ASSERT(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-3);
+    GGML_ASSERT(cur_p.size == expected_probs.size());
+    for (size_t i = 0; i < cur_p.size; i++) {
+        GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-3);
     }
 }
 
 static void test_typical(const std::vector<float> & probs, const std::vector<float> & expected_probs, float p) {
     const size_t n_vocab = probs.size();
 
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
         const float logit = logf(probs[token_id]);
-        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    DUMP(&candidates_p);
-    llama_constraint_typical_impl(&candidates_p, p, 1);
-    DUMP(&candidates_p);
+    llama_token_data_array cur_p = { cur.data(), cur.size(), false };
+    DUMP(&cur_p);
+    TEST(llama_constraint_init_typical(p, 1), &cur_p);
+    DUMP(&cur_p);
 
-    GGML_ASSERT(candidates_p.size == expected_probs.size());
-    for (size_t i = 0; i < candidates_p.size; i++) {
-        GGML_ASSERT(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-3);
+    GGML_ASSERT(cur_p.size == expected_probs.size());
+    for (size_t i = 0; i < cur_p.size; i++) {
+        GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-3);
     }
 }
 
@@ -135,11 +141,11 @@ static void test_penalties(
 
     const size_t n_vocab = probs.size();
 
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
         const float logit = logf(probs[token_id]);
-        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
     llama_token_cnt token_count;
@@ -147,55 +153,55 @@ static void test_penalties(
         token_count[last_tokens[i]]++;
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    llama_constraint_softmax_impl(&candidates_p);
-    DUMP(&candidates_p);
-    llama_constraint_penalties_impl(&candidates_p, token_count, repeat_penalty, alpha_frequency, alpha_presence);
-    llama_constraint_softmax_impl(&candidates_p);
-    DUMP(&candidates_p);
+    llama_token_data_array cur_p = { cur.data(), cur.size(), false };
+    TEST(llama_constraint_init_softmax(), &cur_p);
+    DUMP(&cur_p);
+    llama_constraint_penalties_impl(&cur_p, token_count, repeat_penalty, alpha_frequency, alpha_presence); // TODO: avoid
+    TEST(llama_constraint_init_softmax(), &cur_p);
+    DUMP(&cur_p);
 
-    GGML_ASSERT(candidates_p.size == expected_probs.size());
-    for (size_t i = 0; i < candidates_p.size; i++) {
-        GGML_ASSERT(fabs(candidates_p.data[i].p - expected_probs[i]) < 1e-3);
+    GGML_ASSERT(cur_p.size == expected_probs.size());
+    for (size_t i = 0; i < cur_p.size; i++) {
+        GGML_ASSERT(fabs(cur_p.data[i].p - expected_probs[i]) < 1e-3);
     }
 }
 
 static void test_sampler_queue(const size_t n_vocab, const std::string & samplers_sequence, const int top_k, const float top_p, const float min_p
 ) {
-    std::vector<llama_token_data> candidates;
-    candidates.reserve(n_vocab);
+    std::vector<llama_token_data> cur;
+    cur.reserve(n_vocab);
     for (llama_token token_id = 0; token_id < (llama_token)n_vocab; token_id++) {
         const float logit = logf(token_id);
-        candidates.emplace_back(llama_token_data{token_id, logit, 0.0f});
+        cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
+    llama_token_data_array cur_p = { cur.data(), cur.size(), false };
 
           llama_token min_token_id = 0;
     const llama_token max_token_id = n_vocab-1;
 
     for (auto s : samplers_sequence) {
         switch (s){
-            case 'k': llama_constraint_top_k_impl(&candidates_p, top_k, 1); break;
+            case 'k': TEST(llama_constraint_init_top_k(top_k, 1), &cur_p); break;
             case 'f': GGML_ABORT("tail_free test not implemented");
             case 'y': GGML_ABORT("typical test not implemented");
-            case 'p': llama_constraint_top_p_impl(&candidates_p, top_p, 1); break;
-            case 'm': llama_constraint_min_p_impl(&candidates_p, min_p, 1); break;
+            case 'p': TEST(llama_constraint_init_top_p(top_p, 1), &cur_p); break;
+            case 'm': TEST(llama_constraint_init_min_p(min_p, 1), &cur_p); break;
             case 't': GGML_ABORT("temperature test not implemented");
             default : GGML_ABORT("Unknown sampler");
         }
 
-        llama_constraint_softmax_impl(&candidates_p); // make sure tokens are sorted for tests
+        TEST(llama_constraint_init_softmax(), &cur_p); // make sure tokens are sorted for tests
 
-        const int size = candidates_p.size;
+        const int size = cur_p.size;
 
         if (s == 'k') {
             const int expected_size = std::min(size, top_k);
             min_token_id = std::max(min_token_id, (llama_token)(n_vocab - top_k));
 
             GGML_ASSERT(size == expected_size);
-            GGML_ASSERT(candidates_p.data[0].id == max_token_id);
-            GGML_ASSERT(candidates_p.data[expected_size-1].id == min_token_id);
+            GGML_ASSERT(cur_p.data[0].id == max_token_id);
+            GGML_ASSERT(cur_p.data[expected_size-1].id == min_token_id);
         } else if (s == 'p') {
             const int softmax_divisor = n_vocab * (n_vocab-1) / 2 - min_token_id * (min_token_id-1) / 2;
             const int softmax_numerator_target = ceilf(top_p * softmax_divisor);
@@ -217,8 +223,8 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
             }
 
             GGML_ASSERT(size == expected_size);
-            GGML_ASSERT(candidates_p.data[0].id == max_token_id);
-            GGML_ASSERT(candidates_p.data[expected_size-1].id == min_token_id);
+            GGML_ASSERT(cur_p.data[0].id == max_token_id);
+            GGML_ASSERT(cur_p.data[expected_size-1].id == min_token_id);
         } else if (s == 'm') {
             int expected_size = ceilf((1.0f-min_p) * n_vocab);
             expected_size = std::max(expected_size, 1);
@@ -230,8 +236,8 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
             min_token_id = std::min(min_token_id, (llama_token)(n_vocab - 1));
 
             GGML_ASSERT(size == expected_size);
-            GGML_ASSERT(candidates_p.data[0].id == max_token_id);
-            GGML_ASSERT(candidates_p.data[expected_size-1].id == min_token_id);
+            GGML_ASSERT(cur_p.data[0].id == max_token_id);
+            GGML_ASSERT(cur_p.data[expected_size-1].id == min_token_id);
         } else {
             GGML_ABORT("fatal error");
         }

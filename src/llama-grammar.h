@@ -136,7 +136,7 @@ struct llama_grammar * llama_grammar_cp_impl(const struct llama_grammar & gramma
 // TODO: move the API below as member functions of llama_grammar
 void llama_grammar_apply_impl(
         const struct llama_grammar & grammar,
-            llama_token_data_array * candidates);
+            llama_token_data_array * cur_p);
 
 void llama_grammar_accept_impl(
               struct llama_grammar & grammar,
