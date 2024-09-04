@@ -131,6 +131,9 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
 int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
+    auto options = gpt_params_parser_register(params);
+    gpt_params_parser_run(argc, argv, options);
+    return 0;
 
     if (!gpt_params_parse(argc, argv, params)) {
         gpt_params_print_usage(argc, argv, params);

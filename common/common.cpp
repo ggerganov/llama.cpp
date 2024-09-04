@@ -1714,6 +1714,79 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
 #define LLAMA_COMMON_ATTRIBUTE_FORMAT(...)
 #endif
 
+LLAMA_COMMON_ATTRIBUTE_FORMAT(1, 2)
+static std::string format(const char * fmt, ...) {
+    va_list ap;
+    va_list ap2;
+    va_start(ap, fmt);
+    va_copy(ap2, ap);
+    int size = vsnprintf(NULL, 0, fmt, ap);
+    GGML_ASSERT(size >= 0 && size < INT_MAX); // NOLINT
+    std::vector<char> buf(size + 1);
+    int size2 = vsnprintf(buf.data(), size + 1, fmt, ap2);
+    GGML_ASSERT(size2 == size);
+    va_end(ap2);
+    va_end(ap);
+    return std::string(buf.data(), size);
+}
+
+void gpt_params_print_usage(std::vector<llama_arg> & options) {
+    constexpr static int n_leading_spaces = 40;
+    std::string leading_spaces(n_leading_spaces, ' ');
+    for (const auto & opt : options) {
+        std::ostringstream ss;
+        for (const auto & arg : opt.args) {
+            if (&arg == &opt.args.front()) {
+                ss << format("%-7s", (arg + ",").c_str());
+            } else {
+                ss << arg << (&arg != &opt.args.back() ? ", " : "");
+            }
+        }
+        if (!opt.value_ex.empty()) ss << " " << opt.value_ex;
+        if (ss.tellp() > n_leading_spaces - 3) {
+            // current line is too long, add new line
+            ss << "\n" << leading_spaces;
+        } else {
+            // padding between arg and help, same line
+            ss << std::string(leading_spaces.size() - ss.tellp(), ' ');
+        }
+        const auto help_lines = llama_arg::break_str_into_lines(opt.help, 50);
+        for (const auto & line : help_lines) {
+            ss << (&line == &help_lines.front() ? "" : leading_spaces) << line << "\n";
+        }
+        printf("%s", ss.str().c_str());
+    }
+}
+
+std::vector<llama_arg> gpt_params_parser_register(gpt_params & params) {
+    std::vector<llama_arg> options;
+    options.push_back(llama_arg(
+        {"-h", "--help", "--usage"},
+        "print usage and exit",
+        [&params, &options]() {
+            gpt_params_print_usage(options);
+            exit(0);
+            return true;
+        }
+    ));
+    options.push_back(llama_arg(
+        {"-m", "--model"},
+        format("model path (default: models/$filename with filename from --hf-file or --model-url if set, otherwise %s)", params.model.c_str()),
+        [&params](std::string value) {
+            params.model = value;
+            return true;
+        }
+    ).set_value_ex("FNAME"));
+    return options;
+}
+
+bool gpt_params_parser_run(int argc, char ** argv, std::vector<llama_arg> & options) {
+    for (const auto & opt : options) {
+        if (opt.handler_void) opt.handler_void();
+    }
+    return true;
+}
+
 void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const llama_sampling_params & sparams = params.sparams;
 

@@ -14,6 +14,7 @@
 #include <vector>
 #include <random>
 #include <thread>
+#include <set>
 #include <unordered_map>
 #include <tuple>
 
@@ -123,7 +124,7 @@ struct gpt_params {
     // // sampling parameters
     struct llama_sampling_params sparams;
 
-    std::string model                = ""; // model path
+    std::string model                = "model.gguf"; // model path
     std::string model_draft          = ""; // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = ""; // model url to download
@@ -276,6 +277,66 @@ struct gpt_params {
 
     std::string lora_outfile = "ggml-lora-merged-f16.gguf";
 };
+
+enum llama_example {
+    LLAMA_EXAMPLE_ALL,
+    LLAMA_EXAMPLE_SERVER,
+    LLAMA_EXAMPLE_MAIN,
+};
+
+struct llama_arg {
+    std::set<enum llama_example> examples = {LLAMA_EXAMPLE_ALL};
+    std::vector<std::string> args;
+    std::string value_ex;
+    std::string env;
+    std::string help;
+    std::function<bool(void)>        handler_void   = nullptr;
+    std::function<bool(std::string)> handler_string = nullptr;
+    std::function<bool(bool)>        handler_bool   = nullptr;
+    std::function<bool(int)>         handler_int    = nullptr;
+    std::function<bool(float)>       handler_float  = nullptr;
+
+    llama_arg(std::vector<std::string> args, std::string help, std::function<bool(std::string)> handler) : args(args), help(help), handler_string(handler) {}
+
+    llama_arg(std::vector<std::string> args, std::string help, std::function<bool(bool)> handler) : args(args), help(help), handler_bool(handler) {}
+
+    llama_arg(std::vector<std::string> args, std::string help, std::function<bool(void)> handler) : args(args), help(help), handler_void(handler) {}
+
+    llama_arg & set_examples(std::set<enum llama_example> _examples) {
+        examples = std::move(_examples);
+        return *this;
+    }
+
+    llama_arg & set_value_ex(std::string _value_ex) {
+        value_ex = std::move(_value_ex);
+        return *this;
+    }
+
+    llama_arg & set_env(std::string _env) {
+        env = _env;
+        return *this;
+    }
+
+    // utility function
+    static std::vector<std::string> break_str_into_lines(std::string input, size_t max_char_per_line) {
+        std::vector<std::string> result;
+        std::istringstream iss(input);
+        std::string word, line;
+        while (iss >> word) {
+            if (line.length() + !line.empty() + word.length() > max_char_per_line) {
+                if (!line.empty()) result.push_back(line);
+                line = word;
+            } else {
+                line += (!line.empty() ? " " : "") + word;
+            }
+        }
+        if (!line.empty()) result.push_back(line);
+        return result;
+    }
+};
+
+std::vector<llama_arg> gpt_params_parser_register(gpt_params & params);
+bool gpt_params_parser_run(int argc, char ** argv, std::vector<llama_arg> & options);
 
 void gpt_params_parse_from_env(gpt_params & params);
 void gpt_params_handle_model_default(gpt_params & params);
