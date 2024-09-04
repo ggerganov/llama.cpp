@@ -97,6 +97,8 @@ class Keys:
         RESCALE_EVERY_N_LAYERS            = "{arch}.rescale_every_n_layers"
         TIME_MIX_EXTRA_DIM                = "{arch}.time_mix_extra_dim"
         TIME_DECAY_EXTRA_DIM              = "{arch}.time_decay_extra_dim"
+        RESIDUAL_MULTIPLIER               = "{arch}.residual_multiplier"
+        EMBEDDING_MULTIPLIER              = "{arch}.embedding_multiplier"
 
     class Attention:
         HEAD_COUNT        = "{arch}.attention.head_count"
@@ -112,6 +114,7 @@ class Keys:
         KV_LORA_RANK      = "{arch}.attention.kv_lora_rank"
         REL_BUCKETS_COUNT = "{arch}.attention.relative_buckets_count"
         SLIDING_WINDOW    = "{arch}.attention.sliding_window"
+        MULTIPLIER        = "{arch}.attention.multiplier"
 
     class Rope:
         DIMENSION_COUNT         = "{arch}.rope.dimension_count"
@@ -231,6 +234,7 @@ class MODEL_ARCH(IntEnum):
     JAIS         = auto()
     NEMOTRON     = auto()
     EXAONE       = auto()
+    GRANITE      = auto()
 
 
 class MODEL_TENSOR(IntEnum):
@@ -387,6 +391,7 @@ MODEL_ARCH_NAMES: dict[MODEL_ARCH, str] = {
     MODEL_ARCH.JAIS:           "jais",
     MODEL_ARCH.NEMOTRON:       "nemotron",
     MODEL_ARCH.EXAONE:         "exaone",
+    MODEL_ARCH.GRANITE:        "granite",
 }
 
 TENSOR_NAMES: dict[MODEL_TENSOR, str] = {
@@ -1219,6 +1224,19 @@ MODEL_TENSORS: dict[MODEL_ARCH, list[MODEL_TENSOR]] = {
         MODEL_TENSOR.ATTN_V,
         MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.ATTN_ROT_EMBD,
+        MODEL_TENSOR.FFN_NORM,
+        MODEL_TENSOR.FFN_GATE,
+        MODEL_TENSOR.FFN_DOWN,
+        MODEL_TENSOR.FFN_UP,
+    ],
+    MODEL_ARCH.GRANITE: [
+        MODEL_TENSOR.TOKEN_EMBD,
+        MODEL_TENSOR.OUTPUT_NORM,
+        MODEL_TENSOR.ATTN_NORM,
+        MODEL_TENSOR.ATTN_Q,
+        MODEL_TENSOR.ATTN_K,
+        MODEL_TENSOR.ATTN_V,
+        MODEL_TENSOR.ATTN_OUT,
         MODEL_TENSOR.FFN_NORM,
         MODEL_TENSOR.FFN_GATE,
         MODEL_TENSOR.FFN_DOWN,
