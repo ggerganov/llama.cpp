@@ -4080,6 +4080,34 @@ class ExaoneModel(Model):
         super().prepare_tensors()
 
 
+@Model.register("GraniteForCausalLM")
+class GraniteModel(Model):
+    """Conversion for IBM's GraniteForCausalLM"""
+    model_arch = gguf.MODEL_ARCH.GRANITE
+
+    def set_gguf_parameters(self):
+        """Granite uses standard llama parameters with the following differences:
+
+        - No head_dim support
+        - New multiplier params:
+            - attention_multiplier
+            - embedding_multiplier
+            - residual_multiplier
+        - logits_scaling
+        """
+        if head_dim := self.hparams.pop("head_dim", None):
+            logger.warning("Ignoring head_dim (%s) from config for Granite", head_dim)
+        super().set_gguf_parameters()
+        if attention_multiplier := self.hparams.get("attention_multiplier"):
+            self.gguf_writer.add_attention_multiplier(attention_multiplier)
+        if embedding_multiplier := self.hparams.get("embedding_multiplier"):
+            self.gguf_writer.add_embedding_multiplier(embedding_multiplier)
+        if residual_multiplier := self.hparams.get("residual_multiplier"):
+            self.gguf_writer.add_residual_multiplier(residual_multiplier)
+        if logits_scaling := self.hparams.get("logits_scaling"):
+            self.gguf_writer.add_logit_scale(logits_scaling)
+
+
 ###### CONVERSION LOGIC ######
 
 # tree of lazy tensors
