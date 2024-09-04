@@ -1215,8 +1215,20 @@ void llama_sampler_reset_impl(struct llama_sampler & smpl) {
     // TODO: should we reset the timings?
 }
 
-void llama_sampler_add_constraint_impl(struct llama_sampler & smpl, struct llama_constraint * cnstr) {
+void llama_sampler_constraint_add_impl(struct llama_sampler & smpl, struct llama_constraint * cnstr) {
     smpl.constraints.push_back(cnstr);
+}
+
+int llama_sampler_n_constraints_impl (const struct llama_sampler & smpl) {
+    return smpl.constraints.size();
+}
+
+struct llama_constraint * llama_sampler_constraint_get_impl(const struct llama_sampler & smpl, int ith) {
+    if (ith < 0 || ith >= (int) smpl.constraints.size()) {
+        return nullptr;
+    }
+
+    return smpl.constraints[ith];
 }
 
 void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token) {

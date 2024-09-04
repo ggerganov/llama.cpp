@@ -20729,8 +20729,16 @@ llama_token_data_array * llama_sampler_get_candidates(struct llama_sampler * smp
     return &smpl->cur_p;
 }
 
-void llama_sampler_add_constraint(struct llama_sampler * smpl, struct llama_constraint * cnstr) {
-    llama_sampler_add_constraint_impl(*smpl, cnstr);
+void llama_sampler_constraint_add(struct llama_sampler * smpl, struct llama_constraint * cnstr) {
+    llama_sampler_constraint_add_impl(*smpl, cnstr);
+}
+
+int llama_sampler_n_constraints (const struct llama_sampler * smpl) {
+    return llama_sampler_n_constraints_impl(*smpl);
+}
+
+struct llama_constraint * llama_sampler_constraint_get(const struct llama_sampler * smpl, int32_t i) {
+    return llama_sampler_constraint_get_impl(*smpl, i);
 }
 
 void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {

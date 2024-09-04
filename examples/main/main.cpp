@@ -457,8 +457,15 @@ int main(int argc, char ** argv) {
             }
         }
     }
-    LOG_TEE("sampling params: \n%s\n", sparams.print_all().c_str());
-    LOG_TEE("sampling constr: \n%s\n", sparams.print_constraints().c_str());
+
+    smpl = gpt_sampler_init(model, sparams);
+    if (!smpl) {
+        fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
+        exit(1);
+    }
+
+    LOG_TEE("sampling params: \n%s\n", sparams.print().c_str());
+    LOG_TEE(" sampler constr: \n%s\n", gpt_sampler_print(smpl).c_str());
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 
     // group-attention state
@@ -523,12 +530,6 @@ int main(int argc, char ** argv) {
     antiprompt_ids.reserve(params.antiprompt.size());
     for (const std::string & antiprompt : params.antiprompt) {
         antiprompt_ids.emplace_back(::llama_tokenize(ctx, antiprompt, false, true));
-    }
-
-    smpl = gpt_sampler_init(model, sparams);
-    if (!smpl) {
-        fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
-        exit(1);
     }
 
     if (llama_model_has_encoder(model)) {

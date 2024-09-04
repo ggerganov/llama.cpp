@@ -12,7 +12,7 @@ struct gpt_sampler {
     struct llama_sampler * smpl;
 };
 
-std::string gpt_sampler_params::print_all() const {
+std::string gpt_sampler_params::print() const {
     char result[1024];
 
     snprintf(result, sizeof(result),
@@ -26,17 +26,12 @@ std::string gpt_sampler_params::print_all() const {
     return std::string(result);
 }
 
-std::string gpt_sampler_params::print_constraints() const {
-    std::string result = "CFG -> Penalties ";
-    if (mirostat == 0) {
-        for (const auto & cnstr : constraints) {
-            const auto name = gpt_constraint_type_to_str(cnstr);
-            if (!name.empty()) {
-                result += "-> " + name + " ";
-            }
-        }
-    } else {
-        result += "-> mirostat ";
+std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
+    std::string result = "\tlogits";
+
+    for (int i = 0; i < llama_sampler_n_constraints(gsmpl->smpl); i++) {
+        const auto * cnstr = llama_sampler_constraint_get(gsmpl->smpl, i);
+        result += " -> " + std::string(cnstr->iface->name(cnstr)) + " ";
     }
 
     return result;
@@ -70,33 +65,33 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
         for (const auto & cnstr : params.constraints) {
             switch (cnstr) {
                 case GPT_CONSTRAINT_TYPE_TOP_K:
-                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_top_k    (params.top_k, params.min_keep));
+                    llama_sampler_constraint_add(result->smpl, llama_constraint_init_top_k    (params.top_k, params.min_keep));
                     break;
                 case GPT_CONSTRAINT_TYPE_TOP_P:
-                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_top_p    (params.top_p, params.min_keep));
+                    llama_sampler_constraint_add(result->smpl, llama_constraint_init_top_p    (params.top_p, params.min_keep));
                     break;
                 case GPT_CONSTRAINT_TYPE_MIN_P:
-                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_min_p    (params.min_p, params.min_keep));
+                    llama_sampler_constraint_add(result->smpl, llama_constraint_init_min_p    (params.min_p, params.min_keep));
                     break;
                 case GPT_CONSTRAINT_TYPE_TFS_Z:
-                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_tail_free(params.tfs_z, params.min_keep));
+                    llama_sampler_constraint_add(result->smpl, llama_constraint_init_tail_free(params.tfs_z, params.min_keep));
                     break;
                 case GPT_CONSTRAINT_TYPE_TYPICAL_P:
-                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_typical  (params.typ_p, params.min_keep));
+                    llama_sampler_constraint_add(result->smpl, llama_constraint_init_typical  (params.typ_p, params.min_keep));
                     break;
                 case GPT_CONSTRAINT_TYPE_TEMPERATURE:
-                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    llama_sampler_constraint_add(result->smpl, llama_constraint_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                     break;
                 default:
                     GGML_ASSERT(false && "unknown constraint type");
             }
         }
     } else if (params.mirostat == 1) {
-        llama_sampler_add_constraint(result->smpl, llama_constraint_init_temp(params.temp));
-        llama_sampler_add_constraint(result->smpl, llama_constraint_init_mirostat(model, params.mirostat_tau, params.mirostat_eta));
+        llama_sampler_constraint_add(result->smpl, llama_constraint_init_temp(params.temp));
+        llama_sampler_constraint_add(result->smpl, llama_constraint_init_mirostat(model, params.mirostat_tau, params.mirostat_eta));
     } else if (params.mirostat == 2) {
-        llama_sampler_add_constraint(result->smpl, llama_constraint_init_temp(params.temp));
-        llama_sampler_add_constraint(result->smpl, llama_constraint_init_mirostat_v2(params.mirostat_tau, params.mirostat_eta));
+        llama_sampler_constraint_add(result->smpl, llama_constraint_init_temp(params.temp));
+        llama_sampler_constraint_add(result->smpl, llama_constraint_init_mirostat_v2(params.mirostat_tau, params.mirostat_eta));
     } else {
         GGML_ASSERT(false && "unknown mirostat version");
     }

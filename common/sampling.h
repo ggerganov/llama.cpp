@@ -54,10 +54,7 @@ struct gpt_sampler_params {
     std::vector<llama_logit_bias> logit_bias; // logit biases to apply
 
     // print the parameters into a string
-    std::string print_all() const;
-
-    // print the constraints into a string
-    std::string print_constraints() const;
+    std::string print() const;
 };
 
 // gpt_sampler extends llama_sampler with additional functionality:
@@ -99,6 +96,9 @@ llama_token gpt_sampler_sample_dist  (struct gpt_sampler * gsmpl, llama_token_da
 llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p, bool probs);
 
 // helpers
+
+// print the constraints into a string
+std::string gpt_sampler_print(const struct gpt_sampler * gsmpl);
 
 // get a string representation of the last accepted tokens
 std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx, int n);

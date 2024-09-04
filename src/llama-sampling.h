@@ -109,7 +109,9 @@ void                   llama_sampler_free_impl (      struct llama_sampler * smp
 struct llama_sampler * llama_sampler_cp_impl   (const struct llama_sampler & smpl);
 void                   llama_sampler_reset_impl(      struct llama_sampler & smpl);
 
-void llama_sampler_add_constraint_impl(struct llama_sampler & smpl, struct llama_constraint * cnstr);
+void                      llama_sampler_constraint_add_impl(      struct llama_sampler & smpl, struct llama_constraint * cnstr);
+int                       llama_sampler_n_constraints_impl (const struct llama_sampler & smpl);
+struct llama_constraint * llama_sampler_constraint_get_impl(const struct llama_sampler & smpl, int ith);
 
 void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token);
 void llama_sampler_apply_impl (struct llama_sampler & smpl, struct llama_token_data_array * cur_p);

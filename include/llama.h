@@ -1012,7 +1012,7 @@ extern "C" {
     // The llama_sampler object contains the entire sampling information:
     //
     //   - RNG state (seed and generator)
-    //   - Custom set of constraints (see llama_sampler_add_constraint)
+    //   - Custom set of constraints (see llama_sampler_constraint_add)
     //   - Sampling method (greedy, dist)
     //   - Previous tokens
     //
@@ -1083,7 +1083,7 @@ extern "C" {
 
     LLAMA_API struct llama_constraint * llama_constraint_cp(const struct llama_constraint * cnstr);
 
-    // important: do not call if the constraint has been added to a llama_sampler (via llama_sampler_add_constraint)
+    // important: do not call if the constraint has been added to a llama_sampler (via llama_sampler_constraint_add)
     LLAMA_API void llama_constraint_free(struct llama_constraint * cnstr);
 
     LLAMA_API void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token);
@@ -1102,7 +1102,10 @@ extern "C" {
     LLAMA_API llama_token_data_array * llama_sampler_get_candidates(struct llama_sampler * smpl);
 
     // important: takes ownership of the constraint object and will free it in llama_sampler_free
-    LLAMA_API void llama_sampler_add_constraint(struct llama_sampler * smpl, struct llama_constraint * cnstr);
+    LLAMA_API void                      llama_sampler_constraint_add(      struct llama_sampler * smpl, struct llama_constraint * cnstr);
+    LLAMA_API int                       llama_sampler_n_constraints (const struct llama_sampler * smpl);
+    LLAMA_API struct llama_constraint * llama_sampler_constraint_get(const struct llama_sampler * smpl, int32_t i);
+
 
     LLAMA_API void llama_sampler_accept(struct llama_sampler * smpl, llama_token token);
     LLAMA_API void llama_sampler_apply (struct llama_sampler * smpl, llama_token_data_array * cur_p);
