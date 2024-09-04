@@ -673,16 +673,12 @@ static struct llama_constraint_i llama_constraint_top_k_i = {
 };
 
 struct llama_constraint * llama_constraint_init_top_k_impl(int32_t k, size_t min_keep) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_top_k_i;
-    result->ctx = new llama_constraint_context_top_k;
-
-    auto * ctx = (llama_constraint_context_top_k *) result->ctx;
-
-    *ctx = {
-        /*.k        =*/ k,
-        /*.min_keep =*/ min_keep,
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_top_k_i,
+        /* .ctx   = */ new llama_constraint_context_top_k {
+            /*.k        =*/ k,
+            /*.min_keep =*/ min_keep,
+        },
     };
 
     return result;
@@ -717,16 +713,12 @@ static struct llama_constraint_i llama_constraint_top_p_i = {
 };
 
 struct llama_constraint * llama_constraint_init_top_p_impl(float p, size_t min_keep) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_top_p_i;
-    result->ctx = new llama_constraint_context_top_p;
-
-    auto * ctx = (llama_constraint_context_top_p *) result->ctx;
-
-    *ctx = {
-        /*.p        =*/ p,
-        /*.min_keep =*/ min_keep,
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_top_p_i,
+        /* .ctx   = */ new llama_constraint_context_top_p {
+            /*.p        =*/ p,
+            /*.min_keep =*/ min_keep,
+        },
     };
 
     return result;
@@ -761,16 +753,12 @@ static struct llama_constraint_i llama_constraint_min_p_i = {
 };
 
 struct llama_constraint * llama_constraint_init_min_p_impl(float p, size_t min_keep) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_min_p_i;
-    result->ctx = new llama_constraint_context_min_p;
-
-    auto * ctx = (llama_constraint_context_min_p *) result->ctx;
-
-    *ctx = {
-        /*.p        =*/ p,
-        /*.min_keep =*/ min_keep,
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_min_p_i,
+        /* .ctx   = */ new llama_constraint_context_min_p {
+            /*.p        =*/ p,
+            /*.min_keep =*/ min_keep,
+        },
     };
 
     return result;
@@ -805,16 +793,12 @@ static struct llama_constraint_i llama_constraint_tail_free_i = {
 };
 
 struct llama_constraint * llama_constraint_init_tail_free_impl(float z, size_t min_keep) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_tail_free_i;
-    result->ctx = new llama_constraint_context_tail_free;
-
-    auto * ctx = (llama_constraint_context_tail_free *) result->ctx;
-
-    *ctx = {
-        /*.z        =*/ z,
-        /*.min_keep =*/ min_keep,
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_tail_free_i,
+        /* .ctx   = */ new llama_constraint_context_tail_free {
+            /*.z        =*/ z,
+            /*.min_keep =*/ min_keep,
+        },
     };
 
     return result;
@@ -849,16 +833,12 @@ static struct llama_constraint_i llama_constraint_typical_i = {
 };
 
 struct llama_constraint * llama_constraint_init_typical_impl(float p, size_t min_keep) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_typical_i;
-    result->ctx = new llama_constraint_context_typical;
-
-    auto * ctx = (llama_constraint_context_typical *) result->ctx;
-
-    *ctx = {
-        /*.p        =*/ p,
-        /*.min_keep =*/ min_keep,
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_typical_i,
+        /* .ctx   = */ new llama_constraint_context_typical {
+            /*.p        =*/ p,
+            /*.min_keep =*/ min_keep,
+        },
     };
 
     return result;
@@ -892,15 +872,11 @@ static struct llama_constraint_i llama_constraint_temp_i = {
 };
 
 struct llama_constraint * llama_constraint_init_temp_impl(float temp) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_temp_i;
-    result->ctx = new llama_constraint_context_temp;
-
-    auto * ctx = (llama_constraint_context_temp *) result->ctx;
-
-    *ctx = {
-        /*.temp =*/ temp,
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_temp_i,
+        /* .ctx   = */ new llama_constraint_context_temp {
+            /*.temp =*/ temp,
+        },
     };
 
     return result;
@@ -943,17 +919,13 @@ static struct llama_constraint_i llama_constraint_temp_ext_i = {
 };
 
 struct llama_constraint * llama_constraint_init_temp_ext_impl(float temp, float delta, float exponent) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_temp_ext_i;
-    result->ctx = new llama_constraint_context_temp_ext;
-
-    auto * ctx = (llama_constraint_context_temp_ext *) result->ctx;
-
-    *ctx = {
-        /*.temp     =*/ temp,
-        /*.delta    =*/ delta,
-        /*.exponent =*/ exponent,
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_temp_ext_i,
+        /* .ctx   = */ new llama_constraint_context_temp_ext {
+            /*.temp     =*/ temp,
+            /*.delta    =*/ delta,
+            /*.exponent =*/ exponent,
+        },
     };
 
     return result;
@@ -1019,12 +991,7 @@ static struct llama_constraint_i llama_constraint_grammar_i = {
 };
 
 struct llama_constraint * llama_constraint_init_grammar_impl(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_grammar_i;
-    result->ctx = new llama_constraint_context_grammar;
-
-    auto * ctx = (llama_constraint_context_grammar *) result->ctx;
+    auto * ctx = new llama_constraint_context_grammar;
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
         *ctx = {
@@ -1039,6 +1006,11 @@ struct llama_constraint * llama_constraint_init_grammar_impl(const struct llama_
             /*.grammar      = */ nullptr,
         };
     }
+
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_grammar_i,
+        /* .ctx   = */ ctx,
+    };
 
     return result;
 }
@@ -1117,22 +1089,18 @@ struct llama_constraint * llama_constraint_init_penalties_impl(const struct llam
     GGML_ASSERT(penalize_nl || vocab.linefeed_id != LLAMA_TOKEN_NULL);
     GGML_ASSERT(!ignore_eos || vocab.special_eos_id != LLAMA_TOKEN_NULL);
 
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_penalties_i;
-    result->ctx = new llama_constraint_context_penalties;
-
-    auto * ctx = (llama_constraint_context_penalties *) result->ctx;
-
-    *ctx = {
-        /*.vocab            = */ &vocab,
-        /*.penalty_last_n   = */ penalty_last_n,
-        /*.penalty_repeat   = */ penalty_repeat,
-        /*.penalty_freq     = */ penalty_freq,
-        /*.penalty_present  = */ penalty_present,
-        /*.penalize_nl      = */ penalize_nl,
-        /*.ignore_eos       = */ ignore_eos,
-        /*.prev             = */ {},
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_penalties_i,
+        /* .ctx   = */ new llama_constraint_context_penalties {
+            /*.vocab           =*/ &vocab,
+            /*.penalty_last_n  =*/ penalty_last_n,
+            /*.penalty_repeat  =*/ penalty_repeat,
+            /*.penalty_freq    =*/ penalty_freq,
+            /*.penalty_present =*/ penalty_present,
+            /*.penalize_nl     =*/ penalize_nl,
+            /*.ignore_eos      =*/ ignore_eos,
+            /*.prev            =*/ {},
+        },
     };
 
     return result;
@@ -1177,16 +1145,12 @@ struct llama_constraint * llama_constraint_init_logit_bias_impl(
         const struct llama_vocab & vocab,
                          int32_t   n_logit_bias,
           const llama_logit_bias * logit_bias) {
-    struct llama_constraint * result = new llama_constraint;
-
-    result->iface = &llama_constraint_logit_bias_i;
-    result->ctx = new llama_constraint_context_logit_bias;
-
-    auto * ctx = (llama_constraint_context_logit_bias *) result->ctx;
-
-    *ctx = {
-        /*.vocab      = */ &vocab,
-        /*.logit_bias = */ std::vector<llama_logit_bias>(logit_bias, logit_bias + n_logit_bias),
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_logit_bias_i,
+        /* .ctx   = */ new llama_constraint_context_logit_bias {
+            /*.vocab     =*/ &vocab,
+            /*.logit_bias=*/ std::vector<llama_logit_bias>(logit_bias, logit_bias + n_logit_bias),
+        },
     };
 
     return result;
