@@ -47,9 +47,6 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
 
     lparams.seed         = params.seed;
     lparams.n_prev       = params.n_prev;
-    lparams.mirostat     = params.mirostat;
-    lparams.mirostat_tau = params.mirostat_tau;
-    lparams.mirostat_eta = params.mirostat_eta;
 
     auto * result = new gpt_sampler {
         /* .params = */ params,
@@ -69,29 +66,39 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
         /* .smpl   = */ llama_sampler_init(model, lparams)
     };
 
-    for (const auto & cnstr : params.constraints) {
-        switch (cnstr) {
-            case GPT_CONSTRAINT_TYPE_TOP_K:
-                llama_sampler_add_constraint(result->smpl, llama_constraint_init_top_k    (params.top_k, params.min_keep));
-                break;
-            case GPT_CONSTRAINT_TYPE_TOP_P:
-                llama_sampler_add_constraint(result->smpl, llama_constraint_init_top_p    (params.top_p, params.min_keep));
-                break;
-            case GPT_CONSTRAINT_TYPE_MIN_P:
-                llama_sampler_add_constraint(result->smpl, llama_constraint_init_min_p    (params.min_p, params.min_keep));
-                break;
-            case GPT_CONSTRAINT_TYPE_TFS_Z:
-                llama_sampler_add_constraint(result->smpl, llama_constraint_init_tail_free(params.tfs_z, params.min_keep));
-                break;
-            case GPT_CONSTRAINT_TYPE_TYPICAL_P:
-                llama_sampler_add_constraint(result->smpl, llama_constraint_init_typical  (params.typ_p, params.min_keep));
-                break;
-            case GPT_CONSTRAINT_TYPE_TEMPERATURE:
-                llama_sampler_add_constraint(result->smpl, llama_constraint_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
-                break;
-            default:
-                GGML_ASSERT(false && "unknown constraint type");
+    if (params.mirostat == 0) {
+        for (const auto & cnstr : params.constraints) {
+            switch (cnstr) {
+                case GPT_CONSTRAINT_TYPE_TOP_K:
+                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_top_k    (params.top_k, params.min_keep));
+                    break;
+                case GPT_CONSTRAINT_TYPE_TOP_P:
+                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_top_p    (params.top_p, params.min_keep));
+                    break;
+                case GPT_CONSTRAINT_TYPE_MIN_P:
+                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_min_p    (params.min_p, params.min_keep));
+                    break;
+                case GPT_CONSTRAINT_TYPE_TFS_Z:
+                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_tail_free(params.tfs_z, params.min_keep));
+                    break;
+                case GPT_CONSTRAINT_TYPE_TYPICAL_P:
+                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_typical  (params.typ_p, params.min_keep));
+                    break;
+                case GPT_CONSTRAINT_TYPE_TEMPERATURE:
+                    llama_sampler_add_constraint(result->smpl, llama_constraint_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    break;
+                default:
+                    GGML_ASSERT(false && "unknown constraint type");
+            }
         }
+    } else if (params.mirostat == 1) {
+        llama_sampler_add_constraint(result->smpl, llama_constraint_init_temp(params.temp));
+        llama_sampler_add_constraint(result->smpl, llama_constraint_init_mirostat(model, params.mirostat_tau, params.mirostat_eta));
+    } else if (params.mirostat == 2) {
+        llama_sampler_add_constraint(result->smpl, llama_constraint_init_temp(params.temp));
+        llama_sampler_add_constraint(result->smpl, llama_constraint_init_mirostat_v2(params.mirostat_tau, params.mirostat_eta));
+    } else {
+        GGML_ASSERT(false && "unknown mirostat version");
     }
 
     return result;
@@ -153,7 +160,6 @@ static llama_token gpt_sampler_sample(
         struct llama_sampler * smpl,
         struct llama_token_data_array * cur_p,
         float temp,
-        int mirostat,
         int n_probs) {
     llama_token res = 0;
 
@@ -167,24 +173,20 @@ static llama_token gpt_sampler_sample(
         // apply all sampling constraints and then sample
         llama_sampler_apply(smpl, cur_p);
 
-        if (mirostat != 0) {
-            res = llama_sampler_sample_mirostat(smpl, cur_p);
-        } else {
-            res = llama_sampler_sample_dist(smpl, cur_p);
+        res = llama_sampler_sample_dist(smpl, cur_p);
 
-            //{
-            //    const int n_top = 10;
-            //    LOG("top %d candidates:\n", n_top);
+        //{
+        //    const int n_top = 10;
+        //    LOG("top %d candidates:\n", n_top);
 
-            //    for (int i = 0; i < n_top; i++) {
-            //        const llama_token id = cur_p.data[i].id;
-            //        (void)id; // To avoid a warning that id is unused when logging is disabled.
-            //        LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(smpl, id).c_str(), cur_p.data[i].p);
-            //    }
-            //}
+        //    for (int i = 0; i < n_top; i++) {
+        //        const llama_token id = cur_p.data[i].id;
+        //        (void)id; // To avoid a warning that id is unused when logging is disabled.
+        //        LOG(" - %5d: '%12s' (%.3f)\n", id, llama_token_to_piece(smpl, id).c_str(), cur_p.data[i].p);
+        //    }
+        //}
 
-            //LOG("sampled token: %5d: '%s'\n", res, llama_token_to_piece(smpl, res).c_str());
-        }
+        //LOG("sampled token: %5d: '%s'\n", res, llama_token_to_piece(smpl, res).c_str());
     }
 
     return res;
@@ -208,7 +210,7 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     llama_constraint_apply(pnlt, cur_p);
 
     // first, sample the token without any grammar constraints
-    const llama_token id = gpt_sampler_sample(smpl, nullptr, params.temp, params.mirostat, params.n_probs);
+    const llama_token id = gpt_sampler_sample(smpl, nullptr, params.temp, params.n_probs);
 
     // check if it the sampled token fits the grammar
     {
@@ -231,7 +233,7 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     llama_constraint_apply(pnlt, cur_p);
     llama_constraint_apply(grmr, cur_p);
 
-    return gpt_sampler_sample(smpl, cur_p, params.temp, params.mirostat, params.n_probs);
+    return gpt_sampler_sample(smpl, cur_p, params.temp, params.n_probs);
 }
 
 void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p) {

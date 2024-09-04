@@ -17939,9 +17939,7 @@ struct llama_sampler_params llama_sampler_default_params() {
     struct llama_sampler_params result = {
         /*.seed              =*/ LLAMA_DEFAULT_SEED,
         /*.n_prev            =*/ 256,
-        /*.mirostat          =*/ 0,
-        /*.mirostat_tau      =*/ 5.00f,
-        /*.mirostat_eta      =*/ 0.10f,
+        /*.type              =*/ LLAMA_SAMPLER_TYPE_GREEDY,
     };
 
     return result;
@@ -20641,6 +20639,14 @@ struct llama_constraint * llama_constraint_init_temp_ext(float temp, float delta
     return llama_constraint_init_temp_ext_impl(temp, delta, exponent);
 }
 
+struct llama_constraint * llama_constraint_init_mirostat(const struct llama_model * model, float tau, float eta) {
+    return llama_constraint_init_mirostat_impl(model->vocab, tau, eta, 100);
+}
+
+struct llama_constraint * llama_constraint_init_mirostat_v2(float tau, float eta) {
+    return llama_constraint_init_mirostat_v2_impl(tau, eta);
+}
+
 struct llama_constraint * llama_constraint_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
     return llama_constraint_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
@@ -20739,40 +20745,6 @@ void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * c
     }
 
     llama_sampler_apply_impl(*smpl, cur_p);
-}
-
-llama_token llama_sampler_sample_mirostat(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    time_meas tm(smpl->t_sample_us);
-
-    if (cur_p == nullptr) {
-        cur_p = &smpl->cur_p;
-    }
-
-    const auto type = smpl->params.mirostat;
-
-    llama_token res;
-
-    if (type == 1) {
-        res = llama_sampler_sample_mirostat_impl(cur_p,
-                smpl->rng,
-                smpl->params.mirostat_tau,
-                smpl->params.mirostat_eta,
-                100,
-                smpl->vocab->n_vocab,
-                smpl->mirostat_mu);
-    } else if (type == 2) {
-        res = llama_sampler_sample_mirostat_v2_impl(cur_p,
-                smpl->rng,
-                smpl->params.mirostat_tau,
-                smpl->params.mirostat_eta,
-                smpl->mirostat_mu);
-    } else {
-        GGML_ABORT("invalid mirostat type: %d", type);
-    }
-
-    smpl->n_sample++;
-
-    return res;
 }
 
 llama_token llama_sampler_sample_greedy(struct llama_sampler * smpl, llama_token_data_array * cur_p, bool probs) {

@@ -20,16 +20,38 @@ void llama_constraint_penalties_impl(
 
 // constraints
 
-struct llama_constraint * llama_constraint_init_softmax_impl  ();
-struct llama_constraint * llama_constraint_init_top_k_impl    (int32_t k, size_t min_keep);
-struct llama_constraint * llama_constraint_init_top_p_impl    (float   p, size_t min_keep);
-struct llama_constraint * llama_constraint_init_min_p_impl    (float   p, size_t min_keep);
-struct llama_constraint * llama_constraint_init_tail_free_impl(float   z, size_t min_keep);
-struct llama_constraint * llama_constraint_init_typical_impl  (float   p, size_t min_keep);
-struct llama_constraint * llama_constraint_init_temp_impl     (float   t);
-struct llama_constraint * llama_constraint_init_temp_ext_impl (float   t, float  delta, float exponent);
+struct llama_constraint * llama_constraint_init_softmax_impl    ();
+struct llama_constraint * llama_constraint_init_top_k_impl      (int32_t k, size_t min_keep);
+struct llama_constraint * llama_constraint_init_top_p_impl      (float   p, size_t min_keep);
+struct llama_constraint * llama_constraint_init_min_p_impl      (float   p, size_t min_keep);
+struct llama_constraint * llama_constraint_init_tail_free_impl  (float   z, size_t min_keep);
+struct llama_constraint * llama_constraint_init_typical_impl    (float   p, size_t min_keep);
+struct llama_constraint * llama_constraint_init_temp_impl       (float   t);
+struct llama_constraint * llama_constraint_init_temp_ext_impl   (float   t, float  delta, float exponent);
 
-struct llama_constraint * llama_constraint_init_grammar_impl  (
+/// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+/// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+/// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+/// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+/// @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
+/// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+
+struct llama_constraint * llama_constraint_init_mirostat_impl(
+        const struct llama_vocab & vocab,
+                           float   tau,
+                           float   eta,
+                         int32_t   m);
+
+/// @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
+/// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
+/// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+/// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+/// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+struct llama_constraint * llama_constraint_init_mirostat_v2_impl(
+                           float   tau,
+                           float   eta);
+
+struct llama_constraint * llama_constraint_init_grammar_impl(
         const struct llama_vocab & vocab,
                       const char * grammar_str,
                       const char * grammar_root);
@@ -67,8 +89,6 @@ struct llama_sampler {
 
     std::mt19937 rng;
 
-    float mirostat_mu;
-
     ring_buffer<llama_token> prev;
 
     std::vector<llama_constraint *> constraints;
@@ -96,21 +116,6 @@ void llama_sampler_apply_impl (struct llama_sampler & smpl, struct llama_token_d
 
 llama_token llama_sampler_prev_impl  (const struct llama_sampler & smpl, int ith);
 int         llama_sampler_n_prev_impl(const struct llama_sampler & smpl);
-
-/// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-/// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-/// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
-/// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
-/// @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
-/// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
-llama_token llama_sampler_sample_mirostat_impl   (struct llama_token_data_array * cur_p, std::mt19937 & rng, float tau, float eta, int32_t m, int32_t n_vocab, float & mu);
-
-/// @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
-/// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
-/// @param tau  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
-/// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
-/// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
-llama_token llama_sampler_sample_mirostat_v2_impl(struct llama_token_data_array * cur_p, std::mt19937 & rng, float tau, float eta, float & mu);
 
 llama_token llama_sampler_sample_greedy_impl(struct llama_token_data_array * cur_p, bool probs);
 llama_token llama_sampler_sample_dist_impl  (struct llama_token_data_array * cur_p, std::mt19937 & rng);

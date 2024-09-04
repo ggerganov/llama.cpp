@@ -450,8 +450,8 @@ struct llama_constraint * llama_constraint_init_softmax_impl() {
 // top-k
 
 struct llama_constraint_context_top_k {
-    int32_t k;
-    size_t min_keep;
+    const int32_t k;
+    const size_t  min_keep;
 };
 
 static struct llama_constraint_i llama_constraint_top_k_i = {
@@ -486,8 +486,8 @@ struct llama_constraint * llama_constraint_init_top_k_impl(int32_t k, size_t min
 // top-p
 
 struct llama_constraint_context_top_p {
-    float p;
-    size_t min_keep;
+    const float  p;
+    const size_t min_keep;
 };
 
 static struct llama_constraint_i llama_constraint_top_p_i = {
@@ -522,8 +522,8 @@ struct llama_constraint * llama_constraint_init_top_p_impl(float p, size_t min_k
 // min-p
 
 struct llama_constraint_context_min_p {
-    float p;
-    size_t min_keep;
+    const float  p;
+    const size_t min_keep;
 };
 
 static struct llama_constraint_i llama_constraint_min_p_i = {
@@ -558,8 +558,8 @@ struct llama_constraint * llama_constraint_init_min_p_impl(float p, size_t min_k
 // tail-free
 
 struct llama_constraint_context_tail_free {
-    float z;
-    size_t min_keep;
+    const float  z;
+    const size_t min_keep;
 };
 
 static struct llama_constraint_i llama_constraint_tail_free_i = {
@@ -594,8 +594,8 @@ struct llama_constraint * llama_constraint_init_tail_free_impl(float z, size_t m
 // typical
 
 struct llama_constraint_context_typical {
-    float p;
-    size_t min_keep;
+    const float  p;
+    const size_t min_keep;
 };
 
 static struct llama_constraint_i llama_constraint_typical_i = {
@@ -630,7 +630,7 @@ struct llama_constraint * llama_constraint_init_typical_impl(float p, size_t min
 // temp
 
 struct llama_constraint_context_temp {
-    float temp;
+    const float temp;
 };
 
 static struct llama_constraint_i llama_constraint_temp_i = {
@@ -664,9 +664,9 @@ struct llama_constraint * llama_constraint_init_temp_impl(float temp) {
 // temp-ext
 
 struct llama_constraint_context_temp_ext {
-    float temp;
-    float delta;
-    float exponent;
+    const float temp;
+    const float delta;
+    const float exponent;
 };
 
 static struct llama_constraint_i llama_constraint_temp_ext_i = {
@@ -700,6 +700,176 @@ struct llama_constraint * llama_constraint_init_temp_ext_impl(float temp, float 
             /*.temp     =*/ temp,
             /*.delta    =*/ delta,
             /*.exponent =*/ exponent,
+        },
+    };
+
+    return result;
+}
+
+// mirostat
+
+struct llama_constraint_context_mirostat {
+    const struct llama_vocab * vocab;
+
+    const float tau;
+    const float eta;
+
+    const int32_t m;
+
+    float mu;
+
+    std::vector<llama_token_data> cur;
+};
+
+static struct llama_constraint_i llama_constraint_mirostat_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "mirostat"; },
+    /* .accept = */ [](struct llama_constraint * cnstr, llama_token token) {
+        auto * ctx = (llama_constraint_context_mirostat *) cnstr->ctx;
+
+        int32_t idx = -1;
+        for (size_t i = 0; i < ctx->cur.size(); ++i) {
+            if (ctx->cur[i].id == token) {
+                idx = i;
+                break;
+            }
+        }
+
+        float observed_surprise = -log2f(ctx->cur[idx].p);
+        float e = observed_surprise - ctx->tau;
+
+        // Update mu using the learning rate and error
+        ctx->mu = ctx->mu - ctx->eta * e;
+    },
+    /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
+        auto * ctx = (llama_constraint_context_mirostat *) cnstr->ctx;
+
+        llama_constraint_softmax_impl(cur_p);
+
+        // Estimate s_hat using the most probable m tokens
+        float s_hat = 0.0;
+        float sum_ti_bi = 0.0;
+        float sum_ti_sq = 0.0;
+        for (size_t i = 0; i < size_t(ctx->m - 1) && i < cur_p->size - 1; ++i) {
+            float t_i = logf(float(i + 2) / float(i + 1));
+            float b_i = logf(cur_p->data[i].p / cur_p->data[i + 1].p);
+            sum_ti_bi += t_i * b_i;
+            sum_ti_sq += t_i * t_i;
+        }
+        s_hat = sum_ti_bi / sum_ti_sq;
+
+        // Compute k from the estimated s_hat and target surprise value
+        float epsilon_hat = s_hat - 1;
+        float k = powf((epsilon_hat * powf(2, ctx->mu)) / (1 - powf(ctx->vocab->n_vocab, -epsilon_hat)), 1 / s_hat);
+
+        llama_constraint_top_k_impl(cur_p, int(k), 1);
+
+        // remember the order to be able to compute the distance later when accepting the token
+        ctx->cur.resize(cur_p->size);
+        for (size_t i = 0; i < cur_p->size; ++i) {
+            ctx->cur[i] = cur_p->data[i];
+        }
+    },
+    /* .reset  = */ [](struct llama_constraint * cnstr) {
+        auto * ctx = (llama_constraint_context_mirostat *) cnstr->ctx;
+        ctx->mu = 0.0f;
+    },
+    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+        const auto * ctx = (const llama_constraint_context_mirostat *) cnstr->ctx;
+        return llama_constraint_init_mirostat_impl(*ctx->vocab, ctx->tau, ctx->eta, ctx->m);
+    },
+    /* .free   = */ [](struct llama_constraint * cnstr) {
+        delete (llama_constraint_context_mirostat *) cnstr->ctx;
+    },
+};
+
+struct llama_constraint * llama_constraint_init_mirostat_impl(
+        const struct llama_vocab & vocab,
+                           float   tau,
+                           float   eta,
+                         int32_t   m) {
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_mirostat_i,
+        /* .ctx   = */ new llama_constraint_context_mirostat {
+            /*.vocab =*/ &vocab,
+            /*.tau   =*/ tau,
+            /*.eta   =*/ eta,
+            /*.m     =*/ m,
+            /*.mu    =*/ 0.0f,
+            /*.cur   =*/ {},
+        },
+    };
+
+    return result;
+}
+
+// mirostat v2
+
+struct llama_constraint_context_mirostat_v2 {
+    const float tau;
+    const float eta;
+
+    float mu;
+
+    std::vector<llama_token_data> cur;
+};
+
+static struct llama_constraint_i llama_constraint_mirostat_v2_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "mirostat-v2"; },
+    /* .accept = */ [](struct llama_constraint * cnstr, llama_token token) {
+        auto * ctx = (llama_constraint_context_mirostat_v2 *) cnstr->ctx;
+
+        int32_t idx = -1;
+        for (size_t i = 0; i < ctx->cur.size(); ++i) {
+            if (ctx->cur[i].id == token) {
+                idx = i;
+                break;
+            }
+        }
+
+        float observed_surprise = -log2f(ctx->cur[idx].p);
+        float e = observed_surprise - ctx->tau;
+
+        // Update mu using the learning rate and error
+        ctx->mu = ctx->mu - ctx->eta * e;
+    },
+    /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
+        auto * ctx = (llama_constraint_context_mirostat_v2 *) cnstr->ctx;
+
+        llama_constraint_softmax_impl(cur_p);
+
+        // Truncate the words with surprise values greater than mu
+        cur_p->size = std::distance(cur_p->data, std::find_if(cur_p->data, cur_p->data + cur_p->size, [&](const llama_token_data & candidate) {
+            return -log2f(candidate.p) > ctx->mu;
+        }));
+
+        if (cur_p->size == 0) {
+            cur_p->size = 1;
+        }
+
+        // Normalize the probabilities of the remaining words
+        llama_constraint_softmax_impl(cur_p);
+    },
+    /* .reset  = */ [](struct llama_constraint * cnstr) {
+        auto * ctx = (llama_constraint_context_mirostat_v2 *) cnstr->ctx;
+        ctx->mu = 0.0f;
+    },
+    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+        const auto * ctx = (const llama_constraint_context_mirostat_v2 *) cnstr->ctx;
+        return llama_constraint_init_mirostat_v2_impl(ctx->tau, ctx->eta);
+    },
+    /* .free   = */ [](struct llama_constraint * cnstr) {
+        delete (llama_constraint_context_mirostat_v2 *) cnstr->ctx;
+    },
+};
+
+struct llama_constraint * llama_constraint_init_mirostat_v2_impl(float tau, float eta) {
+    struct llama_constraint * result = new llama_constraint {
+        /* .iface = */ &llama_constraint_mirostat_v2_i,
+        /* .ctx   = */ new llama_constraint_context_mirostat_v2 {
+            /*.tau =*/ tau,
+            /*.eta =*/ eta,
+            /*.mu  =*/ 0.0f,
+            /*.cur =*/ {},
         },
     };
 
@@ -796,13 +966,13 @@ struct llama_constraint * llama_constraint_init_grammar_impl(const struct llama_
 struct llama_constraint_context_penalties {
     const struct llama_vocab * vocab;
 
-    int32_t penalty_last_n;
-    float   penalty_repeat;
-    float   penalty_freq;
-    float   penalty_present;
+    const int32_t penalty_last_n;
+    const float   penalty_repeat;
+    const float   penalty_freq;
+    const float   penalty_present;
 
-    bool    penalize_nl;
-    bool    ignore_eos;
+    const bool    penalize_nl;
+    const bool    ignore_eos;
 
     ring_buffer<llama_token> prev;
 };
@@ -980,7 +1150,6 @@ struct llama_sampler * llama_sampler_init_impl(const struct llama_vocab & vocab,
 
         /* .rng = */ std::mt19937(params.seed),
 
-        /* .mirostat_mu = */ 0.0f,
         /* .prev        = */ { (size_t) params.n_prev },
         /* .constraints = */ {},
         /* .cur         = */ {},
@@ -1011,7 +1180,6 @@ struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) 
 
         /* .rng = */ smpl.rng,
 
-        /* .mirostat_mu = */ smpl.mirostat_mu,
         /* .prev        = */ smpl.prev,
         /* .constraints = */ {},
         /* .cur         = */ {},
@@ -1075,74 +1243,6 @@ llama_token llama_sampler_prev_impl(const struct llama_sampler & smpl, int ith) 
 
 int llama_sampler_n_prev_impl(const struct llama_sampler & smpl) {
     return smpl.prev.size();
-}
-
-llama_token llama_sampler_sample_mirostat_impl(struct llama_token_data_array * cur_p, std::mt19937 & rng, float tau, float eta, int32_t m, int32_t n_vocab, float & mu) {
-    llama_constraint_softmax_impl(cur_p);
-
-    // Estimate s_hat using the most probable m tokens
-    float s_hat = 0.0;
-    float sum_ti_bi = 0.0;
-    float sum_ti_sq = 0.0;
-    for (size_t i = 0; i < size_t(m - 1) && i < cur_p->size - 1; ++i) {
-        float t_i = logf(float(i + 2) / float(i + 1));
-        float b_i = logf(cur_p->data[i].p / cur_p->data[i + 1].p);
-        sum_ti_bi += t_i * b_i;
-        sum_ti_sq += t_i * t_i;
-    }
-    s_hat = sum_ti_bi / sum_ti_sq;
-
-    // Compute k from the estimated s_hat and target surprise value
-    float epsilon_hat = s_hat - 1;
-    float k = powf((epsilon_hat * powf(2, mu)) / (1 - powf(n_vocab, -epsilon_hat)), 1 / s_hat);
-
-    // Sample the next word X using top-k sampling
-    llama_constraint_top_k_impl(cur_p, int(k), 1);
-    llama_token X = llama_sampler_sample_dist_impl(cur_p, rng);
-
-    // Compute error as the difference between observed surprise and target surprise value
-    size_t X_idx = std::distance(cur_p->data, std::find_if(cur_p->data, cur_p->data + cur_p->size, [&](const llama_token_data & candidate) {
-        return candidate.id == X;
-    }));
-    float observed_surprise = -log2f(cur_p->data[X_idx].p);
-    float e = observed_surprise - tau;
-
-    // Update mu using the learning rate and error
-    mu = mu - eta * e;
-
-    return X;
-}
-
-llama_token llama_sampler_sample_mirostat_v2_impl(struct llama_token_data_array * cur_p, std::mt19937 & rng, float tau, float eta, float & mu) {
-    llama_constraint_softmax_impl(cur_p);
-
-    // Truncate the words with surprise values greater than mu
-    cur_p->size = std::distance(cur_p->data, std::find_if(cur_p->data, cur_p->data + cur_p->size, [&](const llama_token_data & candidate) {
-        return -log2f(candidate.p) > mu;
-    }));
-
-    if (cur_p->size == 0) {
-        cur_p->size = 1;
-    }
-
-    // Normalize the probabilities of the remaining words
-    llama_constraint_softmax_impl(cur_p);
-
-    // Sample the next word X from the remaining words
-    llama_token X = llama_sampler_sample_dist_impl(cur_p, rng);
-
-    // Compute error as the difference between observed surprise and target surprise value
-    size_t X_idx = std::distance(cur_p->data, std::find_if(cur_p->data, cur_p->data + cur_p->size, [&](const llama_token_data & candidate) {
-        return candidate.id == X;
-    }));
-
-    float observed_surprise = -log2f(cur_p->data[X_idx].p);
-    float e = observed_surprise - tau;
-
-    // Update mu using the learning rate and error
-    mu = mu - eta * e;
-
-    return X;
 }
 
 llama_token llama_sampler_sample_greedy_impl(llama_token_data_array * cur_p, bool probs) {
