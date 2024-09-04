@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <thread>
 
 #include "ggml.h"
 #include "llama.h"
@@ -170,13 +171,14 @@ static std::string get_gpu_info() {
 }
 
 // command line params
-enum output_formats {NONE, CSV, JSON, MARKDOWN, SQL};
+enum output_formats {NONE, CSV, JSON, JSONL, MARKDOWN, SQL};
 
 static const char * output_format_str(output_formats format) {
     switch (format) {
         case NONE:     return "none";
         case CSV:      return "csv";
         case JSON:     return "json";
+        case JSONL:    return "jsonl";
         case MARKDOWN: return "md";
         case SQL:      return "sql";
         default: GGML_ABORT("invalid output format");
@@ -190,6 +192,8 @@ static bool output_format_from_str(const std::string & s, output_formats & forma
         format = CSV;
     } else if (s == "json") {
         format = JSON;
+    } else if (s == "jsonl") {
+        format = JSONL;
     } else if (s == "md") {
         format = MARKDOWN;
     } else if (s == "sql") {
@@ -225,6 +229,9 @@ struct cmd_params {
     std::vector<ggml_type> type_k;
     std::vector<ggml_type> type_v;
     std::vector<int> n_threads;
+    std::vector<std::string> cpu_mask;
+    std::vector<bool> cpu_strict;
+    std::vector<int> poll;
     std::vector<int> n_gpu_layers;
     std::vector<std::string> rpc_servers;
     std::vector<llama_split_mode> split_mode;
@@ -236,6 +243,8 @@ struct cmd_params {
     std::vector<bool> embeddings;
     ggml_numa_strategy numa;
     int reps;
+    ggml_sched_priority prio;
+    int delay;
     bool verbose;
     output_formats output_format;
     output_formats output_format_stderr;
@@ -251,6 +260,9 @@ static const cmd_params cmd_params_defaults = {
     /* type_k               */ {GGML_TYPE_F16},
     /* type_v               */ {GGML_TYPE_F16},
     /* n_threads            */ {cpu_get_num_math()},
+    /* cpu_mask             */ {"0x0"},
+    /* cpu_strict           */ {false},
+    /* poll                 */ {50},
     /* n_gpu_layers         */ {99},
     /* rpc_servers          */ {""},
     /* split_mode           */ {LLAMA_SPLIT_MODE_LAYER},
@@ -262,6 +274,8 @@ static const cmd_params cmd_params_defaults = {
     /* embeddings           */ {false},
     /* numa                 */ GGML_NUMA_STRATEGY_DISABLED,
     /* reps                 */ 5,
+    /* prio                 */ GGML_SCHED_PRIO_NORMAL,
+    /* delay                */ 0,
     /* verbose              */ false,
     /* output_format        */ MARKDOWN,
     /* output_format_stderr */ NONE,
@@ -272,29 +286,36 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("\n");
     printf("options:\n");
     printf("  -h, --help\n");
-    printf("  -m, --model <filename>              (default: %s)\n", join(cmd_params_defaults.model, ",").c_str());
-    printf("  -p, --n-prompt <n>                  (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
-    printf("  -n, --n-gen <n>                     (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
-    printf("  -pg <pp,tg>                         (default: %s)\n", join(transform_to_str(cmd_params_defaults.n_pg, pair_str), ",").c_str());
-    printf("  -b, --batch-size <n>                (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
-    printf("  -ub, --ubatch-size <n>              (default: %s)\n", join(cmd_params_defaults.n_ubatch, ",").c_str());
-    printf("  -ctk, --cache-type-k <t>            (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_k, ggml_type_name), ",").c_str());
-    printf("  -ctv, --cache-type-v <t>            (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_v, ggml_type_name), ",").c_str());
-    printf("  -t, --threads <n>                   (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
-    printf("  -ngl, --n-gpu-layers <n>            (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
-    printf("  -rpc, --rpc <rpc_servers>           (default: %s)\n", join(cmd_params_defaults.rpc_servers, ",").c_str());
-    printf("  -sm, --split-mode <none|layer|row>  (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
-    printf("  -mg, --main-gpu <i>                 (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
-    printf("  -nkvo, --no-kv-offload <0|1>        (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
-    printf("  -fa, --flash-attn <0|1>             (default: %s)\n", join(cmd_params_defaults.flash_attn, ",").c_str());
-    printf("  -mmp, --mmap <0|1>                  (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
-    printf("  --numa <distribute|isolate|numactl> (default: disabled)\n");
-    printf("  -embd, --embeddings <0|1>           (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
-    printf("  -ts, --tensor-split <ts0/ts1/..>    (default: 0)\n");
-    printf("  -r, --repetitions <n>               (default: %d)\n", cmd_params_defaults.reps);
-    printf("  -o, --output <csv|json|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
-    printf("  -oe, --output-err <csv|json|md|sql> (default: %s)\n", output_format_str(cmd_params_defaults.output_format_stderr));
-    printf("  -v, --verbose                       (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
+    printf("  -m, --model <filename>                    (default: %s)\n", join(cmd_params_defaults.model, ",").c_str());
+    printf("  -p, --n-prompt <n>                        (default: %s)\n", join(cmd_params_defaults.n_prompt, ",").c_str());
+    printf("  -n, --n-gen <n>                           (default: %s)\n", join(cmd_params_defaults.n_gen, ",").c_str());
+    printf("  -pg <pp,tg>                               (default: %s)\n", join(transform_to_str(cmd_params_defaults.n_pg, pair_str), ",").c_str());
+    printf("  -b, --batch-size <n>                      (default: %s)\n", join(cmd_params_defaults.n_batch, ",").c_str());
+    printf("  -ub, --ubatch-size <n>                    (default: %s)\n", join(cmd_params_defaults.n_ubatch, ",").c_str());
+    printf("  -ctk, --cache-type-k <t>                  (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_k, ggml_type_name), ",").c_str());
+    printf("  -ctv, --cache-type-v <t>                  (default: %s)\n", join(transform_to_str(cmd_params_defaults.type_v, ggml_type_name), ",").c_str());
+    printf("  -t, --threads <n>                         (default: %s)\n", join(cmd_params_defaults.n_threads, ",").c_str());
+    printf("  -C, --cpu-mask <hex,hex>                  (default: %s)\n", join(cmd_params_defaults.cpu_mask, ",").c_str());
+    printf("  --cpu-strict <0|1>                        (default: %s)\n", join(cmd_params_defaults.cpu_strict, ",").c_str());
+    printf("  --poll <0...100>                          (default: %s)\n", join(cmd_params_defaults.poll, ",").c_str());
+    printf("  -ngl, --n-gpu-layers <n>                  (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
+#ifdef GGML_USE_RPC
+    printf("  -rpc, --rpc <rpc_servers>                 (default: %s)\n", join(cmd_params_defaults.rpc_servers, ",").c_str());
+#endif
+    printf("  -sm, --split-mode <none|layer|row>        (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
+    printf("  -mg, --main-gpu <i>                       (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
+    printf("  -nkvo, --no-kv-offload <0|1>              (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
+    printf("  -fa, --flash-attn <0|1>                   (default: %s)\n", join(cmd_params_defaults.flash_attn, ",").c_str());
+    printf("  -mmp, --mmap <0|1>                        (default: %s)\n", join(cmd_params_defaults.use_mmap, ",").c_str());
+    printf("  --numa <distribute|isolate|numactl>       (default: disabled)\n");
+    printf("  -embd, --embeddings <0|1>                 (default: %s)\n", join(cmd_params_defaults.embeddings, ",").c_str());
+    printf("  -ts, --tensor-split <ts0/ts1/..>          (default: 0)\n");
+    printf("  -r, --repetitions <n>                     (default: %d)\n", cmd_params_defaults.reps);
+    printf("  --prio <0|1|2|3>                          (default: %d)\n", cmd_params_defaults.prio);
+    printf("  --delay <0...N> (seconds)                 (default: %d)\n", cmd_params_defaults.delay);
+    printf("  -o, --output <csv|json|jsonl|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
+    printf("  -oe, --output-err <csv|json|jsonl|md|sql> (default: %s)\n", output_format_str(cmd_params_defaults.output_format_stderr));
+    printf("  -v, --verbose                             (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
     printf("\n");
     printf("Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
 }
@@ -338,6 +359,8 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     params.output_format_stderr = cmd_params_defaults.output_format_stderr;
     params.reps = cmd_params_defaults.reps;
     params.numa = cmd_params_defaults.numa;
+    params.prio = cmd_params_defaults.prio;
+    params.delay = cmd_params_defaults.delay;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
@@ -433,6 +456,27 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<int>(argv[i], split_delim);
             params.n_threads.insert(params.n_threads.end(), p.begin(), p.end());
+        } else if (arg == "-C" || arg == "--cpu-mask") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = string_split<std::string>(argv[i], split_delim);
+            params.cpu_mask.insert(params.cpu_mask.end(), p.begin(), p.end());
+        } else if (arg == "--cpu-strict") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = string_split<bool>(argv[i], split_delim);
+            params.cpu_strict.insert(params.cpu_strict.end(), p.begin(), p.end());
+        } else if (arg == "--poll") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            auto p = string_split<int>(argv[i], split_delim);
+            params.poll.insert(params.poll.end(), p.begin(), p.end());
         } else if (arg == "-ngl" || arg == "--n-gpu-layers") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -440,12 +484,14 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<int>(argv[i], split_delim);
             params.n_gpu_layers.insert(params.n_gpu_layers.end(), p.begin(), p.end());
+#ifdef GGML_USE_RPC
         } else if (arg == "-rpc" || arg == "--rpc") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.rpc_servers.push_back(argv[i]);
+#endif
         } else if (arg == "-sm" || arg == "--split-mode") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -541,6 +587,18 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
                 break;
             }
             params.reps = std::stoi(argv[i]);
+        } else if (arg == "--prio") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.prio = (enum ggml_sched_priority) std::stoi(argv[i]);
+        } else if (arg == "--delay") {
+            if (++i >= argc) {
+                invalid_param = true;
+                break;
+            }
+            params.delay = std::stoi(argv[i]);
         } else if (arg == "-o" || arg == "--output") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -585,6 +643,9 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     if (params.use_mmap.empty())     { params.use_mmap = cmd_params_defaults.use_mmap; }
     if (params.embeddings.empty())   { params.embeddings = cmd_params_defaults.embeddings; }
     if (params.n_threads.empty())    { params.n_threads = cmd_params_defaults.n_threads; }
+    if (params.cpu_mask.empty())     { params.cpu_mask  = cmd_params_defaults.cpu_mask;  }
+    if (params.cpu_strict.empty())   { params.cpu_strict = cmd_params_defaults.cpu_strict; }
+    if (params.poll.empty())         { params.poll = cmd_params_defaults.poll; }
 
     return params;
 }
@@ -598,6 +659,9 @@ struct cmd_params_instance {
     ggml_type type_k;
     ggml_type type_v;
     int n_threads;
+    std::string cpu_mask;
+    bool cpu_strict;
+    int poll;
     int n_gpu_layers;
     std::string rpc_servers;
     llama_split_mode split_mode;
@@ -667,7 +731,10 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
     for (const auto & tv : params.type_v)
     for (const auto & nkvo : params.no_kv_offload)
     for (const auto & fa : params.flash_attn)
-    for (const auto & nt : params.n_threads) {
+    for (const auto & nt : params.n_threads)
+    for (const auto & cm : params.cpu_mask)
+    for (const auto & cs : params.cpu_strict)
+    for (const auto & pl : params.poll) {
         for (const auto & n_prompt : params.n_prompt) {
             if (n_prompt == 0) {
                 continue;
@@ -681,6 +748,9 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .type_k       = */ tk,
                 /* .type_v       = */ tv,
                 /* .n_threads    = */ nt,
+                /* .cpu_mask     = */ cm,
+                /* .cpu_strict   = */ cs,
+                /* .poll         = */ pl,
                 /* .n_gpu_layers = */ nl,
                 /* .rpc_servers  = */ rpc,
                 /* .split_mode   = */ sm,
@@ -707,6 +777,9 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .type_k       = */ tk,
                 /* .type_v       = */ tv,
                 /* .n_threads    = */ nt,
+                /* .cpu_mask     = */ cm,
+                /* .cpu_strict   = */ cs,
+                /* .poll         = */ pl,
                 /* .n_gpu_layers = */ nl,
                 /* .rpc_servers  = */ rpc,
                 /* .split_mode   = */ sm,
@@ -733,6 +806,9 @@ static std::vector<cmd_params_instance> get_cmd_params_instances(const cmd_param
                 /* .type_k       = */ tk,
                 /* .type_v       = */ tv,
                 /* .n_threads    = */ nt,
+                /* .cpu_mask     = */ cm,
+                /* .cpu_strict   = */ cs,
+                /* .poll         = */ pl,
                 /* .n_gpu_layers = */ nl,
                 /* .rpc_servers  = */ rpc,
                 /* .split_mode   = */ sm,
@@ -769,6 +845,9 @@ struct test {
     int n_batch;
     int n_ubatch;
     int n_threads;
+    std::string cpu_mask;
+    bool cpu_strict;
+    int poll;
     bool has_rpc;
     ggml_type type_k;
     ggml_type type_v;
@@ -795,6 +874,9 @@ struct test {
         n_batch = inst.n_batch;
         n_ubatch = inst.n_ubatch;
         n_threads = inst.n_threads;
+        cpu_mask = inst.cpu_mask;
+        cpu_strict = inst.cpu_strict;
+        poll = inst.poll;
         has_rpc = !inst.rpc_servers.empty();
         type_k = inst.type_k;
         type_v = inst.type_v;
@@ -872,13 +954,14 @@ struct test {
             "cpu_info", "gpu_info",
             "model_filename", "model_type", "model_size", "model_n_params",
             "n_batch", "n_ubatch",
-            "n_threads", "type_k", "type_v",
+            "n_threads", "cpu_mask", "cpu_strict", "poll",
+            "type_k", "type_v",
             "n_gpu_layers", "split_mode",
             "main_gpu", "no_kv_offload", "flash_attn",
             "tensor_split", "use_mmap", "embeddings",
             "n_prompt", "n_gen", "test_time",
             "avg_ns", "stddev_ns",
-            "avg_ts", "stddev_ts"
+            "avg_ts", "stddev_ts",
         };
         return fields;
     }
@@ -887,7 +970,7 @@ struct test {
 
     static field_type get_field_type(const std::string & field) {
         if (field == "build_number" || field == "n_batch" || field == "n_ubatch" ||
-            field == "n_threads" ||
+            field == "n_threads" || field == "poll" ||
             field == "model_size" || field == "model_n_params" ||
             field == "n_gpu_layers" || field == "main_gpu" ||
             field == "n_prompt" || field == "n_gen" ||
@@ -896,6 +979,7 @@ struct test {
         }
         if (field == "cuda" || field == "vulkan" || field == "kompute" || field == "metal" ||
             field == "gpu_blas" || field == "blas" || field == "sycl" ||field == "f16_kv" || field == "no_kv_offload" ||
+            field == "cpu_strict" ||
             field == "flash_attn" || field == "use_mmap" || field == "embeddings") {
             return BOOL;
         }
@@ -928,7 +1012,8 @@ struct test {
             cpu_info, gpu_info,
             model_filename, model_type, std::to_string(model_size), std::to_string(model_n_params),
             std::to_string(n_batch), std::to_string(n_ubatch),
-            std::to_string(n_threads), ggml_type_name(type_k), ggml_type_name(type_v),
+            std::to_string(n_threads), cpu_mask, std::to_string(cpu_strict), std::to_string(poll),
+            ggml_type_name(type_k), ggml_type_name(type_v),
             std::to_string(n_gpu_layers), split_mode_str(split_mode),
             std::to_string(main_gpu), std::to_string(no_kv_offload), std::to_string(flash_attn),
             tensor_split_str, std::to_string(use_mmap), std::to_string(embeddings),
@@ -996,37 +1081,38 @@ struct csv_printer : public printer {
     }
 };
 
+
+static std::string escape_json(const std::string & value) {
+    std::string escaped;
+    for (auto c : value) {
+        if (c == '"') {
+            escaped += "\\\"";
+        } else if (c == '\\') {
+            escaped += "\\\\";
+        } else  if (c <= 0x1f) {
+            char buf[8];
+            snprintf(buf, sizeof(buf), "\\u%04x", c);
+            escaped += buf;
+        } else {
+            escaped += c;
+        }
+    }
+    return escaped;
+}
+
+static std::string format_json_value(const std::string & field, const std::string & value) {
+    switch (test::get_field_type(field)) {
+        case test::STRING:
+            return "\"" + escape_json(value) + "\"";
+        case test::BOOL:
+            return value == "0" ? "false" : "true";
+        default:
+            return value;
+    }
+}
+
 struct json_printer : public printer {
     bool first = true;
-
-    static std::string escape_json(const std::string & value) {
-        std::string escaped;
-        for (auto c : value) {
-            if (c == '"') {
-                escaped += "\\\"";
-            } else if (c == '\\') {
-                escaped += "\\\\";
-            } else  if (c <= 0x1f) {
-                char buf[8];
-                snprintf(buf, sizeof(buf), "\\u%04x", c);
-                escaped += buf;
-            } else {
-                escaped += c;
-            }
-        }
-        return escaped;
-    }
-
-    static std::string format_value(const std::string & field, const std::string & value) {
-        switch (test::get_field_type(field)) {
-            case test::STRING:
-                return "\"" + escape_json(value) + "\"";
-            case test::BOOL:
-                return value == "0" ? "false" : "true";
-            default:
-                return value;
-        }
-    }
 
     void print_header(const cmd_params & params) override {
         fprintf(fout, "[\n");
@@ -1036,7 +1122,7 @@ struct json_printer : public printer {
     void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
         assert(fields.size() == values.size());
         for (size_t i = 0; i < fields.size(); i++) {
-            fprintf(fout, "    \"%s\": %s,\n", fields.at(i).c_str(), format_value(fields.at(i), values.at(i)).c_str());
+            fprintf(fout, "    \"%s\": %s,\n", fields.at(i).c_str(), format_json_value(fields.at(i), values.at(i)).c_str());
         }
     }
 
@@ -1059,6 +1145,25 @@ struct json_printer : public printer {
     }
 };
 
+
+struct jsonl_printer : public printer {
+    void print_fields(const std::vector<std::string> & fields, const std::vector<std::string> & values) {
+        assert(fields.size() == values.size());
+        for (size_t i = 0; i < fields.size(); i++) {
+            fprintf(fout, "\"%s\": %s, ", fields.at(i).c_str(), format_json_value(fields.at(i), values.at(i)).c_str());
+        }
+    }
+
+    void print_test(const test & t) override {
+        fprintf(fout, "{");
+        print_fields(test::get_fields(), t.get_values());
+        fprintf(fout, "\"samples_ns\": [ %s ],", join(t.samples_ns, ", ").c_str());
+        fprintf(fout, "\"samples_ts\": [ %s ]", join(t.get_ts(), ", ").c_str());
+        fprintf(fout, "}\n");
+        fflush(fout);
+    }
+};
+
 struct markdown_printer : public printer {
     std::vector<std::string> fields;
 
@@ -1067,7 +1172,7 @@ struct markdown_printer : public printer {
             return -30;
         }
         if (field == "t/s") {
-            return 16;
+            return 20;
         }
         if (field == "size" || field == "params") {
             return 10;
@@ -1148,6 +1253,15 @@ struct markdown_printer : public printer {
         }
         if (params.n_threads.size() > 1 || params.n_threads != cmd_params_defaults.n_threads || is_cpu_backend) {
             fields.emplace_back("n_threads");
+        }
+        if (params.cpu_mask.size() > 1 || params.cpu_mask != cmd_params_defaults.cpu_mask) {
+            fields.emplace_back("cpu_mask");
+        }
+        if (params.cpu_strict.size() > 1 || params.cpu_strict != cmd_params_defaults.cpu_strict) {
+            fields.emplace_back("cpu_strict");
+        }
+        if (params.poll.size() > 1 || params.poll != cmd_params_defaults.poll) {
+            fields.emplace_back("poll");
         }
         if (params.n_batch.size() > 1 || params.n_batch != cmd_params_defaults.n_batch) {
             fields.emplace_back("n_batch");
@@ -1350,6 +1464,8 @@ static std::unique_ptr<printer> create_printer(output_formats format) {
             return std::unique_ptr<printer>(new csv_printer());
         case JSON:
             return std::unique_ptr<printer>(new json_printer());
+        case JSONL:
+            return std::unique_ptr<printer>(new jsonl_printer());
         case MARKDOWN:
             return std::unique_ptr<printer>(new markdown_printer());
         case SQL:
@@ -1382,6 +1498,8 @@ int main(int argc, char ** argv) {
     }
     llama_backend_init();
     llama_numa_init(params.numa);
+
+    set_process_priority(params.prio);
 
     // initialize printer
     std::unique_ptr<printer> p = create_printer(params.output_format);
@@ -1428,6 +1546,28 @@ int main(int argc, char ** argv) {
 
         llama_kv_cache_clear(ctx);
 
+        // cool off before the test
+        if (params.delay) {
+            std::this_thread::sleep_for(std::chrono::seconds(params.delay));
+        }
+
+        struct ggml_threadpool_params tpp = ggml_threadpool_params_default(t.n_threads);
+        if (!parse_cpu_mask(t.cpu_mask, tpp.cpumask)) {
+            LOG_TEE("%s: failed to parse cpu-mask: %s\n", __func__, t.cpu_mask.c_str());
+            exit(1);
+        }
+        tpp.strict_cpu = t.cpu_strict;
+        tpp.poll       = t.poll;
+        tpp.prio       = params.prio;
+
+        struct ggml_threadpool* threadpool = ggml_threadpool_new(&tpp);
+        if (!threadpool) {
+            LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
+            exit(1);
+        }
+
+        llama_attach_threadpool(ctx, threadpool, NULL);
+
         // warmup run
         if (t.n_prompt > 0) {
             //test_prompt(ctx, std::min(t.n_batch, std::min(t.n_prompt, 32)), 0, t.n_batch, t.n_threads);
@@ -1466,6 +1606,8 @@ int main(int argc, char ** argv) {
         llama_print_timings(ctx);
 
         llama_free(ctx);
+
+        ggml_threadpool_free(threadpool);
     }
 
     llama_free_model(lmodel);

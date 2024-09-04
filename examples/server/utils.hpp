@@ -3,6 +3,14 @@
 #include "llama.h"
 #include "common.h"
 
+#ifndef NDEBUG
+// crash the server in debug mode, otherwise send an http 500 error
+#define CPPHTTPLIB_NO_EXCEPTIONS 1
+#endif
+// increase max payload length to allow use of larger context size
+#define CPPHTTPLIB_FORM_URL_ENCODED_PAYLOAD_MAX_LENGTH 1048576
+#include "httplib.h"
+
 // Change JSON_ASSERT from assert() to GGML_ASSERT:
 #define JSON_ASSERT GGML_ASSERT
 #include "json.hpp"
@@ -279,6 +287,18 @@ static size_t find_partial_stop_string(const std::string &stop, const std::strin
     return std::string::npos;
 }
 
+static bool json_is_array_of_numbers(json data) {
+    if (data.is_array()) {
+        for (const auto & e : data) {
+            if (!e.is_number()) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 // TODO: reuse llama_detokenize
 template <class Iter>
 static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
@@ -341,6 +361,19 @@ static json probs_vector_to_json(const llama_context * ctx, const std::vector<co
     }
 
     return out;
+}
+
+static bool server_sent_event(httplib::DataSink & sink, const char * event, json & data) {
+    const std::string str =
+        std::string(event) + ": " +
+        data.dump(-1, ' ', false, json::error_handler_t::replace) +
+        "\n\n";
+
+    LOG_VERBOSE("data stream", {
+        { "to_send", str }
+    });
+
+    return sink.write(str.c_str(), str.size());
 }
 
 //
