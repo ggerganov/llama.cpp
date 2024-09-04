@@ -50,19 +50,23 @@ defer {
     llama_free(context)
 }
 
-var sparams = llama_sampling_params()
+var sparams = llama_sampler_params()
 sparams.top_k = 40
 sparams.top_p = 0.9
 sparams.temp  = 0.4
 
-let smpl = llama_sampling_init(model, sparams)
+let smpl = llama_sampler_init(model, sparams)
 guard smpl != nil else {
     print("Failed to initialize sampling")
     exit(1)
 }
 defer {
-    llama_sampling_free(smpl)
+    llama_sampler_free(smpl)
 }
+
+llama_sampler_add_constraint(smpl, llama_constraint_init_top_k(40,  1));
+llama_sampler_add_constraint(smpl, llama_constraint_init_top_p(0.9, 1));
+llama_sampler_add_constraint(smpl, llama_constraint_init_temp (0.4));
 
 let n_ctx = llama_n_ctx(context)
 
@@ -138,15 +142,11 @@ while n_cur <= n_len {
 
         var logits = llama_get_logits_ith(context, i_batch[i])
 
-        llama_sampling_set_logits(smpl, logits)
+        llama_sampler_set_logits(smpl, logits)
 
-        llama_sampling_top_k(smpl, nil)
-        llama_sampling_top_p(smpl, nil)
-        llama_sampling_temp (smpl, nil)
+        let new_token_id = llama_sampler_sample_dist(smpl, nil)
 
-        let new_token_id = llama_sampling_sample_dist(smpl, nil)
-
-        // const llama_token new_token_id = llama_sampling_sample_greedy(smpl, nil);
+        // const llama_token new_token_id = llama_sampler_sample_greedy(smpl, nil, false);
 
         // is it an end of stream? -> mark the stream as finished
         if llama_token_is_eog(model, new_token_id) || n_cur == n_len {

@@ -52,12 +52,12 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
     lparams.mirostat_eta = params.mirostat_eta;
 
     auto * result = new gpt_sampler {
-        .params = params,
-        .bias = llama_constraint_init_logit_bias(
+        /* .params = */ params,
+        /* .bias   = */ llama_constraint_init_logit_bias(
             model,
             params.logit_bias.size(),
             params.logit_bias.data()),
-        .pnlt = llama_constraint_init_penalties(
+        /* .pnlt   = */ llama_constraint_init_penalties(
             model,
             params.penalty_last_n,
             params.penalty_repeat,
@@ -65,8 +65,8 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
             params.penalty_present,
             params.penalize_nl,
             params.ignore_eos),
-        .grmr = llama_constraint_init_grammar(model, params.grammar.c_str(), "root"),
-        .smpl = llama_sampler_init(model, lparams)
+        /* .grmr   = */ llama_constraint_init_grammar(model, params.grammar.c_str(), "root"),
+        /* .smpl   = */ llama_sampler_init(model, lparams)
     };
 
     for (const auto & cnstr : params.constraints) {

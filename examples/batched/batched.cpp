@@ -71,7 +71,7 @@ int main(int argc, char ** argv) {
     llama_sampler * smpl = llama_sampler_init(model, sparams);
 
     llama_sampler_add_constraint(smpl, llama_constraint_init_top_k(params.sparams.top_k, params.sparams.min_keep));
-    llama_sampler_add_constraint(smpl, llama_constraint_init_top_p(params.sparams.top_p, params.sparams.min_p));
+    llama_sampler_add_constraint(smpl, llama_constraint_init_top_p(params.sparams.top_p, params.sparams.min_keep));
     llama_sampler_add_constraint(smpl, llama_constraint_init_temp (params.sparams.temp));
 
     if (ctx == NULL) {
@@ -179,7 +179,7 @@ int main(int argc, char ** argv) {
 
             const llama_token new_token_id = llama_sampler_sample_dist(smpl, nullptr);
 
-            //const llama_token new_token_id = llama_sampler_sample_greedy(smpl, nullptr);
+            //const llama_token new_token_id = llama_sampler_sample_greedy(smpl, nullptr, false);
 
             // is it an end of generation? -> mark the stream as finished
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {
