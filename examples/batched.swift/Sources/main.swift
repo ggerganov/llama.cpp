@@ -51,9 +51,6 @@ defer {
 }
 
 var sparams = llama_sampler_params()
-sparams.top_k = 40
-sparams.top_p = 0.9
-sparams.temp  = 0.4
 
 let smpl = llama_sampler_init(model, sparams)
 guard smpl != nil else {

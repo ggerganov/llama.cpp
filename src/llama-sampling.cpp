@@ -724,17 +724,18 @@ static struct llama_constraint_i llama_constraint_grammar_i = {
     },
     /* .reset  = */ [](struct llama_constraint * cnstr) {
         auto * ctx = (llama_constraint_context_grammar *) cnstr->ctx;
-        if (ctx->grammar) {
-            llama_grammar_free_impl(ctx->grammar);
-            ctx->grammar = nullptr;
+        if (!ctx->grammar) {
+            return;
         }
 
-        if (!ctx->grammar_str.empty()) {
-            ctx->grammar = llama_grammar_init_impl(nullptr, ctx->grammar_str.c_str(), ctx->grammar_root.c_str());
-        }
+        auto * grammar_new = llama_grammar_init_impl(ctx->grammar->vocab, ctx->grammar_str.c_str(), ctx->grammar_root.c_str());
+
+        llama_grammar_free_impl(ctx->grammar);
+        ctx->grammar = grammar_new;
     },
     /* .copy   = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx_src = (const llama_constraint_context_grammar *) cnstr->ctx;
+
         auto * result = llama_constraint_init_grammar_impl(*ctx_src->grammar->vocab, nullptr, nullptr);
 
         auto * ctx_dst = (llama_constraint_context_grammar *) result->ctx;
