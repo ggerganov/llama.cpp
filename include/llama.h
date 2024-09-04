@@ -386,11 +386,11 @@ extern "C" {
         double t_start_ms;
         double t_end_ms;
         double t_load_ms;
-        double t_sampling_ms;
+        double t_sampler_ms;
         double t_p_eval_ms;
         double t_eval_ms;
 
-        int32_t n_sampling;
+        int32_t n_sampler;
         int32_t n_p_eval;
         int32_t n_eval;
     };
@@ -1025,8 +1025,7 @@ extern "C" {
 
     // user code can implement the interface below in order to create custom llama_constraint
     struct llama_constraint_i {
-        // TODO: add name API
-
+        const char *              (*name)  (const struct llama_constraint * cnstr);                                 // can be NULL
         void                      (*accept)(      struct llama_constraint * cnstr, llama_token token);              // can be NULL
         void                      (*apply) (      struct llama_constraint * cnstr, llama_token_data_array * cur_p); // required
         void                      (*reset) (      struct llama_constraint * cnstr);                                 // can be NULL
@@ -1035,8 +1034,6 @@ extern "C" {
 
         // TODO: API for internal libllama usage for appending the sampling to an existing ggml_cgraph
         //void (*apply_ggml) (struct llama_constraint * cnstr, ...);
-
-        // TODO: add API to get timing stats
     };
 
     struct llama_constraint {
@@ -1044,7 +1041,7 @@ extern "C" {
         llama_constraint_context_t   ctx;
     };
 
-    LLAMA_API struct llama_constraint * llama_constraint_init_softmax   ();
+    LLAMA_API struct llama_constraint * llama_constraint_init_softmax   (void);
     LLAMA_API struct llama_constraint * llama_constraint_init_top_k     (int32_t k, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_top_p     (float   p, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_min_p     (float   p, int32_t min_keep);

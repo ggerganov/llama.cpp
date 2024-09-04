@@ -20609,7 +20609,7 @@ int32_t llama_chat_apply_template(
 // sampling
 //
 
-struct llama_constraint * llama_constraint_init_softmax() {
+struct llama_constraint * llama_constraint_init_softmax(void) {
     return llama_constraint_init_softmax_impl();
 }
 
@@ -20849,22 +20849,22 @@ int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int 
 
 void llama_print_timings(struct llama_context * ctx, struct llama_sampler * smpl) {
     const llama_timings timings = {
-        /*.t_start_ms    =*/ 1e-3 * ctx->t_start_us,
-        /*.t_end_ms      =*/ 1.00 * ggml_time_ms(),
-        /*.t_load_ms     =*/ 1e-3 * ctx->t_load_us,
-        /*.t_sampling_ms =*/ 1e-3 * (smpl ? smpl->t_sample_us  : 0.0),
-        /*.t_p_eval_ms   =*/ 1e-3 * ctx->t_p_eval_us,
-        /*.t_eval_ms     =*/ 1e-3 * ctx->t_eval_us,
+        /*.t_start_ms   =*/ 1e-3 * ctx->t_start_us,
+        /*.t_end_ms     =*/ 1.00 * ggml_time_ms(),
+        /*.t_load_ms    =*/ 1e-3 * ctx->t_load_us,
+        /*.t_sampler_ms =*/ 1e-3 * (smpl ? smpl->t_sample_us  : 0.0),
+        /*.t_p_eval_ms  =*/ 1e-3 * ctx->t_p_eval_us,
+        /*.t_eval_ms    =*/ 1e-3 * ctx->t_eval_us,
 
-        /*.n_sampling =*/ std::max(0, smpl ? smpl->n_sample  : 0),
-        /*.n_p_eval   =*/ std::max(0, ctx->n_p_eval),
-        /*.n_eval     =*/ std::max(1, ctx->n_eval),
+        /*.n_sampler =*/ std::max(0, smpl ? smpl->n_sample  : 0),
+        /*.n_p_eval  =*/ std::max(0, ctx->n_p_eval),
+        /*.n_eval    =*/ std::max(1, ctx->n_eval),
     };
 
     LLAMA_LOG_INFO("\n");
     LLAMA_LOG_INFO("%s:        load time = %10.2f ms\n", __func__, timings.t_load_ms);
     LLAMA_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, timings.t_sampling_ms, timings.n_sampling, timings.t_sampling_ms / timings.n_sampling, 1e3 / timings.t_sampling_ms * timings.n_sampling);
+            __func__, timings.t_sampler_ms, timings.n_sampler, timings.t_sampler_ms / timings.n_sampler, 1e3 / timings.t_sampler_ms * timings.n_sampler);
     LLAMA_LOG_INFO("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
             __func__, timings.t_p_eval_ms, timings.n_p_eval, timings.t_p_eval_ms / timings.n_p_eval, 1e3 / timings.t_p_eval_ms * timings.n_p_eval);
     LLAMA_LOG_INFO("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",

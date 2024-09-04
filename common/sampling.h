@@ -63,7 +63,7 @@ struct gpt_sampler_params {
 // gpt_sampler extends llama_sampler with additional functionality:
 //
 //  - grammar support
-//  - custom sampler logic based on the paramerters
+//  - custom sampler logic based on the parameters
 //
 struct gpt_sampler;
 

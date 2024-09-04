@@ -428,6 +428,7 @@ void llama_constraint_penalties_impl(
 // softmax
 
 static struct llama_constraint_i llama_constraint_softmax_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "softmax"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * /*cnstr*/, llama_token_data_array * cur_p) {
         llama_constraint_softmax_impl(cur_p);
@@ -454,9 +455,10 @@ struct llama_constraint_context_top_k {
 };
 
 static struct llama_constraint_i llama_constraint_top_k_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "top-k"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_top_k *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_top_k *) cnstr->ctx;
         llama_constraint_top_k_impl(cur_p, ctx->k, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
@@ -466,7 +468,7 @@ static struct llama_constraint_i llama_constraint_top_k_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_top_k *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_top_k_impl(int32_t k, size_t min_keep) {
@@ -489,9 +491,10 @@ struct llama_constraint_context_top_p {
 };
 
 static struct llama_constraint_i llama_constraint_top_p_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "top-p"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_top_p *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_top_p *) cnstr->ctx;
         llama_constraint_top_p_impl(cur_p, ctx->p, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
@@ -501,7 +504,7 @@ static struct llama_constraint_i llama_constraint_top_p_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_top_p *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_top_p_impl(float p, size_t min_keep) {
@@ -524,9 +527,10 @@ struct llama_constraint_context_min_p {
 };
 
 static struct llama_constraint_i llama_constraint_min_p_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "min-p"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_min_p *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_min_p *) cnstr->ctx;
         llama_constraint_min_p_impl(cur_p, ctx->p, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
@@ -536,7 +540,7 @@ static struct llama_constraint_i llama_constraint_min_p_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_min_p *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_min_p_impl(float p, size_t min_keep) {
@@ -559,9 +563,10 @@ struct llama_constraint_context_tail_free {
 };
 
 static struct llama_constraint_i llama_constraint_tail_free_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "tail-free"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_tail_free *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_tail_free *) cnstr->ctx;
         llama_constraint_tail_free_impl(cur_p, ctx->z, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
@@ -571,7 +576,7 @@ static struct llama_constraint_i llama_constraint_tail_free_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_tail_free *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_tail_free_impl(float z, size_t min_keep) {
@@ -594,9 +599,10 @@ struct llama_constraint_context_typical {
 };
 
 static struct llama_constraint_i llama_constraint_typical_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "typical"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_typical *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_typical *) cnstr->ctx;
         llama_constraint_typical_impl(cur_p, ctx->p, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
@@ -606,7 +612,7 @@ static struct llama_constraint_i llama_constraint_typical_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_typical *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_typical_impl(float p, size_t min_keep) {
@@ -628,9 +634,10 @@ struct llama_constraint_context_temp {
 };
 
 static struct llama_constraint_i llama_constraint_temp_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "temp"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_temp *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_temp *) cnstr->ctx;
         llama_constraint_temp_impl(cur_p, ctx->temp);
     },
     /* .reset  = */ nullptr,
@@ -640,7 +647,7 @@ static struct llama_constraint_i llama_constraint_temp_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_temp *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_temp_impl(float temp) {
@@ -663,9 +670,10 @@ struct llama_constraint_context_temp_ext {
 };
 
 static struct llama_constraint_i llama_constraint_temp_ext_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "temp-ext"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_temp_ext *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_temp_ext *) cnstr->ctx;
         if (ctx->delta > 0) {
             const float temp_min = std::max(0.0f, ctx->temp - ctx->delta);
             const float temp_max = ctx->temp + ctx->delta;
@@ -682,7 +690,7 @@ static struct llama_constraint_i llama_constraint_temp_ext_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_temp_ext *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_temp_ext_impl(float temp, float delta, float exponent) {
@@ -708,14 +716,15 @@ struct llama_constraint_context_grammar {
 };
 
 static struct llama_constraint_i llama_constraint_grammar_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "grammar"; },
     /* .accept = */ [](struct llama_constraint * cnstr, llama_token token) {
-        auto * ctx = (llama_constraint_context_grammar *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_grammar *) cnstr->ctx;
         if (ctx->grammar) {
             llama_grammar_accept_impl(*ctx->grammar, token);
         }
     },
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
-        auto * ctx = (llama_constraint_context_grammar *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_grammar *) cnstr->ctx;
         if (ctx->grammar) {
             llama_constraint_grammar_impl(cur_p, *ctx->grammar);
         }
@@ -747,14 +756,14 @@ static struct llama_constraint_i llama_constraint_grammar_i = {
         return result;
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
-        auto * ctx = (llama_constraint_context_grammar *) cnstr->ctx;
+        const auto * ctx = (llama_constraint_context_grammar *) cnstr->ctx;
 
         if (ctx->grammar) {
             llama_grammar_free_impl(ctx->grammar);
         }
 
         delete ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_grammar_impl(const struct llama_vocab & vocab, const char * grammar_str, const char * grammar_root) {
@@ -799,6 +808,7 @@ struct llama_constraint_context_penalties {
 };
 
 static struct llama_constraint_i llama_constraint_penalties_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "penalties"; },
     /* .accept = */ [](struct llama_constraint * cnstr, llama_token token) {
         auto * ctx = (llama_constraint_context_penalties *) cnstr->ctx;
         ctx->prev.push_back(token);
@@ -855,7 +865,7 @@ static struct llama_constraint_i llama_constraint_penalties_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_penalties *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_penalties_impl(const struct llama_vocab & vocab, int32_t penalty_last_n, float penalty_repeat, float penalty_freq, float penalty_present, bool penalize_nl, bool ignore_eos) {
@@ -888,6 +898,7 @@ struct llama_constraint_context_logit_bias {
 };
 
 static struct llama_constraint_i llama_constraint_logit_bias_i = {
+    /* .name   = */ [](const struct llama_constraint * /*cnstr*/) { return "logit-bias"; },
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_constraint * cnstr, llama_token_data_array * cur_p) {
         auto * ctx = (llama_constraint_context_logit_bias *) cnstr->ctx;
@@ -905,7 +916,7 @@ static struct llama_constraint_i llama_constraint_logit_bias_i = {
     },
     /* .free   = */ [](struct llama_constraint * cnstr) {
         delete (llama_constraint_context_logit_bias *) cnstr->ctx;
-    }
+    },
 };
 
 struct llama_constraint * llama_constraint_init_logit_bias_impl(

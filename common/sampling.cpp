@@ -198,9 +198,11 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     auto & grmr = gsmpl->grmr;
     auto & smpl = gsmpl->smpl;
 
-    auto * cur_p = llama_sampler_get_candidates(smpl);
+    const auto * logits = llama_get_logits_ith(ctx, idx);
 
-    llama_sampler_set_logits(smpl, llama_get_logits_ith(ctx, idx));
+    llama_sampler_set_logits(smpl, logits);
+
+    auto * cur_p = llama_sampler_get_candidates(smpl);
 
     llama_constraint_apply(bias, cur_p);
     llama_constraint_apply(pnlt, cur_p);
@@ -223,7 +225,7 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     }
 
     // if the token is not valid, sample again, first apply the grammar constraints and then sample
-    llama_sampler_set_logits(smpl, llama_get_logits_ith(ctx, idx));
+    llama_sampler_set_logits(smpl, logits);
 
     llama_constraint_apply(bias, cur_p);
     llama_constraint_apply(pnlt, cur_p);
