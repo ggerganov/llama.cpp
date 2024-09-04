@@ -163,11 +163,11 @@ static void process_image(struct llava_context * ctx_llava, struct llava_image_e
     LOG_TEE("%s: image token past: %d\n", __func__, n_past);
 }
 
-static const char * sample(struct llama_sampling * smpl,
+static const char * sample(struct gpt_sampler * smpl,
                            struct llama_context * ctx_llama,
                            int * n_past) {
-    const llama_token id = llama_sampling_sample(smpl, ctx_llama, -1);
-    llama_sampling_accept(smpl, id, true);
+    const llama_token id = gpt_sampler_sample(smpl, ctx_llama, -1);
+    gpt_sampler_accept(smpl, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
@@ -214,7 +214,7 @@ static struct llava_context * minicpmv_init(gpt_params * params, const std::stri
     return ctx_llava;
 }
 
-static struct llama_sampling * llama_init(struct llava_context * ctx_llava, gpt_params * params, std::string prompt, int &n_past, bool is_first = false){
+static struct gpt_sampler * llama_init(struct llava_context * ctx_llava, gpt_params * params, std::string prompt, int &n_past, bool is_first = false){
     std::string user_prompt = prompt;
     int has_minicpmv_projector = clip_is_minicpmv(ctx_llava->ctx_clip);
     if (!is_first) {
@@ -238,11 +238,11 @@ static struct llama_sampling * llama_init(struct llava_context * ctx_llava, gpt_
 
     LOG_TEE("\n");
 
-    struct llama_sampling * smpl = llama_sampling_init(ctx_llava->model, params->sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
     return smpl;
 }
 
-static const char * llama_loop(struct llava_context * ctx_llava,struct llama_sampling * smpl, int &n_past){
+static const char * llama_loop(struct llava_context * ctx_llava,struct gpt_sampler * smpl, int &n_past){
 
     const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past);
     return tmp;
@@ -296,7 +296,7 @@ int main(int argc, char ** argv) {
 
                 fflush(stdout);
             }
-            llama_sampling_free(smpl);
+            gpt_sampler_free(smpl);
         }else {
             while (true) {
                 LOG_TEE("<user>");
@@ -315,7 +315,7 @@ int main(int argc, char ** argv) {
                     if (strstr(response.c_str(), "<user>")) break; // minicpm-v
                     fflush(stdout);
                 }
-                llama_sampling_free(smpl);
+                gpt_sampler_free(smpl);
             }
         }
         printf("\n");

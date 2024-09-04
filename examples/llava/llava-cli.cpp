@@ -40,11 +40,11 @@ static bool eval_string(struct llama_context * ctx_llama, const char* str, int n
     return true;
 }
 
-static const char * sample(struct llama_sampling * smpl,
+static const char * sample(struct gpt_sampler * smpl,
                            struct llama_context * ctx_llama,
                            int * n_past) {
-    const llama_token id = llama_sampling_sample(smpl, ctx_llama, -1);
-    llama_sampling_accept(smpl, id, true);
+    const llama_token id = gpt_sampler_sample(smpl, ctx_llama, -1);
+    gpt_sampler_accept(smpl, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
@@ -191,7 +191,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     LOG_TEE("\n");
 
-    struct llama_sampling * smpl = llama_sampling_init(ctx_llava->model, params->sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
     if (!smpl) {
         fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
@@ -211,7 +211,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         fflush(stdout);
     }
 
-    llama_sampling_free(smpl);
+    gpt_sampler_free(smpl);
     printf("\n");
 }
 

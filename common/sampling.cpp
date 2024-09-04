@@ -2,6 +2,16 @@
 
 #include "common.h"
 
+struct gpt_sampler {
+    gpt_sampler_params params;
+
+    struct llama_constraint * bias;
+    struct llama_constraint * pnlt;
+    struct llama_constraint * grmr;
+
+    struct llama_sampler * smpl;
+};
+
 std::string gpt_sampler_params::print_all() const {
     char result[1024];
 
@@ -33,8 +43,6 @@ std::string gpt_sampler_params::print_constraints() const {
 }
 
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
-    gpt_sampler * result = new gpt_sampler();
-
     llama_sampler_params lparams = llama_sampler_default_params();
 
     lparams.seed         = params.seed;
@@ -43,21 +51,23 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
     lparams.mirostat_tau = params.mirostat_tau;
     lparams.mirostat_eta = params.mirostat_eta;
 
-    result->smpl = llama_sampler_init(model, lparams);
-
-    llama_sampler_add_constraint(result->smpl, llama_constraint_init_logit_bias(
-        model,
-        params.logit_bias.size(),
-        params.logit_bias.data()));
-
-    llama_sampler_add_constraint(result->smpl, llama_constraint_init_penalties(
-        model,
-        params.penalty_last_n,
-        params.penalty_repeat,
-        params.penalty_freq,
-        params.penalty_present,
-        params.penalize_nl,
-        params.ignore_eos));
+    auto * result = new gpt_sampler {
+        .params = params,
+        .bias = llama_constraint_init_logit_bias(
+            model,
+            params.logit_bias.size(),
+            params.logit_bias.data()),
+        .pnlt = llama_constraint_init_penalties(
+            model,
+            params.penalty_last_n,
+            params.penalty_repeat,
+            params.penalty_freq,
+            params.penalty_present,
+            params.penalize_nl,
+            params.ignore_eos),
+        .grmr = llama_constraint_init_grammar(model, params.grammar.c_str(), "root"),
+        .smpl = llama_sampler_init(model, lparams)
+    };
 
     for (const auto & cnstr : params.constraints) {
         switch (cnstr) {
@@ -84,14 +94,15 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
         }
     }
 
-    result->grmr = llama_constraint_init_grammar(model, params.grammar.c_str(), "root");
-
     return result;
 }
 
 void gpt_sampler_free(struct gpt_sampler * gsmpl) {
     if (gsmpl) {
+        llama_constraint_free(gsmpl->bias);
+        llama_constraint_free(gsmpl->pnlt);
         llama_constraint_free(gsmpl->grmr);
+
         llama_sampler_free(gsmpl->smpl);
 
         delete gsmpl;
@@ -121,8 +132,20 @@ void gpt_sampler_reset (struct gpt_sampler * gsmpl) {
     llama_sampler_reset(gsmpl->smpl);
 }
 
+void gpt_sampler_set_logits(struct gpt_sampler * gsmpl, const float * logits) {
+    llama_sampler_set_logits(gsmpl->smpl, logits);
+}
+
+llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl) {
+    return llama_sampler_get_candidates(gsmpl->smpl);
+}
+
 llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl) {
     return llama_sampler_last(gsmpl->smpl);
+}
+
+void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl) {
+    llama_print_timings(ctx, gsmpl->smpl);
 }
 
 static llama_token gpt_sampler_sample(
@@ -131,8 +154,6 @@ static llama_token gpt_sampler_sample(
         float temp,
         int mirostat,
         int n_probs) {
-    GGML_ASSERT(cur_p != nullptr && "candidates array must be provided");
-
     llama_token res = 0;
 
     if (temp < 0.0f || (temp == 0.0f && n_probs > 0)) {
@@ -142,6 +163,7 @@ static llama_token gpt_sampler_sample(
         // greedy sampling, no probs
         res = llama_sampler_sample_greedy(smpl, cur_p, false);
     } else {
+        // apply all sampling constraints and then sample
         llama_sampler_apply(smpl, cur_p);
 
         if (mirostat != 0) {
@@ -167,40 +189,60 @@ static llama_token gpt_sampler_sample(
     return res;
 }
 
-llama_token gpt_sampler_sample(
-        struct gpt_sampler * gsmpl,
-        struct llama_context * ctx,
-        int idx) {
+llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx) {
     const auto & params = gsmpl->params;
 
+    auto & bias = gsmpl->bias;
+    auto & pnlt = gsmpl->pnlt;
     auto & grmr = gsmpl->grmr;
     auto & smpl = gsmpl->smpl;
 
-    llama_sampler_set_logits(smpl, llama_get_logits_ith(ctx, idx));
-
     auto * cur_p = llama_sampler_get_candidates(smpl);
 
-    // first, sample the token without any grammar constraints
-    const llama_token id = gpt_sampler_sample(smpl, cur_p, params.temp, params.mirostat, params.n_probs);
-
-    // create an array with a single token data element for the sampled id
-    llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
-    llama_token_data_array single_token_data_array = { &single_token_data, 1, false };
-
-    llama_constraint_apply(grmr, &single_token_data_array);
-
-    // check if the token is valid according to the grammar by seeing if its logit has been set to -INFINITY
-    const bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
-    if (is_valid) {
-        return id;
-    }
-
-    // if the token is not valid, sample again, after applying the grammar constraints
     llama_sampler_set_logits(smpl, llama_get_logits_ith(ctx, idx));
 
+    llama_constraint_apply(bias, cur_p);
+    llama_constraint_apply(pnlt, cur_p);
+
+    // first, sample the token without any grammar constraints
+    const llama_token id = gpt_sampler_sample(smpl, nullptr, params.temp, params.mirostat, params.n_probs);
+
+    // check if it the sampled token fits the grammar
+    {
+        llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
+        llama_token_data_array single_token_data_array = { &single_token_data, 1, false };
+
+        llama_constraint_apply(grmr, &single_token_data_array);
+
+        // check if the token is valid according to the grammar by seeing if its logit has been set to -INFINITY
+        const bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
+        if (is_valid) {
+            return id;
+        }
+    }
+
+    // if the token is not valid, sample again, first apply the grammar constraints and then sample
+    llama_sampler_set_logits(smpl, llama_get_logits_ith(ctx, idx));
+
+    llama_constraint_apply(bias, cur_p);
+    llama_constraint_apply(pnlt, cur_p);
     llama_constraint_apply(grmr, cur_p);
 
     return gpt_sampler_sample(smpl, cur_p, params.temp, params.mirostat, params.n_probs);
+}
+
+void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * candidates) {
+    GGML_ASSERT(candidates != nullptr);
+
+    llama_constraint_apply(gsmpl->grmr, candidates);
+}
+
+llama_token gpt_sampler_sample_dist(struct gpt_sampler * gsmpl, llama_token_data_array * candidates) {
+    return llama_sampler_sample_dist(gsmpl->smpl, candidates);
+}
+
+llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * candidates, bool probs) {
+    return llama_sampler_sample_greedy(gsmpl->smpl, candidates, probs);
 }
 
 std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx_main, int n) {

@@ -117,7 +117,7 @@ int main(int argc, char ** argv) {
     llama_batch batch = llama_batch_init(params.n_ctx, 0, W + G + 1);
 
     // target model sampling context
-    struct llama_sampling * smpl = llama_sampling_init(model, params.sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(model, params.sparams);
 
     // verification n-grams
     std::vector<ngram_data> ngrams_cur(G);
@@ -158,9 +158,9 @@ int main(int argc, char ** argv) {
 
     // sample first token
     {
-        id = llama_sampling_sample(smpl, ctx, 0);
+        id = gpt_sampler_sample(smpl, ctx, 0);
 
-        llama_sampling_accept(smpl, id, true);
+        gpt_sampler_accept(smpl, id, true);
 
         {
             const std::string token_str = llama_token_to_piece(ctx, id);
@@ -283,9 +283,9 @@ int main(int argc, char ** argv) {
             }
 
             // sample the next token
-            id = llama_sampling_sample(smpl, ctx, i_batch);
+            id = gpt_sampler_sample(smpl, ctx, i_batch);
 
-            llama_sampling_accept(smpl, id, true);
+            gpt_sampler_accept(smpl, id, true);
 
             // print
             {
@@ -360,7 +360,7 @@ int main(int argc, char ** argv) {
                 if (v == 0) {
                     // sample from the last level
                     for (int i = 0; i < W; i++) {
-                        tokens_j[N - 2][i] = llama_sampling_sample(smpl, ctx, ngrams_cur.size()*(N-1) + W*(N - 2) + i);
+                        tokens_j[N - 2][i] = gpt_sampler_sample(smpl, ctx, ngrams_cur.size()*(N-1) + W*(N - 2) + i);
                     }
                 } else {
                     for (int i = 0; i < W; i++) {
@@ -467,10 +467,11 @@ int main(int argc, char ** argv) {
     LOG_TEE("n_predict = %d\n", n_predict);
     LOG_TEE("n_accept  = %d\n", n_accept);
 
-    llama_print_timings(ctx, smpl);
+    gpt_print_timings(ctx, smpl);
+
+    gpt_sampler_free(smpl);
 
     llama_kv_cache_view_free(&kvc_view);
-    llama_sampling_free(smpl);
 
     llama_batch_free(batch);
 

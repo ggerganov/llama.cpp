@@ -170,10 +170,10 @@ struct server_slot {
     // sampling
     json json_schema;
 
-    struct gpt_sampling_params sparams;
+    struct gpt_sampler_params sparams;
+    struct gpt_sampler * smpl = nullptr;
 
     llama_token sampled;
-    llama_sampling * smpl = nullptr;
 
     int32_t ga_i = 0;   // group-attention state
     int32_t ga_n = 1;   // group-attention factor
@@ -653,7 +653,7 @@ struct server_context {
         // Clear any sampling context
         for (server_slot & slot : slots) {
             if (slot.smpl != nullptr) {
-                llama_sampling_free(slot.smpl);
+                gpt_sampler_free(slot.smpl);
             }
         }
 
@@ -1027,26 +1027,26 @@ struct server_context {
         }
 
         {
-            const auto & samplers = data.find("samplers");
-            if (samplers != data.end() && samplers->is_array()) {
-                std::vector<std::string> sampler_names;
-                for (const auto & sampler_name : *samplers) {
-                    if (sampler_name.is_string()) {
-                        sampler_names.emplace_back(sampler_name);
+            const auto & constraints = data.find("samplers");
+            if (constraints != data.end() && constraints->is_array()) {
+                std::vector<std::string> constraint_names;
+                for (const auto & name : *constraints) {
+                    if (name.is_string()) {
+                        constraint_names.emplace_back(name);
                     }
                 }
-                slot.sparams.samplers = llama_sampling_types_from_names(sampler_names, false);
+                slot.sparams.constraints = gpt_constraint_types_from_names(constraint_names, false);
             } else {
-                slot.sparams.samplers = default_sparams.samplers;
+                slot.sparams.constraints = default_sparams.constraints;
             }
         }
 
         {
             if (slot.smpl != nullptr) {
-                llama_sampling_free(slot.smpl);
+                gpt_sampler_free(slot.smpl);
             }
 
-            slot.smpl = llama_sampling_init(model, slot.sparams);
+            slot.smpl = gpt_sampler_init(model, slot.sparams);
             if (slot.smpl == nullptr) {
                 // for now, the only error that may happen here is invalid grammar
                 send_error(task, "Failed to parse grammar", ERROR_TYPE_INVALID_REQUEST);
@@ -1253,10 +1253,10 @@ struct server_context {
     }
 
     json get_formated_generation(const server_slot & slot) const {
-        std::vector<std::string> samplers;
-        samplers.reserve(slot.sparams.samplers.size());
-        for (const auto & sampler : slot.sparams.samplers) {
-            samplers.emplace_back(llama_sampling_type_to_str(sampler));
+        std::vector<std::string> constraints;
+        constraints.reserve(slot.sparams.constraints.size());
+        for (const auto & constraint : slot.sparams.constraints) {
+            constraints.emplace_back(gpt_constraint_type_to_str(constraint));
         }
 
         return json {
@@ -1290,7 +1290,7 @@ struct server_context {
             {"n_probs",                   slot.sparams.n_probs},
             {"min_keep",                  slot.sparams.min_keep},
             {"grammar",                   slot.sparams.grammar},
-            {"samplers",                  samplers},
+            {"samplers",                  constraints},
         };
     }
 
@@ -2084,7 +2084,7 @@ struct server_context {
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
                             }
 
-                            llama_sampling_reset(slot.smpl);
+                            gpt_sampler_reset(slot.smpl);
 
                             if (!slot.params.cache_prompt) {
                                 slot.n_past_se = 0;
@@ -2097,7 +2097,7 @@ struct server_context {
 
                                 // push the prompt into the sampling context (do not apply grammar)
                                 for (int i = 0; i < slot.n_past; ++i) {
-                                    llama_sampling_accept(slot.smpl, slot.cache_tokens[i], false);
+                                    gpt_sampler_accept(slot.smpl, slot.cache_tokens[i], false);
                                 }
                             }
                         }
@@ -2150,7 +2150,7 @@ struct server_context {
                         slot.n_past_se = 0;
                         slot.ga_i = 0;
                         // TODO: is the system prompt ever in the sampling context?
-                        llama_sampling_reset(slot.smpl);
+                        gpt_sampler_reset(slot.smpl);
                     }
 
                     // remove the non-common part from the cache
@@ -2332,9 +2332,9 @@ struct server_context {
                 }
 
                 completion_token_output result;
-                const llama_token id = llama_sampling_sample(slot.smpl, ctx, slot.i_batch - i);
+                const llama_token id = gpt_sampler_sample(slot.smpl, ctx, slot.i_batch - i);
 
-                llama_sampling_accept(slot.smpl, id, true);
+                gpt_sampler_accept(slot.smpl, id, true);
 
                 slot.n_decoded += 1;
                 if (slot.n_decoded == 1) {
@@ -2345,7 +2345,7 @@ struct server_context {
 
                 result.tok = id;
 
-                const auto * cur_p = llama_sampling_get_candidates(slot.smpl);
+                const auto * cur_p = gpt_sampler_get_candidates(slot.smpl);
 
                 // TODO: this logic might have been broken during https://github.com/ggerganov/llama.cpp/pull/8643
                 //       fix if necessary

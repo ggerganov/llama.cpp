@@ -30,9 +30,9 @@ static void test_top_k(const std::vector<float> & probs, const std::vector<float
     }
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    llama_sampling_softmax_impl(&candidates_p);
+    llama_constraint_softmax_impl(&candidates_p);
     DUMP(&candidates_p);
-    llama_sampling_top_k_impl(&candidates_p, k, 1);
+    llama_constraint_top_k_impl(&candidates_p, k, 1);
     DUMP(&candidates_p);
 
     GGML_ASSERT(candidates_p.size == expected_probs.size());
@@ -52,9 +52,9 @@ static void test_top_p(const std::vector<float> & probs, const std::vector<float
     }
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    llama_sampling_softmax_impl(&candidates_p);
+    llama_constraint_softmax_impl(&candidates_p);
     DUMP(&candidates_p);
-    llama_sampling_top_p_impl(&candidates_p, p, 1);
+    llama_constraint_top_p_impl(&candidates_p, p, 1);
     DUMP(&candidates_p);
 
     GGML_ASSERT(candidates_p.size == expected_probs.size());
@@ -75,7 +75,7 @@ static void test_tfs(const std::vector<float> & probs, const std::vector<float> 
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     DUMP(&candidates_p);
-    llama_sampling_tail_free_impl(&candidates_p, z, 1);
+    llama_constraint_tail_free_impl(&candidates_p, z, 1);
     DUMP(&candidates_p);
 
     GGML_ASSERT(candidates_p.size == expected_probs.size());
@@ -96,9 +96,9 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     DUMP(&candidates_p);
-    llama_sampling_min_p_impl(&candidates_p, p, 1);
+    llama_constraint_min_p_impl(&candidates_p, p, 1);
     DUMP(&candidates_p);
-    llama_sampling_softmax_impl(&candidates_p);
+    llama_constraint_softmax_impl(&candidates_p);
 
     GGML_ASSERT(candidates_p.size == expected_probs.size());
     for (size_t i = 0; i < candidates_p.size; i++) {
@@ -118,7 +118,7 @@ static void test_typical(const std::vector<float> & probs, const std::vector<flo
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
     DUMP(&candidates_p);
-    llama_sampling_typical_impl(&candidates_p, p, 1);
+    llama_constraint_typical_impl(&candidates_p, p, 1);
     DUMP(&candidates_p);
 
     GGML_ASSERT(candidates_p.size == expected_probs.size());
@@ -148,10 +148,10 @@ static void test_penalties(
     }
 
     llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-    llama_sampling_softmax_impl(&candidates_p);
+    llama_constraint_softmax_impl(&candidates_p);
     DUMP(&candidates_p);
-    llama_sampling_penalties_impl(&candidates_p, token_count, repeat_penalty, alpha_frequency, alpha_presence);
-    llama_sampling_softmax_impl(&candidates_p);
+    llama_constraint_penalties_impl(&candidates_p, token_count, repeat_penalty, alpha_frequency, alpha_presence);
+    llama_constraint_softmax_impl(&candidates_p);
     DUMP(&candidates_p);
 
     GGML_ASSERT(candidates_p.size == expected_probs.size());
@@ -176,16 +176,16 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
 
     for (auto s : samplers_sequence) {
         switch (s){
-            case 'k': llama_sampling_top_k_impl(&candidates_p, top_k, 1); break;
+            case 'k': llama_constraint_top_k_impl(&candidates_p, top_k, 1); break;
             case 'f': GGML_ABORT("tail_free test not implemented");
             case 'y': GGML_ABORT("typical test not implemented");
-            case 'p': llama_sampling_top_p_impl(&candidates_p, top_p, 1); break;
-            case 'm': llama_sampling_min_p_impl(&candidates_p, min_p, 1); break;
+            case 'p': llama_constraint_top_p_impl(&candidates_p, top_p, 1); break;
+            case 'm': llama_constraint_min_p_impl(&candidates_p, min_p, 1); break;
             case 't': GGML_ABORT("temperature test not implemented");
             default : GGML_ABORT("Unknown sampler");
         }
 
-        llama_sampling_softmax_impl(&candidates_p); // make sure tokens are sorted for tests
+        llama_constraint_softmax_impl(&candidates_p); // make sure tokens are sorted for tests
 
         const int size = candidates_p.size;
 

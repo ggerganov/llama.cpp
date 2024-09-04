@@ -64,14 +64,15 @@ int main(int argc, char ** argv) {
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
-    auto sparams = llama_sampling_default_params();
+    auto sparams = llama_sampler_default_params();
 
     sparams.seed  = params.sparams.seed;
-    sparams.top_k = 40;
-    sparams.top_p = 0.9f;
-    sparams.temp  = 0.4f;
 
-    llama_sampling * smpl = llama_sampling_init(model, sparams);
+    llama_sampler * smpl = llama_sampler_init(model, sparams);
+
+    llama_sampler_add_constraint(smpl, llama_constraint_init_top_k(params.sparams.top_k, params.sparams.min_keep));
+    llama_sampler_add_constraint(smpl, llama_constraint_init_top_p(params.sparams.top_p, params.sparams.min_p));
+    llama_sampler_add_constraint(smpl, llama_constraint_init_temp (params.sparams.temp));
 
     if (ctx == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
@@ -174,15 +175,11 @@ int main(int argc, char ** argv) {
 
             const auto * logits = llama_get_logits_ith(ctx, i_batch[i]);
 
-            llama_sampling_set_logits(smpl, logits);
+            llama_sampler_set_logits(smpl, logits);
 
-            llama_sampling_top_k(smpl, nullptr);
-            llama_sampling_top_p(smpl, nullptr);
-            llama_sampling_temp (smpl, nullptr);
+            const llama_token new_token_id = llama_sampler_sample_dist(smpl, nullptr);
 
-            const llama_token new_token_id = llama_sampling_sample_dist(smpl, nullptr);
-
-            //const llama_token new_token_id = llama_sampling_sample_greedy(smpl, nullptr);
+            //const llama_token new_token_id = llama_sampler_sample_greedy(smpl, nullptr);
 
             // is it an end of generation? -> mark the stream as finished
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {
@@ -246,7 +243,7 @@ int main(int argc, char ** argv) {
 
     llama_batch_free(batch);
 
-    llama_sampling_free(smpl);
+    llama_sampler_free(smpl);
     llama_free(ctx);
     llama_free_model(model);
 

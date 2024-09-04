@@ -106,7 +106,7 @@ static void sigint_handler(int signo) {
         } else {
             console::cleanup();
             printf("\n");
-            llama_print_timings(*g_ctx, (*g_smpl)->smpl);
+            gpt_print_timings(*g_ctx, *g_smpl);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
             _exit(130);
         }
@@ -928,7 +928,7 @@ int main(int argc, char ** argv) {
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
-    llama_print_timings(ctx, smpl->smpl);
+    gpt_print_timings(ctx, smpl);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     gpt_sampler_free(smpl);

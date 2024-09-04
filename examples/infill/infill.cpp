@@ -33,7 +33,7 @@
 
 static llama_context           ** g_ctx;
 static llama_model             ** g_model;
-static llama_sampling          ** g_smpl;
+static gpt_sampler             ** g_smpl;
 static gpt_params               * g_params;
 static std::vector<llama_token> * g_input_tokens;
 static std::ostringstream       * g_output_ss;
@@ -93,7 +93,7 @@ static void sigint_handler(int signo) {
         } else {
             console::cleanup();
             printf("\n");
-            llama_print_timings(*g_ctx, *g_smpl);
+            gpt_print_timings(*g_ctx, *g_smpl);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
             _exit(130);
         }
@@ -167,7 +167,7 @@ int main(int argc, char ** argv) {
 
     llama_model * model = nullptr;
     llama_context * ctx = nullptr;
-    llama_sampling * smpl = nullptr;
+    gpt_sampler  * smpl = nullptr;
 
     g_model = &model;
     g_ctx = &ctx;
@@ -345,7 +345,7 @@ int main(int argc, char ** argv) {
 
     std::vector<llama_token> embd;
 
-    smpl = llama_sampling_init(model, sparams);
+    smpl = gpt_sampler_init(model, sparams);
 
     while (n_remain != 0 || params.interactive) {
         // predict
@@ -417,9 +417,9 @@ int main(int argc, char ** argv) {
         embd.clear();
 
         if ((int) embd_inp.size() <= n_consumed && !is_interacting) {
-            const llama_token id = llama_sampling_sample(smpl, ctx, -1);
+            const llama_token id = gpt_sampler_sample(smpl, ctx, -1);
 
-            llama_sampling_accept(smpl, id, true);
+            gpt_sampler_accept(smpl, id, true);
 
             // LOG("last: %s\n", LOG_TOKENS_TOSTR_PRETTY(ctx, smpl->prev.to_vector()).c_str());
 
@@ -440,7 +440,7 @@ int main(int argc, char ** argv) {
 
                 // push the prompt in the sampling context in order to apply repetition penalties later
                 // for the prompt, we don't apply grammar rules
-                llama_sampling_accept(smpl, embd_inp[n_consumed], false);
+                gpt_sampler_accept(smpl, embd_inp[n_consumed], false);
 
                 ++n_consumed;
                 if ((int) embd.size() >= params.n_batch) {
@@ -472,7 +472,7 @@ int main(int argc, char ** argv) {
         // if not currently processing queued inputs;
         if ((int) embd_inp.size() <= n_consumed) {
             // deal with eot token in infill mode
-            if ((llama_sampling_last(smpl) == llama_token_eot(model) || is_interacting) && params.interactive){
+            if ((gpt_sampler_last(smpl) == llama_token_eot(model) || is_interacting) && params.interactive){
                 if (is_interacting && !params.interactive_first) {
                     // print an eot token
                     printf("%s", llama_token_to_piece(ctx, llama_token_eot(model)).c_str());
@@ -538,7 +538,7 @@ int main(int argc, char ** argv) {
                 is_interacting = false;
             }
             // deal with end of generation tokens in interactive mode
-            else if (llama_token_is_eog(model, llama_sampling_last(smpl))) {
+            else if (llama_token_is_eog(model, gpt_sampler_last(smpl))) {
                 LOG("found EOS token\n");
 
                 if (params.interactive) {
@@ -611,7 +611,7 @@ int main(int argc, char ** argv) {
 
             if (n_past > 0) {
                 if (is_interacting) {
-                    llama_sampling_reset(smpl);
+                    gpt_sampler_reset(smpl);
                 }
                 is_interacting = false;
             }
@@ -634,13 +634,13 @@ int main(int argc, char ** argv) {
         fflush(stdout);
     }
 
-    llama_print_timings(ctx, smpl);
+    gpt_print_timings(ctx, smpl);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     llama_free(ctx);
     llama_free_model(model);
 
-    llama_sampling_free(smpl);
+    gpt_sampler_free(smpl);
     llama_backend_free();
 
 #ifndef LOG_DISABLE_LOGS

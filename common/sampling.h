@@ -60,15 +60,12 @@ struct gpt_sampler_params {
     std::string print_constraints() const;
 };
 
-struct gpt_sampler {
-    gpt_sampler_params params;
-
-    struct llama_constraint * grmr = nullptr;
-
-    struct llama_sampler * smpl = nullptr;
-};
-
-// llama_sampler API overload
+// gpt_sampler extends llama_sampler with additional functionality:
+//
+//  - grammar support
+//  - custom sampler logic based on the paramerters
+//
+struct gpt_sampler;
 
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params);
 
@@ -79,7 +76,13 @@ struct gpt_sampler * gpt_sampler_cp(gpt_sampler * gsmpl);
 void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool apply_grammar);
 void gpt_sampler_reset (struct gpt_sampler * gsmpl);
 
+void gpt_sampler_set_logits(struct gpt_sampler * gsmpl, const float * logits);
+
+llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl);
+
 llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl);
+
+void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl);
 
 // common sampling implementation:
 //
@@ -88,10 +91,12 @@ llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl);
 // - check if the token fits the grammar (if any)
 // - if not: resample by first applying the grammar constraints and then sampling again (slower path)
 //
-llama_token gpt_sampler_sample(
-        struct gpt_sampler * gsmpl,
-      struct llama_context * ctx,
-                       int   idx);
+llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx);
+
+void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * candidates);
+
+llama_token gpt_sampler_sample_dist  (struct gpt_sampler * gsmpl, llama_token_data_array * candidates);
+llama_token gpt_sampler_sample_greedy(struct gpt_sampler * gsmpl, llama_token_data_array * candidates, bool probs);
 
 // helpers
 

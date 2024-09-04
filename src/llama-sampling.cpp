@@ -421,113 +421,8 @@ void llama_constraint_penalties_impl(
     candidates->sorted = false;
 }
 
-llama_token llama_sampler_sample_mirostat_impl(struct llama_token_data_array * candidates, std::mt19937 & rng, float tau, float eta, int32_t m, int32_t n_vocab, float & mu) {
-    llama_constraint_softmax_impl(candidates);
-
-    // Estimate s_hat using the most probable m tokens
-    float s_hat = 0.0;
-    float sum_ti_bi = 0.0;
-    float sum_ti_sq = 0.0;
-    for (size_t i = 0; i < size_t(m - 1) && i < candidates->size - 1; ++i) {
-        float t_i = logf(float(i + 2) / float(i + 1));
-        float b_i = logf(candidates->data[i].p / candidates->data[i + 1].p);
-        sum_ti_bi += t_i * b_i;
-        sum_ti_sq += t_i * t_i;
-    }
-    s_hat = sum_ti_bi / sum_ti_sq;
-
-    // Compute k from the estimated s_hat and target surprise value
-    float epsilon_hat = s_hat - 1;
-    float k = powf((epsilon_hat * powf(2, mu)) / (1 - powf(n_vocab, -epsilon_hat)), 1 / s_hat);
-
-    // Sample the next word X using top-k sampling
-    llama_constraint_top_k_impl(candidates, int(k), 1);
-    llama_token X = llama_sampler_sample_dist_impl(candidates, rng);
-
-    // Compute error as the difference between observed surprise and target surprise value
-    size_t X_idx = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
-        return candidate.id == X;
-    }));
-    float observed_surprise = -log2f(candidates->data[X_idx].p);
-    float e = observed_surprise - tau;
-
-    // Update mu using the learning rate and error
-    mu = mu - eta * e;
-
-    return X;
-}
-
-llama_token llama_sampler_sample_mirostat_v2_impl(struct llama_token_data_array * candidates, std::mt19937 & rng, float tau, float eta, float & mu) {
-    llama_constraint_softmax_impl(candidates);
-
-    // Truncate the words with surprise values greater than mu
-    candidates->size = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
-        return -log2f(candidate.p) > mu;
-    }));
-
-    if (candidates->size == 0) {
-        candidates->size = 1;
-    }
-
-    // Normalize the probabilities of the remaining words
-    llama_constraint_softmax_impl(candidates);
-
-    // Sample the next word X from the remaining words
-    llama_token X = llama_sampler_sample_dist_impl(candidates, rng);
-
-    // Compute error as the difference between observed surprise and target surprise value
-    size_t X_idx = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
-        return candidate.id == X;
-    }));
-
-    float observed_surprise = -log2f(candidates->data[X_idx].p);
-    float e = observed_surprise - tau;
-
-    // Update mu using the learning rate and error
-    mu = mu - eta * e;
-
-    return X;
-}
-
-llama_token llama_sampler_sample_greedy_impl(llama_token_data_array * candidates, bool probs) {
-    if (probs) {
-        // if probs are needed, we apply softmax to get the probabilities
-        llama_constraint_softmax_impl(candidates);
-
-        // the candidates are sorted, so we can just return the first one
-        return candidates->data[0].id;
-    }
-
-    // return the token with the highest logit
-    auto * max_iter = std::max_element(candidates->data, candidates->data + candidates->size, [](const llama_token_data & a, const llama_token_data & b) {
-        return a.logit < b.logit;
-    });
-
-    llama_token result = max_iter->id;
-
-    return result;
-}
-
-llama_token llama_sampler_sample_dist_impl(struct llama_token_data_array * candidates, std::mt19937 & rng) {
-    llama_constraint_softmax_impl(candidates);
-
-    std::vector<float> probs;
-    probs.reserve(candidates->size);
-
-    for (size_t i = 0; i < candidates->size; ++i) {
-        probs.push_back(candidates->data[i].p);
-    }
-
-    std::discrete_distribution<> dist(probs.begin(), probs.end());
-
-    const int idx = dist(rng);
-    llama_token result = candidates->data[idx].id;
-
-    return result;
-}
-
 //
-// sampling v2
+// sampling
 //
 
 // constraints
@@ -1172,3 +1067,107 @@ int llama_sampler_n_prev_impl(const struct llama_sampler & smpl) {
     return smpl.prev.size();
 }
 
+llama_token llama_sampler_sample_mirostat_impl(struct llama_token_data_array * candidates, std::mt19937 & rng, float tau, float eta, int32_t m, int32_t n_vocab, float & mu) {
+    llama_constraint_softmax_impl(candidates);
+
+    // Estimate s_hat using the most probable m tokens
+    float s_hat = 0.0;
+    float sum_ti_bi = 0.0;
+    float sum_ti_sq = 0.0;
+    for (size_t i = 0; i < size_t(m - 1) && i < candidates->size - 1; ++i) {
+        float t_i = logf(float(i + 2) / float(i + 1));
+        float b_i = logf(candidates->data[i].p / candidates->data[i + 1].p);
+        sum_ti_bi += t_i * b_i;
+        sum_ti_sq += t_i * t_i;
+    }
+    s_hat = sum_ti_bi / sum_ti_sq;
+
+    // Compute k from the estimated s_hat and target surprise value
+    float epsilon_hat = s_hat - 1;
+    float k = powf((epsilon_hat * powf(2, mu)) / (1 - powf(n_vocab, -epsilon_hat)), 1 / s_hat);
+
+    // Sample the next word X using top-k sampling
+    llama_constraint_top_k_impl(candidates, int(k), 1);
+    llama_token X = llama_sampler_sample_dist_impl(candidates, rng);
+
+    // Compute error as the difference between observed surprise and target surprise value
+    size_t X_idx = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
+        return candidate.id == X;
+    }));
+    float observed_surprise = -log2f(candidates->data[X_idx].p);
+    float e = observed_surprise - tau;
+
+    // Update mu using the learning rate and error
+    mu = mu - eta * e;
+
+    return X;
+}
+
+llama_token llama_sampler_sample_mirostat_v2_impl(struct llama_token_data_array * candidates, std::mt19937 & rng, float tau, float eta, float & mu) {
+    llama_constraint_softmax_impl(candidates);
+
+    // Truncate the words with surprise values greater than mu
+    candidates->size = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
+        return -log2f(candidate.p) > mu;
+    }));
+
+    if (candidates->size == 0) {
+        candidates->size = 1;
+    }
+
+    // Normalize the probabilities of the remaining words
+    llama_constraint_softmax_impl(candidates);
+
+    // Sample the next word X from the remaining words
+    llama_token X = llama_sampler_sample_dist_impl(candidates, rng);
+
+    // Compute error as the difference between observed surprise and target surprise value
+    size_t X_idx = std::distance(candidates->data, std::find_if(candidates->data, candidates->data + candidates->size, [&](const llama_token_data & candidate) {
+        return candidate.id == X;
+    }));
+
+    float observed_surprise = -log2f(candidates->data[X_idx].p);
+    float e = observed_surprise - tau;
+
+    // Update mu using the learning rate and error
+    mu = mu - eta * e;
+
+    return X;
+}
+
+llama_token llama_sampler_sample_greedy_impl(llama_token_data_array * candidates, bool probs) {
+    if (probs) {
+        // if probs are needed, we apply softmax to get the probabilities
+        llama_constraint_softmax_impl(candidates);
+
+        // the candidates are sorted, so we can just return the first one
+        return candidates->data[0].id;
+    }
+
+    // return the token with the highest logit
+    auto * max_iter = std::max_element(candidates->data, candidates->data + candidates->size, [](const llama_token_data & a, const llama_token_data & b) {
+        return a.logit < b.logit;
+    });
+
+    llama_token result = max_iter->id;
+
+    return result;
+}
+
+llama_token llama_sampler_sample_dist_impl(struct llama_token_data_array * candidates, std::mt19937 & rng) {
+    llama_constraint_softmax_impl(candidates);
+
+    std::vector<float> probs;
+    probs.reserve(candidates->size);
+
+    for (size_t i = 0; i < candidates->size; ++i) {
+        probs.push_back(candidates->data[i].p);
+    }
+
+    std::discrete_distribution<> dist(probs.begin(), probs.end());
+
+    const int idx = dist(rng);
+    llama_token result = candidates->data[idx].id;
+
+    return result;
+}

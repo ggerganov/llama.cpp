@@ -92,7 +92,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
     return result;
 }
 
-static std::string generate(llama_context * ctx, llama_sampling * smpl, const std::string & prompt, bool stream) {
+static std::string generate(llama_context * ctx, llama_sampler * smpl, const std::string & prompt, bool stream) {
     std::string result;
 
     const llama_model * model = llama_get_model(ctx);
@@ -122,9 +122,9 @@ static std::string generate(llama_context * ctx, llama_sampling * smpl, const st
 
         const auto * logits = llama_get_logits_ith(ctx, bat.n_tokens - 1);
 
-        llama_sampling_set_logits(smpl, logits);
+        llama_sampler_set_logits(smpl, logits);
 
-        llama_token token = llama_sampling_sample_greedy(smpl, nullptr);
+        llama_token token = llama_sampler_sample_greedy(smpl, nullptr, false);
         if (token == eos_token) {
             break;
         }
@@ -171,7 +171,7 @@ int main(int argc, char * argv[]) {
     // create generation context
     llama_context * ctx = llama_new_context_with_model(model, cparams);
 
-    llama_sampling * smpl = llama_sampling_init(model, llama_sampling_default_params());
+    llama_sampler * smpl = llama_sampler_init(model, llama_sampler_default_params());
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic
@@ -212,7 +212,7 @@ int main(int argc, char * argv[]) {
         std::string response = generate(ctx, smpl, prompt, true);
     }
 
-    llama_sampling_free(smpl);
+    llama_sampler_free(smpl);
     llama_free(ctx);
     llama_free_model(model);
     llama_backend_free();

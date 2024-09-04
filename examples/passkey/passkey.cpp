@@ -83,7 +83,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_sampling * smpl = llama_sampling_init(model, llama_sampling_default_params());
+    llama_sampler * smpl = llama_sampler_init(model, llama_sampler_default_params());
 
     // tokenize the prompt
     std::vector<llama_token> tokens_list;
@@ -218,10 +218,10 @@ int main(int argc, char ** argv) {
         {
             const auto * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
 
-            llama_sampling_set_logits(smpl, logits);
+            llama_sampler_set_logits(smpl, logits);
 
             // sample the most likely token
-            const llama_token new_token_id = llama_sampling_sample_greedy(smpl, nullptr);
+            const llama_token new_token_id = llama_sampler_sample_greedy(smpl, nullptr, false);
 
             // is it an end of generation?
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
@@ -262,9 +262,10 @@ int main(int argc, char ** argv) {
 
     fprintf(stderr, "\n");
 
+    llama_sampler_free(smpl);
+
     llama_batch_free(batch);
 
-    llama_sampling_free(smpl);
     llama_free(ctx);
     llama_free_model(model);
 

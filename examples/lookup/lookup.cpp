@@ -104,7 +104,7 @@ int main(int argc, char ** argv){
 
     bool has_eos = false;
 
-    struct llama_sampling * smpl = llama_sampling_init(model, params.sparams);
+    struct gpt_sampler * smpl = gpt_sampler_init(model, params.sparams);
 
     std::vector<llama_token> draft;
 
@@ -128,9 +128,9 @@ int main(int argc, char ** argv){
         int i_dft = 0;
         while (true) {
             // sample from the target model
-            llama_token id = llama_sampling_sample(smpl, ctx, i_dft);
+            llama_token id = gpt_sampler_sample(smpl, ctx, i_dft);
 
-            llama_sampling_accept(smpl, id, true);
+            gpt_sampler_accept(smpl, id, true);
 
             const std::string token_str = llama_token_to_piece(ctx, id);
 
@@ -239,9 +239,10 @@ int main(int argc, char ** argv){
     LOG_TEE("accept       = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
     LOG_TEE("\ntarget:\n");
-    llama_print_timings(ctx, smpl);
+    gpt_print_timings(ctx, smpl);
 
-    llama_sampling_free(smpl);
+    gpt_sampler_free(smpl);
+
     llama_batch_free(batch_tgt);
 
     llama_free(ctx);
