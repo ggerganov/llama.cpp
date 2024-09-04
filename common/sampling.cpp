@@ -120,7 +120,7 @@ struct gpt_sampler * gpt_sampler_cp(gpt_sampler * gsmpl) {
         /* .bias   = */ llama_constraint_cp(gsmpl->bias),
         /* .pnlt   = */ llama_constraint_cp(gsmpl->pnlt),
         /* .grmr   = */ llama_constraint_cp(gsmpl->grmr),
-        /* .smpl   = */ llama_sampler_cp(gsmpl->smpl)
+        /* .smpl   = */ llama_sampler_cp   (gsmpl->smpl)
     };
 }
 
@@ -158,7 +158,7 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_token_da
     return llama_sampler_sample(gsmpl->smpl, cur_p);
 }
 
-llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx) {
+llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first) {
     auto & bias = gsmpl->bias;
     auto & pnlt = gsmpl->pnlt;
     auto & grmr = gsmpl->grmr;
@@ -173,9 +173,17 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     llama_constraint_apply(bias, cur_p);
     llama_constraint_apply(pnlt, cur_p);
 
+    if (grammar_first) {
+        llama_constraint_apply(grmr, cur_p);
+    }
+
     llama_sampler_apply(smpl, cur_p);
 
     const llama_token id = llama_sampler_sample(smpl, cur_p);
+
+    if (grammar_first) {
+        return id;
+    }
 
     // check if it the sampled token fits the grammar
     {

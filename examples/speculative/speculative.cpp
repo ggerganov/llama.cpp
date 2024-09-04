@@ -228,19 +228,12 @@ int main(int argc, char ** argv) {
                 bool accept = false;
                 if (params.sparams.temp > 0) {
                     // stochastic verification
-                    const float * logits = llama_get_logits_ith(ctx_tgt, drafts[s_keep].i_batch_tgt[i_dft]);
-
-                    gpt_sampler_set_logits(smpl, logits);
+                    gpt_sampler_sample(smpl, ctx_tgt, drafts[s_keep].i_batch_tgt[i_dft], true);
 
                     auto & dist_tgt = *gpt_sampler_get_candidates(smpl);
 
-                    gpt_sampler_apply_grammar(smpl, &dist_tgt);
-                    llama_constraint_apply(softmax, &dist_tgt);
-
                     float p_tgt = 0.0f;
                     float p_dft = 0.0f;
-
-                    // GGML_ASSERT(dist_tgt.size() == dist_dft.size());
 
                     while (active_seqs.size() > 0) {
                         // randomly select a sequence to verify from active sequences
@@ -259,9 +252,13 @@ int main(int argc, char ** argv) {
                             }
                             continue;
                         }
+
                         LOG("verifying sequence #%d at pos #%d from %d active sequence(s)\n", s, i_dft, (int) active_seqs.size());
                         float r = u_dist(rng);
                         llama_token_data_array dist_dft = { drafts[s].dists[i_dft].data() , drafts[s].dists[i_dft].size(), true };
+
+                        //GGML_ASSERT(dist_tgt.size <= dist_dft.size);
+
                         // acquire the token probabilities assigned by the draft and target models
                         for (size_t i = 0; i < dist_tgt.size; i++) {
                             if (dist_tgt.data[i].id == drafts[s].tokens[i_dft]) {
@@ -291,7 +288,6 @@ int main(int argc, char ** argv) {
                             // calculate residual probability
                             GGML_ASSERT(dist_tgt.sorted);
                             GGML_ASSERT(dist_dft.sorted);
-                            float sum_probs = 0.0f;
 
                             // sort dist by id
                             std::sort(dist_tgt.data, dist_tgt.data + dist_tgt.size, [](const llama_token_data &a, const llama_token_data &b) {
@@ -301,10 +297,18 @@ int main(int argc, char ** argv) {
                                 return a.id < b.id;
                             });
 
+                            float sum_probs = 0.0f;
+
                             for (size_t i = 0; i < dist_tgt.size; i++) {
-                                dist_tgt.data[i].p = std::max(0.0f, dist_tgt.data[i].p - dist_dft.data[i].p);
+                                if (i < dist_dft.size) {
+                                    dist_tgt.data[i].p = std::max(0.0f, dist_tgt.data[i].p - dist_dft.data[i].p);
+                                } else {
+                                    dist_tgt.data[i].p = std::max(0.0f, dist_tgt.data[i].p);
+                                }
+
                                 sum_probs += dist_tgt.data[i].p;
                             }
+
                             for (size_t i = 0; i < dist_tgt.size; i++) {
                                 dist_tgt.data[i].p /= sum_probs;
                             }
@@ -334,7 +338,16 @@ int main(int argc, char ** argv) {
                         // all drafted tokens were rejected
                         // sample from the target model
                         LOG("all drafted tokens were rejected, sampling from residual distribution\n");
-                        token_id = gpt_sampler_sample(smpl, &dist_tgt);
+                        std::vector<float> probs(dist_tgt.size);
+                        for (size_t i = 0; i < dist_tgt.size; ++i) {
+                            probs[i] = dist_tgt.data[i].p;
+                        }
+
+                        std::discrete_distribution<> dist(probs.begin(), probs.end());
+
+                        const int idx = dist(rng);
+
+                        token_id = dist_tgt.data[idx].id;
                         gpt_sampler_accept(smpl, token_id, true);
                         token_str = llama_token_to_piece(ctx_tgt, token_id);
                     }
@@ -467,7 +480,7 @@ int main(int argc, char ** argv) {
                     continue;
                 }
 
-                gpt_sampler_sample(drafts[s].smpl, ctx_dft, drafts[s].i_batch_dft);
+                gpt_sampler_sample(drafts[s].smpl, ctx_dft, drafts[s].i_batch_dft, true);
 
                 const auto * cur_p = gpt_sampler_get_candidates(drafts[s].smpl);
 
@@ -511,7 +524,6 @@ int main(int argc, char ** argv) {
                             gpt_sampler_free(drafts[n_seq_cur].smpl);
                         }
                         drafts[n_seq_cur].smpl = gpt_sampler_cp(drafts[s].smpl);
-
 
                         sa.push_back(n_seq_cur);
 

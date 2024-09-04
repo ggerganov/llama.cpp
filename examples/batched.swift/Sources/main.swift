@@ -141,9 +141,7 @@ while n_cur <= n_len {
 
         llama_sampler_set_logits(smpl, logits)
 
-        let new_token_id = llama_sampler_sample_dist(smpl, nil)
-
-        // const llama_token new_token_id = llama_sampler_sample_greedy(smpl, nil, false);
+        let new_token_id = llama_sampler_sample(smpl, nil)
 
         // is it an end of stream? -> mark the stream as finished
         if llama_token_is_eog(model, new_token_id) || n_cur == n_len {

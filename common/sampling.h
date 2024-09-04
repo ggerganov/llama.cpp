@@ -92,7 +92,10 @@ void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl);
 // - check if the token fits the grammar (if any)
 // - if not: resample by first applying the grammar constraints and then sampling again (slower path)
 //
-llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx);
+// if grammar_first is true, the grammar is applied before the constraints (slower)
+// useful in cases where all the resulting candidates must fit the grammar
+//
+llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first = false);
 
 // helpers
 
