@@ -56,7 +56,6 @@ const std::vector<std::pair<std::string, struct ggml_tensor *>> & llama_internal
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 template<typename T>
 struct ring_buffer {
-    ring_buffer() {}
     ring_buffer(size_t cap) : capacity(cap), data(cap) {}
 
     T & front() {

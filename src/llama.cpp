@@ -17938,6 +17938,7 @@ struct llama_context_params llama_context_default_params() {
 struct llama_sampler_params llama_sampler_default_params() {
     struct llama_sampler_params result = {
         /*.seed              =*/ LLAMA_DEFAULT_SEED,
+        /*.n_prev            =*/ 256,
         /*.mirostat          =*/ 0,
         /*.mirostat_tau      =*/ 5.00f,
         /*.mirostat_eta      =*/ 0.10f,

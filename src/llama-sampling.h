@@ -111,9 +111,9 @@ struct llama_sampler {
 
     // timing
 
-    mutable int64_t t_sample_us = 0;
+    mutable int64_t t_sample_us;
 
-    mutable int32_t n_sample = 0;
+    mutable int32_t n_sample;
 };
 
 struct llama_sampler * llama_sampler_init_impl (const struct llama_vocab   & vocab, struct llama_sampler_params params);

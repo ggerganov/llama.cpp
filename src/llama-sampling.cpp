@@ -983,7 +983,7 @@ struct llama_constraint * llama_constraint_init_penalties_impl(const struct llam
             /*.penalty_present =*/ penalty_present,
             /*.penalize_nl     =*/ penalize_nl,
             /*.ignore_eos      =*/ ignore_eos,
-            /*.prev            =*/ {},
+            /*.prev            =*/ ring_buffer<llama_token>(penalty_last_n),
         },
     };
 
@@ -1069,12 +1069,20 @@ void llama_constraint_reset_impl(struct llama_constraint & cnstr) {
 // samplers
 
 struct llama_sampler * llama_sampler_init_impl(const struct llama_vocab & vocab, struct llama_sampler_params params) {
-    auto * result = new llama_sampler;
+    auto * result = new llama_sampler {
+        /* .params = */ params,
+        /* .vocab  = */ &vocab,
 
-    result->params = params;
-    result->vocab = &vocab;
+        /* .rng = */ std::mt19937(params.seed),
 
-    result->rng.seed(params.seed);
+        /* .mirostat_mu = */ 0.0f,
+        /* .prev        = */ { (size_t) params.n_prev },
+        /* .constraints = */ {},
+        /* .cur         = */ {},
+        /* .cur_p       = */ {},
+        /* .t_sample_us = */ 0,
+        /* .n_sample    = */ 0,
+    };
 
     return result;
 }
@@ -1092,9 +1100,20 @@ void llama_sampler_free_impl(struct llama_sampler * smpl) {
 }
 
 struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) {
-    auto * result = new llama_sampler;
+    auto * result = new llama_sampler {
+        /* .params = */ smpl.params,
+        /* .vocab  = */ smpl.vocab,
 
-    *result = smpl;
+        /* .rng = */ smpl.rng,
+
+        /* .mirostat_mu = */ smpl.mirostat_mu,
+        /* .prev        = */ smpl.prev,
+        /* .constraints = */ {},
+        /* .cur         = */ {},
+        /* .cur_p       = */ {},
+        /* .t_sample_us = */ 0,
+        /* .n_sample    = */ 0,
+    };
 
     // copy the constraints objects
     result->constraints.clear();

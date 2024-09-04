@@ -375,6 +375,8 @@ extern "C" {
     typedef struct llama_sampler_params {
         uint32_t seed; // the seed used to initialize the rng of the sampler
 
+        int32_t n_prev; // size of ring buffer to keep previous accepted tokens (needed for llama_sampler_prev_ API)
+
         int32_t mirostat;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
         float   mirostat_tau; // target entropy
         float   mirostat_eta; // learning rate

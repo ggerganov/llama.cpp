@@ -38,6 +38,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
     llama_sampler_params lparams = llama_sampler_default_params();
 
     lparams.seed         = params.seed;
+    lparams.n_prev       = params.n_prev;
     lparams.mirostat     = params.mirostat;
     lparams.mirostat_tau = params.mirostat_tau;
     lparams.mirostat_eta = params.mirostat_eta;
@@ -177,8 +178,10 @@ llama_token gpt_sampler_sample(
 
     llama_sampler_set_logits(smpl, llama_get_logits_ith(ctx, idx));
 
+    auto * cur_p = llama_sampler_get_candidates(smpl);
+
     // first, sample the token without any grammar constraints
-    const llama_token id = gpt_sampler_sample(smpl, nullptr, params.temp, params.mirostat, params.n_probs);
+    const llama_token id = gpt_sampler_sample(smpl, cur_p, params.temp, params.mirostat, params.n_probs);
 
     // create an array with a single token data element for the sampled id
     llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
@@ -194,7 +197,6 @@ llama_token gpt_sampler_sample(
 
     // if the token is not valid, sample again, after applying the grammar constraints
     llama_sampler_set_logits(smpl, llama_get_logits_ith(ctx, idx));
-    auto * cur_p = llama_sampler_get_candidates(smpl);
 
     llama_constraint_apply(grmr, cur_p);
 
