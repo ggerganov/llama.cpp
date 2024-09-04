@@ -855,6 +855,8 @@ struct llama_constraint * llama_constraint_init_mirostat_v2_impl(float tau, floa
 // grammar
 
 struct llama_constraint_context_grammar {
+    const struct llama_vocab * vocab;
+
     std::string grammar_str;
     std::string grammar_root;
 
@@ -889,7 +891,7 @@ static struct llama_constraint_i llama_constraint_grammar_i = {
     /* .copy   = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx_src = (const llama_constraint_context_grammar *) cnstr->ctx;
 
-        auto * result = llama_constraint_init_grammar_impl(*ctx_src->grammar->vocab, nullptr, nullptr);
+        auto * result = llama_constraint_init_grammar_impl(*ctx_src->vocab, nullptr, nullptr);
 
         auto * ctx_dst = (llama_constraint_context_grammar *) result->ctx;
         if (ctx_src->grammar) {
@@ -917,12 +919,14 @@ struct llama_constraint * llama_constraint_init_grammar_impl(const struct llama_
 
     if (grammar_str != nullptr && grammar_str[0] != '\0') {
         *ctx = {
+            /*.vocab        = */ &vocab,
             /*.grammar_str  = */ grammar_str,
             /*.grammar_root = */ grammar_root,
             /*.grammar      = */ llama_grammar_init_impl(&vocab, grammar_str, grammar_root),
         };
     } else {
         *ctx = {
+            /*.vocab        = */ &vocab,
             /*.grammar_str  = */ {},
             /*.grammar_root = */ {},
             /*.grammar      = */ nullptr,

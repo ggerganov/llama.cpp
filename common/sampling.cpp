@@ -132,7 +132,7 @@ void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool appl
     llama_sampler_accept(gsmpl->smpl, token);
 }
 
-void gpt_sampler_reset (struct gpt_sampler * gsmpl) {
+void gpt_sampler_reset(struct gpt_sampler * gsmpl) {
     llama_constraint_reset(gsmpl->grmr);
 
     llama_sampler_reset(gsmpl->smpl);

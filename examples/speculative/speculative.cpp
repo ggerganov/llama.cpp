@@ -37,9 +37,6 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    // for probabilities to be computed even with temp = 0
-    params.sparams.n_probs = 16;
-
     // max number of parallel drafting sequences (i.e. tree branches)
     const int n_seq_dft = params.n_parallel;
 
