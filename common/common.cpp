@@ -841,15 +841,15 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.defrag_thold = std::stof(argv[i]);
         return true;
     }
-    if (arg == "--samplers") {
+    if (arg == "--samplers" || arg == "--constraints") {
         CHECK_ARG
-        const auto sampler_names = string_split(argv[i], ';');
-        sparams.samplers = llama_sampling_types_from_names(sampler_names, true);
+        const auto constraint_names = string_split(argv[i], ';');
+        sparams.constraints = gpt_constraint_types_from_names(constraint_names, true);
         return true;
     }
     if (arg == "--sampling-seq") {
         CHECK_ARG
-        sparams.samplers = llama_sampling_types_from_chars(argv[i]);
+        sparams.constraints = gpt_constraint_types_from_chars(argv[i]);
         return true;
     }
     if (arg == "--top-p") {
@@ -1706,13 +1706,13 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
 void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     const auto & sparams = params.sparams;
 
-    std::string sampler_type_chars;
-    std::string sampler_type_names;
-    for (const auto & sampler : sparams.samplers) {
-        sampler_type_chars += llama_sampling_type_to_chr(sampler);
-        sampler_type_names += llama_sampling_type_to_str(sampler) + ";";
+    std::string constraint_type_chars;
+    std::string constraint_type_names;
+    for (const auto & constraint : sparams.constraints) {
+        constraint_type_chars += gpt_constraint_type_to_chr(constraint);
+        constraint_type_names += gpt_constraint_type_to_str(constraint) + ";";
     }
-    sampler_type_names.pop_back();
+    constraint_type_names.pop_back();
 
     struct option_info {
         LLAMA_COMMON_ATTRIBUTE_FORMAT(4, 5)
@@ -1826,9 +1826,9 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "sampling" });
     options.push_back({ "*",           "-s,    --seed SEED",            "RNG seed (default: %d, use random seed for < 0)", sparams.seed });
     options.push_back({ "*",           "       --samplers SAMPLERS",    "samplers that will be used for generation in the order, separated by \';\'\n"
-                                                                        "(default: %s)", sampler_type_names.c_str() });
+                                                                        "(default: %s)", constraint_type_names.c_str() });
     options.push_back({ "*",           "       --sampling-seq SEQUENCE",
-                                                                        "simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str() });
+                                                                        "simplified sequence for samplers that will be used (default: %s)", constraint_type_chars.c_str() });
     options.push_back({ "*",           "       --ignore-eos",           "ignore end of stream token and continue generating (implies --logit-bias EOS-inf)" });
     options.push_back({ "*",           "       --penalize-nl",          "penalize newline tokens (default: %s)", sparams.penalize_nl ? "true" : "false" });
     options.push_back({ "*",           "       --temp T",               "temperature (default: %.1f)", (double)sparams.temp });

@@ -118,7 +118,7 @@ struct gpt_params {
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
-    struct gpt_sampling_params sparams;
+    struct gpt_sampler_params sparams;
 
     std::string model                = ""; // model path
     std::string model_draft          = ""; // draft model for speculative decoding
