@@ -17,6 +17,7 @@
 #include <set>
 #include <unordered_map>
 #include <tuple>
+#include <functional>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
