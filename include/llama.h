@@ -1046,13 +1046,26 @@ extern "C" {
         llama_constraint_context_t   ctx;
     };
 
+    /// @details Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
     LLAMA_API struct llama_constraint * llama_constraint_init_softmax    (void);
+
+    /// @details Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
     LLAMA_API struct llama_constraint * llama_constraint_init_top_k      (int32_t k);
+
+    /// @details Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
     LLAMA_API struct llama_constraint * llama_constraint_init_top_p      (float   p, int32_t min_keep);
+
+    /// @details Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841
     LLAMA_API struct llama_constraint * llama_constraint_init_min_p      (float   p, int32_t min_keep);
+
+    /// @details Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
     LLAMA_API struct llama_constraint * llama_constraint_init_tail_free  (float   z, int32_t min_keep);
+
+    /// @details Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
     LLAMA_API struct llama_constraint * llama_constraint_init_typical    (float   p, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_temp       (float   t);
+
+    /// @details Dynamic temperature implementation (a.k.a. entropy) described in the paper https://arxiv.org/abs/2309.02772.
     LLAMA_API struct llama_constraint * llama_constraint_init_temp_ext   (float   t, float   delta, float exponent);
 
     /// @details Mirostat 1.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
