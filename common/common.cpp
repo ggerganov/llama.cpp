@@ -1625,6 +1625,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
             params.image.emplace_back(value);
         }
     ));
+#ifdef GGML_USE_RPC
     add_opt(llama_arg(
         {"--rpc"}, "SERVERS",
         "comma separated list of RPC servers",
@@ -1632,6 +1633,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
             params.rpc_servers = value;
         }
     ));
+#endif
     add_opt(llama_arg(
         {"--mlock"},
         "force system to keep model in RAM rather than swapping or compressing",
