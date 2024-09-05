@@ -24,7 +24,7 @@ func llama_batch_add(_ batch: inout llama_batch, _ id: llama_token, _ pos: llama
 actor LlamaContext {
     private var model: OpaquePointer
     private var context: OpaquePointer
-    private var sampling: OpaquePointer
+    private var sampling: llama_sampler
     private var batch: llama_batch
     private var tokens_list: [llama_token]
     var is_done: Bool = false

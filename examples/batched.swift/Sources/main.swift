@@ -61,9 +61,9 @@ defer {
     llama_sampler_free(smpl)
 }
 
-llama_sampler_sampler_add(smpl, llama_sampler_init_top_k(40));
-llama_sampler_sampler_add(smpl, llama_sampler_init_top_p(0.9, 1));
-llama_sampler_sampler_add(smpl, llama_sampler_init_temp (0.4));
+llama_sampler_chain_add(smpl, llama_sampler_init_top_k(40));
+llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.9, 1));
+llama_sampler_chain_add(smpl, llama_sampler_init_temp (0.4));
 
 let n_ctx = llama_n_ctx(context)
 
