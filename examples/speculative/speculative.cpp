@@ -451,7 +451,7 @@ int main(int argc, char ** argv) {
         if (drafts[0].smpl) {
             gpt_sampler_free(drafts[0].smpl);
         }
-        drafts[0].smpl = gpt_sampler_cp(smpl);
+        drafts[0].smpl = gpt_sampler_clone(smpl);
 
         int n_seq_cur  = 1;
         int n_past_cur = n_past_dft;
@@ -523,7 +523,7 @@ int main(int argc, char ** argv) {
                         if (drafts[n_seq_cur].smpl) {
                             gpt_sampler_free(drafts[n_seq_cur].smpl);
                         }
-                        drafts[n_seq_cur].smpl = gpt_sampler_cp(drafts[s].smpl);
+                        drafts[n_seq_cur].smpl = gpt_sampler_clone(drafts[s].smpl);
 
                         sa.push_back(n_seq_cur);
 

@@ -114,13 +114,13 @@ void gpt_sampler_free(struct gpt_sampler * gsmpl) {
     }
 }
 
-struct gpt_sampler * gpt_sampler_cp(gpt_sampler * gsmpl) {
+struct gpt_sampler * gpt_sampler_clone(gpt_sampler * gsmpl) {
     return new gpt_sampler {
         /* .params = */ gsmpl->params,
-        /* .bias   = */ llama_constraint_cp(gsmpl->bias),
-        /* .pnlt   = */ llama_constraint_cp(gsmpl->pnlt),
-        /* .grmr   = */ llama_constraint_cp(gsmpl->grmr),
-        /* .smpl   = */ llama_sampler_cp   (gsmpl->smpl)
+        /* .bias   = */ llama_constraint_clone(gsmpl->bias),
+        /* .pnlt   = */ llama_constraint_clone(gsmpl->pnlt),
+        /* .grmr   = */ llama_constraint_clone(gsmpl->grmr),
+        /* .smpl   = */ llama_sampler_clone   (gsmpl->smpl)
     };
 }
 

@@ -131,7 +131,7 @@ struct llama_grammar * llama_grammar_init_impl(const struct llama_vocab * vocab,
 
 void llama_grammar_free_impl(struct llama_grammar * grammar);
 
-struct llama_grammar * llama_grammar_cp_impl(const struct llama_grammar & grammar);
+struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & grammar);
 
 // TODO: move the API below as member functions of llama_grammar
 void llama_grammar_apply_impl(

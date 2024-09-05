@@ -1050,7 +1050,7 @@ void llama_grammar_free_impl(struct llama_grammar * grammar) {
     delete grammar;
 }
 
-struct llama_grammar * llama_grammar_cp_impl(const struct llama_grammar & grammar) {
+struct llama_grammar * llama_grammar_clone_impl(const struct llama_grammar & grammar) {
     llama_grammar * result = new llama_grammar { grammar.vocab, grammar.rules, grammar.stacks, grammar.partial_utf8, };
 
     // redirect elements in stacks to point to new rules

@@ -20669,8 +20669,8 @@ LLAMA_API struct llama_constraint * llama_constraint_init_logit_bias(
     return llama_constraint_init_logit_bias_impl(model->vocab, n_logit_bias, logit_bias);
 }
 
-struct llama_constraint * llama_constraint_cp(const struct llama_constraint * cnstr) {
-    return llama_constraint_cp_impl(*cnstr);
+struct llama_constraint * llama_constraint_clone(const struct llama_constraint * cnstr) {
+    return llama_constraint_clone_impl(*cnstr);
 }
 
 void llama_constraint_free(struct llama_constraint * cnstr) {
@@ -20705,8 +20705,8 @@ void llama_sampler_free(struct llama_sampler * smpl) {
     llama_sampler_free_impl(smpl);
 }
 
-struct llama_sampler * llama_sampler_cp(const struct llama_sampler * smpl) {
-    return llama_sampler_cp_impl(*smpl);
+struct llama_sampler * llama_sampler_clone(const struct llama_sampler * smpl) {
+    return llama_sampler_clone_impl(*smpl);
 }
 
 void llama_sampler_reset(struct llama_sampler * smpl) {

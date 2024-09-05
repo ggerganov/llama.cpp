@@ -433,7 +433,7 @@ static struct llama_constraint_i llama_constraint_softmax_i = {
         llama_constraint_softmax_impl(cur_p);
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ nullptr,
+    /* .clone  = */ nullptr,
     /* .free   = */ nullptr,
 };
 
@@ -458,7 +458,7 @@ static struct llama_constraint_i llama_constraint_top_k_i = {
         llama_constraint_top_k_impl(cur_p, ctx->k);
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_top_k *) cnstr->ctx;
         return llama_constraint_init_top_k_impl(ctx->k);
     },
@@ -491,7 +491,7 @@ static struct llama_constraint_i llama_constraint_top_p_i = {
         llama_constraint_top_p_impl(cur_p, ctx->p, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_top_p *) cnstr->ctx;
         return llama_constraint_init_top_p_impl(ctx->p, ctx->min_keep);
     },
@@ -525,7 +525,7 @@ static struct llama_constraint_i llama_constraint_min_p_i = {
         llama_constraint_min_p_impl(cur_p, ctx->p, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_min_p *) cnstr->ctx;
         return llama_constraint_init_min_p_impl(ctx->p, ctx->min_keep);
     },
@@ -559,7 +559,7 @@ static struct llama_constraint_i llama_constraint_tail_free_i = {
         llama_constraint_tail_free_impl(cur_p, ctx->z, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_tail_free *) cnstr->ctx;
         return llama_constraint_init_tail_free_impl(ctx->z, ctx->min_keep);
     },
@@ -593,7 +593,7 @@ static struct llama_constraint_i llama_constraint_typical_i = {
         llama_constraint_typical_impl(cur_p, ctx->p, ctx->min_keep);
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_typical *) cnstr->ctx;
         return llama_constraint_init_typical_impl(ctx->p, ctx->min_keep);
     },
@@ -626,7 +626,7 @@ static struct llama_constraint_i llama_constraint_temp_i = {
         llama_constraint_temp_impl(cur_p, ctx->temp);
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_temp *) cnstr->ctx;
         return llama_constraint_init_temp_impl(ctx->temp);
     },
@@ -667,7 +667,7 @@ static struct llama_constraint_i llama_constraint_temp_ext_i = {
         }
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_temp_ext *) cnstr->ctx;
         return llama_constraint_init_temp_ext_impl(ctx->temp, ctx->delta, ctx->exponent);
     },
@@ -754,7 +754,7 @@ static struct llama_constraint_i llama_constraint_mirostat_i = {
         auto * ctx = (llama_constraint_context_mirostat *) cnstr->ctx;
         ctx->mu = 2.0f*ctx->tau;
     },
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_mirostat *) cnstr->ctx;
         return llama_constraint_init_mirostat_impl(*ctx->vocab, ctx->tau, ctx->eta, ctx->m);
     },
@@ -834,7 +834,7 @@ static struct llama_constraint_i llama_constraint_mirostat_v2_i = {
         auto * ctx = (llama_constraint_context_mirostat_v2 *) cnstr->ctx;
         ctx->mu = 2.0f*ctx->tau;
     },
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx = (const llama_constraint_context_mirostat_v2 *) cnstr->ctx;
         return llama_constraint_init_mirostat_v2_impl(ctx->tau, ctx->eta);
     },
@@ -891,7 +891,7 @@ static struct llama_constraint_i llama_constraint_grammar_i = {
         llama_grammar_free_impl(ctx->grammar);
         ctx->grammar = grammar_new;
     },
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx_src = (const llama_constraint_context_grammar *) cnstr->ctx;
 
         auto * result = llama_constraint_init_grammar_impl(*ctx_src->vocab, nullptr, nullptr);
@@ -901,7 +901,7 @@ static struct llama_constraint_i llama_constraint_grammar_i = {
             ctx_dst->grammar_str  = ctx_src->grammar_str;
             ctx_dst->grammar_root = ctx_src->grammar_root;
 
-            ctx_dst->grammar = llama_grammar_cp_impl(*ctx_src->grammar);
+            ctx_dst->grammar = llama_grammar_clone_impl(*ctx_src->grammar);
         }
 
         return result;
@@ -998,7 +998,7 @@ static struct llama_constraint_i llama_constraint_penalties_i = {
         auto * ctx = (llama_constraint_context_penalties *) cnstr->ctx;
         ctx->prev.clear();
     },
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx_src = (const llama_constraint_context_penalties *) cnstr->ctx;
         auto * result = llama_constraint_init_penalties_impl(
                *ctx_src->vocab,
@@ -1059,7 +1059,7 @@ static struct llama_constraint_i llama_constraint_logit_bias_i = {
         }
     },
     /* .reset  = */ nullptr,
-    /* .copy   = */ [](const struct llama_constraint * cnstr) {
+    /* .clone  = */ [](const struct llama_constraint * cnstr) {
         const auto * ctx_src = (const llama_constraint_context_logit_bias *) cnstr->ctx;
         return llama_constraint_init_logit_bias_impl(*ctx_src->vocab, ctx_src->logit_bias.size(), ctx_src->logit_bias.data());
     },
@@ -1083,8 +1083,8 @@ struct llama_constraint * llama_constraint_init_logit_bias_impl(
 
 ////////////////////////////////////////
 
-struct llama_constraint * llama_constraint_cp_impl(const struct llama_constraint & cnstr) {
-    return cnstr.iface->copy ? cnstr.iface->copy(&cnstr) : nullptr;
+struct llama_constraint * llama_constraint_clone_impl(const struct llama_constraint & cnstr) {
+    return cnstr.iface->clone ? cnstr.iface->clone(&cnstr) : nullptr;
 }
 
 void llama_constraint_free_impl(struct llama_constraint * cnstr) {
@@ -1148,7 +1148,7 @@ void llama_sampler_free_impl(struct llama_sampler * smpl) {
     delete smpl;
 }
 
-struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) {
+struct llama_sampler * llama_sampler_clone_impl(const struct llama_sampler & smpl) {
     auto * result = new llama_sampler {
         /* .params = */ smpl.params,
         /* .vocab  = */ smpl.vocab,
@@ -1163,7 +1163,7 @@ struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) 
         /* .n_sample    = */ 0,
     };
 
-    // copy the constraints objects
+    // clone the constraints objects
     result->constraints.clear();
     for (const auto & cnstr : smpl.constraints) {
         if (cnstr->ctx == nullptr) {
@@ -1172,8 +1172,8 @@ struct llama_sampler * llama_sampler_cp_impl(const struct llama_sampler & smpl) 
                 /* .ctx   = */ nullptr,
             });
         } else {
-            GGML_ASSERT(cnstr->iface->copy);
-            result->constraints.push_back(cnstr->iface->copy(cnstr));
+            GGML_ASSERT(cnstr->iface->clone);
+            result->constraints.push_back(cnstr->iface->clone(cnstr));
         }
     }
 
