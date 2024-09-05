@@ -20,11 +20,13 @@
 #if defined(_MSC_VER)
 
 #define m512bh(p) p
+#define m128bh(p) p
 #define m512i(p) p
 
 #else
 
 #define m512bh(p) (__m512bh)(p)
+#define m128bh(p) (__m128bh)(p)
 #define m512i(p) (__m512i)(p)
 
 #endif
@@ -98,6 +100,15 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
     }
     h.bits = (u.i + (0x7fff + ((u.i >> 16) & 1))) >> 16;
     return h;
+}
+
+static inline ggml_bf16_t ggml_make_bf16(uint16_t h) {
+    union {
+        ggml_bf16_t f;
+        uint16_t i;
+    } u;
+    u.i = h;
+    return u.f;
 }
 
 #define GGML_FP32_TO_BF16(x) ggml_compute_fp32_to_bf16(x)
