@@ -1258,7 +1258,18 @@ void llama_sampler_reset_impl(struct llama_sampler & smpl) {
 }
 
 struct llama_sampler * llama_sampler_clone_impl(const struct llama_sampler & smpl) {
-    return smpl.iface->clone ? smpl.iface->clone(&smpl) : nullptr;
+    if (smpl.iface->clone) {
+        return smpl.iface->clone(&smpl);
+    }
+
+    if (smpl.ctx == nullptr) {
+        return new llama_sampler {
+            /* .iface = */ smpl.iface,
+            /* .ctx   = */ nullptr,
+        };
+    }
+
+    GGML_ABORT("the sampler does not support cloning");
 }
 
 void llama_sampler_free_impl(struct llama_sampler * smpl) {

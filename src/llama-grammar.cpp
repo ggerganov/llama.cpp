@@ -3,6 +3,7 @@
 #include "llama-vocab.h"
 #include "llama-sampling.h"
 
+#include <cmath>
 #include <algorithm>
 #include <stdexcept>
 
