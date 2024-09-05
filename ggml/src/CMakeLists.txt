@@ -1061,6 +1061,11 @@ if (NOT MSVC)
     endif()
 endif()
 
+list(LENGTH CMAKE_OSX_ARCHITECTURES OSX_ARCHITECTURES_LENGTH)
+if (OSX_ARCHITECTURES_LENGTH GREATER 1)
+    message(FATAL_ERROR "There's no support for multiple architectures with CMAKE_OSX_ARCHITECTURES.\nPlease use 'lipo -create ...' to create a universal library/binary.")
+endif()
+
 set(ARCH_FLAGS "")
 
 if (CMAKE_OSX_ARCHITECTURES      STREQUAL "arm64" OR
