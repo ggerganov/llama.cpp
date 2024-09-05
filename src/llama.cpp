@@ -214,6 +214,7 @@ enum llm_arch {
     LLM_ARCH_NEMOTRON,
     LLM_ARCH_EXAONE,
     LLM_ARCH_RWKV6,
+    LLM_ARCH_GRANITE,
     LLM_ARCH_UNKNOWN,
 };
 
@@ -264,6 +265,7 @@ static const std::map<llm_arch, const char *> LLM_ARCH_NAMES = {
     { LLM_ARCH_NEMOTRON,        "nemotron"     },
     { LLM_ARCH_EXAONE,          "exaone"       },
     { LLM_ARCH_RWKV6,           "rwkv6"        },
+    { LLM_ARCH_GRANITE,         "granite"      },
     { LLM_ARCH_UNKNOWN,         "(unknown)"    },
 };
 
@@ -303,6 +305,8 @@ enum llm_kv {
     LLM_KV_RESCALE_EVERY_N_LAYERS,
     LLM_KV_TIME_MIX_EXTRA_DIM,
     LLM_KV_TIME_DECAY_EXTRA_DIM,
+    LLM_KV_RESIDUAL_MULTIPLIER,
+    LLM_KV_EMBEDDING_MULTIPLIER,
 
     LLM_KV_ATTENTION_HEAD_COUNT,
     LLM_KV_ATTENTION_HEAD_COUNT_KV,
@@ -317,6 +321,7 @@ enum llm_kv {
     LLM_KV_ATTENTION_KV_LORA_RANK,
     LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT,
     LLM_KV_ATTENTION_SLIDING_WINDOW,
+    LLM_KV_ATTENTION_MULTIPLIER,
 
     LLM_KV_ROPE_DIMENSION_COUNT,
     LLM_KV_ROPE_FREQ_BASE,
@@ -407,6 +412,8 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_RESCALE_EVERY_N_LAYERS,            "%s.rescale_every_n_layers"            },
     { LLM_KV_TIME_MIX_EXTRA_DIM,                "%s.time_mix_extra_dim"                },
     { LLM_KV_TIME_DECAY_EXTRA_DIM,              "%s.time_decay_extra_dim"              },
+    { LLM_KV_RESIDUAL_MULTIPLIER,               "%s.residual_multiplier"               },
+    { LLM_KV_EMBEDDING_MULTIPLIER,              "%s.embedding_multiplier"              },
 
     { LLM_KV_ATTENTION_HEAD_COUNT,             "%s.attention.head_count"             },
     { LLM_KV_ATTENTION_HEAD_COUNT_KV,          "%s.attention.head_count_kv"          },
@@ -421,6 +428,7 @@ static const std::map<llm_kv, const char *> LLM_KV_NAMES = {
     { LLM_KV_ATTENTION_KV_LORA_RANK,           "%s.attention.kv_lora_rank"           },
     { LLM_KV_ATTENTION_RELATIVE_BUCKETS_COUNT, "%s.attention.relative_buckets_count" },
     { LLM_KV_ATTENTION_SLIDING_WINDOW,         "%s.attention.sliding_window"         },
+    { LLM_KV_ATTENTION_MULTIPLIER,             "%s.attention.multiplier"             },
 
     { LLM_KV_ROPE_DIMENSION_COUNT,          "%s.rope.dimension_count"                 },
     { LLM_KV_ROPE_FREQ_BASE,                "%s.rope.freq_base"                       },
@@ -2372,6 +2380,11 @@ struct llama_hparams {
     float f_max_alibi_bias = 0.0f;
     float f_logit_scale    = 0.0f;
 
+    // For Granite architecture
+    float f_residual_multiplier = 0.0f;
+    float f_embedding_multiplier = 0.0f;
+    float f_attention_multiplier = 0.0f;
+
     bool causal_attn   = true;
     bool use_alibi     = false;
     bool attn_soft_cap = false;
@@ -2427,13 +2440,16 @@ struct llama_hparams {
 
         const float EPSILON = 1e-9f;
 
-        if (!is_float_close(this->f_norm_eps,            other.f_norm_eps,            EPSILON)) return true;
-        if (!is_float_close(this->f_norm_rms_eps,        other.f_norm_rms_eps,        EPSILON)) return true;
-        if (!is_float_close(this->rope_attn_factor,      other.rope_attn_factor,      EPSILON)) return true;
-        if (!is_float_close(this->rope_freq_base_train,  other.rope_freq_base_train,  EPSILON)) return true;
-        if (!is_float_close(this->rope_freq_scale_train, other.rope_freq_scale_train, EPSILON)) return true;
-        if (!is_float_close(this->expert_weights_scale,  other.expert_weights_scale,  EPSILON)) return true;
-        if (!is_float_close(this->rope_yarn_log_mul,     other.rope_yarn_log_mul,     EPSILON)) return true;
+        if (!is_float_close(this->f_norm_eps,             other.f_norm_eps,             EPSILON)) return true;
+        if (!is_float_close(this->f_norm_rms_eps,         other.f_norm_rms_eps,         EPSILON)) return true;
+        if (!is_float_close(this->rope_attn_factor,       other.rope_attn_factor,       EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_base_train,   other.rope_freq_base_train,   EPSILON)) return true;
+        if (!is_float_close(this->rope_freq_scale_train,  other.rope_freq_scale_train,  EPSILON)) return true;
+        if (!is_float_close(this->expert_weights_scale,   other.expert_weights_scale,   EPSILON)) return true;
+        if (!is_float_close(this->rope_yarn_log_mul,      other.rope_yarn_log_mul,      EPSILON)) return true;
+        if (!is_float_close(this->f_residual_multiplier,  other.f_residual_multiplier,  EPSILON)) return true;
+        if (!is_float_close(this->f_embedding_multiplier, other.f_embedding_multiplier, EPSILON)) return true;
+        if (!is_float_close(this->f_attention_multiplier, other.f_attention_multiplier, EPSILON)) return true;
 
         return false;
     }
@@ -5406,6 +5422,7 @@ static void llm_load_hparams(
     // arch-specific KVs
     switch (model.arch) {
         case LLM_ARCH_LLAMA:
+        case LLM_ARCH_GRANITE:
             {
                 ml.get_key(LLM_KV_ATTENTION_LAYERNORM_RMS_EPS, hparams.f_norm_rms_eps);
 
@@ -5422,12 +5439,19 @@ static void llm_load_hparams(
                         // granite uses a vocab with len 49152
                         case 32: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
                         case 36: model.type = e_model::MODEL_8B; break; // granite
-                        case 40: model.type = e_model::MODEL_13B; break;
+                        case 40: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : e_model::MODEL_13B; break;
                         case 48: model.type = e_model::MODEL_34B; break;
                         case 60: model.type = e_model::MODEL_30B; break;
                         case 80: model.type = hparams.n_head() == hparams.n_head_kv() ? e_model::MODEL_65B : e_model::MODEL_70B; break;
                         default: model.type = e_model::MODEL_UNKNOWN;
                     }
+                }
+                // Extra multipliers for Granite architecture
+                if (model.arch == LLM_ARCH_GRANITE) {
+                    ml.get_key(LLM_KV_LOGIT_SCALE, hparams.f_logit_scale);
+                    ml.get_key(LLM_KV_RESIDUAL_MULTIPLIER, hparams.f_residual_multiplier);
+                    ml.get_key(LLM_KV_EMBEDDING_MULTIPLIER, hparams.f_embedding_multiplier);
+                    ml.get_key(LLM_KV_ATTENTION_MULTIPLIER, hparams.f_attention_multiplier);
                 }
             } break;
         case LLM_ARCH_MINICPM:
@@ -6716,6 +6740,12 @@ static void llm_load_print_meta(llama_model_loader & ml, llama_model & model) {
     if (model.arch == LLM_ARCH_QWEN2MOE) {
         LLAMA_LOG_INFO("%s: n_ff_exp         = %d\n",     __func__, hparams.n_ff_exp);
         LLAMA_LOG_INFO("%s: n_ff_shexp       = %d\n",     __func__, hparams.n_ff_shexp);
+    }
+
+    if (model.arch == LLM_ARCH_GRANITE) {
+        LLAMA_LOG_INFO("%s: f_embedding_multiplier = %f\n", __func__, hparams.f_embedding_multiplier);
+        LLAMA_LOG_INFO("%s: f_residual_multiplier  = %f\n", __func__, hparams.f_residual_multiplier);
+        LLAMA_LOG_INFO("%s: f_attention_multiplier = %f\n", __func__, hparams.f_attention_multiplier);
     }
 }
 
