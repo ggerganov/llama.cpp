@@ -64,15 +64,13 @@ int main(int argc, char ** argv) {
 
     llama_context * ctx = llama_new_context_with_model(model, ctx_params);
 
-    auto sparams = llama_sampler_default_params();
+    auto sparams = llama_sampler_chain_default_params();
 
-    sparams.seed = params.sparams.seed;
+    llama_sampler * smpl = llama_sampler_chain_init(sparams);
 
-    llama_sampler * smpl = llama_sampler_init(model, sparams);
-
-    llama_sampler_constraint_add(smpl, llama_constraint_init_top_k(params.sparams.top_k));
-    llama_sampler_constraint_add(smpl, llama_constraint_init_top_p(params.sparams.top_p, params.sparams.min_keep));
-    llama_sampler_constraint_add(smpl, llama_constraint_init_temp (params.sparams.temp));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(params.sparams.top_k));
+    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(params.sparams.top_p, params.sparams.min_keep));
+    llama_sampler_chain_add(smpl, llama_sampler_init_temp (params.sparams.temp));
 
     if (ctx == NULL) {
         fprintf(stderr , "%s: error: failed to create the llama_context\n" , __func__);
@@ -173,11 +171,9 @@ int main(int argc, char ** argv) {
                 continue;
             }
 
-            const auto * logits = llama_get_logits_ith(ctx, i_batch[i]);
+            const llama_token new_token_id = llama_sampler_sample(smpl, ctx, i_batch[i]);
 
-            llama_sampler_set_logits(smpl, logits);
-
-            const llama_token new_token_id = llama_sampler_sample(smpl, nullptr);
+            llama_sampler_accept(smpl, new_token_id);
 
             // is it an end of generation? -> mark the stream as finished
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {

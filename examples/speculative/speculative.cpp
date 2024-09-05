@@ -179,7 +179,7 @@ int main(int argc, char ** argv) {
     // target model sampling context (reuse the llama_context's sampling instance)
     struct gpt_sampler * smpl = gpt_sampler_init(model_tgt, params.sparams);
 
-    struct llama_constraint * softmax = llama_constraint_init_softmax();
+    struct llama_sampler * softmax = llama_sampler_init_softmax();
 
     // draft sequence data
     std::vector<seq_draft> drafts(n_seq_dft);
@@ -255,7 +255,7 @@ int main(int argc, char ** argv) {
 
                         LOG("verifying sequence #%d at pos #%d from %d active sequence(s)\n", s, i_dft, (int) active_seqs.size());
                         float r = u_dist(rng);
-                        llama_token_data_array dist_dft = { drafts[s].dists[i_dft].data() , drafts[s].dists[i_dft].size(), true };
+                        llama_token_data_array dist_dft = { drafts[s].dists[i_dft].data() , drafts[s].dists[i_dft].size(), LLAMA_TOKEN_NULL, true };
 
                         //GGML_ASSERT(dist_tgt.size <= dist_dft.size);
 
@@ -625,7 +625,7 @@ int main(int argc, char ** argv) {
         gpt_sampler_free(drafts[s].smpl);
     }
 
-    llama_constraint_free(softmax);
+    llama_sampler_free(softmax);
     llama_batch_free(batch_dft);
 
     llama_free(ctx_tgt);

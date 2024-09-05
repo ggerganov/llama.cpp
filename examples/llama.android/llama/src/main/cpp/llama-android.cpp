@@ -394,12 +394,10 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     if (!la_int_var_value) la_int_var_value = env->GetMethodID(la_int_var, "getValue", "()I");
     if (!la_int_var_inc) la_int_var_inc = env->GetMethodID(la_int_var, "inc", "()V");
 
-    const auto * logits = llama_get_logits_ith(context, batch->n_tokens - 1);
-
-    llama_sampler_set_logits(sampling, logits);
-
     // sample the most likely token
-    const auto new_token_id = llama_sampler_sample(sampling, nullptr);
+    const auto new_token_id = llama_sampler_sample(sampling, context, batch->n_tokens - 1);
+
+    llama_sampler_accept(sampling, new_token_id);
 
     const auto n_cur = env->CallIntMethod(intvar_ncur, la_int_var_value);
     if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {

@@ -43,9 +43,8 @@ actor LlamaContext {
         self.tokens_list = []
         self.batch = llama_batch_init(512, 0, 1)
         self.temporary_invalid_cchars = []
-        var sparams = llama_sampler_default_params()
-        sparams.type = LLAMA_SAMPLER_TYPE_GREEDY
-        self.sampling = llama_sampler_init(context, sparams)
+        var sparams = llama_sampler_chain_default_params()
+        self.sampling = llama_sampler_chain_init(sparams)
     }
 
     deinit {
@@ -148,12 +147,9 @@ actor LlamaContext {
     func completion_loop() -> String {
         var new_token_id: llama_token = 0
 
-        let n_vocab = llama_n_vocab(model)
-        let logits = llama_get_logits_ith(context, batch.n_tokens - 1)
+        new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
 
-        llama_sampler_set_logits(sampling, logits);
-
-        new_token_id = llama_sampler_sample(sampling, nil)
+        llama_sampler_accept(sampling, new_token_id)
 
         if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
             print("\n")

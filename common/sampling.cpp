@@ -2,14 +2,127 @@
 
 #include "common.h"
 
+// the ring buffer works similarly to std::deque, but with a fixed capacity
+// TODO: deduplicate with llama-impl.h
+template<typename T>
+struct ring_buffer {
+    ring_buffer(size_t cap) : capacity(cap), data(cap) {}
+
+    T & front() {
+        if (sz == 0) {
+            throw std::runtime_error("ring buffer is empty");
+        }
+        return data[first];
+    }
+
+    const T & front() const {
+        if (sz == 0) {
+            throw std::runtime_error("ring buffer is empty");
+        }
+        return data[first];
+    }
+
+    T & back() {
+        if (sz == 0) {
+            throw std::runtime_error("ring buffer is empty");
+        }
+        return data[pos];
+    }
+
+    const T & back() const {
+        if (sz == 0) {
+            throw std::runtime_error("ring buffer is empty");
+        }
+        return data[pos];
+    }
+
+    void push_back(const T & value) {
+        if (sz == capacity) {
+            // advance the start when buffer is full
+            first = (first + 1) % capacity;
+        } else {
+            sz++;
+        }
+        data[pos] = value;
+        pos = (pos + 1) % capacity;
+    }
+
+    T pop_front() {
+        if (sz == 0) {
+            throw std::runtime_error("ring buffer is empty");
+        }
+        T value = data[first];
+        first = (first + 1) % capacity;
+        sz--;
+        return value;
+    }
+
+    const T & rat(size_t i) const {
+        if (i >= sz) {
+            throw std::runtime_error("ring buffer: index out of bounds");
+        }
+        return data[(first + sz - i - 1) % capacity];
+    }
+
+    std::vector<T> to_vector() const {
+        std::vector<T> result;
+        result.reserve(sz);
+        for (size_t i = 0; i < sz; i++) {
+            result.push_back(data[(first + i) % capacity]);
+        }
+        return result;
+    }
+
+    void clear() {
+        // here only reset the status of the buffer
+        sz = 0;
+        first = 0;
+        pos = 0;
+    }
+
+    bool empty() const {
+        return sz == 0;
+    }
+
+    size_t size() const {
+        return sz;
+    }
+
+    size_t capacity = 0;
+    size_t sz = 0;
+    size_t first = 0;
+    size_t pos = 0;
+    std::vector<T> data;
+};
+
 struct gpt_sampler {
     gpt_sampler_params params;
 
-    struct llama_constraint * bias;
-    struct llama_constraint * pnlt;
-    struct llama_constraint * grmr;
+    struct llama_sampler * bias;
+    struct llama_sampler * pnlt;
+    struct llama_sampler * grmr;
 
-    struct llama_sampler * smpl;
+    struct llama_sampler * chain;
+
+    ring_buffer<llama_token> prev;
+
+    std::vector<llama_token_data> cur;
+
+    llama_token_data_array cur_p;
+
+    void set_logits(struct llama_context * ctx, int idx) {
+        const auto * logits = llama_get_logits_ith(ctx, idx);
+
+        const int n_vocab = llama_n_vocab(llama_get_model(ctx));
+
+        cur.resize(n_vocab);
+
+        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
+            cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
+        }
+
+        cur_p = { cur.data(), cur.size(), LLAMA_TOKEN_NULL, false };
+    }
 };
 
 std::string gpt_sampler_params::print() const {
@@ -29,28 +142,26 @@ std::string gpt_sampler_params::print() const {
 std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
     std::string result = "\tlogits";
 
-    for (int i = 0; i < llama_sampler_n_constraints(gsmpl->smpl); i++) {
-        const auto * cnstr = llama_sampler_constraint_get(gsmpl->smpl, i);
-        result += std::string(" -> ") + llama_constraint_name(cnstr) + " ";
+    for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
+        const auto * smpl = llama_sampler_chain_get(gsmpl->chain, i);
+        result += std::string(" -> ") + llama_sampler_name(smpl) + " ";
     }
 
     return result;
 }
 
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
-    llama_sampler_params lparams = llama_sampler_default_params();
+    llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
-    lparams.seed   = params.seed;
-    lparams.n_prev = params.n_prev;
-    lparams.type   = params.temp <= 0.0f ? LLAMA_SAMPLER_TYPE_GREEDY : LLAMA_SAMPLER_TYPE_DIST;
+    lparams.no_timing = false;
 
     auto * result = new gpt_sampler {
         /* .params = */ params,
-        /* .bias   = */ llama_constraint_init_logit_bias(
+        /* .bias   = */ llama_sampler_init_logit_bias(
             model,
             params.logit_bias.size(),
             params.logit_bias.data()),
-        /* .pnlt   = */ llama_constraint_init_penalties(
+        /* .pnlt   = */ llama_sampler_init_penalties(
             model,
             params.penalty_last_n,
             params.penalty_repeat,
@@ -58,45 +169,53 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
             params.penalty_present,
             params.penalize_nl,
             params.ignore_eos),
-        /* .grmr   = */ llama_constraint_init_grammar(model, params.grammar.c_str(), "root"),
-        /* .smpl   = */ llama_sampler_init(model, lparams)
+        /* .grmr   = */ llama_sampler_init_grammar(model, params.grammar.c_str(), "root"),
+        /* .chain  = */ llama_sampler_chain_init(lparams),
+        /* .prev   = */ ring_buffer<llama_token>(params.n_prev),
+        /* .cur    = */ {},
+        /* .cur_p  = */ {},
     };
 
     if (params.temp > 0.0f) {
         if (params.mirostat == 0) {
-            for (const auto & cnstr : params.constraints) {
+            for (const auto & cnstr : params.samplers) {
                 switch (cnstr) {
-                    case GPT_CONSTRAINT_TYPE_TOP_K:
-                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_top_k    (params.top_k));
+                    case GPT_SAMPLER_TYPE_TOP_K:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_k    (params.top_k));
                         break;
-                    case GPT_CONSTRAINT_TYPE_TOP_P:
-                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_top_p    (params.top_p, params.min_keep));
+                    case GPT_SAMPLER_TYPE_TOP_P:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_top_p    (params.top_p, params.min_keep));
                         break;
-                    case GPT_CONSTRAINT_TYPE_MIN_P:
-                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_min_p    (params.min_p, params.min_keep));
+                    case GPT_SAMPLER_TYPE_MIN_P:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_min_p    (params.min_p, params.min_keep));
                         break;
-                    case GPT_CONSTRAINT_TYPE_TFS_Z:
-                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_tail_free(params.tfs_z, params.min_keep));
+                    case GPT_SAMPLER_TYPE_TFS_Z:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_tail_free(params.tfs_z, params.min_keep));
                         break;
-                    case GPT_CONSTRAINT_TYPE_TYPICAL_P:
-                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_typical  (params.typ_p, params.min_keep));
+                    case GPT_SAMPLER_TYPE_TYPICAL_P:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_typical  (params.typ_p, params.min_keep));
                         break;
-                    case GPT_CONSTRAINT_TYPE_TEMPERATURE:
-                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    case GPT_SAMPLER_TYPE_TEMPERATURE:
+                        llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext (params.temp, params.dynatemp_range, params.dynatemp_exponent));
                         break;
                     default:
-                        GGML_ASSERT(false && "unknown constraint type");
+                        GGML_ASSERT(false && "unknown sampler type");
                 }
             }
         } else if (params.mirostat == 1) {
-            llama_sampler_constraint_add(result->smpl, llama_constraint_init_temp(params.temp));
-            llama_sampler_constraint_add(result->smpl, llama_constraint_init_mirostat(model, params.mirostat_tau, params.mirostat_eta));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(model, params.mirostat_tau, params.mirostat_eta));
         } else if (params.mirostat == 2) {
-            llama_sampler_constraint_add(result->smpl, llama_constraint_init_temp(params.temp));
-            llama_sampler_constraint_add(result->smpl, llama_constraint_init_mirostat_v2(params.mirostat_tau, params.mirostat_eta));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.mirostat_tau, params.mirostat_eta));
         } else {
             GGML_ASSERT(false && "unknown mirostat version");
         }
+        llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
+        llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
+    } else {
+        llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
+        llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
     }
 
     return result;
@@ -104,11 +223,11 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
 
 void gpt_sampler_free(struct gpt_sampler * gsmpl) {
     if (gsmpl) {
-        llama_constraint_free(gsmpl->bias);
-        llama_constraint_free(gsmpl->pnlt);
-        llama_constraint_free(gsmpl->grmr);
+        llama_sampler_free(gsmpl->bias);
+        llama_sampler_free(gsmpl->pnlt);
+        llama_sampler_free(gsmpl->grmr);
 
-        llama_sampler_free(gsmpl->smpl);
+        llama_sampler_free(gsmpl->chain);
 
         delete gsmpl;
     }
@@ -117,69 +236,66 @@ void gpt_sampler_free(struct gpt_sampler * gsmpl) {
 struct gpt_sampler * gpt_sampler_clone(gpt_sampler * gsmpl) {
     return new gpt_sampler {
         /* .params = */ gsmpl->params,
-        /* .bias   = */ llama_constraint_clone(gsmpl->bias),
-        /* .pnlt   = */ llama_constraint_clone(gsmpl->pnlt),
-        /* .grmr   = */ llama_constraint_clone(gsmpl->grmr),
-        /* .smpl   = */ llama_sampler_clone   (gsmpl->smpl)
+        /* .bias   = */ llama_sampler_clone(gsmpl->bias),
+        /* .pnlt   = */ llama_sampler_clone(gsmpl->pnlt),
+        /* .grmr   = */ llama_sampler_clone(gsmpl->grmr),
+        /* .chain  = */ llama_sampler_clone(gsmpl->chain),
+        /* .prev   = */ gsmpl->prev,
+        /* .cur    = */ gsmpl->cur,
+        /* .cur_p  = */ gsmpl->cur_p,
     };
 }
 
 void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool apply_grammar) {
     if (apply_grammar) {
-        llama_constraint_accept(gsmpl->grmr, token);
+        llama_sampler_accept(gsmpl->grmr, token);
     }
 
-    llama_sampler_accept(gsmpl->smpl, token);
+    llama_sampler_accept(gsmpl->chain, token);
+
+    gsmpl->prev.push_back(token);
 }
 
 void gpt_sampler_reset(struct gpt_sampler * gsmpl) {
-    llama_constraint_reset(gsmpl->grmr);
+    llama_sampler_reset(gsmpl->grmr);
 
-    llama_sampler_reset(gsmpl->smpl);
-}
-
-void gpt_sampler_set_logits(struct gpt_sampler * gsmpl, const float * logits) {
-    llama_sampler_set_logits(gsmpl->smpl, logits);
+    llama_sampler_reset(gsmpl->chain);
 }
 
 llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl) {
-    return llama_sampler_get_candidates(gsmpl->smpl);
+    return &gsmpl->cur_p;
 }
 
 llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl) {
-    return llama_sampler_last(gsmpl->smpl);
+    return gsmpl->prev.rat(0);
 }
 
-void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl) {
-    llama_print_timings(ctx, gsmpl ? gsmpl->smpl : nullptr);
-}
-
-llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_token_data_array * cur_p) {
-    return llama_sampler_sample(gsmpl->smpl, cur_p);
+void gpt_print_timings(const struct llama_context * ctx, const struct gpt_sampler * gsmpl) {
+    llama_print_timings(ctx, gsmpl ? gsmpl->chain : nullptr);
 }
 
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first) {
-    auto & bias = gsmpl->bias;
-    auto & pnlt = gsmpl->pnlt;
-    auto & grmr = gsmpl->grmr;
-    auto & smpl = gsmpl->smpl;
+    auto & bias  = gsmpl->bias;
+    auto & pnlt  = gsmpl->pnlt;
+    auto & grmr  = gsmpl->grmr;
+    auto & chain = gsmpl->chain;
 
-    const auto * logits = llama_get_logits_ith(ctx, idx);
+    gsmpl->set_logits(ctx, idx);
 
-    llama_sampler_set_logits(smpl, logits);
+    auto & cur_p = gsmpl->cur_p;
 
-    auto * cur_p = llama_sampler_get_candidates(smpl);
-
-    llama_constraint_apply(bias, cur_p);
-    llama_constraint_apply(pnlt, cur_p);
+    llama_sampler_apply(bias, &cur_p);
+    llama_sampler_apply(pnlt, &cur_p);
 
     if (grammar_first) {
-        llama_constraint_apply(grmr, cur_p);
+        llama_sampler_apply(grmr, &cur_p);
     }
 
-    llama_sampler_apply(smpl, cur_p);
+    llama_sampler_apply(chain, &cur_p);
 
-    const llama_token id = llama_sampler_sample(smpl, cur_p);
+    const llama_token id = cur_p.data[cur_p.selected].id;
+
+    GGML_ASSERT(id != LLAMA_TOKEN_NULL && "null token in the sampling history - check your sampling configuration");
 
     if (grammar_first) {
         return id;
@@ -188,9 +304,9 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     // check if it the sampled token fits the grammar
     {
         llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
-        llama_token_data_array single_token_data_array = { &single_token_data, 1, false };
+        llama_token_data_array single_token_data_array = { &single_token_data, 1, LLAMA_TOKEN_NULL, false };
 
-        llama_constraint_apply(grmr, &single_token_data_array);
+        llama_sampler_apply(grmr, &single_token_data_array);
 
         // check if the token is valid according to the grammar by seeing if its logit has been set to -INFINITY
         const bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
@@ -199,28 +315,22 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
         }
     }
 
-    // if the token is not valid, sample again, first apply the grammar constraints and then sample
-    llama_sampler_set_logits(smpl, logits);
+    // if the token is not valid, sample again, first apply the grammar samplers and then sample
+    gsmpl->set_logits(ctx, idx);
 
-    llama_constraint_apply(bias, cur_p);
-    llama_constraint_apply(pnlt, cur_p);
-    llama_constraint_apply(grmr, cur_p);
+    llama_sampler_apply(bias, &cur_p);
+    llama_sampler_apply(pnlt, &cur_p);
+    llama_sampler_apply(grmr, &cur_p);
 
-    llama_sampler_apply(smpl, cur_p);
+    llama_sampler_apply(chain, &cur_p);
 
-    return llama_sampler_sample(smpl, cur_p);
-}
+    GGML_ASSERT(cur_p.data[cur_p.selected].id != LLAMA_TOKEN_NULL && "null token in the sampling history - check your sampling configuration");
 
-void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p) {
-    GGML_ASSERT(cur_p != nullptr);
-
-    llama_constraint_apply(gsmpl->grmr, cur_p);
+    return cur_p.data[cur_p.selected].id;
 }
 
 std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx_main, int n) {
-    auto & smpl = gsmpl->smpl;
-
-    n = std::min(n, llama_sampler_n_prev(smpl));
+    n = std::min(n, (int) gsmpl->prev.size());
 
     if (n <= 0) {
         return "";
@@ -230,7 +340,7 @@ std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx_main, 
     result.reserve(8*n); // 8 is the average length of a token [citation needed], TODO: compute this from the vocab
 
     for (int i = n - 1; i >= 0; i--) {
-        const llama_token id = llama_sampler_prev(smpl, i);
+        const llama_token id = gsmpl->prev.rat(i);
 
         GGML_ASSERT(id != LLAMA_TOKEN_NULL && "null token in the sampling history - should not happen");
 
@@ -240,95 +350,95 @@ std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx_main, 
     return result;
 }
 
-char gpt_constraint_type_to_chr(enum gpt_constraint_type cnstr) {
+char gpt_sampler_type_to_chr(enum gpt_sampler_type cnstr) {
     switch (cnstr) {
-        case GPT_CONSTRAINT_TYPE_TOP_K:       return 'k';
-        case GPT_CONSTRAINT_TYPE_TFS_Z:       return 'f';
-        case GPT_CONSTRAINT_TYPE_TYPICAL_P:   return 'y';
-        case GPT_CONSTRAINT_TYPE_TOP_P:       return 'p';
-        case GPT_CONSTRAINT_TYPE_MIN_P:       return 'm';
-        case GPT_CONSTRAINT_TYPE_TEMPERATURE: return 't';
+        case GPT_SAMPLER_TYPE_TOP_K:       return 'k';
+        case GPT_SAMPLER_TYPE_TFS_Z:       return 'f';
+        case GPT_SAMPLER_TYPE_TYPICAL_P:   return 'y';
+        case GPT_SAMPLER_TYPE_TOP_P:       return 'p';
+        case GPT_SAMPLER_TYPE_MIN_P:       return 'm';
+        case GPT_SAMPLER_TYPE_TEMPERATURE: return 't';
         default : return '?';
     }
 }
 
-std::string gpt_constraint_type_to_str(enum gpt_constraint_type cnstr) {
+std::string gpt_sampler_type_to_str(enum gpt_sampler_type cnstr) {
     switch (cnstr) {
-        case GPT_CONSTRAINT_TYPE_TOP_K:       return "top_k";
-        case GPT_CONSTRAINT_TYPE_TFS_Z:       return "tfs_z";
-        case GPT_CONSTRAINT_TYPE_TYPICAL_P:   return "typ_p";
-        case GPT_CONSTRAINT_TYPE_TOP_P:       return "top_p";
-        case GPT_CONSTRAINT_TYPE_MIN_P:       return "min_p";
-        case GPT_CONSTRAINT_TYPE_TEMPERATURE: return "temperature";
+        case GPT_SAMPLER_TYPE_TOP_K:       return "top_k";
+        case GPT_SAMPLER_TYPE_TFS_Z:       return "tfs_z";
+        case GPT_SAMPLER_TYPE_TYPICAL_P:   return "typ_p";
+        case GPT_SAMPLER_TYPE_TOP_P:       return "top_p";
+        case GPT_SAMPLER_TYPE_MIN_P:       return "min_p";
+        case GPT_SAMPLER_TYPE_TEMPERATURE: return "temperature";
         default : return "";
     }
 }
 
-std::vector<gpt_constraint_type> gpt_constraint_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
-    std::unordered_map<std::string, gpt_constraint_type> constraint_canonical_name_map {
-        { "top_k",       GPT_CONSTRAINT_TYPE_TOP_K },
-        { "top_p",       GPT_CONSTRAINT_TYPE_TOP_P },
-        { "typ_p",       GPT_CONSTRAINT_TYPE_TYPICAL_P },
-        { "min_p",       GPT_CONSTRAINT_TYPE_MIN_P },
-        { "tfs_z",       GPT_CONSTRAINT_TYPE_TFS_Z },
-        { "temperature", GPT_CONSTRAINT_TYPE_TEMPERATURE },
+std::vector<gpt_sampler_type> gpt_sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
+    std::unordered_map<std::string, gpt_sampler_type> sampler_canonical_name_map {
+        { "top_k",       GPT_SAMPLER_TYPE_TOP_K },
+        { "top_p",       GPT_SAMPLER_TYPE_TOP_P },
+        { "typ_p",       GPT_SAMPLER_TYPE_TYPICAL_P },
+        { "min_p",       GPT_SAMPLER_TYPE_MIN_P },
+        { "tfs_z",       GPT_SAMPLER_TYPE_TFS_Z },
+        { "temperature", GPT_SAMPLER_TYPE_TEMPERATURE },
     };
 
-    // since constraints names are written multiple ways
+    // since samplers names are written multiple ways
     // make it ready for both system names and input names
-    std::unordered_map<std::string, gpt_constraint_type> constraint_alt_name_map {
-        { "top-k",       GPT_CONSTRAINT_TYPE_TOP_K },
-        { "top-p",       GPT_CONSTRAINT_TYPE_TOP_P },
-        { "nucleus",     GPT_CONSTRAINT_TYPE_TOP_P },
-        { "typical-p",   GPT_CONSTRAINT_TYPE_TYPICAL_P },
-        { "typical",     GPT_CONSTRAINT_TYPE_TYPICAL_P },
-        { "typ-p",       GPT_CONSTRAINT_TYPE_TYPICAL_P },
-        { "typ",         GPT_CONSTRAINT_TYPE_TYPICAL_P },
-        { "min-p",       GPT_CONSTRAINT_TYPE_MIN_P },
-        { "tfs-z",       GPT_CONSTRAINT_TYPE_TFS_Z },
-        { "tfs",         GPT_CONSTRAINT_TYPE_TFS_Z },
-        { "temp",        GPT_CONSTRAINT_TYPE_TEMPERATURE },
+    std::unordered_map<std::string, gpt_sampler_type> sampler_alt_name_map {
+        { "top-k",       GPT_SAMPLER_TYPE_TOP_K },
+        { "top-p",       GPT_SAMPLER_TYPE_TOP_P },
+        { "nucleus",     GPT_SAMPLER_TYPE_TOP_P },
+        { "typical-p",   GPT_SAMPLER_TYPE_TYPICAL_P },
+        { "typical",     GPT_SAMPLER_TYPE_TYPICAL_P },
+        { "typ-p",       GPT_SAMPLER_TYPE_TYPICAL_P },
+        { "typ",         GPT_SAMPLER_TYPE_TYPICAL_P },
+        { "min-p",       GPT_SAMPLER_TYPE_MIN_P },
+        { "tfs-z",       GPT_SAMPLER_TYPE_TFS_Z },
+        { "tfs",         GPT_SAMPLER_TYPE_TFS_Z },
+        { "temp",        GPT_SAMPLER_TYPE_TEMPERATURE },
     };
 
-    std::vector<gpt_constraint_type> constraints;
-    constraints.reserve(names.size());
+    std::vector<gpt_sampler_type> samplers;
+    samplers.reserve(names.size());
 
     for (const auto & name : names) {
-        auto constraint = constraint_canonical_name_map.find(name);
-        if (constraint != constraint_canonical_name_map.end()) {
-            constraints.push_back(constraint->second);
+        auto sampler = sampler_canonical_name_map.find(name);
+        if (sampler != sampler_canonical_name_map.end()) {
+            samplers.push_back(sampler->second);
         } else {
             if (allow_alt_names) {
-                constraint = constraint_alt_name_map.find(name);
-                if (constraint != constraint_alt_name_map.end()) {
-                    constraints.push_back(constraint->second);
+                sampler = sampler_alt_name_map.find(name);
+                if (sampler != sampler_alt_name_map.end()) {
+                    samplers.push_back(sampler->second);
                 }
             }
         }
     }
 
-    return constraints;
+    return samplers;
 }
 
-std::vector<gpt_constraint_type> gpt_constraint_types_from_chars(const std::string & chars) {
-    std::unordered_map<char, gpt_constraint_type> constraint_name_map {
-        { gpt_constraint_type_to_chr(GPT_CONSTRAINT_TYPE_TOP_K),       GPT_CONSTRAINT_TYPE_TOP_K },
-        { gpt_constraint_type_to_chr(GPT_CONSTRAINT_TYPE_TFS_Z),       GPT_CONSTRAINT_TYPE_TFS_Z },
-        { gpt_constraint_type_to_chr(GPT_CONSTRAINT_TYPE_TYPICAL_P),   GPT_CONSTRAINT_TYPE_TYPICAL_P },
-        { gpt_constraint_type_to_chr(GPT_CONSTRAINT_TYPE_TOP_P),       GPT_CONSTRAINT_TYPE_TOP_P },
-        { gpt_constraint_type_to_chr(GPT_CONSTRAINT_TYPE_MIN_P),       GPT_CONSTRAINT_TYPE_MIN_P },
-        { gpt_constraint_type_to_chr(GPT_CONSTRAINT_TYPE_TEMPERATURE), GPT_CONSTRAINT_TYPE_TEMPERATURE }
+std::vector<gpt_sampler_type> gpt_sampler_types_from_chars(const std::string & chars) {
+    std::unordered_map<char, gpt_sampler_type> sampler_name_map {
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TOP_K),       GPT_SAMPLER_TYPE_TOP_K },
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TFS_Z),       GPT_SAMPLER_TYPE_TFS_Z },
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TYPICAL_P),   GPT_SAMPLER_TYPE_TYPICAL_P },
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TOP_P),       GPT_SAMPLER_TYPE_TOP_P },
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_MIN_P),       GPT_SAMPLER_TYPE_MIN_P },
+        { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TEMPERATURE), GPT_SAMPLER_TYPE_TEMPERATURE }
     };
 
-    std::vector<gpt_constraint_type> constraints;
-    constraints.reserve(chars.size());
+    std::vector<gpt_sampler_type> samplers;
+    samplers.reserve(chars.size());
 
     for (const auto & c : chars) {
-        const auto constraint = constraint_name_map.find(c);
-        if (constraint != constraint_name_map.end()) {
-            constraints.push_back(constraint->second);
+        const auto sampler = sampler_name_map.find(c);
+        if (sampler != sampler_name_map.end()) {
+            samplers.push_back(sampler->second);
         }
     }
 
-    return constraints;
+    return samplers;
 }

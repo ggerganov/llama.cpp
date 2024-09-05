@@ -38,10 +38,12 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_sampler_params sparams = llama_sampler_default_params();
-    sparams.seed = params.sparams.seed;
+    auto sparams = llama_sampler_chain_default_params();
 
-    llama_sampler * smpl = llama_sampler_init(model, sparams);
+    llama_sampler * smpl = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl, llama_sampler_init_softmax());
+    llama_sampler_chain_add(smpl, llama_sampler_init_dist(params.sparams.seed));
 
     // tokenize prompt
     auto tokens = llama_tokenize(ctx, params.prompt, true);
@@ -69,12 +71,10 @@ int main(int argc, char ** argv) {
     printf("\nfirst run: %s", params.prompt.c_str());
 
     for (auto i = 0; i < params.n_predict; i++) {
-        const auto * logits = llama_get_logits(ctx);
-
-        llama_sampler_set_logits(smpl, logits);
-
-        auto next_token     = llama_sampler_sample(smpl, nullptr);
+        auto next_token     = llama_sampler_sample(smpl, ctx, -1);
         auto next_token_str = llama_token_to_piece(ctx, next_token);
+
+        llama_sampler_accept(smpl, next_token);
 
         printf("%s", next_token_str.c_str());
         result0 += next_token_str;
@@ -96,7 +96,10 @@ int main(int argc, char ** argv) {
     // make new context
     auto * ctx2 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
 
-    llama_sampler * smpl2 = llama_sampler_init(model, sparams);
+    llama_sampler * smpl2 = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl2, llama_sampler_init_softmax());
+    llama_sampler_chain_add(smpl2, llama_sampler_init_dist(params.sparams.seed));
 
     printf("\nsecond run: %s", params.prompt.c_str());
 
@@ -126,12 +129,10 @@ int main(int argc, char ** argv) {
 
     // second run
     for (auto i = 0; i < params.n_predict; i++) {
-        const auto * logits = llama_get_logits(ctx2);
-
-        llama_sampler_set_logits(smpl2, logits);
-
-        auto next_token     = llama_sampler_sample(smpl2, nullptr);
+        auto next_token     = llama_sampler_sample(smpl2, ctx2, -1);
         auto next_token_str = llama_token_to_piece(ctx2, next_token);
+
+        llama_sampler_accept(smpl2, next_token);
 
         printf("%s", next_token_str.c_str());
         result1 += next_token_str;
@@ -157,7 +158,10 @@ int main(int argc, char ** argv) {
     // make new context
     auto * ctx3 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
 
-    llama_sampler * smpl3 = llama_sampler_init(model, sparams);
+    llama_sampler * smpl3 = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl3, llama_sampler_init_softmax());
+    llama_sampler_chain_add(smpl3, llama_sampler_init_dist(params.sparams.seed));
 
     printf("\nsingle seq run: %s", params.prompt.c_str());
 
@@ -215,12 +219,10 @@ int main(int argc, char ** argv) {
 
     // third run with seq 1 instead of 0
     for (auto i = 0; i < params.n_predict; i++) {
-        const auto * logits = llama_get_logits(ctx3);
-
-        llama_sampler_set_logits(smpl3, logits);
-
-        auto next_token     = llama_sampler_sample(smpl3, nullptr);
+        auto next_token     = llama_sampler_sample(smpl3, ctx3, -1);
         auto next_token_str = llama_token_to_piece(ctx3, next_token);
+
+        llama_sampler_accept(smpl3, next_token);
 
         printf("%s", next_token_str.c_str());
         result2 += next_token_str;

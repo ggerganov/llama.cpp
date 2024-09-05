@@ -5,14 +5,14 @@
 #include <string>
 #include <vector>
 
-enum gpt_constraint_type {
-    GPT_CONSTRAINT_TYPE_NONE        = 0,
-    GPT_CONSTRAINT_TYPE_TOP_K       = 1,
-    GPT_CONSTRAINT_TYPE_TOP_P       = 2,
-    GPT_CONSTRAINT_TYPE_MIN_P       = 3,
-    GPT_CONSTRAINT_TYPE_TFS_Z       = 4,
-    GPT_CONSTRAINT_TYPE_TYPICAL_P   = 5,
-    GPT_CONSTRAINT_TYPE_TEMPERATURE = 6,
+enum gpt_sampler_type {
+    GPT_SAMPLER_TYPE_NONE        = 0,
+    GPT_SAMPLER_TYPE_TOP_K       = 1,
+    GPT_SAMPLER_TYPE_TOP_P       = 2,
+    GPT_SAMPLER_TYPE_MIN_P       = 3,
+    GPT_SAMPLER_TYPE_TFS_Z       = 4,
+    GPT_SAMPLER_TYPE_TYPICAL_P   = 5,
+    GPT_SAMPLER_TYPE_TEMPERATURE = 6,
 };
 
 // sampling parameters
@@ -21,7 +21,7 @@ struct gpt_sampler_params {
 
     int32_t n_prev            = 64;    // number of previous tokens to remember
     int32_t n_probs           = 0;     // if greater than 0, output the probabilities of top n_probs tokens.
-    int32_t min_keep          = 0;     // 0 = disabled, otherwise constraints should return at least min_keep tokens
+    int32_t min_keep          = 0;     // 0 = disabled, otherwise samplers should return at least min_keep tokens
     int32_t top_k             = 40;    // <= 0 to use vocab size
     float   top_p             = 0.95f; // 1.0 = disabled
     float   min_p             = 0.05f; // 0.0 = disabled
@@ -40,13 +40,13 @@ struct gpt_sampler_params {
     bool    penalize_nl       = false; // consider newlines as a repeatable token
     bool    ignore_eos        = false;
 
-    std::vector<enum gpt_constraint_type> constraints = {
-        GPT_CONSTRAINT_TYPE_TOP_K,
-        GPT_CONSTRAINT_TYPE_TFS_Z,
-        GPT_CONSTRAINT_TYPE_TYPICAL_P,
-        GPT_CONSTRAINT_TYPE_TOP_P,
-        GPT_CONSTRAINT_TYPE_MIN_P,
-        GPT_CONSTRAINT_TYPE_TEMPERATURE
+    std::vector<enum gpt_sampler_type> samplers = {
+        GPT_SAMPLER_TYPE_TOP_K,
+        GPT_SAMPLER_TYPE_TFS_Z,
+        GPT_SAMPLER_TYPE_TYPICAL_P,
+        GPT_SAMPLER_TYPE_TOP_P,
+        GPT_SAMPLER_TYPE_MIN_P,
+        GPT_SAMPLER_TYPE_TEMPERATURE
     };
 
     std::string grammar; // optional BNF-like grammar to constrain sampling
@@ -73,40 +73,36 @@ struct gpt_sampler * gpt_sampler_clone(gpt_sampler * gsmpl);
 void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool apply_grammar);
 void gpt_sampler_reset (struct gpt_sampler * gsmpl);
 
-void gpt_sampler_apply_grammar(struct gpt_sampler * gsmpl, llama_token_data_array * cur_p);
-
-void gpt_sampler_set_logits(struct gpt_sampler * gsmpl, const float * logits);
-
 llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl);
 
-llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_token_data_array * cur_p);
+//llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_token_data_array * cur_p);
 
 llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl);
 
-void gpt_print_timings(struct llama_context * ctx, struct gpt_sampler * gsmpl);
+void gpt_print_timings(const struct llama_context * ctx, const struct gpt_sampler * gsmpl);
 
 // extended sampling implementation:
 //
 // - set logits
-// - apply the configured sampling constraints
+// - apply the configured sampler chain
 // - check if the token fits the grammar (if any)
 // - if not: resample by first applying the grammar constraints and then sampling again (slower path)
 //
-// if grammar_first is true, the grammar is applied before the constraints (slower)
+// if grammar_first is true, the grammar is applied before the samplers (slower)
 // useful in cases where all the resulting candidates must fit the grammar
 //
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first = false);
 
 // helpers
 
-// print the constraints into a string
+// print the sampler chain into a string
 std::string gpt_sampler_print(const struct gpt_sampler * gsmpl);
 
 // get a string representation of the last accepted tokens
 std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx, int n);
 
-char        gpt_constraint_type_to_chr(enum gpt_constraint_type cnstr);
-std::string gpt_constraint_type_to_str(enum gpt_constraint_type cnstr);
+char        gpt_sampler_type_to_chr(enum gpt_sampler_type cnstr);
+std::string gpt_sampler_type_to_str(enum gpt_sampler_type cnstr);
 
-std::vector<enum gpt_constraint_type> gpt_constraint_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
-std::vector<enum gpt_constraint_type> gpt_constraint_types_from_chars(const std::string & chars);
+std::vector<enum gpt_sampler_type> gpt_sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names);
+std::vector<enum gpt_sampler_type> gpt_sampler_types_from_chars(const std::string & chars);

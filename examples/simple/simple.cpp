@@ -55,11 +55,9 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    auto sparams = llama_sampler_default_params();
+    auto sparams = llama_sampler_chain_default_params();
 
-    sparams.type = LLAMA_SAMPLER_TYPE_GREEDY;
-
-    llama_sampler * smpl = llama_sampler_init(model, sparams);
+    llama_sampler * smpl = llama_sampler_chain_init(sparams);
 
     // tokenize the prompt
 
@@ -116,12 +114,9 @@ int main(int argc, char ** argv) {
     while (n_cur <= n_predict) {
         // sample the next token
         {
-            const auto * logits = llama_get_logits_ith(ctx, batch.n_tokens - 1);
+            const llama_token new_token_id = llama_sampler_sample(smpl, ctx, batch.n_tokens - 1);
 
-            llama_sampler_set_logits(smpl, logits);
-
-            // sample the most likely token
-            const llama_token new_token_id = llama_sampler_sample(smpl, nullptr);
+            llama_sampler_accept(smpl, new_token_id);
 
             // is it an end of generation?
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {

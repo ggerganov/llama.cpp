@@ -32,6 +32,20 @@ void llama_log_callback_default(ggml_log_level level, const char * text, void * 
 // helpers
 //
 
+struct time_meas {
+    time_meas(int64_t & t_acc, bool disable = false) : t_start_us(disable ? -1 : ggml_time_us()), t_acc(t_acc) {}
+
+    ~time_meas() {
+        if (t_start_us >= 0) {
+            t_acc += ggml_time_us() - t_start_us;
+        }
+    }
+
+    const int64_t t_start_us;
+
+    int64_t & t_acc;
+};
+
 static void replace_all(std::string & s, const std::string & search, const std::string & replace) {
     if (search.empty()) {
         return;

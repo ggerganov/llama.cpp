@@ -1027,17 +1027,17 @@ struct server_context {
         }
 
         {
-            const auto & constraints = data.find("samplers");
-            if (constraints != data.end() && constraints->is_array()) {
-                std::vector<std::string> constraint_names;
-                for (const auto & name : *constraints) {
+            const auto & samplers = data.find("samplers");
+            if (samplers != data.end() && samplers->is_array()) {
+                std::vector<std::string> sampler_names;
+                for (const auto & name : *samplers) {
                     if (name.is_string()) {
-                        constraint_names.emplace_back(name);
+                        sampler_names.emplace_back(name);
                     }
                 }
-                slot.sparams.constraints = gpt_constraint_types_from_names(constraint_names, false);
+                slot.sparams.samplers = gpt_sampler_types_from_names(sampler_names, false);
             } else {
-                slot.sparams.constraints = default_sparams.constraints;
+                slot.sparams.samplers = default_sparams.samplers;
             }
         }
 
@@ -1253,10 +1253,10 @@ struct server_context {
     }
 
     json get_formated_generation(const server_slot & slot) const {
-        std::vector<std::string> constraints;
-        constraints.reserve(slot.sparams.constraints.size());
-        for (const auto & constraint : slot.sparams.constraints) {
-            constraints.emplace_back(gpt_constraint_type_to_str(constraint));
+        std::vector<std::string> samplers;
+        samplers.reserve(slot.sparams.samplers.size());
+        for (const auto & sampler : slot.sparams.samplers) {
+            samplers.emplace_back(gpt_sampler_type_to_str(sampler));
         }
 
         return json {
@@ -1290,7 +1290,7 @@ struct server_context {
             {"n_probs",                   slot.sparams.n_probs},
             {"min_keep",                  slot.sparams.min_keep},
             {"grammar",                   slot.sparams.grammar},
-            {"samplers",                  constraints},
+            {"samplers",                  samplers},
         };
     }
 
