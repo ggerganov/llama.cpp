@@ -112,9 +112,7 @@ struct llava_context {
     struct llama_model * model = NULL;
 };
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     LOG_TEE("\n example usage:\n");
     LOG_TEE("\n     %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> --image <path/to/another/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
     LOG_TEE("\n note: a lower temperature value like 0.1 is recommended for better quality.\n");
@@ -280,8 +278,8 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON, print_usage);
+    if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }
 
@@ -293,7 +291,7 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
-        print_usage(argc, argv, {});
+        print_usage(argc, argv);
         return 1;
     }
     auto model = llava_init(&params);

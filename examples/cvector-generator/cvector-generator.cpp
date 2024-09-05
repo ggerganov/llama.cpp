@@ -35,9 +35,7 @@ static std::string tokens_to_str(llama_context * ctx, Iter begin, Iter end) {
     return ret;
 }
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     printf("\nexample usage:\n");
     printf("\n    CPU only:   %s -m ./llama-3.Q4_K_M.gguf\n", argv[0]);
     printf("\n    with GPU:   %s -m ./llama-3.Q4_K_M.gguf -ngl 99\n", argv[0]);
@@ -390,8 +388,8 @@ static int prepare_entries(gpt_params & params, train_context & ctx_train) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage);
+    if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }
 

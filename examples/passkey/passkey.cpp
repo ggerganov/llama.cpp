@@ -6,9 +6,7 @@
 #include <string>
 #include <vector>
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     LOG_TEE("\nexample usage:\n");
     LOG_TEE("\n    %s -m model.gguf --junk 250 --pos 90 --keep 32 --grp-attn-n 2 [--seed 1234]\n", argv[0]);
     LOG_TEE("\n");
@@ -21,8 +19,8 @@ int main(int argc, char ** argv) {
     params.n_keep = 32;
     params.i_pos  = -1;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_PASSKEY, print_usage);
+    if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }
 

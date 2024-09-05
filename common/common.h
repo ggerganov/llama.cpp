@@ -170,6 +170,7 @@ struct gpt_params {
 
     bool   kl_divergence    = false; // compute KL divergence
 
+    std::function<void(int, char **)> print_usage = nullptr; // print example-specific usage and example
     bool usage             = false; // print usage
     bool use_color         = false; // use color to distinguish generations and inputs
     bool special           = false; // enable special token output
@@ -279,72 +280,66 @@ struct gpt_params {
 };
 
 enum llama_example {
-    LLAMA_EXAMPLE_ALL,
-    LLAMA_EXAMPLE_SERVER,
+    LLAMA_EXAMPLE_COMMON,
+    LLAMA_EXAMPLE_SPECULATIVE,
     LLAMA_EXAMPLE_MAIN,
+    LLAMA_EXAMPLE_INFILL,
+    LLAMA_EXAMPLE_EMBEDDING,
+    LLAMA_EXAMPLE_PERPLEXITY,
+    LLAMA_EXAMPLE_RETRIEVAL,
+    LLAMA_EXAMPLE_PASSKEY,
+    LLAMA_EXAMPLE_IMATRIX,
+    LLAMA_EXAMPLE_BENCH,
+    LLAMA_EXAMPLE_SERVER,
+    LLAMA_EXAMPLE_CVECTOR_GENERATOR,
+    LLAMA_EXAMPLE_EXPORT_LORA,
+
+    LLAMA_EXAMPLE_COUNT,
 };
 
 struct llama_arg {
-    std::set<enum llama_example> examples = {LLAMA_EXAMPLE_ALL};
+    std::set<enum llama_example> examples = {LLAMA_EXAMPLE_COMMON};
     std::vector<std::string> args;
-    std::string value_ex;
+    std::string value_hint; // help text or example for arg value
+    std::string value_hint_2; // for second arg value
     std::string env;
     std::string help;
-    std::function<bool(void)>        handler_void   = nullptr;
-    std::function<bool(std::string)> handler_string = nullptr;
-    std::function<bool(bool)>        handler_bool   = nullptr;
-    std::function<bool(int)>         handler_int    = nullptr;
-    std::function<bool(float)>       handler_float  = nullptr;
+    std::function<void(void)>                     handler_void    = nullptr;
+    std::function<void(std::string)>              handler_string  = nullptr;
+    std::function<void(std::string, std::string)> handler_str_str = nullptr;
+    std::function<void(int)>                      handler_int     = nullptr;
 
-    llama_arg(std::vector<std::string> args, std::string help, std::function<bool(std::string)> handler) : args(args), help(help), handler_string(handler) {}
+    llama_arg(std::vector<std::string> args, std::string value_hint, std::string help, std::function<void(std::string)> handler) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
 
-    llama_arg(std::vector<std::string> args, std::string help, std::function<bool(bool)> handler) : args(args), help(help), handler_bool(handler) {}
+    llama_arg(std::vector<std::string> args, std::string value_hint, std::string help, std::function<void(int)> handler) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
 
-    llama_arg(std::vector<std::string> args, std::string help, std::function<bool(void)> handler) : args(args), help(help), handler_void(handler) {}
+    llama_arg(std::vector<std::string> args, std::string help, std::function<void(void)> handler) : args(args), help(help), handler_void(handler) {}
 
-    llama_arg & set_examples(std::set<enum llama_example> _examples) {
-        examples = std::move(_examples);
+    // support 2 values for arg
+    llama_arg(std::vector<std::string> args, std::string value_hint, std::string value_hint_2, std::string help, std::function<void(std::string, std::string)> handler) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
+
+    llama_arg & set_examples(std::set<enum llama_example> examples) {
+        this->examples = std::move(examples);
         return *this;
     }
 
-    llama_arg & set_value_ex(std::string _value_ex) {
-        value_ex = std::move(_value_ex);
+    llama_arg & set_env(std::string env) {
+        this->env = std::move(env);
         return *this;
     }
 
-    llama_arg & set_env(std::string _env) {
-        env = _env;
-        return *this;
-    }
-
-    // utility function
-    static std::vector<std::string> break_str_into_lines(std::string input, size_t max_char_per_line) {
-        std::vector<std::string> result;
-        std::istringstream iss(input);
-        std::string word, line;
-        while (iss >> word) {
-            if (line.length() + !line.empty() + word.length() > max_char_per_line) {
-                if (!line.empty()) result.push_back(line);
-                line = word;
-            } else {
-                line += (!line.empty() ? " " : "") + word;
-            }
-        }
-        if (!line.empty()) result.push_back(line);
-        return result;
+    bool in_example(enum llama_example ex) {
+        return examples.find(ex) != examples.end();
     }
 };
 
-std::vector<llama_arg> gpt_params_parser_register(gpt_params & params);
-bool gpt_params_parser_run(int argc, char ** argv, std::vector<llama_arg> & options);
+std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex);
+std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex, std::function<void(int, char **)> print_usage);
+bool gpt_params_parse      (int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+void gpt_params_print_usage(std::vector<llama_arg> & options);
 
-void gpt_params_parse_from_env(gpt_params & params);
 void gpt_params_handle_model_default(gpt_params & params);
-
-bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
-bool gpt_params_parse      (int argc, char ** argv, gpt_params & params);
-bool gpt_params_find_arg   (int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
-void gpt_params_print_usage(int argc, char ** argv, const gpt_params & params);
 
 std::string gpt_params_get_system_info(const gpt_params & params);
 
