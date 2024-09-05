@@ -331,6 +331,8 @@ struct llama_arg {
     bool in_example(enum llama_example ex) {
         return examples.find(ex) != examples.end();
     }
+
+    std::string to_string(bool markdown);
 };
 
 std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex);

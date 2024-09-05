@@ -383,8 +383,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
     const std::string arg_prefix = "--";
     llama_sampling_params & sparams = params.sparams;
 
-    std::unordered_map<std::string, const llama_arg *> arg_to_options;
-    for (const auto & opt : options) {
+    std::unordered_map<std::string, llama_arg *> arg_to_options;
+    for (auto & opt : options) {
         for (const auto & arg : opt.args) {
             arg_to_options[arg] = &opt;
         }
@@ -404,8 +404,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
         if (arg_to_options.find(arg) == arg_to_options.end()) {
             throw std::invalid_argument(format("error: invalid argument: %s", arg.c_str()));
         }
+        auto opt = *arg_to_options[arg];
         try {
-            auto opt = *arg_to_options[arg];
             if (opt.handler_void) {
                 opt.handler_void();
                 continue;
@@ -431,7 +431,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
                 continue;
             }
         } catch (std::exception & e) {
-            throw std::invalid_argument(format("error: %s", e.what()));
+            throw std::invalid_argument(format(
+                "error while handling argument \"%s\": %s\n\n"
+                "usage:\n%s\n\nto show complete usage, run with -h",
+                arg.c_str(), e.what(), arg_to_options[arg]->to_string(false).c_str()));
         }
     }
 
@@ -592,39 +595,49 @@ static std::vector<std::string> break_str_into_lines(std::string input, size_t m
     return result;
 }
 
-void gpt_params_print_usage(std::vector<llama_arg> & options) {
+std::string llama_arg::to_string(bool markdown) {
+    // params for printing to console
     const static int n_leading_spaces = 40;
     const static int n_char_per_line_help = 70; // TODO: detect this based on current console
-    
-    auto print_options = [](std::vector<const llama_arg *> & options) {
-        std::string leading_spaces(n_leading_spaces, ' ');
-        for (const auto & opt : options) {
-            std::ostringstream ss;
-            for (const auto & arg : opt->args) {
-                if (&arg == &opt->args.front()) {
-                    ss << (opt->args.size() == 1 ? arg : format("%-7s", (arg + ",").c_str()));
-                } else {
-                    ss << arg << (&arg != &opt->args.back() ? ", " : "");
-                }
-            }
-            if (!opt->value_hint.empty()) ss << " " << opt->value_hint;
-            if (ss.tellp() > n_leading_spaces - 3) {
-                // current line is too long, add new line
-                ss << "\n" << leading_spaces;
-            } else {
-                // padding between arg and help, same line
-                ss << std::string(leading_spaces.size() - ss.tellp(), ' ');
-            }
-            const auto help_lines = break_str_into_lines(opt->help, n_char_per_line_help);
-            for (const auto & line : help_lines) {
-                ss << (&line == &help_lines.front() ? "" : leading_spaces) << line << "\n";
-            }
-            printf("%s", ss.str().c_str());
+    std::string leading_spaces(n_leading_spaces, ' ');
+
+    std::ostringstream ss;
+    if (markdown) ss << "| `";
+    for (const auto & arg : args) {
+        if (arg == args.front()) {
+            ss << (args.size() == 1 ? arg : format("%-7s", (arg + ",").c_str()));
+        } else {
+            ss << arg << (arg != args.back() ? ", " : "");
+        }
+    }
+    if (!value_hint.empty()) ss << " " << value_hint;
+    if (!markdown) {
+        if (ss.tellp() > n_leading_spaces - 3) {
+            // current line is too long, add new line
+            ss << "\n" << leading_spaces;
+        } else {
+            // padding between arg and help, same line
+            ss << std::string(leading_spaces.size() - ss.tellp(), ' ');
+        }
+        const auto help_lines = break_str_into_lines(help, n_char_per_line_help);
+        for (const auto & line : help_lines) {
+            ss << (&line == &help_lines.front() ? "" : leading_spaces) << line << "\n";
+        }
+    } else {
+        ss << "` | " << help << " |";
+    }
+    return ss.str();
+}
+
+void gpt_params_print_usage(std::vector<llama_arg> & options) {
+    auto print_options = [](std::vector<llama_arg *> & options) {
+        for (llama_arg * opt : options) {
+            printf("%s", opt->to_string(false).c_str());
         }
     };
 
-    std::vector<const llama_arg *> common_options;
-    std::vector<const llama_arg *> specific_options;
+    std::vector<llama_arg *> common_options;
+    std::vector<llama_arg *> specific_options;
     for (auto & opt : options) {
         if (opt.in_example(LLAMA_EXAMPLE_COMMON)) {
             common_options.push_back(&opt);
@@ -1688,7 +1701,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         }
     ));
     add_opt(llama_arg(
-        {"-sm", "--split-mode"}, "SPLIT_MODE",
+        {"-sm", "--split-mode"}, "{none,layer,row}",
         "how to split the model across multiple GPUs, one of:\n"
         "- none: use one GPU only\n"
         "- layer (default): split layers and KV across GPUs\n"
