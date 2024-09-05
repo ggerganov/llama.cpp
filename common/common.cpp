@@ -650,7 +650,6 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         sampler_type_names += llama_sampling_type_to_str(sampler_type) + ";";
     }
     sampler_type_names.pop_back();
-    const char split_delim = ',';
 
 
     /**
@@ -1805,6 +1804,13 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         }
     ));
     add_opt(llama_arg(
+        {"-a", "--alias"}, "STRING",
+        "set alias for model name (to be used by REST API)",
+        [&params](std::string value) {
+            params.model_alias = value;
+        }
+    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_MODEL"));
+    add_opt(llama_arg(
         {"-m", "--model"}, "FNAME",
         ex == LLAMA_EXAMPLE_EXPORT_LORA
             ? std::string("model path from which to load base model")
@@ -1950,7 +1956,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         {"-npp"}, "n0,n1,...",
         "number of prompt tokens",
         [&params](std::string value) {
-            auto p = string_split<int>(value, split_delim);
+            auto p = string_split<int>(value, ',');
             params.n_pp.insert(params.n_pp.end(), p.begin(), p.end());
         }
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
@@ -1958,7 +1964,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         {"-ntg"}, "n0,n1,...",
         "number of text generation tokens",
         [&params](std::string value) {
-            auto p = string_split<int>(value, split_delim);
+            auto p = string_split<int>(value, ',');
             params.n_tg.insert(params.n_tg.end(), p.begin(), p.end());
         }
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
@@ -1966,7 +1972,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         {"-npl"}, "n0,n1,...",
         "number of parallel prompts",
         [&params](std::string value) {
-            auto p = string_split<int>(value, split_delim);
+            auto p = string_split<int>(value, ',');
             params.n_pl.insert(params.n_pl.end(), p.begin(), p.end());
         }
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
