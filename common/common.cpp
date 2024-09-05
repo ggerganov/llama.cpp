@@ -425,7 +425,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
             throw std::invalid_argument(format(
                 "error while handling argument \"%s\": %s\n\n"
                 "usage:\n%s\n\nto show complete usage, run with -h",
-                arg.c_str(), e.what(), arg_to_options[arg]->to_string(false).c_str()));
+                arg.c_str(), e.what(), arg_to_options[arg]->to_string().c_str()));
         }
     }
 
@@ -582,14 +582,13 @@ static std::vector<std::string> break_str_into_lines(std::string input, size_t m
     return result;
 }
 
-std::string llama_arg::to_string(bool markdown) {
+std::string llama_arg::to_string() {
     // params for printing to console
     const static int n_leading_spaces = 40;
     const static int n_char_per_line_help = 70; // TODO: detect this based on current console
     std::string leading_spaces(n_leading_spaces, ' ');
 
     std::ostringstream ss;
-    if (markdown) ss << "| `";
     for (const auto & arg : args) {
         if (arg == args.front()) {
             ss << (args.size() == 1 ? arg : format("%-7s", (arg + ",").c_str()));
@@ -598,20 +597,16 @@ std::string llama_arg::to_string(bool markdown) {
         }
     }
     if (!value_hint.empty()) ss << " " << value_hint;
-    if (!markdown) {
-        if (ss.tellp() > n_leading_spaces - 3) {
-            // current line is too long, add new line
-            ss << "\n" << leading_spaces;
-        } else {
-            // padding between arg and help, same line
-            ss << std::string(leading_spaces.size() - ss.tellp(), ' ');
-        }
-        const auto help_lines = break_str_into_lines(help, n_char_per_line_help);
-        for (const auto & line : help_lines) {
-            ss << (&line == &help_lines.front() ? "" : leading_spaces) << line << "\n";
-        }
+    if (ss.tellp() > n_leading_spaces - 3) {
+        // current line is too long, add new line
+        ss << "\n" << leading_spaces;
     } else {
-        ss << "` | " << help << " |";
+        // padding between arg and help, same line
+        ss << std::string(leading_spaces.size() - ss.tellp(), ' ');
+    }
+    const auto help_lines = break_str_into_lines(help, n_char_per_line_help);
+    for (const auto & line : help_lines) {
+        ss << (&line == &help_lines.front() ? "" : leading_spaces) << line << "\n";
     }
     return ss.str();
 }
@@ -619,7 +614,7 @@ std::string llama_arg::to_string(bool markdown) {
 void gpt_params_print_usage(std::vector<llama_arg> & options) {
     auto print_options = [](std::vector<llama_arg *> & options) {
         for (llama_arg * opt : options) {
-            printf("%s", opt->to_string(false).c_str());
+            printf("%s", opt->to_string().c_str());
         }
     };
 

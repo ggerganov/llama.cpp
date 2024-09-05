@@ -349,7 +349,7 @@ struct llama_arg {
         return std::getenv(env.c_str());
     }
 
-    std::string to_string(bool markdown);
+    std::string to_string();
 };
 
 std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex);

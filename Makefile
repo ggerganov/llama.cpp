@@ -39,6 +39,7 @@ BUILD_TARGETS = \
 	llama-tokenize \
 	llama-vdot \
 	llama-cvector-generator \
+	llama-export-docs \
 	tests/test-c.o
 
 # Binaries only useful for tests
@@ -1448,6 +1449,12 @@ examples/server/%.hpp: examples/server/public/% Makefile
 		echo "};" && \
 		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
 	) > $@
+
+llama-export-docs: examples/export-docs/export-docs.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	./llama-export-docs
 
 libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \
