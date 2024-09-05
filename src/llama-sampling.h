@@ -62,9 +62,10 @@ struct llama_constraint * llama_constraint_clone_impl(const struct llama_constra
 
 void llama_constraint_free_impl(struct llama_constraint * cnstr);
 
-void llama_constraint_accept_impl(struct llama_constraint & cnstr, llama_token token);
-void llama_constraint_apply_impl (struct llama_constraint & cnstr, struct llama_token_data_array * cur_p);
-void llama_constraint_reset_impl (struct llama_constraint & cnstr);
+const char * llama_constraint_name_impl  (const struct llama_constraint & cnstr);
+void         llama_constraint_accept_impl(      struct llama_constraint & cnstr, llama_token token);
+void         llama_constraint_apply_impl (      struct llama_constraint & cnstr, struct llama_token_data_array * cur_p);
+void         llama_constraint_reset_impl (      struct llama_constraint & cnstr);
 
 // samplers
 

@@ -1190,6 +1190,14 @@ void llama_sampler_reset_impl(struct llama_sampler & smpl) {
     // TODO: should we reset the timings?
 }
 
+const char * llama_constraint_name_impl(const struct llama_constraint & cnstr) {
+    if (!cnstr.iface) {
+        return "(null)";
+    }
+
+    return cnstr.iface->name(&cnstr);
+}
+
 void llama_sampler_accept_impl(struct llama_sampler & smpl, llama_token token) {
     smpl.prev.push_back(token);
 

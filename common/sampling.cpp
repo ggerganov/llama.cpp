@@ -31,7 +31,7 @@ std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
 
     for (int i = 0; i < llama_sampler_n_constraints(gsmpl->smpl); i++) {
         const auto * cnstr = llama_sampler_constraint_get(gsmpl->smpl, i);
-        result += " -> " + std::string(cnstr->iface->name(cnstr)) + " ";
+        result += std::string(" -> ") + llama_constraint_name(cnstr) + " ";
     }
 
     return result;

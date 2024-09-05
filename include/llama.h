@@ -381,6 +381,8 @@ extern "C" {
 
         // TODO: will be used by the llama_decode_with_sampler() API in the future
         enum llama_sampler_type type;
+
+        bool no_timing; // whether to measure performance timings
     } llama_sampler_params;
 
     // performance timing information
@@ -1097,9 +1099,10 @@ extern "C" {
     // important: do not call if the constraint has been added to a llama_sampler (via llama_sampler_constraint_add)
     LLAMA_API void llama_constraint_free(struct llama_constraint * cnstr);
 
-    LLAMA_API void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token);
-    LLAMA_API void llama_constraint_apply (struct llama_constraint * cnstr, llama_token_data_array * cur_p);
-    LLAMA_API void llama_constraint_reset (struct llama_constraint * cnstr);
+    LLAMA_API const char * llama_constraint_name  (const struct llama_constraint * cnstr);
+    LLAMA_API void         llama_constraint_accept(      struct llama_constraint * cnstr, llama_token token);
+    LLAMA_API void         llama_constraint_apply (      struct llama_constraint * cnstr, llama_token_data_array * cur_p);
+    LLAMA_API void         llama_constraint_reset (      struct llama_constraint * cnstr);
 
     // samplers
 

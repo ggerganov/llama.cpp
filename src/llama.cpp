@@ -148,10 +148,12 @@ static void zeros(std::ofstream & file, size_t n) {
 }
 
 struct time_meas {
-    time_meas(int64_t & t_acc) : t_start_us(ggml_time_us()), t_acc(t_acc) {}
+    time_meas(int64_t & t_acc, bool disable = false) : t_start_us(disable ? -1 : ggml_time_us()), t_acc(t_acc) {}
 
     ~time_meas() {
-        t_acc += ggml_time_us() - t_start_us;
+        if (t_start_us >= 0) {
+            t_acc += ggml_time_us() - t_start_us;
+        }
     }
 
     const int64_t t_start_us;
@@ -17937,9 +17939,10 @@ struct llama_context_params llama_context_default_params() {
 
 struct llama_sampler_params llama_sampler_default_params() {
     struct llama_sampler_params result = {
-        /*.seed              =*/ LLAMA_DEFAULT_SEED,
-        /*.n_prev            =*/ 256,
-        /*.type              =*/ LLAMA_SAMPLER_TYPE_DIST,
+        /*.seed                        =*/ LLAMA_DEFAULT_SEED,
+        /*.n_prev                      =*/ 256,
+        /*.type                        =*/ LLAMA_SAMPLER_TYPE_DIST,
+        /*.no_timing                   =*/ false, // TODO: change to true and set explicitly in examples
     };
 
     return result;
@@ -20681,6 +20684,10 @@ void llama_constraint_free(struct llama_constraint * cnstr) {
     llama_constraint_free_impl(cnstr);
 }
 
+const char * llama_constraint_name(const struct llama_constraint * cnstr) {
+    return llama_constraint_name_impl(*cnstr);
+}
+
 void llama_constraint_accept(struct llama_constraint * cnstr, llama_token token) {
     llama_constraint_accept_impl(*cnstr, token);
 }
@@ -20718,7 +20725,7 @@ void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
 }
 
 void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    time_meas tm(smpl->t_sample_us);
+    time_meas tm(smpl->t_sample_us, smpl->params.no_timing);
 
     if (cur_p == nullptr) {
         cur_p = &smpl->cur_p;
@@ -20756,7 +20763,7 @@ struct llama_constraint * llama_sampler_constraint_get(const struct llama_sample
 }
 
 llama_token llama_sampler_sample(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    time_meas tm(smpl->t_sample_us);
+    time_meas tm(smpl->t_sample_us, smpl->params.no_timing);
 
     if (cur_p == nullptr) {
         cur_p = &smpl->cur_p;
