@@ -21,7 +21,7 @@ void llama_constraint_penalties_impl(
 // constraints
 
 struct llama_constraint * llama_constraint_init_softmax_impl    ();
-struct llama_constraint * llama_constraint_init_top_k_impl      (int32_t k, size_t min_keep);
+struct llama_constraint * llama_constraint_init_top_k_impl      (int32_t k);
 struct llama_constraint * llama_constraint_init_top_p_impl      (float   p, size_t min_keep);
 struct llama_constraint * llama_constraint_init_min_p_impl      (float   p, size_t min_keep);
 struct llama_constraint * llama_constraint_init_tail_free_impl  (float   z, size_t min_keep);

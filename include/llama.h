@@ -1045,7 +1045,7 @@ extern "C" {
     };
 
     LLAMA_API struct llama_constraint * llama_constraint_init_softmax    (void);
-    LLAMA_API struct llama_constraint * llama_constraint_init_top_k      (int32_t k, int32_t min_keep);
+    LLAMA_API struct llama_constraint * llama_constraint_init_top_k      (int32_t k);
     LLAMA_API struct llama_constraint * llama_constraint_init_top_p      (float   p, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_min_p      (float   p, int32_t min_keep);
     LLAMA_API struct llama_constraint * llama_constraint_init_tail_free  (float   z, int32_t min_keep);

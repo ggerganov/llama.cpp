@@ -19,7 +19,7 @@ static void dump(const llama_token_data_array * cur_p) {
 
 #define DUMP(__cur_p) do { printf("%s:%d (%s)\n", __FILE__, __LINE__, __func__); dump((__cur_p)); printf("-\n"); } while(0)
 
-#define TEST(__cnstr, __cur_p) do { \
+#define APPLY(__cnstr, __cur_p) do { \
     auto * cnstr = (__cnstr); \
     llama_constraint_apply(cnstr, (__cur_p)); \
     llama_constraint_free(cnstr); \
@@ -36,9 +36,9 @@ static void test_top_k(const std::vector<float> & probs, const std::vector<float
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
-    TEST(llama_constraint_init_softmax(), &cur_p);
+    APPLY(llama_constraint_init_softmax(), &cur_p);
     DUMP(&cur_p);
-    TEST(llama_constraint_init_top_k(k, 1), &cur_p);
+    APPLY(llama_constraint_init_top_k(k), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -58,9 +58,9 @@ static void test_top_p(const std::vector<float> & probs, const std::vector<float
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
-    TEST(llama_constraint_init_softmax(), &cur_p);
+    APPLY(llama_constraint_init_softmax(), &cur_p);
     DUMP(&cur_p);
-    TEST(llama_constraint_init_top_p(p, 1), &cur_p);
+    APPLY(llama_constraint_init_top_p(p, 1), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -81,7 +81,7 @@ static void test_tfs(const std::vector<float> & probs, const std::vector<float> 
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
     DUMP(&cur_p);
-    TEST(llama_constraint_init_tail_free(z, 1), &cur_p);
+    APPLY(llama_constraint_init_tail_free(z, 1), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -102,9 +102,9 @@ static void test_min_p(const std::vector<float> & probs, const std::vector<float
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
     DUMP(&cur_p);
-    TEST(llama_constraint_init_min_p(p, 1), &cur_p);
+    APPLY(llama_constraint_init_min_p(p, 1), &cur_p);
     DUMP(&cur_p);
-    TEST(llama_constraint_init_softmax(), &cur_p);
+    APPLY(llama_constraint_init_softmax(), &cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
     for (size_t i = 0; i < cur_p.size; i++) {
@@ -124,7 +124,7 @@ static void test_typical(const std::vector<float> & probs, const std::vector<flo
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
     DUMP(&cur_p);
-    TEST(llama_constraint_init_typical(p, 1), &cur_p);
+    APPLY(llama_constraint_init_typical(p, 1), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -154,10 +154,10 @@ static void test_penalties(
     }
 
     llama_token_data_array cur_p = { cur.data(), cur.size(), false };
-    TEST(llama_constraint_init_softmax(), &cur_p);
+    APPLY(llama_constraint_init_softmax(), &cur_p);
     DUMP(&cur_p);
     llama_constraint_penalties_impl(&cur_p, token_count, repeat_penalty, alpha_frequency, alpha_presence); // TODO: avoid
-    TEST(llama_constraint_init_softmax(), &cur_p);
+    APPLY(llama_constraint_init_softmax(), &cur_p);
     DUMP(&cur_p);
 
     GGML_ASSERT(cur_p.size == expected_probs.size());
@@ -182,16 +182,16 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
 
     for (auto s : samplers_sequence) {
         switch (s){
-            case 'k': TEST(llama_constraint_init_top_k(top_k, 1), &cur_p); break;
+            case 'k': APPLY(llama_constraint_init_top_k(top_k), &cur_p); break;
             case 'f': GGML_ABORT("tail_free test not implemented");
             case 'y': GGML_ABORT("typical test not implemented");
-            case 'p': TEST(llama_constraint_init_top_p(top_p, 1), &cur_p); break;
-            case 'm': TEST(llama_constraint_init_min_p(min_p, 1), &cur_p); break;
+            case 'p': APPLY(llama_constraint_init_top_p(top_p, 1), &cur_p); break;
+            case 'm': APPLY(llama_constraint_init_min_p(min_p, 1), &cur_p); break;
             case 't': GGML_ABORT("temperature test not implemented");
             default : GGML_ABORT("Unknown sampler");
         }
 
-        TEST(llama_constraint_init_softmax(), &cur_p); // make sure tokens are sorted for tests
+        APPLY(llama_constraint_init_softmax(), &cur_p); // make sure tokens are sorted for tests
 
         const int size = cur_p.size;
 

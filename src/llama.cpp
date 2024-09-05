@@ -20611,8 +20611,8 @@ struct llama_constraint * llama_constraint_init_softmax(void) {
     return llama_constraint_init_softmax_impl();
 }
 
-struct llama_constraint * llama_constraint_init_top_k(int32_t k, int32_t min_keep) {
-    return llama_constraint_init_top_k_impl(k, min_keep);
+struct llama_constraint * llama_constraint_init_top_k(int32_t k) {
+    return llama_constraint_init_top_k_impl(k);
 }
 
 struct llama_constraint * llama_constraint_init_top_p(float p, int32_t min_keep) {

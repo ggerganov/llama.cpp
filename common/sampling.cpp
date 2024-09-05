@@ -67,7 +67,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
             for (const auto & cnstr : params.constraints) {
                 switch (cnstr) {
                     case GPT_CONSTRAINT_TYPE_TOP_K:
-                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_top_k    (params.top_k, params.min_keep));
+                        llama_sampler_constraint_add(result->smpl, llama_constraint_init_top_k    (params.top_k));
                         break;
                     case GPT_CONSTRAINT_TYPE_TOP_P:
                         llama_sampler_constraint_add(result->smpl, llama_constraint_init_top_p    (params.top_p, params.min_keep));

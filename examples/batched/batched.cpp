@@ -70,7 +70,7 @@ int main(int argc, char ** argv) {
 
     llama_sampler * smpl = llama_sampler_init(model, sparams);
 
-    llama_sampler_constraint_add(smpl, llama_constraint_init_top_k(params.sparams.top_k, params.sparams.min_keep));
+    llama_sampler_constraint_add(smpl, llama_constraint_init_top_k(params.sparams.top_k));
     llama_sampler_constraint_add(smpl, llama_constraint_init_top_p(params.sparams.top_p, params.sparams.min_keep));
     llama_sampler_constraint_add(smpl, llama_constraint_init_temp (params.sparams.temp));
 
