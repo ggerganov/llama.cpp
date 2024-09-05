@@ -124,6 +124,9 @@ static std::string get_cpu_info() {
                         (LPBYTE)cpu_brand,
                         &cpu_brand_size) == ERROR_SUCCESS) {
         id.assign(cpu_brand, cpu_brand_size);
+        if (id.find('\0') != std::string::npos) {
+            id.resize(id.find('\0'));
+        }
     }
     RegCloseKey(hKey);
 #endif
