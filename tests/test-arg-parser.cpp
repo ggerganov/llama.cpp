@@ -8,6 +8,9 @@
 #include "common.h"
 
 int main(void) {
+#ifdef _WIN32
+    printf("test-arg-parser: skip on windows build\n");
+#else
     gpt_params params;
 
     printf("test-arg-parser: make sure there is no duplicated arguments in any examples\n\n");
@@ -88,4 +91,5 @@ int main(void) {
 
 
     printf("test-arg-parser: all tests OK\n\n");
+#endif // __MINGW32__
 }
