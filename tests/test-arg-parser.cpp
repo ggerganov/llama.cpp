@@ -63,5 +63,29 @@ int main(void) {
     assert(params.n_predict == 6789);
     assert(params.n_batch == 9090);
 
+    printf("test-arg-parser: test environment variables (valid + invalid usages)\n\n");
+
+    setenv("LLAMA_ARG_THREADS", "blah", true);
+    argv = {"binary_name"};
+    assert(false == gpt_params_parse(argv.size(), list_str_to_char(argv).data(), params, options));
+
+    setenv("LLAMA_ARG_MODEL", "blah.gguf", true);
+    setenv("LLAMA_ARG_THREADS", "1010", true);
+    argv = {"binary_name"};
+    assert(true == gpt_params_parse(argv.size(), list_str_to_char(argv).data(), params, options));
+    assert(params.model == "blah.gguf");
+    assert(params.cpuparams.n_threads == 1010);
+
+
+    printf("test-arg-parser: test environment variables being overwritten\n\n");
+
+    setenv("LLAMA_ARG_MODEL", "blah.gguf", true);
+    setenv("LLAMA_ARG_THREADS", "1010", true);
+    argv = {"binary_name", "-m", "overwritten.gguf"};
+    assert(true == gpt_params_parse(argv.size(), list_str_to_char(argv).data(), params, options));
+    assert(params.model == "overwritten.gguf");
+    assert(params.cpuparams.n_threads == 1010);
+
+
     printf("test-arg-parser: all tests OK\n\n");
 }

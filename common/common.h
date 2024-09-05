@@ -316,6 +316,7 @@ struct llama_arg {
     llama_arg(std::vector<std::string> args, std::string help, std::function<void(void)> handler) : args(args), help(help), handler_void(handler) {}
 
     // support 2 values for arg
+    // note: env variable is not yet support for 2 values
     llama_arg(std::vector<std::string> args, std::string value_hint, std::string value_hint_2, std::string help, std::function<void(std::string, std::string)> handler) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
 
     llama_arg & set_examples(std::set<enum llama_example> examples) {
@@ -324,12 +325,27 @@ struct llama_arg {
     }
 
     llama_arg & set_env(std::string env) {
+        help = help + "\n(env: " + env + ")";
         this->env = std::move(env);
         return *this;
     }
 
     bool in_example(enum llama_example ex) {
         return examples.find(ex) != examples.end();
+    }
+
+    bool get_value_from_env(std::string & output) {
+        if (env.empty()) return false;
+        char * value = std::getenv(env.c_str());
+        if (value) {
+            output = value;
+            return true;
+        }
+        return false;
+    }
+
+    bool has_value_from_env() {
+        return std::getenv(env.c_str());
     }
 
     std::string to_string(bool markdown);
