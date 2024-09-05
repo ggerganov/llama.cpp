@@ -11,6 +11,17 @@
 #include <random>
 #include <unordered_map>
 
+static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng, std::vector<float> & probs) {
+    probs.resize(cur_p->size);
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        probs[i] = cur_p->data[i].p;
+    }
+
+    std::discrete_distribution<size_t> dist(probs.begin(), probs.end());
+
+    return dist(rng);
+}
+
 static void llama_log_softmax(float * array, size_t size) {
     float max_l = *std::max_element(array, array + size);
     float sum = 0.f;
@@ -456,6 +467,8 @@ struct llama_sampler_context_dist {
     const uint32_t seed;
 
     std::mt19937 rng;
+
+    std::vector<float> probs; // work array
 };
 
 static struct llama_sampler_i llama_sampler_dist_i = {
@@ -463,15 +476,7 @@ static struct llama_sampler_i llama_sampler_dist_i = {
     /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_sampler * smpl, llama_token_data_array * cur_p) {
         auto * ctx = (llama_sampler_context_dist *) smpl->ctx;
-        std::vector<float> probs;
-        probs.reserve(cur_p->size);
-        for (size_t i = 0; i < cur_p->size; ++i) {
-            probs.push_back(cur_p->data[i].p);
-        }
-
-        std::discrete_distribution<size_t> dist(probs.begin(), probs.end());
-
-        cur_p->selected = dist(ctx->rng);
+        cur_p->selected = llama_sample_dist(cur_p, ctx->rng, ctx->probs);
     },
     /* .reset  = */ nullptr,
     /* .clone  = */ [](const struct llama_sampler * smpl) {
@@ -489,6 +494,7 @@ struct llama_sampler * llama_sampler_init_dist_impl(uint32_t seed) {
         /* .ctx   = */ new llama_sampler_context_dist {
             /* .seed = */ seed,
             /* .rng  = */ std::mt19937(seed),
+            /* .probs = */ {},
         },
     };
 }
@@ -761,6 +767,8 @@ struct llama_sampler * llama_sampler_init_temp_ext_impl(float temp, float delta,
 struct llama_sampler_context_mirostat {
     const struct llama_vocab * vocab;
 
+    const uint32_t seed;
+
     const float tau;
     const float eta;
 
@@ -768,28 +776,14 @@ struct llama_sampler_context_mirostat {
 
     float mu;
 
-    std::vector<llama_token_data> cur;
+    std::mt19937 rng;
+
+    std::vector<float> probs;
 };
 
 static struct llama_sampler_i llama_sampler_mirostat_i = {
     /* .name   = */ [](const struct llama_sampler * /*smpl*/) { return "mirostat"; },
-    /* .accept = */ [](struct llama_sampler * smpl, llama_token token) {
-        auto * ctx = (llama_sampler_context_mirostat *) smpl->ctx;
-
-        int32_t idx = -1;
-        for (size_t i = 0; i < ctx->cur.size(); ++i) {
-            if (ctx->cur[i].id == token) {
-                idx = i;
-                break;
-            }
-        }
-
-        float observed_surprise = -log2f(ctx->cur[idx].p);
-        float e = observed_surprise - ctx->tau;
-
-        // Update mu using the learning rate and error
-        ctx->mu = ctx->mu - ctx->eta * e;
-    },
+    /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_sampler * smpl, llama_token_data_array * cur_p) {
         auto * ctx = (llama_sampler_context_mirostat *) smpl->ctx;
 
@@ -812,36 +806,44 @@ static struct llama_sampler_i llama_sampler_mirostat_i = {
         float k = powf((epsilon_hat * powf(2, ctx->mu)) / (1 - powf(ctx->vocab->n_vocab, -epsilon_hat)), 1 / s_hat);
 
         llama_sampler_top_k_impl(cur_p, std::max(int(k), 1));
+        llama_sampler_softmax_impl(cur_p);
 
-        // remember the order to be able to compute the distance later when accepting the token
-        ctx->cur.resize(cur_p->size);
-        for (size_t i = 0; i < cur_p->size; ++i) {
-            ctx->cur[i] = cur_p->data[i];
-        }
+        const int idx = llama_sample_dist(cur_p, ctx->rng, ctx->probs);
+
+        cur_p->selected = idx;
+
+        float observed_surprise = -log2f(cur_p->data[idx].p);
+        float e = observed_surprise - ctx->tau;
+
+        // Update mu using the learning rate and error
+        ctx->mu = ctx->mu - ctx->eta * e;
     },
     /* .reset  = */ [](struct llama_sampler * smpl) {
         auto * ctx = (llama_sampler_context_mirostat *) smpl->ctx;
         ctx->mu = 2.0f*ctx->tau;
+        ctx->rng = std::mt19937(ctx->seed);
     },
     /* .clone  = */ [](const struct llama_sampler * smpl) {
         const auto * ctx = (const llama_sampler_context_mirostat *) smpl->ctx;
-        return llama_sampler_init_mirostat_impl(*ctx->vocab, ctx->tau, ctx->eta, ctx->m);
+        return llama_sampler_init_mirostat_impl(*ctx->vocab, ctx->seed, ctx->tau, ctx->eta, ctx->m);
     },
     /* .free   = */ [](struct llama_sampler * smpl) {
         delete (llama_sampler_context_mirostat *) smpl->ctx;
     },
 };
 
-struct llama_sampler * llama_sampler_init_mirostat_impl(const struct llama_vocab & vocab, float tau, float eta, int32_t m) {
+struct llama_sampler * llama_sampler_init_mirostat_impl(const struct llama_vocab & vocab, uint32_t seed, float tau, float eta, int32_t m) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_mirostat_i,
         /* .ctx   = */ new llama_sampler_context_mirostat {
             /* .vocab = */ &vocab,
+            /* .seed  = */ seed,
             /* .tau   = */ tau,
             /* .eta   = */ eta,
             /* .m     = */ m,
             /* .mu    = */ 2.0f*tau,
-            /* .cur   = */ {},
+            /* .rng   = */ std::mt19937(seed),
+            /* .probs = */ {},
         },
     };
 }
@@ -849,33 +851,21 @@ struct llama_sampler * llama_sampler_init_mirostat_impl(const struct llama_vocab
 // mirostat v2
 
 struct llama_sampler_context_mirostat_v2 {
+    const uint32_t seed;
+
     const float tau;
     const float eta;
 
     float mu;
 
-    std::vector<llama_token_data> cur;
+    std::mt19937 rng;
+
+    std::vector<float> probs;
 };
 
 static struct llama_sampler_i llama_sampler_mirostat_v2_i = {
     /* .name   = */ [](const struct llama_sampler * /*smpl*/) { return "mirostat-v2"; },
-    /* .accept = */ [](struct llama_sampler * smpl, llama_token token) {
-        auto * ctx = (llama_sampler_context_mirostat_v2 *) smpl->ctx;
-
-        int32_t idx = -1;
-        for (size_t i = 0; i < ctx->cur.size(); ++i) {
-            if (ctx->cur[i].id == token) {
-                idx = i;
-                break;
-            }
-        }
-
-        float observed_surprise = -log2f(ctx->cur[idx].p);
-        float e = observed_surprise - ctx->tau;
-
-        // Update mu using the learning rate and error
-        ctx->mu = ctx->mu - ctx->eta * e;
-    },
+    /* .accept = */ nullptr,
     /* .apply  = */ [](struct llama_sampler * smpl, llama_token_data_array * cur_p) {
         auto * ctx = (llama_sampler_context_mirostat_v2 *) smpl->ctx;
 
@@ -893,33 +883,40 @@ static struct llama_sampler_i llama_sampler_mirostat_v2_i = {
         // Normalize the probabilities of the remaining words
         llama_sampler_softmax_impl(cur_p);
 
-        // remember the order to be able to compute the distance later when accepting the token
-        ctx->cur.resize(cur_p->size);
-        for (size_t i = 0; i < cur_p->size; ++i) {
-            ctx->cur[i] = cur_p->data[i];
-        }
+        const int idx = llama_sample_dist(cur_p, ctx->rng, ctx->probs);
+
+        cur_p->selected = idx;
+
+        float observed_surprise = -log2f(cur_p->data[idx].p);
+        float e = observed_surprise - ctx->tau;
+
+        // Update mu using the learning rate and error
+        ctx->mu = ctx->mu - ctx->eta * e;
     },
     /* .reset  = */ [](struct llama_sampler * smpl) {
         auto * ctx = (llama_sampler_context_mirostat_v2 *) smpl->ctx;
         ctx->mu = 2.0f*ctx->tau;
+        ctx->rng = std::mt19937(ctx->seed);
     },
     /* .clone  = */ [](const struct llama_sampler * smpl) {
         const auto * ctx = (const llama_sampler_context_mirostat_v2 *) smpl->ctx;
-        return llama_sampler_init_mirostat_v2_impl(ctx->tau, ctx->eta);
+        return llama_sampler_init_mirostat_v2_impl(ctx->seed, ctx->tau, ctx->eta);
     },
     /* .free   = */ [](struct llama_sampler * smpl) {
         delete (llama_sampler_context_mirostat_v2 *) smpl->ctx;
     },
 };
 
-struct llama_sampler * llama_sampler_init_mirostat_v2_impl(float tau, float eta) {
+struct llama_sampler * llama_sampler_init_mirostat_v2_impl(uint32_t seed, float tau, float eta) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_mirostat_v2_i,
         /* .ctx   = */ new llama_sampler_context_mirostat_v2 {
-            /* .tau = */ tau,
-            /* .eta = */ eta,
-            /* .mu  = */ 2.0f*tau,
-            /* .cur = */ {},
+            /* .seed  = */ seed,
+            /* .tau   = */ tau,
+            /* .eta   = */ eta,
+            /* .mu    = */ 2.0f*tau,
+            /* .rng   = */ std::mt19937(seed),
+            /* .probs = */ {},
         },
     };
 }
@@ -1154,8 +1151,14 @@ struct llama_sampler * llama_sampler_init_logit_bias_impl(
 
 static struct llama_sampler_i llama_sampler_chain_i = {
     /* .name   = */ [](const struct llama_sampler * /*smpl*/) { return "chain"; },
-    /* .accept = */ [](struct llama_sampler * smpl, llama_token /*token*/) {
+    /* .accept = */ [](struct llama_sampler * smpl, llama_token token) {
         auto * chain = (llama_sampler_chain *) smpl->ctx;
+
+        time_meas tm(chain->t_sample_us, chain->params.no_timing);
+
+        for (auto * smpl : chain->samplers) {
+            llama_sampler_accept_impl(*smpl, token);
+        }
 
         chain->n_sample++;
     },

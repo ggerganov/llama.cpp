@@ -1068,6 +1068,7 @@ extern "C" {
     /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
     LLAMA_API struct llama_sampler * llama_sampler_init_mirostat(
             const struct llama_model * model,
+                            uint32_t   seed,
                                float   tau,
                                float   eta);
 
@@ -1077,6 +1078,7 @@ extern "C" {
     /// @param eta The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
     /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
     LLAMA_API struct llama_sampler * llama_sampler_init_mirostat_v2(
+                            uint32_t   seed,
                                float   tau,
                                float   eta);
 

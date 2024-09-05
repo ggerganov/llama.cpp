@@ -121,7 +121,7 @@ struct gpt_sampler {
             cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
         }
 
-        cur_p = { cur.data(), cur.size(), LLAMA_TOKEN_NULL, false };
+        cur_p = { cur.data(), cur.size(), -1, false };
     }
 };
 
@@ -202,17 +202,17 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
                         GGML_ASSERT(false && "unknown sampler type");
                 }
             }
+            llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
+            llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
         } else if (params.mirostat == 1) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(model, params.mirostat_tau, params.mirostat_eta));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(model, params.seed, params.mirostat_tau, params.mirostat_eta));
         } else if (params.mirostat == 2) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.mirostat_tau, params.mirostat_eta));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
         } else {
             GGML_ASSERT(false && "unknown mirostat version");
         }
-        llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
-        llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
     } else {
         llama_sampler_chain_add(result->chain, llama_sampler_init_softmax());
         llama_sampler_chain_add(result->chain, llama_sampler_init_greedy());
@@ -246,8 +246,8 @@ struct gpt_sampler * gpt_sampler_clone(gpt_sampler * gsmpl) {
     };
 }
 
-void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool apply_grammar) {
-    if (apply_grammar) {
+void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool accept_grammar) {
+    if (accept_grammar) {
         llama_sampler_accept(gsmpl->grmr, token);
     }
 
@@ -293,9 +293,9 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
 
     llama_sampler_apply(chain, &cur_p);
 
-    const llama_token id = cur_p.data[cur_p.selected].id;
+    GGML_ASSERT(cur_p.selected != -1 && "no selected token during sampling - check your sampling configuration");
 
-    GGML_ASSERT(id != LLAMA_TOKEN_NULL && "null token in the sampling history - check your sampling configuration");
+    const llama_token id = cur_p.data[cur_p.selected].id;
 
     if (grammar_first) {
         return id;
@@ -304,7 +304,7 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     // check if it the sampled token fits the grammar
     {
         llama_token_data       single_token_data       = { id, 1.0f, 0.0f };
-        llama_token_data_array single_token_data_array = { &single_token_data, 1, LLAMA_TOKEN_NULL, false };
+        llama_token_data_array single_token_data_array = { &single_token_data, 1, -1, false };
 
         llama_sampler_apply(grmr, &single_token_data_array);
 
@@ -324,7 +324,7 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
 
     llama_sampler_apply(chain, &cur_p);
 
-    GGML_ASSERT(cur_p.data[cur_p.selected].id != LLAMA_TOKEN_NULL && "null token in the sampling history - check your sampling configuration");
+    GGML_ASSERT(cur_p.selected != -1 && "no selected token during sampling - check your sampling configuration");
 
     return cur_p.data[cur_p.selected].id;
 }

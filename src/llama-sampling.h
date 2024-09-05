@@ -58,11 +58,13 @@ struct llama_sampler * llama_sampler_init_temp_ext_impl (float   t, float  delta
 
 struct llama_sampler * llama_sampler_init_mirostat_impl(
         const struct llama_vocab & vocab,
+                        uint32_t   seed,
                            float   tau,
                            float   eta,
                          int32_t   m);
 
 struct llama_sampler * llama_sampler_init_mirostat_v2_impl(
+                        uint32_t   seed,
                            float   tau,
                            float   eta);
 

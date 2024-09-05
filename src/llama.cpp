@@ -20676,12 +20676,12 @@ struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, floa
     return llama_sampler_init_temp_ext_impl(temp, delta, exponent);
 }
 
-struct llama_sampler * llama_sampler_init_mirostat(const struct llama_model * model, float tau, float eta) {
-    return llama_sampler_init_mirostat_impl(model->vocab, tau, eta, 100);
+struct llama_sampler * llama_sampler_init_mirostat(const struct llama_model * model, uint32_t seed, float tau, float eta) {
+    return llama_sampler_init_mirostat_impl(model->vocab, seed, tau, eta, 100);
 }
 
-struct llama_sampler * llama_sampler_init_mirostat_v2(float tau, float eta) {
-    return llama_sampler_init_mirostat_v2_impl(tau, eta);
+struct llama_sampler * llama_sampler_init_mirostat_v2(uint32_t seed, float tau, float eta) {
+    return llama_sampler_init_mirostat_v2_impl(seed, tau, eta);
 }
 
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {

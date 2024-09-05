@@ -70,7 +70,7 @@ void gpt_sampler_free(struct gpt_sampler * gsmpl);
 
 struct gpt_sampler * gpt_sampler_clone(gpt_sampler * gsmpl);
 
-void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool apply_grammar);
+void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool accept_grammar);
 void gpt_sampler_reset (struct gpt_sampler * gsmpl);
 
 llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl);
