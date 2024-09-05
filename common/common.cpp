@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <climits>
 
 #if defined(__APPLE__) && defined(__MACH__)
 #include <sys/types.h>
