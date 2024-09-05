@@ -944,7 +944,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         }
     ).set_env("LLAMA_ARG_CTX_SIZE"));
     add_opt(llama_arg(
-        {"-n", "--predict"}, "N",
+        {"-n", "--predict", "--n-predict"}, "N",
         format("number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict),
         [&params](int value) {
             params.n_predict = value;
