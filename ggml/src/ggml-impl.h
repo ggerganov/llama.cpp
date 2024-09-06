@@ -175,7 +175,7 @@ typedef __fp16 ggml_fp16_internal_t;
 
 // 32-bit ARM compatibility
 
-// vaddvq_s16
+// vaddlvq_s16
 // vpaddq_s16
 // vpaddq_s32
 // vaddvq_s32
@@ -185,12 +185,9 @@ typedef __fp16 ggml_fp16_internal_t;
 // vzip1_u8
 // vzip2_u8
 
-inline static int32_t vaddvq_s16(int16x8_t v) {
-    return
-        (int32_t)vgetq_lane_s16(v, 0) + (int32_t)vgetq_lane_s16(v, 1) +
-        (int32_t)vgetq_lane_s16(v, 2) + (int32_t)vgetq_lane_s16(v, 3) +
-        (int32_t)vgetq_lane_s16(v, 4) + (int32_t)vgetq_lane_s16(v, 5) +
-        (int32_t)vgetq_lane_s16(v, 6) + (int32_t)vgetq_lane_s16(v, 7);
+inline static int32_t vaddlvq_s16(int16x8_t v) {
+    int32x4_t v0 = vreinterpretq_s32_s64(vpaddlq_s32(vpaddlq_s16(v)));
+    return vgetq_lane_s32(v0, 0) + vgetq_lane_s32(v0, 2);
 }
 
 inline static int16x8_t vpaddq_s16(int16x8_t a, int16x8_t b) {
