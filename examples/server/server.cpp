@@ -474,6 +474,7 @@ struct server_queue {
             queue_tasks_deferred.pop_front();
             queue_tasks.push_back(std::move(task));
         }
+        condition_tasks.notify_one();
     }
 
     // end the start_loop routine
