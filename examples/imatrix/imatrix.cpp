@@ -5,11 +5,9 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-#include <sstream>
 #include <thread>
 #include <mutex>
 #include <vector>
-#include <fstream>
 #include <unordered_map>
 #include <algorithm>
 
@@ -22,16 +20,19 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
 
     LOG_TEE("\nexample usage:\n");
     LOG_TEE("\n    %s \\\n"
-            "       -m model.gguf -f some-text.txt [-o imatrix.dat] [--process-output] [--verbosity 1] \\\n"
+            "       -m model.gguf -f some-text.txt [-o imatrix.gguf] [--process-output] [--verbosity 1] \\\n"
             "       [--no-ppl] [--chunk 123] [--output-frequency 10] [--save-frequency 0] \\\n"
-            "       [--in-file imatrix-prev-0.dat --in-file imatrix-prev-1.dat ...]\n" , argv[0]);
+            "       [--in-file imatrix-prev-0.gguf --in-file imatrix-prev-1.gguf ...]\n" , argv[0]);
     LOG_TEE("\n");
 }
 
+static const char * const LLM_KV_IMATRIX_DATASET     = "imatrix.dataset";
+static const char * const LLM_KV_IMATRIX_CHUNK_COUNT = "imatrix.chunk_count";
+static const char * const LLM_KV_IMATRIX_CHUNK_SIZE  = "imatrix.chunk_size";
+
 struct Stats {
-    std::vector<float> values;
-    std::vector<int> counts;
-    int ncall = 0;
+    std::vector<double> values;
+    std::vector<int64_t> counts;
 };
 
 class IMatrixCollector {
@@ -39,13 +40,13 @@ public:
     IMatrixCollector() = default;
     void set_params(gpt_params params) { m_params = std::move(params); }
     bool collect_imatrix(struct ggml_tensor * t, bool ask, void * user_data);
-    void save_imatrix(int ncall = -1) const;
+    void save_imatrix(int32_t n_chunk = -1) const;
     bool load_imatrix(const char * file_name);
 private:
     std::unordered_map<std::string, Stats> m_stats;
     gpt_params                             m_params;
     std::mutex                             m_mutex;
-    int                                    m_last_call = 0;
+    int32_t                                m_last_chunk = 0;
     std::vector<float>                     m_src1_data;
     std::vector<char>                      m_ids; // the expert ids from ggml_mul_mat_id
 };
@@ -119,18 +120,24 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
 
         auto & e = m_stats[wname];
 
-        ++e.ncall;
-
+        if (e.counts.size() == 1 && n_as > 1) {
+            // broadcast, when loading an old imatrix
+            e.counts.resize(n_as, e.counts[0]);
+        }
         if (e.values.empty()) {
             e.values.resize(src1->ne[0]*n_as, 0);
-            e.counts.resize(src1->ne[0]*n_as, 0);
+            e.counts.resize(n_as, 0);
         }
         else if (e.values.size() != (size_t)src1->ne[0]*n_as) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
             exit(1); //GGML_ABORT("fatal error");
         }
+        else if (e.counts.size() != (size_t)n_as) {
+            fprintf(stderr, "Oops: inconsistent expert count for %s (%d vs %d)\n", wname.c_str(), (int)e.counts.size(), (int)n_as);
+            exit(1); //GGML_ABORT("fatal error");
+        }
         if (m_params.verbosity > 1) {
-            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[2], (int)src1->type);
+            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_chunk, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[2], (int)src1->type);
         }
         // loop over all possible experts, regardless if they are used or not in the batch
         for (int ex = 0; ex < n_as; ++ex) {
@@ -148,23 +155,26 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
                     const int64_t i12 = row;
                     const float * x = (const float *)((const char *)data + i11*src1->nb[1] + i12*src1->nb[2]);
 
+                    e.counts[ex]++;
+
                     for (int j = 0; j < (int)src1->ne[0]; ++j) {
                         e.values[e_start + j] += x[j]*x[j];
-                        e.counts[e_start + j]++;
-                        if (!std::isfinite(e.values[e_start + j])) {
-                            fprintf(stderr, "%f detected in %s\n", e.values[e_start + j], wname.c_str());
+                        if (!std::isfinite((float)e.values[e_start + j])) {
+                            fprintf(stderr, "%f detected in %s\n", (float)e.values[e_start + j], wname.c_str());
                             exit(1);
                         }
                     }
                 }
             }
-            if (e.ncall > m_last_call) {
-                m_last_call = e.ncall;
-                if (m_last_call % m_params.n_out_freq == 0) {
+            const int32_t n_chunk = e.counts[ex] / (m_params.n_ctx / m_params.n_parallel);
+            if (n_chunk > m_last_chunk) {
+                const int32_t chunk_step = n_chunk - m_last_chunk;
+                m_last_chunk = n_chunk;
+                if ((m_last_chunk % m_params.n_out_freq) / chunk_step == 0) {
                     save_imatrix();
                 }
-                if (m_params.n_save_freq > 0 && m_last_call%m_params.n_save_freq == 0) {
-                    save_imatrix(m_last_call);
+                if (m_params.n_save_freq > 0 && (m_last_chunk % m_params.n_save_freq) / chunk_step == 0) {
+                    save_imatrix(m_last_chunk);
                 }
             }
         }
@@ -172,34 +182,40 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
         auto & e = m_stats[wname];
         if (e.values.empty()) {
             e.values.resize(src1->ne[0], 0);
-            e.counts.resize(src1->ne[0], 0);
+            e.counts.resize(1, 0);
         }
         else if (e.values.size() != (size_t)src1->ne[0]) {
             fprintf(stderr, "Oops: inconsistent size for %s (%d vs %d)\n", wname.c_str(), (int)e.values.size(), (int)src1->ne[0]);
             exit(1); //GGML_ABORT("fatal error");
         }
-        ++e.ncall;
-        if (m_params.verbosity > 1) {
-            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
+        else if (e.counts.size() != 1) {
+            fprintf(stderr, "Oops: inconsistent expert count for %s (%d vs %d)\n", wname.c_str(), (int)e.counts.size(), 1);
+            exit(1); //GGML_ABORT("fatal error");
         }
+        if (m_params.verbosity > 1) {
+            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_chunk, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
+        }
+        // TODO: higher dimensions
         for (int row = 0; row < (int)src1->ne[1]; ++row) {
             const float * x = data + row * src1->ne[0];
+            e.counts[0]++;
             for (int j = 0; j < (int)src1->ne[0]; ++j) {
                 e.values[j] += x[j]*x[j];
-                e.counts[j]++;
-                if (!std::isfinite(e.values[j])) {
-                    fprintf(stderr, "%f detected in %s\n", e.values[j], wname.c_str());
+                if (!std::isfinite((float)e.values[j])) {
+                    fprintf(stderr, "%f detected in %s\n", (float)e.values[j], wname.c_str());
                     exit(1);
                 }
             }
         }
-        if (e.ncall > m_last_call) {
-            m_last_call = e.ncall;
-            if (m_last_call % m_params.n_out_freq == 0) {
+        const int32_t n_chunk = e.counts[0] / (m_params.n_ctx / m_params.n_parallel);
+        if (n_chunk > m_last_chunk) {
+            const int32_t chunk_step = n_chunk - m_last_chunk;
+            m_last_chunk = n_chunk;
+            if ((m_last_chunk % m_params.n_out_freq) / chunk_step == 0) {
                 save_imatrix();
             }
-            if (m_params.n_save_freq > 0 && m_last_call%m_params.n_save_freq == 0) {
-                save_imatrix(m_last_call);
+            if (m_params.n_save_freq > 0 && (m_last_chunk % m_params.n_save_freq) / chunk_step == 0) {
+                save_imatrix(m_last_chunk);
             }
         }
     }
@@ -207,15 +223,15 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
     return true;
 }
 
-void IMatrixCollector::save_imatrix(int ncall) const {
+void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
     auto fname = m_params.out_file;
     if (fname.empty()) {
-        fname = "imatrix.dat";
+        fname = "imatrix.gguf";
     }
 
-    if (ncall > 0) {
+    if (n_chunk > 0) {
         fname += ".at_";
-        fname += std::to_string(ncall);
+        fname += std::to_string(n_chunk);
     }
 
     // avoid writing imatrix entries that do not have full data
@@ -223,6 +239,7 @@ void IMatrixCollector::save_imatrix(int ncall) const {
 
     int n_entries = 0;
     std::vector<std::string> to_store;
+    size_t data_size = 0;
 
     bool is_first = true; // for printing
     for (const auto & kv : m_stats) {
@@ -256,100 +273,132 @@ void IMatrixCollector::save_imatrix(int ncall) const {
 
         n_entries++;
         to_store.push_back(kv.first);
+        data_size += GGML_PAD(ggml_tensor_overhead() + sizeof(float) * kv.second.values.size(), GGML_MEM_ALIGN);
+        data_size += GGML_PAD(ggml_tensor_overhead() + sizeof(float) * kv.second.counts.size(), GGML_MEM_ALIGN);
     }
 
     if (to_store.size() < m_stats.size()) {
         fprintf(stderr, "%s: warning: storing only %zu out of %zu entries\n", __func__, to_store.size(), m_stats.size());
     }
 
-    std::ofstream out(fname, std::ios::binary);
-    out.write((const char *) &n_entries, sizeof(n_entries));
+    struct ggml_init_params params = {
+        .mem_size   = data_size,
+        .mem_buffer = NULL,
+        .no_alloc   = false,
+    };
+    struct ggml_context * ctx = ggml_init(params);
+    struct gguf_context * ctx_gguf = gguf_init_empty();
+
+    gguf_set_val_str(ctx_gguf, "general.type", "imatrix");
+    // Write the input filename to later on specify it in quantize
+    gguf_set_val_str(ctx_gguf, LLM_KV_IMATRIX_DATASET, m_params.prompt_file.c_str());
+    // Write the number of chunks the matrix was computed with
+    gguf_set_val_u32(ctx_gguf, LLM_KV_IMATRIX_CHUNK_COUNT, m_last_chunk);
+    gguf_set_val_u32(ctx_gguf, LLM_KV_IMATRIX_CHUNK_SIZE, m_params.n_ctx / m_params.n_parallel);
+
     for (const auto & name : to_store) {
         const auto & stat = m_stats.at(name);
-        int len = name.size();
-        out.write((const char *) &len, sizeof(len));
-        out.write(name.c_str(), len);
-        out.write((const char *) &stat.ncall, sizeof(stat.ncall));
-        int nval = stat.values.size();
-        out.write((const char *) &nval, sizeof(nval));
+        const int32_t nval = (int32_t) stat.values.size();
+        const int32_t nmat = (int32_t) stat.counts.size();
         if (nval > 0) {
-            std::vector<float> tmp(nval);
-            for (int i = 0; i < nval; i++) {
-                tmp[i] = (stat.values[i] / static_cast<float>(stat.counts[i])) * static_cast<float>(stat.ncall);
+            struct ggml_tensor * sums = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, nval / nmat, nmat);
+            struct ggml_tensor * counts = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, nmat);
+            ggml_set_name(sums, (name + ".sums").c_str());
+            ggml_set_name(counts, (name + ".counts").c_str());
+
+            for (int32_t j = 0; j < nval; ++j) {
+                ((float *) sums->data)[j] = (float) stat.values[j];
             }
-            out.write((const char*)tmp.data(), nval*sizeof(float));
+            for (int32_t j = 0; j < nmat; ++j) {
+                ((float *) counts->data)[j] = (float) stat.counts[j];
+            }
+
+            gguf_add_tensor(ctx_gguf, sums);
+            gguf_add_tensor(ctx_gguf, counts);
         }
     }
 
-    // Write the number of call the matrix was computed with
-    out.write((const char *) &m_last_call, sizeof(m_last_call));
-
-    // Write the input filename at the end of the file to later on specify it in quantize
-    {
-        int len = m_params.prompt_file.size();
-        out.write((const char *) &len, sizeof(len));
-        out.write(m_params.prompt_file.c_str(), len);
-    }
+    gguf_write_to_file(ctx_gguf, fname.c_str(), false);
 
     if (m_params.verbosity > 0) {
-        fprintf(stderr, "\n%s: stored collected data after %d chunks in %s\n", __func__, m_last_call, fname.c_str());
+        fprintf(stderr, "\n%s: stored collected data after %d chunks in %s\n", __func__, m_last_chunk, fname.c_str());
     }
+
+    gguf_free(ctx_gguf);
+    ggml_free(ctx);
 }
 
-bool IMatrixCollector::load_imatrix(const char * fname) {
-    std::ifstream in(fname, std::ios::binary);
-    if (!in) {
-        printf("%s: failed to open %s\n",__func__, fname);
+bool IMatrixCollector::load_imatrix(const char * file_name) {
+    struct ggml_context * ctx = nullptr;
+    struct gguf_init_params meta_gguf_params = {
+        /* .no_alloc = */ false, // the data is needed
+        /* .ctx      = */ &ctx,
+    };
+    struct gguf_context * ctx_gguf = gguf_init_from_file(file_name, meta_gguf_params);
+    if (!ctx_gguf) {
         return false;
     }
-    int n_entries;
-    in.read((char*)&n_entries, sizeof(n_entries));
-    if (in.fail() || n_entries < 1) {
-        printf("%s: no data in file %s\n", __func__, fname);
+    const int32_t n_entries = gguf_get_n_tensors(ctx_gguf);
+    if (n_entries < 2) {
+        fprintf(stderr, "%s: no data in file %s\n", __func__, file_name);
+        gguf_free(ctx_gguf);
+        ggml_free(ctx);
         return false;
     }
-    for (int i = 0; i < n_entries; ++i) {
-        int len; in.read((char *)&len, sizeof(len));
-        std::vector<char> name_as_vec(len+1);
-        in.read((char *)name_as_vec.data(), len);
-        if (in.fail()) {
-            printf("%s: failed reading name for entry %d from %s\n",__func__,i+1, fname);
-            return false;
-        }
-        name_as_vec[len] = 0;
-        std::string name{name_as_vec.data()};
-        auto & e = m_stats[std::move(name)];
-        int ncall;
-        in.read((char*)&ncall, sizeof(ncall));
-        int nval;
-        in.read((char *)&nval, sizeof(nval));
-        if (in.fail() || nval < 1) {
-            printf("%s: failed reading number of values for entry %d\n",__func__,i);
-            m_stats = {};
+
+    const std::string sums_suffix{".sums"};
+    const std::string counts_suffix{".counts"};
+
+    // TODO: allow loading from mis-ordered imatrix files
+    for (int32_t i = 0; i < n_entries - 1; i += 2) {
+        std::string sums_name{gguf_get_tensor_name(ctx_gguf, i + 0)};
+        std::string counts_name{gguf_get_tensor_name(ctx_gguf, i + 1)};
+
+        if (sums_name.size() < sums_suffix.size() ||
+            counts_name.size() < counts_suffix.size() ||
+            !std::equal(sums_name.begin(), sums_name.end() - sums_suffix.size(), counts_name.begin()) ||
+            !std::equal(sums_suffix.rbegin(), sums_suffix.rend(), sums_name.rbegin()) ||
+            !std::equal(counts_suffix.rbegin(), counts_suffix.rend(), counts_name.rbegin())) {
+            fprintf(stderr, "%s: mismatched sums and counts for entry %d\n", __func__, i / 2);
+            gguf_free(ctx_gguf);
+            ggml_free(ctx);
             return false;
         }
 
+        struct ggml_tensor * sums = ggml_get_tensor(ctx, sums_name.c_str());
+        struct ggml_tensor * counts = ggml_get_tensor(ctx, counts_name.c_str());
+        if (!sums || !counts) {
+            fprintf(stderr, "%s: failed reading data for entry %d\n", __func__, i / 2);
+            gguf_free(ctx_gguf);
+            ggml_free(ctx);
+            return false;
+        }
+
+        std::string name = sums_name.substr(0, sums_name.size() - sums_suffix.size());
+        auto & e = m_stats[name];
+
+        int32_t nval = ggml_nelements(sums);
         if (e.values.empty()) {
             e.values.resize(nval, 0);
-            e.counts.resize(nval, 0);
+        }
+        int32_t ncounts = ggml_nelements(counts);
+        if (e.counts.empty()) {
+            e.counts.resize(ncounts, 0);
+        } else if (e.counts.size() == 1 && ncounts > 1) {
+            // broadcast, when loading an old imatrix
+            e.counts.resize(ncounts, e.counts[0]);
         }
 
-        std::vector<float> tmp(nval);
-        in.read((char*)tmp.data(), nval*sizeof(float));
-        if (in.fail()) {
-            printf("%s: failed reading data for entry %d\n",__func__,i);
-            m_stats = {};
-            return false;
+        // Recreate the state as expected by save_imatrix()
+        for (int32_t j = 0; j < nval; j++) {
+            e.values[j] += ((const float *) sums->data)[j];
         }
-
-        // Recreate the state as expected by save_imatrix(), and corerct for weighted sum.
-        for (int i = 0; i < nval; i++) {
-            e.values[i] += tmp[i];
-            e.counts[i] += ncall;
+        for (int32_t j = 0; j < ncounts; j++) {
+            e.counts[j] += std::lround(((const float *) counts->data)[j]);
         }
-        e.ncall += ncall;
-
     }
+    gguf_free(ctx_gguf);
+    ggml_free(ctx);
     return true;
 }
 

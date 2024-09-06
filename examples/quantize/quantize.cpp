@@ -6,8 +6,6 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include <fstream>
-#include <cmath>
 
 struct quant_option {
     std::string name;
@@ -60,6 +58,11 @@ static const char * const LLM_KV_QUANTIZE_IMATRIX_FILE       = "quantize.imatrix
 static const char * const LLM_KV_QUANTIZE_IMATRIX_DATASET    = "quantize.imatrix.dataset";
 static const char * const LLM_KV_QUANTIZE_IMATRIX_N_ENTRIES  = "quantize.imatrix.entries_count";
 static const char * const LLM_KV_QUANTIZE_IMATRIX_N_CHUNKS   = "quantize.imatrix.chunks_count";
+
+// TODO: share with imatrix.cpp
+static const char * const LLM_KV_IMATRIX_DATASET     = "imatrix.dataset";
+static const char * const LLM_KV_IMATRIX_CHUNK_COUNT = "imatrix.chunk_count";
+static const char * const LLM_KV_IMATRIX_CHUNK_SIZE  = "imatrix.chunk_size";
 
 static bool try_parse_ftype(const std::string & ftype_str_in, llama_ftype & ftype, std::string & ftype_str_out) {
     std::string ftype_str;
@@ -121,66 +124,92 @@ static void usage(const char * executable) {
 }
 
 static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_dataset, std::unordered_map<std::string, std::vector<float>> & imatrix_data) {
-    std::ifstream in(imatrix_file.c_str(), std::ios::binary);
-    if (!in) {
-        printf("%s: failed to open %s\n",__func__, imatrix_file.c_str());
+
+    struct ggml_context * ctx = nullptr;
+    struct gguf_init_params meta_gguf_params = {
+        /* .no_alloc = */ false, // the data is needed
+        /* .ctx      = */ &ctx,
+    };
+    struct gguf_context * ctx_gguf = gguf_init_from_file(imatrix_file.c_str(), meta_gguf_params);
+    if (!ctx_gguf) {
         exit(1);
     }
-    int n_entries;
-    in.read((char *)&n_entries, sizeof(n_entries));
-    if (in.fail() || n_entries < 1) {
-        printf("%s: no data in file %s\n", __func__, imatrix_file.c_str());
+    const int32_t n_entries = gguf_get_n_tensors(ctx_gguf);
+    if (n_entries < 2) {
+        fprintf(stderr, "%s: no data in file %s\n", __func__, imatrix_file.c_str());
+        gguf_free(ctx_gguf);
+        ggml_free(ctx);
         exit(1);
     }
-    for (int i = 0; i < n_entries; ++i) {
-        int len; in.read((char *)&len, sizeof(len));
-        std::vector<char> name_as_vec(len+1);
-        in.read((char *)name_as_vec.data(), len);
-        if (in.fail()) {
-            printf("%s: failed reading name for entry %d from %s\n", __func__, i+1, imatrix_file.c_str());
+
+    const int dataset_idx     = gguf_find_key(ctx_gguf, LLM_KV_IMATRIX_DATASET);
+    const int chunk_count_idx = gguf_find_key(ctx_gguf, LLM_KV_IMATRIX_CHUNK_COUNT);
+    const int chunk_size_idx  = gguf_find_key(ctx_gguf, LLM_KV_IMATRIX_CHUNK_SIZE);
+    if (dataset_idx < 0 || chunk_count_idx < 0 || chunk_size_idx < 0) {
+        fprintf(stderr, "%s: missing imatrix metadata in file %s\n", __func__, imatrix_file.c_str());
+        gguf_free(ctx_gguf);
+        ggml_free(ctx);
+        exit(1);
+    }
+
+    const uint32_t chunk_size = gguf_get_val_u32(ctx_gguf, chunk_size_idx);
+
+    const std::string sums_suffix{".sums"};
+    const std::string counts_suffix{".counts"};
+
+    // TODO: allow loading from mis-ordered imatrix files
+    for (int32_t i = 0; i < n_entries - 1; i += 2) {
+        std::string sums_name{gguf_get_tensor_name(ctx_gguf, i + 0)};
+        std::string counts_name{gguf_get_tensor_name(ctx_gguf, i + 1)};
+
+        if (sums_name.size() < sums_suffix.size() ||
+            counts_name.size() < counts_suffix.size() ||
+            !std::equal(sums_name.begin(), sums_name.end() - sums_suffix.size(), counts_name.begin()) ||
+            !std::equal(sums_suffix.rbegin(), sums_suffix.rend(), sums_name.rbegin()) ||
+            !std::equal(counts_suffix.rbegin(), counts_suffix.rend(), counts_name.rbegin())) {
+            fprintf(stderr, "%s: mismatched sums and counts for entry %d\n", __func__, i / 2);
+            gguf_free(ctx_gguf);
+            ggml_free(ctx);
             exit(1);
         }
-        name_as_vec[len] = 0;
-        std::string name{name_as_vec.data()};
+
+        struct ggml_tensor * sums = ggml_get_tensor(ctx, sums_name.c_str());
+        struct ggml_tensor * counts = ggml_get_tensor(ctx, counts_name.c_str());
+        if (!sums || !counts) {
+            fprintf(stderr, "%s: failed reading data for entry %d\n", __func__, i / 2);
+            gguf_free(ctx_gguf);
+            ggml_free(ctx);
+            exit(1);
+        }
+
+        const int64_t ne0 = sums->ne[0];
+        const int64_t ne1 = sums->ne[1];
+        std::string name = sums_name.substr(0, sums_name.size() - sums_suffix.size());
         auto & e = imatrix_data[name];
-        int ncall;
-        in.read((char *)&ncall, sizeof(ncall));
-        int nval;
-        in.read((char *)&nval, sizeof(nval));
-        if (in.fail() || nval < 1) {
-            printf("%s: failed reading number of values for entry %d\n", __func__, i);
-            imatrix_data = {};
-            exit(1);
+        e.resize(ggml_nelements(sums));
+        float max_count = 0.0f;
+        for (int64_t j = 0; j < ne1; ++j) {
+            const float count = ((const float *) counts->data)[ne1];
+            for (int64_t i = 0; i < ne0; ++i) {
+                e[ne1*ne0 + ne0] = ((const float *) sums->data)[ne1*ne0 + ne0] / count;
+            }
+            if (count > max_count) {
+                max_count = count;
+            }
         }
-        e.resize(nval);
-        in.read((char *)e.data(), nval*sizeof(float));
-        if (in.fail()) {
-            printf("%s: failed reading data for entry %d\n", __func__, i);
-            imatrix_data = {};
-            exit(1);
-        }
-        if (ncall > 0) {
-            for (auto& v : e) v /= ncall;
-        }
-
         if (getenv("LLAMA_TRACE")) {
-            printf("%s: loaded data (size = %6d, ncall = %6d) for '%s'\n", __func__, int(e.size()), ncall, name.c_str());
+            printf("%s: loaded data (size = %6d, ncall = %6d) for '%s'\n", __func__, int(e.size()), int(max_count / chunk_size), name.c_str());
         }
     }
+    gguf_free(ctx_gguf);
+    ggml_free(ctx);
 
-    // latest imatrix version contains the dataset filename at the end of the file
-    int m_last_call = 0;
-    if (in.peek() != EOF) {
-        in.read((char *)&m_last_call, sizeof(m_last_call));
-        int dataset_len;
-        in.read((char *)&dataset_len, sizeof(dataset_len));
-        std::vector<char> dataset_as_vec(dataset_len);
-        in.read(dataset_as_vec.data(), dataset_len);
-        imatrix_dataset.assign(dataset_as_vec.begin(), dataset_as_vec.end());
-        printf("%s: imatrix dataset='%s'\n", __func__, imatrix_dataset.c_str());
-    }
-    printf("%s: loaded %d importance matrix entries from %s computed on %d chunks\n", __func__, int(imatrix_data.size()), imatrix_file.c_str(), m_last_call);
-    return m_last_call;
+    int m_last_chunk = gguf_get_val_u32(ctx_gguf, chunk_count_idx);
+    imatrix_dataset = gguf_get_val_str(ctx_gguf, dataset_idx);
+
+    printf("%s: imatrix dataset='%s'\n", __func__, imatrix_dataset.c_str());
+    printf("%s: loaded %d importance matrix entries from %s computed on %d chunks\n", __func__, int(imatrix_data.size()), imatrix_file.c_str(), m_last_chunk);
+    return m_last_chunk;
 }
 
 static int prepare_imatrix(const std::string & imatrix_file,
