@@ -412,6 +412,7 @@ struct server_queue {
 
     // multi-task version of post()
     int post(std::vector<server_task> & tasks, bool front = false) {
+        std::unique_lock<std::mutex> lock(mutex_tasks);
         for (auto & task : tasks) {
             if (task.id == -1) {
                 task.id = id++;

@@ -2235,6 +2235,15 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
             else { throw std::invalid_argument("invalid value"); }
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
+    add_opt(llama_arg(
+        {"--output-format"}, "{md,jsonl}",
+        "output format for batched-bench results (default: md)",
+        [&params](std::string value) {
+            /**/ if (value == "jsonl") { params.batched_bench_output_jsonl = true; }
+            else if (value == "md") { params.batched_bench_output_jsonl = false; }
+            else { std::invalid_argument("invalid value"); }
+        }
+    ).set_examples({LLAMA_EXAMPLE_BENCH}));
 #ifndef LOG_DISABLE_LOGS
     // TODO: make this looks less weird
     add_opt(llama_arg(
