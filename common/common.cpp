@@ -1678,6 +1678,14 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         else { invalid_param = true; }
         return true;
     }
+    if (arg == "--output-format") {
+        CHECK_ARG
+        std::string value(argv[i]);
+        /**/ if (value == "jsonl") { params.batched_bench_output_jsonl = true; }
+        else if (value == "md") { params.batched_bench_output_jsonl = false; }
+        else { invalid_param = true; }
+        return true;
+    }
     if (arg == "--no-warmup") {
         params.warmup = false;
         return true;
@@ -2067,6 +2075,9 @@ void gpt_params_print_usage(int /*argc*/, char ** argv, const gpt_params & param
     options.push_back({ "export-lora", "       --lora FNAME",           "path to LoRA adapter  (can be repeated to use multiple adapters)" });
     options.push_back({ "export-lora", "       --lora-scaled FNAME S",  "path to LoRA adapter with user defined scaling S  (can be repeated to use multiple adapters)" });
     options.push_back({ "export-lora", "-o,    --output FNAME",         "output file (default: '%s')", params.lora_outfile.c_str() });
+
+    options.push_back({ "batched-bench" });
+    options.push_back({ "batched-bench", "       --output-format {md,jsonl}", "output format for batched-bench results (default: md)" });
 
     printf("usage: %s [options]\n", argv[0]);
 
