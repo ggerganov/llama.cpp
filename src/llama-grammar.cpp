@@ -822,12 +822,13 @@ llama_grammar_stacks & llama_grammar_get_stacks(struct llama_grammar * grammar) 
     return grammar->stacks;
 }
 
-llama_grammar_stacks llama_grammar_accept(
+void llama_grammar_accept(
         const llama_grammar_rules  & rules,
         const llama_grammar_stacks & stacks,
-        const uint32_t               chr) {
-    llama_grammar_stacks result;
-    result.reserve(stacks.size());
+        const uint32_t               chr,
+              llama_grammar_stacks & stacks_new) {
+    stacks_new.clear();
+    stacks_new.reserve(stacks.size());
 
     for (const auto & stack : stacks) {
         if (stack.empty()) {
@@ -843,11 +844,9 @@ llama_grammar_stacks llama_grammar_accept(
             if (!llama_grammar_is_end_of_sequence(pos)) {
                 new_stack.push_back(pos);
             }
-            llama_grammar_advance_stack(rules, new_stack, result);
+            llama_grammar_advance_stack(rules, new_stack, stacks_new);
         }
     }
-
-    return result;
 }
 
 llama_grammar_candidates llama_grammar_reject_candidates_for_stack(
@@ -1127,9 +1126,11 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
     const auto   decoded     = decode_utf8(piece, grammar.partial_utf8);
     const auto & code_points = decoded.first;
 
+    llama_grammar_stacks stacks_new;
+
     for (auto it = code_points.begin(), end = code_points.end() - 1; it != end; ++it) {
-        llama_grammar_stacks new_stacks = llama_grammar_accept(grammar.rules, grammar.stacks, *it);
-        grammar.stacks = std::move(new_stacks);
+        llama_grammar_accept(grammar.rules, grammar.stacks, *it, stacks_new);
+        grammar.stacks = std::move(stacks_new);
     }
 
     grammar.partial_utf8 = decoded.second;

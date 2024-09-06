@@ -12,24 +12,24 @@ static bool llama_grammar_validate(struct llama_grammar * grammar, const std::st
     const auto cpts = unicode_cpts_from_utf8(input_str);
 
     const llama_grammar_rules  & rules      = llama_grammar_get_rules (grammar);
-          llama_grammar_stacks & cur_stacks = llama_grammar_get_stacks(grammar);
+          llama_grammar_stacks & stacks_cur = llama_grammar_get_stacks(grammar);
 
     size_t pos = 0;
     for (const auto & cpt : cpts) {
-        const llama_grammar_stacks prev_stacks = llama_grammar_get_stacks(grammar); // copy
+        const llama_grammar_stacks stacks_prev = llama_grammar_get_stacks(grammar); // copy
 
-        cur_stacks = llama_grammar_accept(rules, prev_stacks, cpt);
+        llama_grammar_accept(rules, stacks_prev, cpt, stacks_cur);
 
-        if (cur_stacks.empty()) {
+        if (stacks_cur.empty()) {
             error_pos = pos;
             error_msg = "Unexpected character '" + unicode_cpt_to_utf8(cpt) + "'";
-            cur_stacks = prev_stacks;
+            stacks_cur = stacks_prev;
             return false;
         }
         ++pos;
     }
 
-    for (const auto & stack : cur_stacks) {
+    for (const auto & stack : stacks_cur) {
         if (stack.empty()) {
             return true;
         }

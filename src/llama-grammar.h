@@ -65,10 +65,11 @@ const llama_grammar_rules  & llama_grammar_get_rules (const struct llama_grammar
 // be positioned at a character range (see `llama_grammar_advance_stack`), and
 // produces the N possible stacks if the given char is accepted at those
 // positions
-llama_grammar_stacks llama_grammar_accept(
+void llama_grammar_accept(
         const llama_grammar_rules  & rules,
         const llama_grammar_stacks & stacks,
-                          uint32_t   chr);
+                          uint32_t   chr,
+              llama_grammar_stacks & stacks_new);
 
 std::vector<llama_grammar_candidate> llama_grammar_reject_candidates_for_stack(
         const llama_grammar_rules      & rules,
