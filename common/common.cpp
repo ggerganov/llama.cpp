@@ -456,6 +456,11 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
         params.kv_overrides.back().key[0] = 0;
     }
 
+    if (params.seed == LLAMA_DEFAULT_SEED) {
+        params.seed = time(NULL);
+        sparams.seed = params.seed;
+    }
+
     return true;
 }
 
@@ -468,7 +473,7 @@ bool gpt_params_parse(int argc, char ** argv, gpt_params & params, std::vector<l
             return false;
         }
         if (params.usage) {
-            gpt_params_print_usage(options);
+            gpt_params_print_usage(params, options);
             if (params.print_usage) {
                 params.print_usage(argc, argv);
             }
@@ -612,7 +617,7 @@ std::string llama_arg::to_string() {
     return ss.str();
 }
 
-void gpt_params_print_usage(std::vector<llama_arg> & options) {
+void gpt_params_print_usage(gpt_params & params, std::vector<llama_arg> & options) {
     auto print_options = [](std::vector<llama_arg *> & options) {
         for (llama_arg * opt : options) {
             printf("%s", opt->to_string().c_str());
@@ -622,14 +627,16 @@ void gpt_params_print_usage(std::vector<llama_arg> & options) {
     std::vector<llama_arg *> common_options;
     std::vector<llama_arg *> specific_options;
     for (auto & opt : options) {
-        if (opt.in_example(LLAMA_EXAMPLE_COMMON)) {
-            common_options.push_back(&opt);
-        } else {
+        // in case multiple LLAMA_EXAMPLE_* are set, we prioritize the LLAMA_EXAMPLE_* matching current example
+        if (opt.in_example(params.curr_ex)) {
             specific_options.push_back(&opt);
+        } else {
+            common_options.push_back(&opt);
         }
     }
     printf("----- common options -----\n\n");
     print_options(common_options);
+    // TODO: maybe convert enum llama_example to string
     printf("\n\n----- example-specific options -----\n\n");
     print_options(specific_options);
 }
@@ -641,6 +648,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
 std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex, std::function<void(int, char **)> print_usage) {
     std::vector<llama_arg> options;
     params.print_usage = print_usage;
+    params.curr_ex     = ex;
     llama_sampling_params & sparams = params.sparams;
 
     std::string sampler_type_chars;
@@ -1772,14 +1780,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         [&params](std::string value) {
             params.lora_adapters.push_back({ std::string(value), 1.0 });
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_EXPORT_LORA}));
     add_opt(llama_arg(
         {"--lora-scaled"}, "FNAME", "SCALE",
         "path to LoRA adapter with user defined scaling (can be repeated to use multiple adapters)",
         [&params](std::string fname, std::string scale) {
             params.lora_adapters.push_back({ fname, std::stof(scale) });
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_EXPORT_LORA}));
     add_opt(llama_arg(
         {"--control-vector"}, "FNAME",
         "add a control vector\nnote: this argument can be repeated to add multiple control vectors",

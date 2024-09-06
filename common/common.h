@@ -63,6 +63,24 @@ int32_t cpu_get_num_math();
 // CLI argument parsing
 //
 
+enum llama_example {
+    LLAMA_EXAMPLE_COMMON,
+    LLAMA_EXAMPLE_SPECULATIVE,
+    LLAMA_EXAMPLE_MAIN,
+    LLAMA_EXAMPLE_INFILL,
+    LLAMA_EXAMPLE_EMBEDDING,
+    LLAMA_EXAMPLE_PERPLEXITY,
+    LLAMA_EXAMPLE_RETRIEVAL,
+    LLAMA_EXAMPLE_PASSKEY,
+    LLAMA_EXAMPLE_IMATRIX,
+    LLAMA_EXAMPLE_BENCH,
+    LLAMA_EXAMPLE_SERVER,
+    LLAMA_EXAMPLE_CVECTOR_GENERATOR,
+    LLAMA_EXAMPLE_EXPORT_LORA,
+
+    LLAMA_EXAMPLE_COUNT,
+};
+
 // dimensionality reduction methods, used by cvector-generator
 enum dimre_method {
     DIMRE_METHOD_PCA,
@@ -79,6 +97,7 @@ struct cpu_params {
 };
 
 struct gpt_params {
+    enum llama_example curr_ex    = LLAMA_EXAMPLE_COMMON;
     uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
 
     int32_t n_predict             =    -1; // new tokens to predict
@@ -125,7 +144,7 @@ struct gpt_params {
     // // sampling parameters
     struct llama_sampling_params sparams;
 
-    std::string model                = "model.gguf"; // model path
+    std::string model                = ""; // model path
     std::string model_draft          = ""; // draft model for speculative decoding
     std::string model_alias          = "unknown"; // model alias
     std::string model_url            = ""; // model url to download
@@ -280,24 +299,6 @@ struct gpt_params {
     std::string lora_outfile = "ggml-lora-merged-f16.gguf";
 };
 
-enum llama_example {
-    LLAMA_EXAMPLE_COMMON,
-    LLAMA_EXAMPLE_SPECULATIVE,
-    LLAMA_EXAMPLE_MAIN,
-    LLAMA_EXAMPLE_INFILL,
-    LLAMA_EXAMPLE_EMBEDDING,
-    LLAMA_EXAMPLE_PERPLEXITY,
-    LLAMA_EXAMPLE_RETRIEVAL,
-    LLAMA_EXAMPLE_PASSKEY,
-    LLAMA_EXAMPLE_IMATRIX,
-    LLAMA_EXAMPLE_BENCH,
-    LLAMA_EXAMPLE_SERVER,
-    LLAMA_EXAMPLE_CVECTOR_GENERATOR,
-    LLAMA_EXAMPLE_EXPORT_LORA,
-
-    LLAMA_EXAMPLE_COUNT,
-};
-
 struct llama_arg {
     std::set<enum llama_example> examples = {LLAMA_EXAMPLE_COMMON};
     std::vector<std::string> args;
@@ -352,11 +353,18 @@ struct llama_arg {
     std::string to_string();
 };
 
+// initialize list of options (arguments) that can be used by the current example
 std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex);
+// optionally, we can provide "print_usage" to print example usage
 std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex, std::function<void(int, char **)> print_usage);
-bool gpt_params_parse      (int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
-bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
-void gpt_params_print_usage(std::vector<llama_arg> & options);
+
+// parse input arguments from CLI
+// if one argument has invalid value, it will automatically display usage of the specific argument (and not the full usage message)
+bool gpt_params_parse   (int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+
+// print full usage message; it will be called internally by gpt_params_parse() if "-h" is set
+void gpt_params_print_usage(gpt_params & params, std::vector<llama_arg> & options);
 
 void gpt_params_handle_model_default(gpt_params & params);
 
