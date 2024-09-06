@@ -20592,102 +20592,17 @@ int32_t llama_chat_apply_template(
 // sampling
 //
 
-const char * llama_sampler_name(const struct llama_sampler * smpl) {
-    return llama_sampler_name_impl(*smpl);
-}
-
-void llama_sampler_accept(struct llama_sampler * smpl, llama_token token) {
-    llama_sampler_accept_impl(*smpl, token);
-}
-
-void llama_sampler_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
-    llama_sampler_apply_impl(*smpl, cur_p);
-}
-
-void llama_sampler_reset(struct llama_sampler * smpl) {
-    llama_sampler_reset_impl(*smpl);
-}
-
-struct llama_sampler * llama_sampler_clone(const struct llama_sampler * smpl) {
-    return llama_sampler_clone_impl(*smpl);
-}
-
-void llama_sampler_free(struct llama_sampler * smpl) {
-    if (smpl == nullptr) {
-        return;
-    }
-
-    llama_sampler_free_impl(smpl);
-}
-
-struct llama_sampler * llama_sampler_chain_init(struct llama_sampler_chain_params params) {
-    return llama_sampler_chain_init_impl(params);
-}
-
-void llama_sampler_chain_add(struct llama_sampler * chain, struct llama_sampler * smpl) {
-    llama_sampler_chain_add_impl(*(struct llama_sampler_chain *) chain->ctx, smpl);
-}
-
-struct llama_sampler * llama_sampler_chain_get(const struct llama_sampler * chain, int32_t i) {
-    return llama_sampler_chain_get_impl(*(const struct llama_sampler_chain *) chain->ctx, i);
-}
-
-int llama_sampler_chain_n(const struct llama_sampler * chain) {
-    return llama_sampler_chain_n_impl(*(const struct llama_sampler_chain *) chain->ctx);
-}
-
-struct llama_sampler * llama_sampler_init_greedy(void) {
-    return llama_sampler_init_greedy_impl();
-}
-
-struct llama_sampler * llama_sampler_init_dist(uint32_t seed) {
-    return llama_sampler_init_dist_impl(seed);
-}
-
-struct llama_sampler * llama_sampler_init_softmax(void) {
-    return llama_sampler_init_softmax_impl();
-}
-
-struct llama_sampler * llama_sampler_init_top_k(int32_t k) {
-    return llama_sampler_init_top_k_impl(k);
-}
-
-struct llama_sampler * llama_sampler_init_top_p(float p, int32_t min_keep) {
-    return llama_sampler_init_top_p_impl(p, min_keep);
-}
-
-struct llama_sampler * llama_sampler_init_min_p(float p, int32_t min_keep) {
-    return llama_sampler_init_min_p_impl(p, min_keep);
-}
-
-struct llama_sampler * llama_sampler_init_tail_free(float z, int32_t min_keep) {
-    return llama_sampler_init_tail_free_impl(z, min_keep);
-}
-
-struct llama_sampler * llama_sampler_init_typical(float p, int32_t min_keep) {
-    return llama_sampler_init_typical_impl(p, min_keep);
-}
-
-struct llama_sampler * llama_sampler_init_temp(float temp) {
-    return llama_sampler_init_temp_impl(temp);
-}
-
-struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, float exponent) {
-    return llama_sampler_init_temp_ext_impl(temp, delta, exponent);
-}
-
+// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
 struct llama_sampler * llama_sampler_init_mirostat(const struct llama_model * model, uint32_t seed, float tau, float eta, int32_t m) {
     return llama_sampler_init_mirostat_impl(model->vocab, seed, tau, eta, m);
 }
 
-struct llama_sampler * llama_sampler_init_mirostat_v2(uint32_t seed, float tau, float eta) {
-    return llama_sampler_init_mirostat_v2_impl(seed, tau, eta);
-}
-
+// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
 }
 
+// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
 struct llama_sampler * llama_sampler_init_penalties(
         const struct llama_model * model,
                          int32_t   penalty_last_n,
@@ -20699,29 +20614,12 @@ struct llama_sampler * llama_sampler_init_penalties(
     return llama_sampler_init_penalties_impl(model->vocab, penalty_last_n, penalty_repeat, penalty_freq, penalty_present, penalize_nl, ignore_eos);
 }
 
-LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias(
+// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
+struct llama_sampler * llama_sampler_init_logit_bias(
         const struct llama_model * model,
                          int32_t   n_logit_bias,
           const llama_logit_bias * logit_bias) {
     return llama_sampler_init_logit_bias_impl(model->vocab, n_logit_bias, logit_bias);
-}
-
-llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx) {
-    const auto * logits = llama_get_logits_ith(ctx, idx);
-
-    const int n_vocab = llama_n_vocab(llama_get_model(ctx));
-
-    // TODO: do not allocate each time
-    std::vector<llama_token_data> cur(n_vocab);
-    for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-        cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
-    }
-
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
-
-    llama_sampler_apply(smpl, &cur_p);
-
-    return cur_p.data[cur_p.selected].id;
 }
 
 //
