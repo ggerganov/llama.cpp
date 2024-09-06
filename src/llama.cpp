@@ -2995,17 +2995,17 @@ struct llama_sbatch {
                 ubatch.output[ubatch.n_tokens + i] = 1;
                 out_ids.push_back(ids[seq.offset + i]);
             }
-        } else if (batch->logits) {
+        } else if (batch->output) {
             if (ubatch.equal_seqs) {
                 for (size_t i = 0; i < length; ++i) {
                     size_t id = ids[seq.offset + i];
-                    int8_t is_output = batch->logits[id];
+                    int8_t is_output = batch->output[id];
                     ubatch.output[ubatch.n_tokens + i] = is_output;
                     if (is_output) { out_ids.push_back(id); }
                 }
             } else {
                 // simple split
-                ubatch.output = batch->logits + seq.offset;
+                ubatch.output = batch->output + seq.offset;
                 for (size_t i = 0; i < length; ++i) {
                     if (ubatch.output[i] != 0) { out_ids.push_back(seq.offset + i); }
                 }
@@ -16099,9 +16099,9 @@ static int llama_decode_internal(
     lctx.embd_seq.clear();
 
     // count outputs
-    if (batch_all.logits && !embd_pooled) {
+    if (batch_all.output && !embd_pooled) {
         for (uint32_t i = 0; i < n_tokens_all; ++i) {
-            n_outputs += batch_all.logits[i] != 0;
+            n_outputs += batch_all.output[i] != 0;
         }
     } else if (lctx.logits_all || embd_pooled) {
         n_outputs = n_tokens_all;
@@ -20001,7 +20001,7 @@ struct llama_batch llama_batch_init(int32_t n_tokens_alloc, int32_t embd, int32_
     }
     batch.seq_id[n_tokens_alloc] = nullptr;
 
-    batch.logits   = (int8_t *)        malloc(sizeof(int8_t)         * n_tokens_alloc);
+    batch.output   = (int8_t *)        malloc(sizeof(int8_t)         * n_tokens_alloc);
 
     return batch;
 }
@@ -20017,7 +20017,7 @@ void llama_batch_free(struct llama_batch batch) {
         }
         free(batch.seq_id);
     }
-    if (batch.logits)   free(batch.logits);
+    if (batch.output)   free(batch.output);
 }
 
 int32_t llama_encode(
@@ -20099,7 +20099,7 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
         }
 
         if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
+            throw std::runtime_error(format("batch.output[%d] != true", i));
         }
         if (j >= ctx->n_outputs) {
             // This should not happen
@@ -20148,7 +20148,7 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
         }
 
         if (j < 0) {
-            throw std::runtime_error(format("batch.logits[%d] != true", i));
+            throw std::runtime_error(format("batch.output[%d] != true", i));
         }
         if (j >= ctx->n_outputs) {
             // This should not happen

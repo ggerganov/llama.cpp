@@ -86,11 +86,11 @@ for (i, token) in tokens.enumerated() {
     if let seq_id = batch.seq_id[i] {
         seq_id[0] = 0
     }
-    batch.logits[i] = 0
+    batch.output[i] = 0
 }
 
 // llama_decode will output logits only for the last token of the prompt
-batch.logits[Int(batch.n_tokens) - 1] = 1
+batch.output[Int(batch.n_tokens) - 1] = 1
 
 if llama_decode(context, batch) != 0 {
     print("llama_decode() failed")
@@ -178,7 +178,7 @@ while n_cur <= n_len {
         if let seq_id = batch.seq_id[Int(batch.n_tokens)] {
             seq_id[0] = Int32(i)
         }
-        batch.logits[Int(batch.n_tokens)] = 1
+        batch.output[Int(batch.n_tokens)] = 1
 
         i_batch[i] = batch.n_tokens
 
