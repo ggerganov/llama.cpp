@@ -511,7 +511,7 @@ static struct llama_sampler_i llama_sampler_chain_i = {
     /* .accept = */ [](struct llama_sampler * smpl, llama_token token) {
         auto * chain = (llama_sampler_chain *) smpl->ctx;
 
-        time_meas tm(chain->t_sample_us, chain->params.no_timing);
+        time_meas tm(chain->t_sample_us, chain->params.no_perf);
 
         for (auto * smpl : chain->samplers) {
             llama_sampler_accept(smpl, token);
@@ -522,7 +522,7 @@ static struct llama_sampler_i llama_sampler_chain_i = {
     /* .apply  = */ [](struct llama_sampler * smpl, llama_token_data_array * cur_p) {
         auto * chain = (llama_sampler_chain *) smpl->ctx;
 
-        time_meas tm(chain->t_sample_us, chain->params.no_timing);
+        time_meas tm(chain->t_sample_us, chain->params.no_perf);
 
         for (auto * smpl : chain->samplers) {
             llama_sampler_apply(smpl, cur_p);

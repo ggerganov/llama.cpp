@@ -293,8 +293,10 @@ int main(int argc, char ** argv) {
         }
     }
 
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
+
     // clean up
-    llama_print_timings(ctx, nullptr);
     llama_batch_free(query_batch);
     llama_free(ctx);
     llama_free_model(model);

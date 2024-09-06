@@ -342,6 +342,7 @@ extern "C" {
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
         bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
+      //bool no_perf;     // whether to measure performance timings, TODO: implement
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
@@ -371,22 +372,8 @@ extern "C" {
     } llama_logit_bias;
 
     typedef struct llama_sampler_chain_params {
-        bool no_timing; // whether to measure performance timings
+        bool no_perf; // whether to measure performance timings
     } llama_sampler_chain_params;
-
-    // performance timing information
-    struct llama_timings {
-        double t_start_ms;
-        double t_end_ms;
-        double t_load_ms;
-        double t_sampler_ms;
-        double t_p_eval_ms;
-        double t_eval_ms;
-
-        int32_t n_sampler;
-        int32_t n_p_eval;
-        int32_t n_eval;
-    };
 
     // used in chat template
     typedef struct llama_chat_message {
@@ -1121,13 +1108,6 @@ extern "C" {
     //  Returns the split_prefix length.
     LLAMA_API int llama_split_prefix(char * split_prefix, size_t maxlen, const char * split_path, int split_no, int split_count);
 
-    // Performance information
-    LLAMA_API struct llama_timings llama_get_timings(struct llama_context * ctx);
-
-    // note: requires llama_sampler_chain. how to prevent misuse?
-    LLAMA_API void llama_print_timings(const struct llama_context * ctx, const struct llama_sampler * chain);
-    LLAMA_API void llama_reset_timings(      struct llama_context * ctx,       struct llama_sampler * chain);
-
     // Print system information
     LLAMA_API const char * llama_print_system_info(void);
 
@@ -1135,7 +1115,21 @@ extern "C" {
     // If this is not called, or NULL is supplied, everything is output on stderr.
     LLAMA_API void llama_log_set(ggml_log_callback log_callback, void * user_data);
 
-    LLAMA_API void llama_dump_timing_info_yaml(FILE * stream, const struct llama_context * ctx);
+    //
+    // Performance utils
+    //
+    // NOTE: Used by llama.cpp examples, avoid using in third-party apps. Instead, do your own performance measurements.
+    //
+
+    enum llama_perf_type {
+        LLAMA_PERF_TYPE_CONTEXT       = 0,
+        LLAMA_PERF_TYPE_SAMPLER_CHAIN = 1,
+    };
+
+    LLAMA_API void llama_perf_print(const void * ctx, enum llama_perf_type type);
+    LLAMA_API void llama_perf_reset(      void * ctx, enum llama_perf_type type);
+
+    LLAMA_API void llama_perf_dump_yaml(FILE * stream, const struct llama_context * ctx);
 
 #ifdef __cplusplus
 }

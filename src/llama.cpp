@@ -17924,7 +17924,7 @@ struct llama_context_params llama_context_default_params() {
 
 struct llama_sampler_chain_params llama_sampler_chain_default_params() {
     struct llama_sampler_chain_params result = {
-        /*.no_timing                   =*/ false, // TODO: change to true and set explicitly in examples
+        /*.no_perf                     =*/ true,
     };
 
     return result;
@@ -20650,45 +20650,6 @@ int llama_split_prefix(char * dest, size_t maxlen, const char * split_path, int 
     return 0;
 }
 
-void llama_print_timings(const struct llama_context * ctx, const struct llama_sampler * chain) {
-    auto * smpl = chain ? (const struct llama_sampler_chain *) chain->ctx : nullptr;
-
-    const llama_timings timings = {
-        /*.t_start_ms   =*/ 1e-3 * ctx->t_start_us,
-        /*.t_end_ms     =*/ 1.00 * ggml_time_ms(),
-        /*.t_load_ms    =*/ 1e-3 * ctx->t_load_us,
-        /*.t_sampler_ms =*/ 1e-3 * (smpl ? smpl->t_sample_us  : 0.0),
-        /*.t_p_eval_ms  =*/ 1e-3 * ctx->t_p_eval_us,
-        /*.t_eval_ms    =*/ 1e-3 * ctx->t_eval_us,
-
-        /*.n_sampler =*/ std::max(0, smpl ? smpl->n_sample  : 0),
-        /*.n_p_eval  =*/ std::max(0, ctx->n_p_eval),
-        /*.n_eval    =*/ std::max(1, ctx->n_eval),
-    };
-
-    LLAMA_LOG_INFO("\n");
-    LLAMA_LOG_INFO("%s:        load time = %10.2f ms\n", __func__, timings.t_load_ms);
-    LLAMA_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, timings.t_sampler_ms, timings.n_sampler, timings.t_sampler_ms / timings.n_sampler, 1e3 / timings.t_sampler_ms * timings.n_sampler);
-    LLAMA_LOG_INFO("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, timings.t_p_eval_ms, timings.n_p_eval, timings.t_p_eval_ms / timings.n_p_eval, 1e3 / timings.t_p_eval_ms * timings.n_p_eval);
-    LLAMA_LOG_INFO("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, timings.t_eval_ms, timings.n_eval, timings.t_eval_ms / timings.n_eval, 1e3 / timings.t_eval_ms * timings.n_eval);
-    LLAMA_LOG_INFO("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (timings.t_end_ms - timings.t_start_ms), (timings.n_p_eval + timings.n_eval));
-}
-
-void llama_reset_timings(struct llama_context * ctx, struct llama_sampler * chain) {
-    ctx->t_start_us  = ggml_time_us();
-    ctx->t_eval_us   = ctx->n_eval   = 0;
-    ctx->t_p_eval_us = ctx->n_p_eval = 0;
-
-    if (chain) {
-        auto * smpl = (struct llama_sampler_chain *) chain->ctx;
-
-        smpl->t_sample_us = smpl->n_sample = 0;
-    }
-}
-
 const char * llama_print_system_info(void) {
     static std::string s;
 
@@ -20717,7 +20678,68 @@ const char * llama_print_system_info(void) {
     return s.c_str();
 }
 
-void llama_dump_timing_info_yaml(FILE * stream, const llama_context * ctx) {
+void llama_perf_print(const void * ctx, enum llama_perf_type type) {
+    switch (type) {
+        case LLAMA_PERF_TYPE_CONTEXT:
+            {
+                const auto * p = (const struct llama_context *) ctx;
+
+                const double t_start_ms   = 1e-3 * p->t_start_us;
+                const double t_end_ms     = 1.00 * ggml_time_ms();
+                const double t_load_ms    = 1e-3 * p->t_load_us;
+                const double t_p_eval_ms  = 1e-3 * p->t_p_eval_us;
+                const double t_eval_ms    = 1e-3 * p->t_eval_us;
+
+                const int32_t n_p_eval  = std::max(0, p->n_p_eval);
+                const int32_t n_eval    = std::max(1, p->n_eval);
+
+                LLAMA_LOG_INFO("%s:        load time = %10.2f ms\n", __func__, t_load_ms);
+                LLAMA_LOG_INFO("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
+                        __func__, t_p_eval_ms, n_p_eval, t_p_eval_ms / n_p_eval, 1e3 / t_p_eval_ms * n_p_eval);
+                LLAMA_LOG_INFO("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+                        __func__, t_eval_ms, n_eval, t_eval_ms / n_eval, 1e3 / t_eval_ms * n_eval);
+                LLAMA_LOG_INFO("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (t_end_ms - t_start_ms), (n_p_eval + n_eval));
+            } break;
+        case LLAMA_PERF_TYPE_SAMPLER_CHAIN:
+            {
+                const auto * smpl = (const struct llama_sampler *) ctx;
+                const auto * p = (const struct llama_sampler_chain *) smpl->ctx;
+
+                const double t_sampler_ms = 1e-3 * p->t_sample_us;
+
+                const int32_t n_sampler = std::max(0, p->n_sample);
+
+                LLAMA_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+                        __func__, t_sampler_ms, n_sampler, t_sampler_ms / n_sampler, 1e3 / t_sampler_ms * n_sampler);
+            } break;
+        default:
+            GGML_ABORT("invalid perf type");
+    }
+}
+
+void llama_perf_reset(void * ctx, enum llama_perf_type type) {
+    switch (type) {
+        case LLAMA_PERF_TYPE_CONTEXT:
+            {
+                auto * p = (struct llama_context *) ctx;
+
+                p->t_start_us  = ggml_time_us();
+                p->t_eval_us   = p->n_eval = 0;
+                p->t_p_eval_us = p->n_p_eval = 0;
+            } break;
+        case LLAMA_PERF_TYPE_SAMPLER_CHAIN:
+            {
+                auto * smpl = (struct llama_sampler *) ctx;
+                auto * p = (struct llama_sampler_chain *) smpl->ctx;
+
+                p->t_sample_us = p->n_sample = 0;
+            } break;
+        default:
+            GGML_ABORT("invalid perf type");
+    }
+}
+
+void llama_perf_dump_yaml(FILE * stream, const llama_context * ctx) {
     fprintf(stream, "\n");
     fprintf(stream, "###########\n");
     fprintf(stream, "# Timings #\n");

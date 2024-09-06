@@ -613,12 +613,12 @@ int main(int argc, char ** argv) {
     LOG_TEE("n_accept  = %d\n", n_accept);
     LOG_TEE("accept    = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
-    LOG_TEE("\ndraft:\n");
+    LOG_TEE("\ndraft:\n\n");
     // TODO: print sampling/grammar timings for all drafts
-    gpt_print_timings(ctx_dft, nullptr);
+    llama_perf_print(ctx_dft, LLAMA_PERF_TYPE_CONTEXT);
 
-    LOG_TEE("\ntarget:\n");
-    gpt_print_timings(ctx_tgt, smpl);
+    LOG_TEE("\ntarget:\n\n");
+    gpt_perf_print(ctx_tgt, smpl);
 
     gpt_sampler_free(smpl);
     for (int s = 0; s < n_seq_dft; ++s) {

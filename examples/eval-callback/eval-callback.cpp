@@ -181,7 +181,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_print_timings(ctx, nullptr);
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
 
     llama_free(ctx);
     llama_free_model(model);

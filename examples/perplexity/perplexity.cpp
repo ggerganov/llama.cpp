@@ -76,7 +76,7 @@ static void write_logfile(
     fprintf(logfile, "ppl_value: %f\n", results.ppl_value);
     yaml_dump_vector_float(logfile, "probs", results.probs);
 
-    llama_dump_timing_info_yaml(logfile, ctx);
+    llama_perf_dump_yaml(logfile, ctx);
     fclose(logfile);
 }
 
@@ -2048,7 +2048,8 @@ int main(int argc, char ** argv) {
         results = perplexity(ctx, params, n_ctx);
     }
 
-    llama_print_timings(ctx, nullptr);
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
     write_logfile(ctx, params, model, results);
 
     llama_free(ctx);

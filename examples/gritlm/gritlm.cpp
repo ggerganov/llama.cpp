@@ -171,7 +171,11 @@ int main(int argc, char * argv[]) {
 
     auto sparams = llama_sampler_chain_default_params();
 
+    sparams.no_perf = false;
+
     llama_sampler * smpl = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic

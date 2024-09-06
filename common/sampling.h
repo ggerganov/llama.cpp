@@ -62,6 +62,8 @@ struct gpt_sampler_params {
 //  - grammar support
 //  - custom sampler logic based on the parameters
 //
+// TODO: measure grammar performance
+//
 struct gpt_sampler;
 
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params);
@@ -75,11 +77,9 @@ void gpt_sampler_reset (struct gpt_sampler * gsmpl);
 
 llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl);
 
-//llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_token_data_array * cur_p);
-
 llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl);
 
-void gpt_print_timings(const struct llama_context * ctx, const struct gpt_sampler * gsmpl);
+void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler * gsmpl);
 
 // extended sampling implementation:
 //

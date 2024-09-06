@@ -93,7 +93,7 @@ static void write_logfile(
     yaml_dump_string_multiline(logfile, "output", output.c_str());
     yaml_dump_vector_int(logfile, "output_tokens", output_tokens);
 
-    llama_dump_timing_info_yaml(logfile, ctx);
+    llama_perf_dump_yaml(logfile, ctx);
     fclose(logfile);
 }
 
@@ -106,7 +106,7 @@ static void sigint_handler(int signo) {
         } else {
             console::cleanup();
             printf("\n");
-            gpt_print_timings(*g_ctx, *g_smpl);
+            gpt_perf_print(*g_ctx, *g_smpl);
             write_logfile(*g_ctx, *g_params, *g_model, *g_input_tokens, g_output_ss->str(), *g_output_tokens);
             _exit(130);
         }
@@ -929,7 +929,8 @@ int main(int argc, char ** argv) {
         llama_state_save_file(ctx, path_session.c_str(), session_tokens.data(), session_tokens.size());
     }
 
-    gpt_print_timings(ctx, smpl);
+    LOG_TEE("\n");
+    gpt_perf_print(ctx, smpl);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
 
     gpt_sampler_free(smpl);

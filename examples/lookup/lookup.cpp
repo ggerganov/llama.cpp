@@ -238,8 +238,9 @@ int main(int argc, char ** argv){
     LOG_TEE("n_accept     = %d\n", n_accept);
     LOG_TEE("accept       = %.3f%%\n", 100.0f * n_accept / n_drafted);
 
-    LOG_TEE("\ntarget:\n");
-    gpt_print_timings(ctx, smpl);
+    LOG_TEE("\ntarget:\n\n");
+    llama_perf_print(smpl, LLAMA_PERF_TYPE_SAMPLER_CHAIN);
+    llama_perf_print(ctx,  LLAMA_PERF_TYPE_CONTEXT);
 
     gpt_sampler_free(smpl);
 

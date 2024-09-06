@@ -1630,7 +1630,7 @@ int main(int argc, char ** argv) {
             fflush(p_err->fout);
         }
 
-        llama_print_timings(ctx, nullptr);
+        llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
 
         llama_free(ctx);
 

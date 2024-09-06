@@ -467,7 +467,8 @@ int main(int argc, char ** argv) {
     LOG_TEE("n_predict = %d\n", n_predict);
     LOG_TEE("n_accept  = %d\n", n_accept);
 
-    gpt_print_timings(ctx, smpl);
+    LOG_TEE("\n");
+    gpt_perf_print(ctx, smpl);
 
     gpt_sampler_free(smpl);
 
