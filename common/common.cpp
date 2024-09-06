@@ -2531,7 +2531,12 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         if (bos != -1) {
             tmp.push_back(bos);
         }
-        tmp.push_back(eos);
+        if (eos != -1) {
+            tmp.push_back(eos);
+        }
+        if (tmp.empty()) {
+            tmp.push_back(0);
+        }
 
         if (llama_model_has_encoder(model)) {
             llama_encode(lctx, llama_batch_get_one(tmp.data(), tmp.size(), 0, 0));
