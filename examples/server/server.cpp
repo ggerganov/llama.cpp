@@ -470,9 +470,8 @@ struct server_queue {
     void pop_deferred_task() {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         if (!queue_tasks_deferred.empty()) {
-            server_task task = queue_tasks_deferred.front();
+            queue_tasks.emplace_back(std::move(queue_tasks_deferred.front()));
             queue_tasks_deferred.pop_front();
-            queue_tasks.push_back(std::move(task));
         }
         condition_tasks.notify_one();
     }
