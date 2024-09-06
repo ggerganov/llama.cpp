@@ -19556,7 +19556,7 @@ static bool ggml_thread_apply_priority(int32_t prio) {
     return true;
 }
 
-#elif (defined(__gnu_linux__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__))
+#elif defined(__gnu_linux__)
 // TODO: this may not work on BSD, to be verified
 
 static bool ggml_thread_apply_affinity(const bool * mask) {
@@ -19572,7 +19572,14 @@ static bool ggml_thread_apply_affinity(const bool * mask) {
         }
     }
 
+#ifdef __ANDROID__
+    err = sched_setaffinity(0, sizeof(cpuset), &cpuset);
+    if (err < 0) {
+        err = errno;
+    }
+#else
     err = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+#endif
     if (err != 0) {
         fprintf(stderr, "warn: failed to set affinity mask 0x%llx : %s (%d)\n", (unsigned long long)mask, strerror(err), err);
         return false;
