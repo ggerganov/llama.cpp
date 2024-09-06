@@ -470,8 +470,8 @@ struct server_queue {
         std::unique_lock<std::mutex> lock(mutex_tasks);
         if (!queue_tasks_deferred.empty()) {
             server_task task = queue_tasks_deferred.front();
-            queue_tasks_deferred.erase(queue_tasks_deferred.begin());
-            queue_tasks.push_back(task);
+            queue_tasks_deferred.pop_front();
+            queue_tasks.push_back(std::move(task));
         }
     }
 
@@ -502,7 +502,7 @@ struct server_queue {
                     break;
                 }
                 server_task task = queue_tasks.front();
-                queue_tasks.erase(queue_tasks.begin());
+                queue_tasks.pop_front();
                 lock.unlock();
                 LOG_VERBOSE("callback_new_task", {{"id_task", task.id}});
                 callback_new_task(task);
