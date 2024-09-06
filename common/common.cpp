@@ -603,6 +603,7 @@ std::string llama_arg::to_string() {
         }
     }
     if (!value_hint.empty()) ss << " " << value_hint;
+    if (!value_hint_2.empty()) ss << " " << value_hint_2;
     if (ss.tellp() > n_leading_spaces - 3) {
         // current line is too long, add new line
         ss << "\n" << leading_spaces;
@@ -850,7 +851,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ));
     add_opt(llama_arg(
         {"--poll-batch"}, "<0|1>",
-        "use polling to wait for work (default: same as --poll",
+        "use polling to wait for work (default: same as --poll)",
         [&params](int value) {
             params.cpuparams_batch.poll = value;
         }

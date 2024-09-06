@@ -19,13 +19,13 @@ The project is under active development, and we are [looking for feedback and co
 
 | Argument | Explanation |
 | -------- | ----------- |
-| `-h, --help, --usage ` | print usage and exit |
-| `--version ` | show version and build info |
-| `-v, --verbose ` | print verbose information |
+| `-h, --help, --usage` | print usage and exit |
+| `--version` | show version and build info |
+| `-v, --verbose` | print verbose information |
 | `--verbosity N` | set specific verbosity level (default: 0) |
-| `--verbose-prompt ` | print a verbose prompt before generation (default: false) |
-| `--no-display-prompt ` | don't print prompt at generation (default: false) |
-| `-co, --color ` | colorise output to distinguish prompt and user input from generations (default: false) |
+| `--verbose-prompt` | print a verbose prompt before generation (default: false) |
+| `--no-display-prompt` | don't print prompt at generation (default: false) |
+| `-co, --color` | colorise output to distinguish prompt and user input from generations (default: false) |
 | `-s, --seed SEED` | RNG seed (default: -1, use random seed for < 0) |
 | `-t, --threads N` | number of threads to use during generation (default: -1)<br/>(env: LLAMA_ARG_THREADS) |
 | `-tb, --threads-batch N` | number of threads to use during batch and prompt processing (default: same as --threads) |
@@ -36,27 +36,27 @@ The project is under active development, and we are [looking for feedback and co
 | `-Cb, --cpu-mask-batch M` | CPU affinity mask: arbitrarily long hex. Complements cpu-range-batch (default: same as --cpu-mask) |
 | `-Crb, --cpu-range-batch lo-hi` | ranges of CPUs for affinity. Complements --cpu-mask-batch |
 | `--cpu-strict-batch <0\|1>` | use strict CPU placement (default: same as --cpu-strict) |
-| `--poll-batch <0\|1>` | use polling to wait for work (default: same as --poll |
+| `--poll-batch <0\|1>` | use polling to wait for work (default: same as --poll) |
 | `-lcs, --lookup-cache-static FNAME` | path to static lookup cache to use for lookup decoding (not updated by generation) |
 | `-lcd, --lookup-cache-dynamic FNAME` | path to dynamic lookup cache to use for lookup decoding (updated by generation) |
 | `-c, --ctx-size N` | size of the prompt context (default: 0, 0 = loaded from model)<br/>(env: LLAMA_ARG_CTX_SIZE) |
-| `-n, --predict N` | number of tokens to predict (default: -1, -1 = infinity, -2 = until context filled)<br/>(env: LLAMA_ARG_N_PREDICT) |
+| `-n, --predict, --n-predict N` | number of tokens to predict (default: -1, -1 = infinity, -2 = until context filled)<br/>(env: LLAMA_ARG_N_PREDICT) |
 | `-b, --batch-size N` | logical maximum batch size (default: 2048)<br/>(env: LLAMA_ARG_BATCH) |
 | `-ub, --ubatch-size N` | physical maximum batch size (default: 512)<br/>(env: LLAMA_ARG_UBATCH) |
 | `--keep N` | number of tokens to keep from the initial prompt (default: 0, -1 = all) |
 | `--chunks N` | max number of chunks to process (default: -1, -1 = all) |
-| `-fa, --flash-attn ` | enable Flash Attention (default: disabled)<br/>(env: LLAMA_ARG_FLASH_ATTN) |
+| `-fa, --flash-attn` | enable Flash Attention (default: disabled)<br/>(env: LLAMA_ARG_FLASH_ATTN) |
 | `-p, --prompt PROMPT` | prompt to start generation with<br/> |
 | `-f, --file FNAME` | a file containing the prompt (default: none) |
 | `--in-file FNAME` | an input file (repeat to specify multiple files) |
 | `-bf, --binary-file FNAME` | binary file containing the prompt (default: none) |
-| `-e, --escape ` | process escapes sequences (\n, \r, \t, \', \", \\) (default: true) |
-| `--no-escape ` | do not process escape sequences |
-| `--spm-infill ` | use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: disabled) |
+| `-e, --escape` | process escapes sequences (\n, \r, \t, \', \", \\) (default: true) |
+| `--no-escape` | do not process escape sequences |
+| `--spm-infill` | use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: disabled) |
 | `--samplers SAMPLERS` | samplers that will be used for generation in the order, separated by ';'<br/>(default: top_k;tfs_z;typical_p;top_p;min_p;temperature) |
 | `--sampling-seq SEQUENCE` | simplified sequence for samplers that will be used (default: kfypmt) |
-| `--ignore-eos ` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
-| `--penalize-nl ` | penalize newline tokens (default: false) |
+| `--ignore-eos` | ignore end of stream token and continue generating (implies --logit-bias EOS-inf) |
+| `--penalize-nl` | penalize newline tokens (default: false) |
 | `--temp N` | temperature (default: 0.8) |
 | `--top-k N` | top-k sampling (default: 40, 0 = disabled) |
 | `--top-p N` | top-p sampling (default: 0.9, 1.0 = disabled) |
@@ -87,33 +87,33 @@ The project is under active development, and we are [looking for feedback and co
 | `--yarn-beta-fast N` | YaRN: low correction dim or beta (default: 32.0) |
 | `-gan, --grp-attn-n N` | group-attention factor (default: 1) |
 | `-gaw, --grp-attn-w N` | group-attention width (default: 512.0) |
-| `-dkvc, --dump-kv-cache ` | verbose print of the KV cache |
-| `-nkvo, --no-kv-offload ` | disable KV offload |
+| `-dkvc, --dump-kv-cache` | verbose print of the KV cache |
+| `-nkvo, --no-kv-offload` | disable KV offload |
 | `-ctk, --cache-type-k TYPE` | KV cache data type for K (default: f16) |
 | `-ctv, --cache-type-v TYPE` | KV cache data type for V (default: f16) |
 | `-dt, --defrag-thold N` | KV cache defragmentation threshold (default: -1.0, < 0 - disabled)<br/>(env: LLAMA_ARG_DEFRAG_THOLD) |
 | `-np, --parallel N` | number of parallel sequences to decode (default: 1) |
 | `-ns, --sequences N` | number of sequences to decode (default: 1) |
-| `-cb, --cont-batching ` | enable continuous batching (a.k.a dynamic batching) (default: enabled)<br/>(env: LLAMA_ARG_CONT_BATCHING) |
-| `-nocb, --no-cont-batching ` | disable continuous batching<br/>(env: LLAMA_ARG_NO_CONT_BATCHING) |
+| `-cb, --cont-batching` | enable continuous batching (a.k.a dynamic batching) (default: enabled)<br/>(env: LLAMA_ARG_CONT_BATCHING) |
+| `-nocb, --no-cont-batching` | disable continuous batching<br/>(env: LLAMA_ARG_NO_CONT_BATCHING) |
 | `--mmproj FILE` | path to a multimodal projector file for LLaVA. see examples/llava/README.md |
 | `--image FILE` | path to an image file. use with multimodal models. Specify multiple times for batching |
-| `--rpc SERVERS` | comma separated list of RPC servers |
-| `--mlock ` | force system to keep model in RAM rather than swapping or compressing |
-| `--no-mmap ` | do not memory-map model (slower load but may reduce pageouts if not using mlock) |
+| `--mlock` | force system to keep model in RAM rather than swapping or compressing |
+| `--no-mmap` | do not memory-map model (slower load but may reduce pageouts if not using mlock) |
 | `--numa TYPE` | attempt optimizations that help on some NUMA systems<br/>- distribute: spread execution evenly over all nodes<br/>- isolate: only spawn threads on CPUs on the node that execution started on<br/>- numactl: use the CPU map provided by numactl<br/>if run without this previously, it is recommended to drop the system page cache before using this<br/>see https://github.com/ggerganov/llama.cpp/issues/1437 |
 | `-ngl, --gpu-layers N` | number of layers to store in VRAM<br/>(env: LLAMA_ARG_N_GPU_LAYERS) |
 | `-ngld, --gpu-layers-draft N` | number of layers to store in VRAM for the draft model |
 | `-sm, --split-mode {none,layer,row}` | how to split the model across multiple GPUs, one of:<br/>- none: use one GPU only<br/>- layer (default): split layers and KV across GPUs<br/>- row: split rows across GPUs |
 | `-ts, --tensor-split N0,N1,N2,...` | fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1 |
 | `-mg, --main-gpu INDEX` | the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: 0) |
-| `--check-tensors ` | check model tensor data for invalid values (default: false) |
+| `--check-tensors` | check model tensor data for invalid values (default: false) |
 | `--override-kv KEY=TYPE:VALUE` | advanced option to override model metadata by key. may be specified multiple times.<br/>types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false |
 | `--lora FNAME` | path to LoRA adapter (can be repeated to use multiple adapters) |
-| `--lora-scaled FNAME` | path to LoRA adapter with user defined scaling (can be repeated to use multiple adapters) |
+| `--lora-scaled FNAME SCALE` | path to LoRA adapter with user defined scaling (can be repeated to use multiple adapters) |
 | `--control-vector FNAME` | add a control vector<br/>note: this argument can be repeated to add multiple control vectors |
-| `--control-vector-scaled FNAME` | add a control vector with user defined scaling SCALE<br/>note: this argument can be repeated to add multiple scaled control vectors |
-| `--control-vector-layer-range START` | layer range to apply the control vector(s) to, start and end inclusive |
+| `--control-vector-scaled FNAME SCALE` | add a control vector with user defined scaling SCALE<br/>note: this argument can be repeated to add multiple scaled control vectors |
+| `--control-vector-layer-range START END` | layer range to apply the control vector(s) to, start and end inclusive |
+| `-a, --alias STRING` | set alias for model name (to be used by REST API)<br/>(env: LLAMA_ARG_MODEL) |
 | `-m, --model FNAME` | model path (default: `models/$filename` with filename from `--hf-file` or `--model-url` if set, otherwise models/7B/ggml-model-f16.gguf)<br/>(env: LLAMA_ARG_MODEL) |
 | `-md, --model-draft FNAME` | draft model for speculative decoding (default: unused) |
 | `-mu, --model-url MODEL_URL` | model download url (default: unused)<br/>(env: LLAMA_ARG_MODEL_URL) |
@@ -123,7 +123,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--host HOST` | ip address to listen (default: 127.0.0.1)<br/>(env: LLAMA_ARG_HOST) |
 | `--port PORT` | port to listen (default: 8080)<br/>(env: LLAMA_ARG_PORT) |
 | `--path PATH` | path to serve static files from (default: ) |
-| `--embedding, --embeddings ` | restrict to only support embedding use case; use only with dedicated embedding models (default: disabled)<br/>(env: LLAMA_ARG_EMBEDDINGS) |
+| `--embedding, --embeddings` | restrict to only support embedding use case; use only with dedicated embedding models (default: disabled)<br/>(env: LLAMA_ARG_EMBEDDINGS) |
 | `--api-key KEY` | API key to use for authentication (default: none)<br/>(env: LLAMA_API_KEY) |
 | `--api-key-file FNAME` | path to file containing API keys (default: none) |
 | `--ssl-key-file FNAME` | path to file a PEM-encoded SSL private key |
@@ -132,19 +132,19 @@ The project is under active development, and we are [looking for feedback and co
 | `--threads-http N` | number of threads used to process HTTP requests (default: -1)<br/>(env: LLAMA_ARG_THREADS_HTTP) |
 | `-spf, --system-prompt-file FNAME` | set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications |
 | `--log-format {text, json}` | log output format: json or text (default: json) |
-| `--metrics ` | enable prometheus compatible metrics endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_METRICS) |
-| `--no-slots ` | disables slots monitoring endpoint (default: enabled)<br/>(env: LLAMA_ARG_NO_ENDPOINT_SLOTS) |
+| `--metrics` | enable prometheus compatible metrics endpoint (default: disabled)<br/>(env: LLAMA_ARG_ENDPOINT_METRICS) |
+| `--no-slots` | disables slots monitoring endpoint (default: enabled)<br/>(env: LLAMA_ARG_NO_ENDPOINT_SLOTS) |
 | `--slot-save-path PATH` | path to save slot kv cache (default: disabled) |
 | `--chat-template JINJA_TEMPLATE` | set custom jinja chat template (default: template taken from model's metadata)<br/>if suffix/prefix are specified, template will be disabled<br/>only commonly used templates are accepted:<br/>https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template<br/>(env: LLAMA_ARG_CHAT_TEMPLATE) |
 | `-sps, --slot-prompt-similarity SIMILARITY` | how much the prompt of a request must match the prompt of a slot in order to use that slot (default: 0.50, 0.0 = disabled)<br/> |
-| `--lora-init-without-apply ` | load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: disabled) |
-| `--simple-io ` | use basic IO for better compatibility in subprocesses and limited consoles |
+| `--lora-init-without-apply` | load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: disabled) |
+| `--simple-io` | use basic IO for better compatibility in subprocesses and limited consoles |
 | `-ld, --logdir LOGDIR` | path under which to save YAML logs (no logging if unset) |
-| `--log-test ` | Log test |
-| `--log-disable ` | Log disable |
-| `--log-enable ` | Log enable |
-| `--log-new ` | Log new |
-| `--log-append ` | Log append |
+| `--log-test` | Log test |
+| `--log-disable` | Log disable |
+| `--log-enable` | Log enable |
+| `--log-new` | Log new |
+| `--log-append` | Log append |
 | `--log-file FNAME` | Log file |
 
 Note: If both command line argument and environment variable are both set for the same param, the argument will take precedence over env var.

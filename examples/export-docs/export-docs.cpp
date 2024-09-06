@@ -28,9 +28,16 @@ static void export_md(std::string fname, llama_example ex) {
             }
         }
         // value hint
-        std::string md_value_hint(opt.value_hint);
-        string_replace_all(md_value_hint, "|", "\\|");
-        file << " " << md_value_hint;
+        if (!opt.value_hint.empty()) {
+            std::string md_value_hint(opt.value_hint);
+            string_replace_all(md_value_hint, "|", "\\|");
+            file << " " << md_value_hint;
+        }
+        if (!opt.value_hint_2.empty()) {
+            std::string md_value_hint_2(opt.value_hint_2);
+            string_replace_all(md_value_hint_2, "|", "\\|");
+            file << " " << md_value_hint_2;
+        }
         // help text
         std::string md_help(opt.help);
         string_replace_all(md_help, "\n", "<br/>");
