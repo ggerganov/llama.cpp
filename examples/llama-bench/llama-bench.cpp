@@ -249,6 +249,7 @@ struct cmd_params {
     ggml_sched_priority prio;
     int delay;
     bool verbose;
+    bool progress;
     output_formats output_format;
     output_formats output_format_stderr;
 };
@@ -280,6 +281,7 @@ static const cmd_params cmd_params_defaults = {
     /* prio                 */ GGML_SCHED_PRIO_NORMAL,
     /* delay                */ 0,
     /* verbose              */ false,
+    /* progress             */ false,
     /* output_format        */ MARKDOWN,
     /* output_format_stderr */ NONE,
 };
@@ -319,6 +321,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -o, --output <csv|json|jsonl|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
     printf("  -oe, --output-err <csv|json|jsonl|md|sql> (default: %s)\n", output_format_str(cmd_params_defaults.output_format_stderr));
     printf("  -v, --verbose                             (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
+    printf("  --progress                                (default: %s)\n", cmd_params_defaults.progress ? "1" : "0");
     printf("\n");
     printf("Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
 }
@@ -616,6 +619,8 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             invalid_param = !output_format_from_str(argv[i], params.output_format_stderr);
         } else if (arg == "-v" || arg == "--verbose") {
             params.verbose = true;
+        } else if (arg == "--progress") {
+            params.progress = true;
         } else {
             invalid_param = true;
             break;
@@ -1523,7 +1528,13 @@ int main(int argc, char ** argv) {
     llama_model * lmodel = nullptr;
     const cmd_params_instance * prev_inst = nullptr;
 
+    int params_idx = 0;
+    auto params_count = params_instances.size();
     for (const auto & inst : params_instances) {
+        params_idx ++;
+        if (params.progress) {
+            fprintf(stderr, "llama-bench: benchmark %d/%ld: starting\n", params_idx, params_count);
+        }
         // keep the same model between tests when possible
         if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
             if (lmodel) {
@@ -1573,10 +1584,16 @@ int main(int argc, char ** argv) {
 
         // warmup run
         if (t.n_prompt > 0) {
+            if (params.progress) {
+                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup prompt run\n", params_idx, params_count);
+            }
             //test_prompt(ctx, std::min(t.n_batch, std::min(t.n_prompt, 32)), 0, t.n_batch, t.n_threads);
             test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
         }
         if (t.n_gen > 0) {
+            if (params.progress) {
+                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup generation run\n", params_idx, params_count);
+            }
             test_gen(ctx, 1, 0, t.n_threads);
         }
 
@@ -1586,9 +1603,15 @@ int main(int argc, char ** argv) {
             uint64_t t_start = get_time_ns();
 
             if (t.n_prompt > 0) {
+                if (params.progress) {
+                    fprintf(stderr, "llama-bench: benchmark %d/%ld: prompt run %d/%d\n", params_idx, params_count, i + 1, params.reps);
+                }
                 test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
             }
             if (t.n_gen > 0) {
+                if (params.progress) {
+                    fprintf(stderr, "llama-bench: benchmark %d/%ld: generation run %d/%d\n", params_idx, params_count, i + 1, params.reps);
+                }
                 test_gen(ctx, t.n_gen, t.n_prompt, t.n_threads);
             }
 
