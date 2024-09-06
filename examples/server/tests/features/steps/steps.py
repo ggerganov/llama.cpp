@@ -202,17 +202,15 @@ def step_start_server(context):
             time.sleep(0.1)
 
 
-@step("the server is {expecting_status}")
-@async_run_until_complete
-async def step_wait_for_the_server_to_be_started(context, expecting_status: Literal['healthy', 'ready', 'idle', 'busy'] | str):
+async def wait_for_server_status_with_timeout(context, expecting_status: Literal['healthy', 'ready', 'idle', 'busy'] | str, timeout: int):
     match expecting_status:
         case 'healthy':
             await wait_for_slots_status(context, context.base_url, 200,
-                                        timeout=30)
+                                        timeout=timeout)
 
         case 'ready' | 'idle':
             await wait_for_slots_status(context, context.base_url, 200,
-                                        timeout=30,
+                                        timeout=timeout,
                                         params={'fail_on_no_slot': 1},
                                         slots_idle=context.n_slots,
                                         slots_processing=0)
@@ -223,6 +221,18 @@ async def step_wait_for_the_server_to_be_started(context, expecting_status: Lite
                                         slots_processing=context.n_slots)
         case _:
             assert False, "unknown status"
+
+
+@step("the server is {expecting_status} with timeout {timeout:d} seconds")
+@async_run_until_complete
+async def step_wait_for_server_status_with_timeout(context, expecting_status: Literal['healthy', 'ready', 'idle', 'busy'] | str, timeout: int):
+    await wait_for_server_status_with_timeout(context, expecting_status, timeout)
+
+
+@step("the server is {expecting_status}")
+@async_run_until_complete
+async def step_wait_for_server_status(context, expecting_status: Literal['healthy', 'ready', 'idle', 'busy'] | str):
+    await wait_for_server_status_with_timeout(context, expecting_status, 30)
 
 
 @step('all slots are {expected_slot_status_string}')
