@@ -89,8 +89,8 @@ int main(void) {
     assert(true == gpt_params_parse(argv.size(), list_str_to_char(argv).data(), params, options));
     assert(params.model == "overwritten.gguf");
     assert(params.cpuparams.n_threads == 1010);
+#endif // _WIN32
 
 
     printf("test-arg-parser: all tests OK\n\n");
-#endif // _WIN32
 }
