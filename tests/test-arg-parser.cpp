@@ -8,9 +8,6 @@
 #include "common.h"
 
 int main(void) {
-#ifdef _WIN32
-    printf("test-arg-parser: skip on windows build\n");
-#else
     gpt_params params;
 
     printf("test-arg-parser: make sure there is no duplicated arguments in any examples\n\n");
@@ -66,6 +63,10 @@ int main(void) {
     assert(params.n_predict == 6789);
     assert(params.n_batch == 9090);
 
+// skip this part on windows, because setenv is not supported
+#ifdef _WIN32
+    printf("test-arg-parser: skip on windows build\n");
+#else
     printf("test-arg-parser: test environment variables (valid + invalid usages)\n\n");
 
     setenv("LLAMA_ARG_THREADS", "blah", true);
@@ -91,5 +92,5 @@ int main(void) {
 
 
     printf("test-arg-parser: all tests OK\n\n");
-#endif // __MINGW32__
+#endif // _WIN32
 }
