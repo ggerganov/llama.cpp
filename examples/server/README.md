@@ -25,7 +25,6 @@ The project is under active development, and we are [looking for feedback and co
 | `--verbosity N` | set specific verbosity level (default: 0) |
 | `--verbose-prompt` | print a verbose prompt before generation (default: false) |
 | `--no-display-prompt` | don't print prompt at generation (default: false) |
-| `-co, --color` | colorise output to distinguish prompt and user input from generations (default: false) |
 | `-s, --seed SEED` | RNG seed (default: -1, use random seed for < 0) |
 | `-t, --threads N` | number of threads to use during generation (default: -1)<br/>(env: LLAMA_ARG_THREADS) |
 | `-tb, --threads-batch N` | number of threads to use during batch and prompt processing (default: same as --threads) |
@@ -46,7 +45,7 @@ The project is under active development, and we are [looking for feedback and co
 | `--keep N` | number of tokens to keep from the initial prompt (default: 0, -1 = all) |
 | `--chunks N` | max number of chunks to process (default: -1, -1 = all) |
 | `-fa, --flash-attn` | enable Flash Attention (default: disabled)<br/>(env: LLAMA_ARG_FLASH_ATTN) |
-| `-p, --prompt PROMPT` | prompt to start generation with<br/> |
+| `-p, --prompt PROMPT` | prompt to start generation with |
 | `-f, --file FNAME` | a file containing the prompt (default: none) |
 | `--in-file FNAME` | an input file (repeat to specify multiple files) |
 | `-bf, --binary-file FNAME` | binary file containing the prompt (default: none) |
@@ -96,13 +95,10 @@ The project is under active development, and we are [looking for feedback and co
 | `-ns, --sequences N` | number of sequences to decode (default: 1) |
 | `-cb, --cont-batching` | enable continuous batching (a.k.a dynamic batching) (default: enabled)<br/>(env: LLAMA_ARG_CONT_BATCHING) |
 | `-nocb, --no-cont-batching` | disable continuous batching<br/>(env: LLAMA_ARG_NO_CONT_BATCHING) |
-| `--mmproj FILE` | path to a multimodal projector file for LLaVA. see examples/llava/README.md |
-| `--image FILE` | path to an image file. use with multimodal models. Specify multiple times for batching |
 | `--mlock` | force system to keep model in RAM rather than swapping or compressing |
 | `--no-mmap` | do not memory-map model (slower load but may reduce pageouts if not using mlock) |
 | `--numa TYPE` | attempt optimizations that help on some NUMA systems<br/>- distribute: spread execution evenly over all nodes<br/>- isolate: only spawn threads on CPUs on the node that execution started on<br/>- numactl: use the CPU map provided by numactl<br/>if run without this previously, it is recommended to drop the system page cache before using this<br/>see https://github.com/ggerganov/llama.cpp/issues/1437 |
 | `-ngl, --gpu-layers N` | number of layers to store in VRAM<br/>(env: LLAMA_ARG_N_GPU_LAYERS) |
-| `-ngld, --gpu-layers-draft N` | number of layers to store in VRAM for the draft model |
 | `-sm, --split-mode {none,layer,row}` | how to split the model across multiple GPUs, one of:<br/>- none: use one GPU only<br/>- layer (default): split layers and KV across GPUs<br/>- row: split rows across GPUs |
 | `-ts, --tensor-split N0,N1,N2,...` | fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1 |
 | `-mg, --main-gpu INDEX` | the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: 0) |
@@ -115,7 +111,6 @@ The project is under active development, and we are [looking for feedback and co
 | `--control-vector-layer-range START END` | layer range to apply the control vector(s) to, start and end inclusive |
 | `-a, --alias STRING` | set alias for model name (to be used by REST API)<br/>(env: LLAMA_ARG_MODEL) |
 | `-m, --model FNAME` | model path (default: `models/$filename` with filename from `--hf-file` or `--model-url` if set, otherwise models/7B/ggml-model-f16.gguf)<br/>(env: LLAMA_ARG_MODEL) |
-| `-md, --model-draft FNAME` | draft model for speculative decoding (default: unused) |
 | `-mu, --model-url MODEL_URL` | model download url (default: unused)<br/>(env: LLAMA_ARG_MODEL_URL) |
 | `-hfr, --hf-repo REPO` | Hugging Face model repository (default: unused)<br/>(env: LLAMA_ARG_HF_REPO) |
 | `-hff, --hf-file FILE` | Hugging Face model file (default: unused)<br/>(env: LLAMA_ARG_HF_FILE) |
@@ -138,7 +133,6 @@ The project is under active development, and we are [looking for feedback and co
 | `--chat-template JINJA_TEMPLATE` | set custom jinja chat template (default: template taken from model's metadata)<br/>if suffix/prefix are specified, template will be disabled<br/>only commonly used templates are accepted:<br/>https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template<br/>(env: LLAMA_ARG_CHAT_TEMPLATE) |
 | `-sps, --slot-prompt-similarity SIMILARITY` | how much the prompt of a request must match the prompt of a slot in order to use that slot (default: 0.50, 0.0 = disabled)<br/> |
 | `--lora-init-without-apply` | load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: disabled) |
-| `--simple-io` | use basic IO for better compatibility in subprocesses and limited consoles |
 | `-ld, --logdir LOGDIR` | path under which to save YAML logs (no logging if unset) |
 | `--log-test` | Log test |
 | `--log-disable` | Log disable |

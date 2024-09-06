@@ -278,7 +278,7 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON, print_usage);
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_LLAVA, print_usage);
     if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }

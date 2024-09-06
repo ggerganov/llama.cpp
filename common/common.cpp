@@ -720,21 +720,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         [&params]() {
             params.verbose_prompt = true;
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--no-display-prompt"},
         format("don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false"),
         [&params]() {
             params.display_prompt = false;
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"-co", "--color"},
         format("colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false"),
         [&params]() {
             params.use_color = true;
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"-s", "--seed"}, "SEED",
         format("RNG seed (default: %d, use random seed for < 0)", params.seed),
@@ -996,7 +996,9 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ).set_env("LLAMA_ARG_FLASH_ATTN"));
     add_opt(llama_arg(
         {"-p", "--prompt"}, "PROMPT",
-        "prompt to start generation with\n",
+        ex == LLAMA_EXAMPLE_MAIN
+            ? "prompt to start generation with\nif -cnv is set, this will be used as system prompt"
+            : "prompt to start generation with",
         [&params](std::string value) {
             params.prompt = value;
         }
@@ -1102,7 +1104,13 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"-cnv", "--conversation"},
-        "run in conversation mode, does not print special tokens and suffix/prefix\n",
+        format(
+            "run in conversation mode:\n"
+            "- does not print special tokens and suffix/prefix\n"
+            "- interactive mode is also enabled\n"
+            "(default: %s)",
+            params.conversation ? "true" : "false"
+        ),
         [&params]() {
             params.conversation = true;
         }
@@ -1625,14 +1633,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         [&params](std::string value) {
             params.mmproj = value;
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_LLAVA}));
     add_opt(llama_arg(
         {"--image"}, "FILE",
         "path to an image file. use with multimodal models. Specify multiple times for batching",
         [&params](std::string value) {
             params.image.emplace_back(value);
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_LLAVA}));
 #ifdef GGML_USE_RPC
     add_opt(llama_arg(
         {"--rpc"}, "SERVERS",
@@ -1692,7 +1700,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
                 fprintf(stderr, "warning: see main README.md for information on enabling GPU BLAS support\n");
             }
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"-sm", "--split-mode"}, "{none,layer,row}",
         "how to split the model across multiple GPUs, one of:\n"
@@ -1837,7 +1845,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         [&params](std::string value) {
             params.model_draft = value;
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"-mu", "--model-url"}, "MODEL_URL",
         "model download url (default: unused)",
@@ -2178,7 +2186,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         [&params]() {
             params.simple_io = true;
         }
-    ));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"-ld", "--logdir"}, "LOGDIR",
         "path under which to save YAML logs (no logging if unset)",
