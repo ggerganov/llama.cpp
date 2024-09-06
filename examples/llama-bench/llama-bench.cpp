@@ -367,6 +367,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     params.numa = cmd_params_defaults.numa;
     params.prio = cmd_params_defaults.prio;
     params.delay = cmd_params_defaults.delay;
+    params.progress = cmd_params_defaults.progress;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
@@ -1567,7 +1568,7 @@ int main(int argc, char ** argv) {
 
         struct ggml_threadpool_params tpp = ggml_threadpool_params_default(t.n_threads);
         if (!parse_cpu_mask(t.cpu_mask, tpp.cpumask)) {
-            LOG_TEE("%s: failed to parse cpu-mask: %s\n", __func__, t.cpu_mask.c_str());
+            fprintf(stderr, "%s: failed to parse cpu-mask: %s\n", __func__, t.cpu_mask.c_str());
             exit(1);
         }
         tpp.strict_cpu = t.cpu_strict;
@@ -1576,7 +1577,7 @@ int main(int argc, char ** argv) {
 
         struct ggml_threadpool* threadpool = ggml_threadpool_new(&tpp);
         if (!threadpool) {
-            LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
+            fprintf(stderr, "%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
             exit(1);
         }
 
