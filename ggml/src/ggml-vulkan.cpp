@@ -6602,6 +6602,7 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
                         return false;
                 }
             } break;
+        case GGML_OP_CONT:
         case GGML_OP_CPY:
         case GGML_OP_DUP:
             {
@@ -6642,7 +6643,6 @@ GGML_CALL static bool ggml_backend_vk_supports_op(ggml_backend_t backend, const 
         case GGML_OP_COS:
         case GGML_OP_CLAMP:
         case GGML_OP_PAD:
-        case GGML_OP_CONT:
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
         case GGML_OP_ARGSORT:
