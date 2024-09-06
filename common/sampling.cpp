@@ -206,7 +206,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
             llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
         } else if (params.mirostat == 1) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(model, params.seed, params.mirostat_tau, params.mirostat_eta));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(model, params.seed, params.mirostat_tau, params.mirostat_eta, 100));
         } else if (params.mirostat == 2) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
             llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));

@@ -1070,7 +1070,8 @@ extern "C" {
             const struct llama_model * model,
                             uint32_t   seed,
                                float   tau,
-                               float   eta);
+                               float   eta,
+                             int32_t   m);
 
     /// @details Mirostat 2.0 algorithm described in the paper https://arxiv.org/abs/2007.14966. Uses tokens instead of words.
     /// @param candidates A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
