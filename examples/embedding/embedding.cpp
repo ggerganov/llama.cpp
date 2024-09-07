@@ -90,13 +90,7 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-    }
-
-    fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
-
-    std::mt19937 rng(params.seed);
+    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -313,8 +307,10 @@ int main(int argc, char ** argv) {
         if (notArray) fprintf(stdout, "\n}\n");
     }
 
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
+
     // clean up
-    llama_print_timings(ctx);
     llama_batch_free(batch);
     llama_free(ctx);
     llama_free_model(model);

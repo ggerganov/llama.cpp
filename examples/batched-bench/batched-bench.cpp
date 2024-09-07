@@ -210,7 +210,8 @@ int main(int argc, char ** argv) {
         }
     }
 
-    llama_print_timings(ctx);
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
 
     llama_batch_free(batch);
 
