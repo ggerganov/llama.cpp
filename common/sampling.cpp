@@ -145,7 +145,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
         /* .params = */ params,
         /* .grmr   = */ llama_sampler_init_grammar(model, params.grammar.c_str(), "root"),
         /* .chain  = */ llama_sampler_chain_init(lparams),
-        /* .prev   = */ ring_buffer<llama_token>(params.n_prev),
+        /* .prev   = */ ring_buffer<llama_token>(std::max(32, params.n_prev)),
         /* .cur    = */ {},
         /* .cur_p  = */ {},
     };

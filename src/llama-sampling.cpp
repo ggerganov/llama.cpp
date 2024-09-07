@@ -1226,7 +1226,9 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
     /* .name   = */ [](const struct llama_sampler * /*smpl*/) { return "penalties"; },
     /* .accept = */ [](struct llama_sampler * smpl, llama_token token) {
         auto * ctx = (llama_sampler_penalties *) smpl->ctx;
-        ctx->prev.push_back(token);
+        if (ctx->prev.size()) {
+            ctx->prev.push_back(token);
+        }
     },
     /* .apply  = */ [](struct llama_sampler * smpl, llama_token_data_array * cur_p) {
         auto * ctx = (llama_sampler_penalties *) smpl->ctx;
