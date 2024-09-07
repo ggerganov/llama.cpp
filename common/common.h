@@ -386,8 +386,6 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
 // print full usage message; it will be called internally by gpt_params_parse() if "-h" is set
 void gpt_params_print_usage(gpt_params & params, std::vector<llama_arg> & options);
 
-void gpt_params_handle_model_default(gpt_params & params);
-
 std::string gpt_params_get_system_info(const gpt_params & params);
 
 bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);

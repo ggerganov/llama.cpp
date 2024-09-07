@@ -298,7 +298,7 @@ static std::string format(const char * fmt, ...) {
     return std::string(buf.data(), size);
 }
 
-void gpt_params_handle_model_default(gpt_params & params) {
+static void gpt_params_handle_model_default(gpt_params & params) {
     if (!params.hf_repo.empty()) {
         // short-hand to avoid specifying --hf-file -> default it to --model
         if (params.hf_file.empty()) {
