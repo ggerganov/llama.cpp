@@ -206,6 +206,7 @@ extern "C" {
         LLAMA_SPLIT_MODE_ROW     = 2, // split rows across GPUs
     };
 
+    // TODO: simplify (https://github.com/ggerganov/llama.cpp/pull/9294#pullrequestreview-2286561979)
     typedef struct llama_token_data {
         llama_token id; // token id
         float logit;    // log-odds of the token
@@ -216,7 +217,7 @@ extern "C" {
         // TODO: consider SoA
         llama_token_data * data;
         size_t size;
-        int64_t selected;
+        int64_t selected; // this is the index in the data array (i.e. not the token id)
         bool sorted;
     } llama_token_data_array;
 
@@ -979,9 +980,38 @@ extern "C" {
     //
     // Sampling API
     //
-    // In the future, llama_sampler will be utilized to offload the sampling to the backends (e.g. GPU).
+    // Sample usage:
     //
-    // TODO: in the future, the entire API that uses llama_model should start using llama_vocab
+    //    // prepare the sampling chain at the start
+    //    auto sparams = llama_sampler_chain_default_params();
+    //
+    //    llama_sampler * smpl = llama_sampler_chain_init(sparams);
+    //
+    //    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(50));
+    //    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.9, 1));
+    //    llama_sampler_chain_add(smpl, llama_sampler_init_temp (0.8));
+    //    llama_sampler_chain_add(smpl, llama_sampler_init_dist (seed));
+    //
+    //    ...
+    //
+    //    // decoding loop:
+    //    while (...) {
+    //        ...
+    //
+    //        llama_decode(ctx, batch);
+    //
+    //        // sample from the logits of the last token in the batch
+    //        const llama_token id = llama_sampler_sample(smpl, ctx, -1);
+    //
+    //        ...
+    //    }
+    //
+    //    llama_sampler_free(smpl);
+    //
+    //
+    // TODO: In the future, llama_sampler will be utilized to offload the sampling to the backends (e.g. GPU).
+    // TODO: in the future, the entire sampling API that uses llama_model should start using llama_vocab
+    //
 
     typedef void * llama_sampler_context_t;
 
@@ -1003,6 +1033,7 @@ extern "C" {
         llama_sampler_context_t   ctx;
     };
 
+    // mirror of llama_sampler_i:
     LLAMA_API const char *           llama_sampler_name  (const struct llama_sampler * smpl);
     LLAMA_API void                   llama_sampler_accept(      struct llama_sampler * smpl, llama_token token);
     LLAMA_API void                   llama_sampler_apply (      struct llama_sampler * smpl, llama_token_data_array * cur_p);
@@ -1011,7 +1042,8 @@ extern "C" {
     // important: do not free if the sampler has been added to a llama_sampler_chain (via llama_sampler_chain_add)
     LLAMA_API void                   llama_sampler_free  (      struct llama_sampler * smpl);
 
-    // llama_sampler_chain is a type of llama_sampler that can contain multiple llama_samplers
+    // llama_sampler_chain
+    // a type of llama_sampler that can chain multiple samplers one after another
 
     LLAMA_API struct llama_sampler * llama_sampler_chain_init(struct llama_sampler_chain_params params);
 
@@ -1089,6 +1121,15 @@ extern "C" {
                              int32_t   n_logit_bias,
               const llama_logit_bias * logit_bias);
 
+    // Shorthand for:
+    //
+    //    const auto * logits = llama_get_logits_ith(ctx, idx);
+    //    llama_token_data_array cur_p = { ... init from logits ... };
+    //    llama_sampler_apply(smpl, &cur_p);
+    //    return cur_p.data[cur_p.selected].id;
+    //
+    // At this point, this is mostly a convenience function.
+    //
     LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx);
 
     // TODO: extend in the future

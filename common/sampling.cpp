@@ -136,17 +136,6 @@ std::string gpt_sampler_params::print() const {
     return std::string(result);
 }
 
-std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
-    std::string result = "\tlogits ";
-
-    for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
-        const auto * smpl = llama_sampler_chain_get(gsmpl->chain, i);
-        result += std::string("-> ") + llama_sampler_name(smpl) + " ";
-    }
-
-    return result;
-}
-
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
@@ -232,17 +221,6 @@ void gpt_sampler_free(struct gpt_sampler * gsmpl) {
     }
 }
 
-struct gpt_sampler * gpt_sampler_clone(gpt_sampler * gsmpl) {
-    return new gpt_sampler {
-        /* .params = */ gsmpl->params,
-        /* .grmr   = */ llama_sampler_clone(gsmpl->grmr),
-        /* .chain  = */ llama_sampler_clone(gsmpl->chain),
-        /* .prev   = */ gsmpl->prev,
-        /* .cur    = */ gsmpl->cur,
-        /* .cur_p  = */ gsmpl->cur_p,
-    };
-}
-
 void gpt_sampler_accept(struct gpt_sampler * gsmpl, llama_token token, bool accept_grammar) {
     if (accept_grammar) {
         llama_sampler_accept(gsmpl->grmr, token);
@@ -259,12 +237,15 @@ void gpt_sampler_reset(struct gpt_sampler * gsmpl) {
     llama_sampler_reset(gsmpl->chain);
 }
 
-llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl) {
-    return &gsmpl->cur_p;
-}
-
-llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl) {
-    return gsmpl->prev.rat(0);
+struct gpt_sampler * gpt_sampler_clone(gpt_sampler * gsmpl) {
+    return new gpt_sampler {
+        /* .params = */ gsmpl->params,
+        /* .grmr   = */ llama_sampler_clone(gsmpl->grmr),
+        /* .chain  = */ llama_sampler_clone(gsmpl->chain),
+        /* .prev   = */ gsmpl->prev,
+        /* .cur    = */ gsmpl->cur,
+        /* .cur_p  = */ gsmpl->cur_p,
+    };
 }
 
 void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler * gsmpl) {
@@ -279,12 +260,11 @@ void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler *
 }
 
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first) {
-    auto & grmr  = gsmpl->grmr;
-    auto & chain = gsmpl->chain;
-
     gsmpl->set_logits(ctx, idx);
 
-    auto & cur_p = gsmpl->cur_p;
+    auto & grmr  = gsmpl->grmr;
+    auto & chain = gsmpl->chain;
+    auto & cur_p = gsmpl->cur_p; // initialized by set_logits
 
     if (grammar_first) {
         llama_sampler_apply(grmr, &cur_p);
@@ -307,22 +287,43 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
 
         llama_sampler_apply(grmr, &single_token_data_array);
 
-        // check if the token is valid according to the grammar by seeing if its logit has been set to -INFINITY
         const bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
         if (is_valid) {
             return id;
         }
     }
 
-    // if the token is not valid, sample again, first apply the grammar samplers and then sample
+    // resampling:
+    // if the token is not valid, sample again, but first apply the grammar sampler and then the sampling chain
     gsmpl->set_logits(ctx, idx);
 
     llama_sampler_apply(grmr,  &cur_p);
     llama_sampler_apply(chain, &cur_p);
 
-    GGML_ASSERT(cur_p.selected != -1 && "no selected token during sampling - check your sampling configuration");
+    GGML_ASSERT(cur_p.selected != -1 && "no selected token during re-sampling - check your sampling configuration");
 
     return cur_p.data[cur_p.selected].id;
+}
+
+// helpers
+
+llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl) {
+    return &gsmpl->cur_p;
+}
+
+llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl) {
+    return gsmpl->prev.rat(0);
+}
+
+std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
+    std::string result = "\tlogits ";
+
+    for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
+        const auto * smpl = llama_sampler_chain_get(gsmpl->chain, i);
+        result += std::string("-> ") + llama_sampler_name(smpl) + " ";
+    }
+
+    return result;
 }
 
 std::string gpt_sampler_prev_str(gpt_sampler * gsmpl, llama_context * ctx_main, int n) {

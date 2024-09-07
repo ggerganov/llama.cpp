@@ -1,5 +1,7 @@
 #pragma once
 
+// TODO: rename llama-sampling.h/.cpp to llama-sampler.h/.cpp ?
+
 #include "llama-grammar.h"
 
 #include <unordered_map>
