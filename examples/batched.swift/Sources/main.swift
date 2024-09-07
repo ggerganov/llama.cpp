@@ -202,8 +202,8 @@ let t_main_end = ggml_time_us()
 
 print("decoded \(n_decode) tokens in \(String(format: "%.2f", Double(t_main_end - t_main_start) / 1_000_000.0)) s, speed: \(String(format: "%.2f", Double(n_decode) / (Double(t_main_end - t_main_start) / 1_000_000.0))) t/s\n\n")
 
-llama_perf_print(context, LLAMA_PERF_TYPE_CONTEXT)
-llama_perf_print(smpl,    LLAMA_PERF_TYPE_SAMPLER_CHAIN)
+llama_perf_print(UnsafeRawPointer(context), LLAMA_PERF_TYPE_CONTEXT)
+llama_perf_print(UnsafeRawPointer(smpl),    LLAMA_PERF_TYPE_SAMPLER_CHAIN)
 
 private func tokenize(text: String, add_bos: Bool) -> [llama_token] {
     let utf8Count = text.utf8.count
