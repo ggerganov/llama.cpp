@@ -2514,10 +2514,15 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         llama_token bos = llama_token_bos(model);
         llama_token eos = llama_token_eos(model);
         // some models (e.g. T5) don't have a BOS token
-        if (bos != -1) {
+        if (bos != LLAMA_TOKEN_NULL) {
             tmp.push_back(bos);
         }
-        tmp.push_back(eos);
+        if (eos != LLAMA_TOKEN_NULL) {
+            tmp.push_back(eos);
+        }
+        if (tmp.empty()) {
+            tmp.push_back(0);
+        }
 
         if (llama_model_has_encoder(model)) {
             llama_encode(lctx, llama_batch_get_one(tmp.data(), tmp.size(), 0, 0));
