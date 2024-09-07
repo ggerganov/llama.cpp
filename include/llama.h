@@ -990,7 +990,10 @@ extern "C" {
     //    llama_sampler_chain_add(smpl, llama_sampler_init_top_k(50));
     //    llama_sampler_chain_add(smpl, llama_sampler_init_top_p(0.9, 1));
     //    llama_sampler_chain_add(smpl, llama_sampler_init_temp (0.8));
-    //    llama_sampler_chain_add(smpl, llama_sampler_init_dist (seed));
+    //
+    //    // typically, the chain should end with a sampler such as "greedy", "dist" or "mirostat"
+    //    // this sampler will be responsible to select the actual token
+    //    llama_sampler_chain_add(smpl, llama_sampler_init_dist(seed));
     //
     //    ...
     //
