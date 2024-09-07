@@ -155,6 +155,8 @@ constexpr const char *kGgmlOpToQnnOp[] = {
     nullptr,                         // GGML_OP_SQR
     QNN_OP_ELEMENT_WISE_SQUARE_ROOT, // GGML_OP_SQRT
     QNN_OP_ELEMENT_WISE_LOG,         // GGML_OP_LOG
+    nullptr,                         // GGML_OP_SIN
+    nullptr,                         // GGML_OP_COS
     nullptr,                         // GGML_OP_SUM
     nullptr,                         // GGML_OP_SUM_ROWS
     nullptr,                         // GGML_OP_MEAN
@@ -192,9 +194,11 @@ constexpr const char *kGgmlOpToQnnOp[] = {
     nullptr, // GGML_OP_CLAMP
     nullptr, // GGML_OP_CONV_TRANSPOSE_1D
     nullptr, // GGML_OP_IM2COL
+    nullptr, // GGML_OP_IM2COL_BACK
     nullptr, // GGML_OP_CONV_TRANSPOSE_2D
     nullptr, // GGML_OP_POOL_1D
     nullptr, // GGML_OP_POOL_2D
+    nullptr, // GGML_OP_POOL_2D_BACK
     nullptr, // GGML_OP_UPSCALE
     nullptr, // GGML_OP_PAD
     nullptr, // GGML_OP_ARANGE
@@ -210,6 +214,7 @@ constexpr const char *kGgmlOpToQnnOp[] = {
     nullptr, // GGML_OP_WIN_UNPART
     nullptr, // GGML_OP_GET_REL_POS
     nullptr, // GGML_OP_ADD_REL_POS
+    nullptr, // GGML_OP_RWKV_WKV
 
     nullptr, // GGML_OP_UNARY
 
@@ -241,6 +246,7 @@ constexpr const char *kGgmlOpToQnnOp[] = {
     nullptr,     // GGML_UNARY_OP_SILU
     nullptr,     // GGML_UNARY_OP_HARDSWISH
     nullptr,     // GGML_UNARY_OP_HARDSIGMOID
+    nullptr,     // GGML_UNARY_OP_EXP
 };
 
 static_assert(sizeof(kGgmlOpToQnnOp) / sizeof(kGgmlOpToQnnOp[0]) == (GGML_OP_COUNT + GGML_UNARY_OP_COUNT),
@@ -340,6 +346,8 @@ constexpr const ggml_qnn_unary_op_t kQnnUnaryOpsTable[] = {
     nullptr,                         // GGML_OP_SQR
     qnn_unary_op_impl<GGML_OP_SQRT>, // GGML_OP_SQRT
     qnn_unary_op_impl<GGML_OP_LOG>,  // GGML_OP_LOG
+    nullptr,                         // GGML_OP_SIN
+    nullptr,                         // GGML_OP_COS
     nullptr,                         // GGML_OP_SUM
     nullptr,                         // GGML_OP_SUM_ROWS
     nullptr,                         // GGML_OP_MEAN
@@ -377,9 +385,11 @@ constexpr const ggml_qnn_unary_op_t kQnnUnaryOpsTable[] = {
     nullptr, // GGML_OP_CLAMP
     nullptr, // GGML_OP_CONV_TRANSPOSE_1D
     nullptr, // GGML_OP_IM2COL
+    nullptr, // GGML_OP_IM2COL_BACK
     nullptr, // GGML_OP_CONV_TRANSPOSE_2D
     nullptr, // GGML_OP_POOL_1D
     nullptr, // GGML_OP_POOL_2D
+    nullptr, // GGML_OP_POOL_2D_BACK
     nullptr, // GGML_OP_UPSCALE
     nullptr, // GGML_OP_PAD
     nullptr, // GGML_OP_ARANGE
@@ -395,6 +405,7 @@ constexpr const ggml_qnn_unary_op_t kQnnUnaryOpsTable[] = {
     nullptr, // GGML_OP_WIN_UNPART
     nullptr, // GGML_OP_GET_REL_POS
     nullptr, // GGML_OP_ADD_REL_POS
+    nullptr, // GGML_OP_RWKV_WKV
 
     nullptr, // GGML_OP_UNARY
 
@@ -426,6 +437,7 @@ constexpr const ggml_qnn_unary_op_t kQnnUnaryOpsTable[] = {
     nullptr,                                                   // GGML_UNARY_OP_SILU
     nullptr,                                                   // GGML_UNARY_OP_HARDSWISH
     nullptr,                                                   // GGML_UNARY_OP_HARDSIGMOID
+    nullptr,                                                   // GGML_UNARY_OP_EXP
 };
 
 static_assert(sizeof(kQnnUnaryOpsTable) / sizeof(kQnnUnaryOpsTable[0]) == (GGML_OP_COUNT + GGML_UNARY_OP_COUNT),
@@ -443,6 +455,8 @@ static constexpr const ggml_qnn_binary_op_t kQnnBinaryOpsTable[] = {
     nullptr,                         // GGML_OP_SQR
     nullptr,                         // GGML_OP_SQRT
     nullptr,                         // GGML_OP_LOG
+    nullptr,                         // GGML_OP_SIN
+    nullptr,                         // GGML_OP_COS
     nullptr,                         // GGML_OP_SUM
     nullptr,                         // GGML_OP_SUM_ROWS
     nullptr,                         // GGML_OP_MEAN
@@ -480,9 +494,11 @@ static constexpr const ggml_qnn_binary_op_t kQnnBinaryOpsTable[] = {
     nullptr, // GGML_OP_CLAMP
     nullptr, // GGML_OP_CONV_TRANSPOSE_1D
     nullptr, // GGML_OP_IM2COL
+    nullptr, // GGML_OP_IM2COL_BACK
     nullptr, // GGML_OP_CONV_TRANSPOSE_2D
     nullptr, // GGML_OP_POOL_1D
     nullptr, // GGML_OP_POOL_2D
+    nullptr, // GGML_OP_POOL_2D_BACK
     nullptr, // GGML_OP_UPSCALE
     nullptr, // GGML_OP_PAD
     nullptr, // GGML_OP_ARANGE
@@ -498,6 +514,7 @@ static constexpr const ggml_qnn_binary_op_t kQnnBinaryOpsTable[] = {
     nullptr, // GGML_OP_WIN_UNPART
     nullptr, // GGML_OP_GET_REL_POS
     nullptr, // GGML_OP_ADD_REL_POS
+    nullptr, // GGML_OP_RWKV_WKV
 
     nullptr, // GGML_OP_UNARY
 
