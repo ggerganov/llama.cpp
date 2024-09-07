@@ -1003,11 +1003,12 @@ extern "C" {
     //        // sample from the logits of the last token in the batch
     //        const llama_token id = llama_sampler_sample(smpl, ctx, -1);
     //
+    //        // accepting the token updates the internal state of certain samplers (e.g. grammar, repetition, etc.)
+    //        llama_sampler_accept(smpl, id);
     //        ...
     //    }
     //
     //    llama_sampler_free(smpl);
-    //
     //
     // TODO: In the future, llama_sampler will be utilized to offload the sampling to the backends (e.g. GPU).
     // TODO: in the future, the entire sampling API that uses llama_model should start using llama_vocab
@@ -1086,7 +1087,7 @@ extern "C" {
     /// @param m The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
     /// @param mu Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
     LLAMA_API struct llama_sampler * llama_sampler_init_mirostat(
-            const struct llama_model * model,
+                             int32_t   n_vocab,
                             uint32_t   seed,
                                float   tau,
                                float   eta,
@@ -1108,7 +1109,9 @@ extern "C" {
                           const char * grammar_root);
 
     LLAMA_API struct llama_sampler * llama_sampler_init_penalties(
-            const struct llama_model * model,
+                             int32_t   n_vocab,         // llama_n_vocab()
+                         llama_token   special_eos_id,  // llama_token_eos()
+                         llama_token   linefeed_id,     // llama_token_nl()
                              int32_t   penalty_last_n,  // last n tokens to penalize (0 = disable penalty, -1 = context size)
                                float   penalty_repeat,  // 1.0 = disabled
                                float   penalty_freq,    // 0.0 = disabled
@@ -1117,7 +1120,7 @@ extern "C" {
                                 bool   ignore_eos);     // ignore the end-of-sequence token
 
     LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias(
-            const struct llama_model * model,
+                             int32_t   n_vocab,
                              int32_t   n_logit_bias,
               const llama_logit_bias * logit_bias);
 

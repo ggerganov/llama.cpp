@@ -3,6 +3,7 @@
 #include "llama-vocab.h"
 #include "llama-grammar.h"
 
+#include <cassert>
 #include <algorithm>
 #include <cstring>
 #include <ctime>
@@ -926,7 +927,7 @@ struct llama_sampler * llama_sampler_init_temp_ext(float temp, float delta, floa
 // mirostat
 
 struct llama_sampler_mirostat {
-    const struct llama_vocab * vocab;
+    const int32_t n_vocab;
 
     const uint32_t seed;
 
@@ -964,7 +965,7 @@ static struct llama_sampler_i llama_sampler_mirostat_i = {
 
         // Compute k from the estimated s_hat and target surprise value
         float epsilon_hat = s_hat - 1;
-        float k = powf((epsilon_hat * powf(2, ctx->mu)) / (1 - powf(ctx->vocab->n_vocab, -epsilon_hat)), 1 / s_hat);
+        float k = powf((epsilon_hat * powf(2, ctx->mu)) / (1 - powf(ctx->n_vocab, -epsilon_hat)), 1 / s_hat);
 
         llama_sampler_top_k_impl(cur_p, std::max(int(k), 1));
         llama_sampler_softmax_impl(cur_p);
@@ -986,25 +987,25 @@ static struct llama_sampler_i llama_sampler_mirostat_i = {
     },
     /* .clone  = */ [](const struct llama_sampler * smpl) {
         const auto * ctx = (const llama_sampler_mirostat *) smpl->ctx;
-        return llama_sampler_init_mirostat_impl(*ctx->vocab, ctx->seed, ctx->tau, ctx->eta, ctx->m);
+        return llama_sampler_init_mirostat(ctx->n_vocab, ctx->seed, ctx->tau, ctx->eta, ctx->m);
     },
     /* .free   = */ [](struct llama_sampler * smpl) {
         delete (llama_sampler_mirostat *) smpl->ctx;
     },
 };
 
-struct llama_sampler * llama_sampler_init_mirostat_impl(const struct llama_vocab & vocab, uint32_t seed, float tau, float eta, int32_t m) {
+struct llama_sampler * llama_sampler_init_mirostat(int32_t n_vocab, uint32_t seed, float tau, float eta, int32_t m) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_mirostat_i,
         /* .ctx   = */ new llama_sampler_mirostat {
-            /* .vocab = */ &vocab,
-            /* .seed  = */ seed,
-            /* .tau   = */ tau,
-            /* .eta   = */ eta,
-            /* .m     = */ m,
-            /* .mu    = */ 2.0f*tau,
-            /* .rng   = */ std::mt19937(seed),
-            /* .probs = */ {},
+            /* .n_vocab = */ n_vocab,
+            /* .seed    = */ seed,
+            /* .tau     = */ tau,
+            /* .eta     = */ eta,
+            /* .m       = */ m,
+            /* .mu      = */ 2.0f*tau,
+            /* .rng     = */ std::mt19937(seed),
+            /* .probs   = */ {},
         },
     };
 }
@@ -1172,7 +1173,9 @@ struct llama_sampler * llama_sampler_init_grammar_impl(const struct llama_vocab 
 // penalties
 
 struct llama_sampler_penalties {
-    const struct llama_vocab * vocab;
+    const int32_t     n_vocab;
+    const llama_token special_eos_id;
+    const llama_token linefeed_id;
 
     const int32_t penalty_last_n;
     const float   penalty_repeat;
@@ -1194,10 +1197,21 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
     /* .apply  = */ [](struct llama_sampler * smpl, llama_token_data_array * cur_p) {
         auto * ctx = (llama_sampler_penalties *) smpl->ctx;
 
-        GGML_ASSERT(cur_p->size == ctx->vocab->n_vocab && cur_p->sorted == false && "the 'penalties' sampler must be applied on the full vocabulary");
-
         if (ctx->ignore_eos) {
-            cur_p->data[ctx->vocab->special_eos_id].logit = -INFINITY;
+            assert(ctx->special_eos_id >= 0);
+
+            // optimistically check if the candidates are not yet sorted/shuffled/truncated
+            if (cur_p->size > (size_t) ctx->special_eos_id && cur_p->data[ctx->special_eos_id].id == ctx->special_eos_id) {
+                cur_p->data[ctx->special_eos_id].logit = -INFINITY;
+            } else {
+                // else, search for the special EOS token
+                for (size_t i = 0; i < cur_p->size; ++i) {
+                    if (cur_p->data[i].id == ctx->special_eos_id) {
+                        cur_p->data[i].logit = -INFINITY;
+                        break;
+                    }
+                }
+            }
         }
 
         if ((ctx->penalty_last_n == 0) ||
@@ -1205,7 +1219,29 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
             return;
         }
 
-        const float nl_logit = !ctx->penalize_nl ? cur_p->data[ctx->vocab->linefeed_id].logit : -INFINITY;
+        bool nl_found = false;
+        size_t nl_idx = 0;
+        float nl_logit = -INFINITY;
+        if (!ctx->penalize_nl) {
+            assert(ctx->linefeed_id >= 0);
+
+            // optimistically check if the candidates are not yet sorted/shuffled/truncated
+            if (cur_p->size > (size_t) ctx->linefeed_id && cur_p->data[ctx->linefeed_id].id == ctx->linefeed_id) {
+                nl_found = true;
+                nl_idx = ctx->linefeed_id;
+                nl_logit = cur_p->data[ctx->linefeed_id].logit;
+            } else {
+                // else, search for the linefeed token
+                for (size_t i = 0; i < cur_p->size; ++i) {
+                    if (cur_p->data[i].id == ctx->linefeed_id) {
+                        nl_found = true;
+                        nl_idx = i;
+                        nl_logit = cur_p->data[i].logit;
+                        break;
+                    }
+                }
+            }
+        }
 
         // Create a frequency map to count occurrences of each token in last_tokens
         // TODO: optimize this by maintaining the token count in the sampler context
@@ -1216,9 +1252,9 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
 
         llama_sampler_penalties_impl(cur_p, token_count, ctx->penalty_repeat, ctx->penalty_freq, ctx->penalty_present);
 
-        if (!ctx->penalize_nl) {
+        if (!ctx->penalize_nl && nl_found) {
             // restore the logit of the newline token if it was penalized
-            cur_p->data[ctx->vocab->linefeed_id].logit = nl_logit;
+            cur_p->data[nl_idx].logit = nl_logit;
         }
     },
     /* .reset  = */ [](struct llama_sampler * smpl) {
@@ -1227,8 +1263,10 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
     },
     /* .clone  = */ [](const struct llama_sampler * smpl) {
         const auto * ctx_src = (const llama_sampler_penalties *) smpl->ctx;
-        auto * result = llama_sampler_init_penalties_impl(
-               *ctx_src->vocab,
+        auto * result = llama_sampler_init_penalties(
+                ctx_src->n_vocab,
+                ctx_src->special_eos_id,
+                ctx_src->linefeed_id,
                 ctx_src->penalty_last_n,
                 ctx_src->penalty_repeat,
                 ctx_src->penalty_freq,
@@ -1246,14 +1284,30 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
     },
 };
 
-struct llama_sampler * llama_sampler_init_penalties_impl(const struct llama_vocab & vocab, int32_t penalty_last_n, float penalty_repeat, float penalty_freq, float penalty_present, bool penalize_nl, bool ignore_eos) {
-    GGML_ASSERT(penalize_nl || vocab.linefeed_id    != LLAMA_TOKEN_NULL);
-    GGML_ASSERT(!ignore_eos || vocab.special_eos_id != LLAMA_TOKEN_NULL);
+struct llama_sampler * llama_sampler_init_penalties(
+        int32_t n_vocab,
+        llama_token special_eos_id,
+        llama_token linefeed_id,
+        int32_t penalty_last_n,
+        float penalty_repeat,
+        float penalty_freq,
+        float penalty_present,
+        bool penalize_nl,
+        bool ignore_eos) {
+    if (linefeed_id == LLAMA_TOKEN_NULL) {
+        penalize_nl = false;
+    }
+
+    if (special_eos_id == LLAMA_TOKEN_NULL) {
+        ignore_eos = true;
+    }
 
     return new llama_sampler {
         /* .iface = */ &llama_sampler_penalties_i,
         /* .ctx   = */ new llama_sampler_penalties {
-            /* .vocab           = */ &vocab,
+            /* .n_vocab         = */ n_vocab,
+            /* .special_eos_id  = */ special_eos_id,
+            /* .linefeed_id     = */ linefeed_id,
             /* .penalty_last_n  = */ penalty_last_n,
             /* .penalty_repeat  = */ penalty_repeat,
             /* .penalty_freq    = */ penalty_freq,
@@ -1268,9 +1322,11 @@ struct llama_sampler * llama_sampler_init_penalties_impl(const struct llama_voca
 // logit-bias
 
 struct llama_sampler_logit_bias {
-    const struct llama_vocab * vocab;
+    const int32_t n_vocab;
 
-    std::vector<llama_logit_bias> logit_bias;
+    const std::vector<llama_logit_bias> logit_bias;
+
+    std::vector<llama_logit_bias> to_search;
 };
 
 static struct llama_sampler_i llama_sampler_logit_bias_i = {
@@ -1279,31 +1335,47 @@ static struct llama_sampler_i llama_sampler_logit_bias_i = {
     /* .apply  = */ [](struct llama_sampler * smpl, llama_token_data_array * cur_p) {
         auto * ctx = (llama_sampler_logit_bias *) smpl->ctx;
 
-        GGML_ASSERT(cur_p->size == ctx->vocab->n_vocab && cur_p->sorted == false && "the 'logit_bias' sampler must be applied on the full vocabulary");
+        ctx->to_search.clear();
 
+        // update the candidates that have not been shuffled in the vocabulary (i.e. idx == id)
         for (const auto & lb : ctx->logit_bias) {
-            cur_p->data[lb.token].logit += lb.bias;
+            if (lb.token >= 0 && cur_p->size > (size_t) lb.token && cur_p->data[lb.token].id == lb.token) {
+                cur_p->data[lb.token].logit += lb.bias;
+            } else {
+                ctx->to_search.push_back(lb);
+            }
+        }
+
+        // search for the remaining candidates that were not found in the previous step
+        for (size_t i = 0; i < cur_p->size; ++i) {
+            for (const auto & lb : ctx->to_search) {
+                if (cur_p->data[i].id == lb.token) {
+                    cur_p->data[i].logit += lb.bias;
+                    break;
+                }
+            }
         }
     },
     /* .reset  = */ nullptr,
     /* .clone  = */ [](const struct llama_sampler * smpl) {
         const auto * ctx_src = (const llama_sampler_logit_bias *) smpl->ctx;
-        return llama_sampler_init_logit_bias_impl(*ctx_src->vocab, ctx_src->logit_bias.size(), ctx_src->logit_bias.data());
+        return llama_sampler_init_logit_bias(ctx_src->n_vocab, ctx_src->logit_bias.size(), ctx_src->logit_bias.data());
     },
     /* .free   = */ [](struct llama_sampler * smpl) {
         delete (llama_sampler_logit_bias *) smpl->ctx;
     },
 };
 
-struct llama_sampler * llama_sampler_init_logit_bias_impl(
-        const struct llama_vocab & vocab,
+struct llama_sampler * llama_sampler_init_logit_bias(
+                         int32_t   n_vocab,
                          int32_t   n_logit_bias,
           const llama_logit_bias * logit_bias) {
     return new llama_sampler {
         /* .iface = */ &llama_sampler_logit_bias_i,
         /* .ctx   = */ new llama_sampler_logit_bias {
-            /* .vocab      = */ &vocab,
+            /* .n_vocab    = */ n_vocab,
             /* .logit_bias = */ std::vector<llama_logit_bias>(logit_bias, logit_bias + n_logit_bias),
+            /* .to_search  = */ {},
         },
     };
 }

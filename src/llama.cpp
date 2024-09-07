@@ -20593,33 +20593,8 @@ int32_t llama_chat_apply_template(
 //
 
 // TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
-struct llama_sampler * llama_sampler_init_mirostat(const struct llama_model * model, uint32_t seed, float tau, float eta, int32_t m) {
-    return llama_sampler_init_mirostat_impl(model->vocab, seed, tau, eta, m);
-}
-
-// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
 struct llama_sampler * llama_sampler_init_grammar(const struct llama_model * model, const char * grammar_str, const char * grammar_root) {
     return llama_sampler_init_grammar_impl(model->vocab, grammar_str, grammar_root);
-}
-
-// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
-struct llama_sampler * llama_sampler_init_penalties(
-        const struct llama_model * model,
-                         int32_t   penalty_last_n,
-                           float   penalty_repeat,
-                           float   penalty_freq,
-                           float   penalty_present,
-                            bool   penalize_nl,
-                            bool   ignore_eos) {
-    return llama_sampler_init_penalties_impl(model->vocab, penalty_last_n, penalty_repeat, penalty_freq, penalty_present, penalize_nl, ignore_eos);
-}
-
-// TODO: remove indirection when vocab becomes accesible in llama-sampling.cpp
-struct llama_sampler * llama_sampler_init_logit_bias(
-        const struct llama_model * model,
-                         int32_t   n_logit_bias,
-          const llama_logit_bias * logit_bias) {
-    return llama_sampler_init_logit_bias_impl(model->vocab, n_logit_bias, logit_bias);
 }
 
 //

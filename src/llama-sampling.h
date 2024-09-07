@@ -33,28 +33,7 @@ void llama_sampler_penalties_impl(
                         float   penalty_freq,
                         float   penalty_present);
 
-struct llama_sampler * llama_sampler_init_mirostat_impl(
-        const struct llama_vocab & vocab,
-                        uint32_t   seed,
-                           float   tau,
-                           float   eta,
-                         int32_t   m);
-
 struct llama_sampler * llama_sampler_init_grammar_impl(
         const struct llama_vocab & vocab,
                       const char * grammar_str,
                       const char * grammar_root);
-
-struct llama_sampler * llama_sampler_init_penalties_impl(
-        const struct llama_vocab & vocab,
-                         int32_t   penalty_last_n,
-                           float   penalty_repeat,
-                           float   penalty_freq,
-                           float   penalty_present,
-                            bool   penalize_nl,
-                            bool   ignore_eos);
-
-LLAMA_API struct llama_sampler * llama_sampler_init_logit_bias_impl(
-        const struct llama_vocab & vocab,
-                         int32_t   n_logit_bias,
-          const llama_logit_bias * logit_bias);

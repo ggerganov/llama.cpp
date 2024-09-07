@@ -152,13 +152,15 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
 
     llama_sampler_chain_add(result->chain,
             llama_sampler_init_logit_bias(
-                model,
+                llama_n_vocab(model),
                 params.logit_bias.size(),
                 params.logit_bias.data()));
 
     llama_sampler_chain_add(result->chain,
             llama_sampler_init_penalties(
-                model,
+                llama_n_vocab  (model),
+                llama_token_eos(model),
+                llama_token_nl (model),
                 params.penalty_last_n,
                 params.penalty_repeat,
                 params.penalty_freq,
@@ -196,7 +198,7 @@ struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const st
             llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
         } else if (params.mirostat == 1) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(model, params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+            llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_n_vocab(model), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
         } else if (params.mirostat == 2) {
             llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
             llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
