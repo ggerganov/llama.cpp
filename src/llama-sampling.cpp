@@ -1280,7 +1280,7 @@ static struct llama_sampler_i llama_sampler_penalties_i = {
         // Create a frequency map to count occurrences of each token in last_tokens
         // TODO: optimize this by maintaining the token count in the sampler context
         llama_token_cnt token_count;
-        for (int i = 0; i < ctx->penalty_last_n; ++i) {
+        for (int i = 0; i < std::min<int>(ctx->penalty_last_n, ctx->prev.size()); ++i) {
             token_count[ctx->prev.rat(i)]++;
         }
 

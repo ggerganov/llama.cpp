@@ -2323,10 +2323,10 @@ struct server_context {
                         slot.release();
                         slot.i_batch = -1;
                         continue; // continue loop of slots
-                    } else {
-                        // prompt evaluated for next-token prediction
-                        slot.state = SLOT_STATE_GENERATING;
                     }
+
+                    // prompt evaluated for next-token prediction
+                    slot.state = SLOT_STATE_GENERATING;
                 } else if (slot.state != SLOT_STATE_GENERATING) {
                     continue; // continue loop of slots
                 }
@@ -2347,8 +2347,6 @@ struct server_context {
 
                 const auto * cur_p = gpt_sampler_get_candidates(slot.smpl);
 
-                // TODO: this logic might have been broken during https://github.com/ggerganov/llama.cpp/pull/8643
-                //       fix if necessary
                 for (size_t i = 0; i < (size_t) slot.sparams.n_probs; ++i) {
                     result.probs.push_back({
                         cur_p->data[i].id,
