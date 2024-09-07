@@ -343,7 +343,7 @@ extern "C" {
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
         bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
-      //bool no_perf;     // whether to measure performance timings, TODO: implement
+        bool no_perf;     // whether to measure performance timings
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
@@ -1168,10 +1168,29 @@ extern "C" {
     // NOTE: Used by llama.cpp examples, avoid using in third-party apps. Instead, do your own performance measurements.
     //
 
+    // performance timing information
+    struct llama_perf_data {
+        // llama_context
+        double t_start_ms;
+        double t_load_ms;
+        double t_p_eval_ms;
+        double t_eval_ms;
+
+        int32_t n_p_eval;
+        int32_t n_eval;
+
+        // llama_sampler_chain
+        double t_sample_ms;
+
+        int32_t n_sample;
+    };
+
     enum llama_perf_type {
         LLAMA_PERF_TYPE_CONTEXT       = 0,
         LLAMA_PERF_TYPE_SAMPLER_CHAIN = 1,
     };
+
+    LLAMA_API struct llama_perf_data llama_perf_get(const void * ctx, enum llama_perf_type type);
 
     LLAMA_API void llama_perf_print(const void * ctx, enum llama_perf_type type);
     LLAMA_API void llama_perf_reset(      void * ctx, enum llama_perf_type type);

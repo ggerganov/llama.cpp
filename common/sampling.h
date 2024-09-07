@@ -39,6 +39,7 @@ struct gpt_sampler_params {
     float   mirostat_eta      = 0.10f; // learning rate
     bool    penalize_nl       = false; // consider newlines as a repeatable token
     bool    ignore_eos        = false;
+    bool    no_perf           = false; // disable performance metrics
 
     std::vector<enum gpt_sampler_type> samplers = {
         GPT_SAMPLER_TYPE_TOP_K,

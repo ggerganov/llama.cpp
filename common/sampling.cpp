@@ -139,7 +139,7 @@ std::string gpt_sampler_params::print() const {
 struct gpt_sampler * gpt_sampler_init(const struct llama_model * model, const struct gpt_sampler_params & params) {
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
 
-    lparams.no_perf = false; // TODO: control via params
+    lparams.no_perf = params.no_perf;
 
     auto * result = new gpt_sampler {
         /* .params = */ params,
