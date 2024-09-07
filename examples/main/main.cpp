@@ -41,6 +41,13 @@ static std::vector<llama_token> * g_output_tokens;
 static bool is_interacting  = false;
 static bool need_insert_eot = false;
 
+static void print_usage(int, char ** argv) {
+    printf("\nexample usage:\n");
+    printf("\n  text generation:     %s -m your_model.gguf -p \"I believe the meaning of life is\" -n 128\n", argv[0]);
+    printf("\n  chat (conversation): %s -m your_model.gguf -p \"You are a helpful assistant\" -cnv\n", argv[0]);
+    printf("\n");
+}
+
 static bool file_exists(const std::string & path) {
     std::ifstream f(path.c_str());
     return f.good();
@@ -131,9 +138,9 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
 int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_MAIN, print_usage);
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        gpt_params_print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }
 

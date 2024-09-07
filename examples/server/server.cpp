@@ -2423,13 +2423,10 @@ int main(int argc, char ** argv) {
     // own arguments required by this example
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        gpt_params_print_usage(argc, argv, params);
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_SERVER);
+    if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }
-
-    // parse arguments from environment variables
-    gpt_params_parse_from_env(params);
 
     // TODO: not great to use extern vars
     server_log_json = params.log_json;

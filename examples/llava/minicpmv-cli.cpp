@@ -253,8 +253,8 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        show_additional_info(argc, argv);
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON, show_additional_info);
+    if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }
 
@@ -266,7 +266,6 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     if (params.mmproj.empty() || (params.image.empty())) {
-        gpt_params_print_usage(argc, argv, params);
         show_additional_info(argc, argv);
         return 1;
     }

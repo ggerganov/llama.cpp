@@ -14,8 +14,10 @@
 #include <vector>
 #include <random>
 #include <thread>
+#include <set>
 #include <unordered_map>
 #include <tuple>
+#include <functional>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
@@ -61,6 +63,25 @@ int32_t cpu_get_num_math();
 // CLI argument parsing
 //
 
+enum llama_example {
+    LLAMA_EXAMPLE_COMMON,
+    LLAMA_EXAMPLE_SPECULATIVE,
+    LLAMA_EXAMPLE_MAIN,
+    LLAMA_EXAMPLE_INFILL,
+    LLAMA_EXAMPLE_EMBEDDING,
+    LLAMA_EXAMPLE_PERPLEXITY,
+    LLAMA_EXAMPLE_RETRIEVAL,
+    LLAMA_EXAMPLE_PASSKEY,
+    LLAMA_EXAMPLE_IMATRIX,
+    LLAMA_EXAMPLE_BENCH,
+    LLAMA_EXAMPLE_SERVER,
+    LLAMA_EXAMPLE_CVECTOR_GENERATOR,
+    LLAMA_EXAMPLE_EXPORT_LORA,
+    LLAMA_EXAMPLE_LLAVA,
+
+    LLAMA_EXAMPLE_COUNT,
+};
+
 // dimensionality reduction methods, used by cvector-generator
 enum dimre_method {
     DIMRE_METHOD_PCA,
@@ -77,6 +98,8 @@ struct cpu_params {
 };
 
 struct gpt_params {
+    enum llama_example curr_ex    = LLAMA_EXAMPLE_COMMON;
+
     int32_t n_predict             =    -1; // new tokens to predict
     int32_t n_ctx                 =     0; // context size
     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
@@ -166,6 +189,7 @@ struct gpt_params {
 
     bool   kl_divergence    = false; // compute KL divergence
 
+    std::function<void(int, char **)> print_usage = nullptr; // print example-specific usage and example
     bool usage             = false; // print usage
     bool use_color         = false; // use color to distinguish generations and inputs
     bool special           = false; // enable special token output
@@ -276,13 +300,91 @@ struct gpt_params {
     bool batched_bench_output_jsonl = false;
 };
 
-void gpt_params_parse_from_env(gpt_params & params);
-void gpt_params_handle_model_default(gpt_params & params);
+struct llama_arg {
+    std::set<enum llama_example> examples = {LLAMA_EXAMPLE_COMMON};
+    std::vector<const char *> args;
+    const char * value_hint   = nullptr; // help text or example for arg value
+    const char * value_hint_2 = nullptr; // for second arg value
+    const char * env          = nullptr;
+    std::string help;
+    void (*handler_void)   (gpt_params & params) = nullptr;
+    void (*handler_string) (gpt_params & params, const std::string &) = nullptr;
+    void (*handler_str_str)(gpt_params & params, const std::string &, const std::string &) = nullptr;
+    void (*handler_int)    (gpt_params & params, int) = nullptr;
 
-bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
-bool gpt_params_parse      (int argc, char ** argv, gpt_params & params);
-bool gpt_params_find_arg   (int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
-void gpt_params_print_usage(int argc, char ** argv, const gpt_params & params);
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const char * value_hint,
+        const std::string & help,
+        void (*handler)(gpt_params & params, const std::string &)
+    ) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
+
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const char * value_hint,
+        const std::string & help,
+        void (*handler)(gpt_params & params, int)
+    ) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
+
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const std::string & help,
+        void (*handler)(gpt_params & params)
+    ) : args(args), help(help), handler_void(handler) {}
+
+    // support 2 values for arg
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const char * value_hint,
+        const char * value_hint_2,
+        const std::string & help,
+        void (*handler)(gpt_params & params, const std::string &, const std::string &)
+    ) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
+
+    llama_arg & set_examples(std::initializer_list<enum llama_example> examples) {
+        this->examples = std::move(examples);
+        return *this;
+    }
+
+    llama_arg & set_env(const char * env) {
+        help = help + "\n(env: " + env + ")";
+        this->env = env;
+        return *this;
+    }
+
+    bool in_example(enum llama_example ex) {
+        return examples.find(ex) != examples.end();
+    }
+
+    bool get_value_from_env(std::string & output) const {
+        if (env == nullptr) return false;
+        char * value = std::getenv(env);
+        if (value) {
+            output = value;
+            return true;
+        }
+        return false;
+    }
+
+    bool has_value_from_env() const {
+        return env != nullptr && std::getenv(env);
+    }
+
+    std::string to_string();
+};
+
+// initialize list of options (arguments) that can be used by the current example
+std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex);
+// optionally, we can provide "print_usage" to print example usage
+std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex, std::function<void(int, char **)> print_usage);
+
+// parse input arguments from CLI
+// if one argument has invalid value, it will automatically display usage of the specific argument (and not the full usage message)
+bool gpt_params_parse   (int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+
+// print full usage message; it will be called internally by gpt_params_parse() if "-h" is set
+void gpt_params_print_usage(gpt_params & params, std::vector<llama_arg> & options);
 
 std::string gpt_params_get_system_info(const gpt_params & params);
 

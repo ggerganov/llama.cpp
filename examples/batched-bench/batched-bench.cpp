@@ -28,9 +28,7 @@ static std::vector<int> parse_list(char * p) {
     return ret;
 }
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     LOG_TEE("\nexample usage:\n");
     LOG_TEE("\n    %s -m model.gguf -c 2048 -b 2048 -ub 512 -npp 128,256,512 -ntg 128,256 -npl 1,2,4,8,16,32 [-pps]\n", argv[0]);
     LOG_TEE("\n");
@@ -39,8 +37,8 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_BENCH, print_usage);
+    if (!gpt_params_parse(argc, argv, params, options)) {
         return 1;
     }
 
