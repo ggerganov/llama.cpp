@@ -22,18 +22,19 @@ static void export_md(std::string fname, llama_example ex) {
         // args
         for (const auto & arg : opt.args) {
         if (arg == opt.args.front()) {
-                file << (opt.args.size() == 1 ? arg : (arg + ", "));
+                file << arg;
+                if (opt.args.size() > 1) file << ", ";
             } else {
                 file << arg << (arg != opt.args.back() ? ", " : "");
             }
         }
         // value hint
-        if (!opt.value_hint.empty()) {
+        if (opt.value_hint) {
             std::string md_value_hint(opt.value_hint);
             string_replace_all(md_value_hint, "|", "\\|");
             file << " " << md_value_hint;
         }
-        if (!opt.value_hint_2.empty()) {
+        if (opt.value_hint_2) {
             std::string md_value_hint_2(opt.value_hint_2);
             string_replace_all(md_value_hint_2, "|", "\\|");
             file << " " << md_value_hint_2;

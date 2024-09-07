@@ -373,7 +373,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
                 }
             } catch (std::exception & e) {
                 throw std::invalid_argument(format(
-                    "error while handling environment variable \"%s\": %s\n\n", opt.env.c_str(), e.what()));
+                    "error while handling environment variable \"%s\": %s\n\n", opt.env, e.what()));
             }
         }
     }
@@ -395,7 +395,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
         }
         auto opt = *arg_to_options[arg];
         if (opt.has_value_from_env()) {
-            fprintf(stderr, "warn: %s environment variable is set, but will be overwritten by command line argument %s\n", opt.env.c_str(), arg.c_str());
+            fprintf(stderr, "warn: %s environment variable is set, but will be overwritten by command line argument %s\n", opt.env, arg.c_str());
         }
         try {
             if (opt.handler_void) {
@@ -595,15 +595,19 @@ std::string llama_arg::to_string() {
     std::string leading_spaces(n_leading_spaces, ' ');
 
     std::ostringstream ss;
-    for (const auto & arg : args) {
+    for (const auto arg : args) {
         if (arg == args.front()) {
-            ss << (args.size() == 1 ? arg : format("%-7s", (arg + ",").c_str()));
+            if (args.size() == 1) {
+                ss << arg;
+            } else {
+                ss << format("%-7s", arg) << ", ";
+            }
         } else {
             ss << arg << (arg != args.back() ? ", " : "");
         }
     }
-    if (!value_hint.empty()) ss << " " << value_hint;
-    if (!value_hint_2.empty()) ss << " " << value_hint_2;
+    if (value_hint) ss << " " << value_hint;
+    if (value_hint_2) ss << " " << value_hint_2;
     if (ss.tellp() > n_leading_spaces - 3) {
         // current line is too long, add new line
         ss << "\n" << leading_spaces;
@@ -675,7 +679,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
                 if (seen_args.find(a) == seen_args.end()) {
                     seen_args.insert(a);
                 } else {
-                    throw std::runtime_error(format("found duplicated argument in source code: %s", a.c_str()));
+                    throw std::runtime_error(format("found duplicated argument in source code: %s", a));
                 }
             }
             options.push_back(std::move(arg));
@@ -693,7 +697,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--version"},
         "show version and build info",
-        [](gpt_params & params) {
+        [](gpt_params &) {
             fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
             fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
             exit(0);
@@ -2248,32 +2252,32 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--log-test"},
         "Log test",
-        [](gpt_params & params) { log_param_single_parse("--log-test"); }
+        [](gpt_params &) { log_param_single_parse("--log-test"); }
     ));
     add_opt(llama_arg(
         {"--log-disable"},
         "Log disable",
-        [](gpt_params & params) { log_param_single_parse("--log-disable"); }
+        [](gpt_params &) { log_param_single_parse("--log-disable"); }
     ));
     add_opt(llama_arg(
         {"--log-enable"},
         "Log enable",
-        [](gpt_params & params) { log_param_single_parse("--log-enable"); }
+        [](gpt_params &) { log_param_single_parse("--log-enable"); }
     ));
     add_opt(llama_arg(
         {"--log-new"},
         "Log new",
-        [](gpt_params & params) { log_param_single_parse("--log-new"); }
+        [](gpt_params &) { log_param_single_parse("--log-new"); }
     ));
     add_opt(llama_arg(
         {"--log-append"},
         "Log append",
-        [](gpt_params & params) { log_param_single_parse("--log-append"); }
+        [](gpt_params &) { log_param_single_parse("--log-append"); }
     ));
     add_opt(llama_arg(
         {"--log-file"}, "FNAME",
         "Log file",
-        [](gpt_params & params, const std::string & value) { log_param_pair_parse(false, "--log-file", value); }
+        [](gpt_params &, const std::string & value) { log_param_pair_parse(false, "--log-file", value); }
     ));
 #endif // LOG_DISABLE_LOGS
 
