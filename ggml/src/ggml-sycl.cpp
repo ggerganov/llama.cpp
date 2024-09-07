@@ -4350,6 +4350,11 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     void * dev_ptr;
     SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_device(
                                     size, *stream)));
+    if (!dev_ptr) {
+        char err_buf[1024];
+        snprintf(err_buf, 1023, "%s: can't malloc %lu Bytes memory on device", __func__, size);
+        throw std::runtime_error(err_buf);
+    }
     ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(buft_ctx->device, dev_ptr, buft_ctx->stream);
     return ggml_backend_buffer_init(buft, ggml_backend_sycl_buffer_interface, ctx, size);
 }
