@@ -9,8 +9,11 @@ Feature: llama.cpp server
     And   a model alias bert-bge-small
     And   42 as server seed
     And   2 slots
-    And   1024 as batch size
-    And   1024 as ubatch size
+    # the bert-bge-small model has context size of 512
+    # since the generated prompts are as big as the batch size, we need to set the batch size to 512
+    # ref: https://huggingface.co/BAAI/bge-small-en-v1.5/blob/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/config.json#L20
+    And   512 as batch size
+    And   512 as ubatch size
     And   2048 KV cache size
     And   embeddings extraction
     Then  the server is starting
