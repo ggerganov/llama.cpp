@@ -347,7 +347,7 @@ void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model)
 bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options) {
     std::string arg;
     const std::string arg_prefix = "--";
-    llama_sampling_params & sparams = params.sparams;
+    gpt_sampler_params & sparams = params.sparams;
 
     std::unordered_map<std::string, llama_arg *> arg_to_options;
     for (auto & opt : options) {
@@ -386,7 +386,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
     };
 
     for (int i = 1; i < argc; i++) {
-        arg = argv[i];
+        const std::string arg_prefix = "--";
+
+        std::string arg = argv[i];
         if (arg.compare(0, arg_prefix.size(), arg_prefix) == 0) {
             std::replace(arg.begin(), arg.end(), '_', '-');
         }
@@ -445,7 +447,6 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
         string_process_escapes(params.prompt);
         string_process_escapes(params.input_prefix);
         string_process_escapes(params.input_suffix);
-        string_process_escapes(sparams.cfg_negative_prompt);
         for (auto & antiprompt : params.antiprompt) {
             string_process_escapes(antiprompt);
         }
@@ -456,9 +457,8 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
         params.kv_overrides.back().key[0] = 0;
     }
 
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-        sparams.seed = params.seed;
+    if (sparams.seed == LLAMA_DEFAULT_SEED) {
+        sparams.seed = time(NULL);
     }
 
     return true;
@@ -657,9 +657,9 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
 
     std::string sampler_type_chars;
     std::string sampler_type_names;
-    for (const auto sampler_type : params.sparams.samplers_sequence) {
-        sampler_type_chars += static_cast<char>(sampler_type);
-        sampler_type_names += llama_sampling_type_to_str(sampler_type) + ";";
+    for (const auto & sampler : params.sparams.samplers) {
+        sampler_type_chars += gpt_sampler_type_to_chr(sampler);
+        sampler_type_names += gpt_sampler_type_to_str(sampler) + ";";
     }
     sampler_type_names.pop_back();
 
@@ -740,10 +740,8 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"-s", "--seed"}, "SEED",
-        format("RNG seed (default: %d, use random seed for < 0)", params.seed),
+        format("RNG seed (default: %d, use random seed for < 0)", params.sparams.seed),
         [](gpt_params & params, const std::string & value) {
-            // TODO: this is temporary, in the future the sampling state will be moved fully to llama_sampling_context.
-            params.seed = std::stoul(value);
             params.sparams.seed = std::stoul(value);
         }
     ));
@@ -1185,21 +1183,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         format("samplers that will be used for generation in the order, separated by \';\'\n(default: %s)", sampler_type_names.c_str()),
         [](gpt_params & params, const std::string & value) {
             const auto sampler_names = string_split(value, ';');
-            params.sparams.samplers_sequence = llama_sampling_types_from_names(sampler_names, true);
+            params.sparams.samplers = gpt_sampler_types_from_names(sampler_names, true);
         }
     ));
     add_opt(llama_arg(
         {"--sampling-seq"}, "SEQUENCE",
         format("simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str()),
         [](gpt_params & params, const std::string & value) {
-            params.sparams.samplers_sequence = llama_sampling_types_from_chars(value);
+            params.sparams.samplers = gpt_sampler_types_from_chars(value);
         }
     ));
     add_opt(llama_arg(
         {"--ignore-eos"},
         "ignore end of stream token and continue generating (implies --logit-bias EOS-inf)",
         [](gpt_params & params) {
-            params.ignore_eos = true;
+            params.sparams.ignore_eos = true;
         }
     ));
     add_opt(llama_arg(
@@ -1247,9 +1245,9 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ));
     add_opt(llama_arg(
         {"--typical"}, "N",
-        format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sparams.typical_p),
+        format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)params.sparams.typ_p),
         [](gpt_params & params, const std::string & value) {
-            params.sparams.typical_p = std::stof(value);
+            params.sparams.typ_p = std::stof(value);
         }
     ));
     add_opt(llama_arg(
@@ -1329,7 +1327,8 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
             std::string value_str;
             try {
                 if (ss >> key && ss >> sign && std::getline(ss, value_str) && (sign == '+' || sign == '-')) {
-                    params.sparams.logit_bias[key] = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
+                    const float bias = std::stof(value_str) * ((sign == '-') ? -1.0f : 1.0f);
+                    params.sparams.logit_bias.push_back({key, bias});
                 } else {
                     throw std::invalid_argument("invalid input format");
                 }
@@ -1338,34 +1337,6 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
             }
         }
     ));
-    add_opt(llama_arg(
-        {"--cfg-negative-prompt"}, "PROMPT",
-        format("negative prompt to use for guidance (default: '%s')", params.sparams.cfg_negative_prompt.c_str()),
-        [](gpt_params & params, const std::string & value) {
-            params.sparams.cfg_negative_prompt = value;
-        }
-    ).set_examples({LLAMA_EXAMPLE_MAIN}));
-    add_opt(llama_arg(
-        {"--cfg-negative-prompt-file"}, "FNAME",
-        "negative prompt file to use for guidance",
-        [](gpt_params & params, const std::string & value) {
-            std::ifstream file(value);
-            if (!file) {
-                throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
-            }
-            std::copy(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), back_inserter(params.sparams.cfg_negative_prompt));
-            if (!params.sparams.cfg_negative_prompt.empty() && params.sparams.cfg_negative_prompt.back() == '\n') {
-                params.sparams.cfg_negative_prompt.pop_back();
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_MAIN}));
-    add_opt(llama_arg(
-        {"--cfg-scale"}, "N",
-        format("strength of guidance (default: %.1f, 1.0 = disable)", (double)params.sparams.cfg_scale),
-        [](gpt_params & params, const std::string & value) {
-            params.sparams.cfg_scale = std::stof(value);
-        }
-    ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--grammar"}, "GRAMMAR",
         format("BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", params.sparams.grammar.c_str()),
@@ -2707,8 +2678,9 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         llama_lora_adapters_apply(lctx, iparams.lora_adapters);
     }
 
-    if (params.ignore_eos) {
-        params.sparams.logit_bias[llama_token_eos(model)] = -INFINITY;
+    if (params.sparams.ignore_eos && llama_token_eos(model) == -1) {
+        fprintf(stderr, "%s: warning: model does not have an EOS token, ignoring --ignore-eos\n", __func__);
+        params.sparams.ignore_eos = false;
     }
 
     if (params.warmup) {
@@ -2737,7 +2709,7 @@ struct llama_init_result llama_init_from_gpt_params(gpt_params & params) {
         }
         llama_kv_cache_clear(lctx);
         llama_synchronize(lctx);
-        llama_reset_timings(lctx);
+        llama_perf_reset(lctx, LLAMA_PERF_TYPE_CONTEXT);
     }
 
     iparams.model   = model;
@@ -2816,7 +2788,6 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_threads         = params.cpuparams.n_threads;
     cparams.n_threads_batch   = params.cpuparams_batch.n_threads == -1 ?
                                     params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
-    cparams.seed              = params.seed;
     cparams.logits_all        = params.logits_all;
     cparams.embeddings        = params.embedding;
     cparams.rope_scaling_type = params.rope_scaling_type;
@@ -3702,7 +3673,7 @@ void yaml_dump_string_multiline(FILE * stream, const char * prop_name, const cha
 
 void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const llama_context * lctx,
                                const std::string & timestamp, const std::vector<int> & prompt_tokens, const char * model_desc) {
-    const llama_sampling_params & sparams = params.sparams;
+    const auto & sparams = params.sparams;
 
     fprintf(stream, "build_commit: %s\n",        LLAMA_COMMIT);
     fprintf(stream, "build_number: %d\n",        LLAMA_BUILD_NUMBER);
@@ -3753,8 +3724,6 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
 
     fprintf(stream, "alias: %s # default: unknown\n", params.model_alias.c_str());
     fprintf(stream, "batch_size: %d # default: 512\n", params.n_batch);
-    yaml_dump_string_multiline(stream, "cfg_negative_prompt", sparams.cfg_negative_prompt.c_str());
-    fprintf(stream, "cfg_scale: %f # default: 1.0\n", sparams.cfg_scale);
     fprintf(stream, "chunks: %d # default: -1 (unlimited)\n", params.n_chunks);
     fprintf(stream, "color: %s # default: false\n", params.use_color ? "true" : "false");
     fprintf(stream, "ctx_size: %d # default: 512\n", params.n_ctx);
@@ -3765,10 +3734,7 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "grammar-file: # never logged, see grammar instead. Can still be specified for input.\n");
     fprintf(stream, "hellaswag: %s # default: false\n", params.hellaswag ? "true" : "false");
     fprintf(stream, "hellaswag_tasks: %zu # default: 400\n", params.hellaswag_tasks);
-
-    const auto logit_bias_eos = sparams.logit_bias.find(llama_token_eos(llama_get_model(lctx)));
-    const bool ignore_eos = logit_bias_eos != sparams.logit_bias.end() && logit_bias_eos->second == -INFINITY;
-    fprintf(stream, "ignore_eos: %s # default: false\n", ignore_eos ? "true" : "false");
+    fprintf(stream, "ignore_eos: %s # default: false\n", sparams.ignore_eos ? "true" : "false");
 
     yaml_dump_string_multiline(stream, "in_prefix", params.input_prefix.c_str());
     fprintf(stream, "in_prefix_bos: %s # default: false\n", params.input_prefix_bos ? "true" : "false");
@@ -3779,11 +3745,8 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "logdir: %s # default: unset (no logging)\n", params.logdir.c_str());
 
     fprintf(stream, "logit_bias:\n");
-    for (std::pair<llama_token, float> lb : sparams.logit_bias) {
-        if (ignore_eos && lb.first == logit_bias_eos->first) {
-            continue;
-        }
-        fprintf(stream, "  %d: %f", lb.first, lb.second);
+    for (const auto & logit_bias : sparams.logit_bias) {
+        fprintf(stream, "  %d: %f", logit_bias.token, logit_bias.bias);
     }
 
     fprintf(stream, "lora:\n");
@@ -3836,7 +3799,6 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
 
     fprintf(stream, "rope_freq_base: %f # default: 10000.0\n", params.rope_freq_base);
     fprintf(stream, "rope_freq_scale: %f # default: 1.0\n", params.rope_freq_scale);
-    fprintf(stream, "seed: %u # default: -1 (random seed)\n", params.seed);
     fprintf(stream, "simple_io: %s # default: false\n", params.simple_io ? "true" : "false");
     fprintf(stream, "cont_batching: %s # default: false\n", params.cont_batching ? "true" : "false");
     fprintf(stream, "flash_attn: %s # default: false\n", params.flash_attn ? "true" : "false");
@@ -3850,7 +3812,7 @@ void yaml_dump_non_result_info(FILE * stream, const gpt_params & params, const l
     fprintf(stream, "top_k: %d # default: 40\n", sparams.top_k);
     fprintf(stream, "top_p: %f # default: 0.95\n", sparams.top_p);
     fprintf(stream, "min_p: %f # default: 0.0\n", sparams.min_p);
-    fprintf(stream, "typical_p: %f # default: 1.0\n", sparams.typical_p);
+    fprintf(stream, "typ_p: %f # default: 1.0\n", sparams.typ_p);
     fprintf(stream, "verbose_prompt: %s # default: false\n", params.verbose_prompt ? "true" : "false");
     fprintf(stream, "display_prompt: %s # default: true\n", params.display_prompt ? "true" : "false");
 }
