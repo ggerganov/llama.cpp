@@ -310,20 +310,39 @@ struct llama_arg {
     std::string value_hint_2; // for second arg value
     std::string env;
     std::string help;
-    std::function<void(void)>                     handler_void    = nullptr;
-    std::function<void(std::string)>              handler_string  = nullptr;
-    std::function<void(std::string, std::string)> handler_str_str = nullptr;
-    std::function<void(int)>                      handler_int     = nullptr;
+    void (*handler_void)   (gpt_params & params, llama_sampling_params & sparams) = nullptr;
+    void (*handler_string) (gpt_params & params, llama_sampling_params & sparams, const std::string &) = nullptr;
+    void (*handler_str_str)(gpt_params & params, llama_sampling_params & sparams, const std::string &, const std::string &) = nullptr;
+    void (*handler_int)    (gpt_params & params, llama_sampling_params & sparams, int) = nullptr;
 
-    llama_arg(std::vector<std::string> args, std::string value_hint, std::string help, std::function<void(std::string)> handler) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
+    llama_arg(
+        const std::initializer_list<std::string> & args,
+        const std::string & value_hint,
+        const std::string & help,
+        void (*handler)(gpt_params & params, llama_sampling_params & sparams, const std::string &)
+    ) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
 
-    llama_arg(std::vector<std::string> args, std::string value_hint, std::string help, std::function<void(int)> handler) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
+    llama_arg(
+        const std::initializer_list<std::string> & args,
+        const std::string & value_hint,
+        const std::string & help,
+        void (*handler)(gpt_params & params, llama_sampling_params & sparams, int)
+    ) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
 
-    llama_arg(std::vector<std::string> args, std::string help, std::function<void(void)> handler) : args(args), help(help), handler_void(handler) {}
+    llama_arg(
+        const std::initializer_list<std::string> & args,
+        const std::string & help,
+        void (*handler)(gpt_params & params, llama_sampling_params & sparams)
+    ) : args(args), help(help), handler_void(handler) {}
 
     // support 2 values for arg
-    // note: env variable is not yet support for 2 values
-    llama_arg(std::vector<std::string> args, std::string value_hint, std::string value_hint_2, std::string help, std::function<void(std::string, std::string)> handler) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
+    llama_arg(
+        const std::initializer_list<std::string> & args,
+        const std::string & value_hint,
+        const std::string & value_hint_2,
+        const std::string & help,
+        void (*handler)(gpt_params & params, llama_sampling_params & sparams, const std::string &, const std::string &)
+    ) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
 
     llama_arg & set_examples(std::set<enum llama_example> examples) {
         this->examples = std::move(examples);
@@ -340,7 +359,7 @@ struct llama_arg {
         return examples.find(ex) != examples.end();
     }
 
-    bool get_value_from_env(std::string & output) {
+    bool get_value_from_env(std::string & output) const {
         if (env.empty()) return false;
         char * value = std::getenv(env.c_str());
         if (value) {
@@ -350,7 +369,7 @@ struct llama_arg {
         return false;
     }
 
-    bool has_value_from_env() {
+    bool has_value_from_env() const {
         return std::getenv(env.c_str());
     }
 

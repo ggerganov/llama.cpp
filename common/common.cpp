@@ -362,13 +362,13 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
         if (opt.get_value_from_env(value)) {
             try {
                 if (opt.handler_void && (value == "1" || value == "true")) {
-                    opt.handler_void();
+                    opt.handler_void(params, sparams);
                 }
                 if (opt.handler_int) {
-                    opt.handler_int(std::stoi(value));
+                    opt.handler_int(params, sparams, std::stoi(value));
                 }
                 if (opt.handler_string) {
-                    opt.handler_string(value);
+                    opt.handler_string(params, sparams, value);
                     continue;
                 }
             } catch (std::exception & e) {
@@ -399,7 +399,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
         }
         try {
             if (opt.handler_void) {
-                opt.handler_void();
+                opt.handler_void(params, sparams);
                 continue;
             }
 
@@ -407,11 +407,11 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
             check_arg(i);
             std::string val = argv[++i];
             if (opt.handler_int) {
-                opt.handler_int(std::stoi(val));
+                opt.handler_int(params, sparams, std::stoi(val));
                 continue;
             }
             if (opt.handler_string) {
-                opt.handler_string(val);
+                opt.handler_string(params, sparams, val);
                 continue;
             }
 
@@ -419,7 +419,7 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vecto
             check_arg(i);
             std::string val2 = argv[++i];
             if (opt.handler_str_str) {
-                opt.handler_str_str(val, val2);
+                opt.handler_str_str(params, sparams, val, val2);
                 continue;
             }
         } catch (std::exception & e) {
@@ -687,14 +687,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-h", "--help", "--usage"},
         "print usage and exit",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.usage = true;
         }
     ));
     add_opt(llama_arg(
         {"--version"},
         "show version and build info",
-        []() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             fprintf(stderr, "version: %d (%s)\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT);
             fprintf(stderr, "built with %s for %s\n", LLAMA_COMPILER, LLAMA_BUILD_TARGET);
             exit(0);
@@ -703,42 +703,42 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-v", "--verbose"},
         "print verbose information",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.verbosity = 1;
         }
     ));
     add_opt(llama_arg(
         {"--verbosity"}, "N",
         format("set specific verbosity level (default: %d)", params.verbosity),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.verbosity = value;
         }
     ));
     add_opt(llama_arg(
         {"--verbose-prompt"},
         format("print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.verbose_prompt = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--no-display-prompt"},
         format("don't print prompt at generation (default: %s)", !params.display_prompt ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.display_prompt = false;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"-co", "--color"},
         format("colorise output to distinguish prompt and user input from generations (default: %s)", params.use_color ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.use_color = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"-s", "--seed"}, "SEED",
         format("RNG seed (default: %d, use random seed for < 0)", params.seed),
-        [&sparams, &params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             // TODO: this is temporary, in the future the sampling state will be moved fully to llama_sampling_context.
             params.seed = std::stoul(value);
             sparams.seed = std::stoul(value);
@@ -747,7 +747,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-t", "--threads"}, "N",
         format("number of threads to use during generation (default: %d)", params.cpuparams.n_threads),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.cpuparams.n_threads = value;
             if (params.cpuparams.n_threads <= 0) {
                 params.cpuparams.n_threads = std::thread::hardware_concurrency();
@@ -757,7 +757,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-tb", "--threads-batch"}, "N",
         "number of threads to use during batch and prompt processing (default: same as --threads)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.cpuparams_batch.n_threads = value;
             if (params.cpuparams_batch.n_threads <= 0) {
                 params.cpuparams_batch.n_threads = std::thread::hardware_concurrency();
@@ -767,7 +767,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-td", "--threads-draft"}, "N",
         "number of threads to use during generation (default: same as --threads)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.draft_cpuparams.n_threads = value;
             if (params.draft_cpuparams.n_threads <= 0) {
                 params.draft_cpuparams.n_threads = std::thread::hardware_concurrency();
@@ -777,7 +777,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-tbd", "--threads-batch-draft"}, "N",
         "number of threads to use during batch and prompt processing (default: same as --threads-draft)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.draft_cpuparams_batch.n_threads = value;
             if (params.draft_cpuparams_batch.n_threads <= 0) {
                 params.draft_cpuparams_batch.n_threads = std::thread::hardware_concurrency();
@@ -787,7 +787,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-C", "--cpu-mask"}, "M",
         "CPU affinity mask: arbitrarily long hex. Complements cpu-range (default: \"\")",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string mask = value;
             params.cpuparams.mask_valid = true;
             if (!parse_cpu_mask(mask, params.cpuparams.cpumask)) {
@@ -798,7 +798,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-Cr", "--cpu-range"}, "lo-hi",
         "range of CPUs for affinity. Complements --cpu-mask",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string range = value;
             params.cpuparams.mask_valid = true;
             if (!parse_cpu_range(range, params.cpuparams.cpumask)) {
@@ -809,21 +809,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--cpu-strict"}, "<0|1>",
         format("use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.cpuparams.strict_cpu = std::stoul(value);
         }
     ));
     add_opt(llama_arg(
         {"--poll"}, "<0...100>",
         format("use polling level to wait for work (0 - no polling, default: %u)\n", (unsigned) params.cpuparams.poll),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.cpuparams.poll = std::stoul(value);
         }
     ));
     add_opt(llama_arg(
         {"-Cb", "--cpu-mask-batch"}, "M",
         "CPU affinity mask: arbitrarily long hex. Complements cpu-range-batch (default: same as --cpu-mask)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string mask = value;
             params.cpuparams_batch.mask_valid = true;
             if (!parse_cpu_mask(mask, params.cpuparams_batch.cpumask)) {
@@ -834,7 +834,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-Crb", "--cpu-range-batch"}, "lo-hi",
         "ranges of CPUs for affinity. Complements --cpu-mask-batch",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string range = value;
             params.cpuparams_batch.mask_valid = true;
             if (!parse_cpu_range(range, params.cpuparams_batch.cpumask)) {
@@ -845,21 +845,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--cpu-strict-batch"}, "<0|1>",
         "use strict CPU placement (default: same as --cpu-strict)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.cpuparams_batch.strict_cpu = value;
         }
     ));
     add_opt(llama_arg(
         {"--poll-batch"}, "<0|1>",
         "use polling to wait for work (default: same as --poll)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.cpuparams_batch.poll = value;
         }
     ));
     add_opt(llama_arg(
         {"-Cd", "--cpu-mask-draft"}, "M",
         "Draft model CPU affinity mask. Complements cpu-range-draft (default: same as --cpu-mask)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string mask = value;
             params.draft_cpuparams.mask_valid = true;
             if (!parse_cpu_mask(mask, params.draft_cpuparams.cpumask)) {
@@ -870,7 +870,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-Crd", "--cpu-range-draft"}, "lo-hi",
         "Ranges of CPUs for affinity. Complements --cpu-mask-draft",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string range = value;
             params.draft_cpuparams.mask_valid = true;
             if (!parse_cpu_range(range, params.draft_cpuparams.cpumask)) {
@@ -881,21 +881,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--cpu-strict-draft"}, "<0|1>",
         "Use strict CPU placement for draft model (default: same as --cpu-strict)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.draft_cpuparams.strict_cpu = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"--poll-draft"}, "<0|1>",
         "Use polling to wait for draft model work (default: same as --poll])",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.draft_cpuparams.poll = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"-Crbd", "--cpu-range-batch-draft"}, "lo-hi",
         "Ranges of CPUs for affinity. Complements --cpu-mask-draft-batch)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string range = value;
             params.draft_cpuparams_batch.mask_valid = true;
             if (!parse_cpu_range(range, params.draft_cpuparams_batch.cpumask)) {
@@ -906,91 +906,91 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--cpu-strict-batch-draft"}, "<0|1>",
         "Use strict CPU placement for draft model (default: --cpu-strict-draft)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.draft_cpuparams_batch.strict_cpu = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"--poll-batch-draft"}, "<0|1>",
         "Use polling to wait for draft model work (default: --poll-draft)",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.draft_cpuparams_batch.poll = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"--draft"}, "N",
         format("number of tokens to draft for speculative decoding (default: %d)", params.n_draft),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_draft = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"-ps", "--p-split"}, "N",
         format("speculative decoding split probability (default: %.1f)", (double)params.p_split),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.p_split = std::stof(value);
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"-lcs", "--lookup-cache-static"}, "FNAME",
         "path to static lookup cache to use for lookup decoding (not updated by generation)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.lookup_cache_static = value;
         }
     ));
     add_opt(llama_arg(
         {"-lcd", "--lookup-cache-dynamic"}, "FNAME",
         "path to dynamic lookup cache to use for lookup decoding (updated by generation)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.lookup_cache_dynamic = value;
         }
     ));
     add_opt(llama_arg(
         {"-c", "--ctx-size"}, "N",
         format("size of the prompt context (default: %d, 0 = loaded from model)", params.n_ctx),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_ctx = value;
         }
     ).set_env("LLAMA_ARG_CTX_SIZE"));
     add_opt(llama_arg(
         {"-n", "--predict", "--n-predict"}, "N",
         format("number of tokens to predict (default: %d, -1 = infinity, -2 = until context filled)", params.n_predict),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_predict = value;
         }
     ).set_env("LLAMA_ARG_N_PREDICT"));
     add_opt(llama_arg(
         {"-b", "--batch-size"}, "N",
         format("logical maximum batch size (default: %d)", params.n_batch),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_batch = value;
         }
     ).set_env("LLAMA_ARG_BATCH"));
     add_opt(llama_arg(
         {"-ub", "--ubatch-size"}, "N",
         format("physical maximum batch size (default: %d)", params.n_ubatch),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_ubatch = value;
         }
     ).set_env("LLAMA_ARG_UBATCH"));
     add_opt(llama_arg(
         {"--keep"}, "N",
         format("number of tokens to keep from the initial prompt (default: %d, -1 = all)", params.n_keep),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_keep = value;
         }
     ));
     add_opt(llama_arg(
         {"--chunks"}, "N",
         format("max number of chunks to process (default: %d, -1 = all)", params.n_chunks),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_chunks = value;
         }
     ));
     add_opt(llama_arg(
         {"-fa", "--flash-attn"},
         format("enable Flash Attention (default: %s)", params.flash_attn ? "enabled" : "disabled"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.flash_attn = true;
         }
     ).set_env("LLAMA_ARG_FLASH_ATTN"));
@@ -999,14 +999,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         ex == LLAMA_EXAMPLE_MAIN
             ? "prompt to start generation with\nif -cnv is set, this will be used as system prompt"
             : "prompt to start generation with",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.prompt = value;
         }
     ));
     add_opt(llama_arg(
         {"-f", "--file"}, "FNAME",
         "a file containing the prompt (default: none)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -1022,7 +1022,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--in-file"}, "FNAME",
         "an input file (repeat to specify multiple files)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -1033,7 +1033,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-bf", "--binary-file"}, "FNAME",
         "binary file containing the prompt (default: none)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream file(value, std::ios::binary);
             if (!file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -1049,56 +1049,56 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-e", "--escape"},
         format("process escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\) (default: %s)", params.escape ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.escape = true;
         }
     ));
     add_opt(llama_arg(
         {"--no-escape"},
         "do not process escape sequences",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.escape = false;
         }
     ));
     add_opt(llama_arg(
         {"-ptc", "--print-token-count"}, "N",
         format("print token count every N tokens (default: %d)", params.n_print),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_print = value;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--prompt-cache"}, "FNAME",
         "file to cache prompt state for faster startup (default: none)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.path_prompt_cache = value;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--prompt-cache-all"},
         "if specified, saves user input and generations to cache as well\n",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.prompt_cache_all = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--prompt-cache-ro"},
         "if specified, uses the prompt cache but does not update it",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.prompt_cache_ro = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"-r", "--reverse-prompt"}, "PROMPT",
         "halt generation at PROMPT, return control in interactive mode\n",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.antiprompt.emplace_back(value);
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"-sp", "--special"},
         format("special tokens output enabled (default: %s)", params.special ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.special = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
@@ -1111,35 +1111,35 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
             "(default: %s)",
             params.conversation ? "true" : "false"
         ),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.conversation = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"-i", "--interactive"},
         format("run in interactive mode (default: %s)", params.interactive ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.interactive = true;
         }
     ).set_examples({LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"-if", "--interactive-first"},
         format("run in interactive mode and wait for input right away (default: %s)", params.interactive_first ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.interactive_first = true;
         }
     ).set_examples({LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"-mli", "--multiline-input"},
         "allows you to write or paste multiple lines without ending each in '\\'",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.multiline_input = true;
         }
     ).set_examples({LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"--in-prefix-bos"},
         "prefix BOS to user inputs, preceding the `--in-prefix` string",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.input_prefix_bos = true;
             params.enable_chat_template = false;
         }
@@ -1147,7 +1147,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--in-prefix"}, "STRING",
         "string to prefix user inputs with (default: empty)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.input_prefix = value;
             params.enable_chat_template = false;
         }
@@ -1155,7 +1155,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--in-suffix"}, "STRING",
         "string to suffix after user inputs with (default: empty)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.input_suffix = value;
             params.enable_chat_template = false;
         }
@@ -1163,7 +1163,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--no-warmup"},
         "skip warming up the model with an empty run",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.warmup = false;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
@@ -1173,14 +1173,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
             "use Suffix/Prefix/Middle pattern for infill (instead of Prefix/Suffix/Middle) as some models prefer this. (default: %s)",
             params.spm_infill ? "enabled" : "disabled"
         ),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.spm_infill = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"--samplers"}, "SAMPLERS",
         format("samplers that will be used for generation in the order, separated by \';\'\n(default: %s)", sampler_type_names.c_str()),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             const auto sampler_names = string_split(value, ';');
             sparams.samplers_sequence = llama_sampling_types_from_names(sampler_names, true);
         }
@@ -1188,28 +1188,28 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--sampling-seq"}, "SEQUENCE",
         format("simplified sequence for samplers that will be used (default: %s)", sampler_type_chars.c_str()),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.samplers_sequence = llama_sampling_types_from_chars(value);
         }
     ));
     add_opt(llama_arg(
         {"--ignore-eos"},
         "ignore end of stream token and continue generating (implies --logit-bias EOS-inf)",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.ignore_eos = true;
         }
     ));
     add_opt(llama_arg(
         {"--penalize-nl"},
         format("penalize newline tokens (default: %s)", sparams.penalize_nl ? "true" : "false"),
-        [&sparams]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             sparams.penalize_nl = true;
         }
     ));
     add_opt(llama_arg(
         {"--temp"}, "N",
         format("temperature (default: %.1f)", (double)sparams.temp),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.temp = std::stof(value);
             sparams.temp = std::max(sparams.temp, 0.0f);
         }
@@ -1217,42 +1217,42 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--top-k"}, "N",
         format("top-k sampling (default: %d, 0 = disabled)", sparams.top_k),
-        [&sparams](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             sparams.top_k = value;
         }
     ));
     add_opt(llama_arg(
         {"--top-p"}, "N",
         format("top-p sampling (default: %.1f, 1.0 = disabled)", (double)sparams.top_p),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.top_p = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--min-p"}, "N",
         format("min-p sampling (default: %.1f, 0.0 = disabled)", (double)sparams.min_p),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.min_p = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--tfs"}, "N",
         format("tail free sampling, parameter z (default: %.1f, 1.0 = disabled)", (double)sparams.tfs_z),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.tfs_z = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--typical"}, "N",
         format("locally typical sampling, parameter p (default: %.1f, 1.0 = disabled)", (double)sparams.typical_p),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.typical_p = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--repeat-last-n"}, "N",
         format("last n tokens to consider for penalize (default: %d, 0 = disabled, -1 = ctx_size)", sparams.penalty_last_n),
-        [&sparams](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             sparams.penalty_last_n = value;
             sparams.n_prev = std::max(sparams.n_prev, sparams.penalty_last_n);
         }
@@ -1260,35 +1260,35 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--repeat-penalty"}, "N",
         format("penalize repeat sequence of tokens (default: %.1f, 1.0 = disabled)", (double)sparams.penalty_repeat),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.penalty_repeat = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--presence-penalty"}, "N",
         format("repeat alpha presence penalty (default: %.1f, 0.0 = disabled)", (double)sparams.penalty_present),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.penalty_present = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--frequency-penalty"}, "N",
         format("repeat alpha frequency penalty (default: %.1f, 0.0 = disabled)", (double)sparams.penalty_freq),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.penalty_freq = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--dynatemp-range"}, "N",
         format("dynamic temperature range (default: %.1f, 0.0 = disabled)", (double)sparams.dynatemp_range),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.dynatemp_range = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--dynatemp-exp"}, "N",
         format("dynamic temperature exponent (default: %.1f)", (double)sparams.dynatemp_exponent),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.dynatemp_exponent = std::stof(value);
         }
     ));
@@ -1296,21 +1296,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         {"--mirostat"}, "N",
         format("use Mirostat sampling.\nTop K, Nucleus, Tail Free and Locally Typical samplers are ignored if used.\n"
         "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", sparams.mirostat),
-        [&sparams](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             sparams.mirostat = value;
         }
     ));
     add_opt(llama_arg(
         {"--mirostat-lr"}, "N",
         format("Mirostat learning rate, parameter eta (default: %.1f)", (double)sparams.mirostat_eta),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.mirostat_eta = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--mirostat-ent"}, "N",
         format("Mirostat target entropy, parameter tau (default: %.1f)", (double)sparams.mirostat_tau),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.mirostat_tau = std::stof(value);
         }
     ));
@@ -1319,7 +1319,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         "modifies the likelihood of token appearing in the completion,\n"
         "i.e. `--logit-bias 15043+1` to increase likelihood of token ' Hello',\n"
         "or `--logit-bias 15043-1` to decrease likelihood of token ' Hello'",
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::stringstream ss(value);
             llama_token key;
             char sign;
@@ -1338,14 +1338,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--cfg-negative-prompt"}, "PROMPT",
         format("negative prompt to use for guidance (default: '%s')", sparams.cfg_negative_prompt.c_str()),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.cfg_negative_prompt = value;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--cfg-negative-prompt-file"}, "FNAME",
         "negative prompt file to use for guidance",
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -1359,21 +1359,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--cfg-scale"}, "N",
         format("strength of guidance (default: %.1f, 1.0 = disable)", (double)sparams.cfg_scale),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.cfg_scale = std::stof(value);
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN}));
     add_opt(llama_arg(
         {"--grammar"}, "GRAMMAR",
         format("BNF-like grammar to constrain generations (see samples in grammars/ dir) (default: '%s')", sparams.grammar.c_str()),
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.grammar = value;
         }
     ));
     add_opt(llama_arg(
         {"--grammar-file"}, "FNAME",
         "file to read grammar from",
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -1388,14 +1388,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-j", "--json-schema"}, "SCHEMA",
         "JSON schema to constrain generations (https://json-schema.org/), e.g. `{}` for any JSON object\nFor schemas w/ external $refs, use --grammar + example/json_schema_to_grammar.py instead",
-        [&sparams](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             sparams.grammar = json_schema_to_grammar(json::parse(value));
         }
     ));
     add_opt(llama_arg(
         {"--pooling"}, "{none,mean,cls,last}",
         "pooling type for embeddings, use model default if unspecified",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             /**/ if (value == "none") { params.pooling_type = LLAMA_POOLING_TYPE_NONE; }
             else if (value == "mean") { params.pooling_type = LLAMA_POOLING_TYPE_MEAN; }
             else if (value == "cls") { params.pooling_type = LLAMA_POOLING_TYPE_CLS; }
@@ -1406,7 +1406,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--attention"}, "{causal,non,causal}",
         "attention type for embeddings, use model default if unspecified",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             /**/ if (value == "causal") { params.attention_type = LLAMA_ATTENTION_TYPE_CAUSAL; }
             else if (value == "non-causal") { params.attention_type = LLAMA_ATTENTION_TYPE_NON_CAUSAL; }
             else { throw std::invalid_argument("invalid value"); }
@@ -1415,7 +1415,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--rope-scaling"}, "{none,linear,yarn}",
         "RoPE frequency scaling method, defaults to linear unless specified by the model",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             /**/ if (value == "none") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_NONE; }
             else if (value == "linear") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_LINEAR; }
             else if (value == "yarn") { params.rope_scaling_type = LLAMA_ROPE_SCALING_TYPE_YARN; }
@@ -1425,91 +1425,91 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--rope-scale"}, "N",
         "RoPE context scaling factor, expands context by a factor of N",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.rope_freq_scale = 1.0f / std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--rope-freq-base"}, "N",
         "RoPE base frequency, used by NTK-aware scaling (default: loaded from model)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.rope_freq_base = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--rope-freq-scale"}, "N",
         "RoPE frequency scaling factor, expands context by a factor of 1/N",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.rope_freq_scale = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--yarn-orig-ctx"}, "N",
         format("YaRN: original context size of model (default: %d = model training context size)", params.yarn_orig_ctx),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.yarn_orig_ctx = value;
         }
     ));
     add_opt(llama_arg(
         {"--yarn-ext-factor"}, "N",
         format("YaRN: extrapolation mix factor (default: %.1f, 0.0 = full interpolation)", (double)params.yarn_ext_factor),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.yarn_ext_factor = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--yarn-attn-factor"}, "N",
         format("YaRN: scale sqrt(t) or attention magnitude (default: %.1f)", (double)params.yarn_attn_factor),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.yarn_attn_factor = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--yarn-beta-slow"}, "N",
         format("YaRN: high correction dim or alpha (default: %.1f)", (double)params.yarn_beta_slow),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.yarn_beta_slow = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"--yarn-beta-fast"}, "N",
         format("YaRN: low correction dim or beta (default: %.1f)", (double)params.yarn_beta_fast),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.yarn_beta_fast = std::stof(value);
         }
     ));
     add_opt(llama_arg(
         {"-gan", "--grp-attn-n"}, "N",
         format("group-attention factor (default: %d)", params.grp_attn_n),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.grp_attn_n = value;
         }
     ));
     add_opt(llama_arg(
         {"-gaw", "--grp-attn-w"}, "N",
         format("group-attention width (default: %.1f)", (double)params.grp_attn_w),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.grp_attn_w = value;
         }
     ));
     add_opt(llama_arg(
         {"-dkvc", "--dump-kv-cache"},
         "verbose print of the KV cache",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.dump_kv_cache = true;
         }
     ));
     add_opt(llama_arg(
         {"-nkvo", "--no-kv-offload"},
         "disable KV offload",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.no_kv_offload = true;
         }
     ));
     add_opt(llama_arg(
         {"-ctk", "--cache-type-k"}, "TYPE",
         format("KV cache data type for K (default: %s)", params.cache_type_k.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             // TODO: get the type right here
             params.cache_type_k = value;
         }
@@ -1517,7 +1517,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-ctv", "--cache-type-v"}, "TYPE",
         format("KV cache data type for V (default: %s)", params.cache_type_v.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             // TODO: get the type right here
             params.cache_type_v = value;
         }
@@ -1525,119 +1525,119 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--all-logits"},
         format("return logits for all tokens in the batch (default: %s)", params.logits_all ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.logits_all = true;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--hellaswag"},
         "compute HellaSwag score over random tasks from datafile supplied with -f",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.hellaswag = true;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--hellaswag-tasks"}, "N",
         format("number of tasks to use when computing the HellaSwag score (default: %zu)", params.hellaswag_tasks),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.hellaswag_tasks = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--winogrande"},
         "compute Winogrande score over random tasks from datafile supplied with -f",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.winogrande = true;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--winogrande-tasks"}, "N",
         format("number of tasks to use when computing the Winogrande score (default: %zu)", params.winogrande_tasks),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.winogrande_tasks = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--multiple-choice"},
         "compute multiple choice score over random tasks from datafile supplied with -f",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.multiple_choice = true;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--multiple-choice-tasks"}, "N",
         format("number of tasks to use when computing the multiple choice score (default: %zu)", params.multiple_choice_tasks),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.multiple_choice_tasks = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--kl-divergence"},
         "computes KL-divergence to logits provided via --kl-divergence-base",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.kl_divergence = true;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--ppl-stride"}, "N",
         format("stride for perplexity calculation (default: %d)", params.ppl_stride),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.ppl_stride = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"--ppl-output-type"}, "<0|1>",
         format("output type for perplexity calculation (default: %d)", params.ppl_output_type),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.ppl_output_type = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PERPLEXITY}));
     add_opt(llama_arg(
         {"-dt", "--defrag-thold"}, "N",
         format("KV cache defragmentation threshold (default: %.1f, < 0 - disabled)", (double)params.defrag_thold),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.defrag_thold = std::stof(value);
         }
     ).set_env("LLAMA_ARG_DEFRAG_THOLD"));
     add_opt(llama_arg(
         {"-np", "--parallel"}, "N",
         format("number of parallel sequences to decode (default: %d)", params.n_parallel),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_parallel = value;
         }
     ));
     add_opt(llama_arg(
         {"-ns", "--sequences"}, "N",
         format("number of sequences to decode (default: %d)", params.n_sequences),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_sequences = value;
         }
     ));
     add_opt(llama_arg(
         {"-cb", "--cont-batching"},
         format("enable continuous batching (a.k.a dynamic batching) (default: %s)", params.cont_batching ? "enabled" : "disabled"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.cont_batching = true;
         }
     ).set_env("LLAMA_ARG_CONT_BATCHING"));
     add_opt(llama_arg(
         {"-nocb", "--no-cont-batching"},
         "disable continuous batching",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.cont_batching = false;
         }
     ).set_env("LLAMA_ARG_NO_CONT_BATCHING"));
     add_opt(llama_arg(
         {"--mmproj"}, "FILE",
         "path to a multimodal projector file for LLaVA. see examples/llava/README.md",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.mmproj = value;
         }
     ).set_examples({LLAMA_EXAMPLE_LLAVA}));
     add_opt(llama_arg(
         {"--image"}, "FILE",
         "path to an image file. use with multimodal models. Specify multiple times for batching",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.image.emplace_back(value);
         }
     ).set_examples({LLAMA_EXAMPLE_LLAVA}));
@@ -1645,7 +1645,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--rpc"}, "SERVERS",
         "comma separated list of RPC servers",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.rpc_servers = value;
         }
     ));
@@ -1653,14 +1653,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--mlock"},
         "force system to keep model in RAM rather than swapping or compressing",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.use_mlock = true;
         }
     ));
     add_opt(llama_arg(
         {"--no-mmap"},
         "do not memory-map model (slower load but may reduce pageouts if not using mlock)",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.use_mmap = false;
         }
     ));
@@ -1672,7 +1672,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         "- numactl: use the CPU map provided by numactl\n"
         "if run without this previously, it is recommended to drop the system page cache before using this\n"
         "see https://github.com/ggerganov/llama.cpp/issues/1437",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             /**/ if (value == "distribute" || value == "") { params.numa = GGML_NUMA_STRATEGY_DISTRIBUTE; }
             else if (value == "isolate") { params.numa = GGML_NUMA_STRATEGY_ISOLATE; }
             else if (value == "numactl") { params.numa = GGML_NUMA_STRATEGY_NUMACTL; }
@@ -1682,7 +1682,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-ngl", "--gpu-layers"}, "N",
         "number of layers to store in VRAM",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_gpu_layers = value;
             if (!llama_supports_gpu_offload()) {
                 fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers option will be ignored\n");
@@ -1693,7 +1693,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-ngld", "--gpu-layers-draft"}, "N",
         "number of layers to store in VRAM for the draft model",
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_gpu_layers_draft = value;
             if (!llama_supports_gpu_offload()) {
                 fprintf(stderr, "warning: not compiled with GPU offload support, --gpu-layers-draft option will be ignored\n");
@@ -1707,7 +1707,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         "- none: use one GPU only\n"
         "- layer (default): split layers and KV across GPUs\n"
         "- row: split rows across GPUs",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string arg_next = value;
             if (arg_next == "none") {
                 params.split_mode = LLAMA_SPLIT_MODE_NONE;
@@ -1732,7 +1732,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-ts", "--tensor-split"}, "N0,N1,N2,...",
         "fraction of the model to offload to each GPU, comma-separated list of proportions, e.g. 3,1",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::string arg_next = value;
 
             // split string by , and /
@@ -1759,7 +1759,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-mg", "--main-gpu"}, "INDEX",
         format("the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.main_gpu = value;
 #ifndef GGML_USE_CUDA_SYCL_VULKAN
             fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the main GPU has no effect.\n");
@@ -1769,7 +1769,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--check-tensors"},
         format("check model tensor data for invalid values (default: %s)", params.check_tensors ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.check_tensors = true;
         }
     ));
@@ -1777,7 +1777,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         {"--override-kv"}, "KEY=TYPE:VALUE",
         "advanced option to override model metadata by key. may be specified multiple times.\n"
         "types: int, float, bool, str. example: --override-kv tokenizer.ggml.add_bos_token=bool:false",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             if (!string_parse_kv_override(value.c_str(), params.kv_overrides)) {
                 throw std::runtime_error(format("error: Invalid type for KV override: %s\n", value.c_str()));
             }
@@ -1786,21 +1786,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--lora"}, "FNAME",
         "path to LoRA adapter (can be repeated to use multiple adapters)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.lora_adapters.push_back({ std::string(value), 1.0 });
         }
     ).set_examples({LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_EXPORT_LORA}));
     add_opt(llama_arg(
         {"--lora-scaled"}, "FNAME", "SCALE",
         "path to LoRA adapter with user defined scaling (can be repeated to use multiple adapters)",
-        [&params](std::string fname, std::string scale) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & fname, const std::string & scale) {
             params.lora_adapters.push_back({ fname, std::stof(scale) });
         }
     ).set_examples({LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_EXPORT_LORA}));
     add_opt(llama_arg(
         {"--control-vector"}, "FNAME",
         "add a control vector\nnote: this argument can be repeated to add multiple control vectors",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.control_vectors.push_back({ 1.0f, value, });
         }
     ));
@@ -1808,14 +1808,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         {"--control-vector-scaled"}, "FNAME", "SCALE",
         "add a control vector with user defined scaling SCALE\n"
         "note: this argument can be repeated to add multiple scaled control vectors",
-        [&params](std::string fname, std::string scale) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & fname, const std::string & scale) {
             params.control_vectors.push_back({ std::stof(scale), fname });
         }
     ));
     add_opt(llama_arg(
         {"--control-vector-layer-range"}, "START", "END",
         "layer range to apply the control vector(s) to, start and end inclusive",
-        [&params](std::string start, std::string end) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & start, const std::string & end) {
             params.control_vector_layer_start = std::stoi(start);
             params.control_vector_layer_end = std::stoi(end);
         }
@@ -1823,7 +1823,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-a", "--alias"}, "STRING",
         "set alias for model name (to be used by REST API)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.model_alias = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_MODEL"));
@@ -1835,49 +1835,49 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
                 "model path (default: `models/$filename` with filename from `--hf-file` "
                 "or `--model-url` if set, otherwise %s)", DEFAULT_MODEL_PATH
             ),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.model = value;
         }
     ).set_examples({LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_EXPORT_LORA}).set_env("LLAMA_ARG_MODEL"));
     add_opt(llama_arg(
         {"-md", "--model-draft"}, "FNAME",
         "draft model for speculative decoding (default: unused)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.model_draft = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"-mu", "--model-url"}, "MODEL_URL",
         "model download url (default: unused)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.model_url = value;
         }
     ).set_env("LLAMA_ARG_MODEL_URL"));
     add_opt(llama_arg(
         {"-hfr", "--hf-repo"}, "REPO",
         "Hugging Face model repository (default: unused)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.hf_repo = value;
         }
     ).set_env("LLAMA_ARG_HF_REPO"));
     add_opt(llama_arg(
         {"-hff", "--hf-file"}, "FILE",
         "Hugging Face model file (default: unused)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.hf_file = value;
         }
     ).set_env("LLAMA_ARG_HF_FILE"));
     add_opt(llama_arg(
         {"-hft", "--hf-token"}, "TOKEN",
         "Hugging Face access token (default: value from HF_TOKEN environment variable)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.hf_token = value;
         }
     ).set_env("HF_TOKEN"));
     add_opt(llama_arg(
         {"--context-file"}, "FNAME",
         "file to load context from (repeat to specify multiple files)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream file(value, std::ios::binary);
             if (!file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -1888,28 +1888,28 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--chunk-size"}, "N",
         format("minimum length of embedded text chunks (default: %d)", params.chunk_size),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.chunk_size = value;
         }
     ).set_examples({LLAMA_EXAMPLE_RETRIEVAL}));
     add_opt(llama_arg(
         {"--chunk-separator"}, "STRING",
         format("separator between chunks (default: '%s')", params.chunk_separator.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.chunk_separator = value;
         }
     ).set_examples({LLAMA_EXAMPLE_RETRIEVAL}));
     add_opt(llama_arg(
         {"--junk"}, "N",
         format("number of times to repeat the junk text (default: %d)", params.n_junk),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_junk = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PASSKEY}));
     add_opt(llama_arg(
         {"--pos"}, "N",
         format("position of the passkey in the junk text (default: %d)", params.i_pos),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.i_pos = value;
         }
     ).set_examples({LLAMA_EXAMPLE_PASSKEY}));
@@ -1921,7 +1921,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
                 : ex == LLAMA_EXAMPLE_CVECTOR_GENERATOR
                     ? params.cvector_outfile.c_str()
                     : params.out_file.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.out_file = value;
             params.cvector_outfile = value;
             params.lora_outfile = value;
@@ -1930,49 +1930,49 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-ofreq", "--output-frequency"}, "N",
         format("output the imatrix every N iterations (default: %d)", params.n_out_freq),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_out_freq = value;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(llama_arg(
         {"--save-frequency"}, "N",
         format("save an imatrix copy every N iterations (default: %d)", params.n_save_freq),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_save_freq = value;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(llama_arg(
         {"--process-output"},
         format("collect data for the output tensor (default: %s)", params.process_output ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.process_output = true;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(llama_arg(
         {"--no-ppl"},
         format("do not compute perplexity (default: %s)", params.compute_ppl ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.compute_ppl = false;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(llama_arg(
         {"--chunk"}, "N",
         format("start processing the input from chunk N (default: %d)", params.i_chunk),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.i_chunk = value;
         }
     ).set_examples({LLAMA_EXAMPLE_IMATRIX}));
     add_opt(llama_arg(
         {"-pps"},
         format("is the prompt shared across parallel sequences (default: %s)", params.is_pp_shared ? "true" : "false"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.is_pp_shared = true;
         }
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
     add_opt(llama_arg(
         {"-npp"}, "n0,n1,...",
         "number of prompt tokens",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             auto p = string_split<int>(value, ',');
             params.n_pp.insert(params.n_pp.end(), p.begin(), p.end());
         }
@@ -1980,7 +1980,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-ntg"}, "n0,n1,...",
         "number of text generation tokens",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             auto p = string_split<int>(value, ',');
             params.n_tg.insert(params.n_tg.end(), p.begin(), p.end());
         }
@@ -1988,7 +1988,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-npl"}, "n0,n1,...",
         "number of parallel prompts",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             auto p = string_split<int>(value, ',');
             params.n_pl.insert(params.n_pl.end(), p.begin(), p.end());
         }
@@ -1996,63 +1996,63 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--embd-normalize"}, "N",
         format("normalisation for embendings (default: %d) (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)", params.embd_normalize),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.embd_normalize = value;
         }
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING}));
     add_opt(llama_arg(
         {"--embd-output-format"}, "FORMAT",
         "empty = default, \"array\" = [[],[]...], \"json\" = openai style, \"json+\" = same \"json\" + cosine similarity matrix",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.embd_out = value;
         }
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING}));
     add_opt(llama_arg(
         {"--embd-separator"}, "STRING",
         "separator of embendings (default \\n) for example \"<#sep#>\"",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.embd_sep = value;
         }
     ).set_examples({LLAMA_EXAMPLE_EMBEDDING}));
     add_opt(llama_arg(
         {"--host"}, "HOST",
         format("ip address to listen (default: %s)", params.hostname.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.hostname = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_HOST"));
     add_opt(llama_arg(
         {"--port"}, "PORT",
         format("port to listen (default: %d)", params.port),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.port = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_PORT"));
     add_opt(llama_arg(
         {"--path"}, "PATH",
         format("path to serve static files from (default: %s)", params.public_path.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.public_path = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
         {"--embedding", "--embeddings"},
         format("restrict to only support embedding use case; use only with dedicated embedding models (default: %s)", params.embedding ? "enabled" : "disabled"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.embedding = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_EMBEDDINGS"));
     add_opt(llama_arg(
         {"--api-key"}, "KEY",
         "API key to use for authentication (default: none)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.api_keys.push_back(value);
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_API_KEY"));
     add_opt(llama_arg(
         {"--api-key-file"}, "FNAME",
         "path to file containing API keys (default: none)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream key_file(value);
             if (!key_file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -2069,21 +2069,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--ssl-key-file"}, "FNAME",
         "path to file a PEM-encoded SSL private key",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.ssl_file_key = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
         {"--ssl-cert-file"}, "FNAME",
         "path to file a PEM-encoded SSL certificate",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.ssl_file_cert = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
         {"--timeout"}, "N",
         format("server read/write timeout in seconds (default: %d)", params.timeout_read),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.timeout_read  = value;
             params.timeout_write = value;
         }
@@ -2091,14 +2091,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--threads-http"}, "N",
         format("number of threads used to process HTTP requests (default: %d)", params.n_threads_http),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_threads_http = value;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_THREADS_HTTP"));
     add_opt(llama_arg(
         {"-spf", "--system-prompt-file"}, "FNAME",
         "set a file to load a system prompt (initial prompt of all slots), this is useful for chat applications",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             std::ifstream file(value);
             if (!file) {
                 throw std::runtime_error(format("error: failed to open file '%s'\n", value.c_str()));
@@ -2115,7 +2115,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--log-format"}, "{text, json}",
         "log output format: json or text (default: json)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             if (value == "json") {
                 params.log_json = true;
             } else if (value == "text") {
@@ -2128,21 +2128,21 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--metrics"},
         format("enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.endpoint_metrics = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_ENDPOINT_METRICS"));
     add_opt(llama_arg(
         {"--no-slots"},
         format("disables slots monitoring endpoint (default: %s)", params.endpoint_slots ? "enabled" : "disabled"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.endpoint_slots = false;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_NO_ENDPOINT_SLOTS"));
     add_opt(llama_arg(
         {"--slot-save-path"}, "PATH",
         "path to save slot kv cache (default: disabled)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.slot_save_path = value;
             // if doesn't end with DIRECTORY_SEPARATOR, add it
             if (!params.slot_save_path.empty() && params.slot_save_path[params.slot_save_path.size() - 1] != DIRECTORY_SEPARATOR) {
@@ -2155,7 +2155,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         "set custom jinja chat template (default: template taken from model's metadata)\n"
         "if suffix/prefix are specified, template will be disabled\n"
         "only commonly used templates are accepted:\nhttps://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             if (!llama_chat_verify_template(value)) {
                 throw std::runtime_error(format(
                     "error: the supplied chat template is not supported: %s\n"
@@ -2169,28 +2169,28 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"-sps", "--slot-prompt-similarity"}, "SIMILARITY",
         format("how much the prompt of a request must match the prompt of a slot in order to use that slot (default: %.2f, 0.0 = disabled)\n", params.slot_prompt_similarity),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.slot_prompt_similarity = std::stof(value);
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
         {"--lora-init-without-apply"},
         format("load LoRA adapters without applying them (apply later via POST /lora-adapters) (default: %s)", params.lora_init_without_apply ? "enabled" : "disabled"),
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.lora_init_without_apply = true;
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
         {"--simple-io"},
         "use basic IO for better compatibility in subprocesses and limited consoles",
-        [&params]() {
+        [](gpt_params & params, llama_sampling_params & sparams) {
             params.simple_io = true;
         }
     ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"-ld", "--logdir"}, "LOGDIR",
         "path under which to save YAML logs (no logging if unset)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.logdir = value;
 
             if (params.logdir.back() != DIRECTORY_SEPARATOR) {
@@ -2201,35 +2201,35 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--positive-file"}, "FNAME",
         format("positive prompts file, one prompt per line (default: '%s')", params.cvector_positive_file.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.cvector_positive_file = value;
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
     add_opt(llama_arg(
         {"--negative-file"}, "FNAME",
         format("negative prompts file, one prompt per line (default: '%s')", params.cvector_negative_file.c_str()),
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             params.cvector_negative_file = value;
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
     add_opt(llama_arg(
         {"--pca-batch"}, "N",
         format("batch size used for PCA. Larger batch runs faster, but uses more memory (default: %d)", params.n_pca_batch),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_pca_batch = value;
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
     add_opt(llama_arg(
         {"--pca-iter"}, "N",
         format("number of iterations used for PCA (default: %d)", params.n_pca_iterations),
-        [&params](int value) {
+        [](gpt_params & params, llama_sampling_params & sparams, int value) {
             params.n_pca_iterations = value;
         }
     ).set_examples({LLAMA_EXAMPLE_CVECTOR_GENERATOR}));
     add_opt(llama_arg(
         {"--method"}, "{pca, mean}",
         "dimensionality reduction method to be used (default: pca)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             /**/ if (value == "pca") { params.cvector_dimre_method = DIMRE_METHOD_PCA; }
             else if (value == "mean") { params.cvector_dimre_method = DIMRE_METHOD_MEAN; }
             else { throw std::invalid_argument("invalid value"); }
@@ -2238,7 +2238,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--output-format"}, "{md,jsonl}",
         "output format for batched-bench results (default: md)",
-        [&params](std::string value) {
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) {
             /**/ if (value == "jsonl") { params.batched_bench_output_jsonl = true; }
             else if (value == "md") { params.batched_bench_output_jsonl = false; }
             else { std::invalid_argument("invalid value"); }
@@ -2249,32 +2249,32 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     add_opt(llama_arg(
         {"--log-test"},
         "Log test",
-        []() { log_param_single_parse("--log-test"); }
+        [](gpt_params & params, llama_sampling_params & sparams) { log_param_single_parse("--log-test"); }
     ));
     add_opt(llama_arg(
         {"--log-disable"},
         "Log disable",
-        []() { log_param_single_parse("--log-disable"); }
+        [](gpt_params & params, llama_sampling_params & sparams) { log_param_single_parse("--log-disable"); }
     ));
     add_opt(llama_arg(
         {"--log-enable"},
         "Log enable",
-        []() { log_param_single_parse("--log-enable"); }
+        [](gpt_params & params, llama_sampling_params & sparams) { log_param_single_parse("--log-enable"); }
     ));
     add_opt(llama_arg(
         {"--log-new"},
         "Log new",
-        []() { log_param_single_parse("--log-new"); }
+        [](gpt_params & params, llama_sampling_params & sparams) { log_param_single_parse("--log-new"); }
     ));
     add_opt(llama_arg(
         {"--log-append"},
         "Log append",
-        []() { log_param_single_parse("--log-append"); }
+        [](gpt_params & params, llama_sampling_params & sparams) { log_param_single_parse("--log-append"); }
     ));
     add_opt(llama_arg(
         {"--log-file"}, "FNAME",
         "Log file",
-        [](std::string value) { log_param_pair_parse(false, "--log-file", value); }
+        [](gpt_params & params, llama_sampling_params & sparams, const std::string & value) { log_param_pair_parse(false, "--log-file", value); }
     ));
 #endif // LOG_DISABLE_LOGS
 
