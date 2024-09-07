@@ -2264,7 +2264,7 @@ static bool starts_with(const std::string & str, const std::string & prefix) {
 
 static bool perform_with_retry(const std::string& url, CURL* curl, int max_attempts, int retry_delay_seconds) {
     int remaining_attempts = max_attempts;
-    
+
     while (remaining_attempts > 0) {
         fprintf(stderr, "%s: Trying to download from %s (attempt %d of %d)...\n", __func__ , url.c_str(), max_attempts - remaining_attempts + 1, max_attempts);
 
@@ -2463,13 +2463,12 @@ static bool llama_download_file(const std::string & url, const std::string & pat
         };
 
         // start the download
-        fprintf(stderr, "%s: trying to download model from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__, 
+        fprintf(stderr, "%s: trying to download model from %s to %s (server_etag:%s, server_last_modified:%s)...\n", __func__,
             llama_download_hide_password_in_url(url).c_str(), path.c_str(), headers.etag.c_str(), headers.last_modified.c_str());
         bool was_perform_successful = perform_with_retry(url, curl.get(), CURL_MAX_RETRY, CURL_RETRY_DELAY_SECONDS);
         if (!was_perform_successful) {
             return false;
         }
-        
 
         long http_code = 0;
         curl_easy_getinfo (curl.get(), CURLINFO_RESPONSE_CODE, &http_code);
