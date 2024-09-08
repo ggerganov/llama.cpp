@@ -996,6 +996,14 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         }
     ).set_env("LLAMA_ARG_FLASH_ATTN"));
     add_opt(llama_arg(
+        {"--no-perf"},
+        format("disable internal libllama performance timings (default: %s)", params.no_perf ? "true" : "false"),
+        [](gpt_params & params) {
+            params.no_perf = true;
+            params.sparams.no_perf = true;
+        }
+    ).set_env("LLAMA_ARG_FLASH_ATTN"));
+    add_opt(llama_arg(
         {"-p", "--prompt"}, "PROMPT",
         ex == LLAMA_EXAMPLE_MAIN
             ? "prompt to start generation with\nif -cnv is set, this will be used as system prompt"
