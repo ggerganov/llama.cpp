@@ -156,7 +156,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
                     e.counts[ex]++;
 
                     for (int j = 0; j < (int)src1->ne[0]; ++j) {
-                        e.values[e_start + j] += x[j]*x[j];
+                        e.values[e_start + j] = std::fma(x[j], x[j], e.values[e_start + j]);
                         if (!std::isfinite((float)e.values[e_start + j])) {
                             fprintf(stderr, "%f detected in %s\n", (float)e.values[e_start + j], wname.c_str());
                             exit(1);
@@ -198,7 +198,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             const float * x = data + row * src1->ne[0];
             e.counts[0]++;
             for (int j = 0; j < (int)src1->ne[0]; ++j) {
-                e.values[j] += x[j]*x[j];
+                e.values[j] = std::fma(x[j], x[j], e.values[j]);
                 if (!std::isfinite((float)e.values[j])) {
                     fprintf(stderr, "%f detected in %s\n", (float)e.values[j], wname.c_str());
                     exit(1);
@@ -278,6 +278,9 @@ void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
     if (to_store.size() < m_stats.size()) {
         fprintf(stderr, "%s: warning: storing only %zu out of %zu entries\n", __func__, to_store.size(), m_stats.size());
     }
+
+    // deterministic tensor name order
+    std::sort(to_store.begin(), to_store.end());
 
     struct ggml_init_params params = {
         .mem_size   = data_size,
