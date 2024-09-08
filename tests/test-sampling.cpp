@@ -148,15 +148,17 @@ static void test_penalties(
         cur.emplace_back(llama_token_data{token_id, logit, 0.0f});
     }
 
-    llama_token_cnt token_count;
+    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
+
+    auto * sampler = llama_sampler_init_penalties(n_vocab, LLAMA_TOKEN_NULL, LLAMA_TOKEN_NULL, last_tokens.size(), repeat_penalty, alpha_frequency, alpha_presence, false, false);
+
     for (size_t i = 0; i < last_tokens.size(); i++) {
-        token_count[last_tokens[i]]++;
+        llama_sampler_accept(sampler, last_tokens[i]);
     }
 
-    llama_token_data_array cur_p = { cur.data(), cur.size(), -1, false };
     APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
-    llama_sampler_penalties_impl(&cur_p, token_count, repeat_penalty, alpha_frequency, alpha_presence); // TODO: avoid
+    APPLY(sampler, &cur_p);
     APPLY(llama_sampler_init_softmax(), &cur_p);
     DUMP(&cur_p);
 
