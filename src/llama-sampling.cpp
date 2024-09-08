@@ -1487,11 +1487,11 @@ struct llama_sampler * llama_sampler_init_penalties(
         bool penalize_nl,
         bool ignore_eos) {
     if (linefeed_id == LLAMA_TOKEN_NULL) {
-        penalize_nl = false;
+        penalize_nl = true;
     }
 
     if (special_eos_id == LLAMA_TOKEN_NULL) {
-        ignore_eos = true;
+        ignore_eos = false;
     }
 
     return new llama_sampler {
