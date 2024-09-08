@@ -444,10 +444,8 @@ struct llm_tokenizer_bpe {
                 };
                 break;
             case LLAMA_VOCAB_PRE_TYPE_TEKKEN:
-                // original regex from tokenizer.json
-                // "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
                 regex_exprs = {
-                    "[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))*((?=[\\p{L}])([^A-Z]))+|[^\\r\\n\\p{L}\\p{N}]?((?=[\\p{L}])([^a-z]))+((?=[\\p{L}])([^A-Z]))*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+                    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
                 };
                 break;
             default:
@@ -704,22 +702,21 @@ struct llm_tokenizer_wpm {
         std::vector<std::string> words(1, "");
 
         for (const uint32_t cpt : cpts_nfd) {
-            const auto flags = unicode_cpt_flags(cpt);
+            const auto categ = unicode_cpt_category(cpt);
 
-            if (flags.is_whitespace) {
+            if (categ.is_whitespace()) {
                 if (words.back().size()) {  // finish previous word if any
                     words.emplace_back();
                 }
                 continue;
             }
 
-            assert (!flags.is_separator);
-            if (cpt == 0 || cpt == 0xFFFD || flags.is_control) {
+            if (cpt == 0 || cpt == 0xFFFD || categ.is_C()) {
                 continue;
             }
 
             const std::string s = unicode_cpt_to_utf8(unicode_tolower(cpt));
-            if (flags.is_punctuation || ( cpt < 0x7F && flags.is_symbol ) || is_chinese_char(cpt)) {
+            if (categ.is_P() || (cpt < 0x7F && categ.is_S()) || is_chinese_char(cpt)) {
                 if (words.back().size()) {  // finish previous word if any
                     words.emplace_back();
                 }
@@ -737,7 +734,7 @@ struct llm_tokenizer_wpm {
         return words;
     }
 
-    static bool is_chinese_char(uint32_t cpt) {
+    static bool is_chinese_char(uint32_t cpt) {  //TODO: move to unicode-data.cpp? unicode_cpt_category(cpt).is_chinese()?
         return
             (cpt >= 0x04E00 && cpt <= 0x09FFF) ||
             (cpt >= 0x03400 && cpt <= 0x04DBF) ||
