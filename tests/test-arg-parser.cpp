@@ -1,6 +1,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <unordered_set>
 
 #undef NDEBUG
 #include <cassert>
@@ -13,7 +14,29 @@ int main(void) {
     printf("test-arg-parser: make sure there is no duplicated arguments in any examples\n\n");
     for (int ex = 0; ex < LLAMA_EXAMPLE_COUNT; ex++) {
         try {
-            gpt_params_parser_init(params, (enum llama_example)ex);
+            auto options = gpt_params_parser_init(params, (enum llama_example)ex);
+            std::unordered_set<std::string> seen_args;
+            std::unordered_set<std::string> seen_env_vars;
+            for (const auto & opt : options) {
+                // check for args duplications
+                for (const auto & arg : opt.args) {
+                    if (seen_args.find(arg) == seen_args.end()) {
+                        seen_args.insert(arg);
+                    } else {
+                        fprintf(stderr, "test-arg-parser: found different handlers for the same argument: %s", arg);
+                        exit(1);
+                    }
+                }
+                // check for env var duplications
+                if (opt.env) {
+                    if (seen_env_vars.find(opt.env) == seen_env_vars.end()) {
+                        seen_env_vars.insert(opt.env);
+                    } else {
+                        fprintf(stderr, "test-arg-parser: found different handlers for the same env var: %s", opt.env);
+                        exit(1);
+                    }
+                }
+            }
         } catch (std::exception & e) {
             printf("%s\n", e.what());
             assert(false);
