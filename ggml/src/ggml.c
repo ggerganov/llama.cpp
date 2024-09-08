@@ -19753,8 +19753,8 @@ void ggml_threadpool_resume(struct ggml_threadpool * threadpool) {
 
 struct ggml_cplan ggml_graph_plan(
           const struct ggml_cgraph * cgraph,
-                           int       n_threads,
-    struct ggml_threadpool * threadpool) {
+                               int   n_threads,
+            struct ggml_threadpool * threadpool) {
 
     if (threadpool == NULL) {
         GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
