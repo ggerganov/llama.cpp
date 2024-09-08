@@ -1843,7 +1843,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         [](gpt_params & params, const std::string & value) {
             params.model_alias = value;
         }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}).set_env("LLAMA_ARG_MODEL"));
+    ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
         {"-m", "--model"}, "FNAME",
         ex == LLAMA_EXAMPLE_EXPORT_LORA
