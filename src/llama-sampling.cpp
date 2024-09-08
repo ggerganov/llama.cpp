@@ -396,7 +396,6 @@ static struct llama_sampler * llama_sampler_dist_clone(const struct llama_sample
 }
 
 static void llama_sampler_dist_reset(struct llama_sampler * smpl) {
-    // is this correct?
     auto * ctx = (llama_sampler_dist *) smpl->ctx;
     ctx->rng = std::mt19937(ctx->seed);
 }
