@@ -14,8 +14,10 @@
 #include <vector>
 #include <random>
 #include <thread>
+#include <set>
 #include <unordered_map>
 #include <tuple>
+#include <functional>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
@@ -61,19 +63,43 @@ int32_t cpu_get_num_math();
 // CLI argument parsing
 //
 
+enum llama_example {
+    LLAMA_EXAMPLE_COMMON,
+    LLAMA_EXAMPLE_SPECULATIVE,
+    LLAMA_EXAMPLE_MAIN,
+    LLAMA_EXAMPLE_INFILL,
+    LLAMA_EXAMPLE_EMBEDDING,
+    LLAMA_EXAMPLE_PERPLEXITY,
+    LLAMA_EXAMPLE_RETRIEVAL,
+    LLAMA_EXAMPLE_PASSKEY,
+    LLAMA_EXAMPLE_IMATRIX,
+    LLAMA_EXAMPLE_BENCH,
+    LLAMA_EXAMPLE_SERVER,
+    LLAMA_EXAMPLE_CVECTOR_GENERATOR,
+    LLAMA_EXAMPLE_EXPORT_LORA,
+    LLAMA_EXAMPLE_LLAVA,
+
+    LLAMA_EXAMPLE_COUNT,
+};
+
 // dimensionality reduction methods, used by cvector-generator
 enum dimre_method {
     DIMRE_METHOD_PCA,
     DIMRE_METHOD_MEAN,
 };
 
-struct gpt_params {
-    uint32_t seed                 = LLAMA_DEFAULT_SEED; // RNG seed
+struct cpu_params {
+    int      n_threads                   = -1;
+    bool     cpumask[GGML_MAX_N_THREADS] = {false}; // CPU affinity mask.
+    bool     mask_valid                  = false;   // Default: any CPU
+    enum ggml_sched_priority  priority   = GGML_SCHED_PRIO_NORMAL;  // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
+    bool     strict_cpu                  = false;   // Use strict CPU placement
+    uint32_t poll                        = 50;      // Polling (busywait) level (0 - no polling, 100 - mostly polling)
+};
 
-    int32_t n_threads             = cpu_get_num_math();
-    int32_t n_threads_draft       =    -1;
-    int32_t n_threads_batch       =    -1; // number of threads to use for batch processing (-1 = use n_threads)
-    int32_t n_threads_batch_draft =    -1;
+struct gpt_params {
+    enum llama_example curr_ex    = LLAMA_EXAMPLE_COMMON;
+
     int32_t n_predict             =    -1; // new tokens to predict
     int32_t n_ctx                 =     0; // context size
     int32_t n_batch               =  2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
@@ -100,6 +126,11 @@ struct gpt_params {
     int32_t yarn_orig_ctx         =     0; // YaRN original context length
     float   defrag_thold          = -1.0f; // KV cache defragmentation threshold
 
+    struct cpu_params cpuparams;
+    struct cpu_params cpuparams_batch;
+    struct cpu_params draft_cpuparams;
+    struct cpu_params draft_cpuparams_batch;
+
     ggml_backend_sched_eval_callback cb_eval = nullptr;
     void * cb_eval_user_data                 = nullptr;
 
@@ -110,8 +141,7 @@ struct gpt_params {
     enum llama_pooling_type      pooling_type      = LLAMA_POOLING_TYPE_UNSPECIFIED; // pooling type for embeddings
     enum llama_attention_type    attention_type    = LLAMA_ATTENTION_TYPE_UNSPECIFIED; // attention type for embeddings
 
-    // // sampling parameters
-    struct llama_sampling_params sparams;
+    struct gpt_sampler_params sparams;
 
     std::string model                = ""; // model path
     std::string model_draft          = ""; // draft model for speculative decoding
@@ -159,6 +189,7 @@ struct gpt_params {
 
     bool   kl_divergence    = false; // compute KL divergence
 
+    std::function<void(int, char **)> print_usage = nullptr; // print example-specific usage and example
     bool usage             = false; // print usage
     bool use_color         = false; // use color to distinguish generations and inputs
     bool special           = false; // enable special token output
@@ -175,7 +206,6 @@ struct gpt_params {
     bool flash_attn        = false; // flash attention
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
-    bool ignore_eos        = false; // ignore generated EOS tokens
     bool logits_all        = false; // return logits for all tokens in the batch
     bool use_mmap          = true;  // use mmap for faster loads
     bool use_mlock         = false; // use mlock to keep model in memory
@@ -204,7 +234,7 @@ struct gpt_params {
     int32_t port           = 8080;         // server listens on this network port
     int32_t timeout_read   = 600;          // http read timeout in seconds
     int32_t timeout_write  = timeout_read; // http write timeout in seconds
-    int32_t n_threads_http = -1;           // number of threads to process HTTP requests
+    int     n_threads_http = -1;           // number of threads to process HTTP requests (TODO: support threadpool)
 
     std::string hostname      = "127.0.0.1";
     std::string public_path   = "";
@@ -265,17 +295,103 @@ struct gpt_params {
     bool spm_infill = false; // suffix/prefix/middle pattern for infill
 
     std::string lora_outfile = "ggml-lora-merged-f16.gguf";
+
+    // batched-bench params
+    bool batched_bench_output_jsonl = false;
 };
 
-void gpt_params_handle_hf_token(gpt_params & params);
-void gpt_params_handle_model_default(gpt_params & params);
+struct llama_arg {
+    std::set<enum llama_example> examples = {LLAMA_EXAMPLE_COMMON};
+    std::vector<const char *> args;
+    const char * value_hint   = nullptr; // help text or example for arg value
+    const char * value_hint_2 = nullptr; // for second arg value
+    const char * env          = nullptr;
+    std::string help;
+    void (*handler_void)   (gpt_params & params) = nullptr;
+    void (*handler_string) (gpt_params & params, const std::string &) = nullptr;
+    void (*handler_str_str)(gpt_params & params, const std::string &, const std::string &) = nullptr;
+    void (*handler_int)    (gpt_params & params, int) = nullptr;
 
-bool gpt_params_parse_ex   (int argc, char ** argv, gpt_params & params);
-bool gpt_params_parse      (int argc, char ** argv, gpt_params & params);
-bool gpt_params_find_arg   (int argc, char ** argv, const std::string & arg, gpt_params & params, int & i, bool & invalid_param);
-void gpt_params_print_usage(int argc, char ** argv, const gpt_params & params);
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const char * value_hint,
+        const std::string & help,
+        void (*handler)(gpt_params & params, const std::string &)
+    ) : args(args), value_hint(value_hint), help(help), handler_string(handler) {}
+
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const char * value_hint,
+        const std::string & help,
+        void (*handler)(gpt_params & params, int)
+    ) : args(args), value_hint(value_hint), help(help), handler_int(handler) {}
+
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const std::string & help,
+        void (*handler)(gpt_params & params)
+    ) : args(args), help(help), handler_void(handler) {}
+
+    // support 2 values for arg
+    llama_arg(
+        const std::initializer_list<const char *> & args,
+        const char * value_hint,
+        const char * value_hint_2,
+        const std::string & help,
+        void (*handler)(gpt_params & params, const std::string &, const std::string &)
+    ) : args(args), value_hint(value_hint), value_hint_2(value_hint_2), help(help), handler_str_str(handler) {}
+
+    llama_arg & set_examples(std::initializer_list<enum llama_example> examples) {
+        this->examples = std::move(examples);
+        return *this;
+    }
+
+    llama_arg & set_env(const char * env) {
+        help = help + "\n(env: " + env + ")";
+        this->env = env;
+        return *this;
+    }
+
+    bool in_example(enum llama_example ex) {
+        return examples.find(ex) != examples.end();
+    }
+
+    bool get_value_from_env(std::string & output) const {
+        if (env == nullptr) return false;
+        char * value = std::getenv(env);
+        if (value) {
+            output = value;
+            return true;
+        }
+        return false;
+    }
+
+    bool has_value_from_env() const {
+        return env != nullptr && std::getenv(env);
+    }
+
+    std::string to_string();
+};
+
+// initialize list of options (arguments) that can be used by the current example
+std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex);
+// optionally, we can provide "print_usage" to print example usage
+std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example ex, std::function<void(int, char **)> print_usage);
+
+// parse input arguments from CLI
+// if one argument has invalid value, it will automatically display usage of the specific argument (and not the full usage message)
+bool gpt_params_parse   (int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params, std::vector<llama_arg> & options);
+
+// print full usage message; it will be called internally by gpt_params_parse() if "-h" is set
+void gpt_params_print_usage(gpt_params & params, std::vector<llama_arg> & options);
 
 std::string gpt_params_get_system_info(const gpt_params & params);
+
+bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);
+bool parse_cpu_mask(const std::string& mask, bool(&boolmask)[GGML_MAX_N_THREADS]);
+void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model = nullptr);
+bool set_process_priority(enum ggml_sched_priority prio);
 
 //
 // String utils
@@ -327,8 +443,9 @@ struct llama_init_result {
 
 struct llama_init_result    llama_init_from_gpt_params(gpt_params & params);
 
-struct llama_model_params   llama_model_params_from_gpt_params  (const gpt_params & params);
-struct llama_context_params llama_context_params_from_gpt_params(const gpt_params & params);
+struct llama_model_params     llama_model_params_from_gpt_params    (const gpt_params & params);
+struct llama_context_params   llama_context_params_from_gpt_params  (const gpt_params & params);
+struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params);
 
 struct llama_model * llama_load_model_from_url(const char * model_url, const char * path_model, const char * hf_token, const struct llama_model_params & params);
 struct llama_model * llama_load_model_from_hf(const char * repo, const char * file, const char * path_model, const char * hf_token, const struct llama_model_params & params);

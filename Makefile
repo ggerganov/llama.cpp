@@ -39,10 +39,12 @@ BUILD_TARGETS = \
 	llama-tokenize \
 	llama-vdot \
 	llama-cvector-generator \
+	llama-gen-docs \
 	tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
+	tests/test-arg-parser \
 	tests/test-autorelease \
 	tests/test-backend-ops \
 	tests/test-chat-template \
@@ -927,7 +929,6 @@ OBJ_COMMON = \
 	common/ngram-cache.o \
 	common/sampling.o \
 	common/train.o \
-	common/grammar-parser.o \
 	common/build-info.o \
 	common/json-schema-to-grammar.o
 
@@ -1165,11 +1166,6 @@ common/sampling.o: \
 common/console.o: \
 	common/console.cpp \
 	common/console.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-common/grammar-parser.o: \
-	common/grammar-parser.cpp \
-	common/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/json-schema-to-grammar.o: \
@@ -1448,6 +1444,12 @@ examples/server/%.hpp: examples/server/public/% Makefile
 		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
 	) > $@
 
+llama-gen-docs: examples/gen-docs/gen-docs.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	./llama-gen-docs
+
 libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
@@ -1504,6 +1506,11 @@ run-benchmark-matmult: llama-benchmark-matmult
 	./$@
 
 .PHONY: run-benchmark-matmult swift
+
+tests/test-arg-parser: tests/test-arg-parser.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
 	$(OBJ_ALL)

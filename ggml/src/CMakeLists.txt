@@ -549,6 +549,13 @@ if (GGML_SYCL)
     file(GLOB   GGML_SOURCES_SYCL "ggml-sycl/*.cpp")
     list(APPEND GGML_SOURCES_SYCL "ggml-sycl.cpp")
 
+    find_package(DNNL)
+    message("-- DNNL found:" ${DNNL_FOUND})
+    if (GGML_SYCL_TARGET STREQUAL "INTEL")
+        add_compile_definitions(GGML_SYCL_DNNL=${DNNL_FOUND})
+    else()
+        add_compile_definitions(GGML_SYCL_DNNL=0)
+    endif()
     if (WIN32)
         find_package(IntelSYCL REQUIRED)
         find_package(MKL REQUIRED)
@@ -560,6 +567,9 @@ if (GGML_SYCL)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
             set(GGML_EXTRA_LIBS ${GGML_EXTRA_LIBS} -fsycl pthread m dl onemkl)
         endif()
+    endif()
+    if (${DNNL_FOUND} AND GGML_SYCL_TARGET STREQUAL "INTEL")
+        list(APPEND GGML_EXTRA_LIBS DNNL::dnnl)
     endif()
 endif()
 
@@ -600,6 +610,10 @@ if (GGML_VULKAN)
 
         if (GGML_VULKAN_MEMORY_DEBUG)
             add_compile_definitions(GGML_VULKAN_MEMORY_DEBUG)
+        endif()
+
+        if (GGML_VULKAN_SHADER_DEBUG_INFO)
+            add_compile_definitions(GGML_VULKAN_SHADER_DEBUG_INFO)
         endif()
 
         if (GGML_VULKAN_PERF)
@@ -1237,7 +1251,7 @@ endif()
 
 # Data types, macros and functions related to controlling CPU affinity and
 # some memory allocation are available on Linux through GNU extensions in libc
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" OR CMAKE_SYSTEM_NAME MATCHES "Android")
     add_compile_definitions(_GNU_SOURCE)
 endif()
 

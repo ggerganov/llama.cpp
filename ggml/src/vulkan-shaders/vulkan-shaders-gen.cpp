@@ -200,6 +200,11 @@ void string_to_spv(const std::string& _name, const std::string& in_fname, const 
     #else
         std::vector<std::string> cmd = {GLSLC, "-fshader-stage=compute", "--target-env=vulkan1.2", "-O", in_path, "-o",  out_fname};
     #endif
+
+    #ifdef GGML_VULKAN_SHADER_DEBUG_INFO
+        cmd.push_back("-g");
+    #endif
+
     for (const auto& define : defines) {
         cmd.push_back("-D" + define.first + "=" + define.second);
     }
@@ -369,6 +374,10 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
     }));
 
     tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("acc_f32", "acc.comp", {{"A_TYPE", "float"}, {"B_TYPE", "float"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("split_k_reduce", "mul_mat_split_k_reduce.comp", {});
     }));
 
@@ -390,6 +399,14 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
 
     tasks.push_back(std::async(std::launch::async, [] {
         string_to_spv("sqr_f32", "square.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("sin_f32", "sin.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
+    }));
+
+    tasks.push_back(std::async(std::launch::async, [] {
+        string_to_spv("cos_f32", "cos.comp", {{"A_TYPE", "float"}, {"D_TYPE", "float"}, {"FLOAT_TYPE", "float"}});
     }));
 
     tasks.push_back(std::async(std::launch::async, [] {
