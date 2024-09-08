@@ -64,10 +64,11 @@ class IMatrixReader:
             data = self._get(np.float32, nval)
             assert name not in self.entries, f"duplicated name: {name!r}"
 
-            self.entries[name] = IMatrixEntry(data, np.array([ncall * self.chunk_size], dtype=np.float32))
+            self.entries[name] = IMatrixEntry(data * np.float32(self.chunk_size), np.array([ncall * self.chunk_size], dtype=np.float32))
 
         self.chunk_count = self._get(np.int32).item()
-        self.dataset = self._get(np.uint8, self._get(np.int32).item()).tobytes().decode("utf-8")
+        dataset_len = self._get(np.int32).item()
+        self.dataset = self._get(np.uint8, dataset_len).tobytes().decode("utf-8")
 
     def to_writer(self, outfile: Path) -> IMatrixWriter:
         writer = IMatrixWriter(path=outfile, arch="")
@@ -110,6 +111,9 @@ if __name__ == "__main__":
         input_file: Path = args.imatrix
         if input_file.suffix != ".gguf":
             args.outfile = input_file.with_suffix(".gguf")
+            if args.outfile.exists():
+                logger.error(f"default file exists, specify with --outfile to overwrite: {args.outfile}")
+                exit(1)
 
     writer = IMatrixReader(args.imatrix).to_writer(args.outfile)
 

@@ -31,7 +31,7 @@ static const char * const LLM_KV_IMATRIX_CHUNK_COUNT = "imatrix.chunk_count";
 static const char * const LLM_KV_IMATRIX_CHUNK_SIZE  = "imatrix.chunk_size";
 
 struct Stats {
-    std::vector<double> values;
+    std::vector<float>   values;
     std::vector<int64_t> counts;
 };
 

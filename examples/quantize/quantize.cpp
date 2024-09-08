@@ -132,6 +132,7 @@ static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_
     };
     struct gguf_context * ctx_gguf = gguf_init_from_file(imatrix_file.c_str(), meta_gguf_params);
     if (!ctx_gguf) {
+        fprintf(stderr, "%s: if this is an older imatrix file, make sure to convert it to the GGUF-based imatrix format\n", __func__);
         exit(1);
     }
     const int32_t n_entries = gguf_get_n_tensors(ctx_gguf);
@@ -189,9 +190,9 @@ static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_
         e.resize(ggml_nelements(sums));
         float max_count = 0.0f;
         for (int64_t j = 0; j < ne1; ++j) {
-            const float count = ((const float *) counts->data)[ne1];
+            const float count = ((const float *) counts->data)[j];
             for (int64_t i = 0; i < ne0; ++i) {
-                e[ne1*ne0 + ne0] = ((const float *) sums->data)[ne1*ne0 + ne0] / count;
+                e[j*ne0 + i] = ((const float *) sums->data)[j*ne0 + i] / count;
             }
             if (count > max_count) {
                 max_count = count;
@@ -201,14 +202,16 @@ static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_
             printf("%s: loaded data (size = %6d, ncall = %6d) for '%s'\n", __func__, int(e.size()), int(max_count / chunk_size), name.c_str());
         }
     }
-    gguf_free(ctx_gguf);
-    ggml_free(ctx);
 
     int m_last_chunk = gguf_get_val_u32(ctx_gguf, chunk_count_idx);
     imatrix_dataset = gguf_get_val_str(ctx_gguf, dataset_idx);
 
     printf("%s: imatrix dataset='%s'\n", __func__, imatrix_dataset.c_str());
     printf("%s: loaded %d importance matrix entries from %s computed on %d chunks\n", __func__, int(imatrix_data.size()), imatrix_file.c_str(), m_last_chunk);
+
+    gguf_free(ctx_gguf);
+    ggml_free(ctx);
+
     return m_last_chunk;
 }
 
