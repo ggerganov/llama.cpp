@@ -600,7 +600,9 @@ std::string llama_arg::to_string() {
             if (args.size() == 1) {
                 ss << arg;
             } else {
-                ss << format("%-7s", arg) << ", ";
+                // first arg is usually abbreviation, we need padding to make it more beautiful
+                auto tmp = std::string(arg) + ", ";
+                ss << format("%-7s", tmp.c_str());
             }
         } else {
             ss << arg << (arg != args.back() ? ", " : "");
