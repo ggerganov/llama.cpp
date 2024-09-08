@@ -375,7 +375,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -401,7 +401,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: add oneAPI to apt
         shell: bash
@@ -442,7 +442,7 @@ jobs:
     continue-on-error: true
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: add oneAPI to apt
         shell: bash
@@ -546,7 +546,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -576,7 +576,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -610,7 +610,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Dependencies
         id: depends
@@ -969,7 +969,7 @@ jobs:
     steps:
       - name: Clone
         id: checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install
         id: depends
