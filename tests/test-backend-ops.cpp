@@ -24,6 +24,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstring>
+#include <cinttypes>
 #include <functional>
 #include <memory>
 #include <random>
@@ -32,7 +33,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
 
 static void init_tensor_uniform(ggml_tensor * tensor, float min = -1.0f, float max = 1.0f) {
     // static RNG initialization (revisit if n_threads stops being constant)
@@ -869,7 +869,7 @@ struct test_case {
             for (int64_t i = 0; i < ne; ++i) { // gradient algebraic
                 // check for nans
                 if (!std::isfinite(ga[i])) {
-                    printf("[%s] nonfinite gradient at index %zu (%s=%f) ", ggml_op_desc(t), i, bn, ga[i]);
+                    printf("[%s] nonfinite gradient at index %" PRId64 " (%s=%f) ", ggml_op_desc(t), i, bn, ga[i]);
                     ok = false;
                     break;
                 }
