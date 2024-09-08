@@ -306,11 +306,6 @@ int main(int argc, char ** argv) {
     LOG_TEE("\n\n");
 
     LOG_TEE("\n#####  Infill mode  #####\n\n");
-    if (params.infill) {
-        printf("\n************\n");
-        printf("no need to specify '--infill', always running infill\n");
-        printf("************\n\n");
-    }
     if (params.interactive) {
         const char *control_message;
         if (params.multiline_input) {
