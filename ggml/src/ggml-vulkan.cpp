@@ -6478,14 +6478,18 @@ GGML_CALL static ggml_status ggml_backend_vk_graph_compute(ggml_backend_t backen
         }
 
         bool submit = (submitted_nodes >= submit_count) || (i == last_node);
+
+
         bool enqueued = ggml_vk_build_graph(ctx, cgraph->nodes[i], i, cgraph->nodes[submit_node_idx], submit_node_idx, false, i == last_node, submit);
 
         if (enqueued) {
             ++submitted_nodes;
 
+#ifndef GGML_VULKAN_CHECK_RESULTS
             if (first_node_in_batch) {
                 first_node_in_batch = false;
             }
+#endif
         }
 
         if (submit) {
