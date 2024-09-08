@@ -673,17 +673,8 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
      * - if LLAMA_EXAMPLE_* is set (other than COMMON), we only show the option in the corresponding example
      * - if both {LLAMA_EXAMPLE_COMMON, LLAMA_EXAMPLE_*,} are set, we will prioritize the LLAMA_EXAMPLE_* matching current example
      */
-    std::unordered_set<std::string> seen_args;
     auto add_opt = [&](llama_arg arg) {
         if (arg.in_example(ex) || arg.in_example(LLAMA_EXAMPLE_COMMON)) {
-            // make sure there is no argument duplications
-            for (const auto & a : arg.args) {
-                if (seen_args.find(a) == seen_args.end()) {
-                    seen_args.insert(a);
-                } else {
-                    throw std::runtime_error(format("found duplicated argument in source code: %s", a));
-                }
-            }
             options.push_back(std::move(arg));
         }
     };
