@@ -1656,7 +1656,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         }
     ));
     add_opt(llama_arg(
-        {"-ngl", "--gpu-layers"}, "N",
+        {"-ngl", "--gpu-layers", "--n-gpu-layers"}, "N",
         "number of layers to store in VRAM",
         [](gpt_params & params, int value) {
             params.n_gpu_layers = value;
@@ -1667,7 +1667,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
         }
     ).set_env("LLAMA_ARG_N_GPU_LAYERS"));
     add_opt(llama_arg(
-        {"-ngld", "--gpu-layers-draft"}, "N",
+        {"-ngld", "--gpu-layers-draft", "--n-gpu-layers-draft"}, "N",
         "number of layers to store in VRAM for the draft model",
         [](gpt_params & params, int value) {
             params.n_gpu_layers_draft = value;
