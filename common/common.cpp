@@ -851,7 +851,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ));
     add_opt(llama_arg(
         {"--prio-batch"}, "N",
-        format("set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority),
+        format("set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams_batch.priority),
         [](gpt_params & params, int prio) {
             if (prio < 0 || prio > 3) {
                 throw std::invalid_argument("invalid value");
@@ -895,7 +895,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"--prio-draft"}, "N",
-        format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority),
+        format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams.priority),
         [](gpt_params & params, int prio) {
             if (prio < 0 || prio > 3) {
                 throw std::invalid_argument("invalid value");
@@ -939,7 +939,7 @@ std::vector<llama_arg> gpt_params_parser_init(gpt_params & params, llama_example
     ).set_examples({LLAMA_EXAMPLE_SPECULATIVE}));
     add_opt(llama_arg(
         {"--prio-batch-draft"}, "N",
-        format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority),
+        format("set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams_batch.priority),
         [](gpt_params & params, int prio) {
             if (prio < 0 || prio > 3) {
                 throw std::invalid_argument("invalid value");
