@@ -6399,6 +6399,11 @@ static void llm_load_vocab(
                         )
                    ) {
                     vocab.special_eot_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                            __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
                     break;
                 }
             }
@@ -6412,6 +6417,11 @@ static void llm_load_vocab(
             const auto & t = vocab.token_to_id.find("<|eom_id|>");
             if (t != vocab.token_to_id.end()) {
                 vocab.special_eom_id = t->second;
+                if ((vocab.id_to_token[t->second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                    LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                        __func__, t->first.c_str());
+                    vocab.id_to_token[t->second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                }
             }
         }
     }
