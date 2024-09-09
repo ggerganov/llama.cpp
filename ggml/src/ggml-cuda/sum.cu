@@ -1,12 +1,14 @@
+#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
+// On Windows CUB uses libraries with variables called CC_PASCAL which conflict with the define in common.cuh.
+// For this reason CUB must be included BEFORE anything else.
+#include <cub/cub.cuh>
+using namespace cub;
+#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
+
 #include "sumrows.cuh"
 #include "sum.cuh"
 
 #include <cstdint>
-
-#if !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
-#include <cub/cub.cuh>
-using namespace cub;
-#endif // !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
 
 void sum_f32_cuda(ggml_cuda_pool & pool, const float * x, float * dst, const int64_t ne, cudaStream_t stream) {
 #if !defined(GGML_USE_HIPBLAS) && !defined(GGML_USE_MUSA)
