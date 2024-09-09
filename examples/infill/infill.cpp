@@ -1,6 +1,7 @@
+#include "arg.h"
 #include "common.h"
-
 #include "console.h"
+#include "sampling.h"
 #include "llama.h"
 
 #include <cassert>

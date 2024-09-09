@@ -1,5 +1,7 @@
 #include "arg.h"
 
+#include "sampling.h"
+
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -339,10 +341,6 @@ bool gpt_params_parse(int argc, char ** argv, llama_arg_context & ctx_arg) {
     }
 
     return true;
-}
-
-llama_arg_context gpt_params_parser_init(gpt_params & params, llama_example ex) {
-    return gpt_params_parser_init(params, ex, nullptr);
 }
 
 llama_arg_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **)) {

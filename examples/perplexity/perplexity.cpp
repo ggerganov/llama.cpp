@@ -1,18 +1,19 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
+#include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <fstream>
+#include <mutex>
+#include <random>
 #include <sstream>
 #include <thread>
-#include <mutex>
-#include <atomic>
 #include <vector>
-#include <array>
-#include <fstream>
-#include <sstream>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data

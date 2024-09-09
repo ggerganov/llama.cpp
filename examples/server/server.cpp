@@ -1,6 +1,8 @@
 #include "utils.hpp"
 
+#include "arg.h"
 #include "common.h"
+#include "sampling.h"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
 

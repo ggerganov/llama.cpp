@@ -2,36 +2,13 @@
 
 #include "common.h"
 
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
 
 //
 // CLI argument parsing
 //
-
-struct gpt_params;
-
-enum llama_example {
-    LLAMA_EXAMPLE_COMMON,
-    LLAMA_EXAMPLE_SPECULATIVE,
-    LLAMA_EXAMPLE_MAIN,
-    LLAMA_EXAMPLE_INFILL,
-    LLAMA_EXAMPLE_EMBEDDING,
-    LLAMA_EXAMPLE_PERPLEXITY,
-    LLAMA_EXAMPLE_RETRIEVAL,
-    LLAMA_EXAMPLE_PASSKEY,
-    LLAMA_EXAMPLE_IMATRIX,
-    LLAMA_EXAMPLE_BENCH,
-    LLAMA_EXAMPLE_SERVER,
-    LLAMA_EXAMPLE_CVECTOR_GENERATOR,
-    LLAMA_EXAMPLE_EXPORT_LORA,
-    LLAMA_EXAMPLE_LLAVA,
-    LLAMA_EXAMPLE_LOOKUP,
-    LLAMA_EXAMPLE_PARALLEL,
-
-    LLAMA_EXAMPLE_COUNT,
-};
 
 struct llama_arg {
     std::set<enum llama_example> examples = {LLAMA_EXAMPLE_COMMON};
@@ -92,10 +69,8 @@ struct llama_arg_context {
     llama_arg_context(gpt_params & params) : params(params) {}
 };
 
-// initialize list of options (arguments) that can be used by the current example
-llama_arg_context gpt_params_parser_init(gpt_params & params, llama_example ex);
 // optionally, we can provide "print_usage" to print example usage
-llama_arg_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **));
+llama_arg_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);
 
 // parse input arguments from CLI
 // if one argument has invalid value, it will automatically display usage of the specific argument (and not the full usage message)

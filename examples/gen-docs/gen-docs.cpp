@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 
 #include <fstream>

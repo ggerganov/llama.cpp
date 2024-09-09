@@ -1,11 +1,13 @@
+#include "arg.h"
 #include "common.h"
+#include "sampling.h"
 #include "llama.h"
 
-#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
 #include <set>
+#include <random>
 
 #define SPEC_VOCAB_MAX_SIZE_DIFFERENCE  100
 #define SPEC_VOCAB_CHECK_START_TOKEN_ID 5

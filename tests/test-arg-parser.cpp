@@ -1,3 +1,6 @@
+#include "arg.h"
+#include "common.h"
+
 #include <string>
 #include <vector>
 #include <sstream>
@@ -5,8 +8,6 @@
 
 #undef NDEBUG
 #include <cassert>
-
-#include "common.h"
 
 int main(void) {
     gpt_params params;

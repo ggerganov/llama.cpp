@@ -1,4 +1,6 @@
+#include "arg.h"
 #include "common.h"
+#include "sampling.h"
 #include "llama.h"
 
 #include <cstdio>
