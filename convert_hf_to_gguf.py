@@ -626,7 +626,7 @@ class Model:
             res = "exaone"
         if chkhsh == "fcace8b9cac38ce847670c970cd5892031a753a1ef381abd1d9af00f713da085":
             # ref: https://huggingface.co/microsoft/phi-2
-            res = "phi2"
+            res = "phi-2"
 
         if res is None:
             logger.warning("\n")
