@@ -10,7 +10,7 @@ static void export_md(std::string fname, llama_example ex) {
     std::ofstream file(fname, std::ofstream::out | std::ofstream::trunc);
 
     gpt_params params;
-    if (!gpt_params_parse(argc, argv, params, ex)) {
+    auto ctx_arg = gpt_params_parser_init(params, ex);
 
     file << "| Argument | Explanation |\n";
     file << "| -------- | ----------- |\n";
