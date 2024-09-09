@@ -1062,7 +1062,7 @@ bool rpc_server::graph_compute(const std::vector<uint8_t> & input, std::vector<u
     const rpc_tensor * tensors = (const rpc_tensor *)(input.data() + sizeof(n_nodes) + n_nodes*sizeof(uint64_t) + sizeof(n_tensors));
     GGML_PRINT_DEBUG("[%s] n_nodes: %u, n_tensors: %u\n", __func__, n_nodes, n_tensors);
 
-    static size_t buf_size = ggml_tensor_overhead()*(n_nodes*20 + n_tensors) + ggml_graph_overhead_custom(n_nodes, false);
+    size_t buf_size = ggml_tensor_overhead()*(n_nodes + n_tensors) + ggml_graph_overhead_custom(n_nodes, false);
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_size,
         /*.mem_buffer =*/ NULL,
