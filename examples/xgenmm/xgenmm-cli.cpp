@@ -181,41 +181,41 @@ static const char * sample(struct llama_sampling_context * ctx_sampling,
     return ret.c_str();
 }
 
-// static struct llava_context * minicpmv_init(gpt_params * params, const std::string & fname, int &n_past){
-//     auto ctx_clip = clip_init_context(params);
-//     auto embeds = llava_image_embed_make_with_filename(ctx_clip, params->n_threads, fname.c_str());
-//     if (!embeds) {
-//         std::cerr << "error: failed to load image " << fname << ". Terminating\n\n";
-//         return NULL;
-//     }
+static struct llava_context * minicpmv_init(gpt_params * params, const std::string & fname, int &n_past){
+    auto ctx_clip = clip_init_context(params);
+    auto embeds = llava_image_embed_make_with_filename(ctx_clip, params->n_threads, fname.c_str());
+    if (!embeds) {
+        std::cerr << "error: failed to load image " << fname << ". Terminating\n\n";
+        return NULL;
+    }
 
-//     // process the prompt
-//     if (params->prompt.empty() && params->interactive == false) {
-//         LOG_TEE("prompt should be given or interactive mode should be on");
-//         return NULL;
-//     }
+    // process the prompt
+    if (params->prompt.empty() && params->interactive == false) {
+        LOG_TEE("prompt should be given or interactive mode should be on");
+        return NULL;
+    }
 
-//     auto model = llava_init(params);
-//     if (model == NULL) {
-//         fprintf(stderr, "%s: error: failed to init minicpmv model\n", __func__);
-//         return NULL;
-//     }
-//     const int64_t t_llava_init_start_us = ggml_time_us();
-//     auto ctx_llava = llava_init_context(params, model);
-//     ctx_llava->ctx_clip = ctx_clip;
-//     const int64_t t_llava_init_end_us = ggml_time_us();
-//     float t_llava_init_ms = (t_llava_init_end_us - t_llava_init_start_us) / 1000.0;
-//     LOG_TEE("\n%s: llava init in %8.2f ms.\n", __func__, t_llava_init_ms);
+    auto model = llava_init(params);
+    if (model == NULL) {
+        fprintf(stderr, "%s: error: failed to init minicpmv model\n", __func__);
+        return NULL;
+    }
+    const int64_t t_llava_init_start_us = ggml_time_us();
+    auto ctx_llava = llava_init_context(params, model);
+    ctx_llava->ctx_clip = ctx_clip;
+    const int64_t t_llava_init_end_us = ggml_time_us();
+    float t_llava_init_ms = (t_llava_init_end_us - t_llava_init_start_us) / 1000.0;
+    LOG_TEE("\n%s: llava init in %8.2f ms.\n", __func__, t_llava_init_ms);
 
-//     const int64_t t_process_image_start_us = ggml_time_us();
-//     process_image(ctx_llava, embeds, params, n_past);
-//     const int64_t t_process_image_end_us = ggml_time_us();
-//     float t_process_image_ms = (t_process_image_end_us - t_process_image_start_us) / 1000.0;
-//     LOG_TEE("\n%s: llama process image in %8.2f ms.\n", __func__, t_process_image_ms);
+    const int64_t t_process_image_start_us = ggml_time_us();
+    process_image(ctx_llava, embeds, params, n_past);
+    const int64_t t_process_image_end_us = ggml_time_us();
+    float t_process_image_ms = (t_process_image_end_us - t_process_image_start_us) / 1000.0;
+    LOG_TEE("\n%s: llama process image in %8.2f ms.\n", __func__, t_process_image_ms);
 
-//     llava_image_embed_free(embeds);
-//     return ctx_llava;
-// }
+    llava_image_embed_free(embeds);
+    return ctx_llava;
+}
 
 static struct llava_context * xgenmm_init(gpt_params * params, const std::string & fname, int &n_past){
     auto ctx_clip = clip_init_context(params);
@@ -226,8 +226,9 @@ static struct llava_context * xgenmm_init(gpt_params * params, const std::string
         std::cerr << "error: failed to load image " << fname << ". Terminating\n\n";
         return NULL;
     }
-    std::cout<< "Start Processing Prompt" << std::endl;
+    std::cout<< "Start Processing Prompt: " << std::endl;
     exit(1);
+    // TODO:
     // process the prompt
     if (params->prompt.empty() && params->interactive == false) {
         LOG_TEE("prompt should be given or interactive mode should be on");

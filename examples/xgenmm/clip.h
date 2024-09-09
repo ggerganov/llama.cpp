@@ -85,8 +85,12 @@ CLIP_API bool clip_image_preprocess(struct clip_ctx * ctx, const struct clip_ima
 CLIP_API struct ggml_tensor * clip_get_newline_tensor(const struct clip_ctx * ctx);
 
 CLIP_API bool clip_image_encode      (struct clip_ctx * ctx, int n_threads, struct clip_image_f32 * img, float * vec);
+CLIP_API bool clip_image_encode_vit      (struct clip_ctx * ctx, int n_threads, struct clip_image_f32 * img, float * vec);
+// CLIP_API bool clip_image_encode_tokenizer(struct clip_ctx * ctx, const int n_threads, float * image_embd_v_m, float * image_embd_v_m_mask, float * image_embd);
+CLIP_API bool clip_image_encode_tokenizer(struct clip_ctx * ctx, int batch_size, ggml_tensor *img_embeddings, ggml_tensor *attn_bias_input, float * image_embd);
 CLIP_API bool clip_image_batch_encode(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec);
-
+CLIP_API bool clip_image_batch_encode_vit(struct clip_ctx * ctx, int n_threads, const struct clip_image_f32_batch * imgs, float * vec);
+CLIP_API bool clip_image_batch_encode_tokenizer(struct clip_ctx * ctx, const int n_threads, float * image_embd_v_m, float * image_embd_v_m_mask, float * image_embd);
 CLIP_API bool clip_model_quantize(const char * fname_inp, const char * fname_out, int itype);
 
 CLIP_API int clip_is_minicpmv(const struct clip_ctx * ctx);

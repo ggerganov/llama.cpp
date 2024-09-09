@@ -234,6 +234,246 @@ static bool clip_llava_handle_patches(clip_ctx *ctx_clip, std::vector<float *> &
     return true;
 }
 
+static bool clip_xgenmm_handle_vit_patches(clip_ctx *ctx_clip , const clip_image_u8 *img , std::vector<float *> &image_embd_v,
+                                      struct clip_image_grid_shape grid_shape, float * image_embd)
+                                      // float * image_embd: final output
+{
+    int original_width = img->nx;
+    int original_height = img->ny;
+    int num_images = image_embd_v.size();
+    int32_t num_patches_per_side = clip_image_size(ctx_clip) / clip_patch_size(ctx_clip);
+    int num_patches_width = grid_shape.first;
+    int num_patches_height = grid_shape.second;
+    int patch_num = num_patches_per_side * num_patches_per_side;  // 728
+    int hidden_size = clip_hidden_size(ctx_clip); // 1152
+    size_t  size_ele = ggml_type_size(GGML_TYPE_F32);
+
+    struct
+    {
+        struct ggml_context* ctx;
+    } model;
+
+    // TODO: size calculation is not calculated - it's only tens of MB
+    size_t ctx_size = 0;
+
+    {
+        ctx_size +=
+            num_patches_per_side * num_patches_per_side * hidden_size * sizeof(float) * num_images * 8;  // image_features
+        ctx_size += 1024 * 1024 * ggml_type_size(GGML_TYPE_F32);
+    }
+    struct ggml_init_params params
+    {
+        /*.mem_size   =*/ctx_size,
+            /*.mem_buffer =*/NULL,
+            /*.no_alloc   =*/false,  // NOTE: this should be false when using the legacy API
+    };
+
+    model.ctx = ggml_init(params);
+
+
+    
+    struct ggml_tensor* image_features = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, hidden_size, patch_num, num_images - 1); 
+    struct ggml_tensor* base_image_feature = ggml_new_tensor_3d(model.ctx, GGML_TYPE_F32, hidden_size, patch_num, 1);
+
+    int dim0 = num_images - 1;
+    int dim1 = num_patches_per_side * num_patches_per_side;
+    int dim2 = hidden_size;
+    float* image_features_data = (float*)image_features->data;
+    float* base_image_feature_data = (float*)base_image_feature->data;
+
+    for (int i=0; i < dim0; i++)
+    {   
+        if (i==0)
+        {
+            // base_image_feature_data
+            float* image_embd = image_embd_v[i];
+            for (int j=0; j < dim1; j++)
+            {
+                for (int k=0; k < dim2; k++)
+                {
+                    base_image_feature_data[j * dim2 + k] = image_embd[j * dim2 + k];
+                }
+            }
+        }
+        else
+        {
+            // other sub-images
+            float* image_embd = image_embd_v[i+1];
+            for (int j=0; j < dim1; j++)
+            {
+                for (int k=0; k < dim2; k++)
+                {
+                    image_features_data[i * dim1 * dim2 + j * dim2 + k] = image_embd[j * dim2 + k];
+                }
+            }
+        }
+    }
+
+
+    struct ggml_tensor* image_features_patchview = ggml_view_4d(
+        model.ctx, image_features, num_patches_per_side * hidden_size, num_patches_per_side,
+        num_patches_width, num_patches_height, size_ele * num_patches_per_side * hidden_size,
+        size_ele * num_patches_per_side * hidden_size * num_patches_per_side,
+        size_ele * num_patches_per_side * hidden_size * num_patches_per_side * num_patches_width, 0);
+
+    struct ggml_tensor* permuted_cont =
+        ggml_cont(model.ctx, ggml_permute(model.ctx, image_features_patchview, 0, 2, 1, 3));
+
+    struct ggml_tensor* flatten =
+        ggml_view_2d(model.ctx, permuted_cont, hidden_size,
+                     num_patches_height * num_patches_width * num_patches_per_side * num_patches_per_side,
+                     size_ele * hidden_size, 0);
+    
+        struct ggml_tensor* tensor_3d =
+        ggml_reshape_3d(model.ctx, flatten,
+                        hidden_size,                                        
+                        num_patches_per_side * num_patches_per_side, 
+                        num_patches_width * num_patches_height);
+    tensor_3d = ggml_cont(model.ctx, tensor_3d);
+    tensor_3d =  ggml_concat(model.ctx, base_image_feature, tensor_3d, 2);
+    struct ggml_cgraph* gf = ggml_new_graph(model.ctx);
+    ggml_build_forward_expand(gf, tensor_3d);
+    ggml_graph_compute_with_ctx(model.ctx, gf, 1);
+    struct ggml_tensor* result = gf->nodes[gf->n_nodes - 1];
+
+    struct
+    {
+        struct ggml_context* ctx;
+    } mask;
+
+        ctx_size = 0;
+
+    {
+        ctx_size +=
+            num_patches_per_side * num_patches_width * num_patches_per_side * num_patches_height * sizeof(float) * 4;
+        ctx_size += 1024 * 1024 * ggml_type_size(GGML_TYPE_F32);
+    }
+
+    params = 
+    {
+        /*.mem_size   =*/ctx_size,
+            /*.mem_buffer =*/NULL,
+            /*.no_alloc   =*/false,  // NOTE: this should be false when using the legacy API
+    };
+
+    mask.ctx = ggml_init(params);
+    int current_height = num_patches_per_side * num_patches_height;
+    int current_width = num_patches_per_side * num_patches_width;
+
+    float original_aspect_ratio = (float)original_width / (float)original_height;
+    float current_aspect_ratio = (float)current_width / (float)current_height;
+    // printf("original_height: %d, original_width: %d, original_aspect_ratio: %.2f\n", original_height, original_width,
+    //        original_aspect_ratio);
+    // printf("current_height: %d, current_width: %d, current_aspect_ratio: %.2f\n", current_height, current_width,
+    //        current_aspect_ratio);
+    float scale_factor = 1.0;
+    struct ggml_tensor* attention_mask = ggml_new_tensor_2d(mask.ctx, GGML_TYPE_F32, current_width, current_height);
+    float* attention_mask_data = (float*)attention_mask->data;
+    if (original_aspect_ratio > current_aspect_ratio){
+        scale_factor = (float)current_width / (float)original_width;
+        int new_height = int(original_height * scale_factor);
+        int padding = (current_height - new_height) / 2;
+        // printf("new_height: %d, padding: %d\n", new_height, padding);
+        
+        for (int i = 0; i < current_height; i++){
+            for (int j = 0; j < current_width; j++){
+                if (i < padding || i >= current_height - padding)
+                {
+                    attention_mask_data[i * current_width + j] = 0.0;
+                }
+                else
+                {
+                    attention_mask_data[i * current_width + j] = 1.0;
+                }
+            }
+        }
+    }else{
+        scale_factor = (float)current_height / (float)original_height;
+        int new_width = int(original_width * scale_factor);
+        int padding = (current_width - new_width) / 2;
+        printf("new_width: %d, padding: %d\n", new_width, padding);
+        for (int i = 0; i < current_height; i++){
+            for (int j = 0; j < current_width; j++){
+                if (j < padding || j >= current_width - padding)
+                {
+                    attention_mask_data[i * current_width + j] = 0.0;
+                }
+                else
+                {
+                    attention_mask_data[i * current_width + j] = 1.0;
+                }
+            }
+        }
+    }
+
+    attention_mask = ggml_reshape_2d(mask.ctx, attention_mask, num_patches_per_side * num_patches_per_side, num_patches_width * num_patches_height);
+    attention_mask = ggml_cont(mask.ctx, attention_mask);
+    struct ggml_tensor* all_one_tensor =
+        ggml_new_tensor_2d(mask.ctx, GGML_TYPE_F32, num_patches_per_side * num_patches_per_side, 1);
+    std::fill_n((float*)all_one_tensor->data, num_patches_per_side * num_patches_per_side, 1.0);
+    attention_mask = ggml_concat(mask.ctx, all_one_tensor, attention_mask, 1);
+
+    gf = ggml_new_graph(mask.ctx);
+    ggml_build_forward_expand(gf, attention_mask);
+    ggml_graph_compute_with_ctx(mask.ctx, gf, 1);
+    attention_mask = gf->nodes[gf->n_nodes - 1];
+    // memcpy(image_embd_v_m_mask_out, (float *)attention_mask->data, ggml_nbytes(attention_mask));
+
+    // compute attnetion masks outside of the graph
+    struct ggml_tensor * attn_bias_input;
+    struct ggml_context * ctx0;
+    if (attention_mask)
+    {
+        const int ctx_size = 1024 * 1024 * 1024;
+        struct ggml_init_params params
+        {
+            /*.mem_size   =*/ctx_size,
+                /*.mem_buffer =*/NULL,
+                /*.no_alloc   =*/false,  // NOTE: this should be false when using the legacy API
+        };
+        ctx0 = ggml_init(params);
+        // vision_attn_mask 
+        // 1 -> 0
+        // 0 -> -inf
+        const int batch_size = attention_mask->ne[1];
+        const int vision_seq_length = attention_mask->ne[0];
+        for (int i = 0; i < batch_size * vision_seq_length; i++)
+        {
+            if (((float *)attention_mask->data)[i] == 1.0)
+            {
+                ((float *)attention_mask->data)[i] = 0.0;
+            }
+            else
+            {
+                ((float *)attention_mask->data)[i] = -INFINITY;
+            }
+        }
+        const int lantents_seq_length = 128;  // lantents_seq_length
+        struct ggml_tensor *all_zero_tensor = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, lantents_seq_length, batch_size);
+        std::fill_n((float *)all_zero_tensor->data, lantents_seq_length * batch_size, 0.0);
+
+
+        attention_mask = ggml_concat(ctx0, attention_mask, all_zero_tensor, 0);
+        ggml_tensor *attn_bias = ggml_new_tensor_3d(ctx0, GGML_TYPE_F32, lantents_seq_length + vision_seq_length,
+                                                    batch_size, lantents_seq_length);
+        attn_bias = ggml_repeat(ctx0, attention_mask, attn_bias);
+        attn_bias = ggml_cont(ctx0, ggml_permute(ctx0, attn_bias, 0, 2, 1, 3));
+
+        struct ggml_cgraph *gf_temp = ggml_new_graph(ctx0);
+        ggml_build_forward_expand(gf_temp, attn_bias);
+        ggml_graph_compute_with_ctx(ctx0, gf_temp, 1);
+        attn_bias_input = attn_bias;
+    }
+    int batch_size = num_patches_width * num_patches_height + 1;
+    const bool encoded = clip_image_encode_tokenizer(
+        ctx_clip, batch_size, result, attn_bias_input, image_embd);
+
+    ggml_free(model.ctx);
+    ggml_free(mask.ctx);
+    return true;
+}
+
+
 static clip_image_f32 *only_v2_5_reshape_by_patch(clip_image_f32 *image, int patch_size)
 {
     int             width = image->nx;
@@ -343,37 +583,41 @@ static bool encode_image_with_clip(clip_ctx *ctx_clip, int n_threads, const clip
     }
     else if (clip_is_xgenmm(ctx_clip))
     {
-        // spatial_unpad llava-1.6 type embedding
-        // TODO: CLIP needs batching support - in HF the llm projection is separate after encoding, which might be a
-        // solution to quickly get batching working
+        // Get image embedding right after VIT, merge before v tokenizer
+        int n_img_pos_out = 0;  // # of output visual token
         std::vector<float *> image_embd_v;
         image_embd_v.resize(img_res_v.size);
         for (size_t i = 0; i < img_res_v.size; i++)
-        {
+        {   
+            n_img_pos_out += clip_n_patches(ctx_clip);
+
+            // size_t allocated_size = clip_embd_nbytes(ctx_clip);
+            const int vit_patch_num = clip_image_size(ctx_clip) / clip_patch_size(ctx_clip) * (clip_image_size(ctx_clip) / clip_patch_size(ctx_clip));
             image_embd_v[i] =
-                (float *)malloc(clip_embd_nbytes(ctx_clip));  // 576 patches * 4096 embeddings * 4 bytes = 9437184
-            const bool encoded = clip_image_encode(
+                (float *)malloc(vit_patch_num * clip_hidden_size(ctx_clip)* sizeof(float));  // If vit only, it should be 729 * 1152 * 4 = 3359232
+            const bool encoded = clip_image_encode_vit(
                 ctx_clip, n_threads, &img_res_v.data[i],
-                image_embd_v[i]);  // image data is in 3x336x336 format and will be converted to 336x336x3 inside
+                image_embd_v[i]);
             if (!encoded)
             {
                 LOG_TEE("Unable to encode image - spatial_unpad - subimage %d of %d\n", (int)i + 1,
                         (int)img_res_v.size);
                 return false;
             }
-            for (int j = 0; j < 5; j++)
-            {
-                printf("    %.4f ", image_embd_v[i][j]);
-            }
-            printf("\n");
+            // for (int j = 0; j < 5; j++)
+            // {
+            //     printf("    %.4f ", image_embd_v[i][j]);
+            // }
+            // printf("\n");
         }
+
+        *n_img_pos = n_img_pos_out;
         const int64_t t_img_enc_batch_us = ggml_time_us();
         LOG_TEE("%s: %d segments encoded in %8.2f ms\n", __func__, (int)img_res_v.size,
                 (t_img_enc_batch_us - t_img_enc_start_us) / 1000.0);
-
         const int32_t *image_grid = clip_image_grid(ctx_clip);
-
-        std::vector<std::pair<int, int>> grid_pinpoints;
+        
+        std::vector<std::pair<int, int>> grid_pinpoints;  //(384, 768) (768, 384) (768, 768) (1152, 384) (384, 1152)..
         for (int i = 0; i < 32 && image_grid[i] != 0; i += 2)
         {
             grid_pinpoints.push_back({image_grid[i], image_grid[i + 1]});
@@ -385,24 +629,17 @@ static bool encode_image_with_clip(clip_ctx *ctx_clip, int n_threads, const clip
         img_res_v.data = nullptr;
 
         const int32_t image_size = clip_image_size(ctx_clip);
-
         struct clip_image_grid_shape grid_shape =
-            get_anyres_image_grid_shape({img->nx, img->ny}, grid_pinpoints, image_size);
+            get_anyres_image_grid_shape({img->nx, img->ny}, grid_pinpoints, image_size);  // grid_shape.first is width (e.g., 3), grid_shape.second is height (e.g., 1)
+        
 
-        int n_img_pos_out;
-        clip_llava_handle_patches(ctx_clip, image_embd_v, grid_shape, image_embd, &n_img_pos_out);
-        *n_img_pos = n_img_pos_out;
-
+        // patch merging + projection
+        clip_xgenmm_handle_vit_patches(ctx_clip, img, image_embd_v, grid_shape, image_embd);
         for (size_t i = 0; i < image_embd_v.size(); i++)
         {
             free(image_embd_v[i]);
         }
         image_embd_v.clear();
-
-        // debug image/segment/normalization content:
-        // clip_image_u8 * tmp = clip_image_u8_init();
-        // clip_image_convert_f32_to_u8(*image_feature, *tmp);
-        // clip_image_save_to_bmp(*tmp, "image_feature.bmp");
     }
     else if (strcmp(mm_patch_merge_type, "spatial_unpad") != 0)
     {
@@ -512,7 +749,6 @@ static bool encode_image_with_clip(clip_ctx *ctx_clip, int n_threads, const clip
         // clip_image_convert_f32_to_u8(*image_feature, *tmp);
         // clip_image_save_to_bmp(*tmp, "image_feature.bmp");
     }
-    std::cout << __LINE__ << std::endl;
     LOG_TEE("%s: image embedding created: %d tokens\n", __func__, *n_img_pos);
 
     const int64_t t_img_enc_end_us = ggml_time_us();
@@ -545,6 +781,10 @@ bool llava_image_embed_make_with_clip_img(clip_ctx *ctx_clip, int n_threads, con
 {
     int num_max_patches = 6;
     if (clip_is_minicpmv(ctx_clip))
+    {
+        num_max_patches = 10;
+    }
+    else if (clip_is_xgenmm(ctx_clip))
     {
         num_max_patches = 10;
     }
