@@ -27,6 +27,8 @@ enum llama_example {
     LLAMA_EXAMPLE_CVECTOR_GENERATOR,
     LLAMA_EXAMPLE_EXPORT_LORA,
     LLAMA_EXAMPLE_LLAVA,
+    LLAMA_EXAMPLE_LOOKUP,
+    LLAMA_EXAMPLE_PARALLEL,
 
     LLAMA_EXAMPLE_COUNT,
 };
@@ -38,6 +40,7 @@ struct llama_arg {
     const char * value_hint_2 = nullptr; // for second arg value
     const char * env          = nullptr;
     std::string help;
+    bool is_sparam = false; // is current arg a sampling param?
     void (*handler_void)   (gpt_params & params) = nullptr;
     void (*handler_string) (gpt_params & params, const std::string &) = nullptr;
     void (*handler_str_str)(gpt_params & params, const std::string &, const std::string &) = nullptr;
@@ -74,6 +77,7 @@ struct llama_arg {
 
     llama_arg & set_examples(std::initializer_list<enum llama_example> examples);
     llama_arg & set_env(const char * env);
+    llama_arg & set_sparam();
     bool in_example(enum llama_example ex);
     bool get_value_from_env(std::string & output);
     bool has_value_from_env();

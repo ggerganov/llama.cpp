@@ -15,7 +15,7 @@
 int main(int argc, char ** argv){
     gpt_params params;
 
-    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_SPECULATIVE);
+    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_LOOKUP);
     if (!gpt_params_parse(argc, argv, ctx_arg)) {
         return 1;
     }
