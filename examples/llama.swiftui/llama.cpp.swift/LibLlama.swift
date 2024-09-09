@@ -152,8 +152,6 @@ actor LlamaContext {
 
         new_token_id = llama_sampler_sample(sampling, context, batch.n_tokens - 1)
 
-        llama_sampler_accept(sampling, new_token_id)
-
         if llama_token_is_eog(model, new_token_id) || n_cur == n_len {
             print("\n")
             is_done = true

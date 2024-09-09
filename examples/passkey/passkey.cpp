@@ -220,8 +220,6 @@ int main(int argc, char ** argv) {
         {
             const llama_token new_token_id = llama_sampler_sample(smpl, ctx, batch.n_tokens - 1);
 
-            llama_sampler_accept(smpl, new_token_id);
-
             // is it an end of generation?
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
                 LOG_TEE("\n");

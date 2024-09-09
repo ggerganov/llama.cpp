@@ -245,7 +245,7 @@ static void test_sampler_queue(const size_t n_vocab, const std::string & sampler
         }
     }
 
-    printf("Sampler queue %3s OK with n_vocab=%05ld top_k=%05d top_p=%f min_p=%f\n",
+    printf("Sampler queue %3s OK with n_vocab=%05zu top_k=%05d top_p=%f min_p=%f\n",
            samplers_sequence.c_str(), n_vocab, top_k, top_p, min_p);
 }
 

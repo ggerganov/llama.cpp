@@ -121,7 +121,6 @@ static std::string generate(llama_context * ctx, llama_sampler * smpl, const std
         llama_decode(ctx, bat);
 
         llama_token token = llama_sampler_sample(smpl, ctx, bat.n_tokens - 1);
-        llama_sampler_accept(smpl, token);
 
         if (token == eos_token) {
             break;
