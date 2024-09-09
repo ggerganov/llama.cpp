@@ -2,6 +2,9 @@
 
 #include "common.h"
 
+#include <cmath>
+#include <unordered_map>
+
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 // TODO: deduplicate with llama-impl.h
 template<typename T>
@@ -420,7 +423,7 @@ std::vector<gpt_sampler_type> gpt_sampler_types_from_names(const std::vector<std
 }
 
 std::vector<gpt_sampler_type> gpt_sampler_types_from_chars(const std::string & chars) {
-    std::unordered_map<char, gpt_sampler_type> sampler_name_map {
+    std::unordered_map<char, gpt_sampler_type> sampler_name_map = {
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TOP_K),       GPT_SAMPLER_TYPE_TOP_K },
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TFS_Z),       GPT_SAMPLER_TYPE_TFS_Z },
         { gpt_sampler_type_to_chr(GPT_SAMPLER_TYPE_TYPICAL_P),   GPT_SAMPLER_TYPE_TYPICAL_P },

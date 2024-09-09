@@ -1,6 +1,8 @@
 #include "utils.hpp"
 
+#include "arg.h"
 #include "common.h"
+#include "sampling.h"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
 
@@ -2423,8 +2425,7 @@ int main(int argc, char ** argv) {
     // own arguments required by this example
     gpt_params params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_SERVER);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
 

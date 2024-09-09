@@ -1,6 +1,7 @@
+#include "arg.h"
 #include "common.h"
-
 #include "console.h"
+#include "sampling.h"
 #include "llama.h"
 
 #include <cassert>
@@ -105,8 +106,7 @@ int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_INFILL);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_INFILL)) {
         return 1;
     }
 
