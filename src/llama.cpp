@@ -5455,7 +5455,7 @@ static void llm_load_hparams(
                         // granite uses a vocab with len 49152
                         case 32: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : (hparams.n_vocab < 40000 ? e_model::MODEL_7B : e_model::MODEL_8B); break;
                         case 36: model.type = e_model::MODEL_8B; break; // granite
-                        case 40: model.type = hparams.n_vocab == 49152 ? e_model::MODEL_3B : e_model::MODEL_13B; break;
+                        case 40: model.type = (hparams.n_vocab == 49152 || hparams.n_vocab == 49156) ? e_model::MODEL_3B : e_model::MODEL_13B; break;
                         case 48: model.type = e_model::MODEL_34B; break;
                         case 60: model.type = e_model::MODEL_30B; break;
                         case 80: model.type = hparams.n_head() == hparams.n_head_kv() ? e_model::MODEL_65B : e_model::MODEL_70B; break;
