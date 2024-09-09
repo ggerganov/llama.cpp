@@ -6,6 +6,7 @@
 #include <set>
 #include <fstream>
 #include <regex>
+#include <cstdarg>
 #include <climits>
 
 #include "json-schema-to-grammar.h"
