@@ -303,6 +303,7 @@ extern "C" {
         // Keep the booleans together to avoid misalignment during copy-by-value.
         bool vocab_only;    // only load the vocabulary, no weights
         bool use_mmap;      // use mmap if possible
+        bool use_direct_io; // use direct I/O if possible
         bool use_mlock;     // force system to keep model in RAM
         bool check_tensors; // validate model tensor data
     };
@@ -429,6 +430,7 @@ extern "C" {
     LLAMA_API size_t llama_max_devices(void);
 
     LLAMA_API bool llama_supports_mmap       (void);
+    LLAMA_API bool llama_supports_direct_io  (void);
     LLAMA_API bool llama_supports_mlock      (void);
     LLAMA_API bool llama_supports_gpu_offload(void);
 

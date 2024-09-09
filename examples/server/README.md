@@ -97,6 +97,7 @@ The project is under active development, and we are [looking for feedback and co
 | `-nocb, --no-cont-batching` | disable continuous batching<br/>(env: LLAMA_ARG_NO_CONT_BATCHING) |
 | `--mlock` | force system to keep model in RAM rather than swapping or compressing |
 | `--no-mmap` | do not memory-map model (slower load but may reduce pageouts if not using mlock) |
+| `--direct-io` | use direct I/O (potentially faster uncached loading, fewer pageouts, no page cache pollution) |
 | `--numa TYPE` | attempt optimizations that help on some NUMA systems<br/>- distribute: spread execution evenly over all nodes<br/>- isolate: only spawn threads on CPUs on the node that execution started on<br/>- numactl: use the CPU map provided by numactl<br/>if run without this previously, it is recommended to drop the system page cache before using this<br/>see https://github.com/ggerganov/llama.cpp/issues/1437 |
 | `-ngl, --gpu-layers N` | number of layers to store in VRAM<br/>(env: LLAMA_ARG_N_GPU_LAYERS) |
 | `-sm, --split-mode {none,layer,row}` | how to split the model across multiple GPUs, one of:<br/>- none: use one GPU only<br/>- layer (default): split layers and KV across GPUs<br/>- row: split rows across GPUs |
