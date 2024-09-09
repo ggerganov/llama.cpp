@@ -40,7 +40,7 @@ static int llama_sample_dist(llama_token_data_array * cur_p, std::mt19937 & rng)
     #pragma GCC diagnostic pop
 #endif
 
-    std::discrete_distribution<size_t> dist(probs_iterator{cur_p->data}, probs_iterator{cur_p->data + cur_p->size});
+    std::discrete_distribution<int> dist(probs_iterator{cur_p->data}, probs_iterator{cur_p->data + cur_p->size});
 
     return dist(rng);
 }
