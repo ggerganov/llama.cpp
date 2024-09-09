@@ -329,8 +329,8 @@ bool gpt_params_parse(int argc, char ** argv, llama_arg_context & ctx_arg) {
         }
         if (ctx_arg.params.usage) {
             gpt_params_print_usage(ctx_arg);
-            if (ctx_arg.params.print_usage) {
-                ctx_arg.params.print_usage(argc, argv);
+            if (ctx_arg.print_usage) {
+                ctx_arg.print_usage(argc, argv);
             }
             exit(0);
         }

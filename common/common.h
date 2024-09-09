@@ -232,7 +232,6 @@ struct gpt_params {
 
     bool   kl_divergence    = false; // compute KL divergence
 
-    std::function<void(int, char **)> print_usage = nullptr; // print example-specific usage and example
     bool usage             = false; // print usage
     bool use_color         = false; // use color to distinguish generations and inputs
     bool special           = false; // enable special token output
