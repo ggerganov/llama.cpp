@@ -402,8 +402,7 @@ static void print_usage(int, char ** argv) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage);
-    if (!gpt_params_parse(argc, argv, ctx_arg)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
         return 1;
     }
 

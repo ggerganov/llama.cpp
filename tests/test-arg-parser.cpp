@@ -53,7 +53,7 @@ int main(void) {
     };
 
     std::vector<std::string> argv;
-    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
 
     printf("test-arg-parser: test invalid usage\n\n");
 

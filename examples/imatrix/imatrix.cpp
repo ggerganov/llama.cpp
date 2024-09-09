@@ -578,8 +578,7 @@ int main(int argc, char ** argv) {
     params.logits_all = true;
     params.verbosity = 1;
 
-    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_IMATRIX, print_usage);
-    if (!gpt_params_parse(argc, argv, ctx_arg)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_IMATRIX, print_usage)) {
         return 1;
     }
 

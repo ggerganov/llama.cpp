@@ -112,8 +112,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_RETRIEVAL, print_usage);
-    if (!gpt_params_parse(argc, argv, ctx_arg)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_RETRIEVAL, print_usage)) {
         return 1;
     }
 

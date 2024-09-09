@@ -169,7 +169,7 @@ static void gpt_params_handle_model_default(gpt_params & params) {
 // CLI argument parsing functions
 //
 
-static bool gpt_params_parse_ex(int argc, char ** argv, llama_arg_context & ctx_arg) {
+static bool gpt_params_parse_ex(int argc, char ** argv, gpt_params_context & ctx_arg) {
     std::string arg;
     const std::string arg_prefix = "--";
     gpt_params & params = ctx_arg.params;
@@ -290,7 +290,7 @@ static bool gpt_params_parse_ex(int argc, char ** argv, llama_arg_context & ctx_
     return true;
 }
 
-static void gpt_params_print_usage(llama_arg_context & ctx_arg) {
+static void gpt_params_print_usage(gpt_params_context & ctx_arg) {
     auto print_options = [](std::vector<llama_arg *> & options) {
         for (llama_arg * opt : options) {
             printf("%s", opt->to_string().c_str());
@@ -319,7 +319,8 @@ static void gpt_params_print_usage(llama_arg_context & ctx_arg) {
     print_options(specific_options);
 }
 
-bool gpt_params_parse(int argc, char ** argv, llama_arg_context & ctx_arg) {
+bool gpt_params_parse(int argc, char ** argv, gpt_params & params, llama_example ex, void(*print_usage)(int, char **)) {
+    auto ctx_arg = gpt_params_parser_init(params, ex, print_usage);
     const gpt_params params_org = ctx_arg.params; // the example can modify the default params
 
     try {
@@ -343,8 +344,8 @@ bool gpt_params_parse(int argc, char ** argv, llama_arg_context & ctx_arg) {
     return true;
 }
 
-llama_arg_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **)) {
-    llama_arg_context ctx_arg(params);
+gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **)) {
+    gpt_params_context ctx_arg(params);
     ctx_arg.print_usage = print_usage;
     ctx_arg.ex          = ex;
 

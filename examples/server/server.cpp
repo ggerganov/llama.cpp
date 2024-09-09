@@ -2425,8 +2425,7 @@ int main(int argc, char ** argv) {
     // own arguments required by this example
     gpt_params params;
 
-    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_SERVER);
-    if (!gpt_params_parse(argc, argv, ctx_arg)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
 

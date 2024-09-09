@@ -61,17 +61,17 @@ struct llama_arg {
     std::string to_string();
 };
 
-struct llama_arg_context {
+struct gpt_params_context {
     enum llama_example ex = LLAMA_EXAMPLE_COMMON;
     gpt_params & params;
     std::vector<llama_arg> options;
     void(*print_usage)(int, char **) = nullptr;
-    llama_arg_context(gpt_params & params) : params(params) {}
+    gpt_params_context(gpt_params & params) : params(params) {}
 };
-
-// optionally, we can provide "print_usage" to print example usage
-llama_arg_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);
 
 // parse input arguments from CLI
 // if one argument has invalid value, it will automatically display usage of the specific argument (and not the full usage message)
-bool gpt_params_parse(int argc, char ** argv, llama_arg_context & ctx_arg);
+bool gpt_params_parse(int argc, char ** argv, gpt_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);
+
+// function to be used by test-arg-parser
+gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex, void(*print_usage)(int, char **) = nullptr);
