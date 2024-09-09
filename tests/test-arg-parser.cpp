@@ -14,7 +14,7 @@ int main(void) {
     printf("test-arg-parser: make sure there is no duplicated arguments in any examples\n\n");
     for (int ex = 0; ex < LLAMA_EXAMPLE_COUNT; ex++) {
         try {
-            auto options = gpt_params_parser_init(params, (enum llama_example)ex);
+            auto ctx_arg = gpt_params_parser_init(params, (enum llama_example)ex);
             std::unordered_set<std::string> seen_args;
             std::unordered_set<std::string> seen_env_vars;
             for (const auto & opt : options) {
@@ -52,7 +52,7 @@ int main(void) {
     };
 
     std::vector<std::string> argv;
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON);
+    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON);
 
     printf("test-arg-parser: test invalid usage\n\n");
 

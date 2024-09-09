@@ -18,8 +18,8 @@ int main(int argc, char ** argv) {
     params.prompt = "Hello my name is";
     params.n_predict = 32;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON, print_usage);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON, print_usage);
+    if (!gpt_params_parse(argc, argv, ctx_arg)) {
         return 1;
     }
 

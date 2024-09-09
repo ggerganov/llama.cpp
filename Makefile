@@ -925,6 +925,7 @@ OBJ_LLAMA = \
 
 OBJ_COMMON = \
 	common/common.o \
+	common/arg.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
@@ -1155,6 +1156,11 @@ common/common.o: \
 	common/json.hpp \
 	common/json-schema-to-grammar.h \
 	include/llama.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+common/arg.o: \
+	common/arg.cpp \
+	common/arg.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/sampling.o: \

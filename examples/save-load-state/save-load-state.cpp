@@ -10,8 +10,8 @@ int main(int argc, char ** argv) {
     params.prompt = "The quick brown fox";
     params.sparams.seed = 1234;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    auto ctx_arg = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON);
+    if (!gpt_params_parse(argc, argv, ctx_arg)) {
         return 1;
     }
 
