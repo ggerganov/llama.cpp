@@ -71,3 +71,4 @@ $ bin/llama-cli -m ../models/tinyllama-1b/ggml-model-f16.gguf -p "Hello, my name
 ```
 
 This way you can offload model layers to both local and remote devices.
+
