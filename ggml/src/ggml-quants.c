@@ -5509,9 +5509,7 @@ void ggml_vec_dot_q8_0_q8_0(int n, float * restrict s, size_t bs, const void * r
                     // duplicate deq1 in first half of vector and deq2 in second half of vector
                     const svfloat32_t temp = svdup_f32_m(svdup_f32_z(ph8, deq1), pl8, deq2);
 
-                    svfloat32_t sumvt = svdup_n_f32(0.0f);
-
-                    sumvt = svcvt_f32_s32_x(svptrue_b32(), svdot_s32(svdup_n_s32(0), qx_64, qy_64));
+                    const svfloat32_t sumvt = svcvt_f32_s32_x(svptrue_b32(), svdot_s32(svdup_n_s32(0), qx_64, qy_64));
 
                     sumv00 = svmla_f32_m(svptrue_b32(), sumv00, sumvt, temp);
                 }
