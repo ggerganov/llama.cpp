@@ -217,6 +217,92 @@ static struct llava_context * minicpmv_init(gpt_params * params, const std::stri
     return ctx_llava;
 }
 
+static void process_prompt(struct llava_context *ctx_llava, struct llava_image_embed *image_embed, gpt_params *params,
+                           const std::string &prompt)
+{
+    int n_past = 0;
+
+    const int max_tgt_len = params->n_predict < 0 ? 256 : params->n_predict;
+
+    std::string system_prompt, user_prompt;
+    size_t      image_pos = prompt.find("<image>");
+    if (image_pos != std::string::npos)
+    {
+        // new templating mode: Provide the full prompt including system message and use <image> as a placeholder for
+        // the image
+        system_prompt = prompt.substr(0, image_pos);
+        user_prompt = prompt.substr(image_pos + std::string("<image>").length());
+        LOG_TEE("system_prompt: %s\n", system_prompt.c_str());
+        if (params->verbose_prompt)
+        {
+            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, system_prompt, true, true);
+            for (int i = 0; i < (int)tmp.size(); i++)
+            {
+                LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            }
+        }
+        LOG_TEE("user_prompt: %s\n", user_prompt.c_str());
+        if (params->verbose_prompt)
+        {
+            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            for (int i = 0; i < (int)tmp.size(); i++)
+            {
+                LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            }
+        }
+    }
+    else
+    {
+        // llava-1.5 native mode
+        system_prompt =
+            "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, "
+            "detailed, and polite answers to the human's questions.\nUSER:";
+        user_prompt = prompt + "\nASSISTANT:";
+        if (params->verbose_prompt)
+        {
+            auto tmp = ::llama_tokenize(ctx_llava->ctx_llama, user_prompt, true, true);
+            for (int i = 0; i < (int)tmp.size(); i++)
+            {
+                LOG_TEE("%6d -> '%s'\n", tmp[i], llama_token_to_piece(ctx_llava->ctx_llama, tmp[i]).c_str());
+            }
+        }
+    }
+
+    eval_string(ctx_llava->ctx_llama, system_prompt.c_str(), params->n_batch, &n_past, true);
+    llava_eval_image_embed(ctx_llava->ctx_llama, image_embed, params->n_batch, &n_past);
+    eval_string(ctx_llava->ctx_llama, user_prompt.c_str(), params->n_batch, &n_past, false);
+
+    // generate the response
+
+    LOG_TEE("\n");
+
+    struct llama_sampling_context *ctx_sampling = llama_sampling_init(params->sparams);
+    if (!ctx_sampling)
+    {
+        fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
+        exit(1);
+    }
+
+    std::string response = "";
+    for (int i = 0; i < max_tgt_len; i++)
+    {
+        const char *tmp = sample(ctx_sampling, ctx_llava->ctx_llama, &n_past);
+        response += tmp;
+        if (strcmp(tmp, "</s>") == 0) break;
+        if (strstr(tmp, "###")) break;  // Yi-VL behavior
+        printf("%s", tmp);
+        if (strstr(response.c_str(), "<|im_end|>"))
+            break;  // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
+        if (strstr(response.c_str(), "<|im_start|>")) break;  // Yi-34B llava-1.6
+        if (strstr(response.c_str(), "USER:")) break;         // mistral llava-1.6
+
+        fflush(stdout);
+    }
+
+    llama_sampling_free(ctx_sampling);
+    printf("\n");
+}
+
 static struct llava_context * xgenmm_init(gpt_params * params, const std::string & fname, int &n_past){
     auto ctx_clip = clip_init_context(params);
     std::cout << "clip model has been loaded \n\n";
@@ -227,7 +313,6 @@ static struct llava_context * xgenmm_init(gpt_params * params, const std::string
         return NULL;
     }
     std::cout<< "Start Processing Prompt: " << std::endl;
-    exit(1);
     // TODO:
     // process the prompt
     if (params->prompt.empty() && params->interactive == false) {
@@ -248,7 +333,8 @@ static struct llava_context * xgenmm_init(gpt_params * params, const std::string
     LOG_TEE("\n%s: llava init in %8.2f ms.\n", __func__, t_llava_init_ms);
 
     const int64_t t_process_image_start_us = ggml_time_us();
-    process_image(ctx_llava, embeds, params, n_past);
+    process_prompt(ctx_llava, embeds, params, params->prompt);
+    // process_image(ctx_llava, embeds, params, n_past);
     const int64_t t_process_image_end_us = ggml_time_us();
     float t_process_image_ms = (t_process_image_end_us - t_process_image_start_us) / 1000.0;
     LOG_TEE("\n%s: llama process image in %8.2f ms.\n", __func__, t_process_image_ms);
@@ -292,6 +378,8 @@ static const char * llama_loop(struct llava_context * ctx_llava,struct llama_sam
     return tmp;
 }
 
+
+
 int main(int argc, char ** argv) {
     ggml_time_init();
 
@@ -320,6 +408,8 @@ int main(int argc, char ** argv) {
         // auto ctx_llava = minicpmv_init(&params, image, n_past);
         auto ctx_llava = xgenmm_init(&params, image, n_past);  // generate vision tokens
         std::cout << "Start llava generation: " << std::endl;
+        llama_print_timings(ctx_llava->ctx_llama);
+
         // // TODO: integrate base llm
         // if (!params.prompt.empty()) {
         //     LOG_TEE("<user>%s\n", params.prompt.c_str());
