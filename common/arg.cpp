@@ -1422,20 +1422,18 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
                 params.split_mode = LLAMA_SPLIT_MODE_NONE;
             } else if (arg_next == "layer") {
                 params.split_mode = LLAMA_SPLIT_MODE_LAYER;
-            }
-            else if (arg_next == "row") {
+            } else if (arg_next == "row") {
 #ifdef GGML_USE_SYCL
                 fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
                 exit(1);
 #endif // GGML_USE_SYCL
                 params.split_mode = LLAMA_SPLIT_MODE_ROW;
-            }
-            else {
+            } else {
                 throw std::invalid_argument("invalid value");
             }
-#if (!defined(GGML_USE_CUDA) && !defined(GGML_USE_SYCL) && !defined(GGML_USE_VULKAN))
-            fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the split mode has no effect.\n");
-#endif
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting the split mode has no effect.\n");
+            }
         }
     ));
     add_opt(llama_arg(
@@ -1455,14 +1453,14 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             }
             for (size_t i = 0; i < llama_max_devices(); ++i) {
                 if (i < split_arg.size()) {
-                        params.tensor_split[i] = std::stof(split_arg[i]);
+                    params.tensor_split[i] = std::stof(split_arg[i]);
                 } else {
-                        params.tensor_split[i] = 0.0f;
+                    params.tensor_split[i] = 0.0f;
                 }
             }
-#if (!defined(GGML_USE_CUDA) && !defined(GGML_USE_SYCL) && !defined(GGML_USE_VULKAN))
-            fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting a tensor split has no effect.\n");
-#endif
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting a tensor split has no effect.\n");
+            }
         }
     ));
     add_opt(llama_arg(
@@ -1470,9 +1468,9 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         format("the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu),
         [](gpt_params & params, int value) {
             params.main_gpu = value;
-#if (!defined(GGML_USE_CUDA) && !defined(GGML_USE_SYCL) && !defined(GGML_USE_VULKAN))
-            fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the main GPU has no effect.\n");
-#endif
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting the main GPU has no effect.\n");
+            }
         }
     ));
     add_opt(llama_arg(
