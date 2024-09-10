@@ -27,6 +27,7 @@
 #include "ggml-cuda/rope.cuh"
 #include "ggml-cuda/scale.cuh"
 #include "ggml-cuda/softmax.cuh"
+#include "ggml-cuda/sum.cuh"
 #include "ggml-cuda/sumrows.cuh"
 #include "ggml-cuda/tsembd.cuh"
 #include "ggml-cuda/unary.cuh"
@@ -2180,6 +2181,7 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             ggml_cuda_dup(ctx, dst);
             break;
         case GGML_OP_ADD:
+        case GGML_OP_ADD1: // TODO: more efficient implementation
             ggml_cuda_op_add(ctx, dst);
             break;
         case GGML_OP_SUB:
@@ -2196,6 +2198,9 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             break;
         case GGML_OP_UNARY:
             switch (ggml_get_unary_op(dst)) {
+                case GGML_UNARY_OP_NEG:
+                    ggml_cuda_op_neg(ctx, dst);
+                    break;
                 case GGML_UNARY_OP_GELU:
                     ggml_cuda_op_gelu(ctx, dst);
                     break;
@@ -2303,6 +2308,9 @@ static bool ggml_cuda_compute_forward(ggml_backend_cuda_context & ctx, struct gg
             break;
         case GGML_OP_POOL_2D:
             ggml_cuda_op_pool2d(ctx, dst);
+            break;
+        case GGML_OP_SUM:
+            ggml_cuda_op_sum(ctx, dst);
             break;
         case GGML_OP_SUM_ROWS:
             ggml_cuda_op_sum_rows(ctx, dst);
@@ -2544,7 +2552,11 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
         for (int i = 0; i < cgraph->n_nodes; i++) {
             ggml_tensor * node = cgraph->nodes[i];
 
-            if (node->src[0] && ggml_backend_buffer_is_cuda_split(node->src[0]->buffer)) {
+            if (ggml_is_empty(node) || node->op == GGML_OP_RESHAPE || node->op == GGML_OP_TRANSPOSE || node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_NONE) {
+                continue;
+            }
+
+            if (node->src[0] && node->src[0]->buffer && ggml_backend_buffer_is_cuda_split(node->src[0]->buffer)) {
                 use_cuda_graph = false; // Split buffers are not supported by CUDA graph capture
 #ifndef NDEBUG
                 GGML_CUDA_LOG_WARN("%s: disabling CUDA graphs due to split buffer\n", __func__);
@@ -2572,8 +2584,15 @@ GGML_CALL static enum ggml_status ggml_backend_cuda_graph_compute(ggml_backend_t
                 cuda_ctx->cuda_graph->updated_kernel_arg.push_back((char **) &(node->src[1]->data));
                 // store a pointer to each copy op CUDA kernel to identify it later
                 void * ptr = ggml_cuda_cpy_fn(node->src[0], node->src[1]);
-                if (std::find(ggml_cuda_cpy_fn_ptrs.begin(), ggml_cuda_cpy_fn_ptrs.end(), ptr) == ggml_cuda_cpy_fn_ptrs.end()) {
-                    ggml_cuda_cpy_fn_ptrs.push_back(ptr);
+                if (!ptr) {
+                    use_cuda_graph = false;
+#ifndef NDEBUG
+                    GGML_CUDA_LOG_WARN("%s: disabling CUDA graphs due to unsupported copy op\n", __func__);
+#endif
+                } else {
+                    if (std::find(ggml_cuda_cpy_fn_ptrs.begin(), ggml_cuda_cpy_fn_ptrs.end(), ptr) == ggml_cuda_cpy_fn_ptrs.end()) {
+                        ggml_cuda_cpy_fn_ptrs.push_back(ptr);
+                    }
                 }
             }
 
@@ -2741,6 +2760,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
     switch (op->op) {
         case GGML_OP_UNARY:
             switch (ggml_get_unary_op(op)) {
+                case GGML_UNARY_OP_NEG:
                 case GGML_UNARY_OP_GELU:
                 case GGML_UNARY_OP_SILU:
                 case GGML_UNARY_OP_RELU:
@@ -2842,6 +2862,9 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
                 if (src0_type == GGML_TYPE_F16 && src1_type == GGML_TYPE_F32) {
                     return true;
                 }
+                if (src0_type == src1_type && ggml_is_contiguous(op->src[0]) && ggml_is_contiguous(op->src[1])) {
+                    return true;
+                }
                 return false;
             } break;
         case GGML_OP_DUP:
@@ -2867,6 +2890,7 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
         case GGML_OP_TRANSPOSE:
         case GGML_OP_NORM:
         case GGML_OP_ADD:
+        case GGML_OP_ADD1:
         case GGML_OP_SUB:
         case GGML_OP_MUL:
         case GGML_OP_DIV:
@@ -2877,14 +2901,18 @@ GGML_CALL static bool ggml_backend_cuda_supports_op(ggml_backend_t backend, cons
         case GGML_OP_SIN:
         case GGML_OP_COS:
         case GGML_OP_CLAMP:
+            return true;
         case GGML_OP_CONT:
+            return op->src[0]->type != GGML_TYPE_BF16;
         case GGML_OP_DIAG_MASK_INF:
         case GGML_OP_SOFT_MAX:
             return true;
         case GGML_OP_ROPE:
             return ggml_is_contiguous(op->src[0]);
         case GGML_OP_IM2COL:
+            return op->src[0]->type == GGML_TYPE_F16;
         case GGML_OP_POOL_2D:
+        case GGML_OP_SUM:
         case GGML_OP_SUM_ROWS:
         case GGML_OP_ARGSORT:
         case GGML_OP_ACC:

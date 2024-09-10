@@ -124,6 +124,9 @@ static std::string get_cpu_info() {
                         (LPBYTE)cpu_brand,
                         &cpu_brand_size) == ERROR_SUCCESS) {
         id.assign(cpu_brand, cpu_brand_size);
+        if (id.find('\0') != std::string::npos) {
+            id.resize(id.find('\0'));
+        }
     }
     RegCloseKey(hKey);
 #endif
@@ -246,6 +249,7 @@ struct cmd_params {
     ggml_sched_priority prio;
     int delay;
     bool verbose;
+    bool progress;
     output_formats output_format;
     output_formats output_format_stderr;
 };
@@ -277,6 +281,7 @@ static const cmd_params cmd_params_defaults = {
     /* prio                 */ GGML_SCHED_PRIO_NORMAL,
     /* delay                */ 0,
     /* verbose              */ false,
+    /* progress             */ false,
     /* output_format        */ MARKDOWN,
     /* output_format_stderr */ NONE,
 };
@@ -299,7 +304,9 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  --cpu-strict <0|1>                        (default: %s)\n", join(cmd_params_defaults.cpu_strict, ",").c_str());
     printf("  --poll <0...100>                          (default: %s)\n", join(cmd_params_defaults.poll, ",").c_str());
     printf("  -ngl, --n-gpu-layers <n>                  (default: %s)\n", join(cmd_params_defaults.n_gpu_layers, ",").c_str());
+#ifdef GGML_USE_RPC
     printf("  -rpc, --rpc <rpc_servers>                 (default: %s)\n", join(cmd_params_defaults.rpc_servers, ",").c_str());
+#endif
     printf("  -sm, --split-mode <none|layer|row>        (default: %s)\n", join(transform_to_str(cmd_params_defaults.split_mode, split_mode_str), ",").c_str());
     printf("  -mg, --main-gpu <i>                       (default: %s)\n", join(cmd_params_defaults.main_gpu, ",").c_str());
     printf("  -nkvo, --no-kv-offload <0|1>              (default: %s)\n", join(cmd_params_defaults.no_kv_offload, ",").c_str());
@@ -314,6 +321,7 @@ static void print_usage(int /* argc */, char ** argv) {
     printf("  -o, --output <csv|json|jsonl|md|sql>      (default: %s)\n", output_format_str(cmd_params_defaults.output_format));
     printf("  -oe, --output-err <csv|json|jsonl|md|sql> (default: %s)\n", output_format_str(cmd_params_defaults.output_format_stderr));
     printf("  -v, --verbose                             (default: %s)\n", cmd_params_defaults.verbose ? "1" : "0");
+    printf("  --progress                                (default: %s)\n", cmd_params_defaults.progress ? "1" : "0");
     printf("\n");
     printf("Multiple values can be given for each parameter by separating them with ',' or by specifying the parameter multiple times.\n");
 }
@@ -359,6 +367,7 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
     params.numa = cmd_params_defaults.numa;
     params.prio = cmd_params_defaults.prio;
     params.delay = cmd_params_defaults.delay;
+    params.progress = cmd_params_defaults.progress;
 
     for (int i = 1; i < argc; i++) {
         arg = argv[i];
@@ -482,12 +491,14 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             }
             auto p = string_split<int>(argv[i], split_delim);
             params.n_gpu_layers.insert(params.n_gpu_layers.end(), p.begin(), p.end());
+#ifdef GGML_USE_RPC
         } else if (arg == "-rpc" || arg == "--rpc") {
             if (++i >= argc) {
                 invalid_param = true;
                 break;
             }
             params.rpc_servers.push_back(argv[i]);
+#endif
         } else if (arg == "-sm" || arg == "--split-mode") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -609,6 +620,8 @@ static cmd_params parse_cmd_params(int argc, char ** argv) {
             invalid_param = !output_format_from_str(argv[i], params.output_format_stderr);
         } else if (arg == "-v" || arg == "--verbose") {
             params.verbose = true;
+        } else if (arg == "--progress") {
+            params.progress = true;
         } else {
             invalid_param = true;
             break;
@@ -1516,7 +1529,13 @@ int main(int argc, char ** argv) {
     llama_model * lmodel = nullptr;
     const cmd_params_instance * prev_inst = nullptr;
 
+    int params_idx = 0;
+    auto params_count = params_instances.size();
     for (const auto & inst : params_instances) {
+        params_idx ++;
+        if (params.progress) {
+            fprintf(stderr, "llama-bench: benchmark %d/%ld: starting\n", params_idx, params_count);
+        }
         // keep the same model between tests when possible
         if (!lmodel || !prev_inst || !inst.equal_mparams(*prev_inst)) {
             if (lmodel) {
@@ -1549,7 +1568,7 @@ int main(int argc, char ** argv) {
 
         struct ggml_threadpool_params tpp = ggml_threadpool_params_default(t.n_threads);
         if (!parse_cpu_mask(t.cpu_mask, tpp.cpumask)) {
-            LOG_TEE("%s: failed to parse cpu-mask: %s\n", __func__, t.cpu_mask.c_str());
+            fprintf(stderr, "%s: failed to parse cpu-mask: %s\n", __func__, t.cpu_mask.c_str());
             exit(1);
         }
         tpp.strict_cpu = t.cpu_strict;
@@ -1558,7 +1577,7 @@ int main(int argc, char ** argv) {
 
         struct ggml_threadpool* threadpool = ggml_threadpool_new(&tpp);
         if (!threadpool) {
-            LOG_TEE("%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
+            fprintf(stderr, "%s: threadpool create failed : n_threads %d\n", __func__, tpp.n_threads);
             exit(1);
         }
 
@@ -1566,10 +1585,16 @@ int main(int argc, char ** argv) {
 
         // warmup run
         if (t.n_prompt > 0) {
+            if (params.progress) {
+                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup prompt run\n", params_idx, params_count);
+            }
             //test_prompt(ctx, std::min(t.n_batch, std::min(t.n_prompt, 32)), 0, t.n_batch, t.n_threads);
             test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
         }
         if (t.n_gen > 0) {
+            if (params.progress) {
+                fprintf(stderr, "llama-bench: benchmark %d/%ld: warmup generation run\n", params_idx, params_count);
+            }
             test_gen(ctx, 1, 0, t.n_threads);
         }
 
@@ -1579,9 +1604,15 @@ int main(int argc, char ** argv) {
             uint64_t t_start = get_time_ns();
 
             if (t.n_prompt > 0) {
+                if (params.progress) {
+                    fprintf(stderr, "llama-bench: benchmark %d/%ld: prompt run %d/%d\n", params_idx, params_count, i + 1, params.reps);
+                }
                 test_prompt(ctx, t.n_prompt, 0, t.n_batch, t.n_threads);
             }
             if (t.n_gen > 0) {
+                if (params.progress) {
+                    fprintf(stderr, "llama-bench: benchmark %d/%ld: generation run %d/%d\n", params_idx, params_count, i + 1, params.reps);
+                }
                 test_gen(ctx, t.n_gen, t.n_prompt, t.n_threads);
             }
 
@@ -1599,7 +1630,7 @@ int main(int argc, char ** argv) {
             fflush(p_err->fout);
         }
 
-        llama_print_timings(ctx);
+        llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
 
         llama_free(ctx);
 

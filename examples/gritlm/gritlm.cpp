@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
@@ -9,7 +10,7 @@
 static std::vector<std::vector<float>> encode(llama_context * ctx, const std::vector<std::string> & sentences, const std::string & instruction) {
     std::vector<std::vector<float>> result;
 
-    const llama_model * mdl = llama_get_model(ctx);
+    const llama_model * model = llama_get_model(ctx);
 
     llama_batch batch = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
@@ -18,16 +19,16 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
 
         const std::string input_string = instruction + sentences[i];
 
-        std::vector<llama_token> inputs = llama_tokenize(mdl, input_string, true, false);
+        std::vector<llama_token> inputs = llama_tokenize(model, input_string, true, false);
 
         const int32_t n_toks = inputs.size();
 
         // GritLM seems to have EOS = ""
         // https://github.com/ContextualAI/gritlm/blob/92025b16534712b31b3c4aaaf069350e222bd5f8/gritlm/gritlm.py#L18
-        // inputs.push_back(llama_token_eos(mdl));
+        // inputs.push_back(llama_token_eos(model));
 
         // we want to ignore instruction tokens for mean pooling
-        const int32_t n_inst = llama_tokenize(mdl, instruction, true, false).size();
+        const int32_t n_inst = llama_tokenize(model, instruction, true, false).size();
 
 #ifdef GRIT_DEBUG
         // debug tokens - should be matching as referenced in the GritLM sample
@@ -51,7 +52,7 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
         llama_decode(ctx, batch);
 
         // get embedding dimensions
-        uint64_t n_embd = llama_n_embd(mdl);
+        uint64_t n_embd = llama_n_embd(model);
 
         // allocate embedding output
         std::vector<float> emb_unorm(n_embd, 0.0f);
@@ -92,11 +93,11 @@ static std::vector<std::vector<float>> encode(llama_context * ctx, const std::ve
     return result;
 }
 
-static std::string generate(llama_context * ctx, const std::string & prompt, bool stream) {
+static std::string generate(llama_context * ctx, llama_sampler * smpl, const std::string & prompt, bool stream) {
     std::string result;
 
-    const llama_model * mdl = llama_get_model(ctx);
-    llama_token eos_token = llama_token_eos(mdl);
+    const llama_model * model = llama_get_model(ctx);
+    llama_token eos_token = llama_token_eos(model);
 
     llama_kv_cache_clear(ctx);
     llama_set_embeddings(ctx, false);
@@ -104,28 +105,24 @@ static std::string generate(llama_context * ctx, const std::string & prompt, boo
 
     llama_batch bat = llama_batch_init(llama_n_batch(ctx), 0, 1);
 
-    std::vector<llama_token> inputs = llama_tokenize(mdl, prompt, false, true);
+    std::vector<llama_token> inputs = llama_tokenize(model, prompt, false, true);
     int32_t i_current_token = 0;
 
     while (true) {
         llama_batch_clear(bat);
-        auto n_inputs = (int32_t)inputs.size();
-        for (int32_t i = 0; i < n_inputs; i++) {
-            llama_batch_add(bat, inputs[i], i_current_token++, { 0 }, i == n_inputs - 1);
+        {
+            const int32_t n_inputs = inputs.size();
+
+            for (int32_t i = 0; i < n_inputs; i++) {
+                llama_batch_add(bat, inputs[i], i_current_token++, { 0 }, i == n_inputs - 1);
+            }
         }
         inputs.clear();
 
         llama_decode(ctx, bat);
-        auto logits = llama_get_logits_ith(ctx, bat.n_tokens - 1);
 
-        auto candidates = std::vector<llama_token_data>(llama_n_vocab(mdl));
-        auto n_candidates = (int32_t)candidates.size();
-        for (int32_t token = 0; token < n_candidates; token++) {
-            candidates[token] = llama_token_data{ token, logits[token], 0.0f };
-        }
-        auto candidates_p = llama_token_data_array{ candidates.data(), candidates.size(), false };
+        llama_token token = llama_sampler_sample(smpl, ctx, bat.n_tokens - 1);
 
-        llama_token token = llama_sample_token_greedy(ctx, &candidates_p);
         if (token == eos_token) {
             break;
         }
@@ -157,8 +154,7 @@ static std::string gritlm_instruction(const std::string & instruction) {
 int main(int argc, char * argv[]) {
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        gpt_params_print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
 
@@ -167,10 +163,18 @@ int main(int argc, char * argv[]) {
 
     llama_backend_init();
 
-    llama_model * mdl = llama_load_model_from_file(params.model.c_str(), mparams);
+    llama_model * model = llama_load_model_from_file(params.model.c_str(), mparams);
 
     // create generation context
-    llama_context * ctx = llama_new_context_with_model(mdl, cparams);
+    llama_context * ctx = llama_new_context_with_model(model, cparams);
+
+    auto sparams = llama_sampler_chain_default_params();
+
+    sparams.no_perf = false;
+
+    llama_sampler * smpl = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl, llama_sampler_init_greedy());
 
     // ### Embedding/Representation ###
     // samples taken from: https://github.com/ContextualAI/gritlm#basic
@@ -191,7 +195,7 @@ int main(int argc, char * argv[]) {
         const std::vector<std::vector<float>> d_rep = encode(ctx, documents, gritlm_instruction(""));
         const std::vector<std::vector<float>> q_rep = encode(ctx, queries,   gritlm_instruction(instruction));
 
-        const int n_embd = llama_n_embd(mdl);
+        const int n_embd = llama_n_embd(model);
 
         const float cosine_sim_q0_d0 = llama_embd_similarity_cos(q_rep[0].data(), d_rep[0].data(), n_embd);
         const float cosine_sim_q0_d1 = llama_embd_similarity_cos(q_rep[0].data(), d_rep[1].data(), n_embd);
@@ -208,11 +212,12 @@ int main(int argc, char * argv[]) {
     // GritLM models are not finetuned with system prompts, as you can just include system-like instructions together with your user instruction
     {
         const std::string prompt = "<|user|>\nPlease write me a poem about my recent hike of Mt. Fuji at midnight in the style of Shakespeare.\n<|assistant|>\n";
-        std::string response = generate(ctx, prompt, true);
+        std::string response = generate(ctx, smpl, prompt, true);
     }
 
+    llama_sampler_free(smpl);
     llama_free(ctx);
-    llama_free_model(mdl);
+    llama_free_model(model);
     llama_backend_free();
 
     return 0;

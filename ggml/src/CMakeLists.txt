@@ -612,6 +612,10 @@ if (GGML_VULKAN)
             add_compile_definitions(GGML_VULKAN_MEMORY_DEBUG)
         endif()
 
+        if (GGML_VULKAN_SHADER_DEBUG_INFO)
+            add_compile_definitions(GGML_VULKAN_SHADER_DEBUG_INFO)
+        endif()
+
         if (GGML_VULKAN_PERF)
             add_compile_definitions(GGML_VULKAN_PERF)
         endif()

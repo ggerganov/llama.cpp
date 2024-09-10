@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 #include "ggml.h"
@@ -144,14 +145,11 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        gpt_params_print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
 
     print_build_info();
-
-    std::mt19937 rng(params.seed);
 
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -183,7 +181,8 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    llama_print_timings(ctx);
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
 
     llama_free(ctx);
     llama_free_model(model);
