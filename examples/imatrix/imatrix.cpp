@@ -283,9 +283,9 @@ void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
     std::sort(to_store.begin(), to_store.end());
 
     struct ggml_init_params params = {
-        .mem_size   = data_size,
-        .mem_buffer = NULL,
-        .no_alloc   = false,
+        /* .mem_size   = */ data_size,
+        /* .mem_buffer = */ NULL,
+        /* .no_alloc   = */ false,
     };
     struct ggml_context * ctx = ggml_init(params);
     struct gguf_context * ctx_gguf = gguf_init_empty();
