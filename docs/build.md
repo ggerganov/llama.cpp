@@ -352,6 +352,37 @@ cmake --build build --config Release
 # ggml_vulkan: Using Intel(R) Graphics (ADL GT2) | uma: 1 | fp16: 1 | warp size: 32
 ```
 
+### CANN
+This provides NPU acceleration using the AI cores of your Ascend NPU. And [CANN](https://www.hiascend.com/en/software/cann) is a hierarchical APIs to help you to quickly build AI applications and service based on Ascend NPU.
+
+For more information about Ascend NPU in [Ascend Community](https://www.hiascend.com/en/).
+
+Make sure to have the CANN toolkit installed. You can download it from here: [CANN Toolkit](https://www.hiascend.com/developer/download/community/result?module=cann)
+
+Go to `llama.cpp` directory and build using CMake.
+```bash
+cmake -B build -DGGML_CANN=on -DCMAKE_BUILD_TYPE=release
+cmake --build build --config release
+```
+
+You can test with:
+
+`./build/llama-cli -m PATH_TO_MODEL -p "Building a website can be done in 10 steps:" -ngl 32`
+
+If the fllowing info is output on screen, you are using `llama.cpp by CANN backend`:
+```bash
+llm_load_tensors:       CANN buffer size = 13313.00 MiB
+llama_new_context_with_model:       CANN compute buffer size =  1260.81 MiB
+```
+
+For detailed info, such as model/device supports, CANN install, please refer to [llama.cpp for CANN](./backend/CANN.md).
+
 ### Android
 
 To read documentation for how to build on Android, [click here](./android.md)
+
+### Arm CPU optimized mulmat kernels
+
+Llama.cpp includes a set of optimized mulmat kernels for the Arm architecture, leveraging Arm® Neon™, int8mm and SVE instructions. These kernels are enabled at build time through the appropriate compiler cpu-type flags, such as `-DCMAKE_C_FLAGS=-march=armv8.2a+i8mm+sve`. Note that these optimized kernels require the model to be quantized into one of the formats: `Q4_0_4_4` (Arm Neon), `Q4_0_4_8` (int8mm) or `Q4_0_8_8` (SVE). The SVE mulmat kernel specifically requires a vector width of 256 bits. When running on devices with a different vector width, it is recommended to use the `Q4_0_4_8` (int8mm) or `Q4_0_4_4` (Arm Neon) formats for better performance. Refer to [examples/quantize/README.md](../examples/quantize/README.md) for more information on the quantization formats.
+
+To support `Q4_0_4_4`, you must build with `GGML_NO_LLAMAFILE=1` (`make`) or `-DGGML_LLAMAFILE=OFF` (`cmake`).

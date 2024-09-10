@@ -5,7 +5,7 @@
 # Usage:
 #
 #   $ cd /path/to/llama.cpp
-#   $ ./scripts/sync-ggml-am.sh -skip hash0,hash1,hash2...
+#   $ ./scripts/sync-ggml-am.sh -skip hash0,hash1,hash2... -C 3
 #
 
 set -e
@@ -25,9 +25,23 @@ lc=$(cat $SRC_LLAMA/scripts/sync-ggml.last)
 echo "Syncing ggml changes since commit $lc"
 
 to_skip=""
-if [ "$1" == "-skip" ]; then
-    to_skip=$2
-fi
+
+# context for git patches in number of lines
+ctx="8"
+
+while [ "$1" != "" ]; do
+    case $1 in
+        -skip )
+            shift
+            to_skip=$1
+            ;;
+        -C )
+            shift
+            ctx=$1
+            ;;
+    esac
+    shift
+done
 
 cd $SRC_GGML
 
@@ -52,7 +66,7 @@ while read c; do
         fi
     fi
 
-    git format-patch -k $c~1..$c --stdout -- \
+    git format-patch -U${ctx} -k $c~1..$c --stdout -- \
         CMakeLists.txt \
         src/CMakeLists.txt \
         cmake/FindSIMD.cmake \
@@ -62,6 +76,7 @@ while read c; do
         src/ggml*.m \
         src/ggml*.metal \
         src/ggml*.cu \
+        src/ggml-cann/* \
         src/ggml-cuda/* \
         src/ggml-sycl/* \
         src/vulkan-shaders/* \
@@ -108,6 +123,8 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # src/ggml-alloc.c        -> ggml/src/ggml-alloc.c
     # src/ggml-backend-impl.h -> ggml/src/ggml-backend-impl.h
     # src/ggml-backend.c      -> ggml/src/ggml-backend.c
+    # src/ggml-cann/*         -> ggml/src/ggml-cann/
+    # src/ggml-cann.cpp       -> ggml/src/ggml-cann.cpp
     # src/ggml-common.h       -> ggml/src/ggml-common.h
     # src/ggml-cuda/*         -> ggml/src/ggml-cuda/
     # src/ggml-cuda.cu        -> ggml/src/ggml-cuda.cu
@@ -126,6 +143,7 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
     # include/ggml-alloc.h   -> ggml/include/ggml-alloc.h
     # include/ggml-backend.h -> ggml/include/ggml-backend.h
     # include/ggml-blas.h    -> ggml/include/ggml-blas.h
+    # include/ggml-cann.h    -> ggml/include/ggml-cann.h
     # include/ggml-cuda.h    -> ggml/include/ggml-cuda.h
     # include/ggml-kompute.h -> ggml/include/ggml-kompute.h
     # include/ggml-metal.h   -> ggml/include/ggml-metal.h
@@ -152,6 +170,8 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)src\/ggml-alloc\.c/\1ggml\/src\/ggml-alloc.c/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-backend-impl\.h/\1ggml\/src\/ggml-backend-impl.h/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-backend\.c/\1ggml\/src\/ggml-backend.c/g' \
+        -e 's/([[:space:]]|[ab]\/)src\/ggml-cann\//\1ggml\/src\/ggml-cann\//g' \
+        -e 's/([[:space:]]|[ab]\/)src\/ggml-cann\.cpp/\1ggml\/src\/ggml-cann.cpp/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-common\.h/\1ggml\/src\/ggml-common.h/g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cuda\//\1ggml\/src\/ggml-cuda\//g' \
         -e 's/([[:space:]]|[ab]\/)src\/ggml-cuda\.cu/\1ggml\/src\/ggml-cuda.cu/g' \
@@ -169,22 +189,23 @@ if [ -f $SRC_LLAMA/ggml-src.patch ]; then
         -e 's/([[:space:]]|[ab]\/)include\/ggml-alloc\.h/\1ggml\/include\/ggml-alloc.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-backend\.h/\1ggml\/include\/ggml-backend.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-blas\.h/\1ggml\/include\/ggml-blas.h/g' \
+        -e 's/([[:space:]]|[ab]\/)include\/ggml-cann\.h/\1ggml\/include\/ggml-cann.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-cuda\.h/\1ggml\/include\/ggml-cuda.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-kompute\.h/\1ggml\/include\/ggml-kompute.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-metal\.h/\1ggml\/include\/ggml-metal.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-rpc\.h/\1ggml\/include\/ggml-rpc.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-sycl\.h/\1ggml\/include\/ggml-sycl.h/g' \
         -e 's/([[:space:]]|[ab]\/)include\/ggml-vulkan\.h/\1ggml\/include\/ggml-vulkan.h/g' \
-        -e 's/([[:space:]]|[ab]\/)examples\/common\.h/examples\/common.h/g' \
-        -e 's/([[:space:]]|[ab]\/)examples\/common\.cpp/examples\/common.cpp/g' \
-        -e 's/([[:space:]]|[ab]\/)examples\/common-ggml\.h/examples\/common-ggml.h/g' \
-        -e 's/([[:space:]]|[ab]\/)examples\/common-ggml\.cpp/examples\/common-ggml.cpp/g' \
-        -e 's/([[:space:]]|[ab]\/)LICENSE/LICENSE/g' \
-        -e 's/([[:space:]]|[ab]\/)scripts\/gen-authors\.sh/scripts\/gen-authors.sh/g' \
+        -e 's/([[:space:]]|[ab]\/)examples\/common\.h/\1examples\/common.h/g' \
+        -e 's/([[:space:]]|[ab]\/)examples\/common\.cpp/\1examples\/common.cpp/g' \
+        -e 's/([[:space:]]|[ab]\/)examples\/common-ggml\.h/\1examples\/common-ggml.h/g' \
+        -e 's/([[:space:]]|[ab]\/)examples\/common-ggml\.cpp/\1examples\/common-ggml.cpp/g' \
+        -e 's/([[:space:]]|[ab]\/)LICENSE/\1LICENSE/g' \
+        -e 's/([[:space:]]|[ab]\/)scripts\/gen-authors\.sh/\1scripts\/gen-authors.sh/g' \
         > ggml-src.patch.tmp
     mv ggml-src.patch.tmp ggml-src.patch
 
-    git am ggml-src.patch
+    git am -C${ctx} ggml-src.patch
 
     rm -v $SRC_LLAMA/ggml-src.patch
 fi

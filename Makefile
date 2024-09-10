@@ -19,6 +19,7 @@ BUILD_TARGETS = \
 	llama-imatrix \
 	llama-infill \
 	llama-llava-cli \
+	llama-minicpmv-cli\
 	llama-lookahead \
 	llama-lookup \
 	llama-lookup-create \
@@ -38,10 +39,12 @@ BUILD_TARGETS = \
 	llama-tokenize \
 	llama-vdot \
 	llama-cvector-generator \
+	llama-gen-docs \
 	tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
+	tests/test-arg-parser \
 	tests/test-autorelease \
 	tests/test-backend-ops \
 	tests/test-chat-template \
@@ -762,6 +765,10 @@ ifdef GGML_VULKAN_MEMORY_DEBUG
 	MK_CPPFLAGS  += -DGGML_VULKAN_MEMORY_DEBUG
 endif
 
+ifdef GGML_VULKAN_PERF
+	MK_CPPFLAGS  += -DGGML_VULKAN_PERF
+endif
+
 ifdef GGML_VULKAN_VALIDATE
 	MK_CPPFLAGS  += -DGGML_VULKAN_VALIDATE
 endif
@@ -888,15 +895,16 @@ ggml/src/ggml-metal-embed.o: \
 	ggml/src/ggml-common.h
 	@echo "Embedding Metal library"
 	@sed -e '/#include "ggml-common.h"/r ggml/src/ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml/src/ggml-metal.metal > ggml/src/ggml-metal-embed.metal
-	$(eval TEMP_ASSEMBLY=$(shell mktemp))
-	@echo ".section __DATA, __ggml_metallib"            >  $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_start"                 >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_start:"                       >> $(TEMP_ASSEMBLY)
-	@echo ".incbin \"ggml/src/ggml-metal-embed.metal\"" >> $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_end"                   >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_end:"                         >> $(TEMP_ASSEMBLY)
-	@$(AS) $(TEMP_ASSEMBLY) -o $@
-	@rm -f ${TEMP_ASSEMBLY}
+	$(eval TEMP_ASSEMBLY=$(shell mktemp -d))
+	@echo ".section __DATA, __ggml_metallib"            >  $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo ".globl _ggml_metallib_start"                 >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo "_ggml_metallib_start:"                       >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo ".incbin \"ggml/src/ggml-metal-embed.metal\"" >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo ".globl _ggml_metallib_end"                   >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo "_ggml_metallib_end:"                         >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	$(CC) $(CFLAGS) -c $(TEMP_ASSEMBLY)/ggml-metal-embed.s -o $@
+	@rm -f ${TEMP_ASSEMBLY}/ggml-metal-embed.s
+	@rmdir ${TEMP_ASSEMBLY}
 endif
 endif # GGML_METAL
 
@@ -917,11 +925,11 @@ OBJ_LLAMA = \
 
 OBJ_COMMON = \
 	common/common.o \
+	common/arg.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
 	common/train.o \
-	common/grammar-parser.o \
 	common/build-info.o \
 	common/json-schema-to-grammar.o
 
@@ -1150,6 +1158,11 @@ common/common.o: \
 	include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+common/arg.o: \
+	common/arg.cpp \
+	common/arg.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 common/sampling.o: \
 	common/sampling.cpp \
 	common/sampling.h \
@@ -1159,11 +1172,6 @@ common/sampling.o: \
 common/console.o: \
 	common/console.cpp \
 	common/console.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-common/grammar-parser.o: \
-	common/grammar-parser.cpp \
-	common/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/json-schema-to-grammar.o: \
@@ -1205,6 +1213,7 @@ clean:
 	rm -rvf ggml/*.dll
 	rm -rvf ggml/*.so
 	rm -vrf ggml/src/*.o
+	rm -rvf ggml/src/llamafile/*.o
 	rm -rvf common/build-info.cpp
 	rm -vrf ggml/src/ggml-metal-embed.metal
 	rm -vrf ggml/src/ggml-cuda/*.o
@@ -1441,6 +1450,11 @@ examples/server/%.hpp: examples/server/public/% Makefile
 		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
 	) > $@
 
+llama-gen-docs: examples/gen-docs/gen-docs.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
 libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
@@ -1451,15 +1465,20 @@ libllava.a: examples/llava/llava.cpp \
 	$(CXX) $(CXXFLAGS) -static -fPIC -c $< -o $@ -Wno-cast-qual
 
 llama-llava-cli: examples/llava/llava-cli.cpp \
-	examples/llava/clip.h \
-	examples/llava/clip.cpp \
-	examples/llava/llava.h \
 	examples/llava/llava.cpp \
+	examples/llava/llava.h \
+	examples/llava/clip.cpp \
+	examples/llava/clip.h \
 	$(OBJ_ALL)
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) -c examples/llava/clip.cpp  -o $(call GET_OBJ_FILE, examples/llava/clip.cpp) -Wno-cast-qual
-	$(CXX) $(CXXFLAGS) -c examples/llava/llava.cpp -o $(call GET_OBJ_FILE, examples/llava/llava.cpp)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $< examples/llava/clip.cpp examples/llava/llava.cpp,$^) $(call GET_OBJ_FILE, $<) $(call GET_OBJ_FILE, examples/llava/clip.cpp) $(call GET_OBJ_FILE, examples/llava/llava.cpp) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
+
+llama-minicpmv-cli: examples/llava/minicpmv-cli.cpp \
+	examples/llava/llava.cpp \
+	examples/llava/llava.h \
+	examples/llava/clip.cpp \
+	examples/llava/clip.h \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) $< $(filter-out %.h $<,$^) -o $@ $(LDFLAGS) -Wno-cast-qual
 
 ifeq ($(UNAME_S),Darwin)
 swift: examples/batched.swift
@@ -1492,6 +1511,11 @@ run-benchmark-matmult: llama-benchmark-matmult
 	./$@
 
 .PHONY: run-benchmark-matmult swift
+
+tests/test-arg-parser: tests/test-arg-parser.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
 	$(OBJ_ALL)

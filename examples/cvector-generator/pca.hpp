@@ -12,12 +12,9 @@
 
 #include <cstdio>
 #include <ctime>
+#include <random>
 #include <string>
-#include <tuple>
 #include <vector>
-#include <algorithm>
-#include <iostream>
-#include <fstream>
 
 #define DEBUG_POS 5
 

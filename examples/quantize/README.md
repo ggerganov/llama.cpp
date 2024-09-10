@@ -34,7 +34,7 @@ Run the quantized model:
 
 ```bash
 # start inference on a gguf model
-./llama-cli -m ./models/mymodel/ggml-model-Q4_K_M.gguf -n 128
+./llama-cli -m ./models/mymodel/ggml-model-Q4_K_M.gguf -cnv -p "You are a helpful assistant"
 ```
 
 When running the larger models, make sure you have enough disk space to store all the intermediate files.
@@ -53,6 +53,8 @@ As the models are currently fully loaded into memory, you will need adequate dis
 ## Quantization
 
 Several quantization methods are supported. They differ in the resulting model disk size and inference speed.
+
+The quantization formats `Q4_0_4_4`, `Q4_0_4_8` and `Q4_0_8_8` are block interleaved variants of the `Q4_0` format, providing a data layout that is better suited for specific implementations of optimized mulmat kernels. Since these formats differ only in data layout, they have the same quantized size as the `Q4_0` format.
 
 *(outdated)*
 
