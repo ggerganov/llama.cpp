@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14) # for add_link_options and implicit target directories.
-project("ggml" C CXX)
+project("ggml_llama" C CXX)
 include(CheckIncludeFileCXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -216,14 +216,14 @@ set(GGML_PUBLIC_HEADERS
     include/ggml-sycl.h
     include/ggml-vulkan.h)
 
-set_target_properties(ggml PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
+set_target_properties(ggml_llama PROPERTIES PUBLIC_HEADER "${GGML_PUBLIC_HEADERS}")
 #if (GGML_METAL)
-#    set_target_properties(ggml PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/ggml-metal.metal")
+#    set_target_properties(ggml_llama PROPERTIES RESOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/ggml-metal.metal")
 #endif()
-install(TARGETS ggml PUBLIC_HEADER)
+install(TARGETS ggml_llama PUBLIC_HEADER)
 
 if (BUILD_SHARED_LIBS)
-    install(TARGETS ggml LIBRARY)
+    install(TARGETS ggml_llama LIBRARY)
 endif()
 
 if (GGML_METAL)

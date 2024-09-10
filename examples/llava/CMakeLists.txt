@@ -5,7 +5,7 @@ add_library(llava OBJECT
             clip.h
             )
 
-target_link_libraries(llava PRIVATE ggml llama ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(llava PRIVATE ggml_llama llama ${CMAKE_THREAD_LIBS_INIT})
 
 target_include_directories(llava PUBLIC .)
 target_include_directories(llava PUBLIC ../..)
@@ -18,7 +18,7 @@ if (BUILD_SHARED_LIBS)
     set_target_properties(llava PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_compile_definitions(llava PRIVATE LLAMA_SHARED LLAMA_BUILD)
     add_library(llava_shared SHARED $<TARGET_OBJECTS:llava>)
-    target_link_libraries(llava_shared PRIVATE ggml llama ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(llava_shared PRIVATE ggml_llama llama ${CMAKE_THREAD_LIBS_INIT})
     install(TARGETS llava_shared LIBRARY)
 endif()
 
