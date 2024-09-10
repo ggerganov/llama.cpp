@@ -1954,6 +1954,11 @@ struct ggml_sycl_pool_leg : public ggml_sycl_pool {
         SYCL_CHECK(
             CHECK_TRY_ERROR(ptr = (void *)sycl::malloc_device(
                                 look_ahead_size, *qptr)));
+        if (!ptr) {
+            fprintf(stderr, "%s: can't malloc %lu Bytes memory on device", __func__, look_ahead_size);
+            return nullptr;
+        }
+
         *actual_size = look_ahead_size;
         pool_size += look_ahead_size;
 
@@ -4350,6 +4355,10 @@ ggml_backend_sycl_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft,
     void * dev_ptr;
     SYCL_CHECK(CHECK_TRY_ERROR(dev_ptr = (void *)sycl::malloc_device(
                                     size, *stream)));
+    if (!dev_ptr) {
+        fprintf(stderr, "%s: can't malloc %lu Bytes memory on device", __func__, size);
+        return nullptr;
+    }
     ggml_backend_sycl_buffer_context * ctx = new  ggml_backend_sycl_buffer_context(buft_ctx->device, dev_ptr, buft_ctx->stream);
     return ggml_backend_buffer_init(buft, ggml_backend_sycl_buffer_interface, ctx, size);
 }
@@ -4570,7 +4579,11 @@ ggml_backend_sycl_split_buffer_init_tensor(ggml_backend_buffer_t buffer,
         */
         SYCL_CHECK(CHECK_TRY_ERROR(buf = (char *)sycl::malloc_device(
                                         size, *stream)));
-
+        if (!buf) {
+            char err_buf[1024];
+            snprintf(err_buf, 1023, "%s: can't malloc %lu Bytes memory on device", __func__, size);
+            throw std::runtime_error(err_buf);
+        }
         // set padding to 0 to avoid possible NaN values
         if (size > original_size) {
             /*

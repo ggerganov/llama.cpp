@@ -925,6 +925,7 @@ OBJ_LLAMA = \
 
 OBJ_COMMON = \
 	common/common.o \
+	common/arg.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
@@ -1155,6 +1156,11 @@ common/common.o: \
 	common/json.hpp \
 	common/json-schema-to-grammar.h \
 	include/llama.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+common/arg.o: \
+	common/arg.cpp \
+	common/arg.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/sampling.o: \
@@ -1448,7 +1454,6 @@ llama-gen-docs: examples/gen-docs/gen-docs.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	./llama-gen-docs
 
 libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \

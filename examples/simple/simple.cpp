@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
@@ -18,8 +19,7 @@ int main(int argc, char ** argv) {
     params.prompt = "Hello my name is";
     params.n_predict = 32;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON, print_usage);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON, print_usage)) {
         return 1;
     }
 
@@ -117,8 +117,6 @@ int main(int argc, char ** argv) {
         // sample the next token
         {
             const llama_token new_token_id = llama_sampler_sample(smpl, ctx, batch.n_tokens - 1);
-
-            llama_sampler_accept(smpl, new_token_id);
 
             // is it an end of generation?
             if (llama_token_is_eog(model, new_token_id) || n_cur == n_predict) {

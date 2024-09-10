@@ -883,15 +883,17 @@ ggml_tensor * rpc_server::deserialize_tensor(struct ggml_context * ctx, const rp
     }
     result->buffer = reinterpret_cast<ggml_backend_buffer_t>(tensor->buffer);
     if (result->buffer && buffers.find(result->buffer) == buffers.end()) {
-        return nullptr;
+        result->buffer = nullptr;
     }
 
-    // require that the tensor data does not go beyond the buffer end
-    uint64_t tensor_size = (uint64_t) ggml_nbytes(result);
-    uint64_t buffer_start = (uint64_t) ggml_backend_buffer_get_base(result->buffer);
-    uint64_t buffer_size = (uint64_t) ggml_backend_buffer_get_size(result->buffer);
-    GGML_ASSERT(tensor->data + tensor_size >= tensor->data); // check for overflow
-    GGML_ASSERT(tensor->data >= buffer_start && tensor->data + tensor_size <= buffer_start + buffer_size);
+    if (result->buffer) {
+        // require that the tensor data does not go beyond the buffer end
+        uint64_t tensor_size = (uint64_t) ggml_nbytes(result);
+        uint64_t buffer_start = (uint64_t) ggml_backend_buffer_get_base(result->buffer);
+        uint64_t buffer_size = (uint64_t) ggml_backend_buffer_get_size(result->buffer);
+        GGML_ASSERT(tensor->data + tensor_size >= tensor->data); // check for overflow
+        GGML_ASSERT(tensor->data >= buffer_start && tensor->data + tensor_size <= buffer_start + buffer_size);
+    }
 
     result->op = (ggml_op) tensor->op;
     for (uint32_t i = 0; i < GGML_MAX_OP_PARAMS / sizeof(int32_t); i++) {
@@ -1060,7 +1062,7 @@ bool rpc_server::graph_compute(const std::vector<uint8_t> & input, std::vector<u
     const rpc_tensor * tensors = (const rpc_tensor *)(input.data() + sizeof(n_nodes) + n_nodes*sizeof(uint64_t) + sizeof(n_tensors));
     GGML_PRINT_DEBUG("[%s] n_nodes: %u, n_tensors: %u\n", __func__, n_nodes, n_tensors);
 
-    static size_t buf_size = ggml_tensor_overhead()*(n_nodes + n_tensors) + ggml_graph_overhead_custom(n_nodes, false);
+    size_t buf_size = ggml_tensor_overhead()*(n_nodes + n_tensors) + ggml_graph_overhead_custom(n_nodes, false);
     struct ggml_init_params params = {
         /*.mem_size   =*/ buf_size,
         /*.mem_buffer =*/ NULL,

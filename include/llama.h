@@ -1127,15 +1127,16 @@ extern "C" {
                              int32_t   n_logit_bias,
               const llama_logit_bias * logit_bias);
 
-    // Shorthand for:
+    /// @details Sample and accept a token from the idx-th output of the last evaluation
     //
+    // Shorthand for:
     //    const auto * logits = llama_get_logits_ith(ctx, idx);
     //    llama_token_data_array cur_p = { ... init from logits ... };
     //    llama_sampler_apply(smpl, &cur_p);
-    //    return cur_p.data[cur_p.selected].id;
-    //
-    // At this point, this is mostly a convenience function.
-    //
+    //    auto token = cur_p.data[cur_p.selected].id;
+    //    llama_sampler_accept(smpl, token);
+    //    return token;
+    // Returns the sampled token
     LLAMA_API llama_token llama_sampler_sample(struct llama_sampler * smpl, struct llama_context * ctx, int32_t idx);
 
     // TODO: extend in the future
