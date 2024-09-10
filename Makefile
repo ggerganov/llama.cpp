@@ -1454,7 +1454,6 @@ llama-gen-docs: examples/gen-docs/gen-docs.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
-	./llama-gen-docs
 
 libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \
