@@ -2007,8 +2007,6 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
-
     llama_backend_init();
     llama_numa_init(params.numa);
 

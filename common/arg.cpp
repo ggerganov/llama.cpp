@@ -173,7 +173,6 @@ static bool gpt_params_parse_ex(int argc, char ** argv, gpt_params_context & ctx
     std::string arg;
     const std::string arg_prefix = "--";
     gpt_params & params = ctx_arg.params;
-    gpt_sampler_params & sparams = params.sparams;
 
     std::unordered_map<std::string, llama_arg *> arg_to_options;
     for (auto & opt : ctx_arg.options) {
@@ -281,10 +280,6 @@ static bool gpt_params_parse_ex(int argc, char ** argv, gpt_params_context & ctx
     if (!params.kv_overrides.empty()) {
         params.kv_overrides.emplace_back();
         params.kv_overrides.back().key[0] = 0;
-    }
-
-    if (sparams.seed == LLAMA_DEFAULT_SEED) {
-        sparams.seed = time(NULL);
     }
 
     return true;
@@ -909,7 +904,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
     ).set_sparam());
     add_opt(llama_arg(
         {"-s", "--seed"}, "SEED",
-        format("RNG seed (default: %d, use random seed for < 0)", params.sparams.seed),
+        format("RNG seed (default: %u, use random seed for %u)", params.sparams.seed, LLAMA_DEFAULT_SEED),
         [](gpt_params & params, const std::string & value) {
             params.sparams.seed = std::stoul(value);
         }
