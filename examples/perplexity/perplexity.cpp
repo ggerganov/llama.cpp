@@ -1,18 +1,19 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
+#include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <fstream>
+#include <mutex>
+#include <random>
 #include <sstream>
 #include <thread>
-#include <mutex>
-#include <atomic>
 #include <vector>
-#include <array>
-#include <fstream>
-#include <sstream>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -76,7 +77,7 @@ static void write_logfile(
     fprintf(logfile, "ppl_value: %f\n", results.ppl_value);
     yaml_dump_vector_float(logfile, "probs", results.probs);
 
-    llama_dump_timing_info_yaml(logfile, ctx);
+    llama_perf_dump_yaml(logfile, ctx);
     fclose(logfile);
 }
 
@@ -1967,8 +1968,7 @@ int main(int argc, char ** argv) {
     params.n_ctx = 512;
     params.logits_all = true;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        gpt_params_print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PERPLEXITY)) {
         return 1;
     }
 
@@ -2007,13 +2007,7 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    if (params.seed == LLAMA_DEFAULT_SEED) {
-        params.seed = time(NULL);
-    }
-
-    fprintf(stderr, "%s: seed  = %u\n", __func__, params.seed);
-
-    std::mt19937 rng(params.seed);
+    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -2054,7 +2048,8 @@ int main(int argc, char ** argv) {
         results = perplexity(ctx, params, n_ctx);
     }
 
-    llama_print_timings(ctx);
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
     write_logfile(ctx, params, model, results);
 
     llama_free(ctx);

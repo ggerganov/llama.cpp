@@ -1,8 +1,9 @@
-#include "ggml.h"
+#include "arg.h"
 #include "common.h"
-#include "llama.h"
 #include "log.h"
 #include "ngram-cache.h"
+#include "llama.h"
+#include "ggml.h"
 
 #include <cmath>
 #include <cstdint>
@@ -15,8 +16,7 @@
 int main(int argc, char ** argv){
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        gpt_params_print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
         return 1;
     }
 
