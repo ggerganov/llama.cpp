@@ -20700,7 +20700,7 @@ llama_perf_data llama_perf_get(const void * ctx, enum llama_perf_type type) {
                 const auto * p = (const struct llama_context *) ctx;
 
                 data.t_start_ms  = 1e-3 * p->t_start_us;
-                data.t_load_ms   = 1e-3 * p->t_load_us;;
+                data.t_load_ms   = 1e-3 * p->t_load_us;
                 data.t_p_eval_ms = 1e-3 * p->t_p_eval_us;
                 data.t_eval_ms   = 1e-3 * p->t_eval_us;
                 data.n_p_eval    = std::max(1, p->n_p_eval);
