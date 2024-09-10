@@ -9,6 +9,7 @@
 #include <mutex>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <algorithm>
 
 #if defined(_MSC_VER)
@@ -22,6 +23,14 @@ static void print_usage(int, char ** argv) {
             "       [--no-ppl] [--chunk 123] [--output-frequency 10] [--save-frequency 0] \\\n"
             "       [--in-file imatrix-prev-0.gguf --in-file imatrix-prev-1.gguf ...]\n" , argv[0]);
     LOG_TEE("\n");
+}
+
+static bool str_remove_suffix(std::string & str, const std::string & suffix) {
+    bool has_suffix = str.size() >= suffix.size() && str.compare(str.size() - suffix.size(), str.size(), suffix) == 0;
+    if (has_suffix) {
+        str = str.substr(0, str.size() - suffix.size());
+    }
+    return has_suffix;
 }
 
 static const char * const LLM_KV_IMATRIX_DATASET     = "imatrix.dataset";
@@ -302,8 +311,8 @@ void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
         if (nval > 0) {
             struct ggml_tensor * sums = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, nval / nmat, nmat);
             struct ggml_tensor * counts = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, 1, nmat);
-            ggml_set_name(sums, (name + ".sums").c_str());
-            ggml_set_name(counts, (name + ".counts").c_str());
+            ggml_format_name(sums, "%s.sums", name.c_str());
+            ggml_format_name(counts, "%s.counts", name.c_str());
 
             for (int32_t j = 0; j < nval; ++j) {
                 ((float *) sums->data)[j] = (float) stat.values[j];
@@ -338,7 +347,7 @@ bool IMatrixCollector::load_imatrix(const char * file_name) {
         return false;
     }
     const int32_t n_entries = gguf_get_n_tensors(ctx_gguf);
-    if (n_entries < 2) {
+    if (n_entries < 1) {
         fprintf(stderr, "%s: no data in file %s\n", __func__, file_name);
         gguf_free(ctx_gguf);
         ggml_free(ctx);
@@ -348,51 +357,73 @@ bool IMatrixCollector::load_imatrix(const char * file_name) {
     const std::string sums_suffix{".sums"};
     const std::string counts_suffix{".counts"};
 
-    // TODO: allow loading from mis-ordered imatrix files
-    for (int32_t i = 0; i < n_entries - 1; i += 2) {
-        std::string sums_name{gguf_get_tensor_name(ctx_gguf, i + 0)};
-        std::string counts_name{gguf_get_tensor_name(ctx_gguf, i + 1)};
+    // Could re-use m_stats instead, but this allows
+    // checking for completeness of *each* loaded imatrix file
+    // and also makes it easier to re-use a similar implementation in quantize.cpp
+    // Using an ordered map to get a deterministic iteration order.
+    std::map<std::string, std::pair<struct ggml_tensor *, struct ggml_tensor *>> sums_counts_for;
 
-        if (sums_name.size() < sums_suffix.size() ||
-            counts_name.size() < counts_suffix.size() ||
-            !std::equal(sums_name.begin(), sums_name.end() - sums_suffix.size(), counts_name.begin()) ||
-            !std::equal(sums_suffix.rbegin(), sums_suffix.rend(), sums_name.rbegin()) ||
-            !std::equal(counts_suffix.rbegin(), counts_suffix.rend(), counts_name.rbegin())) {
-            fprintf(stderr, "%s: mismatched sums and counts for entry %d\n", __func__, i / 2);
+    for (struct ggml_tensor * cur = ggml_get_first_tensor(ctx); cur; cur = ggml_get_next_tensor(ctx, cur)) {
+        std::string name = cur->name;
+
+        if (name.empty()) { continue; }
+
+        if (str_remove_suffix(name, sums_suffix)) {
+            // sums
+            sums_counts_for[name].first = cur;
+        } else if (str_remove_suffix(name, counts_suffix)) {
+            // counts
+            sums_counts_for[name].second = cur;
+        } else {
+            fprintf(stderr, "%s: invalid imatrix tensor name: %s\n", __func__, name.c_str());
             gguf_free(ctx_gguf);
             ggml_free(ctx);
             return false;
         }
+    }
 
-        struct ggml_tensor * sums = ggml_get_tensor(ctx, sums_name.c_str());
-        struct ggml_tensor * counts = ggml_get_tensor(ctx, counts_name.c_str());
+    for (const auto & sc : sums_counts_for) {
+        const        std::string & name   = sc.first;
+        const struct ggml_tensor * sums   = sc.second.first;
+        const struct ggml_tensor * counts = sc.second.second;
+
         if (!sums || !counts) {
-            fprintf(stderr, "%s: failed reading data for entry %d\n", __func__, i / 2);
+            fprintf(stderr, "%s: mismatched sums and counts for %s\n", __func__, name.c_str());
             gguf_free(ctx_gguf);
             ggml_free(ctx);
             return false;
         }
 
-        std::string name = sums_name.substr(0, sums_name.size() - sums_suffix.size());
         auto & e = m_stats[name];
 
-        int32_t nval = ggml_nelements(sums);
+        int64_t nval = ggml_nelements(sums);
         if (e.values.empty()) {
             e.values.resize(nval, 0);
+        } else if ((size_t) nval != e.values.size()) {
+            fprintf(stderr, "%s: mismatched sums size for %s: %zu != %zu\n", __func__, name.c_str(), (size_t) nval, e.values.size());
+            gguf_free(ctx_gguf);
+            ggml_free(ctx);
+            return false;
         }
-        int32_t ncounts = ggml_nelements(counts);
+
+        int64_t ncounts = ggml_nelements(counts);
         if (e.counts.empty()) {
             e.counts.resize(ncounts, 0);
         } else if (e.counts.size() == 1 && ncounts > 1) {
             // broadcast, when loading an old imatrix
             e.counts.resize(ncounts, e.counts[0]);
+        } else if ((size_t) ncounts != e.counts.size()) {
+            fprintf(stderr, "%s: mismatched counts size for %s: %zu != %zu\n", __func__, name.c_str(), (size_t) ncounts, e.counts.size());
+            gguf_free(ctx_gguf);
+            ggml_free(ctx);
+            return false;
         }
 
         // Recreate the state as expected by save_imatrix()
-        for (int32_t j = 0; j < nval; j++) {
+        for (int64_t j = 0; j < nval; j++) {
             e.values[j] += ((const float *) sums->data)[j];
         }
-        for (int32_t j = 0; j < ncounts; j++) {
+        for (int64_t j = 0; j < ncounts; j++) {
             e.counts[j] += std::lround(((const float *) counts->data)[j]);
         }
     }
