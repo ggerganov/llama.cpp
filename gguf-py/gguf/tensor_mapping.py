@@ -251,11 +251,12 @@ class TensorNameMap:
         ),
 
         MODEL_TENSOR.FFN_GATE_INP: (
-            "layers.{bid}.feed_forward.gate",             # mixtral
-            "model.layers.{bid}.block_sparse_moe.gate",   # mixtral
-            "model.layers.{bid}.mlp.gate",                # qwen2moe olmoe
-            "transformer.decoder_layer.{bid}.router",     # Grok
-            "transformer.blocks.{bid}.ffn.router.layer",  # dbrx
+            "layers.{bid}.feed_forward.gate",                   # mixtral
+            "model.layers.{bid}.block_sparse_moe.gate",         # mixtral
+            "model.layers.{bid}.mlp.gate",                      # qwen2moe olmoe
+            "transformer.decoder_layer.{bid}.router",           # Grok
+            "transformer.blocks.{bid}.ffn.router.layer",        # dbrx
+            "model.layers.{bid}.block_sparse_moe.router.layer", # granitemoe
         ),
 
         MODEL_TENSOR.FFN_GATE_INP_SHEXP: (
@@ -329,7 +330,6 @@ class TensorNameMap:
             "transformer.decoder_layer.{bid}.moe.linear",       # Grok (merged)
             "transformer.blocks.{bid}.ffn.experts.mlp.w1",      # dbrx
             "model.layers.{bid}.mlp.experts.gate_proj",         # qwen2moe olmoe (merged)
-            "model.layers.{bid}.block_sparse_moe.router.layer", # granitemoe
         ),
 
         MODEL_TENSOR.FFN_GATE_SHEXP: (

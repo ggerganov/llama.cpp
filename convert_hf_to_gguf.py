@@ -4102,13 +4102,22 @@ class GraniteModel(LlamaModel):
         #   consistency
         if attention_scale := self.hparams.get("attention_multiplier"):
             self.gguf_writer.add_attention_scale(attention_scale)
+            logger.info("gguf: (granite) attention_scale = %s", attention_scale)
         if embedding_scale := self.hparams.get("embedding_multiplier"):
             self.gguf_writer.add_embedding_scale(embedding_scale)
+            logger.info("gguf: (granite) embedding_scale = %s", embedding_scale)
         if residual_scale := self.hparams.get("residual_multiplier"):
             self.gguf_writer.add_residual_scale(residual_scale)
-        if logits_scaling := self.hparams.get("logits_scaling"):
-            self.gguf_writer.add_logit_scale(logits_scaling)
+            logger.info("gguf: (granite) residual_scale = %s", residual_scale)
+        if logits_scale := self.hparams.get("logits_scaling"):
+            self.gguf_writer.add_logit_scale(logits_scale)
+            logger.info("gguf: (granite) logits_scale = %s", logits_scale)
 
+
+@Model.register("GraniteMoeForCausalLM")
+class GraniteMoeModel(GraniteModel):
+    """Conversion for IBM's GraniteMoeForCausalLM"""
+    model_arch = gguf.MODEL_ARCH.GRANITE_MOE
 
 ###### CONVERSION LOGIC ######
 
