@@ -426,7 +426,7 @@ static struct llama_sampler * llama_sampler_dist_clone(const struct llama_sample
 static void llama_sampler_dist_reset(struct llama_sampler * smpl) {
     auto * ctx = (llama_sampler_dist *) smpl->ctx;
     ctx->seed_cur = get_rng_seed(ctx->seed);
-    ctx->rng = std::mt19937(ctx->seed_cur);
+    ctx->rng.seed(ctx->seed_cur);
 }
 
 static void llama_sampler_dist_free(struct llama_sampler * smpl) {
@@ -1114,7 +1114,7 @@ static void llama_sampler_mirostat_reset(struct llama_sampler * smpl) {
     auto * ctx = (llama_sampler_mirostat *) smpl->ctx;
     ctx->mu = 2.0f*ctx->tau;
     ctx->seed_cur = get_rng_seed(ctx->seed);
-    ctx->rng = std::mt19937(ctx->seed_cur);
+    ctx->rng.seed(ctx->seed_cur);
 }
 
 static void llama_sampler_mirostat_free(struct llama_sampler * smpl) {
@@ -1197,7 +1197,7 @@ static void llama_sampler_mirostat_v2_reset(struct llama_sampler * smpl) {
     auto * ctx = (llama_sampler_mirostat_v2 *) smpl->ctx;
     ctx->mu = 2.0f*ctx->tau;
     ctx->seed_cur = get_rng_seed(ctx->seed);
-    ctx->rng = std::mt19937(ctx->seed_cur);
+    ctx->rng.seed(ctx->seed_cur);
 }
 
 static struct llama_sampler * llama_sampler_mirostat_v2_clone(const struct llama_sampler * smpl) {
