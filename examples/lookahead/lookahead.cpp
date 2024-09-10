@@ -4,6 +4,7 @@
 #include "llama.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,17 @@ struct ngram_container {
     std::vector<llama_token> tokens;
 };
 
+int int_from_env(const char *name, int default_value) {
+    char *value = std::getenv(name);
+    if (value != nullptr) {
+        int v = atoi(value);
+        v = v ? v : default_value;
+        return v;
+    } else {
+        return default_value;
+    }
+}
+
 int main(int argc, char ** argv) {
     gpt_params params;
 
@@ -42,9 +54,10 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    const int W = 15; // lookahead window
-    const int N = 5;  // n-gram size
-    const int G = 15; // max verification n-grams
+    int W = int_from_env("W",15); // lookahead window
+    int N = int_from_env("N",5);  // n-gram size
+    int G = int_from_env("G",15); // max verification n-grams
+
 
     const bool dump_kv_cache = params.dump_kv_cache;
 
