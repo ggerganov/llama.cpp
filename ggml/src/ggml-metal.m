@@ -1,7 +1,7 @@
 #import "ggml-metal.h"
 
+#import "ggml-impl.h"
 #import "ggml-backend-impl.h"
-#import "ggml.h"
 
 #import <Foundation/Foundation.h>
 
@@ -882,7 +882,7 @@ static enum ggml_status ggml_metal_graph_compute(
     // create multiple command buffers and enqueue them
     // then, we encode the graph into the command buffers in parallel
 
-    const int n_nodes  = gf->n_nodes;
+    const int n_nodes = gf->n_nodes;
     const int n_cb = ctx->n_cb;
     const int n_nodes_per_cb = (n_nodes + n_cb - 1) / n_cb;
 

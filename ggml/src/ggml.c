@@ -287,6 +287,7 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 #define GGML_DEBUG 0
 #define GGML_GELU_FP16
 #define GGML_GELU_QUICK_FP16
+#define GGML_N_TASKS_MAX (-1)
 
 #define GGML_SOFT_MAX_UNROLL 4
 #define GGML_VEC_DOT_UNROLL  2
@@ -1892,6 +1893,23 @@ static inline void __lsx_f16x4_store(ggml_fp16_t * x, __m128 y) {
 #define GGML_F32_ARR (GGML_F32_STEP/GGML_F32_EPR)
 #define GGML_F16_ARR (GGML_F16_STEP/GGML_F16_EPR)
 #endif
+
+//
+// ggml object
+//
+
+struct ggml_object {
+    size_t offs;
+    size_t size;
+
+    struct ggml_object * next;
+
+    enum ggml_object_type type;
+
+    char padding[4];
+};
+
+static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
 
 //
 // ggml context
@@ -19159,6 +19177,33 @@ void ggml_graph_clear(struct ggml_cgraph * cgraph) {
     cgraph->n_leafs = 0;
     cgraph->n_nodes = 0;
     ggml_hash_set_reset(&cgraph->visited_hash_set);
+}
+
+int ggml_graph_size(struct ggml_cgraph * cgraph) {
+    return cgraph->size;
+}
+
+struct ggml_tensor * ggml_graph_node(struct ggml_cgraph * cgraph, int i) {
+    if (i < 0) {
+        GGML_ASSERT(cgraph->n_nodes + i >= 0);
+        return cgraph->nodes[cgraph->n_nodes + i];
+    }
+
+    GGML_ASSERT(i < cgraph->n_nodes);
+    return cgraph->nodes[i];
+}
+
+struct ggml_tensor ** ggml_graph_nodes(struct ggml_cgraph * cgraph) {
+    return cgraph->nodes;
+}
+
+int ggml_graph_n_nodes(struct ggml_cgraph * cgraph) {
+    return cgraph->n_nodes;
+}
+
+void ggml_graph_add_node(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
+    cgraph->nodes[cgraph->n_nodes] = tensor;
+    cgraph->n_nodes++;
 }
 
 // Android's libc implementation "bionic" does not support setting affinity

@@ -184,7 +184,7 @@ static bool clip_llava_handle_patches(clip_ctx * ctx_clip, std::vector<float *> 
     // ggml_tensor_printf(flatten,"flatten",__LINE__,false,false);
     ggml_build_forward_expand(gf, flatten);
     ggml_graph_compute_with_ctx(model.ctx, gf, 1);
-    struct ggml_tensor* result = gf->nodes[gf->n_nodes - 1];
+    struct ggml_tensor* result = ggml_graph_node(gf, -1);
 
     memcpy(image_embd_out, image_embd_v[0], clip_embd_nbytes(ctx_clip)); // main image as global context
     // append without newline tokens (default behavior in llava_arch when not using unpad ):

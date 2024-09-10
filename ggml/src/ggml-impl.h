@@ -629,7 +629,15 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 #define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
 #endif
 
+enum ggml_cgraph_eval_order {
+    GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT = 0,
+    GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT,
+    GGML_CGRAPH_EVAL_ORDER_COUNT
+};
+
 // bitset
+
+typedef uint32_t ggml_bitset_t;
 
 static_assert(sizeof(ggml_bitset_t) == 4, "bitset_t constants must be updated");
 #define BITSET_SHR 5 // log2(sizeof(ggml_bitset_t)*8)
@@ -655,6 +663,12 @@ static inline void ggml_bitset_clear(ggml_bitset_t * bitset, size_t i) {
 
 #define GGML_HASHSET_FULL ((size_t)-1)
 #define GGML_HASHSET_ALREADY_EXISTS ((size_t)-2)
+
+struct ggml_hash_set {
+    size_t size;
+    ggml_bitset_t * used;       // whether or not the keys are in use i.e. set
+    struct ggml_tensor ** keys; // actual tensors in the set, keys[i] is only defined if ggml_bitset_get(used, i)
+};
 
 struct ggml_hash_set ggml_hash_set_new(size_t size);
 void                 ggml_hash_set_free(struct ggml_hash_set * hash_set);
@@ -744,6 +758,24 @@ static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct g
     // visited all hash table entries -> not found
     GGML_ABORT("fatal error");
 }
+
+// computation graph
+
+struct ggml_cgraph {
+    int size;
+    int n_nodes;
+    int n_leafs;
+
+    struct ggml_tensor ** nodes;
+    struct ggml_tensor ** grads;
+    struct ggml_tensor ** leafs;
+
+    struct ggml_hash_set visited_hash_set;
+
+    enum ggml_cgraph_eval_order order;
+};
+
+struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph, int i0, int i1);
 
 #ifdef __cplusplus
 }
