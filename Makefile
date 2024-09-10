@@ -54,6 +54,7 @@ TEST_TARGETS = \
 	tests/test-grammar-parser \
 	tests/test-json-schema-to-grammar \
 	tests/test-llama-grammar \
+	tests/test-log \
 	tests/test-model-load-cancel \
 	tests/test-opt \
 	tests/test-quantize-fns \
@@ -931,6 +932,7 @@ OBJ_LLAMA = \
 OBJ_COMMON = \
 	common/common.o \
 	common/arg.o \
+	common/log.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
@@ -1168,6 +1170,11 @@ common/arg.o: \
 	common/arg.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+common/log.o: \
+	common/log.cpp \
+	common/log.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 common/sampling.o: \
 	common/sampling.cpp \
 	common/sampling.h \
@@ -1346,7 +1353,7 @@ llama-cvector-generator: examples/cvector-generator/cvector-generator.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 llama-convert-llama2c-to-ggml: examples/convert-llama2c-to-ggml/convert-llama2c-to-ggml.cpp \
-	$(OBJ_GGML) $(OBJ_LLAMA)
+	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
@@ -1523,6 +1530,11 @@ tests/test-arg-parser: tests/test-arg-parser.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+tests/test-log: tests/test-log.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)

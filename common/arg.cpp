@@ -1,15 +1,17 @@
 #include "arg.h"
 
+#include "log.h"
 #include "sampling.h"
 
 #include <algorithm>
-#include <string>
-#include <vector>
-#include <set>
+#include <climits>
+#include <cstdarg>
 #include <fstream>
 #include <regex>
-#include <cstdarg>
-#include <climits>
+#include <set>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "json-schema-to-grammar.h"
 
@@ -417,7 +419,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params) {
             params.use_color = true;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL, LLAMA_EXAMPLE_SPECULATIVE, LLAMA_EXAMPLE_LOOKUP}));
     add_opt(llama_arg(
         {"-t", "--threads"}, "N",
         format("number of threads to use during generation (default: %d)", params.cpuparams.n_threads),
@@ -876,7 +878,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             params.input_prefix = value;
             params.enable_chat_template = false;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN}));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"--in-suffix"}, "STRING",
         "string to suffix after user inputs with (default: empty)",
@@ -884,7 +886,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             params.input_suffix = value;
             params.enable_chat_template = false;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN}));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_INFILL}));
     add_opt(llama_arg(
         {"--no-warmup"},
         "skip warming up the model with an empty run",
@@ -1825,19 +1827,6 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
-        {"--log-format"}, "{text, json}",
-        "log output format: json or text (default: json)",
-        [](gpt_params & params, const std::string & value) {
-            if (value == "json") {
-                params.log_json = true;
-            } else if (value == "text") {
-                params.log_json = false;
-            } else {
-                throw std::invalid_argument("invalid value");
-            }
-        }
-    ).set_examples({LLAMA_EXAMPLE_SERVER}));
-    add_opt(llama_arg(
         {"--metrics"},
         format("enable prometheus compatible metrics endpoint (default: %s)", params.endpoint_metrics ? "enabled" : "disabled"),
         [](gpt_params & params) {
@@ -1956,39 +1945,48 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             else { std::invalid_argument("invalid value"); }
         }
     ).set_examples({LLAMA_EXAMPLE_BENCH}));
-#ifndef LOG_DISABLE_LOGS
-    // TODO: make this looks less weird
-    add_opt(llama_arg(
-        {"--log-test"},
-        "Log test",
-        [](gpt_params &) { log_param_single_parse("--log-test"); }
-    ));
     add_opt(llama_arg(
         {"--log-disable"},
         "Log disable",
-        [](gpt_params &) { log_param_single_parse("--log-disable"); }
-    ));
-    add_opt(llama_arg(
-        {"--log-enable"},
-        "Log enable",
-        [](gpt_params &) { log_param_single_parse("--log-enable"); }
-    ));
-    add_opt(llama_arg(
-        {"--log-new"},
-        "Log new",
-        [](gpt_params &) { log_param_single_parse("--log-new"); }
-    ));
-    add_opt(llama_arg(
-        {"--log-append"},
-        "Log append",
-        [](gpt_params &) { log_param_single_parse("--log-append"); }
+        [](gpt_params &) {
+            gpt_log_pause(gpt_log_main());
+        }
     ));
     add_opt(llama_arg(
         {"--log-file"}, "FNAME",
-        "Log file",
-        [](gpt_params &, const std::string & value) { log_param_pair_parse(false, "--log-file", value); }
+        "Log to file",
+        [](gpt_params &, const std::string & value) {
+            gpt_log_set_file(gpt_log_main(), value.c_str());
+        }
     ));
-#endif // LOG_DISABLE_LOGS
+    add_opt(llama_arg(
+        {"--log-colors"},
+        "Enable colored logging",
+        [](gpt_params &) {
+            gpt_log_set_colors(gpt_log_main(), true);
+        }
+    ).set_env("LLAMA_LOG_COLORS"));
+    add_opt(llama_arg(
+        {"-lv", "--log-verbose"},
+        "Set verbosity level to infinity (i.e. log all messages, useful for debugging)",
+        [](gpt_params &) {
+            gpt_log_set_verbosity_thold(INT_MAX);
+        }
+    ));
+    add_opt(llama_arg(
+        {"--log-verbosity"}, "THOLD",
+        "Set the verbosity threshold. Messages with a higher verbosity will be ignored.",
+        [](gpt_params &, int value) {
+            gpt_log_set_verbosity_thold(value);
+        }
+    ).set_env("LLAMA_LOG_VERBOSITY"));
+    add_opt(llama_arg(
+        {"--log-timestamps"},
+        "Enable timestamps in log messages",
+        [](gpt_params &) {
+            gpt_log_set_timestamps(gpt_log_main(), true);
+        }
+    ).set_env("LLAMA_LOG_TIMESTAMPS"));
 
     return ctx_arg;
 }

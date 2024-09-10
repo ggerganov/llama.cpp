@@ -18074,9 +18074,9 @@ struct llama_model * llama_load_model_from_file(
             unsigned percentage = (unsigned) (100 * progress);
             while (percentage > *cur_percentage_p) {
                 *cur_percentage_p = percentage;
-                LLAMA_LOG_INFO(".");
+                LLAMA_LOG(".");
                 if (percentage >= 100) {
-                    LLAMA_LOG_INFO("\n");
+                    LLAMA_LOG("\n");
                 }
             }
             return true;
@@ -20781,8 +20781,8 @@ static void llama_log_internal_v(ggml_log_level level, const char * format, va_l
     if (len < 128) {
         g_state.log_callback(level, buffer, g_state.log_callback_user_data);
     } else {
-        char* buffer2 = new char[len+1];
-        vsnprintf(buffer2, len+1, format, args_copy);
+        char * buffer2 = new char[len + 1];
+        vsnprintf(buffer2, len + 1, format, args_copy);
         buffer2[len] = 0;
         g_state.log_callback(level, buffer2, g_state.log_callback_user_data);
         delete[] buffer2;
