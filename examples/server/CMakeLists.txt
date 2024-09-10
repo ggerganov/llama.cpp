@@ -25,6 +25,7 @@ set(PUBLIC_ASSETS
     theme-snowstorm.css
     index.html
     index-new.html
+    loading.html
     index.js
     completion.js
     system-prompts.js

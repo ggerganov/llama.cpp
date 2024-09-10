@@ -1430,6 +1430,7 @@ llama-server: \
 	examples/server/theme-snowstorm.css.hpp \
 	examples/server/index.html.hpp \
 	examples/server/index-new.html.hpp \
+	examples/server/loading.html.hpp \
 	examples/server/index.js.hpp \
 	examples/server/completion.js.hpp \
 	examples/server/system-prompts.js.hpp \
