@@ -4081,7 +4081,7 @@ class ExaoneModel(Model):
 
 
 @Model.register("GraniteForCausalLM")
-class GraniteModel(Model):
+class GraniteModel(LlamaModel):
     """Conversion for IBM's GraniteForCausalLM"""
     model_arch = gguf.MODEL_ARCH.GRANITE
 
