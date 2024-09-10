@@ -220,7 +220,7 @@ static int load_imatrix(const std::string & imatrix_file, std::string & imatrix_
             }
         }
         if (getenv("LLAMA_TRACE")) {
-            printf("%s: loaded data (size = %6d, n_tokens = %6d) for '%s'\n", __func__, int(e.size()), int(max_count), name.c_str());
+            printf("%s: loaded data (size = %6d, n_tokens = %6d, n_chunks = %6d) for '%s'\n", __func__, int(e.size()), int(max_count), int(max_count / chunk_size), name.c_str());
         }
     }
 
