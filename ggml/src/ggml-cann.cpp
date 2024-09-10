@@ -1220,6 +1220,73 @@ ggml_backend_cann_buffer_type(int32_t device) {
     return &ggml_backend_cann_buffer_types[device];
 }
 
+// host buffer type
+
+GGML_CALL static const char * ggml_backend_cann_host_buffer_type_name(ggml_backend_buffer_type_t buft) {
+    return "CANN_Host";
+
+    GGML_UNUSED(buft);
+}
+
+GGML_CALL static const char * ggml_backend_cann_host_buffer_name(ggml_backend_buffer_t buffer) {
+    return "CANN_Host";
+
+    GGML_UNUSED(buffer);
+}
+
+GGML_CALL static void ggml_backend_cann_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
+    ACL_CHECK(aclrtFreeHost(buffer->context)); 
+}
+
+static void * ggml_cann_host_malloc(size_t size) {
+    if (getenv("GGML_CANN_NO_PINNED") != nullptr) {
+        return nullptr;
+    }
+
+    void * ptr = nullptr;
+    aclError err = aclrtMallocHost((void **) &ptr, size); 
+    if (err != ACL_SUCCESS) { 
+
+        GGML_CANN_LOG_WARN("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
+                           size / 1024.0 / 1024.0, aclGetRecentErrMsg());
+        return nullptr;
+    }
+
+    return ptr;
+}
+
+GGML_CALL static ggml_backend_buffer_t ggml_backend_cann_host_buffer_type_alloc_buffer(ggml_backend_buffer_type_t buft, size_t size) {
+    void * ptr = ggml_cann_host_malloc(size);
+
+    if (ptr == nullptr) {
+        // fallback to cpu buffer
+        return ggml_backend_buft_alloc_buffer(ggml_backend_cpu_buffer_type(), size);
+    }
+
+    ggml_backend_buffer_t buffer = ggml_backend_cpu_buffer_from_ptr(ptr, size);
+    buffer->buft = buft;
+    buffer->iface.get_name = ggml_backend_cann_host_buffer_name;
+    buffer->iface.free_buffer = ggml_backend_cann_host_buffer_free_buffer;
+
+    return buffer;
+}
+
+GGML_CALL ggml_backend_buffer_type_t ggml_backend_cann_host_buffer_type() {
+    static struct ggml_backend_buffer_type ggml_backend_cann_buffer_type_host = {
+        /* .iface    = */ {
+            /* .get_name         = */ ggml_backend_cann_host_buffer_type_name,
+            /* .alloc_buffer     = */ ggml_backend_cann_host_buffer_type_alloc_buffer,
+            /* .get_alignment    = */ ggml_backend_cpu_buffer_type()->iface.get_alignment,
+            /* .get_max_size     = */ NULL, // defaults to SIZE_MAX
+            /* .get_alloc_size   = */ ggml_backend_cpu_buffer_type()->iface.get_alloc_size,
+            /* .is_host          = */ ggml_backend_cpu_buffer_type()->iface.is_host,
+        },
+        /* .context  = */ nullptr,
+    };
+
+    return &ggml_backend_cann_buffer_type_host;
+}
+
 /**
  * @brief Computes the forward operation for a given tensor using CANN
  * operations.
