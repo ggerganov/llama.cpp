@@ -1505,6 +1505,8 @@ struct llama_sampler * llama_sampler_init_penalties(
         ignore_eos = false;
     }
 
+    penalty_last_n = std::max(penalty_last_n, 0);
+
     return new llama_sampler {
         /* .iface = */ &llama_sampler_penalties_i,
         /* .ctx   = */ new llama_sampler_penalties {
