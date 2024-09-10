@@ -6,6 +6,10 @@
 #include "ggml-metal.h"
 #endif
 
+#ifdef GGML_USE_VULKAN
+#include "ggml-vulkan.h"
+#endif
+
 #include "ggml-rpc.h"
 #ifdef _WIN32
 #  include <windows.h>
@@ -79,6 +83,12 @@ static ggml_backend_t create_backend() {
     if (!backend) {
         fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
     }
+#elif GGML_USE_VULKAN
+    fprintf(stderr, "%s: using Vulkan backend\n", __func__);
+    backend = ggml_backend_vk_init(0); // init device 0
+    if (!backend) {
+        fprintf(stderr, "%s: ggml_backend_vulkan_init() failed\n", __func__);
+    }
 #endif
 
     // if there aren't GPU Backends fallback to CPU backend
@@ -92,6 +102,8 @@ static ggml_backend_t create_backend() {
 static void get_backend_memory(size_t * free_mem, size_t * total_mem) {
 #ifdef GGML_USE_CUDA
     ggml_backend_cuda_get_device_memory(0, free_mem, total_mem);
+#elif GGML_USE_VULKAN
+    ggml_backend_vk_get_device_memory(0, free_mem, total_mem);
 #else
     #ifdef _WIN32
         MEMORYSTATUSEX status;
