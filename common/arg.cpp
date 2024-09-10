@@ -1433,9 +1433,9 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             else {
                 throw std::invalid_argument("invalid value");
             }
-#ifndef GGML_USE_CUDA_SYCL_VULKAN
+#if (!defined(GGML_USE_CUDA) && !defined(GGML_USE_SYCL) && !defined(GGML_USE_VULKAN))
             fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL_VULKAN
+#endif
         }
     ));
     add_opt(llama_arg(
@@ -1460,9 +1460,9 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
                         params.tensor_split[i] = 0.0f;
                 }
             }
-#ifndef GGML_USE_CUDA_SYCL_VULKAN
+#if (!defined(GGML_USE_CUDA) && !defined(GGML_USE_SYCL) && !defined(GGML_USE_VULKAN))
             fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting a tensor split has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL_VULKAN
+#endif
         }
     ));
     add_opt(llama_arg(
@@ -1470,9 +1470,9 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         format("the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu),
         [](gpt_params & params, int value) {
             params.main_gpu = value;
-#ifndef GGML_USE_CUDA_SYCL_VULKAN
+#if (!defined(GGML_USE_CUDA) && !defined(GGML_USE_SYCL) && !defined(GGML_USE_VULKAN))
             fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the main GPU has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL_VULKAN
+#endif
         }
     ));
     add_opt(llama_arg(
