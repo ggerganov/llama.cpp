@@ -235,7 +235,6 @@ void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
     // avoid writing imatrix entries that do not have full data
     // this can happen with MoE models where some of the experts end up not being exercised by the provided training data
 
-    int n_entries = 0;
     std::vector<std::string> to_store;
     size_t data_size = 0;
 
@@ -269,7 +268,6 @@ void IMatrixCollector::save_imatrix(int32_t n_chunk) const {
             continue;
         }
 
-        n_entries++;
         to_store.push_back(kv.first);
         data_size += GGML_PAD(ggml_tensor_overhead() + sizeof(float) * kv.second.values.size(), GGML_MEM_ALIGN);
         data_size += GGML_PAD(ggml_tensor_overhead() + sizeof(float) * kv.second.counts.size(), GGML_MEM_ALIGN);
