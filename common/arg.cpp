@@ -173,7 +173,6 @@ static bool gpt_params_parse_ex(int argc, char ** argv, gpt_params_context & ctx
     std::string arg;
     const std::string arg_prefix = "--";
     gpt_params & params = ctx_arg.params;
-    gpt_sampler_params & sparams = params.sparams;
 
     std::unordered_map<std::string, llama_arg *> arg_to_options;
     for (auto & opt : ctx_arg.options) {
@@ -281,10 +280,6 @@ static bool gpt_params_parse_ex(int argc, char ** argv, gpt_params_context & ctx
     if (!params.kv_overrides.empty()) {
         params.kv_overrides.emplace_back();
         params.kv_overrides.back().key[0] = 0;
-    }
-
-    if (sparams.seed == LLAMA_DEFAULT_SEED) {
-        sparams.seed = time(NULL);
     }
 
     return true;
@@ -823,7 +818,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         [](gpt_params & params) {
             params.special = true;
         }
-    ).set_examples({LLAMA_EXAMPLE_MAIN}));
+    ).set_examples({LLAMA_EXAMPLE_MAIN, LLAMA_EXAMPLE_SERVER}));
     add_opt(llama_arg(
         {"-cnv", "--conversation"},
         format(
@@ -909,7 +904,7 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
     ).set_sparam());
     add_opt(llama_arg(
         {"-s", "--seed"}, "SEED",
-        format("RNG seed (default: %d, use random seed for < 0)", params.sparams.seed),
+        format("RNG seed (default: %u, use random seed for %u)", params.sparams.seed, LLAMA_DEFAULT_SEED),
         [](gpt_params & params, const std::string & value) {
             params.sparams.seed = std::stoul(value);
         }
@@ -1422,20 +1417,18 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
                 params.split_mode = LLAMA_SPLIT_MODE_NONE;
             } else if (arg_next == "layer") {
                 params.split_mode = LLAMA_SPLIT_MODE_LAYER;
-            }
-            else if (arg_next == "row") {
+            } else if (arg_next == "row") {
 #ifdef GGML_USE_SYCL
                 fprintf(stderr, "warning: The split mode value:[row] is not supported by llama.cpp with SYCL. It's developing.\nExit!\n");
                 exit(1);
 #endif // GGML_USE_SYCL
                 params.split_mode = LLAMA_SPLIT_MODE_ROW;
-            }
-            else {
+            } else {
                 throw std::invalid_argument("invalid value");
             }
-#ifndef GGML_USE_CUDA_SYCL_VULKAN
-            fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the split mode has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL_VULKAN
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting the split mode has no effect.\n");
+            }
         }
     ));
     add_opt(llama_arg(
@@ -1455,14 +1448,14 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
             }
             for (size_t i = 0; i < llama_max_devices(); ++i) {
                 if (i < split_arg.size()) {
-                        params.tensor_split[i] = std::stof(split_arg[i]);
+                    params.tensor_split[i] = std::stof(split_arg[i]);
                 } else {
-                        params.tensor_split[i] = 0.0f;
+                    params.tensor_split[i] = 0.0f;
                 }
             }
-#ifndef GGML_USE_CUDA_SYCL_VULKAN
-            fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting a tensor split has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL_VULKAN
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting a tensor split has no effect.\n");
+            }
         }
     ));
     add_opt(llama_arg(
@@ -1470,9 +1463,9 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         format("the GPU to use for the model (with split-mode = none), or for intermediate results and KV (with split-mode = row) (default: %d)", params.main_gpu),
         [](gpt_params & params, int value) {
             params.main_gpu = value;
-#ifndef GGML_USE_CUDA_SYCL_VULKAN
-            fprintf(stderr, "warning: llama.cpp was compiled without CUDA/SYCL/Vulkan. Setting the main GPU has no effect.\n");
-#endif // GGML_USE_CUDA_SYCL_VULKAN
+            if (!llama_supports_gpu_offload()) {
+                fprintf(stderr, "warning: llama.cpp was compiled without support for GPU offload. Setting the main GPU has no effect.\n");
+            }
         }
     ));
     add_opt(llama_arg(

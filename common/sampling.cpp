@@ -310,6 +310,10 @@ llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context 
     return cur_p.data[cur_p.selected].id;
 }
 
+uint32_t gpt_sampler_get_seed(const struct gpt_sampler * gsmpl) {
+    return llama_sampler_get_seed(gsmpl->chain);
+}
+
 // helpers
 
 llama_token_data_array * gpt_sampler_get_candidates(struct gpt_sampler * gsmpl) {
