@@ -637,7 +637,7 @@ int main(int argc, char ** argv) {
     g_collector.save_imatrix();
 
     LOG_TEE("\n");
-    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
+    llama_perf_print_context(ctx);
 
     llama_free(ctx);
     llama_free_model(model);

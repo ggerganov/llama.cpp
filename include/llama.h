@@ -1169,9 +1169,7 @@ extern "C" {
     // NOTE: Used by llama.cpp examples, avoid using in third-party apps. Instead, do your own performance measurements.
     //
 
-    // performance timing information
-    struct llama_perf_data {
-        // llama_context
+    struct llama_perf_data_context {
         double t_start_ms;
         double t_load_ms;
         double t_p_eval_ms;
@@ -1179,22 +1177,22 @@ extern "C" {
 
         int32_t n_p_eval;
         int32_t n_eval;
+    };
 
-        // llama_sampler_chain
+    struct llama_perf_data_sampler {
         double t_sample_ms;
 
         int32_t n_sample;
     };
 
-    enum llama_perf_type {
-        LLAMA_PERF_TYPE_CONTEXT       = 0,
-        LLAMA_PERF_TYPE_SAMPLER_CHAIN = 1,
-    };
+    LLAMA_API struct llama_perf_data_context llama_perf_context(const struct llama_context * ctx);
+    LLAMA_API struct llama_perf_data_sampler llama_perf_sampler(const struct llama_sampler * chain);
 
-    LLAMA_API struct llama_perf_data llama_perf_get(const void * ctx, enum llama_perf_type type);
+    LLAMA_API void llama_perf_print_context(const struct llama_context * ctx);
+    LLAMA_API void llama_perf_print_sampler(const struct llama_sampler * chain);
 
-    LLAMA_API void llama_perf_print(const void * ctx, enum llama_perf_type type);
-    LLAMA_API void llama_perf_reset(      void * ctx, enum llama_perf_type type);
+    LLAMA_API void llama_perf_reset_context(struct llama_context * ctx);
+    LLAMA_API void llama_perf_reset_sampler(struct llama_sampler * chain);
 
     LLAMA_API void llama_perf_dump_yaml(FILE * stream, const struct llama_context * ctx);
 

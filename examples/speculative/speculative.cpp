@@ -616,7 +616,7 @@ int main(int argc, char ** argv) {
 
     LOG_TEE("\ndraft:\n\n");
     // TODO: print sampling/grammar timings for all drafts
-    llama_perf_print(ctx_dft, LLAMA_PERF_TYPE_CONTEXT);
+    llama_perf_print_context(ctx_dft);
 
     LOG_TEE("\ntarget:\n\n");
     gpt_perf_print(ctx_tgt, smpl);
