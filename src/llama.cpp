@@ -6399,6 +6399,11 @@ static void llm_load_vocab(
                         )
                    ) {
                     vocab.special_eot_id = t.second;
+                    if ((vocab.id_to_token[t.second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                        LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                            __func__, t.first.c_str());
+                        vocab.id_to_token[t.second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                    }
                     break;
                 }
             }
@@ -6412,6 +6417,11 @@ static void llm_load_vocab(
             const auto & t = vocab.token_to_id.find("<|eom_id|>");
             if (t != vocab.token_to_id.end()) {
                 vocab.special_eom_id = t->second;
+                if ((vocab.id_to_token[t->second].attr & LLAMA_TOKEN_ATTR_CONTROL) == 0) {
+                    LLAMA_LOG_WARN("%s: control-looking token: '%s' was not control-type; this is probably a bug in the model. its type will be overridden\n",
+                        __func__, t->first.c_str());
+                    vocab.id_to_token[t->second].attr = LLAMA_TOKEN_ATTR_CONTROL;
+                }
             }
         }
     }
@@ -9248,7 +9258,7 @@ static struct ggml_tensor * llm_build_copy_mask_state(
     // FIXME: zero-out NANs?
     states = ggml_mul(ctx, states, state_mask);
 
-    // copy states which won't be changed further (between n_seqs and n_rs)
+    // copy states which won't be changed further (between n_seqs and n_kv)
     ggml_build_forward_expand(graph,
         ggml_cpy(ctx,
             ggml_view_1d(ctx, states, n_state*(n_kv - n_seqs), n_seqs*n_state*ggml_element_size(states)),
@@ -16067,7 +16077,7 @@ static int llama_decode_internal(
     }
 
     for (uint32_t i = 0; i < n_tokens_all; ++i) {
-        if (batch_all.token[i] < 0) {
+        if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= lctx.model.vocab.n_vocab) {
             LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch_all.token[i]);
             return -1;
         }
@@ -16366,7 +16376,7 @@ static int llama_encode_internal(
     }
 
     for (uint32_t i = 0; i < n_tokens; ++i) {
-        if (batch.token[i] < 0) {
+        if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= lctx.model.vocab.n_vocab) {
             LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch.token[i]);
             return -1;
         }
@@ -17520,6 +17530,8 @@ static void llama_model_quantize_internal(const std::string & fname_inp, const s
         quantize &= name.find("time_mix_first.weight") == std::string::npos;
         quantize &= name.find("time_mix_w1.weight") == std::string::npos;
         quantize &= name.find("time_mix_w2.weight") == std::string::npos;
+        quantize &= name.find("time_mix_decay_w1.weight") == std::string::npos;
+        quantize &= name.find("time_mix_decay_w2.weight") == std::string::npos;
 
         // do not quantize relative position bias (T5)
         quantize &= name.find("attn_rel_b.weight") == std::string::npos;

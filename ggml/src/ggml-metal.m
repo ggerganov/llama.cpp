@@ -17,8 +17,8 @@
 #define GGML_METAL_LOG_WARN(...)
 #define GGML_METAL_LOG_ERROR(...)
 #else
-#define GGML_METAL_LOG_INFO(...)  ggml_metal_log(GGML_LOG_LEVEL_INFO, __VA_ARGS__)
-#define GGML_METAL_LOG_WARN(...)  ggml_metal_log(GGML_LOG_LEVEL_WARN, __VA_ARGS__)
+#define GGML_METAL_LOG_INFO(...)  ggml_metal_log(GGML_LOG_LEVEL_INFO,  __VA_ARGS__)
+#define GGML_METAL_LOG_WARN(...)  ggml_metal_log(GGML_LOG_LEVEL_WARN,  __VA_ARGS__)
 #define GGML_METAL_LOG_ERROR(...) ggml_metal_log(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
 #endif
 
@@ -799,8 +799,9 @@ static bool ggml_metal_supports_op(const struct ggml_backend_metal_context * ctx
             return ctx->support_simdgroup_reduction;
         case GGML_OP_NORM:
         case GGML_OP_ROPE:
-        case GGML_OP_IM2COL:
             return true;
+        case GGML_OP_IM2COL:
+            return op->src[0]->type == GGML_TYPE_F16;
         case GGML_OP_POOL_1D:
         case GGML_OP_POOL_2D:
             return false;
@@ -3038,8 +3039,7 @@ static enum ggml_status ggml_metal_graph_compute(
         if (status != MTLCommandBufferStatusCompleted) {
             GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, i, status);
             if (status == MTLCommandBufferStatusError) {
-                NSString * error_code = [command_buffer error].localizedDescription;
-                GGML_METAL_LOG_INFO("error: %s\n", [error_code UTF8String]);
+                GGML_METAL_LOG_INFO("error: %s\n", [[command_buffer error].localizedDescription UTF8String]);
             }
 
             return GGML_STATUS_FAILED;

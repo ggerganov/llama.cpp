@@ -302,6 +302,8 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_FIRST,
                             gguf.MODEL_TENSOR.TIME_MIX_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
+                            gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
+                            gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
                         )
                     )
                     or not new_name.endswith(".weight")

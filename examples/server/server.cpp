@@ -1,6 +1,8 @@
 #include "utils.hpp"
 
+#include "arg.h"
 #include "common.h"
+#include "sampling.h"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
 
@@ -613,7 +615,7 @@ struct server_context {
 
     gpt_params params;
 
-    llama_batch batch;
+    llama_batch batch = {};
 
     bool clean_kv_cache = true;
     bool add_bos_token  = true;
@@ -1264,6 +1266,7 @@ struct server_context {
             {"n_predict",                 slot.n_predict},     // Server configured n_predict
             {"model",                     params.model_alias},
             {"seed",                      slot.sparams.seed},
+            {"seed_cur",                  slot.smpl ? gpt_sampler_get_seed(slot.smpl) : 0},
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
@@ -2423,8 +2426,7 @@ int main(int argc, char ** argv) {
     // own arguments required by this example
     gpt_params params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_SERVER);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
 

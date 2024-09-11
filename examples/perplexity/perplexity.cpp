@@ -1,18 +1,19 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
+#include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <fstream>
+#include <mutex>
+#include <random>
 #include <sstream>
 #include <thread>
-#include <mutex>
-#include <atomic>
 #include <vector>
-#include <array>
-#include <fstream>
-#include <sstream>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -1967,8 +1968,7 @@ int main(int argc, char ** argv) {
     params.n_ctx = 512;
     params.logits_all = true;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_PERPLEXITY);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PERPLEXITY)) {
         return 1;
     }
 
@@ -2006,8 +2006,6 @@ int main(int argc, char ** argv) {
     }
 
     print_build_info();
-
-    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     llama_backend_init();
     llama_numa_init(params.numa);

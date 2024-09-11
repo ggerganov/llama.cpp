@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
@@ -79,8 +80,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_EMBEDDING);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EMBEDDING)) {
         return 1;
     }
 
@@ -89,8 +89,6 @@ int main(int argc, char ** argv) {
     params.n_ubatch = params.n_batch;
 
     print_build_info();
-
-    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     llama_backend_init();
     llama_numa_init(params.numa);

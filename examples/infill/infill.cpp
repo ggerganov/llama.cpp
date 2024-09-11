@@ -1,6 +1,7 @@
+#include "arg.h"
 #include "common.h"
-
 #include "console.h"
+#include "sampling.h"
 #include "llama.h"
 
 #include <cassert>
@@ -105,8 +106,7 @@ int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_INFILL);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_INFILL)) {
         return 1;
     }
 
@@ -158,8 +158,6 @@ int main(int argc, char ** argv) {
     }
 
     print_build_info();
-
-    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init();
@@ -301,16 +299,14 @@ int main(int argc, char ** argv) {
             LOG_TEE("Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
+    smpl = gpt_sampler_init(model, sparams);
+
+    LOG_TEE("sampling seed: %u\n", gpt_sampler_get_seed(smpl));
     LOG_TEE("sampling: \n%s\n", sparams.print().c_str());
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     LOG_TEE("\n\n");
 
     LOG_TEE("\n#####  Infill mode  #####\n\n");
-    if (params.infill) {
-        printf("\n************\n");
-        printf("no need to specify '--infill', always running infill\n");
-        printf("************\n\n");
-    }
     if (params.interactive) {
         const char *control_message;
         if (params.multiline_input) {
@@ -344,8 +340,6 @@ int main(int argc, char ** argv) {
     console::set_display(console::prompt);
 
     std::vector<llama_token> embd;
-
-    smpl = gpt_sampler_init(model, sparams);
 
     while (n_remain != 0 || params.interactive) {
         // predict

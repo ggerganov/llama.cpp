@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -401,8 +402,7 @@ static void print_usage(int, char ** argv) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
         return 1;
     }
 

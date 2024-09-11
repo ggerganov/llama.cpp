@@ -414,8 +414,6 @@ Java_android_llama_cpp_LLamaAndroid_completion_1loop(
     // sample the most likely token
     const auto new_token_id = llama_sampler_sample(sampler, context, -1);
 
-    llama_sampler_accept(sampler, new_token_id);
-
     const auto n_cur = env->CallIntMethod(intvar_ncur, la_int_var_value);
     if (llama_token_is_eog(model, new_token_id) || n_cur == n_len) {
         return nullptr;

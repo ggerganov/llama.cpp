@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
@@ -10,8 +11,7 @@ int main(int argc, char ** argv) {
     params.prompt = "The quick brown fox";
     params.sparams.seed = 1234;
 
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_COMMON);
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
 
@@ -74,8 +74,6 @@ int main(int argc, char ** argv) {
         auto next_token     = llama_sampler_sample(smpl, ctx, -1);
         auto next_token_str = llama_token_to_piece(ctx, next_token);
 
-        llama_sampler_accept(smpl, next_token);
-
         printf("%s", next_token_str.c_str());
         result0 += next_token_str;
 
@@ -131,8 +129,6 @@ int main(int argc, char ** argv) {
     for (auto i = 0; i < params.n_predict; i++) {
         auto next_token     = llama_sampler_sample(smpl2, ctx2, -1);
         auto next_token_str = llama_token_to_piece(ctx2, next_token);
-
-        llama_sampler_accept(smpl2, next_token);
 
         printf("%s", next_token_str.c_str());
         result1 += next_token_str;
@@ -221,8 +217,6 @@ int main(int argc, char ** argv) {
     for (auto i = 0; i < params.n_predict; i++) {
         auto next_token     = llama_sampler_sample(smpl3, ctx3, -1);
         auto next_token_str = llama_token_to_piece(ctx3, next_token);
-
-        llama_sampler_accept(smpl3, next_token);
 
         printf("%s", next_token_str.c_str());
         result2 += next_token_str;

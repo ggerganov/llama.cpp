@@ -101,6 +101,10 @@ struct ring_buffer {
     }
 
     void push_back(const T & value) {
+        if (capacity == 0) {
+            throw std::runtime_error("ring buffer: capacity is zero");
+        }
+
         if (sz == capacity) {
             // advance the start when buffer is full
             first = (first + 1) % capacity;

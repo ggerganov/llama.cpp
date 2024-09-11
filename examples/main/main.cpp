@@ -1,6 +1,7 @@
+#include "arg.h"
 #include "common.h"
-
 #include "console.h"
+#include "sampling.h"
 #include "llama.h"
 
 #include <cassert>
@@ -138,9 +139,7 @@ static std::string chat_add_and_format(struct llama_model * model, std::vector<l
 int main(int argc, char ** argv) {
     gpt_params params;
     g_params = &params;
-    auto options = gpt_params_parser_init(params, LLAMA_EXAMPLE_MAIN, print_usage);
-
-    if (!gpt_params_parse(argc, argv, params, options)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_MAIN, print_usage)) {
         return 1;
     }
 
@@ -191,8 +190,6 @@ int main(int argc, char ** argv) {
     }
 
     print_build_info();
-
-    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
 
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init();
@@ -471,8 +468,10 @@ int main(int argc, char ** argv) {
         exit(1);
     }
 
+    LOG_TEE("sampling seed: %u\n", gpt_sampler_get_seed(smpl));
     LOG_TEE("sampling params: \n%s\n", sparams.print().c_str());
-    LOG_TEE(" sampler constr: \n%s\n", gpt_sampler_print(smpl).c_str());
+    LOG_TEE("sampler constr: \n%s\n", gpt_sampler_print(smpl).c_str());
+
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 
     // group-attention state
