@@ -644,20 +644,6 @@ extern "C" {
 
     typedef struct ggml_threadpool * ggml_threadpool_t;
 
-    // the compute plan that needs to be prepared for ggml_graph_compute()
-    // since https://github.com/ggerganov/ggml/issues/287
-    struct ggml_cplan {
-        size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
-        uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
-
-        int n_threads;
-        struct ggml_threadpool * threadpool;
-
-        // abort ggml_graph_compute when true
-        ggml_abort_callback abort_callback;
-        void *              abort_callback_data;
-    };
-
     // scratch buffer
     struct ggml_scratch {
         size_t offs;
@@ -2047,7 +2033,6 @@ extern "C" {
     GGML_API void ggml_build_forward_expand (struct ggml_cgraph * cgraph, struct ggml_tensor * tensor);
     GGML_API void ggml_build_backward_expand(struct ggml_context * ctx, struct ggml_cgraph * gf, struct ggml_cgraph * gb, bool keep);
 
-    // graph allocation in a context
     GGML_API struct ggml_cgraph * ggml_new_graph       (struct ggml_context * ctx); // size = GGML_DEFAULT_GRAPH_SIZE, grads = false
     GGML_API struct ggml_cgraph * ggml_new_graph_custom(struct ggml_context * ctx, size_t size, bool grads);
     GGML_API struct ggml_cgraph * ggml_graph_dup       (struct ggml_context * ctx, struct ggml_cgraph * cgraph);
@@ -2065,26 +2050,72 @@ extern "C" {
     GGML_API size_t ggml_graph_overhead(void);
     GGML_API size_t ggml_graph_overhead_custom(size_t size, bool grads);
 
+    // TODO: move these declarations above before the ggml_graph API and reorder the implementation order in ggml.c
+    //       (unless the code has been moved to a separate source file)
     GGML_API struct ggml_threadpool_params ggml_threadpool_params_default(int n_threads);
     GGML_API void                          ggml_threadpool_params_init   (struct ggml_threadpool_params * p, int n_threads);
     GGML_API bool                          ggml_threadpool_params_match  (const struct ggml_threadpool_params * p0, const struct ggml_threadpool_params * p1);
-    GGML_API struct ggml_threadpool *      ggml_threadpool_new          (struct ggml_threadpool_params  * params);
-    GGML_API void                          ggml_threadpool_free         (struct ggml_threadpool * threadpool);
-    GGML_API int                           ggml_threadpool_get_n_threads(struct ggml_threadpool * threadpool);
-    GGML_API void                          ggml_threadpool_pause        (struct ggml_threadpool * threadpool);
-    GGML_API void                          ggml_threadpool_resume       (struct ggml_threadpool * threadpool);
+    GGML_API struct ggml_threadpool *      ggml_threadpool_new           (struct ggml_threadpool_params * params);
+    GGML_API void                          ggml_threadpool_free          (struct ggml_threadpool * threadpool);
+    GGML_API int                           ggml_threadpool_get_n_threads (struct ggml_threadpool * threadpool);
+    GGML_API void                          ggml_threadpool_pause         (struct ggml_threadpool * threadpool);
+    GGML_API void                          ggml_threadpool_resume        (struct ggml_threadpool * threadpool);
 
-    // ggml_graph_plan() has to be called before ggml_graph_compute()
-    // when plan.work_size > 0, caller must allocate memory for plan.work_data
-    GGML_API struct ggml_cplan ggml_graph_plan(
-                  const struct ggml_cgraph * cgraph,
-                                       int   n_threads, /* = GGML_DEFAULT_N_THREADS */
-                    struct ggml_threadpool * threadpool /* = NULL */ );
-    GGML_API enum ggml_status  ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan);
+    // =================================================================================================
+    // CPU-only API for ggml_cgraph
+    //
+    // TODO: move as a separate backend
+    // NOTE: avoid using, will be removed
+    //
 
-    // same as ggml_graph_compute() but the work data is allocated as a part of the context
-    // note: the drawback of this API is that you must have ensured that the context has enough memory for the work data
-    GGML_API enum ggml_status  ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads);
+    // loops through the graph and determines:
+    //
+    // - work size needed for CPU computation
+    // - number of threads to start
+    //
+    GGML_API enum ggml_status ggml_graph_prepare(
+                struct ggml_cgraph * cgraph,
+                               int   n_threads, /* = GGML_DEFAULT_N_THREADS */
+            struct ggml_threadpool * threadpool /* = NULL */ );
+
+    // get the estimated work size for the graph from ggml_graph_prepare()
+    GGML_API size_t ggml_graph_work_size(const struct ggml_cgraph * cgraph);
+
+    // if ctx is NULL, the work buffer will be dynamically allocated. in this case, call ggml_graph_work_free() to free the buffer
+    // otherwise, the work buffer will be allocated in the context. no need to free it
+    GGML_API enum ggml_status ggml_graph_work_init(struct ggml_cgraph * cgraph, struct ggml_context * ctx);
+    GGML_API void             ggml_graph_work_free(struct ggml_cgraph * cgraph);
+
+    // note: call ggml_graph_prepare() and ggml_graph_work_init() first
+    //
+    // sample usages:
+    //
+    //   - no dynamic allocations:
+    //
+    //      ... prepare ggml_context ctx ...
+    //
+    //      ggml_graph_prepare  (cgraph, n_threads, threadpool);
+    //      ggml_graph_work_init(cgraph, ctx);
+    //
+    //      ggml_graph_compute  (cgraph); // can call many times
+    //
+    //      // no need to call ggml_graph_work_free() because it is allocated in ctx
+    //
+    //  - dynamic allocations:
+    //
+    //      ggml_graph_prepare  (cgraph, n_threads, threadpool);
+    //      ggml_graph_work_init(cgraph, NULL); // will allocate memory
+    //
+    //      ggml_graph_compute  (cgraph); // can call many times
+    //
+    //      ggml_graph_work_free(cgraph);
+    //
+    GGML_API enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph);
+
+    // end of CPU-only API
+    // =================================================================================================
+
+    GGML_API void ggml_graph_set_abort_callback(struct ggml_cgraph * cgraph, ggml_abort_callback abort_callback, void * abort_data);
 
     GGML_API struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name);
 
@@ -2107,6 +2138,7 @@ extern "C" {
             struct ggml_cgraph    * gb_tmp,
             struct ggml_tensor  * * checkpoints,
             int                     n_checkpoints);
+
     //
     // optimization
     //

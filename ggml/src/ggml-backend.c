@@ -751,8 +751,10 @@ GGML_CALL static ggml_backend_buffer_type_t ggml_backend_cpu_get_default_buffer_
     GGML_UNUSED(backend);
 }
 
+// TODO: this struct should no longer be needed
+//       instead, the new ggml_graph_work_init() + ggml_graph_work_free() API should be enough to replace this
+//       for now, keeping the implementation as it is, to avoid making a mistake
 struct ggml_backend_plan_cpu {
-    struct ggml_cplan cplan;
     struct ggml_cgraph cgraph;
 };
 
@@ -761,19 +763,19 @@ GGML_CALL static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(gg
 
     struct ggml_backend_plan_cpu * cpu_plan = malloc(sizeof(struct ggml_backend_plan_cpu));
 
-    cpu_plan->cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads, cpu_ctx->threadpool);
     cpu_plan->cgraph = *cgraph; // FIXME: deep copy
+    ggml_graph_prepare(&cpu_plan->cgraph, cpu_ctx->n_threads, cpu_ctx->threadpool);
 
-    if (cpu_plan->cplan.work_size > 0) {
-        cpu_plan->cplan.work_data = malloc(cpu_plan->cplan.work_size);
-        if (cpu_plan->cplan.work_data == NULL) {
+    if (cpu_plan->cgraph.work_size > 0) {
+        cpu_plan->cgraph.work_data = malloc(cpu_plan->cgraph.work_size);
+        if (cpu_plan->cgraph.work_data == NULL) {
             free(cpu_plan);
             return NULL;
         }
     }
 
-    cpu_plan->cplan.abort_callback      = cpu_ctx->abort_callback;
-    cpu_plan->cplan.abort_callback_data = cpu_ctx->abort_callback_data;
+    cpu_plan->cgraph.abort_callback      = cpu_ctx->abort_callback;
+    cpu_plan->cgraph.abort_callback_data = cpu_ctx->abort_callback_data;
 
     return cpu_plan;
 }
@@ -781,7 +783,7 @@ GGML_CALL static ggml_backend_graph_plan_t ggml_backend_cpu_graph_plan_create(gg
 GGML_CALL static void ggml_backend_cpu_graph_plan_free(ggml_backend_t backend, ggml_backend_graph_plan_t plan) {
     struct ggml_backend_plan_cpu * cpu_plan = (struct ggml_backend_plan_cpu *)plan;
 
-    free(cpu_plan->cplan.work_data);
+    free(cpu_plan->cgraph.work_data);
     free(cpu_plan);
 
     GGML_UNUSED(backend);
@@ -790,7 +792,7 @@ GGML_CALL static void ggml_backend_cpu_graph_plan_free(ggml_backend_t backend, g
 GGML_CALL static enum ggml_status ggml_backend_cpu_graph_plan_compute(ggml_backend_t backend, ggml_backend_graph_plan_t plan) {
     struct ggml_backend_plan_cpu * cpu_plan = (struct ggml_backend_plan_cpu *)plan;
 
-    return ggml_graph_compute(&cpu_plan->cgraph, &cpu_plan->cplan);
+    return ggml_graph_compute(&cpu_plan->cgraph);
 
     GGML_UNUSED(backend);
 }
@@ -798,23 +800,24 @@ GGML_CALL static enum ggml_status ggml_backend_cpu_graph_plan_compute(ggml_backe
 GGML_CALL static enum ggml_status ggml_backend_cpu_graph_compute(ggml_backend_t backend, struct ggml_cgraph * cgraph) {
     struct ggml_backend_cpu_context * cpu_ctx = (struct ggml_backend_cpu_context *)backend->context;
 
-    struct ggml_cplan cplan = ggml_graph_plan(cgraph, cpu_ctx->n_threads, cpu_ctx->threadpool);
+    ggml_graph_prepare(cgraph, cpu_ctx->n_threads, cpu_ctx->threadpool);
 
-    if (cpu_ctx->work_size < cplan.work_size) {
+    if (cpu_ctx->work_size < cgraph->work_size) {
         free(cpu_ctx->work_data);
-        cpu_ctx->work_data = malloc(cplan.work_size);
+        cpu_ctx->work_data = malloc(cgraph->work_size);
         if (cpu_ctx->work_data == NULL) {
             cpu_ctx->work_size = 0;
             return GGML_STATUS_ALLOC_FAILED;
         }
-        cpu_ctx->work_size = cplan.work_size;
+        cpu_ctx->work_size = cgraph->work_size;
     }
-    cplan.work_data = cpu_ctx->work_data;
+    cgraph->work_data = cpu_ctx->work_data;
+    cgraph->work_own  = false; // always freed by ggml_backend_cpu_graph_plan_free
 
-    cplan.abort_callback      = cpu_ctx->abort_callback;
-    cplan.abort_callback_data = cpu_ctx->abort_callback_data;
+    cgraph->abort_callback      = cpu_ctx->abort_callback;
+    cgraph->abort_callback_data = cpu_ctx->abort_callback_data;
 
-    return ggml_graph_compute(cgraph, &cplan);
+    return ggml_graph_compute(cgraph);
 }
 
 GGML_CALL static bool ggml_backend_cpu_supports_op(ggml_backend_t backend, const struct ggml_tensor * op) {

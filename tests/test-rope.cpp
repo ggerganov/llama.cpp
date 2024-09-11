@@ -112,25 +112,12 @@ static struct ggml_tensor * get_random_tensor_f32(
     return result;
 }
 
-static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
-    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads, nullptr);
-
-    if (plan.work_size > 0) {
-        buf.resize(plan.work_size);
-        plan.work_data = buf.data();
-    }
-
-    ggml_graph_compute(graph, &plan);
-}
-
 int main(int /*argc*/, const char ** /*argv*/) {
     struct ggml_init_params params = {
         /* .mem_size   = */ 128*1024*1024,
         /* .mem_buffer = */ NULL,
         /* .no_alloc   = */ false,
     };
-
-    std::vector<uint8_t> work_buffer;
 
     struct ggml_context * ctx0 = ggml_init(params);
 
@@ -175,7 +162,10 @@ int main(int /*argc*/, const char ** /*argv*/) {
         ggml_build_forward_expand(gf, r1);
         ggml_build_forward_expand(gf, r2);
 
-        ggml_graph_compute_helper(work_buffer, gf, 4);
+        ggml_graph_prepare(gf, 4, nullptr);
+        ggml_graph_work_init(gf, nullptr);
+        ggml_graph_compute(gf);
+        ggml_graph_work_free(gf);
 
         // check that r1 and r2 are the same
         {

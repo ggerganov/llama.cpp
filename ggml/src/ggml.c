@@ -2001,7 +2001,6 @@ struct ggml_threadpool {
     ggml_cond_t  cond;        // cond.var for waiting for new work
 
     struct ggml_cgraph * cgraph;
-    struct ggml_cplan  * cplan;
 
     // synchronization primitives
     atomic_int n_graph;       // incremented when there is work to be done (i.e each graph)
@@ -19089,14 +19088,21 @@ struct ggml_cgraph * ggml_new_graph_custom(struct ggml_context * ctx, size_t siz
     assert(obj_size == (size_t)((char *)p - (char *)cgraph));
 
     *cgraph = (struct ggml_cgraph) {
-        /*.size         =*/ size,
-        /*.n_nodes      =*/ 0,
-        /*.n_leafs      =*/ 0,
-        /*.nodes        =*/ nodes_ptr,
-        /*.grads        =*/ grads_ptr,
-        /*.leafs        =*/ leafs_ptr,
-        /*.hash_table   =*/ { hash_size, hash_used, hash_keys_ptr },
-        /*.order        =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
+        /*.size                =*/ size,
+        /*.n_nodes             =*/ 0,
+        /*.n_leafs             =*/ 0,
+        /*.nodes               =*/ nodes_ptr,
+        /*.grads               =*/ grads_ptr,
+        /*.leafs               =*/ leafs_ptr,
+        /*.visited_hash_set    =*/ { hash_size, hash_used, hash_keys_ptr },
+        /*.order               =*/ GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT,
+        /*.work_own            =*/ false,
+        /*.work_size           =*/ 0,
+        /*.work_data           =*/ NULL,
+        /*.n_threads           =*/ GGML_DEFAULT_N_THREADS,
+        /*.threadpool          =*/ NULL,
+        /*.abort_callback      =*/ NULL,
+        /*.abort_callback_data =*/ NULL,
     };
 
     ggml_hash_set_reset(&cgraph->visited_hash_set);
@@ -19110,14 +19116,21 @@ struct ggml_cgraph * ggml_new_graph(struct ggml_context * ctx) {
 
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph0, int i0, int i1) {
     struct ggml_cgraph cgraph = {
-        /*.size         =*/ 0,
-        /*.n_nodes      =*/ i1 - i0,
-        /*.n_leafs      =*/ 0,
-        /*.nodes        =*/ cgraph0->nodes + i0,
-        /*.grads        =*/ cgraph0->grads ? cgraph0->grads + i0 : NULL,
-        /*.leafs        =*/ NULL,
-        /*.hash_table   =*/ { 0, NULL, NULL },
-        /*.order        =*/ cgraph0->order,
+        /*.size                =*/ 0,
+        /*.n_nodes             =*/ i1 - i0,
+        /*.n_leafs             =*/ 0,
+        /*.nodes               =*/ cgraph0->nodes + i0,
+        /*.grads               =*/ cgraph0->grads ? cgraph0->grads + i0 : NULL,
+        /*.leafs               =*/ NULL,
+        /*.hash_table          =*/ { 0, NULL, NULL },
+        /*.order               =*/ cgraph0->order,
+        /*.work_own            =*/ false,
+        /*.work_size           =*/ 0,
+        /*.work_data           =*/ NULL,
+        /*.n_threads           =*/ GGML_DEFAULT_N_THREADS,
+        /*.threadpool          =*/ NULL,
+        /*.abort_callback      =*/ NULL,
+        /*.abort_callback_data =*/ NULL,
     };
 
     return cgraph;
@@ -19753,11 +19766,10 @@ void ggml_threadpool_resume(struct ggml_threadpool * threadpool) {
 #endif
 }
 
-struct ggml_cplan ggml_graph_plan(
-          const struct ggml_cgraph * cgraph,
-                           int       n_threads,
-    struct ggml_threadpool * threadpool) {
-
+enum ggml_status ggml_graph_prepare(
+            struct ggml_cgraph * cgraph,
+                           int   n_threads,
+        struct ggml_threadpool * threadpool) {
     if (threadpool == NULL) {
         GGML_PRINT_DEBUG("Threadpool is not specified. Will create a disposable threadpool : n_threads %d\n", n_threads);
     }
@@ -19766,9 +19778,6 @@ struct ggml_cplan ggml_graph_plan(
     }
 
     size_t work_size = 0;
-
-    struct ggml_cplan cplan;
-    memset(&cplan, 0, sizeof(struct ggml_cplan));
 
     int max_tasks = 1;
 
@@ -19921,28 +19930,63 @@ struct ggml_cplan ggml_graph_plan(
         work_size += CACHE_LINE_SIZE*(n_threads);
     }
 
-    cplan.threadpool = threadpool;
-    cplan.n_threads  = MIN(max_tasks, n_threads);
-    cplan.work_size  = work_size;
-    cplan.work_data  = NULL;
+    cgraph->threadpool = threadpool;
+    cgraph->n_threads  = MIN(max_tasks, n_threads);
+    cgraph->work_size  = work_size;
 
-    return cplan;
+    ggml_graph_work_free(cgraph);
+
+    return GGML_STATUS_SUCCESS;
+}
+
+size_t ggml_graph_work_size(const struct ggml_cgraph * cgraph) {
+    return cgraph->work_size;
+}
+
+enum ggml_status ggml_graph_work_init(struct ggml_cgraph * cgraph, struct ggml_context * ctx) {
+    GGML_ASSERT(cgraph->n_threads > 0 && "call ggml_graph_prepare first");
+
+    ggml_graph_work_free(cgraph);
+
+    if (cgraph->work_size > 0) {
+        if (ctx == NULL) {
+            cgraph->work_data = GGML_ALIGNED_MALLOC(cgraph->work_size);
+            if (cgraph->work_data == NULL) {
+                return GGML_STATUS_ALLOC_FAILED;
+            }
+
+            cgraph->work_own = true;
+        } else {
+            struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_TYPE_WORK_BUFFER, cgraph->work_size);
+
+            cgraph->work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
+            cgraph->work_own  = false;
+        }
+    }
+
+    return GGML_STATUS_SUCCESS;
+}
+
+void ggml_graph_work_free(struct ggml_cgraph * cgraph) {
+    if (cgraph->work_data && cgraph->work_own) {
+        GGML_ALIGNED_FREE(cgraph->work_data);
+        cgraph->work_data = NULL;
+    }
 }
 
 static thread_ret_t ggml_graph_compute_thread(void * data) {
     struct ggml_compute_state * state = (struct ggml_compute_state *) data;
 
     const struct ggml_cgraph * cgraph = state->threadpool->cgraph;
-    const struct ggml_cplan  * cplan  = state->threadpool->cplan;
 
     set_numa_thread_affinity(state->ith);
 
     struct ggml_compute_params params = {
-        /*.ith       =*/ state->ith,
-        /*.nth       =*/ state->threadpool->n_threads_cur,
-        /*.wsize     =*/ cplan->work_size,
-        /*.wdata     =*/ cplan->work_data,
-        /*.threadpool=*/ state->threadpool,
+        /*.ith        =*/ state->ith,
+        /*.nth        =*/ state->threadpool->n_threads_cur,
+        /*.wsize      =*/ cgraph->work_size,
+        /*.wdata      =*/ cgraph->work_data,
+        /*.threadpool =*/ state->threadpool,
     };
 
     for (int node_n = 0; node_n < cgraph->n_nodes; node_n++) {
@@ -19950,7 +19994,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
 
         ggml_compute_forward(&params, node);
 
-        if (state->ith == 0 && cplan->abort_callback && cplan->abort_callback(cplan->abort_callback_data)) {
+        if (state->ith == 0 && cgraph->abort_callback && cgraph->abort_callback(cgraph->abort_callback_data)) {
             state->threadpool->ec = GGML_STATUS_ABORTED;
         }
 
@@ -20104,14 +20148,12 @@ bool ggml_threadpool_params_match(const struct ggml_threadpool_params * p0, cons
 
 static struct ggml_threadpool * ggml_threadpool_new_impl(
     struct ggml_threadpool_params * tpp,
-               struct ggml_cgraph * cgraph,
-                struct ggml_cplan * cplan) {
+               struct ggml_cgraph * cgraph) {
 
     struct ggml_threadpool * threadpool =
         GGML_ALIGNED_MALLOC(sizeof(struct ggml_threadpool));
     {
         threadpool->cgraph           = cgraph;
-        threadpool->cplan            = cplan;
         threadpool->n_graph          = 0;
         threadpool->n_barrier        = 0;
         threadpool->n_barrier_passed = 0;
@@ -20169,16 +20211,15 @@ static struct ggml_threadpool * ggml_threadpool_new_impl(
 }
 
 struct ggml_threadpool * ggml_threadpool_new(struct ggml_threadpool_params * tpp) {
-    return ggml_threadpool_new_impl(tpp, NULL, NULL);
+    return ggml_threadpool_new_impl(tpp, NULL);
 }
 
-enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cplan * cplan) {
-    GGML_ASSERT(cplan);
-    GGML_ASSERT(cplan->n_threads > 0);
-    GGML_ASSERT(cplan->work_size == 0 || cplan->work_data != NULL);
+enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph) {
+    GGML_ASSERT((cgraph->n_threads > 0                              ) && "call ggml_graph_prepare first");
+    GGML_ASSERT((cgraph->work_size == 0 || cgraph->work_data != NULL) && "call ggml_graph_work_init first");
 
-    int n_threads                               = cplan->n_threads;
-    struct ggml_threadpool * threadpool = cplan->threadpool;
+    int n_threads = cgraph->n_threads;
+    struct ggml_threadpool * threadpool = cgraph->threadpool;
 
     bool disposable_threadpool = false;
 
@@ -20187,19 +20228,18 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
         disposable_threadpool = true;
 
         struct ggml_threadpool_params ttp = ggml_threadpool_params_default(n_threads);
-        threadpool = ggml_threadpool_new_impl(&ttp, cgraph, cplan);
+        threadpool = ggml_threadpool_new_impl(&ttp, cgraph);
     } else {
         // Reset some of the parameters that need resetting
         // No worker threads should be accessing the parameters below at this stage
-        threadpool->cgraph           = cgraph;
-        threadpool->cplan            = cplan;
-        threadpool->n_threads_cur    = n_threads;
-        threadpool->current_chunk    = 0;
-        threadpool->ec               = GGML_STATUS_SUCCESS;
+        threadpool->cgraph        = cgraph;
+        threadpool->n_threads_cur = n_threads;
+        threadpool->current_chunk = 0;
+        threadpool->ec            = GGML_STATUS_SUCCESS;
     }
 
     if (n_threads > threadpool->n_threads_max) {
-        GGML_PRINT("WARNING: cplan is requesting more threads than the threadpool contains. Expect a bad time!\n");
+        GGML_PRINT("WARNING: cgraph is requesting more threads than the threadpool contains. Expect a bad time!\n");
     }
 
 #ifdef GGML_USE_OPENMP
@@ -20238,14 +20278,9 @@ enum ggml_status ggml_graph_compute(struct ggml_cgraph * cgraph, struct ggml_cpl
     return ret;
 }
 
-enum ggml_status ggml_graph_compute_with_ctx(struct ggml_context * ctx, struct ggml_cgraph * cgraph, int n_threads) {
-    struct ggml_cplan cplan = ggml_graph_plan(cgraph, n_threads, NULL);
-
-    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_TYPE_WORK_BUFFER, cplan.work_size);
-
-    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
-
-    return ggml_graph_compute(cgraph, &cplan);
+void ggml_graph_set_abort_callback(struct ggml_cgraph * cgraph, ggml_abort_callback abort_callback, void * abort_data) {
+    cgraph->abort_callback = abort_callback;
+    cgraph->abort_callback_data = abort_data;
 }
 
 struct ggml_tensor * ggml_graph_get_tensor(struct ggml_cgraph * cgraph, const char * name) {
@@ -21055,9 +21090,8 @@ static enum ggml_opt_result ggml_opt_adam(
 
     float * pf = params.past > 0 ? opt->adam.pf->data : NULL; // past function values
 
-    struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads, NULL);
-    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_TYPE_WORK_BUFFER, cplan.work_size);
-    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
+    ggml_graph_prepare  (gb, params.n_threads, NULL);
+    ggml_graph_work_init(gb, ctx);
 
     bool cancel = false;
 
@@ -21073,7 +21107,7 @@ static enum ggml_opt_result ggml_opt_adam(
         }
         // ggml_graph_reset  (gf);
         ggml_set_f32      (f->grad, 1.0f);
-        ggml_graph_compute(gb, &cplan);
+        ggml_graph_compute(gb);
         ggml_opt_acc_grad(np, ps, g, accum_norm);
         fx += ggml_get_f32_1d(f, 0);
     }
@@ -21164,7 +21198,7 @@ static enum ggml_opt_result ggml_opt_adam(
             }
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
-            ggml_graph_compute(gb, &cplan);
+            ggml_graph_compute(gb);
             ggml_opt_acc_grad(np, ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
         }
@@ -21249,7 +21283,6 @@ static enum ggml_opt_result linesearch_backtracking(
         const float * xp,
         struct ggml_tensor * f,
         struct ggml_cgraph * gb,
-        struct ggml_cplan  * cplan,
         const int np,
         struct ggml_tensor * ps[],
         bool * cancel,
@@ -21306,7 +21339,7 @@ static enum ggml_opt_result linesearch_backtracking(
                 }
                 // ggml_graph_reset  (gf);
                 ggml_set_f32      (f->grad, 1.0f);
-                ggml_graph_compute(gb, cplan);
+                ggml_graph_compute(gb);
                 ggml_opt_acc_grad(np, ps, g, accum_norm);
                 *fx += ggml_get_f32_1d(f, 0);
             }
@@ -21402,9 +21435,8 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         opt->iter = iter;
     }
 
-    struct ggml_cplan cplan = ggml_graph_plan(gb, params.n_threads, NULL);
-    struct ggml_object * obj = ggml_new_object(ctx, GGML_OBJECT_TYPE_WORK_BUFFER, cplan.work_size);
-    cplan.work_data = (uint8_t *)ctx->mem_buffer + obj->offs;
+    ggml_graph_prepare  (gb, params.n_threads, NULL);
+    ggml_graph_work_init(gb, ctx);
 
     float * x  = opt->lbfgs.x->data;  // current parameters
     float * xp = opt->lbfgs.xp->data; // previous parameters
@@ -21449,7 +21481,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
             }
             // ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
-            ggml_graph_compute(gb, &cplan);
+            ggml_graph_compute(gb);
             ggml_opt_acc_grad(np, ps, g, accum_norm);
             fx += ggml_get_f32_1d(f, 0);
         }
@@ -21515,7 +21547,7 @@ static enum ggml_opt_result ggml_opt_lbfgs(
         //       to determine if the optimization should be cancelled
         //       this is a simple change, but not doing this atm, since I don't have a nice
         //       way to test and don't want to break something with so many changes lined up
-        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, &cplan, np, ps, &cancel, callback, callback_data);
+        ls = linesearch_backtracking(&params, nx, x, &fx, g, d, step, xp, f, gb, np, ps, &cancel, callback, callback_data);
         if (cancel) {
             return GGML_OPT_RESULT_CANCEL;
         }

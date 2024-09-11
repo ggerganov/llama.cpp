@@ -17,17 +17,6 @@ constexpr float rms_norm_eps = LLAMA_DEFAULT_RMS_EPS;
 constexpr float rms_norm_eps = 5e-6f;
 #endif
 
-static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
-    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads, nullptr);
-
-    if (plan.work_size > 0) {
-        buf.resize(plan.work_size);
-        plan.work_data = buf.data();
-    }
-
-    ggml_graph_compute(graph, &plan);
-}
-
 static struct ggml_tensor * randomize_tensor(
     struct ggml_tensor * tensor, int ndims, const int64_t ne[], float fmin, float fmax
 ) {
@@ -1514,8 +1503,6 @@ int main(int argc, char ** argv) {
     int n_tokens = model.hparams.n_ctx;
     int n_vocab  = model.hparams.n_vocab;
 
-    std::vector<uint8_t> work_buffer;
-
     for (int ex=0; ex<n_examples; ++ex) {
         struct ggml_init_params params = {
             /*.mem_size   =*/ compute_size,
@@ -1542,7 +1529,10 @@ int main(int argc, char ** argv) {
         struct ggml_tensor * e = square_error_loss(ctx0, targets, logits);
 
         ggml_build_forward_expand(gf, e);
-        ggml_graph_compute_helper(work_buffer, gf, /*n_threads*/ 1);
+        ggml_graph_prepare(gf, 1, nullptr);
+        ggml_graph_work_init(gf, nullptr);
+        ggml_graph_compute(gf);
+        ggml_graph_work_free(gf);
 
         float error_before_opt = ggml_get_f32_1d(e, 0);
 
@@ -1553,7 +1543,10 @@ int main(int argc, char ** argv) {
         ggml_opt(ctx0, opt_params_lbfgs, e);
         //
         ggml_build_forward_expand(gf, e);
-        ggml_graph_compute_helper(work_buffer, gf, /*n_threads*/ 1);
+        ggml_graph_prepare(gf, 1, nullptr);
+        ggml_graph_work_init(gf, nullptr);
+        ggml_graph_compute(gf);
+        ggml_graph_work_free(gf);
 
         float error_after_opt = ggml_get_f32_1d(e, 0);
 
@@ -1607,7 +1600,10 @@ int main(int argc, char ** argv) {
             struct ggml_tensor * logits = forward(&model, &kv_self, ctx0, gf, tokens_input, sample_ctx, n_past);
 
             ggml_build_forward_expand(gf, logits);
-            ggml_graph_compute_helper(work_buffer, gf, /*n_threads*/ 1);
+            ggml_graph_prepare(gf, 1, nullptr);
+            ggml_graph_work_init(gf, nullptr);
+            ggml_graph_compute(gf);
+            ggml_graph_work_free(gf);
 
             struct ggml_tensor * best_samples = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, sample_ctx);
             struct ggml_tensor * probs        = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, n_vocab, sample_ctx);

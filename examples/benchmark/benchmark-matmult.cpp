@@ -20,17 +20,6 @@
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
 
-static void ggml_graph_compute_helper(std::vector<uint8_t> & buf, ggml_cgraph * graph, int n_threads) {
-    struct ggml_cplan plan = ggml_graph_plan(graph, n_threads, nullptr);
-
-    if (plan.work_size > 0) {
-        buf.resize(plan.work_size);
-        plan.work_data = buf.data();
-    }
-
-    ggml_graph_compute(graph, &plan);
-}
-
 static float tensor_sum_elements(const ggml_tensor * tensor) {
     double sum = 0;
     if (tensor->type == GGML_TYPE_F32) {
@@ -179,9 +168,8 @@ int main(int argc, char ** argv)  {
     TENSOR_DUMP(m11);
     TENSOR_DUMP(m2);
 
-    std::vector<uint8_t> work_buffer;
-
-    ggml_graph_compute_helper(work_buffer, gf, benchmark_params.n_threads);
+    ggml_graph_prepare(gf, benchmark_params.n_threads, nullptr);
+    ggml_graph_work_init(gf, nullptr);
 
     TENSOR_DUMP(ggml_graph_node(gf, 0));
 
@@ -234,7 +222,7 @@ int main(int argc, char ** argv)  {
 
         long long int start = ggml_time_us();
         //printf("Running ggml_graph_compute\n");
-        ggml_graph_compute_helper(work_buffer, gf31, benchmark_params.n_threads);
+        ggml_graph_compute(gf31);
 
         long long int stop = ggml_time_us();
         long long int usec = stop-start;
@@ -267,8 +255,11 @@ int main(int argc, char ** argv)  {
         }
 
         // Running a different graph computation to make sure we override the CPU cache lines
-        ggml_graph_compute_helper(work_buffer, gf32, benchmark_params.n_threads);
+        ggml_graph_compute(gf32);
     }
+
+    ggml_graph_work_free(gf);
+
     printf("\n");
     printf("Average%78.2f\n",gflops_sum/((double)benchmark_params.n_iterations));
     printf("=====================================================================================\n");

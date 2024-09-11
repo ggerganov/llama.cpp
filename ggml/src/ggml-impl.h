@@ -773,6 +773,17 @@ struct ggml_cgraph {
     struct ggml_hash_set visited_hash_set;
 
     enum ggml_cgraph_eval_order order;
+
+    bool      work_own;
+    size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
+    uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`
+
+    int n_threads;
+    struct ggml_threadpool * threadpool;
+
+    // abort ggml_graph_compute when true
+    ggml_abort_callback abort_callback;
+    void *              abort_callback_data;
 };
 
 struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph, int i0, int i1);

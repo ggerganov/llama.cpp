@@ -242,12 +242,16 @@ static bool check_gradient(
     ggml_graph_cpy(gf, gb);
     ggml_build_backward_expand(ctx0, gf, gb, false);
 
-    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
+    ggml_graph_prepare(gf, n_threads, nullptr);
+    ggml_graph_work_init(gf, ctx0);
+    ggml_graph_compute(gf);
 
     ggml_graph_reset  (gf);
     ggml_set_f32      (f->grad, 1.0f);
 
-    ggml_graph_compute_with_ctx(ctx0, gb, n_threads);
+    ggml_graph_prepare(gb, n_threads, nullptr);
+    ggml_graph_work_init(gb, ctx0);
+    ggml_graph_compute(gb);
 
     // ggml_graph_dump_dot(gf, NULL, "test-grad0-forward.dot");
     // ggml_graph_dump_dot(gb, gf,  "test-grad0-backward.dot");
@@ -262,13 +266,17 @@ static bool check_gradient(
             const float xp = x0 + eps;
             ggml_set_f32_1d(x[i], k, xp);
 
-            ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
+            ggml_graph_prepare(gf, n_threads, nullptr);
+            ggml_graph_work_init(gf, ctx0);
+            ggml_graph_compute(gf);
 
             const double f0 = ggml_get_f32_1d(f, 0);
 
             ggml_set_f32_1d(x[i], k, xm);
 
-            ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
+            ggml_graph_prepare(gf, n_threads, nullptr);
+            ggml_graph_work_init(gf, ctx0);
+            ggml_graph_compute(gf);
 
             const double f1 = ggml_get_f32_1d(f, 0);
             const double g0 = (f0 - f1)/(2.0*(double) eps);
@@ -301,7 +309,9 @@ static bool check_gradient(
             ggml_graph_reset  (gf);
             ggml_set_f32      (f->grad, 1.0f);
 
-            ggml_graph_compute_with_ctx(ctx0, gb, n_threads);
+            ggml_graph_prepare(gb, n_threads, nullptr);
+            ggml_graph_work_init(gb, ctx0);
+            ggml_graph_compute(gb);
 
             const double g1 = ggml_get_f32_1d(x[i]->grad, k);
 

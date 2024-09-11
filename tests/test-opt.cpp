@@ -113,7 +113,10 @@ int main(void) {
     ggml_build_forward_expand(ge, e);
     ggml_graph_reset(ge);
 
-    ggml_graph_compute_with_ctx(ctx, ge, /*n_threads*/ 1);
+    ggml_graph_prepare(ge, 1, nullptr);
+    ggml_graph_work_init(ge, nullptr);
+    ggml_graph_compute(ge);
+    ggml_graph_work_free(ge);
 
     const float fe = ggml_get_f32_1d(e, 0);
     printf("%s: e = %.4f\n", __func__, fe);
@@ -124,7 +127,10 @@ int main(void) {
 
     ggml_graph_reset(ge);
 
-    ggml_graph_compute_with_ctx(ctx, ge, /*n_threads*/ 1);
+    ggml_graph_prepare(ge, 1, nullptr);
+    ggml_graph_work_init(ge, nullptr);
+    ggml_graph_compute(ge);
+    ggml_graph_work_free(ge);
 
     const float fe_opt = ggml_get_f32_1d(e, 0);
     printf("%s: original  e = %.4f\n", __func__, fe);
