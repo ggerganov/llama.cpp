@@ -1,16 +1,17 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
 #include <vector>
 #include <cstdio>
-#include <chrono>
 
 int main(int argc, char ** argv) {
     gpt_params params;
 
     params.prompt = "The quick brown fox";
+    params.sparams.seed = 1234;
 
-    if (!gpt_params_parse(argc, argv, params)) {
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
 
@@ -27,14 +28,22 @@ int main(int argc, char ** argv) {
     std::string result2;
 
     // init
-    llama_model * model;
-    llama_context * ctx;
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
 
-    std::tie(model, ctx) = llama_init_from_gpt_params(params);
+    llama_model * model = llama_init.model;
+    llama_context * ctx = llama_init.context;
+
     if (model == nullptr || ctx == nullptr) {
         fprintf(stderr, "%s : failed to init\n", __func__);
         return 1;
     }
+
+    auto sparams = llama_sampler_chain_default_params();
+
+    llama_sampler * smpl = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl, llama_sampler_init_softmax());
+    llama_sampler_chain_add(smpl, llama_sampler_init_dist(params.sparams.seed));
 
     // tokenize prompt
     auto tokens = llama_tokenize(ctx, params.prompt, true);
@@ -46,7 +55,7 @@ int main(int argc, char ** argv) {
     // save state (rng, logits, embedding and kv_cache) to file
     {
         std::vector<uint8_t> state_mem(llama_state_get_size(ctx));
-        const size_t written = llama_state_get_data(ctx, state_mem.data());
+        const size_t written = llama_state_get_data(ctx, state_mem.data(), state_mem.size());
 
         FILE *fp_write = fopen("dump_state.bin", "wb");
         fwrite(state_mem.data(), 1, written, fp_write);
@@ -62,16 +71,7 @@ int main(int argc, char ** argv) {
     printf("\nfirst run: %s", params.prompt.c_str());
 
     for (auto i = 0; i < params.n_predict; i++) {
-        auto * logits = llama_get_logits(ctx);
-        auto n_vocab = llama_n_vocab(model);
-
-        std::vector<llama_token_data> candidates;
-        candidates.reserve(n_vocab);
-        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-            candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
-        }
-        llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-        auto next_token = llama_sample_token(ctx, &candidates_p);
+        auto next_token     = llama_sampler_sample(smpl, ctx, -1);
         auto next_token_str = llama_token_to_piece(ctx, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -94,17 +94,25 @@ int main(int argc, char ** argv) {
     // make new context
     auto * ctx2 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
 
+    llama_sampler * smpl2 = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl2, llama_sampler_init_softmax());
+    llama_sampler_chain_add(smpl2, llama_sampler_init_dist(params.sparams.seed));
+
     printf("\nsecond run: %s", params.prompt.c_str());
 
     // load state (rng, logits, embedding and kv_cache) from file
     {
-        std::vector<uint8_t> state_mem(llama_state_get_size(ctx2));
+        std::vector<uint8_t> state_mem;
 
         FILE * fp_read = fopen("dump_state.bin", "rb");
+        fseek(fp_read, 0, SEEK_END);
+        state_mem.resize(ftell(fp_read));
+        fseek(fp_read, 0, SEEK_SET);
         const size_t read = fread(state_mem.data(), 1, state_mem.size(), fp_read);
         fclose(fp_read);
 
-        if (read != llama_state_set_data(ctx2, state_mem.data())) {
+        if (read != llama_state_set_data(ctx2, state_mem.data(), state_mem.size())) {
             fprintf(stderr, "\n%s : failed to read state\n", __func__);
             llama_free(ctx2);
             llama_free_model(model);
@@ -119,15 +127,7 @@ int main(int argc, char ** argv) {
 
     // second run
     for (auto i = 0; i < params.n_predict; i++) {
-        auto * logits = llama_get_logits(ctx2);
-        auto n_vocab = llama_n_vocab(model);
-        std::vector<llama_token_data> candidates;
-        candidates.reserve(n_vocab);
-        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-            candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
-        }
-        llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-        auto next_token = llama_sample_token(ctx2, &candidates_p);
+        auto next_token     = llama_sampler_sample(smpl2, ctx2, -1);
         auto next_token_str = llama_token_to_piece(ctx2, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -152,19 +152,27 @@ int main(int argc, char ** argv) {
     }
 
     // make new context
-    auto* ctx3 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
+    auto * ctx3 = llama_new_context_with_model(model, llama_context_params_from_gpt_params(params));
+
+    llama_sampler * smpl3 = llama_sampler_chain_init(sparams);
+
+    llama_sampler_chain_add(smpl3, llama_sampler_init_softmax());
+    llama_sampler_chain_add(smpl3, llama_sampler_init_dist(params.sparams.seed));
 
     printf("\nsingle seq run: %s", params.prompt.c_str());
 
     // load state (rng, logits, embedding and kv_cache) from file
     {
-        std::vector<uint8_t> state_mem(llama_state_get_size(ctx3));
+        std::vector<uint8_t> state_mem;
 
         FILE * fp_read = fopen("dump_state.bin", "rb");
+        fseek(fp_read, 0, SEEK_END);
+        state_mem.resize(ftell(fp_read));
+        fseek(fp_read, 0, SEEK_SET);
         const size_t read = fread(state_mem.data(), 1, state_mem.size(), fp_read);
         fclose(fp_read);
 
-        if (read != llama_state_set_data(ctx3, state_mem.data())) {
+        if (read != llama_state_set_data(ctx3, state_mem.data(), state_mem.size())) {
             fprintf(stderr, "\n%s : failed to read state\n", __func__);
             llama_free(ctx3);
             llama_free_model(model);
@@ -181,7 +189,7 @@ int main(int argc, char ** argv) {
     {
         // save kv of seq 0
         std::vector<uint8_t> seq_store(llama_state_seq_get_size(ctx3, 0));
-        const size_t ncopy = llama_state_seq_get_data(ctx3, seq_store.data(), 0);
+        const size_t ncopy = llama_state_seq_get_data(ctx3, seq_store.data(), seq_store.size(), 0);
         if (ncopy != seq_store.size()) {
             fprintf(stderr, "\n%s : seq copy data length %zd does not match expected length %zd\n", __func__, ncopy, seq_store.size());
             llama_free(ctx3);
@@ -195,7 +203,7 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "%s : kv cache cleared\n", __func__);
 
         // restore kv into seq 1
-        const size_t nset = llama_state_seq_set_data(ctx3, seq_store.data(), 1);
+        const size_t nset = llama_state_seq_set_data(ctx3, seq_store.data(), seq_store.size(), 1);
         if (nset != seq_store.size()) {
             fprintf(stderr, "\n%s : seq set data length %zd does not match expected length %zd\n", __func__, nset, seq_store.size());
             llama_free(ctx3);
@@ -207,15 +215,7 @@ int main(int argc, char ** argv) {
 
     // third run with seq 1 instead of 0
     for (auto i = 0; i < params.n_predict; i++) {
-        auto * logits = llama_get_logits(ctx3);
-        auto n_vocab = llama_n_vocab(model);
-        std::vector<llama_token_data> candidates;
-        candidates.reserve(n_vocab);
-        for (llama_token token_id = 0; token_id < n_vocab; token_id++) {
-            candidates.emplace_back(llama_token_data{token_id, logits[token_id], 0.0f});
-        }
-        llama_token_data_array candidates_p = { candidates.data(), candidates.size(), false };
-        auto next_token = llama_sample_token(ctx3, &candidates_p);
+        auto next_token     = llama_sampler_sample(smpl3, ctx3, -1);
         auto next_token_str = llama_token_to_piece(ctx3, next_token);
 
         printf("%s", next_token_str.c_str());
@@ -231,6 +231,10 @@ int main(int argc, char ** argv) {
     }
 
     printf("\n");
+
+    llama_sampler_free(smpl);
+    llama_sampler_free(smpl2);
+    llama_sampler_free(smpl3);
 
     llama_free(ctx3);
     llama_free_model(model);

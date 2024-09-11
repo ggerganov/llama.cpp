@@ -10,15 +10,15 @@ import yaml
 
 logger = logging.getLogger("run-with-preset")
 
-CLI_ARGS_MAIN_PERPLEXITY = [
+CLI_ARGS_LLAMA_CLI_PERPLEXITY = [
     "batch-size", "cfg-negative-prompt", "cfg-scale", "chunks", "color", "ctx-size", "escape",
     "export", "file", "frequency-penalty", "grammar", "grammar-file", "hellaswag",
-    "hellaswag-tasks", "ignore-eos", "in-prefix", "in-prefix-bos", "in-suffix", "instruct",
+    "hellaswag-tasks", "ignore-eos", "in-prefix", "in-prefix-bos", "in-suffix",
     "interactive", "interactive-first", "keep", "logdir", "logit-bias", "lora", "lora-base",
     "low-vram", "main-gpu", "memory-f32", "mirostat", "mirostat-ent", "mirostat-lr", "mlock",
     "model", "multiline-input", "n-gpu-layers", "n-predict", "no-mmap", "no-mul-mat-q",
     "np-penalize-nl", "numa", "ppl-output-type", "ppl-stride", "presence-penalty", "prompt",
-    "prompt-cache", "prompt-cache-all", "prompt-cache-ro", "random-prompt", "repeat-last-n",
+    "prompt-cache", "prompt-cache-all", "prompt-cache-ro", "repeat-last-n",
     "repeat-penalty", "reverse-prompt", "rope-freq-base", "rope-freq-scale", "rope-scale", "seed",
     "simple-io", "tensor-split", "threads", "temp", "tfs", "top-k", "top-p", "typical",
     "verbose-prompt"
@@ -29,7 +29,7 @@ CLI_ARGS_LLAMA_BENCH = [
     "n-prompt", "output", "repetitions", "tensor-split", "threads", "verbose"
 ]
 
-CLI_ARGS_SERVER = [
+CLI_ARGS_LLAMA_SERVER = [
     "alias", "batch-size", "ctx-size", "embedding", "host", "memory-f32", "lora", "lora-base",
     "low-vram", "main-gpu", "mlock", "model", "n-gpu-layers", "n-probs", "no-mmap", "no-mul-mat-q",
     "numa", "path", "port", "rope-freq-base", "timeout", "rope-freq-scale", "tensor-split",
@@ -37,7 +37,7 @@ CLI_ARGS_SERVER = [
 ]
 
 description = """Run llama.cpp binaries with presets from YAML file(s).
-To specify which binary should be run, specify the "binary" property (main, perplexity, llama-bench, and server are supported).
+To specify which binary should be run, specify the "binary" property (llama-cli, llama-perplexity, llama-bench, and llama-server are supported).
 To get a preset file template, run a llama.cpp binary with the "--logdir" CLI argument.
 
 Formatting considerations:
@@ -77,19 +77,19 @@ for yaml_file in known_args.yaml_files:
 
 props = {prop.replace("_", "-"): val for prop, val in props.items()}
 
-binary = props.pop("binary", "main")
+binary = props.pop("binary", "llama-cli")
 if known_args.binary:
     binary = known_args.binary
 
 if os.path.exists(f"./{binary}"):
     binary = f"./{binary}"
 
-if binary.lower().endswith("main") or binary.lower().endswith("perplexity"):
-    cli_args = CLI_ARGS_MAIN_PERPLEXITY
+if binary.lower().endswith("llama-cli") or binary.lower().endswith("llama-perplexity"):
+    cli_args = CLI_ARGS_LLAMA_CLI_PERPLEXITY
 elif binary.lower().endswith("llama-bench"):
     cli_args = CLI_ARGS_LLAMA_BENCH
-elif binary.lower().endswith("server"):
-    cli_args = CLI_ARGS_SERVER
+elif binary.lower().endswith("llama-server"):
+    cli_args = CLI_ARGS_LLAMA_SERVER
 else:
     logger.error(f"Unknown binary: {binary}")
     sys.exit(1)

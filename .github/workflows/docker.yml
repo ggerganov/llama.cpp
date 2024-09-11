@@ -10,10 +10,11 @@
 name: Publish Docker image
 
 on:
-  pull_request:
+  #pull_request:
   push:
     branches:
       - master
+    paths: ['.github/workflows/docker.yml', '.devops/*.Dockerfile', '**/CMakeLists.txt', '**/Makefile', '**/*.h', '**/*.hpp', '**/*.c', '**/*.cpp', '**/*.cu', '**/*.cuh', '**/*.swift', '**/*.m', '**/*.metal']
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
@@ -22,7 +23,7 @@ concurrency:
 jobs:
   push_to_registry:
     name: Push Docker image to Docker Hub
-    if: github.event.pull_request.draft == false
+    #if: github.event.pull_request.draft == false
 
     runs-on: ubuntu-latest
     env:
@@ -30,21 +31,18 @@ jobs:
     strategy:
       matrix:
         config:
-          - { tag: "light", dockerfile: ".devops/main.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "light", dockerfile: ".devops/llama-cli.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "server", dockerfile: ".devops/llama-server.Dockerfile", platforms: "linux/amd64,linux/arm64" }
           - { tag: "full", dockerfile: ".devops/full.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "server", dockerfile: ".devops/server.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          # NOTE(canardletter): The CUDA builds on arm64 are very slow, so I
-          #                     have disabled them for now until the reason why
-          #                     is understood.
-          - { tag: "light-cuda", dockerfile: ".devops/main-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "light-cuda", dockerfile: ".devops/llama-cli-cuda.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "server-cuda", dockerfile: ".devops/llama-server-cuda.Dockerfile", platforms: "linux/amd64" }
           - { tag: "full-cuda", dockerfile: ".devops/full-cuda.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "server-cuda", dockerfile: ".devops/server-cuda.Dockerfile", platforms: "linux/amd64" }
-          - { tag: "light-rocm", dockerfile: ".devops/main-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "full-rocm", dockerfile: ".devops/full-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          - { tag: "server-rocm", dockerfile: ".devops/server-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
-          # TODO: Disabled due to build issues https://github.com/ggerganov/llama.cpp/issues/7507
-          #- { tag: "light-intel", dockerfile: ".devops/main-intel.Dockerfile", platforms: "linux/amd64" }
-          #- { tag: "server-intel", dockerfile: ".devops/server-intel.Dockerfile", platforms: "linux/amd64" }
+          # Note: the rocm images are failing due to a compiler error and are disabled until this is fixed to allow the workflow to complete
+          #- { tag: "light-rocm", dockerfile: ".devops/llama-cli-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          #- { tag: "server-rocm", dockerfile: ".devops/llama-server-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          #- { tag: "full-rocm", dockerfile: ".devops/full-rocm.Dockerfile", platforms: "linux/amd64,linux/arm64" }
+          - { tag: "light-intel", dockerfile: ".devops/llama-cli-intel.Dockerfile", platforms: "linux/amd64" }
+          - { tag: "server-intel", dockerfile: ".devops/llama-server-intel.Dockerfile", platforms: "linux/amd64" }
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
@@ -98,21 +96,12 @@ jobs:
         env:
           GITHUB_REPOSITORY_OWNER: '${{ github.repository_owner }}'
 
-      - name: Build and push Docker image (versioned)
+      - name: Build and push Docker image (tagged + versioned)
         if: github.event_name == 'push'
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }}"
-          file: ${{ matrix.config.dockerfile }}
-
-      - name: Build and push Docker image (tagged)
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: ${{ github.event_name == 'push' }}
-          platforms: ${{ matrix.config.platforms }}
-          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }},ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
+          tags: "ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ env.COMMIT_SHA }},ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }},ghcr.io/${{ env.repository_owner_lowercase }}/llama.cpp:${{ matrix.config.tag }}-${{ steps.tag.outputs.name }}"
           file: ${{ matrix.config.dockerfile }}

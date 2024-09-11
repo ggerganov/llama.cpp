@@ -1,7 +1,7 @@
-#define LLAMA_API_INTERNAL
 #include "common.h"
 #include "ggml.h"
 #include "llama.h"
+#include "llama-impl.h"
 
 #include <algorithm>
 #include <cassert>
@@ -154,7 +154,7 @@ static void test_roundtrip_on_chunk(
     }
 
     if (use_reference) {
-        qfns.from_float_reference(input_scratch, quantized_scratch, chunk_size);
+        qfns.from_float_ref(input_scratch, quantized_scratch, chunk_size);
     } else {
         qfns.from_float(input_scratch, quantized_scratch, chunk_size);
     }
@@ -319,8 +319,7 @@ int main(int argc, char ** argv) {
         }
 
         auto cparams = llama_context_default_params();
-        cparams.n_ctx      = 256;
-        cparams.seed       = 1;
+        cparams.n_ctx = 256;
 
         ctx = llama_new_context_with_model(model, cparams);
 

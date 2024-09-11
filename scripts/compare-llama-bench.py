@@ -19,22 +19,22 @@ logger = logging.getLogger("compare-llama-bench")
 
 # Properties by which to differentiate results per commit:
 KEY_PROPERTIES = [
-    "cpu_info", "gpu_info", "n_gpu_layers", "main_gpu", "cuda", "opencl", "metal", "gpu_blas",
-    "blas", "model_filename", "model_type", "model_size", "model_n_params", "n_batch", "n_threads",
-    "type_k", "type_v", "no_kv_offload", "tensor_split", "n_prompt", "n_gen"
+    "cpu_info", "gpu_info", "n_gpu_layers", "cuda", "vulkan", "kompute", "metal", "sycl", "rpc", "gpu_blas",
+    "blas", "model_filename", "model_type", "model_size", "model_n_params", "n_batch", "n_ubatch", "embeddings", "n_threads",
+    "type_k", "type_v", "use_mmap", "no_kv_offload", "split_mode", "main_gpu", "tensor_split", "flash_attn", "n_prompt", "n_gen"
 ]
 
 # Properties that are boolean and are converted to Yes/No for the table:
-BOOL_PROPERTIES = ["cuda", "opencl", "metal", "gpu_blas", "blas"]
+BOOL_PROPERTIES = ["cuda", "vulkan", "kompute", "metal", "sycl", "gpu_blas", "blas", "embeddings", "use_mmap", "no_kv_offload", "flash_attn"]
 
 # Header names for the table:
 PRETTY_NAMES = {
-    "cuda": "CUDA", "opencl": "OpenCL", "metal": "Metal", "gpu_blas": "GPU BLAS", "blas": "BLAS",
-    "cpu_info": "CPU", "gpu_info": "GPU", "model_filename": "File", "model_type": "Model",
-    "model_size": "Model Size [GiB]", "model_n_params": "Num. of Parameters",
-    "n_batch": "Batch size", "n_threads": "Threads", "type_k": "K type", "type_v": "V type",
-    "n_gpu_layers": "GPU layers", "main_gpu": "Main GPU", "no_kv_offload": "NKVO",
-    "tensor_split": "Tensor split"
+    "cuda": "CUDA", "vulkan": "Vulkan", "kompute": "Kompute", "metal": "Metal", "sycl": "SYCL", "rpc": "RPC",
+    "gpu_blas": "GPU BLAS", "blas": "BLAS", "cpu_info": "CPU", "gpu_info": "GPU", "model_filename": "File", "model_type": "Model",
+    "model_size": "Model Size [GiB]", "model_n_params": "Num. of Par.", "n_batch": "Batch size", "n_ubatch": "Microbatch size",
+    "n_threads": "Threads", "type_k": "K type", "type_v": "V type", "n_gpu_layers": "GPU layers", "split_mode": "Split mode",
+    "main_gpu": "Main GPU", "no_kv_offload": "NKVO", "flash_attn": "FlashAttention", "tensor_split": "Tensor split",
+    "use_mmap": "Use mmap", "embeddings": "Embeddings",
 }
 
 DEFAULT_SHOW = ["model_type"]  # Always show these properties by default.
@@ -123,13 +123,13 @@ builds = cursor.execute("SELECT DISTINCT build_commit FROM test;").fetchall()
 
 try:
     repo = git.Repo(".", search_parent_directories=True)
-except git.exc.InvalidGitRepositoryError:
+except git.InvalidGitRepositoryError:
     repo = None
 
 
-def find_parent_in_data(commit):
+def find_parent_in_data(commit: git.Commit):
     """Helper function to find the most recent parent measured in number of commits for which there is data."""
-    heap = [(0, commit)]
+    heap: list[tuple[int, git.Commit]] = [(0, commit)]
     seen_hexsha8 = set()
     while heap:
         depth, current_commit = heapq.heappop(heap)
@@ -144,7 +144,7 @@ def find_parent_in_data(commit):
     return None
 
 
-def get_all_parent_hexsha8s(commit):
+def get_all_parent_hexsha8s(commit: git.Commit):
     """Helper function to recursively get hexsha8 values for all parents of a commit."""
     unvisited = [commit]
     visited   = []
