@@ -1235,7 +1235,7 @@ GGML_CALL static const char * ggml_backend_cann_host_buffer_name(ggml_backend_bu
 }
 
 GGML_CALL static void ggml_backend_cann_host_buffer_free_buffer(ggml_backend_buffer_t buffer) {
-    ACL_CHECK(aclrtFreeHost(buffer->context)); 
+    ACL_CHECK(aclrtFreeHost(buffer->context));
 }
 
 static void * ggml_cann_host_malloc(size_t size) {
@@ -1244,8 +1244,8 @@ static void * ggml_cann_host_malloc(size_t size) {
     }
 
     void * ptr = nullptr;
-    aclError err = aclrtMallocHost((void **) &ptr, size); 
-    if (err != ACL_SUCCESS) { 
+    aclError err = aclrtMallocHost((void **) &ptr, size);
+    if (err != ACL_SUCCESS) {
 
         GGML_CANN_LOG_WARN("%s: failed to allocate %.2f MiB of pinned memory: %s\n", __func__,
                            size / 1024.0 / 1024.0, aclGetRecentErrMsg());
