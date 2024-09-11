@@ -2475,6 +2475,7 @@ int main(int argc, char ** argv) {
 #endif
 
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
+
     svr->set_default_headers({{"Server", "llama.cpp"}});
 
     // CORS preflight
