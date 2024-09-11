@@ -23,7 +23,6 @@
 #include "theme-snowstorm.css.hpp"
 #include "index.html.hpp"
 #include "index-new.html.hpp"
-#include "loading.html.hpp"
 #include "index.js.hpp"
 #include "completion.js.hpp"
 #include "system-prompts.js.hpp"
@@ -3162,7 +3161,6 @@ int main(int argc, char ** argv) {
     svr->Get("/theme-polarnight.css",  handle_static_file(theme_polarnight_css, theme_polarnight_css_len, "text/css; charset=utf-8"));
     svr->Get("/theme-snowstorm.css",   handle_static_file(theme_snowstorm_css, theme_snowstorm_css_len, "text/css; charset=utf-8"));
     svr->Get("/index-new.html",        handle_static_file(index_new_html, index_new_html_len, "text/html; charset=utf-8"));
-    svr->Get("/loading.html",          handle_static_file(loading_html, loading_html_len, "text/html; charset=utf-8"));
     svr->Get("/system-prompts.js",     handle_static_file(system_prompts_js, system_prompts_js_len, "text/javascript; charset=utf-8"));
     svr->Get("/prompt-formats.js",     handle_static_file(prompt_formats_js, prompt_formats_js_len, "text/javascript; charset=utf-8"));
 
