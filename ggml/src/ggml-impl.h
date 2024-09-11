@@ -774,6 +774,8 @@ struct ggml_cgraph {
 
     enum ggml_cgraph_eval_order order;
 
+    // TODO: after the CPU-only API is removed, we can move the members below to ggml_backend_plan_cpu
+
     bool      work_own;
     size_t    work_size; // size of work buffer, calculated by `ggml_graph_plan()`
     uint8_t * work_data; // work buffer, to be allocated by caller before calling to `ggml_graph_compute()`

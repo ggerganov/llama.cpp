@@ -751,10 +751,9 @@ GGML_CALL static ggml_backend_buffer_type_t ggml_backend_cpu_get_default_buffer_
     GGML_UNUSED(backend);
 }
 
-// TODO: this struct should no longer be needed
-//       instead, the new ggml_graph_work_init() + ggml_graph_work_free() API should be enough to replace this
-//       for now, keeping the implementation as it is, to avoid making a mistake
 struct ggml_backend_plan_cpu {
+    // TODO: move member from ggml_cgraph here when the public CPU-only API is removed
+
     struct ggml_cgraph cgraph;
 };
 

@@ -2064,7 +2064,7 @@ extern "C" {
     // =================================================================================================
     // CPU-only API for ggml_cgraph
     //
-    // TODO: move as a separate backend
+    // TODO: move to the CPU backend
     // NOTE: avoid using, will be removed
     //
 
