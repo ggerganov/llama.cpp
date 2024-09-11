@@ -1997,7 +1997,7 @@ struct ggml_threadpool {
 
     struct ggml_compute_state * workers;   // per thread state
     int          n_threads_max; // number of threads in the pool
-    int          n_threads_cur; // number of threads used in the current graph
+    atomic_int   n_threads_cur; // number of threads used in the current graph
 
     int32_t      prio;        // Scheduling priority
     uint32_t     poll;        // Polling level (0 - no polling)
