@@ -4119,7 +4119,25 @@ class GraniteMoeModel(GraniteModel):
     """Conversion for IBM's GraniteMoeForCausalLM"""
     model_arch = gguf.MODEL_ARCH.GRANITE_MOE
 
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        """In modeling_granitemoe, the JetMoe implementation of parallel experts
+        is used. This essentially merges w1 and w3 into a single tensor with 2x
+        the hidden size that is then split during forward. To keep compativility
+        with existing mixtral support, we pull them apart here.
+        """
+
+        if name.endswith("block_sparse_moe.input_linear.weight"):
+            gate, up = data_torch.chunk(2, dim=-2)
+            return [
+                (self.map_tensor_name(f"model.layers.{bid}.block_sparse_moe.input_linear.gate.weight"), gate),
+                (self.map_tensor_name(f"model.layers.{bid}.block_sparse_moe.input_linear.up.weight"), up),
+            ]
+
+        return super().modify_tensors(data_torch, name, bid)
+
+
 ###### CONVERSION LOGIC ######
+
 
 # tree of lazy tensors
 class LazyTorchTensor(gguf.LazyBase):
