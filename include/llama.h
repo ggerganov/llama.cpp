@@ -253,6 +253,21 @@ extern "C" {
         llama_seq_id all_seq_id; // used if seq_id == NULL
     } llama_batch;
 
+    enum llama_decode_result {
+        LLAMA_DECODE_RESULT_OK                  = 0,
+        LLAMA_DECODE_RESULT_ERR_ALLOC_KV        = 1,
+        LLAMA_DECODE_RESULT_ERR_RESERVE_OUTPUT  = -1,
+        LLAMA_DECODE_RESULT_INVALID_BATCH       = -2,
+    };
+
+    enum llama_encode_result {
+        LLAMA_ENCODE_RESULT_OK                  = 0,
+        LLAMA_ENCODE_RESULT_ERR_ALLOC_KV        = 1,
+        LLAMA_ENCODE_RESULT_ERR_NO_ENCODER      = 2,
+        LLAMA_ENCODE_RESULT_ERR_RESERVE_OUTPUT  = -1,
+        LLAMA_ENCODE_RESULT_INVALID_BATCH       = -2,
+    };
+
     enum llama_model_kv_override_type {
         LLAMA_KV_OVERRIDE_TYPE_INT,
         LLAMA_KV_OVERRIDE_TYPE_FLOAT,
@@ -801,7 +816,7 @@ extern "C" {
     // Stores the encoder output internally for later use by the decoder cross-attention layers.
     //   0 - success
     // < 0 - error
-    LLAMA_API int32_t llama_encode(
+    LLAMA_API enum llama_encode_result llama_encode(
             struct llama_context * ctx,
               struct llama_batch   batch);
 
@@ -809,7 +824,7 @@ extern "C" {
     //   0 - success
     //   1 - could not find a KV slot for the batch (try reducing the size of the batch or increase the context)
     // < 0 - error
-    LLAMA_API int32_t llama_decode(
+    LLAMA_API enum llama_decode_result llama_decode(
             struct llama_context * ctx,
               struct llama_batch   batch);
 
