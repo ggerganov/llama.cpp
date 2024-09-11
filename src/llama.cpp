@@ -16076,18 +16076,20 @@ static int llama_decode_internal(
         return -1;
     }
 
-    for (uint32_t i = 0; i < n_tokens_all; ++i) {
-        if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= lctx.model.vocab.n_vocab) {
-            LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch_all.token[i]);
-            return -1;
-        }
-    }
-
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
     GGML_ASSERT((!batch_all.token && batch_all.embd) || (batch_all.token && !batch_all.embd)); // NOLINT
+
+    if (batch_all.token) {
+        for (uint32_t i = 0; i < n_tokens_all; ++i) {
+            if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= model.vocab.n_vocab) {
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch_all.token[i]);
+                return -1;
+            }
+        }
+    }
 
     GGML_ASSERT(n_tokens_all <= cparams.n_batch);
 
@@ -16375,18 +16377,20 @@ static int llama_encode_internal(
         return -1;
     }
 
-    for (uint32_t i = 0; i < n_tokens; ++i) {
-        if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= lctx.model.vocab.n_vocab) {
-            LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch.token[i]);
-            return -1;
-        }
-    }
-
     const auto & model   = lctx.model;
     const auto & hparams = model.hparams;
     const auto & cparams = lctx.cparams;
 
     GGML_ASSERT((!batch.token && batch.embd) || (batch.token && !batch.embd)); // NOLINT
+
+    if (batch.token) {
+        for (uint32_t i = 0; i < n_tokens; ++i) {
+            if (batch.token[i] < 0 || (uint32_t)batch.token[i] >= model.vocab.n_vocab) {
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch.token[i]);
+                return -1;
+            }
+        }
+    }
 
     // micro-batching is not possible for non-causal encoding, so we process the batch in a single shot
     GGML_ASSERT(cparams.n_ubatch >= n_tokens && "encoder requires n_ubatch >= n_tokens");
