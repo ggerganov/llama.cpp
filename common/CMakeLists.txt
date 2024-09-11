@@ -54,12 +54,12 @@ add_library(${TARGET} STATIC
     base64.hpp
     common.h
     common.cpp
+    arg.h
+    arg.cpp
     sampling.h
     sampling.cpp
     console.h
     console.cpp
-    grammar-parser.h
-    grammar-parser.cpp
     json.hpp
     json-schema-to-grammar.cpp
     train.h

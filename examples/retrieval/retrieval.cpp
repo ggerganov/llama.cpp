@@ -1,12 +1,11 @@
+#include "arg.h"
 #include "common.h"
 #include "llama.h"
 
 #include <algorithm>
 #include <fstream>
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     LOG_TEE("\nexample usage:\n");
     LOG_TEE("\n    %s --model ./models/bge-base-en-v1.5-f16.gguf --top-k 3 --context-file README.md --context-file License --chunk-size 100 --chunk-separator .\n", argv[0]);
     LOG_TEE("\n");
@@ -113,8 +112,7 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_RETRIEVAL, print_usage)) {
         return 1;
     }
 
@@ -293,9 +291,11 @@ int main(int argc, char ** argv) {
         }
     }
 
+    LOG_TEE("\n");
+    llama_perf_print(ctx, LLAMA_PERF_TYPE_CONTEXT);
+
     // clean up
     llama_batch_free(query_batch);
-    llama_print_timings(ctx);
     llama_free(ctx);
     llama_free_model(model);
     llama_backend_free();

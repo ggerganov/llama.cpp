@@ -18,6 +18,8 @@ struct llama_vocab {
         tattr attr;
     };
 
+    uint32_t n_vocab = 0; // TODO: not great because has to keep in sync with hparams.n_vocab
+
     enum llama_vocab_type     type     = LLAMA_VOCAB_TYPE_SPM;
     enum llama_vocab_pre_type type_pre = LLAMA_VOCAB_PRE_TYPE_DEFAULT;
 
@@ -62,8 +64,6 @@ struct llama_vocab {
     int find_bpe_rank(const std::string & token_left, const std::string & token_right) const;
 };
 
-const struct llama_vocab * llama_get_vocab(const struct llama_context * ctx);
-
 //
 // internal API
 //
@@ -76,6 +76,7 @@ std::vector<llama_vocab::id> llama_tokenize_internal(
         bool add_special,
         bool parse_special = false);
 
+// TODO: move the API below as member functions of llama_vocab
 llama_token llama_byte_to_token_impl(const llama_vocab & vocab, uint8_t ch);
 
 const char * llama_token_get_text_impl(const struct llama_vocab & vocab, llama_token token);
