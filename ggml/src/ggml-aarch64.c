@@ -15,15 +15,6 @@
 #include <float.h>
 #include <stdlib.h> // for qsort
 #include <stdio.h>  // for GGML_ASSERT
-#if defined(_WIN32) || defined(_WIN64)
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#   define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <pthread.h>
-#endif
 
 #include "ggml-aarch64.h"
 
@@ -607,33 +598,6 @@ size_t quantize_q4_0_8x8(const float * restrict src, void * restrict dst, int64_
     return quantize_q4_0_nr_bl(src, dst, nrow, n_per_row, 8, 8);
 }
 
-// Print a given message only once
-static const char *warning_message = NULL;
-
-static void print_message(void) {
-    if (warning_message != NULL) {
-        fprintf(stderr, "\n%s\n", warning_message);
-    }
-}
-
-#if defined(_WIN32) || defined(_WIN64)
-static INIT_ONCE once_control_win = INIT_ONCE_STATIC_INIT;
-BOOL CALLBACK print_message_wrapper(PINIT_ONCE InitOnce, PVOID Parameter, PVOID *Context) {
-    warning_message = (const char *)Parameter;
-    print_message();
-    return TRUE;
-}
-static inline void print_message_once(const char *message) {
-    InitOnceExecuteOnce(&once_control_win, print_message_wrapper, (PVOID)message, NULL);
-}
-#else
-static pthread_once_t print_once_control = PTHREAD_ONCE_INIT;
-static inline void print_message_once(const char *message) {
-    warning_message = message;
-    pthread_once(&print_once_control, print_message);
-}
-#endif
-
 // Return the number of byte lanes in the SVE vector if SVE is supported; otherwise, returns 0 if SVE is not supported.
 static int sve_lane_count(void) {
 #if defined(__ARM_FEATURE_SVE)
@@ -662,14 +626,7 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
 
-#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
-    if (ggml_cpu_has_sve() && sve_lane_count() == QK8_0) {
-        print_message_once("SVE detected, use the Q4_0_8_8 quantization format for optimal performance");
-    }
-    else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        print_message_once("Int8mm detected, use the Q4_0_4_8 quantization format for optimal performance");
-    }
-#if defined(__ARM_NEON)
+#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
     if (ggml_cpu_has_neon()) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
@@ -729,8 +686,7 @@ void ggml_gemv_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
             );
         return;
     }
-#endif // #if defined(__ARM_NEON)
-#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
+#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
     float sumf[4];
     int sumi;
 
@@ -775,11 +731,7 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
 
-#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
-    if (ggml_cpu_has_sve() && sve_lane_count() == QK8_0) {
-        print_message_once("SVE detected, use the Q4_0_8_8 quantization format for optimal performance");
-    }
-#if defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
+#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
     if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
@@ -844,11 +796,7 @@ void ggml_gemv_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         );
         return;
     }
-#endif
-    if (ggml_cpu_has_neon()) {
-        print_message_once("Neon detected, use the Q4_0_4_4 quantization format for optimal performance");
-    }
-#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
+#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
     float sumf[4];
     int sumi;
 
@@ -960,13 +908,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         );
         return;
     }
-#endif
-    if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        print_message_once("Int8mm detected, use the Q4_0_4_8 quantization format for optimal performance");
-    }
-    else if (ggml_cpu_has_neon()) {
-        print_message_once("Neon detected, use the Q4_0_4_4 quantization format for optimal performance");
-    }
+#endif // #if defined(__ARM_FEATURE_SVE)
 #elif defined(__AVX2__)
     // Lookup table to convert signed nibbles to signed bytes
     __m256i signextendlut = _mm256_castsi128_si256(_mm_set_epi8(-1, -2, -3, -4, -5, -6, -7, -8, 7, 6, 5, 4, 3, 2, 1, 0));
@@ -1058,7 +1000,7 @@ void ggml_gemv_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         }
     }
     return;
-#endif
+#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
     {
         float sumf[8];
         int sumi;
@@ -1106,14 +1048,7 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
 
-#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
-    if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && sve_lane_count() == QK8_0) {
-        print_message_once("SVE detected, use the Q4_0_8_8 quantization format for optimal performance");
-    }
-    else if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        print_message_once("Int8mm detected, use the Q4_0_4_8 quantization format for optimal performance");
-    }
-#if defined(__ARM_NEON)
+#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
     if (ggml_cpu_has_neon()) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
@@ -1572,8 +1507,7 @@ void ggml_gemm_q4_0_4x4_q8_0(int n, float * restrict s, size_t bs, const void * 
         );
         return;
     }
-#endif // #if defined(__ARM_NEON)
-#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
+#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON)
     {
         float sumf[4][4];
         int sumi;
@@ -1630,11 +1564,7 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
     UNUSED(ncols_interleaved);
     UNUSED(blocklen);
 
-#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
-    if (ggml_cpu_has_sve() && ggml_cpu_has_matmul_int8() && sve_lane_count() == QK8_0) {
-        print_message_once("SVE detected, use the Q4_0_8_8 quantization format for optimal performance");
-    }
-#if defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
+#if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
     if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
         const void * b_ptr = vx;
         const void * a_ptr = vy;
@@ -2033,11 +1963,7 @@ void ggml_gemm_q4_0_4x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         );
         return;
     }
-#endif
-    if (ggml_cpu_has_neon()) {
-        print_message_once("Neon detected, use the Q4_0_4_4 quantization format for optimal performance");
-    }
-#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
+#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__) && defined(__ARM_NEON) && defined(__ARM_FEATURE_MATMUL_INT8)
     float sumf[4][4];
     int sumi;
 
@@ -2504,13 +2430,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         );
         return;
     }
-#endif
-    if (ggml_cpu_has_neon() && ggml_cpu_has_matmul_int8()) {
-        print_message_once("Int8mm detected, use the Q4_0_4_8 quantization format for optimal performance");
-    }
-    else if (ggml_cpu_has_neon()) {
-        print_message_once("Neon detected, use the Q4_0_4_4 quantization format for optimal performance");
-    }
+#endif // #if defined(__ARM_FEATURE_SVE) && defined(__ARM_FEATURE_MATMUL_INT8)
 #elif defined(__AVX2__) || defined(__AVX512F__)
     const block_q4_0x8 * b_ptr_start = (const block_q4_0x8 *)vx;
     const block_q8_0x4 * a_ptr_start = (const block_q8_0x4 *)vy;
@@ -3260,7 +3180,7 @@ void ggml_gemm_q4_0_8x8_q8_0(int n, float * restrict s, size_t bs, const void * 
         }
     }
     return;
-#endif
+#endif // #if ! ((defined(_MSC_VER)) && ! defined(__clang__)) && defined(__aarch64__)
     float sumf[4][8];
     int sumi;
 
