@@ -356,6 +356,17 @@ struct llama_sampler * llama_sampler_chain_get(const struct llama_sampler * chai
     return p->samplers[i];
 }
 
+void llama_sampler_chain_remove(struct llama_sampler * chain, int32_t i) {
+    auto * p = (llama_sampler_chain *) chain->ctx;
+
+    if (i < 0 || i >= (int32_t) p->samplers.size()) {
+        return;
+    }
+
+    auto * result = p->samplers[i];
+    p->samplers.erase(p->samplers.begin() + i);
+}
+
 int llama_sampler_chain_n(const struct llama_sampler * chain) {
     const auto * p = (const llama_sampler_chain *) chain->ctx;
 
