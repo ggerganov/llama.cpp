@@ -2476,7 +2476,6 @@ int main(int argc, char ** argv) {
 #endif
 
     std::atomic<server_state> state{SERVER_STATE_LOADING_MODEL};
-
     svr->set_default_headers({{"Server", "llama.cpp"}});
 
     // CORS preflight
@@ -2592,22 +2591,11 @@ int main(int argc, char ** argv) {
         return false;
     };
 
-    auto middleware_server_state = [&res_error, &state](const httplib::Request & req, httplib::Response & res) {
+    auto middleware_server_state = [&res_error, &state](const httplib::Request &, httplib::Response & res) {
         server_state current_state = state.load();
         if (current_state == SERVER_STATE_LOADING_MODEL) {
-            httplib::Request & modified_req = (httplib::Request &) req;
-            const char* path_c = modified_req.path.c_str();
-            int path_c_len = strlen(path_c);
-            char last_five[6];
-            strcpy(last_five, path_c + (path_c_len -5));
-
-            if ((strcmp(path_c, "/") == 0) || (strcmp(last_five, ".html") == 0)) {
-                modified_req.path = "/loading.html";
-            }
-            else {
-                res_error(res, format_error_response("Loading model", ERROR_TYPE_UNAVAILABLE));
-                return false;
-            }
+            res.set_content("<html><body>The model is loading. Please wait.<br/>The user interface will appear soon.</body></html>", "text/html; charset=utf-8");
+            return false;
         }
         return true;
     };
