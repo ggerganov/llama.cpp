@@ -2591,7 +2591,7 @@ int main(int argc, char ** argv) {
         return false;
     };
 
-    auto middleware_server_state = [&res_error, &state](const httplib::Request &, httplib::Response & res) {
+    auto middleware_server_state = [&state](const httplib::Request &, httplib::Response & res) {
         server_state current_state = state.load();
         if (current_state == SERVER_STATE_LOADING_MODEL) {
             res.set_content("<html><body>The model is loading. Please wait.<br/>The user interface will appear soon.</body></html>", "text/html; charset=utf-8");
