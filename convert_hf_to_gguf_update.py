@@ -31,6 +31,7 @@ import re
 import requests
 import sys
 import json
+import shutil
 
 from hashlib import sha256
 from enum import IntEnum, auto
