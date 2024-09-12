@@ -2156,6 +2156,10 @@ static ggml_backend_buffer_type_t llama_default_buffer_type_cpu(bool host_buffer
     if (host_buffer) {
         buft = ggml_backend_sycl_host_buffer_type();
     }
+#elif defined(GGML_USE_CANN)
+    if (host_buffer) {
+        buft = ggml_backend_cann_host_buffer_type();
+    }
 #elif defined(GGML_USE_CPU_HBM)
     buft = ggml_backend_cpu_hbm_buffer_type();
 #elif defined(GGML_USE_VULKAN)
