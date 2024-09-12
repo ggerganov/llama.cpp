@@ -19202,6 +19202,7 @@ int ggml_graph_n_nodes(struct ggml_cgraph * cgraph) {
 }
 
 void ggml_graph_add_node(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
+    GGML_ASSERT(cgraph->size > cgraph->n_nodes);
     cgraph->nodes[cgraph->n_nodes] = tensor;
     cgraph->n_nodes++;
 }
