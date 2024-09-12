@@ -2595,6 +2595,7 @@ int main(int argc, char ** argv) {
         server_state current_state = state.load();
         if (current_state == SERVER_STATE_LOADING_MODEL) {
             res.set_content("<html><body>The model is loading. Please wait.<br/>The user interface will appear soon.</body></html>", "text/html; charset=utf-8");
+            res.status = 503;
             return false;
         }
         return true;
