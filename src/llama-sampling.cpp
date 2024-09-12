@@ -1663,8 +1663,7 @@ struct llama_perf_sampler_data llama_perf_sampler(const struct llama_sampler * c
     struct llama_perf_sampler_data data = {};
 
     if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
-        // TODO: return empty data, or GGML_ABORT() ?
-        return data;
+        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with llama_sampler_chain_init()\n", __func__);
     }
 
     const auto * ctx = (const struct llama_sampler_chain *) chain->ctx;
@@ -1684,8 +1683,7 @@ void llama_perf_sampler_print(const struct llama_sampler * chain) {
 
 void llama_perf_sampler_reset(struct llama_sampler * chain) {
     if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
-        // TODO: return empty data, or GGML_ABORT() ?
-        return;
+        GGML_ABORT("%s: invalid sampler passed - requires a sampler created with llama_sampler_chain_init()\n", __func__);
     }
 
     auto * ctx = (struct llama_sampler_chain *) chain->ctx;
