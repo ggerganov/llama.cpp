@@ -2049,7 +2049,7 @@ int main(int argc, char ** argv) {
     }
 
     LOG_TEE("\n");
-    llama_perf_print_context(ctx);
+    llama_perf_context_print(ctx);
     write_logfile(ctx, params, model, results);
 
     llama_free(ctx);

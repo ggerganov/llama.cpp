@@ -256,7 +256,7 @@ int main(int argc, char ** argv) {
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
 
     LOG_TEE("\n");
-    llama_perf_print_context(ctx);
+    llama_perf_context_print(ctx);
 
     fprintf(stderr, "\n");
 

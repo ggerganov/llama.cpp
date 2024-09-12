@@ -20687,8 +20687,8 @@ const char * llama_print_system_info(void) {
     return s.c_str();
 }
 
-struct llama_perf_data_context llama_perf_context(const struct llama_context * ctx) {
-    struct llama_perf_data_context data = {};
+struct llama_perf_context_data llama_perf_context(const struct llama_context * ctx) {
+    struct llama_perf_context_data data = {};
 
     if (ctx == nullptr) {
         return data;
@@ -20704,22 +20704,7 @@ struct llama_perf_data_context llama_perf_context(const struct llama_context * c
     return data;
 }
 
-struct llama_perf_data_sampler llama_perf_sampler(const struct llama_sampler * chain) {
-    struct llama_perf_data_sampler data = {};
-
-    if (chain == nullptr) {
-        return data;
-    }
-
-    const auto * p = (const struct llama_sampler_chain *) chain->ctx;
-
-    data.t_sample_ms = 1e-3 * p->t_sample_us;
-    data.n_sample    = std::max(0, p->n_sample);
-
-    return data;
-}
-
-void llama_perf_print_context(const struct llama_context * ctx) {
+void llama_perf_context_print(const struct llama_context * ctx) {
     const auto data = llama_perf_context(ctx);
 
     const double t_end_ms = 1e-3 * ggml_time_us();
@@ -20732,23 +20717,10 @@ void llama_perf_print_context(const struct llama_context * ctx) {
     LLAMA_LOG_INFO("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (t_end_ms - data.t_start_ms), (data.n_p_eval + data.n_eval));
 }
 
-void llama_perf_print_sampler(const struct llama_sampler * chain) {
-    const auto data = llama_perf_sampler(chain);
-
-    LLAMA_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-            __func__, data.t_sample_ms, data.n_sample, data.t_sample_ms / data.n_sample, 1e3 / data.t_sample_ms * data.n_sample);
-}
-
-void llama_perf_reset_context(struct llama_context * ctx) {
+void llama_perf_context_reset(struct llama_context * ctx) {
     ctx->t_start_us  = ggml_time_us();
     ctx->t_eval_us   = ctx->n_eval = 0;
     ctx->t_p_eval_us = ctx->n_p_eval = 0;
-}
-
-void llama_perf_reset_sampler(struct llama_sampler * chain) {
-    auto * p = (struct llama_sampler_chain *) chain->ctx;
-
-    p->t_sample_us = p->n_sample = 0;
 }
 
 void llama_perf_dump_yaml(FILE * stream, const llama_context * ctx) {

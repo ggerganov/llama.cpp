@@ -308,7 +308,7 @@ int main(int argc, char ** argv) {
         // process the prompt
         process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-        llama_perf_print_context(ctx_llava->ctx_llama);
+        llama_perf_context_print(ctx_llava->ctx_llama);
         llava_image_embed_free(image_embed);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
@@ -325,7 +325,7 @@ int main(int argc, char ** argv) {
             // process the prompt
             process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-            llama_perf_print_context(ctx_llava->ctx_llama);
+            llama_perf_context_print(ctx_llava->ctx_llama);
             llava_image_embed_free(image_embed);
             ctx_llava->model = NULL;
             llava_free(ctx_llava);

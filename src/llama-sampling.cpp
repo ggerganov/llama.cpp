@@ -1599,3 +1599,39 @@ struct llama_sampler * llama_sampler_init_logit_bias(
         },
     };
 }
+
+// perf
+
+struct llama_perf_sampler_data llama_perf_sampler(const struct llama_sampler * chain) {
+    struct llama_perf_sampler_data data = {};
+
+    if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
+        // TODO: return empty data, or GGML_ABORT() ?
+        return data;
+    }
+
+    const auto * p = (const struct llama_sampler_chain *) chain->ctx;
+
+    data.t_sample_ms = 1e-3 * p->t_sample_us;
+    data.n_sample    = std::max(0, p->n_sample);
+
+    return data;
+}
+
+void llama_perf_sampler_print(const struct llama_sampler * chain) {
+    const auto data = llama_perf_sampler(chain);
+
+    LLAMA_LOG_INFO("%s:    sampling time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
+            __func__, data.t_sample_ms, data.n_sample, data.t_sample_ms / data.n_sample, 1e3 / data.t_sample_ms * data.n_sample);
+}
+
+void llama_perf_sampler_reset(struct llama_sampler * chain) {
+    if (chain == nullptr || chain->iface != &llama_sampler_chain_i) {
+        // TODO: return empty data, or GGML_ABORT() ?
+        return;
+    }
+
+    auto * p = (struct llama_sampler_chain *) chain->ctx;
+
+    p->t_sample_us = p->n_sample = 0;
+}

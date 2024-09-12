@@ -257,10 +257,10 @@ void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler *
     // TODO: measure grammar performance
 
     if (gsmpl) {
-        llama_perf_print_sampler(gsmpl->chain);
+        llama_perf_sampler_print(gsmpl->chain);
     }
     if (ctx) {
-        llama_perf_print_context(ctx);
+        llama_perf_context_print(ctx);
     }
 }
 
