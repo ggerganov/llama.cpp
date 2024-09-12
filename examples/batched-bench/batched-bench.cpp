@@ -3,31 +3,9 @@
 #include "llama.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
-
-// mutates the input string
-static std::vector<int> parse_list(char * p) {
-    std::vector<int> ret;
-
-    char * q = p;
-
-    while (*p) {
-        if (*p == ',') {
-            *p = '\0';
-            ret.push_back(std::atoi(q));
-            q = p + 1;
-        }
-
-        ++p;
-    }
-
-    ret.push_back(std::atoi(q));
-
-    return ret;
-}
 
 static void print_usage(int, char ** argv) {
     LOG_TEE("\nexample usage:\n");

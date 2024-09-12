@@ -159,8 +159,6 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
-
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -301,6 +299,9 @@ int main(int argc, char ** argv) {
             LOG_TEE("Input suffix: '%s'\n", params.input_suffix.c_str());
         }
     }
+    smpl = gpt_sampler_init(model, sparams);
+
+    LOG_TEE("sampling seed: %u\n", gpt_sampler_get_seed(smpl));
     LOG_TEE("sampling: \n%s\n", sparams.print().c_str());
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
     LOG_TEE("\n\n");
@@ -339,8 +340,6 @@ int main(int argc, char ** argv) {
     console::set_display(console::prompt);
 
     std::vector<llama_token> embd;
-
-    smpl = gpt_sampler_init(model, sparams);
 
     while (n_remain != 0 || params.interactive) {
         // predict

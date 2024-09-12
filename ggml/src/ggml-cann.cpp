@@ -1942,7 +1942,7 @@ GGML_CALL ggml_backend_t ggml_backend_cann_init(int32_t device) {
         GGML_CANN_LOG_ERROR("%s: error: failed to allocate context\n", __func__);
         return nullptr;
     }
-
+    ggml_cann_set_device(ctx->device);
     ggml_backend_t cann_backend =
         new ggml_backend{/* .guid      = */ ggml_backend_cann_guid(),
                          /* .interface = */ ggml_backend_cann_interface,
