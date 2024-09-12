@@ -1,11 +1,12 @@
-#include "ggml.h"
+#include "arg.h"
+#include "base64.hpp"
 #include "log.h"
 #include "common.h"
+#include "sampling.h"
 #include "clip.h"
 #include "llava.h"
 #include "llama.h"
-
-#include "base64.hpp"
+#include "ggml.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -40,11 +41,11 @@ static bool eval_string(struct llama_context * ctx_llama, const char* str, int n
     return true;
 }
 
-static const char * sample(struct llama_sampling_context * ctx_sampling,
+static const char * sample(struct gpt_sampler * smpl,
                            struct llama_context * ctx_llama,
                            int * n_past) {
-    const llama_token id = llama_sampling_sample(ctx_sampling, ctx_llama, NULL);
-    llama_sampling_accept(ctx_sampling, ctx_llama, id, true);
+    const llama_token id = gpt_sampler_sample(smpl, ctx_llama, -1);
+    gpt_sampler_accept(smpl, id, true);
     static std::string ret;
     if (llama_token_is_eog(llama_get_model(ctx_llama), id)) {
         ret = "</s>";
@@ -112,9 +113,7 @@ struct llava_context {
     struct llama_model * model = NULL;
 };
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     LOG_TEE("\n example usage:\n");
     LOG_TEE("\n     %s -m <llava-v1.5-7b/ggml-model-q5_k.gguf> --mmproj <llava-v1.5-7b/mmproj-model-f16.gguf> --image <path/to/an/image.jpg> --image <path/to/another/image.jpg> [--temp 0.1] [-p \"describe the image in detail.\"]\n", argv[0]);
     LOG_TEE("\n note: a lower temperature value like 0.1 is recommended for better quality.\n");
@@ -129,14 +128,14 @@ static struct llava_image_embed * load_image(llava_context * ctx_llava, gpt_para
         if (!params->image.empty()) {
             LOG_TEE("using base64 encoded image instead of command line image path\n");
         }
-        embed = llava_image_embed_make_with_prompt_base64(ctx_llava->ctx_clip, params->n_threads, prompt);
+        embed = llava_image_embed_make_with_prompt_base64(ctx_llava->ctx_clip, params->cpuparams.n_threads, prompt);
         if (!embed) {
             LOG_TEE("%s: can't load image from prompt\n", __func__);
             return NULL;
         }
         params->prompt = remove_image_from_prompt(prompt);
     } else {
-        embed = llava_image_embed_make_with_filename(ctx_llava->ctx_clip, params->n_threads, fname.c_str());
+        embed = llava_image_embed_make_with_filename(ctx_llava->ctx_clip, params->cpuparams.n_threads, fname.c_str());
         if (!embed) {
             fprintf(stderr, "%s: is %s really an image file?\n", __func__, fname.c_str());
             return NULL;
@@ -191,15 +190,15 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
 
     LOG_TEE("\n");
 
-    struct llama_sampling_context * ctx_sampling = llama_sampling_init(params->sparams);
-    if (!ctx_sampling) {
+    struct gpt_sampler * smpl = gpt_sampler_init(ctx_llava->model, params->sparams);
+    if (!smpl) {
         fprintf(stderr, "%s: failed to initialize sampling subsystem\n", __func__);
         exit(1);
     }
 
     std::string response = "";
     for (int i = 0; i < max_tgt_len; i++) {
-        const char * tmp = sample(ctx_sampling, ctx_llava->ctx_llama, &n_past);
+        const char * tmp = sample(smpl, ctx_llava->ctx_llama, &n_past);
         response += tmp;
         if (strcmp(tmp, "</s>") == 0) break;
         if (strstr(tmp, "###")) break; // Yi-VL behavior
@@ -211,7 +210,7 @@ static void process_prompt(struct llava_context * ctx_llava, struct llava_image_
         fflush(stdout);
     }
 
-    llama_sampling_free(ctx_sampling);
+    gpt_sampler_free(smpl);
     printf("\n");
 }
 
@@ -280,8 +279,7 @@ int main(int argc, char ** argv) {
 
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, print_usage)) {
         return 1;
     }
 
@@ -293,7 +291,7 @@ int main(int argc, char ** argv) {
 #endif // LOG_DISABLE_LOGS
 
     if (params.mmproj.empty() || (params.image.empty() && !prompt_contains_image(params.prompt))) {
-        print_usage(argc, argv, {});
+        print_usage(argc, argv);
         return 1;
     }
     auto model = llava_init(&params);
@@ -310,7 +308,7 @@ int main(int argc, char ** argv) {
         // process the prompt
         process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-        llama_print_timings(ctx_llava->ctx_llama);
+        llama_perf_print(ctx_llava->ctx_llama, LLAMA_PERF_TYPE_CONTEXT);
         llava_image_embed_free(image_embed);
         ctx_llava->model = NULL;
         llava_free(ctx_llava);
@@ -327,7 +325,7 @@ int main(int argc, char ** argv) {
             // process the prompt
             process_prompt(ctx_llava, image_embed, &params, params.prompt);
 
-            llama_print_timings(ctx_llava->ctx_llama);
+            llama_perf_print(ctx_llava->ctx_llama, LLAMA_PERF_TYPE_CONTEXT);
             llava_image_embed_free(image_embed);
             ctx_llava->model = NULL;
             llava_free(ctx_llava);

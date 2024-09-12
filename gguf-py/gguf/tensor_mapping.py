@@ -27,6 +27,7 @@ class TensorNameMap:
             "embedding.word_embeddings",                 # chatglm
             "transformer.token_embeddings",              # openelm
             "shared",                                    # t5
+            "rwkv.embeddings",                           # rwkv
         ),
 
         # Token type embeddings
@@ -40,6 +41,7 @@ class TensorNameMap:
             "embeddings.LayerNorm",       # bert
             "emb_ln",                     # nomic-bert
             "transformer.norm",           # openelm
+            "rwkv.blocks.0.pre_ln",       # rwkv
         ),
 
         # Position embeddings
@@ -57,6 +59,7 @@ class TensorNameMap:
             "word_embeddings_for_head",  # persimmon
             "lm_head.linear",            # phi2
             "output_layer",              # chatglm
+            "head",                      # rwkv
         ),
 
         # Output norm
@@ -76,6 +79,7 @@ class TensorNameMap:
             "encoder.final_layernorm",                 # chatglm
             "transformer.norm",                        # openelm
             "model.norm",                              # nemotron
+            "rwkv.ln_out",                             # rwkv
         ),
 
         # Rope frequencies
@@ -108,12 +112,14 @@ class TensorNameMap:
             "transformer.blocks.{bid}.norm_attn_norm.norm_1",       # dbrx
             "encoder.layers.{bid}.input_layernorm",                 # chatglm
             "transformer.layers.{bid}.attn_norm",                   # openelm
+            "rwkv.blocks.{bid}.ln1",                                # rwkv
         ),
 
         # Attention norm 2
         MODEL_TENSOR.ATTN_NORM_2: (
-            "transformer.h.{bid}.ln_attn",  # falcon40b
+            "transformer.h.{bid}.ln_attn",                  # falcon40b
             "encoder.layer.{bid}.layer_norm_1",             # jina-v2-code
+            "rwkv.blocks.{bid}.ln2",                        # rwkv
         ),
 
         # Attention query-key-value
@@ -432,6 +438,98 @@ class TensorNameMap:
         MODEL_TENSOR.SSM_OUT: (
             "model.layers.{bid}.out_proj",
             "backbone.layers.{bid}.mixer.out_proj",
+        ),
+
+        MODEL_TENSOR.TIME_MIX_W1: (
+            "rwkv.blocks.{bid}.attention.time_maa_w1",  # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_W2: (
+            "rwkv.blocks.{bid}.attention.time_maa_w2",  # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_LERP_X: (
+            "rwkv.blocks.{bid}.attention.time_maa_x",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_LERP_K: (
+            "rwkv.blocks.{bid}.attention.time_maa_k",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_LERP_V: (
+            "rwkv.blocks.{bid}.attention.time_maa_v",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_LERP_R: (
+            "rwkv.blocks.{bid}.attention.time_maa_r",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_LERP_G: (
+            "rwkv.blocks.{bid}.attention.time_maa_g",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_LERP_W: (
+            "rwkv.blocks.{bid}.attention.time_maa_w",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_FIRST: (
+            "rwkv.blocks.{bid}.attention.time_faaaa",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_DECAY: (
+            "rwkv.blocks.{bid}.attention.time_decay",   # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_DECAY_W1: (
+            "rwkv.blocks.{bid}.attention.time_decay_w1",  # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_DECAY_W2: (
+            "rwkv.blocks.{bid}.attention.time_decay_w2",  # rwkv v6
+        ),
+
+        MODEL_TENSOR.TIME_MIX_KEY: (
+            "rwkv.blocks.{bid}.attention.key", # rwkv
+        ),
+
+        MODEL_TENSOR.TIME_MIX_VALUE: (
+            "rwkv.blocks.{bid}.attention.value", # rwkv
+        ),
+
+        MODEL_TENSOR.TIME_MIX_RECEPTANCE: (
+            "rwkv.blocks.{bid}.attention.receptance", # rwkv
+        ),
+
+        MODEL_TENSOR.TIME_MIX_GATE: (
+            "rwkv.blocks.{bid}.attention.gate", # rwkv
+        ),
+
+        MODEL_TENSOR.TIME_MIX_LN: (
+            "rwkv.blocks.{bid}.attention.ln_x", # rwkv
+        ),
+
+        MODEL_TENSOR.TIME_MIX_OUTPUT: (
+            "rwkv.blocks.{bid}.attention.output", # rwkv
+        ),
+
+        MODEL_TENSOR.CHANNEL_MIX_LERP_K: (
+            "rwkv.blocks.{bid}.feed_forward.time_maa_k", # rwkv v6
+        ),
+
+        MODEL_TENSOR.CHANNEL_MIX_LERP_R: (
+            "rwkv.blocks.{bid}.feed_forward.time_maa_r", # rwkv v6
+        ),
+
+        MODEL_TENSOR.CHANNEL_MIX_KEY: (
+            "rwkv.blocks.{bid}.feed_forward.key", # rwkv
+        ),
+
+        MODEL_TENSOR.CHANNEL_MIX_RECEPTANCE: (
+            "rwkv.blocks.{bid}.feed_forward.receptance", # rwkv
+        ),
+
+        MODEL_TENSOR.CHANNEL_MIX_VALUE: (
+            "rwkv.blocks.{bid}.feed_forward.value", # rwkv
         ),
 
         MODEL_TENSOR.ATTN_Q_A: (

@@ -26,6 +26,8 @@ static const std::vector<struct quant_option> QUANT_OPTIONS = {
     { "IQ2_M",    LLAMA_FTYPE_MOSTLY_IQ2_M,    " 2.7  bpw quantization",            },
     { "IQ1_S",    LLAMA_FTYPE_MOSTLY_IQ1_S,    " 1.56 bpw quantization",            },
     { "IQ1_M",    LLAMA_FTYPE_MOSTLY_IQ1_M,    " 1.75 bpw quantization",            },
+    { "TQ1_0",    LLAMA_FTYPE_MOSTLY_TQ1_0,    " 1.69 bpw ternarization",           },
+    { "TQ2_0",    LLAMA_FTYPE_MOSTLY_TQ2_0,    " 2.06 bpw ternarization",           },
     { "Q2_K",     LLAMA_FTYPE_MOSTLY_Q2_K,     " 2.96G, +3.5199 ppl @ Llama-3-8B",  },
     { "Q2_K_S",   LLAMA_FTYPE_MOSTLY_Q2_K_S,   " 2.96G, +3.1836 ppl @ Llama-3-8B",  },
     { "IQ3_XXS",  LLAMA_FTYPE_MOSTLY_IQ3_XXS,  " 3.06 bpw quantization",            },
@@ -104,7 +106,7 @@ static void usage(const char * executable) {
     printf("  --exclude-weights tensor_name: use importance matrix for this/these tensor(s)\n");
     printf("  --output-tensor-type ggml_type: use this ggml_type for the output.weight tensor\n");
     printf("  --token-embedding-type ggml_type: use this ggml_type for the token embeddings tensor\n");
-    printf("  --keep-split: will generate quatized model in the same shards as input");
+    printf("  --keep-split: will generate quantized model in the same shards as input\n");
     printf("  --override-kv KEY=TYPE:VALUE\n");
     printf("      Advanced option to override model metadata by key in the quantized model. May be specified multiple times.\n");
     printf("Note: --include-weights and --exclude-weights cannot be used together\n");

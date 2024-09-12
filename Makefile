@@ -39,10 +39,12 @@ BUILD_TARGETS = \
 	llama-tokenize \
 	llama-vdot \
 	llama-cvector-generator \
+	llama-gen-docs \
 	tests/test-c.o
 
 # Binaries only useful for tests
 TEST_TARGETS = \
+	tests/test-arg-parser \
 	tests/test-autorelease \
 	tests/test-backend-ops \
 	tests/test-chat-template \
@@ -432,7 +434,7 @@ endif
 # TODO: probably these flags need to be tweaked on some architectures
 #       feel free to update the Makefile for your architecture and send a pull request or issue
 
-ifndef RISCV
+ifndef RISCV_CROSS_COMPILE
 
 ifeq ($(UNAME_M),$(filter $(UNAME_M),x86_64 i686 amd64))
 	# Use all CPU extensions that are available:
@@ -512,7 +514,12 @@ ifneq ($(filter loongarch64%,$(UNAME_M)),)
 	MK_CXXFLAGS += -mlasx
 endif
 
-else
+ifneq ($(filter riscv64%,$(UNAME_M)),)
+	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
+	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
+endif
+
+else # RISC-V CROSS COMPILATION
 	MK_CFLAGS   += -march=rv64gcv -mabi=lp64d
 	MK_CXXFLAGS += -march=rv64gcv -mabi=lp64d
 endif
@@ -923,11 +930,11 @@ OBJ_LLAMA = \
 
 OBJ_COMMON = \
 	common/common.o \
+	common/arg.o \
 	common/console.o \
 	common/ngram-cache.o \
 	common/sampling.o \
 	common/train.o \
-	common/grammar-parser.o \
 	common/build-info.o \
 	common/json-schema-to-grammar.o
 
@@ -1156,6 +1163,11 @@ common/common.o: \
 	include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+common/arg.o: \
+	common/arg.cpp \
+	common/arg.h
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 common/sampling.o: \
 	common/sampling.cpp \
 	common/sampling.h \
@@ -1165,11 +1177,6 @@ common/sampling.o: \
 common/console.o: \
 	common/console.cpp \
 	common/console.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-common/grammar-parser.o: \
-	common/grammar-parser.cpp \
-	common/grammar-parser.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 common/json-schema-to-grammar.o: \
@@ -1448,6 +1455,11 @@ examples/server/%.hpp: examples/server/public/% Makefile
 		echo "unsigned int $${NAME}_len = $(shell cat $< | wc -c );" \
 	) > $@
 
+llama-gen-docs: examples/gen-docs/gen-docs.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
 libllava.a: examples/llava/llava.cpp \
 	examples/llava/llava.h \
 	examples/llava/clip.cpp \
@@ -1504,6 +1516,11 @@ run-benchmark-matmult: llama-benchmark-matmult
 	./$@
 
 .PHONY: run-benchmark-matmult swift
+
+tests/test-arg-parser: tests/test-arg-parser.cpp \
+	$(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-llama-grammar: tests/test-llama-grammar.cpp \
 	$(OBJ_ALL)

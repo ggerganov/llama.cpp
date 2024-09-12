@@ -175,7 +175,7 @@ typedef __fp16 ggml_fp16_internal_t;
 
 // 32-bit ARM compatibility
 
-// vaddvq_s16
+// vaddlvq_s16
 // vpaddq_s16
 // vpaddq_s32
 // vaddvq_s32
@@ -185,12 +185,9 @@ typedef __fp16 ggml_fp16_internal_t;
 // vzip1_u8
 // vzip2_u8
 
-inline static int32_t vaddvq_s16(int16x8_t v) {
-    return
-        (int32_t)vgetq_lane_s16(v, 0) + (int32_t)vgetq_lane_s16(v, 1) +
-        (int32_t)vgetq_lane_s16(v, 2) + (int32_t)vgetq_lane_s16(v, 3) +
-        (int32_t)vgetq_lane_s16(v, 4) + (int32_t)vgetq_lane_s16(v, 5) +
-        (int32_t)vgetq_lane_s16(v, 6) + (int32_t)vgetq_lane_s16(v, 7);
+inline static int32_t vaddlvq_s16(int16x8_t v) {
+    int32x4_t v0 = vreinterpretq_s32_s64(vpaddlq_s32(vpaddlq_s16(v)));
+    return vgetq_lane_s32(v0, 0) + vgetq_lane_s32(v0, 2);
 }
 
 inline static int16x8_t vpaddq_s16(int16x8_t a, int16x8_t b) {
@@ -632,7 +629,15 @@ inline static float ggml_lookup_fp16_to_fp32(ggml_fp16_t f) {
 #define GGML_FP32_TO_FP16(x) GGML_COMPUTE_FP32_TO_FP16(x)
 #endif
 
+enum ggml_cgraph_eval_order {
+    GGML_CGRAPH_EVAL_ORDER_LEFT_TO_RIGHT = 0,
+    GGML_CGRAPH_EVAL_ORDER_RIGHT_TO_LEFT,
+    GGML_CGRAPH_EVAL_ORDER_COUNT
+};
+
 // bitset
+
+typedef uint32_t ggml_bitset_t;
 
 static_assert(sizeof(ggml_bitset_t) == 4, "bitset_t constants must be updated");
 #define BITSET_SHR 5 // log2(sizeof(ggml_bitset_t)*8)
@@ -658,6 +663,12 @@ static inline void ggml_bitset_clear(ggml_bitset_t * bitset, size_t i) {
 
 #define GGML_HASHSET_FULL ((size_t)-1)
 #define GGML_HASHSET_ALREADY_EXISTS ((size_t)-2)
+
+struct ggml_hash_set {
+    size_t size;
+    ggml_bitset_t * used;       // whether or not the keys are in use i.e. set
+    struct ggml_tensor ** keys; // actual tensors in the set, keys[i] is only defined if ggml_bitset_get(used, i)
+};
 
 struct ggml_hash_set ggml_hash_set_new(size_t size);
 void                 ggml_hash_set_free(struct ggml_hash_set * hash_set);
@@ -747,6 +758,24 @@ static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct g
     // visited all hash table entries -> not found
     GGML_ABORT("fatal error");
 }
+
+// computation graph
+
+struct ggml_cgraph {
+    int size;
+    int n_nodes;
+    int n_leafs;
+
+    struct ggml_tensor ** nodes;
+    struct ggml_tensor ** grads;
+    struct ggml_tensor ** leafs;
+
+    struct ggml_hash_set visited_hash_set;
+
+    enum ggml_cgraph_eval_order order;
+};
+
+struct ggml_cgraph ggml_graph_view(struct ggml_cgraph * cgraph, int i0, int i1);
 
 #ifdef __cplusplus
 }

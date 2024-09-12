@@ -1,3 +1,4 @@
+#include "arg.h"
 #include "common.h"
 #include "ggml.h"
 #include "ggml-alloc.h"
@@ -369,7 +370,7 @@ struct lora_merge_ctx {
 
         // write data to output file
         {
-            auto result = gf->nodes[gf->n_nodes - 1];
+            auto * result = ggml_graph_node(gf, -1);
             size_t len = ggml_nbytes(result);
             if (read_buf.size() < len) {
                 read_buf.resize(len);
@@ -391,9 +392,7 @@ struct lora_merge_ctx {
     }
 };
 
-static void print_usage(int argc, char ** argv, const gpt_params & params) {
-    gpt_params_print_usage(argc, argv, params);
-
+static void print_usage(int, char ** argv) {
     printf("\nexample usage:\n");
     printf("\n  %s -m base-model.gguf --lora lora-file.gguf -o merged-model-f16.gguf\n", argv[0]);
     printf("\nNOTE: output model is F16\n");
@@ -403,14 +402,13 @@ static void print_usage(int argc, char ** argv, const gpt_params & params) {
 int main(int argc, char ** argv) {
     gpt_params params;
 
-    if (!gpt_params_parse(argc, argv, params)) {
-        print_usage(argc, argv, params);
+    if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EXPORT_LORA, print_usage)) {
         return 1;
     }
 
     g_verbose = (params.verbosity == 1);
     try {
-        lora_merge_ctx ctx(params.model, params.lora_adapters, params.lora_outfile, params.n_threads);
+        lora_merge_ctx ctx(params.model, params.lora_adapters, params.lora_outfile, params.cpuparams.n_threads);
         ctx.run_merge();
     } catch (const std::exception & err) {
         fprintf(stderr, "%s\n", err.what());
