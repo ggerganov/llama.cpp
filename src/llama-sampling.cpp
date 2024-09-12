@@ -1667,10 +1667,10 @@ struct llama_perf_sampler_data llama_perf_sampler(const struct llama_sampler * c
         return data;
     }
 
-    const auto * p = (const struct llama_sampler_chain *) chain->ctx;
+    const auto * ctx = (const struct llama_sampler_chain *) chain->ctx;
 
-    data.t_sample_ms = 1e-3 * p->t_sample_us;
-    data.n_sample    = std::max(0, p->n_sample);
+    data.t_sample_ms = 1e-3 * ctx->t_sample_us;
+    data.n_sample    = std::max(0, ctx->n_sample);
 
     return data;
 }
@@ -1688,7 +1688,7 @@ void llama_perf_sampler_reset(struct llama_sampler * chain) {
         return;
     }
 
-    auto * p = (struct llama_sampler_chain *) chain->ctx;
+    auto * ctx = (struct llama_sampler_chain *) chain->ctx;
 
-    p->t_sample_us = p->n_sample = 0;
+    ctx->t_sample_us = ctx->n_sample = 0;
 }
