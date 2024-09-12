@@ -1208,7 +1208,10 @@ async def wait_for_slots_status(context,
         while True:
             async with await session.get(f'{base_url}/slots', params=params) as slots_response:
                 status_code = slots_response.status
-                slots = await slots_response.json()
+                try:
+                    slots = await slots_response.json()
+                except:
+                    slots = await slots_response.text()
                 if context.debug:
                     print(f"slots responses {slots}\n")
                 if status_code == 503 and status_code == expected_http_status_code:
