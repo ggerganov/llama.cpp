@@ -287,6 +287,7 @@ void ggml_abort(const char * file, int line, const char * fmt, ...) {
 #define GGML_DEBUG 0
 #define GGML_GELU_FP16
 #define GGML_GELU_QUICK_FP16
+#define GGML_N_TASKS_MAX (-1)
 
 #define GGML_SOFT_MAX_UNROLL 4
 #define GGML_VEC_DOT_UNROLL  2
@@ -1120,21 +1121,21 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
 #define GGML_F32x4_ADD          vaddq_f32
 #define GGML_F32x4_MUL          vmulq_f32
 #define GGML_F32x4_REDUCE_ONE(x) vaddvq_f32(x)
-#define GGML_F32x4_REDUCE(res, x)              \
-{                                              \
-    int offset = GGML_F32_ARR >> 1;            \
-    for (int i = 0; i < offset; ++i) {         \
-        x[i] = vaddq_f32(x[i], x[offset+i]);   \
-    }                                          \
-    offset >>= 1;                              \
-    for (int i = 0; i < offset; ++i) {         \
-        x[i] = vaddq_f32(x[i], x[offset+i]);   \
-    }                                          \
-    offset >>= 1;                              \
-    for (int i = 0; i < offset; ++i) {         \
-        x[i] = vaddq_f32(x[i], x[offset+i]);   \
-    }                                          \
-    res = GGML_F32x4_REDUCE_ONE(x[0]);         \
+#define GGML_F32x4_REDUCE(res, x)                  \
+{                                                  \
+    int offset = GGML_F32_ARR >> 1;                \
+    for (int i = 0; i < offset; ++i) {             \
+        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]); \
+    }                                              \
+    offset >>= 1;                                  \
+    for (int i = 0; i < offset; ++i) {             \
+        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]); \
+    }                                              \
+    offset >>= 1;                                  \
+    for (int i = 0; i < offset; ++i) {             \
+        (x)[i] = vaddq_f32((x)[i], (x)[offset+i]); \
+    }                                              \
+    (res) = GGML_F32x4_REDUCE_ONE((x)[0]);         \
 }
 
 #define GGML_F32_VEC        GGML_F32x4
@@ -1161,30 +1162,30 @@ ggml_type_traits_t ggml_internal_get_type_traits(enum ggml_type type) {
     #define GGML_F16x8_FMA(a, b, c) vfmaq_f16(a, b, c)
     #define GGML_F16x8_ADD          vaddq_f16
     #define GGML_F16x8_MUL          vmulq_f16
-    #define GGML_F16x8_REDUCE(res, x)                             \
-    do {                                                          \
-        int offset = GGML_F16_ARR >> 1;                           \
-        for (int i = 0; i < offset; ++i) {                        \
-            x[i] = vaddq_f16(x[i], x[offset+i]);                  \
-        }                                                         \
-        offset >>= 1;                                             \
-        for (int i = 0; i < offset; ++i) {                        \
-            x[i] = vaddq_f16(x[i], x[offset+i]);                  \
-        }                                                         \
-        offset >>= 1;                                             \
-        for (int i = 0; i < offset; ++i) {                        \
-            x[i] = vaddq_f16(x[i], x[offset+i]);                  \
-        }                                                         \
-        const float32x4_t t0 = vcvt_f32_f16(vget_low_f16 (x[0])); \
-        const float32x4_t t1 = vcvt_f32_f16(vget_high_f16(x[0])); \
-        res = (ggml_float) vaddvq_f32(vaddq_f32(t0, t1));         \
+    #define GGML_F16x8_REDUCE(res, x)                               \
+    do {                                                            \
+        int offset = GGML_F16_ARR >> 1;                             \
+        for (int i = 0; i < offset; ++i) {                          \
+            (x)[i] = vaddq_f16((x)[i], (x)[offset+i]);              \
+        }                                                           \
+        offset >>= 1;                                               \
+        for (int i = 0; i < offset; ++i) {                          \
+            (x)[i] = vaddq_f16((x)[i], (x)[offset+i]);              \
+        }                                                           \
+        offset >>= 1;                                               \
+        for (int i = 0; i < offset; ++i) {                          \
+            (x)[i] = vaddq_f16((x)[i], (x)[offset+i]);              \
+        }                                                           \
+        const float32x4_t t0 = vcvt_f32_f16(vget_low_f16 ((x)[0])); \
+        const float32x4_t t1 = vcvt_f32_f16(vget_high_f16((x)[0])); \
+        (res) = (ggml_float) vaddvq_f32(vaddq_f32(t0, t1));         \
     } while (0)
 
     #define GGML_F16_VEC                GGML_F16x8
     #define GGML_F16_VEC_ZERO           GGML_F16x8_ZERO
     #define GGML_F16_VEC_SET1           GGML_F16x8_SET1
     #define GGML_F16_VEC_LOAD(p, i)     GGML_F16x8_LOAD(p)
-    #define GGML_F16_VEC_STORE(p, r, i) GGML_F16x8_STORE((ggml_fp16_internal_t *)(p), r[i])
+    #define GGML_F16_VEC_STORE(p, r, i) GGML_F16x8_STORE((ggml_fp16_internal_t *)(p), (r)[i])
     #define GGML_F16_VEC_FMA            GGML_F16x8_FMA
     #define GGML_F16_VEC_ADD            GGML_F16x8_ADD
     #define GGML_F16_VEC_MUL            GGML_F16x8_MUL
@@ -1892,6 +1893,23 @@ static inline void __lsx_f16x4_store(ggml_fp16_t * x, __m128 y) {
 #define GGML_F32_ARR (GGML_F32_STEP/GGML_F32_EPR)
 #define GGML_F16_ARR (GGML_F16_STEP/GGML_F16_EPR)
 #endif
+
+//
+// ggml object
+//
+
+struct ggml_object {
+    size_t offs;
+    size_t size;
+
+    struct ggml_object * next;
+
+    enum ggml_object_type type;
+
+    char padding[4];
+};
+
+static const size_t GGML_OBJECT_SIZE = sizeof(struct ggml_object);
 
 //
 // ggml context
@@ -19159,6 +19177,34 @@ void ggml_graph_clear(struct ggml_cgraph * cgraph) {
     cgraph->n_leafs = 0;
     cgraph->n_nodes = 0;
     ggml_hash_set_reset(&cgraph->visited_hash_set);
+}
+
+int ggml_graph_size(struct ggml_cgraph * cgraph) {
+    return cgraph->size;
+}
+
+struct ggml_tensor * ggml_graph_node(struct ggml_cgraph * cgraph, int i) {
+    if (i < 0) {
+        GGML_ASSERT(cgraph->n_nodes + i >= 0);
+        return cgraph->nodes[cgraph->n_nodes + i];
+    }
+
+    GGML_ASSERT(i < cgraph->n_nodes);
+    return cgraph->nodes[i];
+}
+
+struct ggml_tensor ** ggml_graph_nodes(struct ggml_cgraph * cgraph) {
+    return cgraph->nodes;
+}
+
+int ggml_graph_n_nodes(struct ggml_cgraph * cgraph) {
+    return cgraph->n_nodes;
+}
+
+void ggml_graph_add_node(struct ggml_cgraph * cgraph, struct ggml_tensor * tensor) {
+    GGML_ASSERT(cgraph->size > cgraph->n_nodes);
+    cgraph->nodes[cgraph->n_nodes] = tensor;
+    cgraph->n_nodes++;
 }
 
 // Android's libc implementation "bionic" does not support setting affinity

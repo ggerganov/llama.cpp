@@ -21,7 +21,7 @@
 #include <memory>
 #include <mutex>
 
-#include "ggml.h"
+#include "ggml-impl.h"
 #include "ggml-backend-impl.h"
 
 #include "ggml-vulkan-shaders.hpp"

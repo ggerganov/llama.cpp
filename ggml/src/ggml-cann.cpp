@@ -30,6 +30,7 @@
 #include <cstring>
 #include <mutex>
 
+#include "ggml-impl.h"
 #include "ggml-backend-impl.h"
 #include "ggml-cann/aclnn_ops.h"
 #include "ggml-cann/common.h"

@@ -370,7 +370,7 @@ struct lora_merge_ctx {
 
         // write data to output file
         {
-            auto result = gf->nodes[gf->n_nodes - 1];
+            auto * result = ggml_graph_node(gf, -1);
             size_t len = ggml_nbytes(result);
             if (read_buf.size() < len) {
                 read_buf.resize(len);

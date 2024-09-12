@@ -9877,8 +9877,8 @@ struct llm_build_context {
     struct ggml_cgraph * append_pooling(struct ggml_cgraph * gf) {
         // find result_norm tensor for input
         struct ggml_tensor * inp = nullptr;
-        for (int i = gf->n_nodes - 1; i >= 0; --i) {
-            inp = gf->nodes[i];
+        for (int i = ggml_graph_n_nodes(gf) - 1; i >= 0; --i) {
+            inp = ggml_graph_node(gf, i);
             if (strcmp(inp->name, "result_norm") == 0 || strcmp(inp->name, "result_embd") == 0) {
                 break;
             } else {
@@ -16207,8 +16207,8 @@ static int llama_decode_internal(
         ggml_cgraph * gf = llama_build_graph(lctx, ubatch, false);
 
         // the output is always the last tensor in the graph
-        struct ggml_tensor * res  = gf->nodes[gf->n_nodes - 1];
-        struct ggml_tensor * embd = gf->nodes[gf->n_nodes - 2];
+        struct ggml_tensor * res  = ggml_graph_node(gf, -1);
+        struct ggml_tensor * embd = ggml_graph_node(gf, -2);
 
         if (lctx.n_outputs == 0) {
             // no output
@@ -16217,9 +16217,9 @@ static int llama_decode_internal(
         } else if (cparams.embeddings) {
             res  = nullptr; // do not extract logits for embedding case
             embd = nullptr;
-            for (int i = gf->n_nodes - 1; i >= 0; --i) {
-                if (strcmp(gf->nodes[i]->name, "result_embd_pooled") == 0) {
-                    embd = gf->nodes[i];
+            for (int i = ggml_graph_n_nodes(gf) - 1; i >= 0; --i) {
+                if (strcmp(ggml_graph_node(gf, i)->name, "result_embd_pooled") == 0) {
+                    embd = ggml_graph_node(gf, i);
                     break;
                 }
             }
@@ -16436,15 +16436,15 @@ static int llama_encode_internal(
     // there are two cases here
     if (llama_model_has_decoder(&lctx.model)) {
         // first case is an encoder-decoder T5 model where embeddings are passed to decoder
-        embd = gf->nodes[gf->n_nodes - 1];
+        embd = ggml_graph_node(gf, -1);
         GGML_ASSERT(strcmp(embd->name, "result_norm") == 0 && "missing result_output tensor");
     } else {
         // second case is an encoder-only T5 model
         if (cparams.embeddings) {
             // only output embeddings if required
-            embd = gf->nodes[gf->n_nodes - 1];
+            embd = ggml_graph_node(gf, -1);
             if (strcmp(embd->name, "result_embd_pooled") != 0) {
-                embd = gf->nodes[gf->n_nodes - 2];
+                embd = ggml_graph_node(gf, -2);
             }
             GGML_ASSERT(strcmp(embd->name, "result_embd_pooled") == 0 && "missing embeddings tensor");
         }
@@ -18492,7 +18492,7 @@ struct llama_context * llama_new_context_with_model(
 
             // note: the number of splits during measure is higher than during inference due to the kv shift
             int n_splits = ggml_backend_sched_get_n_splits(ctx->sched);
-            LLAMA_LOG_INFO("%s: graph nodes  = %d\n", __func__, gf->n_nodes);
+            LLAMA_LOG_INFO("%s: graph nodes  = %d\n", __func__, ggml_graph_n_nodes(gf));
             LLAMA_LOG_INFO("%s: graph splits = %d\n", __func__, n_splits);
         }
     }

@@ -33,7 +33,7 @@
 #include <sycl/half_type.hpp>
 
 #include "ggml-sycl.h"
-#include "ggml.h"
+#include "ggml-impl.h"
 #include "ggml-backend-impl.h"
 
 #include "ggml-sycl/backend.hpp"
