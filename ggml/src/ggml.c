@@ -23288,6 +23288,14 @@ int ggml_cpu_has_arm_fma(void) {
 #endif
 }
 
+int ggml_cpu_has_riscv_v(void) {
+#if defined(__riscv_v_intrinsic)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 int ggml_cpu_has_metal(void) {
 #if defined(GGML_USE_METAL)
     return 1;
