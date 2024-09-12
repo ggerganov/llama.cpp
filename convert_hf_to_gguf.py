@@ -2771,6 +2771,8 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_tokenizer_model("rwkv")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False)
+        special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]
