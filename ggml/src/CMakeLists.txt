@@ -516,7 +516,8 @@ if (GGML_SYCL)
     endif()
 
     check_cxx_compiler_flag("-fsycl" SUPPORTS_SYCL)
-    if ( DEFINED ENV{ONEAPI_ROOT})
+
+    if (DEFINED ENV{ONEAPI_ROOT})
         message(STATUS "Using oneAPI Release SYCL compiler (icpx).")
     elseif(SUPPORTS_SYCL)
         message(WARNING "Using open-source SYCL compiler (clang++). Didn't detect ENV {ONEAPI_ROOT}.
@@ -554,11 +555,17 @@ if (GGML_SYCL)
 
     find_package(DNNL)
     message("-- DNNL found:" ${DNNL_FOUND})
+
     if (GGML_SYCL_TARGET STREQUAL "INTEL")
         add_compile_definitions(GGML_SYCL_DNNL=${DNNL_FOUND})
     else()
         add_compile_definitions(GGML_SYCL_DNNL=0)
     endif()
+
+    if (${DNNL_FOUND} AND GGML_SYCL_TARGET STREQUAL "INTEL")
+        list(APPEND GGML_EXTRA_LIBS DNNL::dnnl)
+    endif()
+
     if (WIN32)
         find_package(IntelSYCL REQUIRED)
         find_package(MKL REQUIRED)
