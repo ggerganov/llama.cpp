@@ -9,8 +9,8 @@ repos:
   - id: end-of-file-fixer
   - id: check-yaml
   - id: check-added-large-files
-# - repo: https://github.com/PyCQA/flake8
-#   rev: 7.0.0
-#   hooks:
-#   -   id: flake8
-#       additional_dependencies: [flake8-no-print]
+- repo: https://github.com/PyCQA/flake8
+  rev: 7.0.0
+  hooks:
+  -   id: flake8
+      additional_dependencies: [flake8-no-print]
