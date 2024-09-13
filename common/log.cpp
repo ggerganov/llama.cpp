@@ -69,8 +69,8 @@ struct gpt_log_entry {
     void print(FILE * file = nullptr) const {
         FILE * fcur = file;
         if (!fcur) {
-            // stderr displays DBG messages only when the verbosity is high
-            // these messages can still be logged to a file
+            // stderr displays DBG messages only when their verbosity level is not higher than the threshold
+            // these messages will still be logged to a file
             if (level == GGML_LOG_LEVEL_DEBUG && gpt_log_verbosity_thold < LOG_DEFAULT_DEBUG) {
                 return;
             }

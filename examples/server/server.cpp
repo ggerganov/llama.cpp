@@ -2077,13 +2077,6 @@ struct server_context {
                         slot_npast++;
                     }
 
-                    //LOG_VERBOSE("prompt processing progress", {
-                    //    {"id_slot",  slot.id},
-                    //    {"n_past",   slot.n_past},
-                    //    {"n_ctx",    n_ctx},
-                    //    {"n_tokens", batch.n_tokens},
-                    //    {"progress", (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens},
-                    //});
                     SLT_INF(slot, "prompt processing progress, n_past = %d, n_tokens = %d, progress = %f\n", slot.n_past, batch.n_tokens, (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens);
 
                     // entire prompt has been processed
@@ -2098,12 +2091,6 @@ struct server_context {
                         slot.n_decoded = 0;
                         slot.i_batch   = batch.n_tokens - 1;
 
-                        //LOG_VERBOSE("prompt done", {
-                        //    {"id_slot",  slot.id},
-                        //    {"n_past",   slot.n_past},
-                        //    {"n_ctx",    n_ctx},
-                        //    {"n_tokens", batch.n_tokens},
-                        //});
                         SLT_INF(slot, "prompt done, n_past = %d, n_tokens = %d\n", slot.n_past, batch.n_tokens);
                     }
                 }

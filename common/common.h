@@ -341,7 +341,8 @@ struct gpt_params {
     bool batched_bench_output_jsonl = false;
 };
 
-// call once at the start of a program using common
+// call once at the start of a program if it uses libcommon
+// initializes the logging system and prints info about the build
 void gpt_init();
 
 std::string gpt_params_get_system_info(const gpt_params & params);

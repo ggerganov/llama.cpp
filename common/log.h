@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ggml.h"
+#include "ggml.h" // for ggml_log_level
 
 #ifndef __GNUC__
 #    define LOG_ATTRIBUTE_FORMAT(...)
@@ -48,7 +48,10 @@ void gpt_log_add(struct gpt_log * log, enum ggml_log_level level, const char * f
 //   0.00.090.578 I llm_load_tensors: offloading 32 repeating layers to GPU
 //   0.00.090.579 I llm_load_tensors: offloading non-repeating layers to GPU
 //
-// I - info, W - warning, E - error, D - debug
+// I - info    (stdout, V = 0)
+// W - warning (stderr, V = 0)
+// E - error   (stderr, V = 0)
+// D - debug   (stderr, V = LOG_DEFAULT_DEBUG)
 //
 
 void gpt_log_set_file      (struct gpt_log * log, const char * file);       // not thread-safe
@@ -57,13 +60,13 @@ void gpt_log_set_prefix    (struct gpt_log * log,       bool   prefix);     // w
 void gpt_log_set_timestamps(struct gpt_log * log,       bool   timestamps); // whether to output timestamps in the prefix
 
 // helper macros for logging
-// use these to avoid computing log arguments if the verbosity is lower than the threshold
+// use these to avoid computing log arguments if the verbosity of the log is higher than the threshold
 //
 // for example:
 //
 //   LOG_DBG("this is a debug message: %d\n", expensive_function());
 //
-// this will avoid calling expensive_function() if the verbosity is lower than LOG_DEFAULT_DEBUG
+// this will avoid calling expensive_function() if LOG_DEFAULT_DEBUG > gpt_log_verbosity_thold
 //
 
 #define LOG_TMPL(level, verbosity, ...) \

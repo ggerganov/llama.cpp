@@ -149,6 +149,14 @@ GGML_NO_METAL := 1
 DEPRECATE_WARNING := 1
 endif
 
+ifdef LLAMA_DISABLE_LOGS
+REMOVE_WARNING := 1
+endif
+
+ifdef LLAMA_SERVER_VERBOSE
+REMOVE_WARNING := 1
+endif
+
 ifndef UNAME_S
 UNAME_S := $(shell uname -s)
 endif
@@ -352,18 +360,10 @@ ifdef LLAMA_SANITIZE_UNDEFINED
 	MK_LDFLAGS  += -fsanitize=undefined -g
 endif
 
-ifdef LLAMA_SERVER_VERBOSE
-	MK_CPPFLAGS += -DSERVER_VERBOSE=$(LLAMA_SERVER_VERBOSE)
-endif
-
 ifdef LLAMA_SERVER_SSL
 	MK_CPPFLAGS += -DCPPHTTPLIB_OPENSSL_SUPPORT
 	MK_LDFLAGS += -lssl -lcrypto
 endif
-
-ifdef LLAMA_DISABLE_LOGS
-	MK_CPPFLAGS += -DLOG_DISABLE_LOGS
-endif # LLAMA_DISABLE_LOGS
 
 # warnings
 WARN_FLAGS = \
@@ -1026,6 +1026,14 @@ $(info   - LLAMA_NO_ACCELERATE)
 $(info   - LLAMA_NO_OPENMP)
 $(info   - LLAMA_NO_METAL)
 $(info   - LLAMA_NO_CCACHE)
+$(info )
+endif
+
+ifdef REMOVE_WARNING
+$(info !!! REMOVAL WARNING !!!)
+$(info The following LLAMA_ options have been removed and are no longer supported)
+$(info   - LLAMA_DISABLE_LOGS   (https://github.com/ggerganov/llama.cpp/pull/9418))
+$(info   - LLAMA_SERVER_VERBOSE (https://github.com/ggerganov/llama.cpp/pull/9418))
 $(info )
 endif
 

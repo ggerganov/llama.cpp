@@ -42,7 +42,7 @@
 #define LOG_INF(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
 #define LOG_WRN(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
 #define LOG_ERR(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
-#define LOG_DBG(...) do { fprintf(stdout, __VA_ARGS__); } while (0)
+#define LOG_DBG(...) do { fprintf(stderr, __VA_ARGS__); } while (0)
 
 //#define CLIP_DEBUG_FUNCTIONS
 
