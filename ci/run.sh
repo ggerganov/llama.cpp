@@ -737,6 +737,7 @@ function gg_sum_embd_bge_small {
 
 ## main
 
+export LLAMA_LOG_PREFIX=1
 export LLAMA_LOG_TIMESTAMPS=1
 
 if [ -z ${GG_BUILD_LOW_PERF} ]; then

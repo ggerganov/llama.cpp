@@ -57,6 +57,8 @@ static std::vector<const char *> g_col = {
 struct gpt_log_entry {
     enum ggml_log_level level;
 
+    bool prefix;
+
     int64_t timestamp;
 
     std::vector<char> msg;
@@ -80,7 +82,7 @@ struct gpt_log_entry {
             }
         }
 
-        if (level != GGML_LOG_LEVEL_NONE) {
+        if (level != GGML_LOG_LEVEL_NONE && prefix) {
             if (timestamp) {
                 // [M.s.ms.us]
                 fprintf(fcur, "%s%d.%02d.%03d.%03d%s ",
@@ -118,6 +120,7 @@ struct gpt_log {
 
     gpt_log(size_t capacity) {
         file = nullptr;
+        prefix = false;
         timestamps = false;
         running = false;
         t_start = t_us();
@@ -148,6 +151,7 @@ private:
 
     FILE * file;
 
+    bool prefix;
     bool timestamps;
     bool running;
 
@@ -205,6 +209,7 @@ public:
         }
 
         entry.level = level;
+        entry.prefix = prefix;
         entry.timestamp = 0;
         if (timestamps) {
             entry.timestamp = t_us() - t_start;
@@ -333,6 +338,12 @@ public:
         resume();
     }
 
+    void set_prefix(bool prefix) {
+        std::lock_guard<std::mutex> lock(mtx);
+
+        this->prefix = prefix;
+    }
+
     void set_timestamps(bool timestamps) {
         std::lock_guard<std::mutex> lock(mtx);
 
@@ -379,6 +390,10 @@ void gpt_log_set_file(struct gpt_log * log, const char * file) {
 
 void gpt_log_set_colors(struct gpt_log * log, bool colors) {
     log->set_colors(colors);
+}
+
+void gpt_log_set_prefix(struct gpt_log * log, bool prefix) {
+    log->set_prefix(prefix);
 }
 
 void gpt_log_set_timestamps(struct gpt_log * log, bool timestamps) {

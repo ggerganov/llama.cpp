@@ -1969,6 +1969,13 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_env("LLAMA_LOG_VERBOSITY"));
     add_opt(llama_arg(
+        {"--log-prefix"},
+        "Enable prefx in log messages",
+        [](gpt_params &) {
+            gpt_log_set_prefix(gpt_log_main(), true);
+        }
+    ).set_env("LLAMA_LOG_PREFIX"));
+    add_opt(llama_arg(
         {"--log-timestamps"},
         "Enable timestamps in log messages",
         [](gpt_params &) {

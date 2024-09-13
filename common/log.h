@@ -32,9 +32,29 @@ void             gpt_log_free  (struct gpt_log * log);
 LOG_ATTRIBUTE_FORMAT(3, 4)
 void gpt_log_add(struct gpt_log * log, enum ggml_log_level level, const char * fmt, ...);
 
+// defaults: file = NULL, colors = false, prefix = false, timestamps = false
+//
+// regular log output:
+//
+//   ggml_backend_metal_log_allocated_size: allocated buffer, size =  6695.84 MiB, ( 6695.91 / 21845.34)
+//   llm_load_tensors: ggml ctx size =    0.27 MiB
+//   llm_load_tensors: offloading 32 repeating layers to GPU
+//   llm_load_tensors: offloading non-repeating layers to GPU
+//
+// with prefix = true, timestamps = true, the log output will look like this:
+//
+//   0.00.035.060 D ggml_backend_metal_log_allocated_size: allocated buffer, size =  6695.84 MiB, ( 6695.91 / 21845.34)
+//   0.00.035.064 I llm_load_tensors: ggml ctx size =    0.27 MiB
+//   0.00.090.578 I llm_load_tensors: offloading 32 repeating layers to GPU
+//   0.00.090.579 I llm_load_tensors: offloading non-repeating layers to GPU
+//
+// I - info, W - warning, E - error, D - debug
+//
+
 void gpt_log_set_file      (struct gpt_log * log, const char * file);       // not thread-safe
 void gpt_log_set_colors    (struct gpt_log * log,       bool   colors);     // not thread-safe
-void gpt_log_set_timestamps(struct gpt_log * log,       bool   timestamps);
+void gpt_log_set_prefix    (struct gpt_log * log,       bool   prefix);     // whether to output prefix to each log
+void gpt_log_set_timestamps(struct gpt_log * log,       bool   timestamps); // whether to output timestamps in the prefix
 
 // helper macros for logging
 // use these to avoid computing log arguments if the verbosity is lower than the threshold
