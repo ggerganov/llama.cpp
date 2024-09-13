@@ -369,8 +369,13 @@ void gpt_init() {
         }
     }, NULL);
 
+#ifdef NDEBUG
+    const char * build_type = "";
+#else
+    const char * build_type = " (debug)";
+#endif
 
-    LOG_INF("build: %d (%s) with %s for %s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT, LLAMA_COMPILER, LLAMA_BUILD_TARGET);
+    LOG_INF("build: %d (%s) with %s for %s%s\n", LLAMA_BUILD_NUMBER, LLAMA_COMMIT, LLAMA_COMPILER, LLAMA_BUILD_TARGET, build_type);
 }
 
 std::string gpt_params_get_system_info(const gpt_params & params) {
