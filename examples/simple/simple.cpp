@@ -154,8 +154,8 @@ int main(int argc, char ** argv) {
             __func__, n_decode, (t_main_end - t_main_start) / 1000000.0f, n_decode / ((t_main_end - t_main_start) / 1000000.0f));
 
     LOG_TEE("\n");
-    llama_perf_print(smpl, LLAMA_PERF_TYPE_SAMPLER_CHAIN);
-    llama_perf_print(ctx,  LLAMA_PERF_TYPE_CONTEXT);
+    llama_perf_sampler_print(smpl);
+    llama_perf_context_print(ctx);
 
     fprintf(stderr, "\n");
 

@@ -124,6 +124,7 @@ struct gpt_sampler_params {
     float   mirostat_eta      = 0.10f; // learning rate
     bool    penalize_nl       = false; // consider newlines as a repeatable token
     bool    ignore_eos        = false;
+    bool    no_perf           = false; // disable performance metrics
 
     std::vector<enum gpt_sampler_type> samplers = {
         GPT_SAMPLER_TYPE_TOP_K,
@@ -246,6 +247,7 @@ struct gpt_params {
     bool simple_io         = false; // improves compatibility with subprocesses and limited consoles
     bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
     bool flash_attn        = false; // flash attention
+    bool no_perf           = false; // disable performance metrics
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
     bool logits_all        = false; // return logits for all tokens in the batch

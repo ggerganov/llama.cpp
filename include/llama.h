@@ -343,7 +343,7 @@ extern "C" {
         bool embeddings;  // if true, extract embeddings (together with logits)
         bool offload_kqv; // whether to offload the KQV ops (including the KV cache) to GPU
         bool flash_attn;  // whether to use flash attention [EXPERIMENTAL]
-      //bool no_perf;     // whether to measure performance timings, TODO: implement
+        bool no_perf;     // whether to measure performance timings
 
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
@@ -1176,13 +1176,30 @@ extern "C" {
     // NOTE: Used by llama.cpp examples, avoid using in third-party apps. Instead, do your own performance measurements.
     //
 
-    enum llama_perf_type {
-        LLAMA_PERF_TYPE_CONTEXT       = 0,
-        LLAMA_PERF_TYPE_SAMPLER_CHAIN = 1,
+    struct llama_perf_context_data {
+        double t_start_ms;
+        double t_load_ms;
+        double t_p_eval_ms;
+        double t_eval_ms;
+
+        int32_t n_p_eval;
+        int32_t n_eval;
     };
 
-    LLAMA_API void llama_perf_print(const void * ctx, enum llama_perf_type type);
-    LLAMA_API void llama_perf_reset(      void * ctx, enum llama_perf_type type);
+    struct llama_perf_sampler_data {
+        double t_sample_ms;
+
+        int32_t n_sample;
+    };
+
+    LLAMA_API struct llama_perf_context_data llama_perf_context      (const struct llama_context * ctx);
+    LLAMA_API void                           llama_perf_context_print(const struct llama_context * ctx);
+    LLAMA_API void                           llama_perf_context_reset(      struct llama_context * ctx);
+
+    // NOTE: the following work only with samplers constructed via llama_sampler_chain_init
+    LLAMA_API struct llama_perf_sampler_data llama_perf_sampler      (const struct llama_sampler * chain);
+    LLAMA_API void                           llama_perf_sampler_print(const struct llama_sampler * chain);
+    LLAMA_API void                           llama_perf_sampler_reset(      struct llama_sampler * chain);
 
     LLAMA_API void llama_perf_dump_yaml(FILE * stream, const struct llama_context * ctx);
 

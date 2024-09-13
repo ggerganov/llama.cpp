@@ -721,6 +721,14 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ));
     add_opt(llama_arg(
+        {"--no-perf"},
+        format("disable internal libllama performance timings (default: %s)", params.no_perf ? "true" : "false"),
+        [](gpt_params & params) {
+            params.no_perf = true;
+            params.sparams.no_perf = true;
+        }
+    ).set_env("LLAMA_ARG_NO_PERF"));
+    add_opt(llama_arg(
         {"-f", "--file"}, "FNAME",
         "a file containing the prompt (default: none)",
         [](gpt_params & params, const std::string & value) {
