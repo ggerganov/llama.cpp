@@ -538,7 +538,7 @@ if (GGML_SYCL)
         add_compile_definitions(GGML_SYCL_FORCE_MMQ)
     endif()
 
-    list(APPEND CMAKE_CXX_FLAGS -Wno-narrowing -fsycl)
+    list(APPEND CMAKE_CXX_FLAGS -Wno-narrowing)
 
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
         add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
@@ -572,7 +572,7 @@ if (GGML_SYCL)
         endif()
     endif()
     if (${DNNL_FOUND} AND GGML_SYCL_TARGET STREQUAL "INTEL")
-        list(APPEND GGML_EXTRA_LIBS DNNL::dnnl)
+        list(APPEND GGML_EXTRA_LIBS -fsycl DNNL::dnnl)
     endif()
 endif()
 
