@@ -31,7 +31,6 @@
 #include "json-schema-to-grammar.mjs.hpp"
 
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cinttypes>
@@ -43,10 +42,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#define SLT_INF(fmt, ...) LOG_INF("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, id, id_task, __VA_ARGS__)
-#define SLT_WRN(fmt, ...) LOG_WRN("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, id, id_task, __VA_ARGS__)
-#define SLT_ERR(fmt, ...) LOG_ERR("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, id, id_task, __VA_ARGS__)
-#define SLT_DBG(fmt, ...) LOG_DBG("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, id, id_task, __VA_ARGS__)
+#define SLT_INF(slot, fmt, ...) LOG_INF("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
+#define SLT_WRN(slot, fmt, ...) LOG_WRN("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
+#define SLT_ERR(slot, fmt, ...) LOG_ERR("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
+#define SLT_DBG(slot, fmt, ...) LOG_DBG("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, (slot).id_task, __VA_ARGS__)
 
 #define SRV_INF(fmt, ...) LOG_INF("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
 #define SRV_WRN(fmt, ...) LOG_WRN("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
@@ -210,7 +209,7 @@ struct server_slot {
     std::function<void(int)> callback_on_release;
 
     void reset() {
-        SLT_DBG("%s", "\n");
+        SLT_DBG(*this, "%s", "\n");
 
         n_prompt_tokens    = 0;
         generated_text     = "";
@@ -251,7 +250,7 @@ struct server_slot {
 
     void add_token(const completion_token_output & token) {
         if (!is_processing()) {
-            SLT_WRN("%s", "slot is not processing\n");
+            SLT_WRN(*this, "%s", "slot is not processing\n");
             return;
         }
         generated_token_probs.push_back(token);
@@ -259,7 +258,7 @@ struct server_slot {
 
     void release() {
         if (is_processing()) {
-            SLT_INF("stop processing: n_past = %d, truncated = %d\n", n_past, truncated);
+            SLT_INF(*this, "stop processing: n_past = %d, truncated = %d\n", n_past, truncated);
 
             t_token_generation = (ggml_time_us() - t_start_generation) / 1e3;
             state = SLOT_STATE_IDLE;
@@ -316,7 +315,8 @@ struct server_slot {
         const double t_gen        =       t_token_generation / n_decoded;
         const double n_gen_second = 1e3 / t_token_generation * n_decoded;
 
-        SLT_INF("\n"
+        SLT_INF(*this,
+                "\n"
                 "\rprompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
                 "\r       eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n"
                 "\r      total time = %10.2f ms / %5d tokens\n",
@@ -694,7 +694,7 @@ struct server_context {
             slot.n_ctx = n_ctx_slot;
             slot.n_predict = params.n_predict;
 
-            SRV_INF("new slot, id_slot = %d, n_ctx_slot = %d\n", slot.id, slot.n_ctx);
+            SLT_INF(slot, "new slot n_ctx_slot = %d\n", slot.n_ctx);
 
             const int ga_n = params.grp_attn_n;
             const int ga_w = params.grp_attn_w;
@@ -705,7 +705,7 @@ struct server_context {
                 //GGML_ASSERT(n_ctx_train % ga_w == 0     && "n_ctx_train must be a multiple of ga_w");    // NOLINT
                 //GGML_ASSERT(n_ctx >= n_ctx_train * ga_n && "n_ctx must be at least n_ctx_train * ga_n"); // NOLINT
 
-                SRV_INF("slot self-extend: id_slot = %d, ga_n = %d, ga_w = %d\n", slot.id, ga_n, ga_w);
+                SLT_INF(slot, "slot self-extend: ga_n = %d, ga_w = %d\n", ga_n, ga_w);
             }
 
             slot.ga_i = 0;
@@ -828,7 +828,7 @@ struct server_context {
             }
 
             if (ret != nullptr) {
-                SRV_DBG("selected slot by lcp similarity, id_slot = %d, max_lcp_len = %d, similarity = %f\n", ret->id, max_lcp_len, similarity);
+                SLT_DBG(*ret, "selected slot by lcp similarity, max_lcp_len = %d, similarity = %f\n", max_lcp_len, similarity);
             }
         }
 
@@ -849,7 +849,7 @@ struct server_context {
             }
 
             if (ret != nullptr) {
-                SRV_DBG("selected slot by lru, id_slot = %d, t_last = %" PRId64 "\n", ret->id, t_last);
+                SLT_DBG(*ret, "selected slot by lru, t_last = %" PRId64 "\n", t_last);
             }
         }
 
@@ -914,13 +914,13 @@ struct server_context {
 
         if (slot.params.cache_prompt && slot.ga_n != 1) {
             slot.params.cache_prompt = false;
-            SRV_WRN("slot %d: group-attention is not supported with prompt caching. disabling cache", slot.id);
+            SLT_WRN(slot, "%s", "group-attention is not supported with prompt caching. disabling cache\n");
         }
 
         if (slot.n_predict > 0 && slot.params.n_predict > slot.n_predict) {
             // Might be better to reject the request with a 400 ?
             slot.params.n_predict = slot.n_predict;
-            SRV_WRN("slot %d: n_predict exceeds server configuration, setting to %d", slot.id, slot.n_predict);
+            SLT_WRN(slot, "n_predict = %d exceeds server configuration, setting to %d", slot.n_predict, slot.n_predict);
         }
 
         // infill
@@ -1029,7 +1029,7 @@ struct server_context {
         slot.state = SLOT_STATE_PROCESSING_PROMPT;
         slot.prompt_tokens.clear();
 
-        SRV_INF("processing task, slot id = %d, task id = %d\n", slot.id, slot.id_task);
+        SLT_INF(slot, "%s", "processing task\n");
 
         return true;
     }
@@ -1164,54 +1164,30 @@ struct server_context {
             slot.stopped_limit  = true;
             slot.has_next_token = false;
 
-            SRV_DBG("slot %d, task %d: stopped by limit, n_decoded = %d, n_predict = %d\n", slot.id, slot.id_task, slot.n_decoded, slot.params.n_predict);
+            SLT_DBG(slot, "stopped by limit, n_decoded = %d, n_predict = %d\n", slot.n_decoded, slot.params.n_predict);
         }
 
         if (llama_token_is_eog(model, result.tok)) {
             slot.stopped_eos    = true;
             slot.has_next_token = false;
 
-            SRV_DBG("slot %d, task %d: stopped by EOS\n", slot.id, slot.id_task);
+            SLT_DBG(slot, "%s", "stopped by EOS\n");
         }
 
         const auto n_ctx_train = llama_n_ctx_train(model);
 
         if (slot.params.n_predict < 1 && slot.n_predict < 1 && slot.ga_n == 1 && slot.n_prompt_tokens + slot.n_decoded >= n_ctx_train) {
-            //LOG_WARNING("n_predict is not set and self-context extend is disabled."
-            //            " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop", {
-            //        { "id_slot",              slot.id },
-            //        { "params.n_predict",     slot.params.n_predict },
-            //        { "slot.n_prompt_tokens", slot.n_prompt_tokens },
-            //        { "slot.n_decoded",       slot.n_decoded },
-            //        { "slot.n_predict",       slot.n_predict },
-            //        { "n_slots",              params.n_parallel },
-            //        { "slot.n_ctx",           slot.n_ctx },
-            //        { "n_ctx",                n_ctx },
-            //        { "n_ctx_train",          n_ctx_train },
-            //        { "ga_n",                 slot.ga_n },
-            //    });
             slot.truncated      = true;
             slot.stopped_limit  = true;
             slot.has_next_token = false; // stop prediction
 
-            SRV_WRN("slot %d, task %d: n_predict is not set and self-context extend is disabled."
-                    " Limiting generated tokens to n_ctx_train to avoid EOS-less generation infinite loop\n", slot.id, slot.id_task);
+            SLT_WRN(slot,
+                    "n_predict (%d) is not set and self-context extend is disabled. "
+                    "Limiting generated tokens to n_ctx_train (%d) to avoid EOS-less generation infinite loop\n",
+                    slot.params.n_predict, n_ctx_train);
         }
 
-        //LOG_VERBOSE("next token", {
-        //    {"id_slot",        slot.id},
-        //    {"id_task",        slot.id_task},
-        //    {"token",          result.tok},
-        //    {"token_text",     tokens_to_output_formatted_string(ctx, result.tok)},
-        //    {"has_next_token", slot.has_next_token},
-        //    {"n_remain",       slot.n_remaining},
-        //    {"n_decoded",      slot.n_decoded},
-        //    {"stopped_eos",    slot.stopped_eos},
-        //    {"stopped_word",   slot.stopped_word},
-        //    {"stopped_limit",  slot.stopped_limit},
-        //    {"stopping_word",  slot.stopping_word},
-        //});
-        SRV_DBG("slot %d, task %d, n_decoded = %d, n_remaining = %d, next token: '%s'\n", slot.id, slot.id_task, slot.n_decoded, slot.n_remaining, token_str.c_str());
+        SLT_DBG(slot, "n_decoded = %d, n_remaining = %d, next token: '%s'\n", slot.n_decoded, slot.n_remaining, token_str.c_str());
 
         return slot.has_next_token; // continue
     }
@@ -1387,7 +1363,7 @@ struct server_context {
             }
 
             if (embd == NULL) {
-                SRV_ERR("failed to get embeddings, token = %d, seq_id = %d\n", batch.token[i], batch.seq_id[i][0]);
+                SLT_ERR(slot, "failed to get embeddings, token = %d, seq_id = %d\n", batch.token[i], batch.seq_id[i][0]);
 
                 res.data = json {
                     {"embedding", std::vector<float>(n_embd, 0.0f)},
@@ -1403,6 +1379,8 @@ struct server_context {
                 {"index",     slot.index},
             };
         }
+
+        SLT_DBG(slot, "%s", "sending embeddings\n");
 
         queue_results.send(res);
     }
@@ -1841,7 +1819,7 @@ struct server_context {
                     const int n_left    = (int) system_tokens.size() + slot.n_past - n_keep;
                     const int n_discard = slot.params.n_discard ? slot.params.n_discard : (n_left / 2);
 
-                    SRV_WRN("slot context shift, id_slot = %d, id_task = %d, n_keep = %d, n_left = %d, n_discard = %d\n", slot.id, slot.id_task, n_keep, n_left, n_discard);
+                    SLT_WRN(slot, "slot context shift, n_keep = %d, n_left = %d, n_discard = %d\n", n_keep, n_left, n_discard);
 
                     llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
                     llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
@@ -1884,7 +1862,8 @@ struct server_context {
                 slot.cache_tokens.push_back(slot.sampled);
             }
 
-            SRV_DBG("slot decode token, id_slot = %d, id_task = %d, n_ctx = %d, n_past = %d, n_system_tokens = %d, n_cache_tokens = %d, truncated = %d\n", slot.id, slot.id_task, slot.n_ctx, slot.n_past, (int) system_tokens.size(), (int) slot.cache_tokens.size(), slot.truncated);
+            SLT_DBG(slot, "slot decode token, n_ctx = %d, n_past = %d, n_system_tokens = %d, n_cache_tokens = %d, truncated = %d\n",
+                    slot.n_ctx, slot.n_past, (int) system_tokens.size(), (int) slot.cache_tokens.size(), slot.truncated);
         }
 
         // process in chunks of params.n_batch
@@ -1905,7 +1884,7 @@ struct server_context {
 
                     // we haven't tokenized the prompt yet - do it now:
                     if (prompt_tokens.empty()) {
-                        SRV_INF("tokenizing prompt, id_slot = %d, id_task = %d\n", slot.id, slot.id_task);
+                        SLT_INF(slot, "tokenizing prompt, len = %d\n", (int) slot.prompt.size());
 
                         slot.t_start_process_prompt = ggml_time_us();
                         slot.t_start_generation = 0;
@@ -1949,11 +1928,11 @@ struct server_context {
                         slot.n_past = 0;
                         slot.n_prompt_tokens = prompt_tokens.size();
 
-                        SRV_INF("prompt tokenized, id_slot = %d, id_task = %d, n_ctx_slot = %d, n_keep = %d, n_prompt_tokens = %d\n", slot.id, slot.id_task, slot.n_ctx, slot.params.n_keep, slot.n_prompt_tokens);
+                        SLT_INF(slot, "prompt tokenized, n_ctx_slot = %d, n_keep = %d, n_prompt_tokens = %d\n", slot.n_ctx, slot.params.n_keep, slot.n_prompt_tokens);
 
                         // empty prompt passed -> release the slot and send empty response
                         if (prompt_tokens.empty()) {
-                            SRV_WRN("empty prompt - releasing slot, id_slot = %d, id_task = %d\n", slot.id, slot.id_task);
+                            SLT_WRN(slot, "%s", "empty prompt - releasing slot\n");
 
                             slot.release();
                             slot.print_timings();
@@ -1995,7 +1974,7 @@ struct server_context {
                                 slot.truncated = true;
                                 slot.n_prompt_tokens = prompt_tokens.size();
 
-                                SRV_WRN("input truncated, id_slot = %d, id_task = %d, n_ctx = %d, n_keep = %d, n_left = %d, n_prompt_tokens = %d\n", slot.id, slot.id_task, slot.n_ctx, slot.params.n_keep, n_left, slot.n_prompt_tokens);
+                                SLT_WRN(slot, "input truncated, n_ctx = %d, n_keep = %d, n_left = %d, n_prompt_tokens = %d\n", slot.n_ctx, slot.params.n_keep, n_left, slot.n_prompt_tokens);
 
                                 GGML_ASSERT(slot.n_prompt_tokens < slot.n_ctx);
                             }
@@ -2020,7 +1999,7 @@ struct server_context {
 
                         if (slot.n_past == slot.n_prompt_tokens && slot.n_past > 0) {
                             // we have to evaluate at least 1 token to generate logits.
-                            SRV_WRN("need to evaluate at least 1 token to generate logits, id_slot = %d, id_task = %d\n", slot.id, slot.id_task);
+                            SLT_WRN(slot, "need to evaluate at least 1 token to generate logits, n_past = %d, n_prompt_tokens = %d\n", slot.n_past, slot.n_prompt_tokens);
 
                             slot.n_past--;
                             if (slot.ga_i > 0) {
@@ -2069,7 +2048,7 @@ struct server_context {
                     // remove the non-common part from the cache
                     slot.cache_tokens.resize(slot.n_past);
 
-                    SRV_INF("kv cache rm [%d, end), id_slot = %d, id_task = %d\n", p0, slot.id, slot.id_task);
+                    SLT_INF(slot, "kv cache rm [%d, end)\n", p0);
 
                     int32_t slot_npast = slot.n_past_se > 0 ? slot.n_past_se : slot.n_past;
 
@@ -2105,7 +2084,7 @@ struct server_context {
                     //    {"n_tokens", batch.n_tokens},
                     //    {"progress", (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens},
                     //});
-                    SRV_INF("prompt processing progress, id_slot = %d, n_past = %d, n_tokens = %d, progress = %f\n", slot.id, slot.n_past, batch.n_tokens, (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens);
+                    SLT_INF(slot, "prompt processing progress, n_past = %d, n_tokens = %d, progress = %f\n", slot.n_past, batch.n_tokens, (float) slot.n_prompt_tokens_processed / slot.n_prompt_tokens);
 
                     // entire prompt has been processed
                     if (slot.n_past == slot.n_prompt_tokens) {
@@ -2125,7 +2104,7 @@ struct server_context {
                         //    {"n_ctx",    n_ctx},
                         //    {"n_tokens", batch.n_tokens},
                         //});
-                        SRV_INF("prompt done, id_slot = %d, n_past = %d, n_tokens = %d\n", slot.id, slot.n_past, batch.n_tokens);
+                        SLT_INF(slot, "prompt done, n_past = %d, n_tokens = %d\n", slot.n_past, batch.n_tokens);
                     }
                 }
 
@@ -2158,9 +2137,9 @@ struct server_context {
                         const int bd = (slot.ga_w / slot.ga_n) * (slot.ga_n - 1);
                         const int dd = (slot.ga_w / slot.ga_n) - ib * bd - slot.ga_w;
 
-                        SRV_DBG("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i, slot.n_past_se, ib * bd, slot.ga_i + ib * bd, slot.n_past_se + ib * bd);
-                        SRV_DBG("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
-                        SRV_DBG("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
+                        SLT_DBG(slot, "shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i, slot.n_past_se, ib * bd, slot.ga_i + ib * bd, slot.n_past_se + ib * bd);
+                        SLT_DBG(slot, "div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
+                        SLT_DBG(slot, "shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
 
                         llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i, slot.n_past_se, ib * bd);
                         llama_kv_cache_seq_div(ctx, slot.id + 1, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n);
@@ -2170,7 +2149,7 @@ struct server_context {
 
                         slot.ga_i += slot.ga_w / slot.ga_n;
 
-                        SRV_DBG("\nn_past_old = %d, n_past = %d, ga_i = %d\n\n", slot.n_past_se + bd, slot.n_past_se, slot.ga_i);
+                        SLT_DBG(slot, "\nn_past_old = %d, n_past = %d, ga_i = %d\n\n", slot.n_past_se + bd, slot.n_past_se, slot.ga_i);
                     }
 
                     slot.n_past_se += n_tokens;
