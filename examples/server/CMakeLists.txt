@@ -30,6 +30,7 @@ set(PUBLIC_ASSETS
     system-prompts.js
     prompt-formats.js
     json-schema-to-grammar.mjs
+    loading.html
 )
 
 foreach(asset ${PUBLIC_ASSETS})
