@@ -2596,7 +2596,7 @@ int main(int argc, char ** argv) {
         server_state current_state = state.load();
         if (current_state == SERVER_STATE_LOADING_MODEL) {
             if(req.path == "/"){
-                res.set_content("<html><body>The model is loading. Please wait.<br/>The user interface will appear soon.</body></html>", "text/html; charset=utf-8");
+                res.set_content("<html><body>The model is loading. Please wait.<br/>The user interface will appear soon.<br/>You may need to refresh the page.</body></html>", "text/html; charset=utf-8");
                 res.status = 503;
             } else {
                 res_error(res, format_error_response("Loading model", ERROR_TYPE_UNAVAILABLE));
