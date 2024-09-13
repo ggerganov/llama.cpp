@@ -13,13 +13,13 @@
 #include <vector>
 
 int main(int argc, char ** argv){
-    gpt_init();
-
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LOOKUP)) {
         return 1;
     }
+
+    gpt_init();
 
     const int n_draft = params.n_draft;
 

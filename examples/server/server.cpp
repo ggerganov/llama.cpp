@@ -2316,14 +2316,14 @@ inline void signal_handler(int signal) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     // own arguments required by this example
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SERVER)) {
         return 1;
     }
+
+    gpt_init();
 
     const bool verbose = params.verbosity > 0;
 

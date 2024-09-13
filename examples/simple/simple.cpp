@@ -12,8 +12,6 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     gpt_params params;
 
     params.prompt = "Hello my name is";
@@ -22,6 +20,8 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON, print_usage)) {
         return 1;
     }
+
+    gpt_init();
 
     // total length of the sequence including the prompt
     const int n_predict = params.n_predict;

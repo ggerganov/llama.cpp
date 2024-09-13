@@ -30,13 +30,13 @@ struct seq_draft {
 };
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_SPECULATIVE)) {
         return 1;
     }
+
+    gpt_init();
 
     if (params.model_draft.empty()) {
         LOG_ERR("%s: --model-draft is required\n", __func__);

@@ -15,8 +15,6 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     gpt_params params;
 
     params.n_junk = 250;
@@ -26,6 +24,8 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PASSKEY, print_usage)) {
         return 1;
     }
+
+    gpt_init();
 
     int n_junk = params.n_junk;
     int n_keep = params.n_keep;

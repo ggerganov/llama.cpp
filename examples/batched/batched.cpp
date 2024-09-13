@@ -15,8 +15,6 @@ static void print_usage(int, char ** argv) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_log_init();
-
     gpt_params params;
 
     params.prompt = "Hello my name is";
@@ -26,6 +24,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
+    gpt_init();
 
     // number of parallel batches
     int n_parallel = params.n_parallel;

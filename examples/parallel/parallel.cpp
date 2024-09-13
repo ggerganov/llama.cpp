@@ -103,13 +103,13 @@ static std::vector<std::string> split_string(const std::string& input, char deli
 int main(int argc, char ** argv) {
     srand(1234);
 
-    gpt_init();
-
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PARALLEL)) {
         return 1;
     }
+
+    gpt_init();
 
     // number of simultaneous "clients" to simulate
     const int32_t n_clients = params.n_parallel;

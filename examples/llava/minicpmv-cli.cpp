@@ -248,8 +248,6 @@ static const char * llama_loop(struct llava_context * ctx_llava,struct gpt_sampl
 }
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     ggml_time_init();
 
     gpt_params params;
@@ -257,6 +255,8 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_LLAVA, show_additional_info)) {
         return 1;
     }
+
+    gpt_init();
 
     if (params.mmproj.empty() || (params.image.empty())) {
         show_additional_info(argc, argv);

@@ -37,13 +37,13 @@ struct ngram_container {
 };
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
+
+    gpt_init();
 
     const int W = 15; // lookahead window
     const int N = 5;  // n-gram size

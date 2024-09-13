@@ -1957,8 +1957,6 @@ static void kl_divergence(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     gpt_params params;
 
     params.n_ctx = 512;
@@ -1967,6 +1965,8 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_PERPLEXITY)) {
         return 1;
     }
+
+    gpt_init();
 
     const int32_t n_ctx = params.n_ctx;
 

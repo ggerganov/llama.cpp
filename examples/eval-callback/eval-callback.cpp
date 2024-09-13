@@ -140,8 +140,6 @@ static bool run(llama_context * ctx, const gpt_params & params) {
 }
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     callback_data cb_data;
 
     gpt_params params;
@@ -149,6 +147,8 @@ int main(int argc, char ** argv) {
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_COMMON)) {
         return 1;
     }
+
+    gpt_init();
 
     llama_backend_init();
     llama_numa_init(params.numa);

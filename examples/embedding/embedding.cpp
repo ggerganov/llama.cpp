@@ -79,13 +79,13 @@ static void batch_decode(llama_context * ctx, llama_batch & batch, float * outpu
 }
 
 int main(int argc, char ** argv) {
-    gpt_log_init();
-
     gpt_params params;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_EMBEDDING)) {
         return 1;
     }
+
+    gpt_init();
 
     params.embedding = true;
     // For non-causal models, batch size must be equal to ubatch size

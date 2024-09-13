@@ -104,14 +104,14 @@ static void sigint_handler(int signo) {
 #endif
 
 int main(int argc, char ** argv) {
-    gpt_init();
-
     gpt_params params;
     g_params = &params;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_INFILL)) {
         return 1;
     }
+
+    gpt_init();
 
     auto & sparams = params.sparams;
 
