@@ -1237,7 +1237,6 @@ async def wait_for_slots_status(context,
         while True:
             async with await session.get(f'{base_url}/slots', params=params) as slots_response:
                 status_code = slots_response.status
-                print(await slots_response.text())
                 slots = await slots_response.json()
                 if context.debug:
                     print(f"slots responses {slots}\n")
