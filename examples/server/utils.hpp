@@ -408,6 +408,7 @@ static json format_final_response_oaicompat(const json & request, const json & r
         {"id", completion_id}
     };
 
+    // extra fields for debugging purposes
     if (verbose) {
         res["__verbose"] = result;
     }

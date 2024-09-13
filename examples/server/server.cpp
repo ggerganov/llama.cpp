@@ -2304,7 +2304,9 @@ int main(int argc, char ** argv) {
 
     gpt_init();
 
-    const bool verbose = params.verbosity > 0;
+    // enabling this will output extra debug information in the HTTP responses from the server
+    // see format_final_response_oaicompat()
+    const bool verbose = params.verbosity > 9;
 
     // struct that contains llama context and inference
     server_context ctx_server;
@@ -2830,7 +2832,7 @@ int main(int argc, char ** argv) {
         if (!stream) {
             ctx_server.receive_cmpl_results(task_ids, [&](const std::vector<server_task_result> & results) {
                 // multitask is never support in chat completion, there is only one result
-                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, verbose);
+                json result_oai = format_final_response_oaicompat(data, results[0].data, completion_id, /*.streaming =*/ false, verbose);
                 res_ok(res, result_oai);
             }, [&](const json & error_data) {
                 res_error(res, error_data);
