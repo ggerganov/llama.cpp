@@ -191,8 +191,6 @@ int main(int argc, char ** argv) {
 
     print_build_info();
 
-    LOG_TEE("%s: seed = %u\n", __func__, params.sparams.seed);
-
     LOG("%s: llama backend init\n", __func__);
     llama_backend_init();
     llama_numa_init(params.numa);
@@ -470,8 +468,10 @@ int main(int argc, char ** argv) {
         exit(1);
     }
 
+    LOG_TEE("sampling seed: %u\n", gpt_sampler_get_seed(smpl));
     LOG_TEE("sampling params: \n%s\n", sparams.print().c_str());
-    LOG_TEE(" sampler constr: \n%s\n", gpt_sampler_print(smpl).c_str());
+    LOG_TEE("sampler constr: \n%s\n", gpt_sampler_print(smpl).c_str());
+
     LOG_TEE("generate: n_ctx = %d, n_batch = %d, n_predict = %d, n_keep = %d\n", n_ctx, params.n_batch, params.n_predict, params.n_keep);
 
     // group-attention state

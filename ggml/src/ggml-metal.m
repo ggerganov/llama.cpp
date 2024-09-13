@@ -1,7 +1,7 @@
 #import "ggml-metal.h"
 
+#import "ggml-impl.h"
 #import "ggml-backend-impl.h"
-#import "ggml.h"
 
 #import <Foundation/Foundation.h>
 
@@ -17,8 +17,8 @@
 #define GGML_METAL_LOG_WARN(...)
 #define GGML_METAL_LOG_ERROR(...)
 #else
-#define GGML_METAL_LOG_INFO(...)  ggml_metal_log(GGML_LOG_LEVEL_INFO, __VA_ARGS__)
-#define GGML_METAL_LOG_WARN(...)  ggml_metal_log(GGML_LOG_LEVEL_WARN, __VA_ARGS__)
+#define GGML_METAL_LOG_INFO(...)  ggml_metal_log(GGML_LOG_LEVEL_INFO,  __VA_ARGS__)
+#define GGML_METAL_LOG_WARN(...)  ggml_metal_log(GGML_LOG_LEVEL_WARN,  __VA_ARGS__)
 #define GGML_METAL_LOG_ERROR(...) ggml_metal_log(GGML_LOG_LEVEL_ERROR, __VA_ARGS__)
 #endif
 
@@ -882,7 +882,7 @@ static enum ggml_status ggml_metal_graph_compute(
     // create multiple command buffers and enqueue them
     // then, we encode the graph into the command buffers in parallel
 
-    const int n_nodes  = gf->n_nodes;
+    const int n_nodes = gf->n_nodes;
     const int n_cb = ctx->n_cb;
     const int n_nodes_per_cb = (n_nodes + n_cb - 1) / n_cb;
 
@@ -3039,8 +3039,7 @@ static enum ggml_status ggml_metal_graph_compute(
         if (status != MTLCommandBufferStatusCompleted) {
             GGML_METAL_LOG_INFO("%s: command buffer %d failed with status %lu\n", __func__, i, status);
             if (status == MTLCommandBufferStatusError) {
-                NSString * error_code = [command_buffer error].localizedDescription;
-                GGML_METAL_LOG_INFO("error: %s\n", [error_code UTF8String]);
+                GGML_METAL_LOG_INFO("error: %s\n", [[command_buffer error].localizedDescription UTF8String]);
             }
 
             return GGML_STATUS_FAILED;

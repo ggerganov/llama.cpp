@@ -519,7 +519,7 @@ struct test_case {
 
         // add sentinels as graph nodes so that they are checked in the callback
         for (ggml_tensor * sentinel : sentinels) {
-            gf->nodes[gf->n_nodes++] = sentinel;
+            ggml_graph_add_node(gf, sentinel);
         }
 
         // randomize tensors
@@ -679,9 +679,9 @@ struct test_case {
 
         // duplicate the op
         size_t target_size = ggml_backend_is_cpu(backend) ? 1ULL << 33 : 1ULL << 35; // 8 GB CPU, 32 GB GPU
-        int n_runs = std::min((size_t)gf->size - gf->n_nodes, target_size / op_size(out)) + 1;
+        int n_runs = std::min((size_t) ggml_graph_size(gf) - ggml_graph_n_nodes(gf), target_size / op_size(out)) + 1;
         for (int i = 1; i < n_runs; i++) {
-            gf->nodes[gf->n_nodes++] = out;
+            ggml_graph_add_node(gf, out);
         }
 
         // calculate memory
@@ -696,11 +696,11 @@ struct test_case {
             }
             return size;
         };
-        for (int i = 0; i < gf->n_nodes; i++) {
-            if (ggml_is_view_op(gf->nodes[i]->op) || gf->nodes[i] == out) {
+        for (int i = 0; i < ggml_graph_n_nodes(gf); ++i) {
+            if (ggml_is_view_op(ggml_graph_node(gf, i)->op) || ggml_graph_node(gf, i) == out) {
                 continue;
             }
-            mem += tensor_op_size(gf->nodes[i]);
+            mem += tensor_op_size(ggml_graph_node(gf, i));
         }
 
         // run
@@ -804,7 +804,7 @@ struct test_case {
         ggml_graph_cpy(gf, gb);
         ggml_build_backward_expand(ctx, gf, gb, false);
         if (expect.size() != 1 || expect[0] != 0.0f) {
-            GGML_ASSERT(gb->n_nodes > gf->n_nodes);
+            GGML_ASSERT(ggml_graph_n_nodes(gb) > ggml_graph_n_nodes(gf));
             for (ggml_tensor * t = ggml_get_first_tensor(ctx); t != NULL; t = ggml_get_next_tensor(ctx, t)) {
                 GGML_ASSERT(!(t->flags & GGML_TENSOR_FLAG_PARAM) || t->grad->op != GGML_OP_NONE);
             }

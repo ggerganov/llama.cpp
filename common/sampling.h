@@ -60,6 +60,8 @@ void gpt_perf_print(const struct llama_context * ctx, const struct gpt_sampler *
 //
 llama_token gpt_sampler_sample(struct gpt_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first = false);
 
+uint32_t gpt_sampler_get_seed(const struct gpt_sampler * gsmpl);
+
 // helpers
 
 // access the internal list of current candidate tokens

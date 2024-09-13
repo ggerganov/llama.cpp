@@ -1056,6 +1056,9 @@ extern "C" {
     LLAMA_API struct llama_sampler * llama_sampler_chain_get(const struct llama_sampler * chain, int32_t i);
     LLAMA_API int                    llama_sampler_chain_n  (const struct llama_sampler * chain);
 
+    // after removing a sampler, the chain will no longer own it, and it will not be freed when the chain is freed
+    LLAMA_API struct llama_sampler * llama_sampler_chain_remove(   struct llama_sampler * chain, int32_t i);
+
     // available samplers:
 
     LLAMA_API struct llama_sampler * llama_sampler_init_greedy     (void);
@@ -1126,6 +1129,10 @@ extern "C" {
                              int32_t   n_vocab,
                              int32_t   n_logit_bias,
               const llama_logit_bias * logit_bias);
+
+
+    // Returns the seed used by the sampler if applicable, LLAMA_DEFAULT_SEED otherwise
+    LLAMA_API uint32_t llama_sampler_get_seed(const struct llama_sampler * smpl);
 
     /// @details Sample and accept a token from the idx-th output of the last evaluation
     //

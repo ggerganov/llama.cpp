@@ -302,6 +302,8 @@ class Model:
                             gguf.MODEL_TENSOR.TIME_MIX_FIRST,
                             gguf.MODEL_TENSOR.TIME_MIX_W1,
                             gguf.MODEL_TENSOR.TIME_MIX_W2,
+                            gguf.MODEL_TENSOR.TIME_MIX_DECAY_W1,
+                            gguf.MODEL_TENSOR.TIME_MIX_DECAY_W2,
                         )
                     )
                     or not new_name.endswith(".weight")
@@ -624,6 +626,9 @@ class Model:
         if chkhsh == "4e2b24cc4770243d65a2c9ec19770a72f08cffc161adbb73fcbb6b7dd45a0aae":
             # ref: https://huggingface.co/LGAI-EXAONE/EXAONE-3.0-7.8B-Instruct
             res = "exaone"
+        if chkhsh == "fcace8b9cac38ce847670c970cd5892031a753a1ef381abd1d9af00f713da085":
+            # ref: https://huggingface.co/microsoft/phi-2
+            res = "phi-2"
 
         if res is None:
             logger.warning("\n")
@@ -2769,6 +2774,8 @@ class Rwkv6Model(Model):
         self.gguf_writer.add_tokenizer_model("rwkv")
         self.gguf_writer.add_token_list(tokens)
         self.gguf_writer.add_token_types(toktypes)
+        special_vocab = gguf.SpecialVocab(self.dir_model, load_merges=False)
+        special_vocab.add_to_gguf(self.gguf_writer)
 
     def set_gguf_parameters(self):
         block_count = self.hparams["num_hidden_layers"]

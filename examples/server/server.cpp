@@ -1266,6 +1266,7 @@ struct server_context {
             {"n_predict",                 slot.n_predict},     // Server configured n_predict
             {"model",                     params.model_alias},
             {"seed",                      slot.sparams.seed},
+            {"seed_cur",                  slot.smpl ? gpt_sampler_get_seed(slot.smpl) : 0},
             {"temperature",               slot.sparams.temp},
             {"dynatemp_range",            slot.sparams.dynatemp_range},
             {"dynatemp_exponent",         slot.sparams.dynatemp_exponent},
@@ -3017,12 +3018,39 @@ int main(int argc, char ** argv) {
     const auto handle_tokenize = [&ctx_server, &res_ok](const httplib::Request & req, httplib::Response & res) {
         const json body = json::parse(req.body);
 
-        std::vector<llama_token> tokens;
+        json tokens_response = json::array();
         if (body.count("content") != 0) {
             const bool add_special = json_value(body, "add_special", false);
-            tokens = ctx_server.tokenize(body.at("content"), add_special);
+            const bool with_pieces = json_value(body, "with_pieces", false);
+            std::vector<llama_token> tokens = ctx_server.tokenize(body.at("content"), add_special);
+
+            if (with_pieces) {
+                for (const auto& token : tokens) {
+                    std::string piece = llama_token_to_piece(ctx_server.ctx, token);
+                    json piece_json;
+
+                    // Check if the piece is valid UTF-8
+                    if (is_valid_utf8(piece)) {
+                        piece_json = piece;
+                    } else {
+                        // If not valid UTF-8, store as array of byte values
+                        piece_json = json::array();
+                        for (unsigned char c : piece) {
+                            piece_json.push_back(static_cast<int>(c));
+                        }
+                    }
+
+                    tokens_response.push_back({
+                        {"id", token},
+                        {"piece", piece_json}
+                    });
+                }
+            } else {
+                tokens_response = tokens;
+            }
         }
-        const json data = format_tokenizer_response(tokens);
+
+        const json data = format_tokenizer_response(tokens_response);
         res_ok(res, data);
     };
 
