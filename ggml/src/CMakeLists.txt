@@ -538,7 +538,7 @@ if (GGML_SYCL)
         add_compile_definitions(GGML_SYCL_FORCE_MMQ)
     endif()
 
-    list(APPEND CMAKE_CXX_FLAGS -Wno-narrowing -fsycl)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing -fsycl")
 
     if (GGML_SYCL_TARGET STREQUAL "NVIDIA")
         add_compile_definitions(GGML_SYCL_WARP_SIZE=32)
