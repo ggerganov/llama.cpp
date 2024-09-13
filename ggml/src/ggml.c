@@ -3178,42 +3178,36 @@ inline static void ggml_critical_section_start(void) {
     }
 }
 
+static void ggml_barrier(struct ggml_threadpool * tp) {
+    int n_threads = atomic_load_explicit(&tp->n_threads_cur, memory_order_relaxed);
+    if (n_threads == 1) {
+        return;
+    }
+
 #ifdef GGML_USE_OPENMP
-static void ggml_barrier(struct ggml_threadpool * threadpool) {
-    int n_threads = atomic_load_explicit(&threadpool->n_threads_cur, memory_order_relaxed);
-    if (n_threads == 1) {
-        return;
-    }
-
     #pragma omp barrier
-}
 #else
-static void ggml_barrier(struct ggml_threadpool * threadpool) {
-    int n_threads = atomic_load_explicit(&threadpool->n_threads_cur, memory_order_relaxed);
-    if (n_threads == 1) {
-        return;
-    }
+    int n_passed = atomic_load_explicit(&tp->n_barrier_passed, memory_order_relaxed);
 
-    atomic_int * n_barrier = &threadpool->n_barrier;
-    atomic_int * n_barrier_passed = &threadpool->n_barrier_passed;
+    // enter barrier (full seq-cst fence)
+    int n_barrier = atomic_fetch_add_explicit(&tp->n_barrier, 1, memory_order_seq_cst);
 
-    int passed_old = atomic_load_explicit(n_barrier_passed, memory_order_relaxed);
-
-    if (atomic_fetch_add(n_barrier, 1) == n_threads - 1) {
+    int last = 0;
+    if (n_barrier == (n_threads - 1)) {
         // last thread
-        atomic_store(n_barrier, 0);
-        atomic_fetch_add_explicit(n_barrier_passed, 1, memory_order_relaxed);
+        atomic_store_explicit(&tp->n_barrier, 0, memory_order_relaxed);
+        last = 1;
     } else {
         // wait for other threads
-        while (true) {
-            if (atomic_load_explicit(n_barrier_passed, memory_order_relaxed) != passed_old) {
-                return;
-            }
+        while (atomic_load_explicit(&tp->n_barrier_passed, memory_order_relaxed) == n_passed) {
             ggml_thread_cpu_relax();
         }
     }
-}
+
+    // exit barrier (full seq-cst fence)
+    atomic_fetch_add_explicit(&tp->n_barrier_passed, last, memory_order_seq_cst);
 #endif
+}
 
 // TODO: make this somehow automatically executed
 //       some sort of "sentry" mechanism
