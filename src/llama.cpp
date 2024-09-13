@@ -15826,7 +15826,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_ubatch & batch) {
 
             // clear unused states
             for (int i = 0; i < n_kv; ++i) {
-                uint32_t        cell_id = i + kv_self.head;
+                const uint32_t  cell_id = i + kv_self.head;
                 llama_kv_cell & kv_cell = lctx.kv_self.cells[cell_id];
 
                 data[i] = (float) (kv_cell.src >= 0);
