@@ -2986,6 +2986,8 @@ int main(int argc, char ** argv) {
                 }, [&](json error_data) {
                     server_sent_event(sink, "error", error_data);
                 });
+                static const std::string ev_done = "data: [DONE]\n\n";
+                sink.write(ev_done.data(), ev_done.size());
                 sink.done();
                 return true;
             };
