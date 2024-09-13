@@ -5,11 +5,12 @@
 
 int main() {
     const int n_thread = 8;
-    const int n_msg = 1000;
 
     std::thread threads[n_thread];
     for (int i = 0; i < n_thread; i++) {
-        threads[i] = std::thread([i, n_msg]() {
+        threads[i] = std::thread([i]() {
+            const int n_msg = 1000;
+
             for (int j = 0; j < n_msg; j++) {
                 const int log_type = std::rand() % 4;
 

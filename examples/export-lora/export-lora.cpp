@@ -406,7 +406,7 @@ int main(int argc, char ** argv) {
         return 1;
     }
 
-    g_verbose = (params.verbosity == 1);
+    g_verbose = (params.verbosity > 1);
     try {
         lora_merge_ctx ctx(params.model, params.lora_adapters, params.lora_outfile, params.cpuparams.n_threads);
         ctx.run_merge();

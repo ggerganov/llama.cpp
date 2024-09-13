@@ -22,7 +22,7 @@
 static void print_usage(int, char ** argv) {
     LOG("\nexample usage:\n");
     LOG("\n    %s \\\n"
-            "       -m model.gguf -f some-text.txt [-o imatrix.dat] [--process-output] [--verbosity 1] \\\n"
+            "       -m model.gguf -f some-text.txt [-o imatrix.dat] [--process-output] \\\n"
             "       [--no-ppl] [--chunk 123] [--output-frequency 10] [--save-frequency 0] \\\n"
             "       [--in-file imatrix-prev-0.dat --in-file imatrix-prev-1.dat ...]\n" , argv[0]);
     LOG("\n");
@@ -129,9 +129,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             LOG_ERR("%s: inconsistent size for %s (%d vs %d)\n", __func__, wname.c_str(), (int)e.values.size(), (int)src1->ne[0]*n_as);
             exit(1); //GGML_ABORT("fatal error");
         }
-        if (m_params.verbosity > 1) {
-            printf("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[2], (int)src1->type);
-        }
+        LOG_DBGV(2, "%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[2], (int)src1->type);
         // loop over all possible experts, regardless if they are used or not in the batch
         for (int ex = 0; ex < n_as; ++ex) {
             size_t e_start = ex*src1->ne[0];
@@ -180,9 +178,7 @@ bool IMatrixCollector::collect_imatrix(struct ggml_tensor * t, bool ask, void * 
             exit(1); //GGML_ABORT("fatal error");
         }
         ++e.ncall;
-        if (m_params.verbosity > 1) {
-            LOG("%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
-        }
+        LOG_DBGV(2, "%s[%d]: %32s, %s, %5d x %5d, %d\n", __func__, m_last_call, wname.c_str(), ggml_op_name(t->op), (int)src1->ne[0], (int)src1->ne[1], (int)src1->type);
         for (int row = 0; row < (int)src1->ne[1]; ++row) {
             const float * x = data + row * src1->ne[0];
             for (int j = 0; j < (int)src1->ne[0]; ++j) {
@@ -292,21 +288,20 @@ void IMatrixCollector::save_imatrix(int ncall) const {
         out.write(m_params.prompt_file.c_str(), len);
     }
 
-    if (m_params.verbosity > 0) {
-        LOG_INF("\n%s: stored collected data after %d chunks in %s\n", __func__, m_last_call, fname.c_str());
-    }
+    LOGV(1, "\n");
+    LOG_DBGV(1, "%s: stored collected data after %d chunks in %s\n", __func__, m_last_call, fname.c_str());
 }
 
 bool IMatrixCollector::load_imatrix(const char * fname) {
     std::ifstream in(fname, std::ios::binary);
     if (!in) {
-        printf("%s: failed to open %s\n",__func__, fname);
+        LOG_ERR("%s: failed to open %s\n",__func__, fname);
         return false;
     }
     int n_entries;
     in.read((char*)&n_entries, sizeof(n_entries));
     if (in.fail() || n_entries < 1) {
-        printf("%s: no data in file %s\n", __func__, fname);
+        LOG_ERR("%s: no data in file %s\n", __func__, fname);
         return false;
     }
     for (int i = 0; i < n_entries; ++i) {
@@ -314,7 +309,7 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
         std::vector<char> name_as_vec(len+1);
         in.read((char *)name_as_vec.data(), len);
         if (in.fail()) {
-            printf("%s: failed reading name for entry %d from %s\n",__func__,i+1, fname);
+            LOG_ERR("%s: failed reading name for entry %d from %s\n",__func__,i+1, fname);
             return false;
         }
         name_as_vec[len] = 0;
@@ -325,7 +320,7 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
         int nval;
         in.read((char *)&nval, sizeof(nval));
         if (in.fail() || nval < 1) {
-            printf("%s: failed reading number of values for entry %d\n",__func__,i);
+            LOG_ERR("%s: failed reading number of values for entry %d\n",__func__,i);
             m_stats = {};
             return false;
         }
@@ -338,7 +333,7 @@ bool IMatrixCollector::load_imatrix(const char * fname) {
         std::vector<float> tmp(nval);
         in.read((char*)tmp.data(), nval*sizeof(float));
         if (in.fail()) {
-            printf("%s: failed reading data for entry %d\n",__func__,i);
+            LOG_ERR("%s: failed reading data for entry %d\n",__func__,i);
             m_stats = {};
             return false;
         }
@@ -548,13 +543,13 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
                     workers, nll, nll2, logit_history.data() + start + first, prob_history.data() + start + first);
             count += n_ctx - first - 1;
 
-            printf("[%d]%.4lf,", i + 1, std::exp(nll / count));
+            LOG("[%d]%.4lf,", i + 1, std::exp(nll / count));
             fflush(stdout);
 
             logits.clear();
         }
     }
-    printf("\n");
+    LOG("\n");
 
     if (params.compute_ppl) {
         nll2 /= count;
@@ -563,9 +558,9 @@ static bool compute_imatrix(llama_context * ctx, const gpt_params & params) {
         nll2 -= nll * nll;
         if (nll2 > 0) {
             nll2 = sqrt(nll2/(count-1));
-            printf("Final estimate: PPL = %.4lf +/- %.5lf\n", ppl, nll2*ppl);
+            LOG("Final estimate: PPL = %.4lf +/- %.5lf\n", ppl, nll2*ppl);
         } else {
-            printf("Unexpected negative standard deviation of log(prob)\n");
+            LOG("Unexpected negative standard deviation of log(prob)\n");
         }
     }
 
@@ -577,7 +572,6 @@ int main(int argc, char ** argv) {
 
     params.n_ctx = 512;
     params.logits_all = true;
-    params.verbosity = 1;
 
     if (!gpt_params_parse(argc, argv, params, LLAMA_EXAMPLE_IMATRIX, print_usage)) {
         return 1;
@@ -590,7 +584,7 @@ int main(int argc, char ** argv) {
     g_collector.set_params(params);
 
     for (const auto & in_file : params.in_files) {
-        printf("%s : loading imatrix from '%s'\n", __func__, in_file.c_str());
+        LOG_INF("%s : loading imatrix from '%s'\n", __func__, in_file.c_str());
         if (!g_collector.load_imatrix(in_file.c_str())) {
             LOG_ERR("%s : failed to load %s\n", __func__, in_file.c_str());
             return 1;
@@ -598,7 +592,7 @@ int main(int argc, char ** argv) {
     }
 
     if (params.in_files.size() > 1) {
-        printf("%s : saving combined imatrix to '%s'\n", __func__, params.out_file.c_str());
+        LOG_INF("%s : saving combined imatrix to '%s'\n", __func__, params.out_file.c_str());
         g_collector.save_imatrix();
     }
 

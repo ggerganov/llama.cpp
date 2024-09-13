@@ -113,15 +113,21 @@ struct gpt_log_entry {
 };
 
 struct gpt_log {
+    // default capacity - will be expanded if needed
+    gpt_log() : gpt_log(256) {}
+
     gpt_log(size_t capacity) {
         file = nullptr;
         timestamps = false;
         running = false;
         t_start = t_us();
+
+        // initial message size - will be expanded if longer messages arrive
         entries.resize(capacity);
         for (auto & entry : entries) {
             entry.msg.resize(256);
         }
+
         head = 0;
         tail = 0;
 
@@ -160,6 +166,7 @@ public:
         std::lock_guard<std::mutex> lock(mtx);
 
         if (!running) {
+            // discard messages while the worker thread is paused
             return;
         }
 
@@ -274,11 +281,13 @@ public:
 
             running = false;
 
-            auto & entry = entries[tail];
+            // push an entry to signal the worker thread to stop
+            {
+                auto & entry = entries[tail];
+                entry.is_end = true;
 
-            entry.is_end = true;
-
-            tail = (tail + 1) % entries.size();
+                tail = (tail + 1) % entries.size();
+            }
 
             cv.notify_one();
         }
@@ -331,12 +340,16 @@ public:
     }
 };
 
+//
+// public API
+//
+
 struct gpt_log * gpt_log_init() {
-    return new gpt_log{256};
+    return new gpt_log;
 }
 
 struct gpt_log * gpt_log_main() {
-    static struct gpt_log log{256};
+    static struct gpt_log log;
 
     return &log;
 }

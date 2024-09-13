@@ -386,20 +386,6 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ));
     add_opt(llama_arg(
-        {"-v", "--verbose"},
-        "print verbose information",
-        [](gpt_params & params) {
-            params.verbosity = 1;
-        }
-    ));
-    add_opt(llama_arg(
-        {"--verbosity"}, "N",
-        format("set specific verbosity level (default: %d)", params.verbosity),
-        [](gpt_params & params, int value) {
-            params.verbosity = value;
-        }
-    ));
-    add_opt(llama_arg(
         {"--verbose-prompt"},
         format("print a verbose prompt before generation (default: %s)", params.verbose_prompt ? "true" : "false"),
         [](gpt_params & params) {
@@ -1967,16 +1953,18 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ).set_env("LLAMA_LOG_COLORS"));
     add_opt(llama_arg(
-        {"-lv", "--log-verbose"},
+        {"-v", "--verbose", "--log-verbose"},
         "Set verbosity level to infinity (i.e. log all messages, useful for debugging)",
-        [](gpt_params &) {
+        [](gpt_params & params) {
+            params.verbosity = INT_MAX;
             gpt_log_set_verbosity_thold(INT_MAX);
         }
     ));
     add_opt(llama_arg(
-        {"--log-verbosity"}, "THOLD",
+        {"-lv", "--verbosity", "--log-verbosity"}, "THOLD",
         "Set the verbosity threshold. Messages with a higher verbosity will be ignored.",
-        [](gpt_params &, int value) {
+        [](gpt_params & params, int value) {
+            params.verbosity = value;
             gpt_log_set_verbosity_thold(value);
         }
     ).set_env("LLAMA_LOG_VERBOSITY"));
