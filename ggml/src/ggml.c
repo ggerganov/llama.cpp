@@ -3399,7 +3399,7 @@ double ggml_type_sizef(enum ggml_type type) {
 }
 
 GGML_CALL const char * ggml_type_name(enum ggml_type type) {
-    return type_traits[type].type_name;
+    return type < GGML_TYPE_COUNT ? type_traits[type].type_name : "NONE";
 }
 
 GGML_CALL bool ggml_is_quantized(enum ggml_type type) {
