@@ -581,7 +581,7 @@ int main(int argc, char ** argv) {
                 // - take half of the last (n_ctx - n_keep) tokens and recompute the logits in batches
 
                 if (n_past + (int) embd.size() >= n_ctx) {
-                    if(!params.ctx_shift){
+                    if (!params.ctx_shift){
                         LOG_TEE("\n\n%s: context full and context shift is disabled => stopping\n", __func__);
                         break;
                     } else {
