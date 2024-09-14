@@ -698,6 +698,13 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
         }
     ));
     add_opt(llama_arg(
+        {"--no-context-shift"},
+        format("disables context shift on inifinite text generation (default: %s)", params.ctx_shift ? "disabled" : "enabled"),
+        [](gpt_params & params) {
+            params.ctx_shift = false;
+        }
+    ));
+    add_opt(llama_arg(
         {"--chunks"}, "N",
         format("max number of chunks to process (default: %d, -1 = all)", params.n_chunks),
         [](gpt_params & params, int value) {
@@ -1992,4 +1999,3 @@ gpt_params_context gpt_params_parser_init(gpt_params & params, llama_example ex,
 
     return ctx_arg;
 }
-
