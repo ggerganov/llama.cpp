@@ -152,7 +152,7 @@ static void split_params_parse_ex(int argc, const char ** argv, split_params & p
         throw std::invalid_argument("error: invalid parameter for argument: " + arg);
     }
 
-    if (argc - arg_idx < 2) {
+    if (argc - arg_idx != 2) {
         throw std::invalid_argument("error: bad arguments");
     }
 
