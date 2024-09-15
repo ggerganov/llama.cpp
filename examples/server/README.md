@@ -350,6 +350,8 @@ node index.js
 
     `frequency_penalty`: Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
 
+    `repeat_penalty_sigmoid_growth`: Apply the sigmoid function to `repeat_penalty` within `repeat_last_n` range. The value of `1` means linear change in penalty from 1 to `repeat_penalty`. Higher values > 1 increase the difference in the resulting penalty between the first and the second half of the penalty range. Lower values < 1 change the resulting penalty slower in the middle of the range. Negative values will be changing the penalty in the same way, but from `repeat_penalty` to 1. Default: `0.0`, which is disabled.
+
     `mirostat`: Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
 
     `mirostat_tau`: Set the Mirostat target entropy, parameter tau. Default: `5.0`

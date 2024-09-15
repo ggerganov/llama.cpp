@@ -1124,6 +1124,7 @@ extern "C" {
                                float   penalty_repeat,  // 1.0 = disabled
                                float   penalty_freq,    // 0.0 = disabled
                                float   penalty_present, // 0.0 = disabled
+                               float   penalty_repeat_sigmoid_growth, // 0.0 = disabled
                                 bool   penalize_nl,     // consider newlines as a repeatable token
                                 bool   ignore_eos);     // ignore the end-of-sequence token
 

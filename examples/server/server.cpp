@@ -898,6 +898,7 @@ struct server_context {
         slot.sparams.penalty_repeat    = json_value(data, "repeat_penalty",    default_sparams.penalty_repeat);
         slot.sparams.penalty_freq      = json_value(data, "frequency_penalty", default_sparams.penalty_freq);
         slot.sparams.penalty_present   = json_value(data, "presence_penalty",  default_sparams.penalty_present);
+        slot.sparams.penalty_repeat_sigmoid_growth = json_value(data, "repeat_penalty_sigmoid_growth",  default_sparams.penalty_repeat_sigmoid_growth);
         slot.sparams.mirostat          = json_value(data, "mirostat",          default_sparams.mirostat);
         slot.sparams.mirostat_tau      = json_value(data, "mirostat_tau",      default_sparams.mirostat_tau);
         slot.sparams.mirostat_eta      = json_value(data, "mirostat_eta",      default_sparams.mirostat_eta);
@@ -1239,6 +1240,7 @@ struct server_context {
             {"repeat_penalty",            slot.sparams.penalty_repeat},
             {"presence_penalty",          slot.sparams.penalty_present},
             {"frequency_penalty",         slot.sparams.penalty_freq},
+            {"repeat_penalty_sigmoid_growth", slot.sparams.penalty_repeat_sigmoid_growth},
             {"mirostat",                  slot.sparams.mirostat},
             {"mirostat_tau",              slot.sparams.mirostat_tau},
             {"mirostat_eta",              slot.sparams.mirostat_eta},
