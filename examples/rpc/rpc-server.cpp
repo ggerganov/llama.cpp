@@ -75,9 +75,9 @@ static ggml_backend_t create_backend() {
     }
 #elif GGML_USE_METAL
     fprintf(stderr, "%s: using Metal backend\n", __func__);
-    backend = ggml_backend_metal_init();
+    backend = ggml_backend_metal_init(0);
     if (!backend) {
-        fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
+        fprintf(stderr, "%s: ggml_backend_metal_init(0) failed\n", __func__);
     }
 #endif
 

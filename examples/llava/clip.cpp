@@ -1143,7 +1143,7 @@ struct clip_ctx * clip_model_load(const char * fname, const int verbosity = 1) {
 #endif
 
 #ifdef GGML_USE_METAL
-    new_clip->backend = ggml_backend_metal_init();
+    new_clip->backend = ggml_backend_metal_init(0);
     LOG_TEE("%s: CLIP using Metal backend\n", __func__);
 #endif
 
