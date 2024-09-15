@@ -16076,10 +16076,12 @@ static int llama_decode_internal(
         return -1;
     }
 
-    for (uint32_t i = 0; i < n_tokens_all; ++i) {
-        if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= lctx.model.vocab.n_vocab) {
-            LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch_all.token[i]);
-            return -1;
+    if(batch_all.token != nullptr) {
+        for (uint32_t i = 0; i < n_tokens_all; ++i) {
+            if (batch_all.token[i] < 0 || (uint32_t)batch_all.token[i] >= lctx.model.vocab.n_vocab) {
+                LLAMA_LOG_ERROR("%s: invalid token[%d] = %d", __func__, i, batch_all.token[i]);
+                return -1;
+            }
         }
     }
 
