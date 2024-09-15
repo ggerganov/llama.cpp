@@ -26,7 +26,8 @@ if (NOT MSVC)
     endif()
 endif()
 
-unset(GGML_EXTRA_LIBS)
+unset(GGML_EXTRA_LIBS_PRIVATE)
+unset(GGML_EXTRA_LIBS_PUBLIC)
 
 if (APPLE AND GGML_ACCELERATE)
     find_library(ACCELERATE_FRAMEWORK Accelerate)
@@ -37,7 +38,7 @@ if (APPLE AND GGML_ACCELERATE)
         add_compile_definitions(ACCELERATE_NEW_LAPACK)
         add_compile_definitions(ACCELERATE_LAPACK_ILP64)
 
-        list(APPEND GGML_EXTRA_LIBS ${ACCELERATE_FRAMEWORK})
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE ${ACCELERATE_FRAMEWORK})
     else()
         message(WARNING "Accelerate framework not found")
     endif()
@@ -89,7 +90,7 @@ if (GGML_METAL)
             COMMENT "Generate assembly for embedded Metal library"
         )
 
-    list(APPEND GGML_SOURCES_METAL ${METALLIB_EMBED_ASM})
+        list(APPEND GGML_SOURCES_METAL ${METALLIB_EMBED_ASM})
     else()
         if (GGML_METAL_SHADER_DEBUG)
             # custom command to do the following:
@@ -134,7 +135,7 @@ if (GGML_METAL)
             )
     endif() # GGML_METAL_EMBED_LIBRARY
 
-    list(APPEND GGML_EXTRA_LIBS
+    list(APPEND GGML_EXTRA_LIBS_PRIVATE
         ${FOUNDATION_LIBRARY}
         ${METAL_FRAMEWORK}
         ${METALKIT_FRAMEWORK}
@@ -159,11 +160,11 @@ if (GGML_OPENMP)
 
         add_compile_definitions(GGML_USE_OPENMP)
 
-        list(APPEND GGML_EXTRA_LIBS OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE OpenMP::OpenMP_C OpenMP::OpenMP_CXX)
 
         if (GGML_MUSA)
-            list(APPEND GGML_EXTRA_INCLUDES "/usr/lib/llvm-10/include/openmp")
-            list(APPEND GGML_EXTRA_LIBS     "/usr/lib/llvm-10/lib/libomp.so")
+            list(APPEND GGML_EXTRA_INCLUDES     "/usr/lib/llvm-10/include/openmp")
+            list(APPEND GGML_EXTRA_LIBS_PRIVATE "/usr/lib/llvm-10/lib/libomp.so")
         endif()
     else()
         message(WARNING "OpenMP not found")
@@ -246,8 +247,8 @@ if (GGML_BLAS)
         set(GGML_HEADERS_BLAS ../include/ggml-blas.h)
         set(GGML_SOURCES_BLAS ggml-blas.cpp)
 
-        list(APPEND GGML_EXTRA_LIBS     ${BLAS_LIBRARIES})
-        list(APPEND GGML_EXTRA_INCLUDES ${BLAS_INCLUDE_DIRS})
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE ${BLAS_LIBRARIES})
+        list(APPEND GGML_EXTRA_INCLUDES     ${BLAS_INCLUDE_DIRS})
     else()
         message(WARNING "BLAS not found, please refer to "
         "https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors"
@@ -370,19 +371,19 @@ if (GGML_CUDA)
         if (GGML_STATIC)
             if (WIN32)
                 # As of 12.3.1 CUDA Toolkit for Windows does not offer a static cublas library
-                list(APPEND GGML_EXTRA_LIBS CUDA::cudart_static CUDA::cublas CUDA::cublasLt)
+                list(APPEND GGML_EXTRA_LIBS_PRIVATE CUDA::cudart_static CUDA::cublas CUDA::cublasLt)
             else ()
                 if (GGML_MUSA)
-                    list(APPEND GGML_EXTRA_LIBS MUSA::musart_static MUSA::mublas_static)
+                    list(APPEND GGML_EXTRA_LIBS_PRIVATE MUSA::musart_static MUSA::mublas_static)
                 else()
-                    list(APPEND GGML_EXTRA_LIBS CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
+                    list(APPEND GGML_EXTRA_LIBS_PRIVATE CUDA::cudart_static CUDA::cublas_static CUDA::cublasLt_static)
                 endif()
             endif()
         else()
             if (GGML_MUSA)
-                list(APPEND GGML_EXTRA_LIBS MUSA::musart MUSA::mublas)
+                list(APPEND GGML_EXTRA_LIBS_PRIVATE MUSA::musart MUSA::mublas)
             else()
-                list(APPEND GGML_EXTRA_LIBS CUDA::cudart CUDA::cublas CUDA::cublasLt)
+                list(APPEND GGML_EXTRA_LIBS_PRIVATE CUDA::cudart CUDA::cublas CUDA::cublasLt)
             endif()
         endif()
 
@@ -390,9 +391,9 @@ if (GGML_CUDA)
             # No VMM requested, no need to link directly with the cuda driver lib (libcuda.so)
         else()
             if (GGML_MUSA)
-                list(APPEND GGML_EXTRA_LIBS MUSA::musa_driver) # required by muDeviceGetAttribute(), muMemGetAllocationGranularity(...), ...
+                list(APPEND GGML_EXTRA_LIBS_PRIVATE MUSA::musa_driver) # required by muDeviceGetAttribute(), muMemGetAllocationGranularity(...), ...
             else()
-                list(APPEND GGML_EXTRA_LIBS CUDA::cuda_driver) # required by cuDeviceGetAttribute(), cuMemGetAllocationGranularity(...), ...
+                list(APPEND GGML_EXTRA_LIBS_PRIVATE CUDA::cuda_driver) # required by cuDeviceGetAttribute(), cuMemGetAllocationGranularity(...), ...
             endif()
         endif()
     else()
@@ -497,7 +498,7 @@ if (GGML_HIPBLAS)
 
     if (CXX_IS_HIPCC)
         set_source_files_properties(${GGML_SOURCES_ROCM} PROPERTIES LANGUAGE CXX)
-        list(APPEND GGML_EXTRA_LIBS hip::device)
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE hip::device)
     else()
         set_source_files_properties(${GGML_SOURCES_ROCM} PROPERTIES LANGUAGE HIP)
     endif()
@@ -506,8 +507,7 @@ if (GGML_HIPBLAS)
         message(FATAL_ERROR "Static linking not supported for HIP/ROCm")
     endif()
 
-    # TODO: this "PUBLIC" here seems wrong
-    list(APPEND GGML_EXTRA_LIBS PUBLIC hip::host roc::rocblas roc::hipblas)
+    list(APPEND GGML_EXTRA_LIBS_PUBLIC hip::host roc::rocblas roc::hipblas)
 endif()
 
 if (GGML_SYCL)
@@ -563,23 +563,22 @@ if (GGML_SYCL)
     endif()
 
     if (${DNNL_FOUND} AND GGML_SYCL_TARGET STREQUAL "INTEL")
-        list(APPEND GGML_EXTRA_LIBS DNNL::dnnl)
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE DNNL::dnnl)
     endif()
 
     if (WIN32)
         find_package(IntelSYCL REQUIRED)
         find_package(MKL REQUIRED)
-        list(APPEND GGML_EXTRA_LIBS IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE IntelSYCL::SYCL_CXX MKL::MKL MKL::MKL_SYCL)
     else()
         if (GGML_SYCL_TARGET STREQUAL "INTEL")
-            list(APPEND GGML_EXTRA_LIBS OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsycl")
+            list(APPEND GGML_EXTRA_LIBS_PRIVATE OpenCL mkl_core pthread m dl mkl_sycl_blas mkl_intel_ilp64 mkl_tbb_thread)
         elseif (GGML_SYCL_TARGET STREQUAL "NVIDIA")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
-            list(APPEND GGML_EXTRA_LIBS pthread m dl onemkl)
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsycl")
+            set(CMAKE_CXX_FLAGS        "${CMAKE_CXX_FLAGS} -fsycl-targets=nvptx64-nvidia-cuda")
+            list(APPEND GGML_EXTRA_LIBS_PRIVATE pthread m dl onemkl)
         endif()
-    endif()
-    if (${DNNL_FOUND} AND GGML_SYCL_TARGET STREQUAL "INTEL")
-        list(APPEND GGML_EXTRA_LIBS DNNL::dnnl)
     endif()
 endif()
 
@@ -589,7 +588,7 @@ if (GGML_RPC)
     list(APPEND GGML_CDEF_PUBLIC GGML_USE_RPC)
 
     if (WIN32)
-        list(APPEND GGML_EXTRA_LIBS ws2_32)
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE ws2_32)
     endif()
 
     set(GGML_HEADERS_RPC ../include/ggml-rpc.h)
@@ -667,8 +666,8 @@ if (GGML_VULKAN)
         set(GGML_HEADERS_VULKAN ${CMAKE_CURRENT_SOURCE_DIR}/../include/ggml-vulkan.h ${_ggml_vk_header})
         set(GGML_SOURCES_VULKAN ggml-vulkan.cpp ${_ggml_vk_source})
 
-        list(APPEND GGML_EXTRA_LIBS     Vulkan::Vulkan)
-        list(APPEND GGML_EXTRA_INCLUDES ${CMAKE_CURRENT_BINARY_DIR})
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE Vulkan::Vulkan)
+        list(APPEND GGML_EXTRA_INCLUDES     ${CMAKE_CURRENT_BINARY_DIR})
     else()
         message(WARNING "Vulkan not found")
     endif()
@@ -827,8 +826,8 @@ if (GGML_KOMPUTE)
 
         list(APPEND GGML_CDEF_PUBLIC GGML_USE_KOMPUTE)
 
-        list(APPEND GGML_EXTRA_LIBS     kompute)
-        list(APPEND GGML_EXTRA_INCLUDES ${CMAKE_CURRENT_BINARY_DIR})
+        list(APPEND GGML_EXTRA_LIBS_PRIVATE kompute)
+        list(APPEND GGML_EXTRA_INCLUDES     ${CMAKE_CURRENT_BINARY_DIR})
     else()
         message(WARNING "Kompute not found")
     endif()
@@ -893,9 +892,9 @@ if (GGML_CANN)
             message(STATUS "CANN: CANN_INCLUDE_DIRS =  ${CANN_INCLUDE_DIRS}")
             message(STATUS "CANN: CANN_LIBRARIES =  ${CANN_LIBRARIES}")
 
-            list(APPEND GGML_EXTRA_LIBS     ${CANN_LIBRARIES} )
-            list(APPEND GGML_EXTRA_INCLUDES ${CANN_INCLUDE_DIRS})
-            list(APPEND GGML_EXTRA_LIBDIRS  ${CANN_INSTALL_DIR}/lib64)
+            list(APPEND GGML_EXTRA_LIBS_PRIVATE ${CANN_LIBRARIES} )
+            list(APPEND GGML_EXTRA_INCLUDES     ${CANN_INCLUDE_DIRS})
+            list(APPEND GGML_EXTRA_LIBDIRS      ${CANN_INSTALL_DIR}/lib64)
 
             list(APPEND GGML_CDEF_PUBLIC GGML_USE_CANN)
         endif()
@@ -1339,9 +1338,7 @@ target_include_directories(ggml PRIVATE . ${GGML_EXTRA_INCLUDES})
 target_link_directories   (ggml PRIVATE   ${GGML_EXTRA_LIBDIRS})
 target_compile_features   (ggml PRIVATE c_std_11) # don't bump
 
-list(REMOVE_DUPLICATES GGML_EXTRA_LIBS)
-
-target_link_libraries(ggml PRIVATE Threads::Threads ${GGML_EXTRA_LIBS})
+list(APPEND GGML_EXTRA_LIBS_PRIVATE Threads::Threads)
 
 find_library(MATH_LIBRARY m)
 if (MATH_LIBRARY)
@@ -1349,6 +1346,10 @@ if (MATH_LIBRARY)
         target_link_libraries(ggml PRIVATE ${MATH_LIBRARY})
     endif()
 endif()
+
+list(REMOVE_DUPLICATES GGML_EXTRA_LIBS_PRIVATE)
+list(REMOVE_DUPLICATES GGML_EXTRA_LIBS_PUBLIC)
+target_link_libraries(ggml PRIVATE ${GGML_EXTRA_LIBS_PRIVATE} PUBLIC ${GGML_EXTRA_LIBS_PUBLIC})
 
 if (BUILD_SHARED_LIBS)
     set_target_properties(ggml PROPERTIES POSITION_INDEPENDENT_CODE ON)
