@@ -1372,8 +1372,6 @@ def start_server_background(context):
         server_args.append('--verbose')
     if context.lora_file:
         server_args.extend(['--lora', context.lora_file])
-    if 'SERVER_LOG_FORMAT_JSON' not in os.environ:
-        server_args.extend(['--log-format', "text"])
 
     args = [str(arg) for arg in [context.server_path, *server_args]]
     print(f"bench: starting server with: {' '.join(args)}")

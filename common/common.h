@@ -4,11 +4,9 @@
 
 #include "llama.h"
 
-#define LOG_NO_FILE_LINE_FUNCTION
-#include "log.h"
-
 #include <string>
 #include <vector>
+#include <sstream>
 
 #ifdef _WIN32
 #define DIRECTORY_SEPARATOR '\\'
@@ -343,6 +341,10 @@ struct gpt_params {
     bool batched_bench_output_jsonl = false;
 };
 
+// call once at the start of a program if it uses libcommon
+// initializes the logging system and prints info about the build
+void gpt_init();
+
 std::string gpt_params_get_system_info(const gpt_params & params);
 
 bool parse_cpu_range(const std::string& range, bool(&boolmask)[GGML_MAX_N_THREADS]);
@@ -377,6 +379,11 @@ static std::vector<T> string_split(const std::string & str, char delim) {
 
 bool string_parse_kv_override(const char * data, std::vector<llama_model_kv_override> & overrides);
 void string_process_escapes(std::string & input);
+
+std::string string_from(bool value);
+std::string string_from(const std::vector<int> & values);
+std::string string_from(const struct llama_context * ctx, const std::vector<llama_token> & tokens);
+std::string string_from(const struct llama_context * ctx, const struct llama_batch & batch);
 
 //
 // Filesystem utils

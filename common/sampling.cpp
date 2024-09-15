@@ -325,7 +325,7 @@ llama_token gpt_sampler_last(const struct gpt_sampler * gsmpl) {
 }
 
 std::string gpt_sampler_print(const struct gpt_sampler * gsmpl) {
-    std::string result = "\tlogits ";
+    std::string result = "logits ";
 
     for (int i = 0; i < llama_sampler_chain_n(gsmpl->chain); i++) {
         const auto * smpl = llama_sampler_chain_get(gsmpl->chain, i);
