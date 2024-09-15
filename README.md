@@ -28,7 +28,7 @@ variety of hardware - locally and in the cloud.
 
 - Plain C/C++ implementation without any dependencies
 - Apple silicon is a first-class citizen - optimized via ARM NEON, Accelerate and Metal frameworks
-- AVX, AVX2 and AVX512 support for x86 architectures
+- AVX, AVX2, AVX512 and AMX support for x86 architectures
 - 1.5-bit, 2-bit, 3-bit, 4-bit, 5-bit, 6-bit, and 8-bit integer quantization for faster inference and reduced memory use
 - Custom CUDA kernels for running LLMs on NVIDIA GPUs (support for AMD GPUs via HIP)
 - Vulkan and SYCL backend support
