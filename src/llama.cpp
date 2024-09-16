@@ -6061,8 +6061,13 @@ static void llm_load_vocab(
             vocab.special_mask_id = -1;
             vocab.linefeed_id     = -1;
 
+            // read vocab size from metadata
+            ml.get_key(LLM_KV_VOCAB_SIZE, vocab.n_vocab);
+
             return;
-        } else if (tokenizer_model == "llama") {
+        }
+
+        if (tokenizer_model == "llama") {
             vocab.type = LLAMA_VOCAB_TYPE_SPM;
 
             // default special tokens
